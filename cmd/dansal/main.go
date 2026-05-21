@@ -706,6 +706,7 @@ func migrateDB() {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token)")
 	migrateContactPostsCheckConstraint()
+	db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
 }
 
 func createTables() error {
@@ -906,9 +907,11 @@ func createTables() error {
 		description TEXT,
 		room TEXT,
 		location_id INTEGER,
+		musician_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-		FOREIGN KEY (location_id) REFERENCES locations(id)
+		FOREIGN KEY (location_id) REFERENCES locations(id),
+		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
 	CREATE TABLE IF NOT EXISTS event_locations (

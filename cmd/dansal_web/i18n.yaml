@@ -202,6 +202,7 @@ languages:
       tt_desc_placeholder: "Munudoù"
       tt_room_placeholder: "Sal A"
       tt_location: "Lec'h"
+      tt_musician: "Muzisian"
       view_list: "Listenn"
       view_week: "Sizhun"
       view_map: "Kartenn"
@@ -658,6 +659,7 @@ languages:
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Saal A"
       tt_location: "Ort"
+      tt_musician: "Musiker"
       # View toggle
       view_list: "Liste"
       view_week: "Woche"
@@ -1098,6 +1100,7 @@ languages:
       tt_desc_placeholder: "Munudoù"
       tt_room_placeholder: "Sal A"
       tt_location: "Lec'h"
+      tt_musician: "Muzisian"
       # View toggle
       view_list: "Roll"
       view_week: "Sizhun"
@@ -1556,6 +1559,7 @@ languages:
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Hall A"
       tt_location: "Location"
+      tt_musician: "Musician"
       # View toggle
       view_list: "List"
       view_week: "Week"
@@ -2010,6 +2014,7 @@ languages:
       tt_desc_placeholder: "Detalles"
       tt_room_placeholder: "Sala A"
       tt_location: "Lugar"
+      tt_musician: "Músico"
       view_list: "Lista"
       view_week: "Semana"
       view_map: "Mapa"
@@ -2466,6 +2471,7 @@ languages:
       tt_desc_placeholder: "Détails"
       tt_room_placeholder: "Salle A"
       tt_location: "Lieu"
+      tt_musician: "Musicien"
       # View toggle
       view_list: "Liste"
       view_week: "Semaine"
@@ -2920,6 +2926,7 @@ languages:
       tt_desc_placeholder: "Dettagli"
       tt_room_placeholder: "Sala A"
       tt_location: "Luogo"
+      tt_musician: "Musicista"
       view_list: "Lista"
       view_week: "Settimana"
       view_map: "Mappa"
@@ -3369,6 +3376,7 @@ languages:
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Zaal A"
       tt_location: "Locatie"
+      tt_musician: "Muzikant"
       view_list: "Lijst"
       view_week: "Week"
       view_map: "Kaart"

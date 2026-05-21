@@ -22,6 +22,8 @@ type TimetableEntry struct {
 	Room         string `json:"room,omitempty"`
 	LocationID   *int   `json:"location_id,omitempty"`
 	LocationName string `json:"location_name,omitempty"`
+	MusicianID   *int   `json:"musician_id,omitempty"`
+	MusicianName string `json:"musician_name,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -32,6 +34,7 @@ type TimetableEntryRequest struct {
 	Description string `json:"description"`
 	Room        string `json:"room"`
 	LocationID  *int   `json:"location_id"`
+	MusicianID  *int   `json:"musician_id"`
 }
 
 var timeSlotRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -40,26 +43,32 @@ func validTimeSlot(s string) bool { return timeSlotRe.MatchString(s) }
 
 func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	var e TimetableEntry
-	var locID sql.NullInt64
-	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &locID, &e.CreatedAt); err != nil {
+	var locID, musID sql.NullInt64
+	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &locID, &musID, &e.CreatedAt); err != nil {
 		return TimetableEntry{}, err
 	}
 	if locID.Valid {
 		v := int(locID.Int64)
 		e.LocationID = &v
 	}
+	if musID.Valid {
+		v := int(musID.Int64)
+		e.MusicianID = &v
+	}
 	return e, nil
 }
 
-const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, created_at"
+const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, musician_id, created_at"
 
 // fetchTimetable returns all entries for an event ordered by start_time,
-// including the location name via a LEFT JOIN.
+// including the location and musician name via LEFT JOINs.
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
-		        COALESCE(t.room,''), t.location_id, COALESCE(l.location,''), t.created_at
-		 FROM timetable_entries t LEFT JOIN locations l ON t.location_id = l.id
+		        COALESCE(t.room,''), t.location_id, COALESCE(l.location,''), t.musician_id, COALESCE(m.name,''), t.created_at
+		 FROM timetable_entries t
+		 LEFT JOIN locations l ON t.location_id = l.id
+		 LEFT JOIN musicians m ON t.musician_id = m.id
 		 WHERE t.event_id = ? ORDER BY t.start_time, t.id`,
 		eventID,
 	)
@@ -70,14 +79,18 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	entries := []TimetableEntry{}
 	for rows.Next() {
 		var e TimetableEntry
-		var locID sql.NullInt64
+		var locID, musID sql.NullInt64
 		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
-			&e.Description, &e.Room, &locID, &e.LocationName, &e.CreatedAt); err != nil {
+			&e.Description, &e.Room, &locID, &e.LocationName, &musID, &e.MusicianName, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		if locID.Valid {
 			v := int(locID.Int64)
 			e.LocationID = &v
+		}
+		if musID.Valid {
+			v := int(musID.Int64)
+			e.MusicianID = &v
 		}
 		entries = append(entries, e)
 	}
@@ -132,13 +145,16 @@ func readTimetableBody(r *http.Request) ([]TimetableEntryRequest, error) {
 }
 
 func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEntry, error) {
-	var locIDArg any
+	var locIDArg, musIDArg any
 	if req.LocationID != nil {
 		locIDArg = *req.LocationID
 	}
+	if req.MusicianID != nil {
+		musIDArg = *req.MusicianID
+	}
 	return scanTimetableRow(q.QueryRow(
-		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, location_id) VALUES (?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
-		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, locIDArg,
+		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, location_id, musician_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
+		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, locIDArg, musIDArg,
 	))
 }
 

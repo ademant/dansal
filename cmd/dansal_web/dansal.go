@@ -188,6 +188,8 @@ type TimetableEntry struct {
 	Room         string `json:"room,omitempty"`
 	LocationID   *int   `json:"location_id,omitempty"`
 	LocationName string `json:"location_name,omitempty"`
+	MusicianID   *int   `json:"musician_id,omitempty"`
+	MusicianName string `json:"musician_name,omitempty"`
 }
 
 type Organization struct {
@@ -1034,6 +1036,7 @@ type TimetableEntryReq struct {
 	Description string `json:"description,omitempty"`
 	Room        string `json:"room,omitempty"`
 	LocationID  *int   `json:"location_id,omitempty"`
+	MusicianID  *int   `json:"musician_id,omitempty"`
 }
 
 func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {

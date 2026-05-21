@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="page-header">
   <h1>{{.Strings.T "admin_locations_title"}}</h1>
-  {{if .Data.IsAdmin}}<a href="/admin/locations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_new"}}</a>{{end}}
+  {{if .Data.IsAdmin}}<a href="/admin/locations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_location_new_title"}}</a>{{end}}
 </div>
 
 {{with .Data}}
@@ -37,6 +37,7 @@
       <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_country"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      <th title="Geo / Town / Website">✓</th>
       <th></th>
     </tr>
   </thead>
@@ -46,10 +47,15 @@
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
   <tr data-town="{{.Town}}" data-org="{{$orgName}}">
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}<span class="short-name"> ({{.Location}})</span>{{else}}{{.Location}}{{end}}</td>
+    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
     <td>{{.Town}}</td>
     <td>{{.Country}}</td>
     <td>{{$orgName}}</td>
+    <td class="ind-cell">
+      <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
+      <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
+      <span class="ind {{if .Internetsite}}ind-ok{{else}}ind-no{{end}}" title="Website">🔗</span>
+    </td>
     <td class="col-actions">
       <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{if $.Data.IsAdmin}}<button type="button" class="btn-sm btn-del"
@@ -66,16 +72,26 @@
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:middle}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
 .bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .col-cb{width:2rem;text-align:center}
-.short-name{color:#888;font-size:.85em}
-.btn-del{background:#b00020;color:#fff;border:none}
-.btn-del:hover{background:#800016}
+.col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
+.ind-cell{white-space:nowrap}
+.ind{font-size:.85rem;opacity:.25}
+.ind-ok{opacity:1;color:#1a7f37}
 .loc-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .loc-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
 .btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:#555;text-decoration:none;background:#fff;cursor:pointer}
 .btn-reset:hover{background:#f0f0f0;border-color:#888}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
 </style>
 
 <script>

@@ -804,6 +804,20 @@ func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, 
 	return nil
 }
 
+func (c *DansalClient) UnassignLocationOrg(ctx context.Context, locationID, orgID int, token string) error {
+	body, _ := json.Marshal(map[string]int{"location_id": locationID, "organization_id": orgID})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations/unassign-org", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
 func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, orgID *int, token string) error {
 	payload := map[string]any{"ids": ids, "organization_id": orgID}
 	body, _ := json.Marshal(payload)

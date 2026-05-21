@@ -1143,6 +1143,7 @@ func main() {
 	// Protected location writes
 	smux.Handle("POST /api/v1/locations", auth(createLocation))
 	smux.Handle("POST /api/v1/locations/bulk-assign-org", auth(bulkAssignLocationOrg))
+	smux.Handle("POST /api/v1/locations/unassign-org", auth(unassignLocationOrg))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(patchLocation))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 

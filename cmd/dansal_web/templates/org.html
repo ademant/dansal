@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 {{with .Data}}
+{{with .Org.ImageURL}}<img src="{{.}}" alt="{{$.Data.Org.Name}}" class="org-banner">{{end}}
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
   {{if $.User}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
@@ -126,6 +127,7 @@
 {{end}}{{/* .Data */}}
 
 <style>
+.org-banner{width:100%;max-height:280px;object-fit:cover;border-radius:6px;margin-bottom:1rem}
 .org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
 .org-page-header h1{margin:0}
 .btn-edit-event{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);text-decoration:none;margin-left:.6rem;vertical-align:middle}

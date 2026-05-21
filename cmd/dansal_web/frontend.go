@@ -543,6 +543,7 @@ var tmplFuncMap = template.FuncMap{
 		return out
 	},
 	"hasPrefix": strings.HasPrefix,
+	"lower":     strings.ToLower,
 	"fmtBytes": func(b int64) string {
 		const unit = 1024
 		if b < unit {

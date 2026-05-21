@@ -72,12 +72,13 @@ type AdminOrgsData struct {
 }
 
 type AdminOrgEditData struct {
-	Org       Organization
-	ErrorKey  string
-	Follows   []FollowRecord
-	FollowErr string
-	Members   []OrgMember
-	AllUsers  []UserInfo
+	Org                 Organization
+	ErrorKey            string
+	Follows             []FollowRecord
+	FollowErr           string
+	Members             []OrgMember
+	AssignedLocations   []Location
+	UnassignedLocations []Location
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -241,14 +242,30 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			follows, _ = listFollows(db, actor.ID)
 		}
 		members, _ := client.GetOrganizationMembers(r.Context(), id, token)
-		allUsers, _ := client.GetAllUsers(r.Context(), token)
+		allLocations, _ := client.GetLocations(r.Context())
+		var assigned, unassigned []Location
+		for _, loc := range allLocations {
+			found := false
+			for _, oid := range loc.OrganizationIDs {
+				if oid == id {
+					found = true
+					break
+				}
+			}
+			if found {
+				assigned = append(assigned, loc)
+			} else {
+				unassigned = append(unassigned, loc)
+			}
+		}
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-			Org:       org,
-			Follows:   follows,
-			FollowErr: r.URL.Query().Get("follow_err"),
-			Members:   members,
-			AllUsers:  allUsers,
+			Org:                 org,
+			Follows:             follows,
+			FollowErr:           r.URL.Query().Get("follow_err"),
+			Members:             members,
+			AssignedLocations:   assigned,
+			UnassignedLocations: unassigned,
 		}))
 	}
 }
@@ -372,6 +389,41 @@ func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			_ = client.RemoveOrgMember(r.Context(), orgID, userID, token)
 		} else {
 			_ = client.AddOrgMember(r.Context(), orgID, userID, token)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
+	}
+}
+
+func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		orgID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		action := r.FormValue("action")
+		locID, err := strconv.Atoi(r.FormValue("location_id"))
+		if err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
+			return
+		}
+		if action == "remove" {
+			_ = client.UnassignLocationOrg(r.Context(), locID, orgID, token)
+		} else {
+			_ = client.BulkAssignLocationOrg(r.Context(), []int{locID}, &orgID, token)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
 	}
@@ -644,11 +696,9 @@ func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetEventsByMusician(r.Context(), id, getSessionToken(r))
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
 			Musician: musician,
-			Events:   events,
 		}))
 	}
 }

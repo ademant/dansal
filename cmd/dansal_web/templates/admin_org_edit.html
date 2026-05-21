@@ -9,7 +9,7 @@
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
-    {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
+    {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/organizations/{{$.Data.Org.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
@@ -82,17 +82,52 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0">No members yet.</p>
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0">No members. Assign members via user management.</p>
   {{end}}
-  {{if .AllUsers}}
-  <form method="post" action="/admin/organizations/{{$orgID}}/members" style="display:flex;gap:.5rem;margin-top:.75rem;align-items:center">
-    <input type="hidden" name="action" value="add">
-    <select name="user_id" style="flex:1;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
-      <option value="">— select user —</option>
-      {{range .AllUsers}}<option value="{{.ID}}">{{.Username}} ({{.Role}})</option>{{end}}
-    </select>
-    <button type="submit" class="btn-primary" style="white-space:nowrap">Add member</button>
-  </form>
+</fieldset>
+
+{{/* Locations */}}
+<fieldset class="members-fieldset">
+  <legend>{{$.Strings.T "org_locations"}}</legend>
+  {{if .AssignedLocations}}
+  <table class="members-table">
+    <tbody>
+    {{range .AssignedLocations}}
+    <tr>
+      <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</td>
+      <td>
+        <form method="post" action="/admin/organizations/{{$orgID}}/locations" style="margin:0">
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="location_id" value="{{.ID}}">
+          <button type="submit" class="btn-sm btn-del">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No locations assigned.</p>
+  {{end}}
+  {{if .UnassignedLocations}}
+  <details style="margin-top:.75rem">
+    <summary style="cursor:pointer;font-size:.88rem;color:#1a6eb5">Add location</summary>
+    <div style="margin-top:.5rem">
+      <input type="text" id="loc-filter" placeholder="Filter by town…" oninput="filterLocs(this.value)" style="width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;margin-bottom:.4rem">
+      <div id="loc-list" style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:4px">
+      {{range .UnassignedLocations}}
+        <div class="loc-row" data-town="{{lower .Town}}">
+          <span>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</span>
+          <form method="post" action="/admin/organizations/{{$orgID}}/locations" style="margin:0;display:inline">
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="location_id" value="{{.ID}}">
+            <button type="submit" class="btn-sm btn-primary-sm">Add</button>
+          </form>
+        </div>
+      {{end}}
+      </div>
+    </div>
+  </details>
   {{end}}
 </fieldset>
 
@@ -169,7 +204,22 @@
 .follows-table .follow-state.pending{color:#856404;background:#fff3cd}
 .follows-table .follow-state.accepted{color:#155724;background:#d4edda}
 .follows-table .follow-state.rejected{color:#721c24;background:#f8d7da}
+.loc-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem .5rem;border-bottom:1px solid #eee;font-size:.88rem}
+.loc-row:last-child{border-bottom:none}
+.loc-row span{flex:1;margin-right:.5rem;color:#333}
+.btn-primary-sm{padding:.2rem .6rem;background:#1a6eb5;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:.8rem;white-space:nowrap}
+.btn-primary-sm:hover{background:#0d4a80}
 </style>
+<script>
+function filterLocs(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#loc-list .loc-row').forEach(function(row){
+    var town=row.dataset.town||'';
+    var text=row.textContent.toLowerCase();
+    row.style.display=(text.indexOf(q)>=0||!q)?'':'none';
+  });
+}
+</script>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){

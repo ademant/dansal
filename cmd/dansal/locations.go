@@ -432,6 +432,24 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /api/v1/locations/{id} - Delete a location
+// POST /api/v1/locations/unassign-org — remove one org from one location
+func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		writeError(w, "Forbidden: admin only", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		LocationID     int `json:"location_id"`
+		OrganizationID int `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == 0 || req.OrganizationID == 0 {
+		writeError(w, "location_id and organization_id are required", http.StatusBadRequest)
+		return
+	}
+	db.Exec("DELETE FROM location_organizations WHERE location_id=? AND organization_id=?", req.LocationID, req.OrganizationID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

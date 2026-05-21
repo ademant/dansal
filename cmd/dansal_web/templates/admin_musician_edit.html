@@ -37,80 +37,74 @@
 </div>
 
 <form method="post" enctype="multipart/form-data" class="edit-form">
-  <label for="bandname">{{$.Strings.T "musician_bandname"}}</label>
-  <input id="bandname" type="text" name="bandname" value="{{.Musician.Bandname}}" required>
 
-  <label for="short_name">{{$.Strings.T "musician_short_name"}}</label>
-  <input id="short_name" type="text" name="short_name" value="{{.Musician.ShortName}}">
-
-  <label for="country">{{$.Strings.T "musician_country"}}</label>
-  <input id="country" type="text" name="country" value="{{.Musician.Country}}" placeholder="DE, FR, …">
-
-  <label for="begin_year">{{$.Strings.T "musician_begin_year"}}</label>
-  <input id="begin_year" type="number" name="begin_year" value="{{if .Musician.BeginYear}}{{.Musician.BeginYear}}{{end}}" min="1900" max="2099" placeholder="1985">
-
-  <label for="description">{{$.Strings.T "musician_description"}}</label>
-  <textarea id="description" name="description" rows="3">{{.Musician.Description}}</textarea>
-
-  <label for="genre">Genre</label>
-  <input id="genre" type="text" name="genre" value="{{.Musician.Genre}}" placeholder="Folk, Balfolk, Celtic…">
-
-  <label for="biography">{{$.Strings.T "musician_biography"}}</label>
-  <textarea id="biography" name="biography" rows="5">{{.Musician.Biography}}</textarea>
-
-  <label for="members">{{$.Strings.T "musician_members"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
-  <textarea id="members" name="members" rows="3">{{jsonLines .Musician.MembersJSON}}</textarea>
-
-  <label for="albums">{{$.Strings.T "musician_albums"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
-  <textarea id="albums" name="albums" rows="3">{{jsonLines .Musician.AlbumsJSON}}</textarea>
-
-  <label for="internetsite">{{$.Strings.T "musician_website"}}</label>
-  <input id="internetsite" type="url" name="internetsite" value="{{.Musician.Internetsite}}" placeholder="https://…">
-
-  <label for="mbid">{{$.Strings.T "musician_mbid"}}</label>
-  <div class="mbid-row">
-    <input id="mbid" type="text" name="mbid" value="{{.Musician.MBID}}"
-           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="[0-9a-f\-]*">
-    {{if .Musician.MBID}}
-    <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ MusicBrainz</a>
-    {{end}}
+  <div class="sec-head"><h3>{{$.Strings.T "musician_bandname"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="bandname">{{$.Strings.T "musician_bandname"}}</label>
+    <input id="bandname" type="text" name="bandname" value="{{.Musician.Bandname}}" required>
+    <label for="short_name">{{$.Strings.T "musician_short_name"}}</label>
+    <input id="short_name" type="text" name="short_name" value="{{.Musician.ShortName}}">
+    <label for="country">{{$.Strings.T "musician_country"}}</label>
+    <input id="country" type="text" name="country" value="{{.Musician.Country}}" placeholder="DE, FR, …">
+    <label for="begin_year">{{$.Strings.T "musician_begin_year"}}</label>
+    <input id="begin_year" type="number" name="begin_year" value="{{if .Musician.BeginYear}}{{.Musician.BeginYear}}{{end}}" min="1900" max="2099" placeholder="1985">
   </div>
 
-  <label for="wikidata_id">{{$.Strings.T "musician_wikidata"}}</label>
-  <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Musician.WikidataID}}" placeholder="Q12345">
-
-  <label for="discogs_id">Discogs ID</label>
-  <div class="mbid-row">
-    <input id="discogs_id" type="text" name="discogs_id" value="{{.Musician.DiscogsID}}" placeholder="12345">
-    {{if .Musician.DiscogsID}}
-    <a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ Discogs</a>
-    {{end}}
+  <div class="sec-head"><h3>{{$.Strings.T "musician_description"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="description">{{$.Strings.T "musician_description"}}</label>
+    <textarea id="description" name="description" rows="3">{{.Musician.Description}}</textarea>
+    <label for="genre">Genre</label>
+    <input id="genre" type="text" name="genre" value="{{.Musician.Genre}}" placeholder="Folk, Balfolk, Celtic…">
   </div>
 
-  <fieldset class="social-fieldset">
-    <legend>{{$.Strings.T "musician_social"}}</legend>
+  <div class="sec-head"><h3>{{$.Strings.T "musician_biography"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="biography">{{$.Strings.T "musician_biography"}}</label>
+    <textarea id="biography" name="biography" rows="5">{{.Musician.Biography}}</textarea>
+    <label for="members">{{$.Strings.T "musician_members"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+    <textarea id="members" name="members" rows="3">{{jsonLines .Musician.MembersJSON}}</textarea>
+    <label for="albums">{{$.Strings.T "musician_albums"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+    <textarea id="albums" name="albums" rows="3">{{jsonLines .Musician.AlbumsJSON}}</textarea>
+  </div>
 
+  <div class="sec-head"><h3>Links &amp; IDs</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="internetsite">{{$.Strings.T "musician_website"}}</label>
+    <input id="internetsite" type="url" name="internetsite" value="{{.Musician.Internetsite}}" placeholder="https://…">
+    <label for="mbid">{{$.Strings.T "musician_mbid"}}</label>
+    <div class="mbid-row">
+      <input id="mbid" type="text" name="mbid" value="{{.Musician.MBID}}"
+             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="[0-9a-f\-]*">
+      {{if .Musician.MBID}}<a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ MusicBrainz</a>{{end}}
+    </div>
+    <label for="wikidata_id">{{$.Strings.T "musician_wikidata"}}</label>
+    <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Musician.WikidataID}}" placeholder="Q12345">
+    <label for="discogs_id">Discogs ID</label>
+    <div class="mbid-row">
+      <input id="discogs_id" type="text" name="discogs_id" value="{{.Musician.DiscogsID}}" placeholder="12345">
+      {{if .Musician.DiscogsID}}<a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ Discogs</a>{{end}}
+    </div>
+  </div>
+
+  <div class="sec-head"><h3>{{$.Strings.T "musician_social"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
     <label for="mastodon">{{$.Strings.T "musician_mastodon"}}</label>
     <input id="mastodon" type="text" name="mastodon" value="{{.Musician.Mastodon}}" placeholder="@band@mastodon.social">
-
     <label for="instagram">{{$.Strings.T "musician_instagram"}}</label>
     <input id="instagram" type="text" name="instagram" value="{{.Musician.Instagram}}" placeholder="bandname">
-
     <label for="facebook">{{$.Strings.T "musician_facebook"}}</label>
     <input id="facebook" type="text" name="facebook" value="{{.Musician.Facebook}}" placeholder="bandname">
-
     <label for="soundcloud">{{$.Strings.T "musician_soundcloud"}}</label>
     <input id="soundcloud" type="text" name="soundcloud" value="{{.Musician.Soundcloud}}" placeholder="bandname">
-
     <label for="spotify">Spotify</label>
     <input id="spotify" type="url" name="spotify" value="{{.Musician.Spotify}}" placeholder="https://open.spotify.com/artist/…">
-
     <label for="deezer">Deezer</label>
     <input id="deezer" type="url" name="deezer" value="{{.Musician.Deezer}}" placeholder="https://www.deezer.com/artist/…">
-  </fieldset>
+  </div>
 
-  <fieldset class="image-fieldset">
-    <legend>{{$.Strings.T "musician_image"}}</legend>
+  <div class="sec-head"><h3>{{$.Strings.T "musician_image"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
     {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/musicians/{{$.Data.Musician.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
@@ -121,7 +115,7 @@
       </div>
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
     </div>
-  </fieldset>
+  </div>
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
@@ -151,10 +145,16 @@
 .mb-results li button{background:#ba2025;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
 .mb-results li.match-row{border-left:3px solid #1a6eb5}
 .match-hint{font-size:.8rem;color:#1a6eb5;margin-top:.25rem;padding:.2rem .4rem;background:#e8f3ff;border-radius:3px}
-.edit-form{display:flex;flex-direction:column;gap:.5rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
+.edit-form{display:flex;flex-direction:column;gap:.25rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
 .edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.2rem}
 .edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
 .edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.sec-head{display:flex;align-items:center;gap:.5rem;border-top:1px solid #eee;padding-top:.6rem;margin-top:.25rem}
+.sec-head h3{margin:0;font-size:.92rem;font-weight:700;color:#333;flex:1}
+.sec-head:first-of-type{border-top:none;padding-top:0;margin-top:0}
+.btn-sec-edit{background:none;border:1px solid #ccc;border-radius:3px;cursor:pointer;font-size:.82rem;padding:.1rem .4rem;color:#666;line-height:1.4}
+.btn-sec-edit:hover{background:#f0f4ff;border-color:#1a6eb5;color:#1a6eb5}
+.sec-body{display:flex;flex-direction:column;gap:.35rem;padding:.5rem 0 .5rem .75rem;border-left:2px solid #e8eaf6;margin-bottom:.25rem}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
 .drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
 .drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
@@ -179,25 +179,15 @@
 .btn-del:hover{background:#800016}
 </style>
 
-{{if and (not .Data.IsNew) .Data.Events}}
-<div class="upcoming-events">
-  <h2>{{$.Strings.T "musician_upcoming_events"}}</h2>
-  <ul class="event-list">
-  {{range .Data.Events}}
-  <li class="event-item">
-    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
-    <div class="event-meta">
-      {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-      {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
-      {{if not .IsPublished}}<span class="badge unpublished">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
-      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
-    </div>
-  </li>
-  {{end}}
-  </ul>
-</div>
-{{end}}
-
+<script>
+function toggleSec(btn){
+  var body=btn.closest('.sec-head').nextElementSibling;
+  if(body&&body.classList.contains('sec-body')){
+    body.hidden=!body.hidden;
+    btn.textContent=body.hidden?'✎':'✕';
+  }
+}
+</script>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){

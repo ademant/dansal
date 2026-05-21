@@ -139,6 +139,7 @@ func main() {
 		r.HandleFunc("POST /admin/organizations/{id}/delete", adminOrgDeleteHandler(cfg, client))
 		r.HandleFunc("POST /admin/organizations/{id}/run-feeds", adminOrgRunFeedsHandler(cfg, client))
 		r.HandleFunc("POST /admin/organizations/{id}/members", adminOrgMemberHandler(cfg, client))
+		r.HandleFunc("POST /admin/organizations/{id}/locations", adminOrgLocationsHandler(cfg, client))
 		r.HandleFunc("POST /admin/organizations/{id}/follow", adminOrgFollowHandler(cfg, db, client))
 		r.HandleFunc("POST /admin/organizations/{id}/unfollow", adminOrgUnfollowHandler(cfg, db, client))
 

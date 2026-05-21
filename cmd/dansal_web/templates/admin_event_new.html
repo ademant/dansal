@@ -294,7 +294,7 @@ function togglePricing(){
   document.getElementById('pricing-multiple').hidden=(v!=='multiple');
 }
 
-var _ttLocs={{locationsJSON .Locations}};
+var _ttLocs={{locationsJSON $.Data.Locations}};
 var _ttDefaultLocID=0;
 function _buildLocOpts(selectedID){
   var orgEl=document.getElementById('org_id');

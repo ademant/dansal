@@ -322,7 +322,7 @@
         </tr>
         <tr class="tt-row-detail">
           <td colspan="3"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><select name="tt_musician_id"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}"{{if and $entry.MusicianID (eq .ID (derefInt $entry.MusicianID))}} selected{{end}}>{{.Name}}</option>{{end}}</select></td>
+          <td colspan="3"><select name="tt_musician_id"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}"{{if and $entry.MusicianID (eq .ID (derefInt $entry.MusicianID))}} selected{{end}}>{{.Bandname}}</option>{{end}}</select></td>
         </tr>
         {{end}}
         <tr class="tt-row">
@@ -335,7 +335,7 @@
         </tr>
         <tr class="tt-row-detail">
           <td colspan="3"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><select name="tt_musician_id" id="tt-mus-template"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></td>
+          <td colspan="3"><select name="tt_musician_id" id="tt-mus-template"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}">{{.Bandname}}</option>{{end}}</select></td>
         </tr>
       </tbody>
     </table>
@@ -469,7 +469,7 @@ function geocodeLocation(){
 
 var _ttLocs={{locationsJSON $.Data.Locations}};
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
-var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
+var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
 function _buildLocOpts(selectedID){
   var orgEl=document.getElementById('org_id');
   var orgID=orgEl?parseInt(orgEl.value,10)||0:0;

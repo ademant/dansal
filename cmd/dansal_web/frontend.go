@@ -35,8 +35,9 @@ type TemplateData struct {
 	BannerHeight int
 	LogoHeight   int
 	DarkMode     string // "auto", "light", or "dark"
-	AppVersion   string
-	AppBuildTime string
+	AppVersion      string
+	AppBuildTime    string
+	SuggestAvailable bool
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
@@ -74,8 +75,9 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		BannerHeight: bannerHeight,
 		LogoHeight:   logoHeight,
 		DarkMode:     cfg.DarkMode,
-		AppVersion:   Version,
-		AppBuildTime: BuildTime,
+		AppVersion:       Version,
+		AppBuildTime:     BuildTime,
+		SuggestAvailable: suggestAvailable(cfg),
 	}
 }
 
@@ -145,6 +147,10 @@ var logoSVG []byte
 
 //go:embed static/banner.svg
 var bannerSVG []byte
+
+func suggestAvailable(cfg *Config) bool {
+	return cfg.SMTPHost != "" || cfg.TelegramBotToken != ""
+}
 
 func svgHandler(data []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -590,6 +596,9 @@ type Templates struct {
 	adminInfo          *template.Template
 	impressum          *template.Template
 	orgs               *template.Template
+	suggestEvent       *template.Template
+	suggestDone        *template.Template
+	suggestVerified    *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -632,6 +641,9 @@ func loadTemplates() *Templates {
 		adminInfo:         load("admin_info"),
 		impressum:         load("impressum"),
 		orgs:              load("orgs"),
+		suggestEvent:      load("events_suggest"),
+		suggestDone:       load("events_suggest_done"),
+		suggestVerified:   load("events_suggest_verified"),
 	}
 }
 

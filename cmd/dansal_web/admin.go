@@ -1321,6 +1321,7 @@ type AdminEventsData struct {
 	FilterType         string // "ball", "workshop", "festival"
 	FilterDance        string
 	FilterCreatedAfter string
+	FilterSource       string
 }
 
 type EventPrefill struct {
@@ -1670,6 +1671,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		filterType := q.Get("type")
 		filterDance := q.Get("dance")
 		createdAfter := q.Get("created_after")
+		filterSource := q.Get("source")
 
 		params := url.Values{}
 		if includePast {
@@ -1690,6 +1692,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		if createdAfter != "" {
 			params.Set("created_after", createdAfter)
+		}
+		if filterSource != "" {
+			params.Set("source", filterSource)
 		}
 
 		token := getSessionToken(r)
@@ -1767,6 +1772,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterType:         filterType,
 			FilterDance:        filterDance,
 			FilterCreatedAfter: createdAfter,
+			FilterSource:       filterSource,
 		}))
 	}
 }

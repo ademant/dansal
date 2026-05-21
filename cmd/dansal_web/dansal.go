@@ -1834,3 +1834,78 @@ func (c *DansalClient) CreateEventBatch(ctx context.Context, events []json.RawMe
 	c.invalidateEvents()
 	return result, nil
 }
+
+// SuggestEventReq is the JSON body for POST /api/v1/events/suggest.
+type SuggestEventReq struct {
+	Title              string     `json:"title"`
+	Description        string     `json:"description"`
+	StartTime          string     `json:"start_time"`
+	EndTime            string     `json:"end_time,omitempty"`
+	HasBall            bool       `json:"has_ball"`
+	HasWorkshop        bool       `json:"has_workshop"`
+	HasFestival        bool       `json:"has_festival"`
+	WorkshopDifficulty string     `json:"workshop_difficulty,omitempty"`
+	Tags               []string   `json:"tags,omitempty"`
+	URL                string     `json:"url,omitempty"`
+	Location           PreviewLoc `json:"location"`
+	Email              string     `json:"email"`
+	Phone2             string     `json:"phone2"` // honeypot
+}
+
+// SuggestEventPreview calls POST /api/v1/events/suggest-preview with a multipart body.
+func (c *DansalClient) SuggestEventPreview(ctx context.Context, body io.Reader, contentType string) ([]PreviewEvent, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest-preview", body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var events []PreviewEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// SuggestEvent calls POST /api/v1/events/suggest.
+func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq) error {
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// VerifySuggestion calls GET /api/v1/events/suggest/verify/{token}.
+func (c *DansalClient) VerifySuggestion(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/events/suggest/verify/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}

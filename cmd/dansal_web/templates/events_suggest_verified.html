@@ -1,0 +1,32 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="sv-wrap">
+  {{with .Data}}
+  {{if .Error}}
+    <div class="sv-box sv-error">
+      <p>{{$.Strings.T "suggest_error_token"}}</p>
+    </div>
+  {{else}}
+    <div class="sv-box sv-ok">
+      <p class="sv-icon">✓</p>
+      <h2>{{$.Strings.T "suggest_verified_title"}}</h2>
+      <p>{{$.Strings.T "suggest_verified_body"}}</p>
+      <a href="/">{{$.Strings.T "suggest_done_back"}}</a>
+    </div>
+  {{end}}
+  {{end}}
+</div>
+
+<style>
+.sv-wrap{max-width:480px;margin:4rem auto;text-align:center}
+.sv-box{border-radius:8px;padding:2.5rem 2rem}
+.sv-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.sv-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.sv-icon{font-size:3rem;margin-bottom:.5rem}
+.sv-box h2{margin:0 0 .75rem}
+.sv-box p{font-size:1rem;margin-bottom:1.25rem}
+.sv-box a{font-weight:600}
+.sv-ok a{color:#155724}
+.sv-error a{color:#721c24}
+</style>
+{{end}}

@@ -41,6 +41,14 @@ type Config struct {
 
 	// Telegram
 	TelegramWebhookSecret string `yaml:"telegram_webhook_secret"`
+	TelegramBotToken      string `yaml:"telegram_bot_token"` // used only to gate suggest feature
+
+	// SMTP — mirrors API config; used only to determine suggest hint text
+	SMTPHost string `yaml:"smtp_host"`
+
+	// Captcha (Cloudflare Turnstile)
+	CaptchaSiteKey   string `yaml:"captcha_site_key"`
+	CaptchaSecretKey string `yaml:"captcha_secret_key"`
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`

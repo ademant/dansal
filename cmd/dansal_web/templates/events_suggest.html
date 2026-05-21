@@ -1,0 +1,157 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="suggest-wrap">
+  <h1>{{.Strings.T "suggest_event_title"}}</h1>
+
+  {{with .Data}}
+  {{if .Error}}<p class="form-error" role="alert">{{$.Strings.T .Error}}</p>{{end}}
+
+  <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}">
+    {{if .HintSMTP}}{{$.Strings.T "suggest_hint_email"}}{{else}}{{$.Strings.T "suggest_hint_review"}}{{end}}
+  </p>
+
+  {{if .PreviewEvents}}
+  <h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
+  <form method="post" action="/events/suggest/submit">
+    <div class="table-wrap">
+    <table class="event-table">
+      <thead>
+        <tr>
+          <th style="width:2rem"></th>
+          <th>{{$.Strings.T "col_date"}}</th>
+          <th>{{$.Strings.T "col_title"}}</th>
+          <th>{{$.Strings.T "col_location"}}</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{range $i, $e := .PreviewEvents}}
+      <tr>
+        <td><input type="checkbox" name="sel_{{$i}}" value="1" class="row-cb" checked></td>
+        <td style="white-space:nowrap">{{formatDate $.LangCode $e.StartTime}}</td>
+        <td>{{$e.Title}}</td>
+        <td>{{if $e.Location.Town}}{{$e.Location.Town}}{{else}}{{$e.Location.Location}}{{end}}</td>
+        <input type="hidden" name="event_{{$i}}" value="{{index $.Data.PreviewJSON $i}}">
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{if $.Data.HintSMTP}}
+    <div class="form-row">
+      <label>{{$.Strings.T "suggest_email_label"}}
+        <input type="email" name="email" required>
+      </label>
+    </div>
+    {{end}}
+    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+    {{if .CaptchaSiteKey}}
+    <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {{end}}
+    <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
+  </form>
+
+  {{else}}
+
+  <div class="suggest-tabs">
+    <button class="tab-btn active" onclick="switchTab(this,'manual')">{{$.Strings.T "suggest_tab_manual"}}</button>
+    <button class="tab-btn" onclick="switchTab(this,'import')">{{$.Strings.T "suggest_tab_import"}}</button>
+  </div>
+
+  <div id="tab-manual" class="tab-panel">
+  <form method="post" action="/events/suggest/submit">
+    <div class="form-row">
+      <label>{{$.Strings.T "evt_title"}} *
+        <input type="text" name="title" required maxlength="200">
+      </label>
+    </div>
+    <div class="form-row">
+      <label>{{$.Strings.T "evt_description"}}
+        <textarea name="description" rows="4"></textarea>
+      </label>
+    </div>
+    <div class="form-row form-row-2col">
+      <label>{{$.Strings.T "evt_start"}} *
+        <input type="datetime-local" name="start_time" required>
+      </label>
+      <label>{{$.Strings.T "evt_end"}}
+        <input type="datetime-local" name="end_time">
+      </label>
+    </div>
+    <div class="form-row form-row-2col">
+      <label>{{$.Strings.T "col_location"}}
+        <input type="text" name="location" maxlength="100">
+      </label>
+      <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
+        <input type="text" name="town" maxlength="100">
+      </label>
+    </div>
+    <div class="form-row">
+      <label>{{$.Strings.T "col_country"}}
+        <input type="text" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
+      </label>
+    </div>
+    <div class="form-row form-row-checks">
+      <label class="check-label"><input type="checkbox" name="has_ball" value="1"> {{$.Strings.T "filter_type_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop" value="1"> {{$.Strings.T "filter_type_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_festival" value="1"> {{$.Strings.T "filter_type_festival"}}</label>
+    </div>
+    {{if $.Data.HintSMTP}}
+    <div class="form-row">
+      <label>{{$.Strings.T "suggest_email_label"}} *
+        <input type="email" name="email" required>
+      </label>
+    </div>
+    {{end}}
+    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+    {{if .CaptchaSiteKey}}
+    <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {{end}}
+    <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
+  </form>
+  </div>
+
+  <div id="tab-import" class="tab-panel" hidden>
+  <form method="post" action="/events/suggest" enctype="multipart/form-data">
+    <div class="form-row">
+      <label>{{$.Strings.T "admin_import_file_label"}}
+        <input type="file" name="file" accept=".ics,.json">
+      </label>
+    </div>
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
+  </form>
+  </div>
+
+  {{end}}
+  {{end}}
+</div>
+
+<style>
+.suggest-wrap{max-width:640px;margin:2rem auto}
+.suggest-hint{padding:.75rem 1rem;border-radius:6px;margin-bottom:1.5rem;font-size:.95rem}
+.hint-email{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
+.hint-review{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.form-error{color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem}
+.form-row{margin-bottom:1rem}
+.form-row label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
+.form-row input[type=text],.form-row input[type=email],.form-row input[type=datetime-local],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.form-row-checks{display:flex;gap:1.5rem}
+.hp-field{display:none!important}
+.suggest-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
+.tab-btn{padding:.4rem .9rem;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:.9rem}
+.tab-btn.active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
+.btn-primary{padding:.5rem 1.4rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.95rem;margin-top:.5rem}
+.btn-primary:hover{background:#155a8a}
+</style>
+
+<script>
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
+  document.getElementById('tab-' + id).hidden = false;
+}
+</script>
+{{end}}

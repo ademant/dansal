@@ -171,6 +171,7 @@ footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;bor
     <a href="/">{{.Strings.T "nav_events"}}</a>
     <a href="/musicians">{{.Strings.T "nav_musicians"}}</a>
     <a href="/organizations">{{.Strings.T "nav_orgs"}}</a>
+    {{if .SuggestAvailable}}<a href="/events/suggest">{{.Strings.T "nav_suggest"}}</a>{{end}}
     {{end}}
   </div>
   <div class="nav-user">

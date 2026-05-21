@@ -83,6 +83,12 @@ func main() {
 		r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
 		r.HandleFunc("POST /telegram/webhook", telegramWebhookProxyHandler(cfg))
 
+		r.HandleFunc("GET /events/suggest", suggestPageHandler(cfg, tmpls, i18n))
+		r.HandleFunc("POST /events/suggest", suggestPreviewHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /events/suggest/submit", suggestSubmitHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /events/suggest/done", suggestDoneHandler(cfg, tmpls, i18n))
+		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
+
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
 		r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))

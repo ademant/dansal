@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="page-header">
   <h1>{{.Strings.T "admin_orgs_title"}}</h1>
-  {{if .Data.CanEdit}}<a href="/admin/organizations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_new"}}</a>{{end}}
+  {{if .Data.CanEdit}}<a href="/admin/organizations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_org_new_title"}}</a>{{end}}
 </div>
 
 {{with .Data}}
@@ -11,6 +11,7 @@
   <thead>
     <tr>
       <th data-sort="str">{{$.Strings.T "org_name"}}</th>
+      <th data-sort="str">{{$.Strings.T "col_location"}}</th>
       <th>{{$.Strings.T "org_description"}}</th>
       <th class="col-num" data-sort="num">{{$.Strings.T "org_events_title"}}</th>
       <th class="col-num" data-sort="num">{{$.Strings.T "org_locations"}}</th>
@@ -22,6 +23,7 @@
   {{range .Stats}}
   <tr>
     <td><a href="/org/{{.Slug}}">{{.Org.Name}}</a></td>
+    <td class="muted">{{.MainTown}}</td>
     <td class="desc-cell">{{.Org.Description}}</td>
     <td class="col-num">{{.EventCount}}</td>
     <td class="col-num">{{.LocationCount}}</td>
@@ -31,7 +33,7 @@
       <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{if .FetchSources}}
       <form method="post" action="/admin/organizations/{{.Org.ID}}/run-feeds" style="display:inline">
-        <button type="submit" class="btn-sm btn-run">{{$.Strings.T "fetch_run"}}</button>
+        <button type="submit" class="btn-sm btn-run">{{$.Strings.T "org_run_feeds"}}</button>
       </form>
       {{end}}
       <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "org_confirm_delete"}}'))delOrg({{.Org.ID}})">{{$.Strings.T "admin_delete"}}</button>
@@ -47,8 +49,17 @@
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
-.desc-cell{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
+.desc-cell{max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.muted{color:#888;font-size:.9rem;white-space:nowrap}
 .col-num{text-align:right;white-space:nowrap;width:70px}
+.col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
 .btn-run{background:#e8f4ff;border-color:#b3d4f5;color:#1a6eb5}
 .btn-run:hover{background:#c5e3ff;color:#0d4a80}
 .btn-del{background:#b00020;color:#fff;border:none}

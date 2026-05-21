@@ -63,6 +63,7 @@ type OrgStats struct {
 	EventCount    int
 	LocationCount int
 	FetchSources  []FetchSource
+	MainTown      string
 }
 
 type AdminOrgsData struct {
@@ -89,12 +90,14 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		var orgs []Organization
 		var statMap map[int]OrgStatRecord
 		var sources []FetchSource
+		var locations []Location
 		var orgsErr error
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(4)
 		go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
 		go func() { defer wg.Done(); statMap, _ = client.GetOrgStats(r.Context()) }()
 		go func() { defer wg.Done(); sources, _ = client.GetFetchSources(r.Context(), token) }()
+		go func() { defer wg.Done(); locations, _ = client.GetLocations(r.Context()) }()
 		wg.Wait()
 		if orgsErr != nil {
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
@@ -106,6 +109,29 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				srcsByOrg[*s.OrganizationID] = append(srcsByOrg[*s.OrganizationID], s)
 			}
 		}
+		// Build town frequency map per org from linked locations.
+		townsByOrg := map[int]map[string]int{}
+		for _, loc := range locations {
+			if loc.Town == "" {
+				continue
+			}
+			for _, oid := range loc.OrganizationIDs {
+				if townsByOrg[oid] == nil {
+					townsByOrg[oid] = map[string]int{}
+				}
+				townsByOrg[oid][loc.Town]++
+			}
+		}
+		mainTown := func(orgID int) string {
+			towns := townsByOrg[orgID]
+			best, bestCount := "", 0
+			for t, c := range towns {
+				if c > bestCount || (c == bestCount && t < best) {
+					best, bestCount = t, c
+				}
+			}
+			return best
+		}
 		stats := make([]OrgStats, len(orgs))
 		for i, o := range orgs {
 			st := statMap[o.ID]
@@ -115,6 +141,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				EventCount:    st.EventCount,
 				LocationCount: st.LocationCount,
 				FetchSources:  srcsByOrg[o.ID],
+				MainTown:      mainTown(o.ID),
 			}
 		}
 		title := i18n.T(r, "admin_orgs_title")

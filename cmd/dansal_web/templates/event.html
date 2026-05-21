@@ -253,7 +253,12 @@
   {{end}}
   {{end}}
   {{if .BoardContacted}}
+  {{if .BoardContactTgURL}}
+  <p class="msg msg-ok">{{$.Strings.T "board_contacted_telegram"}}</p>
+  <a href="{{.BoardContactTgURL}}" class="btn-tg-verify" target="_blank" rel="noopener">{{$.Strings.T "board_contact_verify_telegram_btn"}}</a>
+  {{else}}
   <p class="msg msg-ok">{{$.Strings.T "board_contacted_ok"}}</p>
+  {{end}}
   {{end}}
   {{if .BoardError}}
   <p class="msg msg-error">{{$.Strings.T .BoardError}}</p>
@@ -279,8 +284,17 @@
         </form>
         {{end}}
       </div>
-      <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact">
-        <input type="email" name="email" required placeholder="{{$.Strings.T "board_your_email"}}">
+      <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact" onsubmit="return boardContactValidate(this)">
+        <div class="board-contact-method">
+          <label class="board-method-radio"><input type="radio" name="contact_method" value="email" checked onchange="boardContactToggle(this.closest('form'),this.value)"> {{$.Strings.T "board_email_label"}}</label>
+          <label class="board-method-radio"><input type="radio" name="contact_method" value="telegram" onchange="boardContactToggle(this.closest('form'),this.value)"> {{$.Strings.T "board_telegram_label"}}</label>
+        </div>
+        <div class="board-contact-email-row">
+          <input type="email" name="email" placeholder="{{$.Strings.T "board_your_email"}}">
+        </div>
+        <div class="board-contact-tg-row" style="display:none">
+          <input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}">
+        </div>
         <textarea name="message" required rows="3" placeholder="{{$.Strings.T "board_your_message"}}"></textarea>
         <button type="submit">{{$.Strings.T "board_send_btn"}}</button>
       </form>
@@ -463,6 +477,32 @@ function boardToggleMethod(val) {
   if (emailInput) emailInput.required = val === 'email';
   if (tgInput) tgInput.required = val === 'telegram';
 }
+function boardContactToggle(form, val) {
+  var emailRow = form.querySelector('.board-contact-email-row');
+  var tgRow = form.querySelector('.board-contact-tg-row');
+  if (emailRow) { emailRow.style.display = val === 'email' ? '' : 'none'; var inp = emailRow.querySelector('input'); if(inp) inp.required = val === 'email'; }
+  if (tgRow) { tgRow.style.display = val === 'telegram' ? '' : 'none'; var inp2 = tgRow.querySelector('input'); if(inp2) inp2.required = val === 'telegram'; }
+}
+function boardContainsLink(s) {
+  var l = s.toLowerCase();
+  return l.indexOf('http://') !== -1 || l.indexOf('https://') !== -1 || l.indexOf('mailto:') !== -1;
+}
+function boardContactValidate(form) {
+  var msg = form.querySelector('textarea[name="message"]');
+  if (msg && boardContainsLink(msg.value)) { alert('{{$.Strings.T "board_no_links_error"}}'); return false; }
+  var method = form.querySelector('input[name="contact_method"]:checked');
+  if (!method || method.value === 'email') {
+    var email = form.querySelector('input[name="email"]');
+    if (!email || !email.value.trim()) { alert('{{$.Strings.T "board_email_required"}}'); return false; }
+  }
+  return true;
+}
+document.querySelectorAll('.board-post-form').forEach(function(form){
+  form.addEventListener('submit', function(e){
+    var msg = form.querySelector('textarea[name="message"]');
+    if (msg && boardContainsLink(msg.value)) { e.preventDefault(); alert('{{$.Strings.T "board_no_links_error"}}'); }
+  });
+});
 </script>
 
 {{with .Data}}{{if .Event.LocationLat}}

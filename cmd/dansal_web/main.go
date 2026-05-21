@@ -85,6 +85,7 @@ func main() {
 		r.HandleFunc("POST /events/{id}/board/{post_id}/delete", contactBoardDeleteHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/board/{post_id}/contact", contactBoardContactHandler(cfg, client))
 		r.HandleFunc("GET /contact-posts/verify/{token}", contactBoardVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /contact-requests/verify/{token}", contactRequestVerifyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /checkin/{qr_token}", checkinGetHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /checkin/{qr_token}", checkinPostHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/book", bookingPostHandler(cfg, client, i18n))

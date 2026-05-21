@@ -118,9 +118,10 @@ func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *Dansal
 }
 
 type VerifyData struct {
-	Success     bool
-	BoardVerify bool
-	ErrorKey    string
+	Success              bool
+	BoardVerify          bool
+	ContactRequestVerify bool
+	ErrorKey             string
 }
 
 func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

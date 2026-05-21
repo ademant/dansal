@@ -113,14 +113,34 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		}
 
 		email := r.FormValue("email")
+		telegram := r.FormValue("telegram")
 		message := r.FormValue("message")
 
-		if err := client.ContactPoster(r.Context(), postID, email, message); err != nil {
+		tgURL, err := client.ContactPoster(r.Context(), postID, email, telegram, message, cfg.publicBaseURL())
+		if err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
 			return
 		}
 		boardThrottle.record(ip)
+		if tgURL != "" {
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1&board_contact_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
+	}
+}
+
+// GET /contact-requests/verify/{token}
+func contactRequestVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		if err := client.VerifyContactRequest(r.Context(), token); err != nil {
+			title := i18n.T(r, "verify_title")
+			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "verify_error_invalid"}))
+			return
+		}
+		title := i18n.T(r, "board_request_verify_title")
+		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true, ContactRequestVerify: true}))
 	}
 }
 

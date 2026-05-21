@@ -98,33 +98,78 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		token,
 	).Scan(&tokenID, &userID, &channel, &expiresAt)
 	if err == sql.ErrNoRows {
-		// Fall back: check if it's a contact board post verification token.
+		// Not a user account token. Check contact board post tokens.
 		var postID int
 		var postExpires string
 		err2 := db.QueryRow(
 			"SELECT id, expires_at FROM contact_posts WHERE verify_token=? AND email_verified=0",
 			token,
 		).Scan(&postID, &postExpires)
-		if err2 == sql.ErrNoRows {
-			_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+		if err2 == nil {
+			exp, err3 := parseTokenExpiration(postExpires)
+			if err3 != nil || time.Now().After(exp) {
+				db.Exec("DELETE FROM contact_posts WHERE id=?", postID)
+				_ = sendTelegramMessage(chatIDStr, "This verification link has expired.")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL, poster_telegram_chat_id=? WHERE id=?", chatIDStr, postID)
+			log.Printf("telegram webhook: verified contact post %d", postID)
+			_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if err2 != nil {
+		if err2 != nil && err2 != sql.ErrNoRows {
 			log.Printf("telegram webhook: db error checking contact post: %v", err2)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		exp, err3 := parseTokenExpiration(postExpires)
-		if err3 != nil || time.Now().After(exp) {
-			db.Exec("DELETE FROM contact_posts WHERE id=?", postID)
+
+		// Not a contact post token. Check contact request tokens.
+		var crID, crPostID int
+		var crExpires, crSenderEmail, crSenderTelegram, crMessage string
+		err3 := db.QueryRow(
+			"SELECT id, post_id, sender_email, sender_telegram, message, expires_at FROM contact_requests WHERE verify_token=?",
+			token,
+		).Scan(&crID, &crPostID, &crExpires, &crSenderEmail, &crSenderTelegram, &crMessage)
+		if err3 == sql.ErrNoRows {
+			_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err3 != nil {
+			log.Printf("telegram webhook: db error checking contact request: %v", err3)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		crExp, err4 := parseTokenExpiration(crExpires)
+		if err4 != nil || time.Now().After(crExp) {
+			db.Exec("DELETE FROM contact_requests WHERE id=?", crID)
 			_ = sendTelegramMessage(chatIDStr, "This verification link has expired.")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL WHERE id=?", postID)
-		log.Printf("telegram webhook: verified contact post %d", postID)
-		_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
+		var posterEmail, posterNick, posterChatID string
+		db.QueryRow(
+			"SELECT email, nickname, COALESCE(poster_telegram_chat_id,'') FROM contact_posts WHERE id=?", crPostID,
+		).Scan(&posterEmail, &posterNick, &posterChatID)
+		db.Exec("UPDATE contact_requests SET verify_token=NULL WHERE id=?", crID)
+		log.Printf("telegram webhook: verified contact request %d for post %d", crID, crPostID)
+		senderContact := crSenderEmail
+		if crSenderTelegram != "" {
+			senderContact = "@" + crSenderTelegram
+		}
+		if posterChatID != "" {
+			msg := fmt.Sprintf("Someone replied to your board post!\n\nMessage:\n%s\n\nContact them at: %s", crMessage, senderContact)
+			go func() { _ = sendTelegramMessage(posterChatID, msg) }()
+		} else if posterEmail != "" {
+			body := fmt.Sprintf(
+				"Hello %s,\n\nSomeone saw your contact board post on dansal and wants to get in touch:\n\n---\n%s\n---\n\nYou can reach them at: %s\n\nThis message was forwarded by dansal.\n",
+				posterNick, crMessage, senderContact,
+			)
+			go func() { _ = SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body) }()
+		}
+		_ = sendTelegramMessage(chatIDStr, "✓ Your message has been confirmed and forwarded to the poster!")
 		w.WriteHeader(http.StatusOK)
 		return
 	}

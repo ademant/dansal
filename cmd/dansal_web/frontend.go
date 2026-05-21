@@ -91,10 +91,11 @@ type EventData struct {
 	OrgSlug          string
 	ContactPosts     []ContactPost
 	CanManageBoard   bool
-	BoardPosted      bool
-	BoardTelegramURL string
-	BoardContacted   bool
-	BoardError       string
+	BoardPosted         bool
+	BoardTelegramURL    string
+	BoardContacted      bool
+	BoardContactTgURL   string
+	BoardError          string
 	BookingOK        bool
 	BookingError     string
 }
@@ -742,22 +743,24 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		boardPosted := r.URL.Query().Get("board_posted") == "1"
 		boardTelegramURL := r.URL.Query().Get("board_tg_url")
 		boardContacted := r.URL.Query().Get("board_contacted") == "1"
+		boardContactTgURL := r.URL.Query().Get("board_contact_tg_url")
 		boardError := r.URL.Query().Get("board_error")
 		bookingOK := r.URL.Query().Get("book_ok") == "1"
 		bookingError := r.URL.Query().Get("book_error")
 
 		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
-			Event:            event,
-			Org:              org,
-			OrgSlug:          slug,
-			ContactPosts:     posts,
-			CanManageBoard:   canManage,
-			BoardPosted:      boardPosted,
-			BoardTelegramURL: boardTelegramURL,
-			BoardContacted:   boardContacted,
-			BoardError:       boardError,
-			BookingOK:        bookingOK,
-			BookingError:     bookingError,
+			Event:              event,
+			Org:                org,
+			OrgSlug:            slug,
+			ContactPosts:       posts,
+			CanManageBoard:     canManage,
+			BoardPosted:        boardPosted,
+			BoardTelegramURL:   boardTelegramURL,
+			BoardContacted:     boardContacted,
+			BoardContactTgURL:  boardContactTgURL,
+			BoardError:         boardError,
+			BookingOK:          bookingOK,
+			BookingError:       bookingError,
 		}))
 	}
 }

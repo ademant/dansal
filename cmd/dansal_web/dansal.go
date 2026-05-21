@@ -1420,24 +1420,34 @@ func (c *DansalClient) VerifyBooking(ctx context.Context, token string) (Booking
 	return result, json.NewDecoder(resp.Body).Decode(&result)
 }
 
-func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message string) error {
-	body, _ := json.Marshal(map[string]string{"email": email, "message": message})
+// ContactPoster creates a pending contact request and returns (telegramVerifyURL, error).
+func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegram, message, baseURL string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"email": email, "telegram": telegram, "message": message})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/contact-posts/%d/contact", id),
 		bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		return apiErr(resp)
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
+		return "", apiErr(resp)
 	}
-	return nil
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		if tgURL, ok := result["telegram_verify_url"].(string); ok {
+			return tgURL, nil
+		}
+	}
+	return "", nil
 }
 
 // ── users & invites ───────────────────────────────────────────────────────────
@@ -1580,6 +1590,22 @@ func (c *DansalClient) RevokeInvite(ctx context.Context, inviteToken, authToken 
 
 func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/verify/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) VerifyContactRequest(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-requests/verify/"+token, nil)
 	if err != nil {
 		return err
 	}

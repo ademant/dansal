@@ -623,6 +623,19 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN last_result TEXT") // no-op if already present
 	db.Exec("ALTER TABLE contact_posts ADD COLUMN telegram_username TEXT")
+	db.Exec("ALTER TABLE contact_posts ADD COLUMN poster_telegram_chat_id TEXT")
+	db.Exec(`CREATE TABLE IF NOT EXISTS contact_requests (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		post_id INTEGER NOT NULL,
+		sender_email TEXT NOT NULL DEFAULT '',
+		sender_telegram TEXT NOT NULL DEFAULT '',
+		message TEXT NOT NULL,
+		verify_token TEXT UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at DATETIME NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token)")
 }
 
 func createTables() error {
@@ -863,6 +876,7 @@ func createTables() error {
 		nickname TEXT NOT NULL,
 		email TEXT NOT NULL DEFAULT '',
 		telegram_username TEXT,
+		poster_telegram_chat_id TEXT,
 		email_verified INTEGER DEFAULT 0,
 		verify_token TEXT UNIQUE,
 		delete_token TEXT UNIQUE,
@@ -872,6 +886,18 @@ func createTables() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token);
+	CREATE TABLE IF NOT EXISTS contact_requests (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		post_id INTEGER NOT NULL,
+		sender_email TEXT NOT NULL DEFAULT '',
+		sender_telegram TEXT NOT NULL DEFAULT '',
+		message TEXT NOT NULL,
+		verify_token TEXT UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at DATETIME NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token);
 	CREATE TABLE IF NOT EXISTS bookings (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
@@ -1013,6 +1039,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/contact-posts/verify/{token}", verifyContactPost)
 	smux.HandleFunc("GET /api/v1/contact-posts/delete/{token}", deleteContactPostByToken)
 	smux.HandleFunc("POST /api/v1/contact-posts/{id}/contact", contactPoster)
+	smux.HandleFunc("GET /api/v1/contact-requests/verify/{token}", verifyContactRequest)
 
 	// Bookings — public create + verify
 	smux.HandleFunc("POST /api/v1/events/{id}/bookings", createBooking)

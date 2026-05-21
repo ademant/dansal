@@ -25,31 +25,31 @@
     <h2>{{$.Strings.T "evt_basic_info"}}</h2>
 
     <label for="title">{{$.Strings.T "evt_title"}} *</label>
-    <input id="title" type="text" name="title" required placeholder="{{$.Strings.T "evt_title_placeholder"}}">
+    <input id="title" type="text" name="title" required placeholder="{{$.Strings.T "evt_title_placeholder"}}" value="{{if .Prefill}}{{.Prefill.Title}}{{end}}">
 
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" oninput="onStartDateChange(this.value)">
+        <input id="date" type="date" name="date" oninput="onStartDateChange(this.value)" value="{{if .Prefill}}{{.Prefill.Date}}{{end}}">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
-        <input id="start_time" type="time" name="start_time">
+        <input id="start_time" type="time" name="start_time" value="{{if .Prefill}}{{.Prefill.StartTime}}{{end}}">
       </div>
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
-        <input id="end_time" type="time" name="end_time">
+        <input id="end_time" type="time" name="end_time" value="{{if .Prefill}}{{.Prefill.EndTime}}{{end}}">
       </div>
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
-        <input id="end_date" type="date" name="end_date">
+        <input id="end_date" type="date" name="end_date" value="{{if .Prefill}}{{.Prefill.EndDate}}{{end}}">
       </div>
     </div>
 
     <div class="check-row">
-      <label class="check-label"><input type="checkbox" name="has_ball"> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop" onchange="toggleWorkshopDifficulty()"> {{$.Strings.T "filter_type_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_festival"> {{$.Strings.T "filter_type_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_ball" {{if and .Prefill .Prefill.HasBall}}checked{{end}}> {{$.Strings.T "filter_type_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop" onchange="toggleWorkshopDifficulty()" {{if and .Prefill .Prefill.HasWorkshop}}checked{{end}}> {{$.Strings.T "filter_type_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_festival" {{if and .Prefill .Prefill.HasFestival}}checked{{end}}> {{$.Strings.T "filter_type_festival"}}</label>
     </div>
     <div id="workshop-difficulty" hidden style="margin-top:.5rem">
       <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
@@ -61,10 +61,10 @@
     </div>
 
     <label for="description">{{$.Strings.T "evt_description"}}</label>
-    <textarea id="description" name="description" rows="5"></textarea>
+    <textarea id="description" name="description" rows="5">{{if .Prefill}}{{.Prefill.Description}}{{end}}</textarea>
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
-    <input id="url" type="url" name="url" placeholder="https://...">
+    <input id="url" type="url" name="url" placeholder="https://..." value="{{if .Prefill}}{{.Prefill.URL}}{{end}}">
 
     <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
     <input id="booking_url" type="url" name="booking_url" placeholder="https://...">
@@ -102,11 +102,11 @@
     <h2>{{$.Strings.T "evt_location"}}</h2>
     <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
     <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
-      <option value="existing">{{$.Strings.T "evt_loc_existing"}}</option>
-      <option value="new">{{$.Strings.T "evt_loc_new"}}</option>
+      <option value="existing" {{if and .Prefill .Prefill.Location}}{{else}}selected{{end}}>{{$.Strings.T "evt_loc_existing"}}</option>
+      <option value="new" {{if and .Prefill .Prefill.Location}}selected{{end}}>{{$.Strings.T "evt_loc_new"}}</option>
     </select>
 
-    <div id="loc-existing">
+    <div id="loc-existing" {{if and .Prefill .Prefill.Location}}hidden{{end}}>
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>
@@ -114,9 +114,9 @@
       </select>
     </div>
 
-    <div id="loc-new" hidden class="loc-new-fields">
+    <div id="loc-new" {{if not (and .Prefill .Prefill.Location)}}hidden{{end}} class="loc-new-fields">
       <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
-      <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
+      <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}" value="{{if .Prefill}}{{.Prefill.Location}}{{end}}">
       <label for="new_loc_short_name">{{$.Strings.T "loc_short_name"}}</label>
       <input id="new_loc_short_name" type="text" name="new_loc_short_name">
       <label for="new_loc_address">{{$.Strings.T "loc_address"}}</label>
@@ -128,11 +128,11 @@
         </div>
         <div>
           <label for="new_loc_town">{{$.Strings.T "loc_town"}}</label>
-          <input id="new_loc_town" type="text" name="new_loc_town">
+          <input id="new_loc_town" type="text" name="new_loc_town" value="{{if .Prefill}}{{.Prefill.Town}}{{end}}">
         </div>
         <div>
           <label for="new_loc_country">{{$.Strings.T "loc_country"}}</label>
-          <input id="new_loc_country" type="text" name="new_loc_country">
+          <input id="new_loc_country" type="text" name="new_loc_country" value="{{if .Prefill}}{{.Prefill.Country}}{{end}}">
         </div>
       </div>
       <div class="field-row">

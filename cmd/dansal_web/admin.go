@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -1307,17 +1309,26 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
-	Events            []Event
-	Organizations     []Organization
-	Musicians         []Musician
-	Dances            []Dance
-	FilterIncludePast bool
-	FilterOrgID       int    // -1 = no org assigned
-	FilterDateFrom    string
-	FilterDateTo      string
-	FilterMusicianID  int
-	FilterType        string // "ball", "workshop", "festival"
-	FilterDance       string
+	Events             []Event
+	Organizations      []Organization
+	Musicians          []Musician
+	Dances             []Dance
+	FilterIncludePast  bool
+	FilterOrgID        int    // -1 = no org assigned
+	FilterDateFrom     string
+	FilterDateTo       string
+	FilterMusicianID   int
+	FilterType         string // "ball", "workshop", "festival"
+	FilterDance        string
+	FilterCreatedAfter string
+}
+
+type EventPrefill struct {
+	Title, Description, URL      string
+	Date, EndDate                string
+	StartTime, EndTime           string
+	Location, Town, Country      string
+	HasBall, HasWorkshop, HasFestival bool
 }
 
 type AdminEventNewData struct {
@@ -1327,6 +1338,15 @@ type AdminEventNewData struct {
 	Dances             []Dance
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
+	Prefill            *EventPrefill
+}
+
+type AdminImportEventsData struct {
+	PreviewEvents []PreviewEvent
+	PreviewJSON   []string
+	Error         string
+	FeedURL       string
+	FeedType      string
 }
 
 // ── Users & Invites ───────────────────────────────────────────────────────────
@@ -1649,6 +1669,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		dateTo := q.Get("date_to")
 		filterType := q.Get("type")
 		filterDance := q.Get("dance")
+		createdAfter := q.Get("created_after")
 
 		params := url.Values{}
 		if includePast {
@@ -1666,6 +1687,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		if musicianID != 0 {
 			params.Set("musician_id", strconv.Itoa(musicianID))
+		}
+		if createdAfter != "" {
+			params.Set("created_after", createdAfter)
 		}
 
 		token := getSessionToken(r)
@@ -1731,17 +1755,18 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 
 		title := i18n.T(r, "admin_events_title")
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
-			Events:            events,
-			Organizations:     orgs,
-			Musicians:         musicians,
-			Dances:            dances,
-			FilterIncludePast: includePast,
-			FilterOrgID:       orgID,
-			FilterDateFrom:    dateFrom,
-			FilterDateTo:      dateTo,
-			FilterMusicianID:  musicianID,
-			FilterType:        filterType,
-			FilterDance:       filterDance,
+			Events:             events,
+			Organizations:      orgs,
+			Musicians:          musicians,
+			Dances:             dances,
+			FilterIncludePast:  includePast,
+			FilterOrgID:        orgID,
+			FilterDateFrom:     dateFrom,
+			FilterDateTo:       dateTo,
+			FilterMusicianID:   musicianID,
+			FilterType:         filterType,
+			FilterDance:        filterDance,
+			FilterCreatedAfter: createdAfter,
 		}))
 	}
 }
@@ -1755,6 +1780,26 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		bundle := client.FetchRefBundle(r.Context())
 		defaultDanceIDs := loadDefaultDanceIDs(db)
 		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, bundle.Dances)
+
+		var prefill *EventPrefill
+		if r.URL.Query().Get("title") != "" {
+			prefill = &EventPrefill{
+				Title:       r.URL.Query().Get("title"),
+				Description: r.URL.Query().Get("description"),
+				URL:         r.URL.Query().Get("url"),
+				Date:        r.URL.Query().Get("date"),
+				EndDate:     r.URL.Query().Get("end_date"),
+				StartTime:   r.URL.Query().Get("start_time"),
+				EndTime:     r.URL.Query().Get("end_time"),
+				Location:    r.URL.Query().Get("location"),
+				Town:        r.URL.Query().Get("town"),
+				Country:     r.URL.Query().Get("country"),
+				HasBall:     r.URL.Query().Get("has_ball") == "1",
+				HasWorkshop: r.URL.Query().Get("has_workshop") == "1",
+				HasFestival: r.URL.Query().Get("has_festival") == "1",
+			}
+		}
+
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
 			Organizations:      bundle.Orgs,
@@ -1762,6 +1807,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
 			SelectedDanceNames: selected,
+			Prefill:            prefill,
 		}))
 	}
 }
@@ -2710,4 +2756,172 @@ func readLoadAvg() string {
 		}
 	}
 	return ""
+}
+
+// ── Import events ─────────────────────────────────────────────────────────────
+
+func adminImportEventsPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		title := i18n.T(r, "admin_import_title")
+		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{}))
+	}
+}
+
+func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+
+		renderErr := func(msg, feedURL, feedType string) {
+			title := i18n.T(r, "admin_import_title")
+			renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
+				Error:   msg,
+				FeedURL: feedURL,
+				FeedType: feedType,
+			}))
+		}
+
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			renderErr("invalid form", "", "ical")
+			return
+		}
+
+		feedURL := r.FormValue("url")
+		feedType := r.FormValue("type")
+		if feedType == "" {
+			feedType = "ical"
+		}
+		orgID := r.FormValue("organization_id")
+
+		// Build a new multipart body to forward to the API.
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		mw.WriteField("type", feedType)
+		if orgID != "" {
+			mw.WriteField("organization_id", orgID)
+		}
+
+		if feedURL != "" {
+			mw.WriteField("url", feedURL)
+		} else {
+			file, hdr, err := r.FormFile("file")
+			if err != nil {
+				renderErr(i18n.T(r, "admin_import_file_label")+": required", feedURL, feedType)
+				return
+			}
+			defer file.Close()
+			part, _ := mw.CreateFormFile("file", hdr.Filename)
+			io.Copy(part, file)
+		}
+		mw.Close()
+
+		token := getSessionToken(r)
+		events, err := client.PreviewEvents(r.Context(), &buf, mw.FormDataContentType(), token)
+		if err != nil {
+			renderErr(err.Error(), feedURL, feedType)
+			return
+		}
+
+		if len(events) == 0 {
+			renderErr(i18n.T(r, "admin_import_none_found"), feedURL, feedType)
+			return
+		}
+
+		if len(events) == 1 {
+			e := events[0]
+			q := url.Values{}
+			q.Set("title", e.Title)
+			if e.Description != "" {
+				q.Set("description", e.Description)
+			}
+			if e.URL != "" {
+				q.Set("url", e.URL)
+			}
+			if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
+				q.Set("date", t.Format("2006-01-02"))
+				q.Set("start_time", t.Format("15:04"))
+			}
+			if e.EndTime != "" {
+				if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
+					q.Set("end_date", t.Format("2006-01-02"))
+					q.Set("end_time", t.Format("15:04"))
+				}
+			}
+			if e.Location.Location != "" {
+				q.Set("location", e.Location.Location)
+			}
+			if e.Location.Town != "" {
+				q.Set("town", e.Location.Town)
+			}
+			if e.Location.Country != "" {
+				q.Set("country", e.Location.Country)
+			}
+			if e.HasBall {
+				q.Set("has_ball", "1")
+			}
+			if e.HasWorkshop {
+				q.Set("has_workshop", "1")
+			}
+			if e.HasFestival {
+				q.Set("has_festival", "1")
+			}
+			http.Redirect(w, r, "/admin/events/new?"+q.Encode(), http.StatusSeeOther)
+			return
+		}
+
+		previewJSON := make([]string, len(events))
+		for i, e := range events {
+			b, _ := json.Marshal(e)
+			previewJSON[i] = string(b)
+		}
+		title := i18n.T(r, "admin_import_title")
+		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
+			PreviewEvents: events,
+			PreviewJSON:   previewJSON,
+			FeedURL:       feedURL,
+			FeedType:      feedType,
+		}))
+	}
+}
+
+func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		token := getSessionToken(r)
+		createdAt := time.Now().UTC().Format(time.RFC3339)
+
+		var selected []json.RawMessage
+		for i := 0; ; i++ {
+			vals := r.Form["event_"+strconv.Itoa(i)]
+			if len(vals) == 0 {
+				break
+			}
+			if len(r.Form["sel_"+strconv.Itoa(i)]) > 0 {
+				selected = append(selected, json.RawMessage(vals[0]))
+			}
+		}
+
+		if len(selected) > 0 {
+			client.CreateEventBatch(r.Context(), selected, token)
+		}
+
+		q := url.Values{}
+		q.Set("created_after", createdAt)
+		q.Set("include_past", "1")
+		http.Redirect(w, r, "/admin/events?"+q.Encode(), http.StatusSeeOther)
+	}
 }

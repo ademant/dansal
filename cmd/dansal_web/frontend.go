@@ -584,6 +584,7 @@ type Templates struct {
 	adminEvents        *template.Template
 	adminEventNew      *template.Template
 	adminEventEdit     *template.Template
+	adminEventsImport  *template.Template
 	adminDances        *template.Template
 	adminSiteConfig    *template.Template
 	adminInfo          *template.Template
@@ -625,6 +626,7 @@ func loadTemplates() *Templates {
 		adminEvents:       load("admin_events"),
 		adminEventNew:     load("admin_event_new"),
 		adminEventEdit:    load("admin_event_edit"),
+		adminEventsImport: load("admin_events_import"),
 		adminDances:       load("admin_dances"),
 		adminSiteConfig:   load("admin_site_config"),
 		adminInfo:         load("admin_info"),

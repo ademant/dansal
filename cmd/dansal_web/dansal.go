@@ -1772,3 +1772,65 @@ func (c *DansalClient) DeleteAPIKey(ctx context.Context, token string, id int) e
 	}
 	return nil
 }
+
+// PreviewEvent mirrors the EventCreateRequest JSON returned by POST /api/v1/events/preview.
+type PreviewEvent struct {
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	StartTime   string      `json:"start_time"`
+	EndTime     string      `json:"end_time,omitempty"`
+	HasBall     bool        `json:"has_ball"`
+	HasWorkshop bool        `json:"has_workshop"`
+	HasFestival bool        `json:"has_festival"`
+	IsCancelled bool        `json:"is_cancelled"`
+	Tags        []string    `json:"tags,omitempty"`
+	URL         string      `json:"url,omitempty"`
+	Location    PreviewLoc  `json:"location"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
+	Pricing     *Pricing    `json:"pricing,omitempty"`
+}
+
+type PreviewLoc struct {
+	Location string `json:"location"`
+	Town     string `json:"town,omitempty"`
+	Country  string `json:"country,omitempty"`
+}
+
+func (c *DansalClient) PreviewEvents(ctx context.Context, body io.Reader, contentType, token string) ([]PreviewEvent, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/preview", body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var events []PreviewEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (c *DansalClient) CreateEventBatch(ctx context.Context, events []json.RawMessage, token string) ([]Event, error) {
+	body, _ := json.Marshal(events)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events", token, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("create events: %s: %s", resp.Status, string(b))
+	}
+	var result []Event
+	json.Unmarshal(b, &result)
+	c.invalidateEvents()
+	return result, nil
+}

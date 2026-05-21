@@ -1,0 +1,99 @@
+{{template "base" .}}
+{{define "content"}}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+  <h1 style="margin:0">{{.Strings.T "admin_import_title"}}</h1>
+  <a href="/admin/events" style="font-size:.875rem;color:#555;text-decoration:none">← {{.Strings.T "admin_events_title"}}</a>
+</div>
+
+{{with .Data}}
+{{if .Error}}<p class="form-error" role="alert">{{.Error}}</p>{{end}}
+
+{{if .PreviewEvents}}
+<h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
+<form method="post" action="/admin/events/import/confirm">
+  <div style="margin-bottom:.75rem">
+    <label class="check-label">
+      <input type="checkbox" id="sel-all" onchange="toggleAll(this)"> {{$.Strings.T "admin_import_select_all"}}
+    </label>
+  </div>
+  <div class="table-wrap">
+  <table class="event-table">
+    <thead>
+      <tr>
+        <th style="width:2rem"></th>
+        <th>{{$.Strings.T "col_date"}}</th>
+        <th>{{$.Strings.T "col_title"}}</th>
+        <th>{{$.Strings.T "col_location"}}</th>
+        <th>{{$.Strings.T "col_country"}}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range $i, $e := .PreviewEvents}}
+    <tr>
+      <td><input type="checkbox" name="sel_{{$i}}" value="1" class="row-cb" checked></td>
+      <td style="white-space:nowrap">{{formatDate $.LangCode $e.StartTime}}</td>
+      <td>{{$e.Title}}{{if $e.IsCancelled}} <span class="badge cancelled">✕</span>{{end}}</td>
+      <td>{{if $e.Location.Town}}{{$e.Location.Town}}{{else}}{{$e.Location.Location}}{{end}}</td>
+      <td>{{$e.Location.Country}}</td>
+      <input type="hidden" name="event_{{$i}}" value="{{index $.Data.PreviewJSON $i}}">
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <div style="margin-top:1rem">
+    <button type="submit" class="btn-primary" id="import-btn">{{$.Strings.T "admin_import_create_btn"}} ({{len .PreviewEvents}})</button>
+  </div>
+</form>
+{{else}}
+<form method="post" enctype="multipart/form-data" class="import-form">
+  <div class="form-section">
+    <label for="file">{{$.Strings.T "admin_import_file_label"}}</label>
+    <input id="file" type="file" name="file" accept=".ics,.json">
+  </div>
+
+  <div class="form-section">
+    <label for="feed-url">{{$.Strings.T "admin_import_url_label"}}</label>
+    <input id="feed-url" type="url" name="url" value="{{.FeedURL}}" placeholder="https://..." style="width:100%;max-width:40rem">
+  </div>
+
+  <div class="form-section">
+    <label for="feed-type">Type</label>
+    <select id="feed-type" name="type" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px">
+      <option value="ical" {{if eq .FeedType "ical"}}selected{{end}}>{{$.Strings.T "admin_import_type_ical"}}</option>
+      <option value="folkdance-json" {{if eq .FeedType "folkdance-json"}}selected{{end}}>{{$.Strings.T "admin_import_type_json"}}</option>
+    </select>
+  </div>
+
+  <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
+</form>
+{{end}}
+{{end}}
+
+<style>
+.import-form .form-section{margin-bottom:1rem}
+.import-form label{display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem}
+.form-error{color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:.5rem .75rem;margin-bottom:1rem}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee}
+.event-table thead th{background:#f4f6fb;font-weight:600}
+.event-table tbody tr:hover{background:#f9f9ff}
+.btn-primary{display:inline-block;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;text-decoration:none}
+.btn-primary:hover{background:#155a9a}
+.check-label{display:flex;align-items:center;gap:.3rem;font-size:.875rem;cursor:pointer}
+.badge.cancelled{background:#f8d7da;color:#721c24;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
+</style>
+<script>
+function toggleAll(cb) {
+  document.querySelectorAll('.row-cb').forEach(function(c){ c.checked = cb.checked; });
+  updateBtn();
+}
+function updateBtn() {
+  var n = document.querySelectorAll('.row-cb:checked').length;
+  var btn = document.getElementById('import-btn');
+  if (btn) btn.textContent = btn.textContent.replace(/\(\d+\)/, '('+n+')');
+}
+document.querySelectorAll('.row-cb').forEach(function(c){ c.addEventListener('change', updateBtn); });
+</script>
+{{end}}

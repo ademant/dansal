@@ -183,6 +183,10 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/edit", adminLocationSaveHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminLocationDeleteHandler(cfg, client))
 
+		r.HandleFunc("GET /api/v1/images/{id}", imageProxyHandler(client, "/api/v1/images/"))
+		r.HandleFunc("GET /api/v1/musician-images/{id}", imageProxyHandler(client, "/api/v1/musician-images/"))
+		r.HandleFunc("GET /api/v1/org-images/{id}", imageProxyHandler(client, "/api/v1/org-images/"))
+
 		return feedRouter(cfg, db, client)(r)
 	}
 

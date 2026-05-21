@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -988,6 +989,36 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 		a := actorFromOrg(cfg, org, actor)
 		writeJSON(w, http.StatusOK, a)
+	}
+}
+
+// imageProxyHandler forwards GET requests for a single path segment ID to the
+// API backend, streaming the response (including Content-Type) back to the
+// browser. This makes /api/v1/*-images/{id} URLs work when the browser hits
+// the web frontend instead of the API directly.
+func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		apiURL := client.BaseURL + prefix + id
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
+		if err != nil {
+			http.Error(w, "proxy error", http.StatusBadGateway)
+			return
+		}
+		resp, err := client.HTTP.Do(req)
+		if err != nil {
+			http.Error(w, "proxy error", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		if ct := resp.Header.Get("Content-Type"); ct != "" {
+			w.Header().Set("Content-Type", ct)
+		}
+		if cc := resp.Header.Get("Cache-Control"); cc != "" {
+			w.Header().Set("Cache-Control", cc)
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body) //nolint:errcheck
 	}
 }
 

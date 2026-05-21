@@ -168,7 +168,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 
 	// Send verification email in background — never blocks the 201 response.
-	base := strings.TrimRight(config.Server.BaseURL, "/")
+	base := buildBaseURL(r)
 	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
 	deleteURL := base + "/api/v1/contact-posts/delete/" + deleteToken
 	emailBody := fmt.Sprintf(

@@ -16,9 +16,8 @@ import (
 
 )
 
-// buildVerifyURL constructs the verification link. If base_url is configured
-// it is used as prefix; otherwise the URL is inferred from the request.
-func buildVerifyURL(r *http.Request, token string) string {
+// buildBaseURL returns the configured base URL or infers it from the request.
+func buildBaseURL(r *http.Request) string {
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	if base == "" {
 		scheme := "https"
@@ -27,7 +26,12 @@ func buildVerifyURL(r *http.Request, token string) string {
 		}
 		base = scheme + "://" + r.Host
 	}
-	return base + "/api/v1/verify/" + token
+	return base
+}
+
+// buildVerifyURL constructs the verification link using buildBaseURL.
+func buildVerifyURL(r *http.Request, token string) string {
+	return buildBaseURL(r) + "/api/v1/verify/" + token
 }
 
 func generateVerificationToken() (string, error) {

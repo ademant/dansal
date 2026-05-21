@@ -199,7 +199,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 
 	s := bookingMailStringsFor(lang)
-	base := strings.TrimRight(config.Server.BaseURL, "/")
+	base := buildBaseURL(r)
 	verifyURL := base + "/api/v1/bookings/verify/" + verifyToken
 	verifyBody := fmt.Sprintf(s.VerifyBody, req.Name, verifyURL, config.Server.VerificationExpiryHours)
 	if err := SendEmail(req.Email, s.VerifySubject, verifyBody); err != nil {
@@ -254,8 +254,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	log.Printf("bookings: verified booking %d for event %d", id, eventID)
 	go sendBookingConfirmedEmail(name, email, lang, eventID, qrToken)
 
-	base := strings.TrimRight(config.Server.BaseURL, "/")
-	checkinURL := base + "/checkin/" + qrToken
+	checkinURL := buildBaseURL(r) + "/checkin/" + qrToken
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{

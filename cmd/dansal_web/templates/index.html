@@ -52,8 +52,6 @@
       <th data-col="country"   class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_country"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
       <th class="col-fee">{{$.Strings.T "col_fee"}}</th>
-      <th data-col="organizer" class="sortable col-org" tabindex="0" aria-sort="none">{{$.Strings.T "col_organizer"}}</th>
-      <th class="col-actions">{{$.Strings.T "col_links"}}</th>
     </tr>
   </thead>
   <tbody id="event-tbody">
@@ -97,13 +95,6 @@
       {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
     </td>
     <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid">€</span>{{end}}{{end}}</td>
-    <td class="col-org">
-      {{if $org}}<a href="/org/{{orgSlug $org}}">{{$org}}</a>{{end}}
-    </td>
-    <td class="col-actions">
-      <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
-      {{if .URL}}<a href="{{.URL}}" class="btn-sm" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}}</a>{{end}}
-    </td>
   </tr>
   {{end}}
   {{range $.Data.FederatedEvents}}
@@ -130,15 +121,13 @@
     <td></td>
     <td class="col-type"></td>
     <td class="col-fee"></td>
-    <td class="col-org"></td>
-    <td class="col-actions">
-      {{if .URL}}<a href="{{.URL}}" class="btn-sm" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}}</a>{{end}}
-    </td>
   </tr>
   {{end}}
   </tbody>
 </table>
 </div>
+
+<div id="event-tiles"></div>
 
 <div class="pagination-bar" id="pagination-bar">
   <span id="page-info"></span>
@@ -211,9 +200,9 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .fee-free{background:#d1fae5;color:#065f46}
 .fee-donation{background:#fef3c7;color:#92400e}
 .fee-paid{background:#e5e7eb;color:#374151}
-.col-actions{white-space:nowrap}
-.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;text-decoration:none;color:var(--fg-2);margin-right:.2rem;background:var(--bg-card)}
-.btn-sm:hover{background:var(--bg-subtle);color:var(--fg)}
+.event-tile{display:block;padding:.75rem 1rem;border:1px solid var(--border-lite);border-radius:.4rem;margin-bottom:.5rem;text-decoration:none;color:inherit;background:var(--bg)}
+.event-tile:hover{background:var(--bg-hover)}
+#event-tiles{display:none}
 .badge.workshop{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.badge-difficulty{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.festival{background:var(--badge-ok-bg);color:var(--badge-ok-fg)}
@@ -268,13 +257,13 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 .mc-grid td{line-height:1.1;vertical-align:top}
 .mc-dot{display:block;width:4px;height:4px;border-radius:50%;background:var(--link);margin:.15rem auto 0}
 @media(max-width:640px){
-  .col-org,.col-actions,.col-fee{display:none}
-  .event-table td:nth-child(6),.event-table td:nth-child(7),.event-table td:nth-child(8){display:none}
   .filter-row input[type=date]{display:none}
   #map-container{height:280px}
   #week-mini-cal{display:none}
   .week-nav button{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
+  .table-wrap{display:none}
+  #event-tiles{display:block}
 }
 </style>
 
@@ -563,6 +552,42 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       '</div>';
   }
 
+  function buildTile(r){
+    var d=r.dataset;
+    var detailUrl=d.href||'/events/'+d.id;
+    var dateStr='';
+    if(d.start){
+      try{ dateStr=new Intl.DateTimeFormat(lang,{day:'numeric',month:'short',year:'numeric'}).format(new Date(d.start)); }
+      catch(_){ dateStr=(d.date||'').slice(0,10); }
+    }
+    var loc=d.location||'', town=d.town||'';
+    var place=(loc&&town&&loc!==town)?loc+', '+town:(loc||town);
+    var badges='';
+    if(r.classList.contains('is-cancelled')) badges+='<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>';
+    if(d.ball==='1') badges+='<span class="badge" style="margin-right:.2rem">{{$.Strings.T "filter_type_ball"}}</span>';
+    if(d.workshop==='1') badges+='<span class="badge workshop" style="margin-right:.2rem">{{$.Strings.T "filter_type_workshop"}}</span>';
+    if(d.festival==='1') badges+='<span class="badge festival" style="margin-right:.2rem">Festival</span>';
+    if(d.availability==='limited') badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
+    if(d.availability==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
+    var feeHtml='';
+    if(d.fee==='free') feeHtml='<span class="fee-sym fee-free">0€</span>';
+    else if(d.fee==='donation') feeHtml='<span class="fee-sym fee-donation">♥</span>';
+    else if(d.fee==='paid') feeHtml='<span class="fee-sym fee-paid">€</span>';
+    return '<a href="'+detailUrl+'" class="event-tile">'+
+      '<div style="font-size:.95rem;font-weight:bold;margin-bottom:.25rem">'+escHtml(d.title||'')+'</div>'+
+      (dateStr?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(dateStr)+'</div>':'')+
+      (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
+      (badges||feeHtml?'<div>'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
+      '</a>';
+  }
+
+  function renderTiles(){
+    var container=document.getElementById('event-tiles');
+    var html='';
+    visible.slice(0,shown).forEach(function(r){ html+=buildTile(r); });
+    container.innerHTML=html;
+  }
+
   function eventIcon(e){
     // Priority for mixed-type events: festival > workshop > ball
     var color, shape;
@@ -706,6 +731,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     // Table
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
+
     shown = Math.min(shown+PAGE, visible.length);
     visible.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
     document.getElementById('page-info').textContent =
@@ -714,6 +740,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     document.getElementById('empty-state').hidden  = visible.length>0;
     document.getElementById('event-table').hidden  = visible.length===0;
     document.getElementById('pagination-bar').hidden = visible.length===0;
+
+    // Mobile tiles
+    renderTiles();
   }
 
   document.querySelectorAll('th.sortable').forEach(function(th){
@@ -751,6 +780,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     document.getElementById('page-info').textContent =
       I18N.showing+' '+shown+' '+I18N.of+' '+visible.length;
     this.disabled=shown>=visible.length;
+    renderTiles();
   });
 
   // Initialise map and first render

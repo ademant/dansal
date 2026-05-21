@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
@@ -1099,13 +1100,24 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	editable := userRole == RoleAdmin || (userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID))
 	event.Editable = &editable
 
-	if timetable, err := fetchTimetable(event.ID); err == nil {
+	var (
+		timetable []TimetableEntry
+		locs      []Location
+		musicians []Musician
+		wg        sync.WaitGroup
+	)
+	wg.Add(3)
+	go func() { defer wg.Done(); timetable, _ = fetchTimetable(event.ID) }()
+	go func() { defer wg.Done(); locs, _ = fetchEventLocation(event.ID) }()
+	go func() { defer wg.Done(); musicians, _ = fetchEventMusicians(event.ID) }()
+	wg.Wait()
+	if len(timetable) > 0 {
 		event.Timetable = timetable
 	}
-	if locs, err := fetchEventLocation(event.ID); err == nil && len(locs) > 0 {
+	if len(locs) > 0 {
 		event.Locations = locs
 	}
-	if musicians, err := fetchEventMusicians(event.ID); err == nil && len(musicians) > 0 {
+	if len(musicians) > 0 {
 		event.Musicians = musicians
 	}
 

@@ -205,6 +205,7 @@ languages:
       map_no_coords: "Doareennoù kartenn ebet evit an degouezhioù-mañ."
       nav_admin_musicians: "Sonerien"
       admin_musicians_title: "Sonerien"
+      admin_musician_new_title: "Soner nevez"
       musician_bandname: "Anv ar strolladig"
       musician_short_name: "Anv berr"
       musician_description: "Deskrivadur"
@@ -634,6 +635,7 @@ languages:
       # Locations
       nav_admin_musicians: "Musiker"
       admin_musicians_title: "Musiker"
+      admin_musician_new_title: "Neuer Musiker"
       musician_bandname: "Bandname"
       musician_short_name: "Kurzname"
       musician_description: "Beschreibung"
@@ -1045,6 +1047,7 @@ languages:
       # Locations
       nav_admin_musicians: "Sonerien"
       admin_musicians_title: "Sonerien"
+      admin_musician_new_title: "Soner nevez"
       musician_bandname: "Anv ar strollad"
       musician_short_name: "Anv berr"
       musician_description: "Deskrivadur"
@@ -1476,6 +1479,7 @@ languages:
       # Locations
       nav_admin_musicians: "Musicians"
       admin_musicians_title: "Musicians"
+      admin_musician_new_title: "New musician"
       musician_bandname: "Band name"
       musician_short_name: "Short name"
       musician_description: "Description"
@@ -1899,6 +1903,7 @@ languages:
       map_no_coords: "No hay coordenadas de mapa para estos eventos."
       nav_admin_musicians: "Músicos"
       admin_musicians_title: "Músicos"
+      admin_musician_new_title: "Nuevo músico"
       musician_bandname: "Nombre del grupo"
       musician_short_name: "Nombre corto"
       musician_description: "Descripción"
@@ -2328,6 +2333,7 @@ languages:
       # Locations
       nav_admin_musicians: "Musiciens"
       admin_musicians_title: "Musiciens"
+      admin_musician_new_title: "Nouveau musicien"
       musician_bandname: "Nom du groupe"
       musician_short_name: "Nom court"
       musician_description: "Description"
@@ -2751,6 +2757,7 @@ languages:
       map_no_coords: "Nessuna coordinata mappa per questi eventi."
       nav_admin_musicians: "Musicisti"
       admin_musicians_title: "Musicisti"
+      admin_musician_new_title: "Nuovo musicista"
       musician_bandname: "Nome del gruppo"
       musician_short_name: "Nome breve"
       musician_description: "Descrizione"
@@ -3171,6 +3178,7 @@ languages:
       map_no_coords: "Geen kaartcoördinaten voor deze evenementen."
       nav_admin_musicians: "Muzikanten"
       admin_musicians_title: "Muzikanten"
+      admin_musician_new_title: "Nieuwe muzikant"
       musician_bandname: "Bandnaam"
       musician_short_name: "Korte naam"
       musician_description: "Beschrijving"

@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="page-header">
   <h1>{{.Strings.T "admin_musicians_title"}}</h1>
-  <a href="/admin/musicians/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_new"}}</a>
+  <a href="/admin/musicians/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_musician_new_title"}}</a>
 </div>
 
 {{with .Data}}
@@ -13,23 +13,20 @@
       <th data-sort="str">{{$.Strings.T "musician_bandname"}}</th>
       <th data-sort="str">{{$.Strings.T "musician_short_name"}}</th>
       <th>{{$.Strings.T "musician_mbid"}}</th>
-      <th>{{$.Strings.T "musician_website"}}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
   {{range .Musicians}}
   <tr>
-    <td>{{.Bandname}}</td>
+    <td><a href="/musicians/{{.ID}}">{{.Bandname}}</a></td>
     <td class="muted">{{.ShortName}}</td>
     <td class="mbid-cell">
-      {{if .MBID}}<a href="https://musicbrainz.org/artist/{{.MBID}}" target="_blank" rel="noopener" title="{{.MBID}}">MB ↗</a>{{end}}
-    </td>
-    <td class="url-cell">
-      {{if .Internetsite}}<a href="{{.Internetsite}}" target="_blank" rel="noopener">↗</a>{{end}}
+      {{if .MBID}}<a href="https://musicbrainz.org/artist/{{.MBID}}" target="_blank" rel="noopener" title="{{.MBID}}" class="btn-sm">MB ↗</a>{{end}}
     </td>
     <td class="col-actions">
       <a href="/admin/musicians/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      {{if .Internetsite}}<a href="{{.Internetsite}}" target="_blank" rel="noopener" class="btn-sm">{{$.Strings.T "musician_website"}} ↗</a>{{end}}
       <button type="button" class="btn-sm btn-del"
               onclick="if(confirm('{{$.Strings.T "musician_confirm_delete"}}'))delMusician({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
@@ -52,10 +49,16 @@ function delMusician(id) {
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
 .muted{color:#888;font-size:.9rem}
 .mbid-cell{font-size:.85rem}
-.url-cell{font-size:.9rem}
 .col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
+.btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
 </style>

@@ -620,6 +620,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_org_members_user_id ON organization_members(user_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN last_result TEXT") // no-op if already present
 }
 
 func createTables() error {
@@ -732,6 +733,7 @@ func createTables() error {
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at DATETIME,
+		last_result TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (

@@ -993,6 +993,33 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				}
 			}
 			_ = client.BulkAssignFetchSourceOrg(r.Context(), ids, orgID, token)
+		case "add-tag":
+			newTag := strings.TrimSpace(r.FormValue("new_tag"))
+			if newTag != "" {
+				idSet := make(map[int]bool, len(ids))
+				for _, id := range ids {
+					idSet[id] = true
+				}
+				sources, err := client.GetFetchSources(r.Context(), token)
+				if err == nil {
+					for _, src := range sources {
+						if !idSet[src.ID] {
+							continue
+						}
+						hasTag := false
+						for _, t := range src.Tags {
+							if t == newTag {
+								hasTag = true
+								break
+							}
+						}
+						if !hasTag {
+							newTags := append(src.Tags, newTag)
+							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, token)
+						}
+					}
+				}
+			}
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
 	}

@@ -540,6 +540,7 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return out
 	},
+	"hasPrefix": strings.HasPrefix,
 	"fmtBytes": func(b int64) string {
 		const unit = 1024
 		if b < unit {

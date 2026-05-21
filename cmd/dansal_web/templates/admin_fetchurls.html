@@ -15,11 +15,13 @@
     <option value="run">{{$.Strings.T "fetch_run"}}</option>
     <option value="delete">{{$.Strings.T "admin_delete"}}</option>
     <option value="assign-org">{{$.Strings.T "fetch_assign_org"}}</option>
+    <option value="add-tag">{{$.Strings.T "fetch_add_tag"}}</option>
   </select>
   <select name="organization_id" id="bulk-org" class="bulk-org-select" style="display:none">
     <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
+  <input type="text" name="new_tag" id="bulk-tag" placeholder="tag" style="display:none;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem">
   <button type="submit" class="btn-sm">{{$.Strings.T "admin_apply"}}</button>
 </div>
 
@@ -33,6 +35,7 @@
       <th>{{$.Strings.T "fetch_tags"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_last_fetched"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_last_result"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -47,6 +50,7 @@
     <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
     <td>{{$orgName}}</td>
     <td class="date-cell" data-val="{{.LastFetchedAt}}">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
+    <td class="result-cell">{{if .LastResult}}<span class="{{if hasPrefix .LastResult "error:"}}result-err{{else}}result-ok{{end}}" title="{{.LastResult}}">{{.LastResult}}</span>{{end}}</td>
     <td class="col-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <button type="button" class="btn-sm btn-run"
@@ -102,6 +106,7 @@ document.getElementById('check-all').addEventListener('change', function() {
 });
 document.getElementById('bulk-action').addEventListener('change', function() {
   document.getElementById('bulk-org').style.display = this.value === 'assign-org' ? '' : 'none';
+  document.getElementById('bulk-tag').style.display = this.value === 'add-tag' ? '' : 'none';
 });
 </script>
 
@@ -110,12 +115,22 @@ document.getElementById('bulk-action').addEventListener('change', function() {
 .toast.toast-show{transform:translateX(-50%) translateY(0);opacity:1}
 .toast-ok{background:#1e7e34;color:#fff}
 .toast-err{background:#b00020;color:#fff}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
 .bulk-toolbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap}
 .check-all-label{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
 .col-check{width:2rem;text-align:center}
 .url-cell{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .date-cell{white-space:nowrap;color:#666;font-size:.85rem}
+.result-cell{max-width:160px;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result-ok{color:#1a7f37;font-weight:600}
+.result-err{color:#b00020}
 .col-actions{white-space:nowrap;display:flex;gap:.3rem;align-items:center}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
 .btn-run{background:#2a7a2a;color:#fff;border:none}
 .btn-run:hover{background:#1a5a1a}
 .btn-del{background:#b00020;color:#fff;border:none}

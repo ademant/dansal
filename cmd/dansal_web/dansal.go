@@ -264,6 +264,7 @@ type FetchSource struct {
 	DanceIDs       []int    `json:"dance_ids,omitempty"`
 	OrganizationID *int     `json:"organization_id,omitempty"`
 	LastFetchedAt  string   `json:"last_fetched_at,omitempty"`
+	LastResult     string   `json:"last_result,omitempty"`
 	CreatedAt      string   `json:"created_at"`
 }
 

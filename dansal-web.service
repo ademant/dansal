@@ -2,6 +2,8 @@
 Description=Dansal Web Frontend
 After=network-online.target dansal.service
 Wants=dansal.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -11,8 +13,6 @@ ExecStart=/usr/bin/dansal-web --config /etc/dansal/web.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
 TimeoutStopSec=35
 
 RuntimeDirectory=dansal-web

@@ -1,6 +1,8 @@
 [Unit]
 Description=Dansal Calendar Server
 After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -11,8 +13,6 @@ ExecStart=/usr/bin/dansal --config /etc/dansal/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
 TimeoutStopSec=35
 
 # systemd creates /run/dansal (socket), /var/lib/dansal (database + images)

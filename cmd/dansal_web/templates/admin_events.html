@@ -13,6 +13,7 @@
   </label>
   <select name="org_id" onchange="this.form.submit()">
     <option value="">{{$.Strings.T "filter_all_orgs"}}</option>
+    <option value="-1" {{if eq .FilterOrgID -1}}selected{{end}}>{{$.Strings.T "filter_no_org"}}</option>
     {{range .Organizations}}
     <option value="{{.ID}}" {{if eq .ID $.Data.FilterOrgID}}selected{{end}}>{{.Name}}</option>
     {{end}}
@@ -21,6 +22,18 @@
     <option value="">{{$.Strings.T "filter_all_musicians"}}</option>
     {{range .Musicians}}
     <option value="{{.ID}}" {{if eq .ID $.Data.FilterMusicianID}}selected{{end}}>{{.Bandname}}</option>
+    {{end}}
+  </select>
+  <select name="type" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_types"}}</option>
+    <option value="ball" {{if eq .FilterType "ball"}}selected{{end}}>{{$.Strings.T "filter_type_ball"}}</option>
+    <option value="workshop" {{if eq .FilterType "workshop"}}selected{{end}}>{{$.Strings.T "filter_type_workshop"}}</option>
+    <option value="festival" {{if eq .FilterType "festival"}}selected{{end}}>{{$.Strings.T "filter_type_festival"}}</option>
+  </select>
+  <select name="dance" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_dances"}}</option>
+    {{range .Dances}}
+    <option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>
     {{end}}
   </select>
   <input type="date" name="date_from" value="{{.FilterDateFrom}}" title="{{$.Strings.T "filter_from_label"}}" onchange="this.form.submit()">
@@ -47,7 +60,7 @@
   <tr>
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
-    <td>{{if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
+    <td>{{if and .LocationShortName .LocationTown}}{{.LocationShortName}}, {{.LocationTown}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
     <td>{{.LocationCountry}}</td>
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
@@ -56,7 +69,6 @@
     </td>
     <td style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
-      <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
       <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>

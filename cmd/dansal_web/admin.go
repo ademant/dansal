@@ -1206,11 +1206,14 @@ type AdminEventsData struct {
 	Events            []Event
 	Organizations     []Organization
 	Musicians         []Musician
+	Dances            []Dance
 	FilterIncludePast bool
-	FilterOrgID       int
+	FilterOrgID       int    // -1 = no org assigned
 	FilterDateFrom    string
 	FilterDateTo      string
 	FilterMusicianID  int
+	FilterType        string // "ball", "workshop", "festival"
+	FilterDance       string
 }
 
 type AdminEventNewData struct {
@@ -1536,6 +1539,8 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		musicianID, _ := strconv.Atoi(q.Get("musician_id"))
 		dateFrom := q.Get("date_from")
 		dateTo := q.Get("date_to")
+		filterType := q.Get("type")
+		filterDance := q.Get("dance")
 
 		params := url.Values{}
 		if includePast {
@@ -1561,7 +1566,16 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
-		if orgID != 0 {
+		// org filter: -1 = no org assigned, >0 = specific org
+		if orgID == -1 {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.OrganizationID == nil {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		} else if orgID != 0 {
 			filtered := events[:0]
 			for _, e := range events {
 				if e.OrganizationID != nil && *e.OrganizationID == orgID {
@@ -1570,20 +1584,56 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 			events = filtered
 		}
+		if filterType != "" {
+			filtered := events[:0]
+			for _, e := range events {
+				switch filterType {
+				case "ball":
+					if e.HasBall {
+						filtered = append(filtered, e)
+					}
+				case "workshop":
+					if e.HasWorkshop {
+						filtered = append(filtered, e)
+					}
+				case "festival":
+					if e.HasFestival {
+						filtered = append(filtered, e)
+					}
+				}
+			}
+			events = filtered
+		}
+		if filterDance != "" {
+			filtered := events[:0]
+			for _, e := range events {
+				for _, d := range e.DanceNames {
+					if d == filterDance {
+						filtered = append(filtered, e)
+						break
+					}
+				}
+			}
+			events = filtered
+		}
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
+		dances, _ := client.GetDances(r.Context())
 
 		title := i18n.T(r, "admin_events_title")
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:            events,
 			Organizations:     orgs,
 			Musicians:         musicians,
+			Dances:            dances,
 			FilterIncludePast: includePast,
 			FilterOrgID:       orgID,
 			FilterDateFrom:    dateFrom,
 			FilterDateTo:      dateTo,
 			FilterMusicianID:  musicianID,
+			FilterType:        filterType,
+			FilterDance:       filterDance,
 		}))
 	}
 }

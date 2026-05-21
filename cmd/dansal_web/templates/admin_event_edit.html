@@ -266,25 +266,14 @@
       <option value="multiple"{{if and .Event.Pricing (eq .Event.Pricing.Type "multiple")}} selected{{end}}>{{$.Strings.T "evt_pricing_multiple"}}</option>
     </select>
 
-    <div id="pricing-single"{{if not (and .Event.Pricing (eq .Event.Pricing.Type "single"))}} hidden{{end}} class="field-row">
+    <div id="pricing-single"{{if not (and .Event.Pricing (or (eq .Event.Pricing.Type "single") (eq .Event.Pricing.Type "donation")))}} hidden{{end}} class="field-row">
       <div>
         <label for="pricing_amount">{{$.Strings.T "evt_pricing_amount"}}</label>
-        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" value="{{with .Event.Pricing}}{{if eq .Type "single"}}{{.Amount}}{{end}}{{end}}" placeholder="10.00">
+        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" value="{{with .Event.Pricing}}{{if or (eq .Type "single") (eq .Type "donation")}}{{.Amount}}{{end}}{{end}}" placeholder="10.00">
       </div>
       <div>
         <label for="pricing_currency">{{$.Strings.T "evt_pricing_currency"}}</label>
         <input id="pricing_currency" type="text" name="pricing_currency" value="{{with .Event.Pricing}}{{.Currency}}{{end}}" placeholder="EUR" style="max-width:80px">
-      </div>
-    </div>
-
-    <div id="pricing-donation"{{if not (and .Event.Pricing (eq .Event.Pricing.Type "donation"))}} hidden{{end}} class="field-row">
-      <div>
-        <label for="pricing_donation_amount">{{$.Strings.T "evt_pricing_amount"}} <span class="field-hint">(ca.)</span></label>
-        <input id="pricing_donation_amount" type="number" name="pricing_amount" min="0" step="0.01" value="{{with .Event.Pricing}}{{if eq .Type "donation"}}{{.Amount}}{{end}}{{end}}" placeholder="10.00">
-      </div>
-      <div>
-        <label for="pricing_donation_currency">{{$.Strings.T "evt_pricing_currency"}}</label>
-        <input id="pricing_donation_currency" type="text" name="pricing_currency" value="{{with .Event.Pricing}}{{.Currency}}{{end}}" placeholder="EUR" style="max-width:80px">
       </div>
     </div>
 
@@ -436,8 +425,7 @@ function toggleLocNew(){
 }
 function togglePricing(){
   var v=document.getElementById('pricing_type').value;
-  document.getElementById('pricing-single').hidden=(v!=='single');
-  document.getElementById('pricing-donation').hidden=(v!=='donation');
+  document.getElementById('pricing-single').hidden=(v!=='single'&&v!=='donation');
   document.getElementById('pricing-multiple').hidden=(v!=='multiple');
 }
 

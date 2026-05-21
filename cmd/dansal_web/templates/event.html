@@ -113,7 +113,7 @@
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_admission"}}</div>
       {{if eq .Type "free"}}<div>{{$.Strings.T "evt_free"}}</div>{{end}}
-      {{if eq .Type "donation"}}<div>{{$.Strings.T "evt_donation"}}</div>{{end}}
+      {{if eq .Type "donation"}}<div>{{if gt .Amount 0.0}}ca. {{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}{{else}}{{$.Strings.T "evt_donation"}}{{end}}</div>{{end}}
       {{if eq .Type "single"}}<div>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</div>{{end}}
       {{if eq .Type "multiple"}}
         {{range .Prices}}<div>{{.Label}}: {{.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}</div>{{end}}

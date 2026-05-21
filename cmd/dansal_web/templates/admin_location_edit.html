@@ -60,16 +60,23 @@
   <label>{{$.Strings.T "fetch_org"}}</label>
   <div style="display:flex;flex-direction:column;gap:.3rem">
     {{range .Orgs}}{{$orgID := .ID}}
-    <label style="font-weight:normal;display:flex;align-items:center;gap:.5rem">
+    <label class="org-cb-label">
       <input type="checkbox" name="organization_ids" value="{{.ID}}"{{range $.Data.Location.OrganizationIDs}}{{if eq . $orgID}} checked{{end}}{{end}}>
-      {{.Name}}
+      <span>{{.Name}}</span>
     </label>
     {{end}}
   </div>
 
   <div class="form-actions">
-    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/locations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    <div style="display:flex;gap:.75rem">
+      <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+      <a href="/admin/locations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    </div>
+    {{if .Location.ID}}
+    <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
+      <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
+    </form>
+    {{end}}
   </div>
 </form>
 {{end}}
@@ -97,11 +104,15 @@
 .edit-form input:focus,.edit-form select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .form-row{display:flex;gap:.75rem}
 .form-row>div{display:flex;flex-direction:column;gap:.3rem;flex:1}
-.form-actions{display:flex;gap:.75rem;margin-top:.5rem}
+.form-actions{display:flex;gap:.75rem;margin-top:.5rem;justify-content:space-between;align-items:center}
+.org-cb-label{font-weight:normal;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:.5rem}
+.org-cb-label input[type=checkbox]{width:auto;flex-shrink:0}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+.btn-del{padding:.45rem 1.2rem;background:#b00020;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-del:hover{background:#800016}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>

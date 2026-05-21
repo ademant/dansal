@@ -20,6 +20,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Channel  string `json:"channel"` // "email" (default) or "telegram"
+		BaseURL  string `json:"base_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -118,7 +119,11 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", now.Format(time.RFC3339), user.ID)
 
-	magicURL := buildMagicBase(r) + "/api/v1/login/magic/" + token
+	base := req.BaseURL
+	if base == "" {
+		base = buildMagicBase(r)
+	}
+	magicURL := base + "/api/v1/login/magic/" + token
 
 	msgText := fmt.Sprintf(
 		"Hi %s,\n\nclick the link below to log in:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",

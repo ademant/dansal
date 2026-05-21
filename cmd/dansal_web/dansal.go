@@ -150,6 +150,7 @@ type Event struct {
 	URL             string     `json:"url,omitempty"`
 	ImageURL        string     `json:"image_url,omitempty"`
 	OrganizationID  *int       `json:"organization_id,omitempty"`
+	LocationID      *int       `json:"location_id,omitempty"`
 	Location          string     `json:"location,omitempty"`
 	LocationShortName string     `json:"location_short_name,omitempty"`
 	LocationAddress   string     `json:"location_address,omitempty"`
@@ -185,6 +186,7 @@ type TimetableEntry struct {
 	Title        string `json:"title"`
 	Description  string `json:"description,omitempty"`
 	Room         string `json:"room,omitempty"`
+	LocationID   *int   `json:"location_id,omitempty"`
 	LocationName string `json:"location_name,omitempty"`
 }
 
@@ -906,7 +908,7 @@ func (c *DansalClient) GetTelegramVerifyLink(ctx context.Context, id int, baseUR
 	return result.DeepLink, nil
 }
 
-func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channel string) error {
+func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channel, baseURL string) error {
 	var payload map[string]string
 	if strings.Contains(identifier, "@") {
 		payload = map[string]string{"email": identifier}
@@ -915,6 +917,9 @@ func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channe
 	}
 	if channel != "" && channel != "email" {
 		payload["channel"] = channel
+	}
+	if baseURL != "" {
+		payload["base_url"] = baseURL
 	}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login/magic",

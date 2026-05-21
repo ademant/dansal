@@ -155,7 +155,7 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			channel = "email"
 		}
 		if identifier != "" {
-			_ = client.RequestMagicLogin(r.Context(), identifier, channel)
+			_ = client.RequestMagicLogin(r.Context(), identifier, channel, cfg.publicBaseURL())
 		}
 		http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)
 	}

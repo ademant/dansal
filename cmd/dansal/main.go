@@ -721,6 +721,29 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN suggester_email TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE events ADD COLUMN suggestion_token TEXT")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_suggestion_token ON events(suggestion_token)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS pending_registrations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		verification_token TEXT UNIQUE NOT NULL,
+		approval_token     TEXT UNIQUE NOT NULL,
+		username           TEXT NOT NULL,
+		email              TEXT NOT NULL,
+		password_hash      TEXT NOT NULL,
+		reg_type           TEXT NOT NULL CHECK(reg_type IN ('join_org','new_org')),
+		org_id             INTEGER,
+		org_name           TEXT DEFAULT '',
+		org_description    TEXT DEFAULT '',
+		org_website        TEXT DEFAULT '',
+		org_contact_email  TEXT DEFAULT '',
+		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
+		telegram           TEXT DEFAULT '',
+		telegram_chat_id   TEXT DEFAULT '',
+		verified           INTEGER DEFAULT 0,
+		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at         DATETIME NOT NULL,
+		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_reg_verification_token ON pending_registrations(verification_token)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_reg_approval_token ON pending_registrations(approval_token)")
 }
 
 func createTables() error {
@@ -1024,6 +1047,29 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_org_members_user_id    ON organization_members(user_id);
 	CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id);
 	CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
+	CREATE TABLE IF NOT EXISTS pending_registrations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		verification_token TEXT UNIQUE NOT NULL,
+		approval_token     TEXT UNIQUE NOT NULL,
+		username           TEXT NOT NULL,
+		email              TEXT NOT NULL,
+		password_hash      TEXT NOT NULL,
+		reg_type           TEXT NOT NULL CHECK(reg_type IN ('join_org','new_org')),
+		org_id             INTEGER,
+		org_name           TEXT DEFAULT '',
+		org_description    TEXT DEFAULT '',
+		org_website        TEXT DEFAULT '',
+		org_contact_email  TEXT DEFAULT '',
+		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
+		telegram           TEXT DEFAULT '',
+		telegram_chat_id   TEXT DEFAULT '',
+		verified           INTEGER DEFAULT 0,
+		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at         DATETIME NOT NULL,
+		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_pending_reg_verification_token ON pending_registrations(verification_token);
+	CREATE INDEX IF NOT EXISTS idx_pending_reg_approval_token ON pending_registrations(approval_token);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -1048,6 +1094,7 @@ func reloadConfig(path string) {
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
+	initRegisterRateLimiter()
 	log.Printf("Config reloaded from %s", path)
 }
 
@@ -1108,6 +1155,7 @@ func main() {
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
+	initRegisterRateLimiter()
 
 	smux := http.NewServeMux()
 
@@ -1166,6 +1214,13 @@ func main() {
 	smux.HandleFunc("POST /api/v1/events/suggest-preview", suggestPreviewHandler)
 	smux.HandleFunc("POST /api/v1/events/suggest", suggestHandler)
 	smux.HandleFunc("GET /api/v1/events/suggest/verify/{token}", suggestVerifyHandler)
+
+	// Self-registration endpoints
+	smux.HandleFunc("POST /api/v1/register", registerHandler)
+	smux.HandleFunc("GET /api/v1/register/verify/email/{token}", verifyEmailRegHandler)
+	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
+	smux.Handle("POST /api/v1/pending-registrations/{id}/approve", auth(approveRegHandler))
+	smux.Handle("DELETE /api/v1/pending-registrations/{id}", auth(rejectRegHandler))
 
 	// Protected event writes
 	smux.Handle("POST /api/v1/events/preview", auth(previewEventsHandler))

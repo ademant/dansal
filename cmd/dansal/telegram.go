@@ -75,6 +75,47 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	chatID := update.Message.Chat.ID
 	chatIDStr := fmt.Sprintf("%d", chatID)
 
+	// Handle /register {token} commands.
+	if strings.HasPrefix(text, "/register") {
+		parts := strings.Fields(text)
+		if len(parts) < 2 {
+			_ = sendTelegramMessage(chatIDStr, "Send /register <token> with the token from the registration page.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		regToken := parts[1]
+		var regID int
+		var regExpires string
+		var regVerified int
+		regErr := db.QueryRow(
+			"SELECT id, expires_at, verified FROM pending_registrations WHERE verification_token=?",
+			regToken,
+		).Scan(&regID, &regExpires, &regVerified)
+		if regErr != nil {
+			_ = sendTelegramMessage(chatIDStr, "This registration token is invalid or has already been used.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		regExp, err := parseTokenExpiration(regExpires)
+		if err != nil || time.Now().After(regExp) {
+			db.Exec("DELETE FROM pending_registrations WHERE id=?", regID)
+			_ = sendTelegramMessage(chatIDStr, "This registration token has expired.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if regVerified == 1 {
+			_ = sendTelegramMessage(chatIDStr, "This registration has already been verified.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		db.Exec("UPDATE pending_registrations SET verified=1, telegram_chat_id=? WHERE id=?", chatIDStr, regID)
+		log.Printf("telegram webhook: verified pending registration %d via Telegram", regID)
+		_ = sendTelegramMessage(chatIDStr, "✓ Verified! Your registration is now awaiting admin approval.")
+		go notifyApprovers(regID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Only handle /start commands.
 	if !strings.HasPrefix(text, "/start") {
 		w.WriteHeader(http.StatusOK)

@@ -80,3 +80,12 @@ logo_height_sub: 32
 
 # Colour scheme: auto (follow OS preference), light, or dark.
 dark_mode: auto
+
+# --- Telegram ---
+
+# Optional secret token to validate incoming Telegram webhook calls.
+# Set the same value in Telegram's setWebhook call as secret_token=<value>.
+# When set, requests with a missing or wrong X-Telegram-Bot-Api-Secret-Token
+# header are rejected with 403. When unset, all POST /telegram/webhook
+# requests are forwarded without secret checking.
+# telegram_webhook_secret: ""

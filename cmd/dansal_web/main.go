@@ -81,6 +81,7 @@ func main() {
 		r.HandleFunc("GET /org/{name}/followers", followersHandler(cfg, db))
 		r.HandleFunc("POST /org/{name}/inbox", inboxHandler(cfg, db, client))
 		r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
+		r.HandleFunc("POST /telegram/webhook", telegramWebhookProxyHandler(cfg))
 
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))

@@ -39,6 +39,9 @@ type Config struct {
 	pagesContent *PagesContent
 	configPath   string // path from which config was loaded; used for reload
 
+	// Telegram
+	TelegramWebhookSecret string `yaml:"telegram_webhook_secret"`
+
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`
 	ContactOverride   string

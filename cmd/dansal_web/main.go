@@ -191,7 +191,7 @@ func main() {
 	}
 	go startDelivery(cfg, db, client, relayActor)
 
-	log.Printf("web server listening on %s (domain: %s)", cfg.Listen, cfg.Domain)
+	log.Printf("web server listening on %s (domain: %s, public base URL: %s)", cfg.Listen, cfg.Domain, cfg.publicBaseURL())
 	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(&live)); err != nil {
 		log.Fatal(err)
 	}

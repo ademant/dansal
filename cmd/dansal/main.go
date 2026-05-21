@@ -535,7 +535,6 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token)")
 	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN has_festival INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
@@ -552,7 +551,6 @@ func migrateDB() {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id)")
 	db.Exec("ALTER TABLE locations ADD COLUMN country TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS event_musicians (
 		event_id INTEGER NOT NULL,
@@ -561,7 +559,6 @@ func migrateDB() {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id)")
 	// Remove tables and columns that are no longer part of the schema.
 	db.Exec("DROP TABLE IF EXISTS posts")
 	db.Exec("DROP TABLE IF EXISTS threads")
@@ -587,7 +584,6 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)")
 	db.Exec("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -607,7 +603,6 @@ func migrateDB() {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token)")
 	db.Exec("ALTER TABLE events ADD COLUMN availability TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE events ADD COLUMN tickets_total INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE events ADD COLUMN booking_enabled INTEGER DEFAULT 0")
@@ -626,8 +621,6 @@ func migrateDB() {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token)")
 	db.Exec("ALTER TABLE bookings ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE musicians ADD COLUMN wikidata_id TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN country TEXT")
@@ -653,7 +646,6 @@ func migrateDB() {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id)")
 	db.Exec(`CREATE TABLE IF NOT EXISTS event_tags (
 		event_id INTEGER NOT NULL,
 		tag TEXT NOT NULL,
@@ -673,7 +665,6 @@ func migrateDB() {
 		FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id ON fetch_source_dances(fetch_source_id)")
 	db.Exec(`INSERT OR IGNORE INTO fetch_source_dances (fetch_source_id, dance_id)
 		SELECT fs.id, CAST(j.value AS INTEGER)
 		FROM fetch_sources fs, json_each(COALESCE(fs.dance_ids,'[]')) j
@@ -714,7 +705,6 @@ func migrateDB() {
 		expires_at DATETIME NOT NULL,
 		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token)")
 	migrateContactPostsCheckConstraint()
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)")
@@ -742,8 +732,20 @@ func migrateDB() {
 		expires_at         DATETIME NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_reg_verification_token ON pending_registrations(verification_token)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_reg_approval_token ON pending_registrations(approval_token)")
+	// Drop indexes made redundant by UNIQUE constraints or composite-PK leading-column coverage.
+	db.Exec("DROP INDEX IF EXISTS idx_verification_tokens_token")
+	db.Exec("DROP INDEX IF EXISTS idx_magic_login_tokens_token")
+	db.Exec("DROP INDEX IF EXISTS idx_invite_links_token")
+	db.Exec("DROP INDEX IF EXISTS idx_contact_posts_verify_token")
+	db.Exec("DROP INDEX IF EXISTS idx_contact_requests_verify_token")
+	db.Exec("DROP INDEX IF EXISTS idx_bookings_verify_token")
+	db.Exec("DROP INDEX IF EXISTS idx_bookings_qr_token")
+	db.Exec("DROP INDEX IF EXISTS idx_event_locations_event_id")
+	db.Exec("DROP INDEX IF EXISTS idx_event_musicians_event_id")
+	db.Exec("DROP INDEX IF EXISTS idx_event_dances_event_id")
+	db.Exec("DROP INDEX IF EXISTS idx_fetch_source_dances_source_id")
+	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_verification_token")
+	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_approval_token")
 }
 
 func createTables() error {
@@ -875,7 +877,6 @@ func createTables() error {
 		FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id ON fetch_source_dances(fetch_source_id);
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
@@ -917,7 +918,6 @@ func createTables() error {
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
-	CREATE INDEX IF NOT EXISTS idx_invite_links_token ON invite_links(token);
 	CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -927,7 +927,6 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
 	CREATE TABLE IF NOT EXISTS magic_login_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -936,7 +935,6 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token);
 	CREATE TABLE IF NOT EXISTS timetable_entries (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
@@ -960,7 +958,6 @@ func createTables() error {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id);
 	CREATE TABLE IF NOT EXISTS event_musicians (
 		event_id INTEGER NOT NULL,
 		musician_id INTEGER NOT NULL,
@@ -968,7 +965,6 @@ func createTables() error {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id);
 	CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id);
 	CREATE TABLE IF NOT EXISTS event_dances (
 		event_id INTEGER NOT NULL,
@@ -977,7 +973,6 @@ func createTables() error {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id);
 	CREATE TABLE IF NOT EXISTS event_tags (
 		event_id INTEGER NOT NULL,
 		tag TEXT NOT NULL,
@@ -1004,7 +999,6 @@ func createTables() error {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id);
-	CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token);
 	CREATE TABLE IF NOT EXISTS contact_requests (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		post_id INTEGER NOT NULL,
@@ -1016,7 +1010,6 @@ func createTables() error {
 		expires_at DATETIME NOT NULL,
 		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token);
 	CREATE TABLE IF NOT EXISTS bookings (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
@@ -1033,8 +1026,6 @@ func createTables() error {
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
-	CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token);
-	CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token);
 	CREATE INDEX IF NOT EXISTS idx_events_url             ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -1068,8 +1059,6 @@ func createTables() error {
 		expires_at         DATETIME NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
-	CREATE INDEX IF NOT EXISTS idx_pending_reg_verification_token ON pending_registrations(verification_token);
-	CREATE INDEX IF NOT EXISTS idx_pending_reg_approval_token ON pending_registrations(approval_token);
 	`
 	_, err := db.Exec(schema)
 	return err

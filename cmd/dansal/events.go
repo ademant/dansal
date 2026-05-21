@@ -395,6 +395,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 			*args = append(*args, n)
 		}
 	}
+	if v := q.Get("created_after"); v != "" {
+		*query += " AND e.created_at >= ?"
+		*args = append(*args, v)
+	}
 }
 
 // applyPagination appends ORDER BY + LIMIT/OFFSET clauses.

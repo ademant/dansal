@@ -144,6 +144,84 @@ func ensureMusician(q querier, bandname string) (int64, error) {
 	return result.LastInsertId()
 }
 
+// parseFolkdanceJSONToRequests converts a folkdance JSON body to
+// EventCreateRequests without touching the database. Used by the preview
+// endpoint; musician IDs are omitted since ensureMusician requires a DB.
+func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
+	var payload struct {
+		Events []folkdanceEvent `json:"events"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("parse JSON: %w", err)
+	}
+
+	var reqs []EventCreateRequest
+	now := time.Now().UTC()
+
+	for _, fe := range payload.Events {
+		if fe.Name == "" {
+			continue
+		}
+		startTime, err := parseFolkdanceTime(fe.Start, fe.StartDate)
+		if err != nil {
+			continue
+		}
+		endTime := startTime
+		if fe.End != "" {
+			endTime, _ = parseFolkdanceTime(fe.End, "")
+		} else if fe.EndDate != "" {
+			if t, err := time.Parse("2006-01-02", fe.EndDate); err == nil {
+				endTime = t.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339)
+			}
+		}
+		if et, err := time.Parse(time.RFC3339, endTime); err == nil && et.Before(now) {
+			continue
+		}
+
+		tags := make([]string, 0, len(fe.Styles)+len(src.Tags))
+		seen := make(map[string]bool)
+		for _, s := range fe.Styles {
+			if s != "" && !seen[s] {
+				seen[s] = true
+				tags = append(tags, s)
+			}
+		}
+		for _, s := range src.Tags {
+			if s != "" && !seen[s] {
+				seen[s] = true
+				tags = append(tags, s)
+			}
+		}
+
+		var eventURL string
+		if len(fe.Links) > 0 {
+			eventURL = fe.Links[0]
+		}
+
+		reqs = append(reqs, EventCreateRequest{
+			Title:          fe.Name,
+			Description:    fe.Details,
+			StartTime:      startTime,
+			EndTime:        endTime,
+			HasBall:        fe.Social,
+			HasWorkshop:    fe.Workshop,
+			IsCancelled:    fe.Cancelled,
+			Tags:           tags,
+			URL:            eventURL,
+			Source:         src.URL,
+			OrganizationID: src.OrganizationID,
+			Dances:         src.DanceIDs,
+			Pricing:        parseFolkdancePrice(fe.Price),
+			Location: EventLocationRequest{
+				Location: folkdanceLocationString(fe.City, fe.State, fe.Country),
+				Town:     fe.City,
+				Country:  fe.Country,
+			},
+		})
+	}
+	return reqs, nil
+}
+
 func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 	resp, err := fetchClient.Get(src.URL)
 	if err != nil {

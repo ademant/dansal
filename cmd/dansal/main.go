@@ -717,6 +717,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token)")
 	migrateContactPostsCheckConstraint()
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)")
 }
 
 func createTables() error {
@@ -1017,6 +1018,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_org_members_user_id    ON organization_members(user_id);
 	CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id);
+	CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -1154,6 +1156,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/org-images/{id}", getOrgImage)
 
 	// Protected event writes
+	smux.Handle("POST /api/v1/events/preview", auth(previewEventsHandler))
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))

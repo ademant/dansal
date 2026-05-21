@@ -469,6 +469,105 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 	}
 }
 
+// parseICalToRequests converts a parsed iCal calendar to EventCreateRequests
+// without touching the database. Used by the preview endpoint.
+func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateRequest {
+	var reqs []EventCreateRequest
+	now := time.Now().UTC()
+
+	for _, vevent := range cal.Events() {
+		prop := func(p ics.ComponentProperty) string {
+			if v := vevent.GetProperty(p); v != nil {
+				return v.Value
+			}
+			return ""
+		}
+
+		startT, err := vevent.GetStartAt()
+		if err != nil {
+			continue
+		}
+		endT := startT
+		if et, err := vevent.GetEndAt(); err == nil {
+			endT = et
+		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
+			if d, err := parseICalDuration(durStr); err == nil {
+				endT = startT.Add(d)
+			}
+		}
+
+		title := prop(ics.ComponentPropertySummary)
+		if title == "" {
+			continue
+		}
+
+		tags := parseICalCategories(vevent)
+		seen := make(map[string]bool)
+		for _, t := range tags {
+			seen[t] = true
+		}
+		for _, t := range src.Tags {
+			if !seen[t] {
+				tags = append(tags, t)
+			}
+		}
+
+		baseUID := prop(ics.ComponentPropertyUniqueId)
+		sourceLastModified := icalLastModified(vevent)
+
+		occs, _ := expandRRuleOccurrences(vevent, startT, endT)
+		if occs == nil {
+			occs = [][2]time.Time{{startT, endT}}
+		}
+
+		for _, occ := range occs {
+			if occ[1].Before(now) {
+				continue
+			}
+			uid := baseUID
+			if len(occs) > 1 && !occ[0].Equal(startT) {
+				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
+			}
+
+			var loc EventLocationRequest
+			if apple := parseAppleStructuredLocation(vevent); apple != nil {
+				if apple.Location == "" {
+					apple.Location = prop(ics.ComponentPropertyLocation)
+				}
+				if apple.Latitude == nil {
+					apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
+				}
+				loc = *apple
+			} else {
+				lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
+				loc = EventLocationRequest{
+					Location:  prop(ics.ComponentPropertyLocation),
+					Latitude:  lat,
+					Longitude: lon,
+				}
+			}
+
+			reqs = append(reqs, EventCreateRequest{
+				UID:                uid,
+				Title:              title,
+				Description:        prop(ics.ComponentPropertyDescription),
+				StartTime:          occ[0].UTC().Format(time.RFC3339),
+				EndTime:            occ[1].UTC().Format(time.RFC3339),
+				IsCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
+				Tags:               tags,
+				URL:                attachURL(vevent),
+				Source:             src.URL,
+				OrganizationID:     src.OrganizationID,
+				Dances:             src.DanceIDs,
+				Location:           loc,
+				SourceLastModified: sourceLastModified,
+				FetchSourceID:      src.ID,
+			})
+		}
+	}
+	return reqs
+}
+
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
 func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 	resp, err := fetchClient.Get(src.URL)

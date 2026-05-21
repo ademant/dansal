@@ -3,7 +3,7 @@
 {{with .Data}}
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
-  {{if and $.User (eq $.User.Role "admin")}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
+  {{if $.User}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
@@ -63,7 +63,15 @@
 {{end}}
 
 {{/* Upcoming events */}}
-<h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
+<div class="events-heading-row">
+  <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
+  {{if .PastEvents}}
+  <button type="button" class="btn-toggle" id="past-toggle"
+          onclick="var l=document.getElementById('past-list');l.hidden=!l.hidden;this.classList.toggle('btn-toggle-active')">
+    {{$.Strings.T "org_show_past"}} ({{len .PastEvents}})
+  </button>
+  {{end}}
+</div>
 {{if .UpcomingEvents}}
 <ul class="event-list">
 {{range .UpcomingEvents}}
@@ -71,7 +79,9 @@
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
     {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-    {{if .LocationShortName}} &mdash; {{.LocationShortName}}{{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+    {{if .LocationShortName}}
+      &mdash; {{.LocationShortName}}{{if .LocationAddress}}, {{.LocationAddress}}{{end}}{{if .LocationTown}}, {{.LocationTown}}{{end}}
+    {{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
     {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
@@ -82,27 +92,23 @@
 </li>
 {{end}}
 </ul>
-{{else}}<p>{{$.Strings.T "org_no_events"}}</p>{{end}}
+{{else}}<p class="empty-msg">{{$.Strings.T "org_no_events"}}</p>{{end}}
 
-{{/* Past events toggle */}}
 {{if .PastEvents}}
-<div class="past-events-section">
-  <button type="button" class="past-toggle" id="past-toggle" onclick="document.getElementById('past-list').hidden=!document.getElementById('past-list').hidden;this.textContent=document.getElementById('past-list').hidden?'{{$.Strings.T "org_show_past"}} ({{len .PastEvents}})':'{{$.Strings.T "org_hide_past"}}'">
-    {{$.Strings.T "org_show_past"}} ({{len .PastEvents}})
-  </button>
-  <ul class="event-list" id="past-list" hidden>
-  {{range .PastEvents}}
-  <li class="event-item past-item">
-    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
-    <div class="event-meta">
-      {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-      {{if .LocationShortName}} &mdash; {{.LocationShortName}}{{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
-      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
-    </div>
-  </li>
-  {{end}}
-  </ul>
-</div>
+<ul class="event-list" id="past-list" hidden>
+{{range .PastEvents}}
+<li class="event-item past-item">
+  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+  <div class="event-meta">
+    {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+    {{if .LocationShortName}}
+      &mdash; {{.LocationShortName}}{{if .LocationAddress}}, {{.LocationAddress}}{{end}}{{if .LocationTown}}, {{.LocationTown}}{{end}}
+    {{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+    {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+  </div>
+</li>
+{{end}}
+</ul>
 {{end}}
 
 {{/* Musicians */}}
@@ -122,6 +128,8 @@
 <style>
 .org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
 .org-page-header h1{margin:0}
+.btn-edit-event{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);text-decoration:none;margin-left:.6rem;vertical-align:middle}
+.btn-edit-event:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
 .org-desc{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .org-desc p{margin:.5rem 0}
 .org-desc h1,.org-desc h2,.org-desc h3{font-size:1.1rem;margin:.75rem 0 .25rem}
@@ -137,9 +145,12 @@
 .feed-links{margin:1rem 0;font-size:.85rem;color:var(--fg-muted)}
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
 .feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
-.past-events-section{margin-top:1.25rem}
-.past-toggle{padding:.35rem .9rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;cursor:pointer;font-size:.88rem;color:var(--fg-dim)}
-.past-toggle:hover{background:var(--btn-bg-h);color:var(--fg)}
+.events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
+.events-heading-row .section-heading{margin:0}
+.btn-toggle{padding:.25rem .75rem;border:1px solid var(--border-mid);border-radius:14px;background:var(--btn-bg);color:var(--fg-dim);cursor:pointer;font-size:.82rem}
+.btn-toggle:hover{border-color:var(--fg-faint);color:var(--fg)}
+.btn-toggle-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
 .past-item h3{font-size:.95rem}
 .past-item .event-meta{font-size:.82rem}
 .org-musicians{margin-top:1.5rem}

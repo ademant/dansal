@@ -1,0 +1,55 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>System info</h1>
+</div>
+
+{{with .Data}}
+<div class="info-grid">
+
+  <section class="cfg-section">
+    <h2>dansal-web (this server)</h2>
+    <table class="plain-table">
+      <tr><th>Version</th><td>{{.WebVersion}}</td></tr>
+      <tr><th>Built</th><td>{{.WebBuildTime}}</td></tr>
+      <tr><th>Outbound IP</th><td>{{.OutboundIP}}</td></tr>
+      <tr><th>Load average</th><td>{{.LoadAvg}}</td></tr>
+    </table>
+  </section>
+
+  <section class="cfg-section">
+    <h2>dansal API</h2>
+    <table class="plain-table">
+      <tr><th>Service</th><td>{{.API.Service}}</td></tr>
+      <tr><th>Version</th><td>{{.API.Version}}</td></tr>
+      <tr><th>Built</th><td>{{.API.BuildTime}}</td></tr>
+    </table>
+  </section>
+
+  <section class="cfg-section">
+    <h2>Events</h2>
+    <table class="plain-table">
+      <tr><th>Total</th><td>{{.API.TotalEvents}}</td></tr>
+      <tr><th>Published</th><td>{{.API.PublishedEvents}}</td></tr>
+      <tr><th>Upcoming</th><td>{{.API.UpcomingEvents}}</td></tr>
+    </table>
+  </section>
+
+  <section class="cfg-section">
+    <h2>Storage</h2>
+    <table class="plain-table">
+      <tr><th>Database</th><td>{{fmtBytes .API.DBSizeBytes}}</td></tr>
+      <tr><th>Images</th><td>{{fmtBytes .API.ImagesSizeBytes}}</td></tr>
+    </table>
+  </section>
+
+</div>
+{{end}}
+
+<style>
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.5rem;margin-top:1rem}
+.plain-table{width:100%;border-collapse:collapse}
+.plain-table th{text-align:left;font-weight:600;padding:.3rem .6rem .3rem 0;white-space:nowrap;width:40%}
+.plain-table td{padding:.3rem 0}
+</style>
+{{end}}

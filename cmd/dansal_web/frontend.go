@@ -540,6 +540,18 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return out
 	},
+	"fmtBytes": func(b int64) string {
+		const unit = 1024
+		if b < unit {
+			return fmt.Sprintf("%d B", b)
+		}
+		div, exp := int64(unit), 0
+		for n := b / unit; n >= unit; n /= unit {
+			div *= unit
+			exp++
+		}
+		return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+	},
 }
 
 type Templates struct {
@@ -569,6 +581,7 @@ type Templates struct {
 	adminEventEdit     *template.Template
 	adminDances        *template.Template
 	adminSiteConfig    *template.Template
+	adminInfo          *template.Template
 	impressum          *template.Template
 	orgs               *template.Template
 }
@@ -609,6 +622,7 @@ func loadTemplates() *Templates {
 		adminEventEdit:    load("admin_event_edit"),
 		adminDances:       load("admin_dances"),
 		adminSiteConfig:   load("admin_site_config"),
+		adminInfo:         load("admin_info"),
 		impressum:         load("impressum"),
 		orgs:              load("orgs"),
 	}

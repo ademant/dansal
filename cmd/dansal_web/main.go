@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"log/syslog"
 	"net/http"
@@ -27,6 +29,14 @@ func (lh *liveHandler) store(h http.Handler) {
 }
 
 func main() {
+	printVersion := flag.Bool("version", false, "print version and build date then exit")
+	flag.Parse()
+
+	if *printVersion {
+		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)
+		os.Exit(0)
+	}
+
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal_web"); err == nil {
 		log.SetOutput(w)
 		log.SetFlags(0)
@@ -136,6 +146,8 @@ func main() {
 
 		r.HandleFunc("GET /admin/site-config", adminSiteConfigHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/site-config", adminSiteConfigSaveHandler(cfg, db, client))
+
+		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n))

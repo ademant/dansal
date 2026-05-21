@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -2413,6 +2415,66 @@ func detectAssetMIME(data []byte) string {
 	// GIF: GIF87a or GIF89a magic
 	if len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a") {
 		return "image/gif"
+	}
+	return ""
+}
+
+type AdminInfoData struct {
+	WebVersion   string
+	WebBuildTime string
+	API          DansalInfo
+	OutboundIP   string
+	LoadAvg      string
+}
+
+func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		info, _ := client.GetDansalInfo(r.Context())
+
+		outboundIP := outboundIP()
+		loadAvg := readLoadAvg()
+
+		data := AdminInfoData{
+			WebVersion:   Version,
+			WebBuildTime: BuildTime,
+			API:          info,
+			OutboundIP:   outboundIP,
+			LoadAvg:      loadAvg,
+		}
+		renderTemplate(w, tmpls.adminInfo, tmplData(r, cfg, i18n, "System info", data))
+	}
+}
+
+func outboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+}
+
+func readLoadAvg() string {
+	f, err := os.Open("/proc/loadavg")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	if sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) >= 3 {
+			return strings.Join(fields[:3], " ")
+		}
 	}
 	return ""
 }

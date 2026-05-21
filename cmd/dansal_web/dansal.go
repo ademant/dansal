@@ -1611,3 +1611,21 @@ func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac Ad
 	}
 	return nil
 }
+
+// DansalInfo mirrors the ServiceInfo struct from the dansal API.
+type DansalInfo struct {
+	Service         string `json:"service"`
+	Version         string `json:"version"`
+	BuildTime       string `json:"build_time"`
+	TotalEvents     int    `json:"total_events"`
+	PublishedEvents int    `json:"published_events"`
+	UpcomingEvents  int    `json:"upcoming_events"`
+	DBSizeBytes     int64  `json:"db_size_bytes"`
+	ImagesSizeBytes int64  `json:"images_size_bytes"`
+}
+
+func (c *DansalClient) GetDansalInfo(ctx context.Context) (DansalInfo, error) {
+	var info DansalInfo
+	err := c.get(ctx, "/api/v1/info", &info)
+	return info, err
+}

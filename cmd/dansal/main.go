@@ -923,7 +923,13 @@ func reloadConfig(path string) {
 
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
+	printVersion := flag.Bool("version", false, "print version and build date then exit")
 	flag.Parse()
+
+	if *printVersion {
+		fmt.Printf("dansal %s (built %s)\n", Version, BuildTime)
+		os.Exit(0)
+	}
 
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal"); err == nil {
 		log.SetOutput(w)

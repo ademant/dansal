@@ -126,7 +126,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	magicURL := base + "/api/v1/login/magic/" + token
 
 	msgText := fmt.Sprintf(
-		"Hi %s,\n\nclick the link below to log in:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
+		"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
 		user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
 	)
 
@@ -146,7 +146,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default: // "email"
-		if err := SendEmail(user.Email, "Your login link", msgText); err != nil {
+		if err := SendEmail(user.Email, "Your passwordless login link", msgText); err != nil {
 			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
 			log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Username, err)
 			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)

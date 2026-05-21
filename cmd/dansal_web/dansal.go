@@ -1224,14 +1224,15 @@ func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, to
 // ── contact board ────────────────────────────────────────────────────────────
 
 type ContactPost struct {
-	ID        int    `json:"id"`
-	EventID   int    `json:"event_id"`
-	Type      string `json:"type"`
-	City      string `json:"city"`
-	Persons   int    `json:"persons"`
-	Message   string `json:"message,omitempty"`
-	Nickname  string `json:"nickname"`
-	CreatedAt string `json:"created_at"`
+	ID               int    `json:"id"`
+	EventID          int    `json:"event_id"`
+	Type             string `json:"type"`
+	City             string `json:"city"`
+	Persons          int    `json:"persons"`
+	Message          string `json:"message,omitempty"`
+	Nickname         string `json:"nickname"`
+	TelegramUsername string `json:"telegram_username,omitempty"`
+	CreatedAt        string `json:"created_at"`
 }
 
 func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]ContactPost, error) {
@@ -1239,24 +1240,30 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 	return posts, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID), &posts)
 }
 
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any) error {
+// CreateContactPost submits a board post and returns (telegramVerifyURL, error).
+// telegramVerifyURL is non-empty only when the post was submitted with a Telegram username.
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any) (string, error) {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
 		bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return apiErr(resp)
+		return "", apiErr(resp)
 	}
-	return nil
+	var result struct {
+		TelegramVerifyURL string `json:"telegram_verify_url"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.TelegramVerifyURL, nil
 }
 
 func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token string) error {

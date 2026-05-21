@@ -13,15 +13,16 @@ import (
 )
 
 type ContactPost struct {
-	ID            int    `json:"id"`
-	EventID       int    `json:"event_id"`
-	Type          string `json:"type"`
-	City          string `json:"city"`
-	Persons       int    `json:"persons"`
-	Message       string `json:"message,omitempty"`
-	Nickname      string `json:"nickname"`
-	EmailVerified bool   `json:"email_verified"`
-	CreatedAt     string `json:"created_at"`
+	ID               int    `json:"id"`
+	EventID          int    `json:"event_id"`
+	Type             string `json:"type"`
+	City             string `json:"city"`
+	Persons          int    `json:"persons"`
+	Message          string `json:"message,omitempty"`
+	Nickname         string `json:"nickname"`
+	TelegramUsername string `json:"telegram_username,omitempty"`
+	EmailVerified    bool   `json:"email_verified"`
+	CreatedAt        string `json:"created_at"`
 }
 
 // computeContactPostExpiry returns the earlier of (now+30 days) and (event end_time+3 days).
@@ -64,7 +65,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(
-		`SELECT id, event_id, type, city, persons, COALESCE(message,''), nickname, email_verified, created_at
+		`SELECT id, event_id, type, city, persons, COALESCE(message,''), nickname, COALESCE(telegram_username,''), email_verified, created_at
 		 FROM contact_posts
 		 WHERE event_id=? AND email_verified=1 AND expires_at > ?
 		 ORDER BY created_at ASC`,
@@ -80,7 +81,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p ContactPost
 		var ev int
-		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &p.Persons, &p.Message, &p.Nickname, &ev, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -114,6 +115,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		Message  string `json:"message"`
 		Nickname string `json:"nickname"`
 		Email    string `json:"email"`
+		Telegram string `json:"telegram"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid request body", http.StatusBadRequest)
@@ -125,17 +127,27 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	req.City = strings.TrimSpace(req.City)
 	req.Nickname = strings.TrimSpace(req.Nickname)
 	req.Email = strings.TrimSpace(req.Email)
-	if req.Type == "" || req.City == "" || req.Nickname == "" || req.Email == "" {
-		writeError(w, "type, city, nickname and email are required", http.StatusBadRequest)
+	req.Telegram = strings.TrimPrefix(strings.TrimSpace(req.Telegram), "@")
+	if req.Type == "" || req.City == "" || req.Nickname == "" {
+		writeError(w, "type, city and nickname are required", http.StatusBadRequest)
+		return
+	}
+	if req.Email == "" && req.Telegram == "" {
+		writeError(w, "email or telegram username is required", http.StatusBadRequest)
 		return
 	}
 	validTypes := map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true, "ticket_offer": true, "ticket_request": true}
 	if !validTypes[req.Type] {
-		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request", http.StatusBadRequest)
+		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request, ticket_offer, ticket_request", http.StatusBadRequest)
 		return
 	}
-	if !strings.Contains(req.Email, "@") {
+	if req.Email != "" && !strings.Contains(req.Email, "@") {
 		writeError(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
+	useTelegram := req.Telegram != ""
+	if useTelegram && config.Server.TelegramBotName == "" {
+		writeError(w, "telegram not configured on this server", http.StatusBadRequest)
 		return
 	}
 	if req.Persons < 1 {
@@ -156,9 +168,9 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	expiresAt := computeContactPostExpiry(eventID)
 
 	result, err := db.Exec(
-		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, verify_token, delete_token, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email,
+		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, verify_token, delete_token, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 		verifyToken, deleteToken, expiresAt.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -167,10 +179,24 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := result.LastInsertId()
 
-	// Send verification email in background — never blocks the 201 response.
 	base := buildBaseURL(r)
-	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
 	deleteURL := base + "/api/v1/contact-posts/delete/" + deleteToken
+
+	if useTelegram {
+		// Return a t.me link; the user opens the bot which sends /start TOKEN to verify.
+		botURL := "https://t.me/" + config.Server.TelegramBotName + "?start=" + verifyToken
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":                  id,
+			"message":             "Open the Telegram bot to confirm your post.",
+			"telegram_verify_url": botURL,
+			"delete_url":          deleteURL,
+		})
+		return
+	}
+
+	// Email verification path.
+	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
 	emailBody := fmt.Sprintf(
 		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n%s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n%s\n\nThis post expires on %s.\n",
 		req.Nickname, verifyURL, deleteURL, expiresAt.Format("2006-01-02"),

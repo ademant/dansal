@@ -528,7 +528,8 @@ func migrateDB() {
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		nickname TEXT NOT NULL,
-		email TEXT NOT NULL,
+		email TEXT NOT NULL DEFAULT '',
+		telegram_username TEXT,
 		email_verified INTEGER DEFAULT 0,
 		verify_token TEXT UNIQUE,
 		delete_token TEXT UNIQUE,
@@ -621,6 +622,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN last_result TEXT") // no-op if already present
+	db.Exec("ALTER TABLE contact_posts ADD COLUMN telegram_username TEXT")
 }
 
 func createTables() error {
@@ -859,7 +861,8 @@ func createTables() error {
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		nickname TEXT NOT NULL,
-		email TEXT NOT NULL,
+		email TEXT NOT NULL DEFAULT '',
+		telegram_username TEXT,
 		email_verified INTEGER DEFAULT 0,
 		verify_token TEXT UNIQUE,
 		delete_token TEXT UNIQUE,

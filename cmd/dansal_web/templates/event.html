@@ -245,7 +245,12 @@
   <h2>{{$.Strings.T "board_title"}}</h2>
 
   {{if .BoardPosted}}
+  {{if .BoardTelegramURL}}
+  <p class="msg msg-ok">{{$.Strings.T "board_posted_telegram"}}</p>
+  <a href="{{.BoardTelegramURL}}" class="btn-tg-verify" target="_blank" rel="noopener">{{$.Strings.T "board_verify_telegram_btn"}}</a>
+  {{else}}
   <p class="msg msg-ok">{{$.Strings.T "board_posted_ok"}}</p>
+  {{end}}
   {{end}}
   {{if .BoardContacted}}
   <p class="msg msg-ok">{{$.Strings.T "board_contacted_ok"}}</p>
@@ -267,7 +272,7 @@
       </div>
       {{if .Message}}<p class="board-message">{{.Message}}</p>{{end}}
       <div class="board-actions">
-        <button class="btn-contact-toggle" data-target="contact-form-{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>
+        {{if not .TelegramUsername}}<button class="btn-contact-toggle" data-target="contact-form-{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>{{end}}
         {{if $.Data.CanManageBoard}}
         <form method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('{{$.Strings.T "board_delete_confirm"}}')">
           <button type="submit" class="btn-board-del">{{$.Strings.T "board_delete_btn"}}</button>
@@ -316,10 +321,21 @@
         <label>{{$.Strings.T "board_nickname_label"}}</label>
         <input type="text" name="nickname" required placeholder="{{$.Strings.T "board_nickname_placeholder"}}">
       </div>
-      <div class="board-form-row">
-        <label>{{$.Strings.T "board_email_label"}}</label>
-        <input type="email" name="email" required placeholder="{{$.Strings.T "board_email_placeholder"}}">
+      <div class="board-contact-method">
+        <label class="board-method-radio">
+          <input type="radio" name="contact_method" value="email" checked onchange="boardToggleMethod(this.value)"> {{$.Strings.T "board_email_label"}}
+        </label>
+        <label class="board-method-radio">
+          <input type="radio" name="contact_method" value="telegram" onchange="boardToggleMethod(this.value)"> {{$.Strings.T "board_telegram_label"}}
+        </label>
+      </div>
+      <div class="board-form-row" id="board-email-row">
+        <input type="email" name="email" placeholder="{{$.Strings.T "board_email_placeholder"}}">
         <span class="board-hint">{{$.Strings.T "board_email_hint"}}</span>
+      </div>
+      <div class="board-form-row" id="board-telegram-row" style="display:none">
+        <input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}">
+        <span class="board-hint">{{$.Strings.T "board_telegram_hint"}}</span>
       </div>
       <button type="submit" class="btn-board-submit">{{$.Strings.T "board_submit_btn"}}</button>
     </form>
@@ -426,6 +442,10 @@
 .msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:.75rem}
 .msg-ok{background:var(--badge-ok-bg);color:var(--badge-ok-fg);border:1px solid var(--badge-ok-fg)}
 .msg-error{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border:1px solid var(--badge-danger-fg)}
+.board-contact-method{display:flex;gap:1rem;margin:.4rem 0}
+.board-method-radio{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
+.btn-tg-verify{display:inline-block;margin-top:.4rem;padding:.45rem 1.1rem;background:#2481cc;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
+.btn-tg-verify:hover{background:#1a69a4;color:#fff}
 </style>
 
 <script>
@@ -435,6 +455,14 @@ document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
     if(form) form.classList.toggle('hidden');
   });
 });
+function boardToggleMethod(val) {
+  document.getElementById('board-email-row').style.display = val === 'email' ? '' : 'none';
+  document.getElementById('board-telegram-row').style.display = val === 'telegram' ? '' : 'none';
+  var emailInput = document.querySelector('#board-email-row input');
+  var tgInput = document.querySelector('#board-telegram-row input');
+  if (emailInput) emailInput.required = val === 'email';
+  if (tgInput) tgInput.required = val === 'telegram';
+}
 </script>
 
 {{with .Data}}{{if .Event.LocationLat}}

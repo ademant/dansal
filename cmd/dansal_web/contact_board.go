@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -42,13 +43,19 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			"message":  r.FormValue("message"),
 			"nickname": r.FormValue("nickname"),
 			"email":    r.FormValue("email"),
+			"telegram": r.FormValue("telegram"),
 		}
 
-		if err := client.CreateContactPost(r.Context(), eventID, post); err != nil {
+		tgURL, err := client.CreateContactPost(r.Context(), eventID, post)
+		if err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
 		}
 		boardThrottle.record(ip)
+		if tgURL != "" {
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1&board_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
 	}
 }

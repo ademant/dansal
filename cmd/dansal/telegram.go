@@ -90,7 +90,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	token := parts[1]
 
-	// Look up the verification token.
+	// Look up the verification token — first try user account tokens.
 	var tokenID, userID int
 	var channel, expiresAt string
 	err := db.QueryRow(
@@ -98,7 +98,33 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		token,
 	).Scan(&tokenID, &userID, &channel, &expiresAt)
 	if err == sql.ErrNoRows {
-		_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+		// Fall back: check if it's a contact board post verification token.
+		var postID int
+		var postExpires string
+		err2 := db.QueryRow(
+			"SELECT id, expires_at FROM contact_posts WHERE verify_token=? AND email_verified=0",
+			token,
+		).Scan(&postID, &postExpires)
+		if err2 == sql.ErrNoRows {
+			_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err2 != nil {
+			log.Printf("telegram webhook: db error checking contact post: %v", err2)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		exp, err3 := parseTokenExpiration(postExpires)
+		if err3 != nil || time.Now().After(exp) {
+			db.Exec("DELETE FROM contact_posts WHERE id=?", postID)
+			_ = sendTelegramMessage(chatIDStr, "This verification link has expired.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL WHERE id=?", postID)
+		log.Printf("telegram webhook: verified contact post %d", postID)
+		_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
 		w.WriteHeader(http.StatusOK)
 		return
 	}

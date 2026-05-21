@@ -92,7 +92,8 @@
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
       {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
-      {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+      {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{.}}</span>{{end}}
+      {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
     </td>
     <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid">€</span>{{end}}{{end}}</td>
   </tr>

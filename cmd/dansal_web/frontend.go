@@ -414,6 +414,46 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(pins)
 		return template.JS(b)
 	},
+	"limitTags": func(hasBall, hasWorkshop, hasFestival bool, tags []string) []string {
+		typeCount := 0
+		if hasBall {
+			typeCount++
+		}
+		if hasWorkshop {
+			typeCount++
+		}
+		if hasFestival {
+			typeCount++
+		}
+		limit := 5 - typeCount
+		if limit < 0 {
+			limit = 0
+		}
+		if len(tags) <= limit {
+			return tags
+		}
+		return tags[:limit]
+	},
+	"hiddenTagCount": func(hasBall, hasWorkshop, hasFestival bool, tags []string) int {
+		typeCount := 0
+		if hasBall {
+			typeCount++
+		}
+		if hasWorkshop {
+			typeCount++
+		}
+		if hasFestival {
+			typeCount++
+		}
+		limit := 5 - typeCount
+		if limit < 0 {
+			limit = 0
+		}
+		if len(tags) <= limit {
+			return 0
+		}
+		return len(tags) - limit
+	},
 	"orgName": func(orgMap map[int]Organization, id *int) string {
 		if id == nil {
 			return ""

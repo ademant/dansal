@@ -23,6 +23,13 @@
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
   <button name="action" value="org" type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <select name="role" class="bulk-role-select">
+    <option value="user">user</option>
+    <option value="publisher">publisher</option>
+    <option value="viewer">viewer</option>
+    <option value="admin">admin</option>
+  </select>
+  <button name="action" value="role" type="submit" class="btn-sm">{{$.Strings.T "users_bulk_change_role"}}</button>
   <button name="action" value="delete" type="submit" class="btn-sm btn-del"
           onclick="return confirm('{{$.Strings.T "admin_users_bulk_confirm"}}')">{{$.Strings.T "admin_users_bulk_delete"}}</button>
 </div>
@@ -149,10 +156,12 @@
 .page-header h1{margin:0}
 .col-cb{width:2rem;text-align:center}
 .col-actions{white-space:nowrap}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
-.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
-.bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd;flex-wrap:wrap}
+.bulk-bar select,.bulk-role-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .inline-select{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
 .email-cell{font-size:.85rem}
 .org-tag{display:inline-flex;align-items:center;gap:.2rem;background:#e8eef7;border-radius:4px;padding:.1rem .4rem;font-size:.82rem;margin:.1rem .2rem .1rem 0}

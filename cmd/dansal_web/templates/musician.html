@@ -12,6 +12,7 @@
       {{if .Musician.BeginYear}}<span class="chip">est. {{.Musician.BeginYear}}</span>{{end}}
     </div>
   </div>
+  {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit" class="btn-edit-musician">{{$.Strings.T "admin_edit"}}</a>{{end}}
 </div>
 
 {{if .Musician.Biography}}
@@ -66,13 +67,6 @@
   </div>
 </div>
 {{end}}
-
-<div class="feed-links">
-  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
-  <a href="/feed/musician/{{.Slug}}/events.ical" class="feed-link">iCal</a>
-  <a href="/feed/musician/{{.Slug}}/events.rss"  class="feed-link">RSS</a>
-  <a href="/feed/musician/{{.Slug}}/events.json" class="feed-link">JSON</a>
-</div>
 
 <div class="page-section">
   <div class="events-heading-row">
@@ -136,9 +130,8 @@
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
 .detail-list{margin:.25rem 0;padding-left:1.25rem;color:var(--fg-dim);font-size:.95rem}
 .detail-list li{margin-bottom:.2rem}
-.feed-links{margin:1rem 0 1.5rem;font-size:.85rem;color:var(--fg-muted)}
-.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
-.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
+.btn-edit-musician{display:inline-block;margin-left:auto;align-self:flex-start;padding:.3rem .8rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem;text-decoration:none;color:#333;background:#fff;white-space:nowrap}
+.btn-edit-musician:hover{background:#f0f0f0}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 .events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
 .events-heading-row .section-heading{margin:0}

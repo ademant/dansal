@@ -1464,6 +1464,10 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 				if err == nil {
 					_ = client.AddOrgMember(r.Context(), orgID, id, token)
 				}
+			case "role":
+				if role := r.FormValue("role"); role != "" {
+					_ = client.UpdateUser(r.Context(), id, map[string]string{"role": role}, token)
+				}
 			}
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)

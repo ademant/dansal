@@ -869,8 +869,8 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 			st := statMap[o.ID]
 			slug := effectiveSlug(o)
 			fedHandle := ""
-			if aslug, ok := actorSlugs[o.ID]; ok {
-				fedHandle = "@" + aslug + "@" + cfg.Domain
+			if _, ok := actorSlugs[o.ID]; ok {
+				fedHandle = "@" + slug + "@" + cfg.Domain
 			}
 			items[i] = OrgListItem{
 				Org:           o,

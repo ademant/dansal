@@ -363,7 +363,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 		*args = append(*args, boolParam(v))
 	}
 	if tag := q.Get("tag"); tag != "" {
-		*query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		*query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?)"
 		*args = append(*args, tag)
 	}
 	if country := q.Get("country"); country != "" {
@@ -670,6 +670,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 				q.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
 			}
 		}
+		syncEventTags(q, id, req.Tags)
 
 		event, err := fetchEventByID(q, id)
 		if err != nil {
@@ -735,6 +736,16 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 		musicians = append(musicians, m)
 	}
 	return musicians, nil
+}
+
+// syncEventTags replaces all event_tags rows for eventID with the given tags.
+func syncEventTags(q querier, eventID int, tags []string) {
+	q.Exec("DELETE FROM event_tags WHERE event_id = ?", eventID)
+	for _, tag := range tags {
+		if t := strings.TrimSpace(tag); t != "" {
+			q.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) VALUES (?, ?)", eventID, t)
+		}
+	}
 }
 
 // fetchEventLocation returns the primary location for an event as a full
@@ -1238,6 +1249,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	for _, danceID := range req.Dances {
 		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
 	}
+	syncEventTags(tx, id, req.Tags)
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1302,7 +1314,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	cntQ := "SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
 	cntArgs := []any{now}
 	if tag != "" {
-		cntQ += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		cntQ += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?)"
 		cntArgs = append(cntArgs, tag)
 	}
 	if loc != "" {
@@ -1317,7 +1329,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	args := []any{now}
 
 	if tag != "" {
-		query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?)"
 		args = append(args, tag)
 	}
 	if loc != "" {
@@ -1375,11 +1387,11 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	tag := r.PathValue("tag")
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
-		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)",
+		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = events.id AND et.tag = ?)",
 		now, tag) {
 		return
 	}
-	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?) ORDER BY e.start_time ASC"
+	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?) ORDER BY e.start_time ASC"
 	rows, err := db.Query(query, now, tag)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1507,12 +1519,12 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
-	query := "SELECT DISTINCT j.value FROM events, json_each(events.tags) AS j WHERE 1=1"
+	query := "SELECT DISTINCT et.tag FROM event_tags et JOIN events e ON e.id = et.event_id WHERE 1=1"
 	var args []any
 	if !isAuthorizedAdmin {
-		query += " AND is_published = 1"
+		query += " AND e.is_published = 1"
 	}
-	query += " ORDER BY j.value"
+	query += " ORDER BY et.tag"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

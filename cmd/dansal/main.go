@@ -654,6 +654,15 @@ func migrateDB() {
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS event_tags (
+		event_id INTEGER NOT NULL,
+		tag TEXT NOT NULL,
+		PRIMARY KEY (event_id, tag),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
+	db.Exec(`INSERT OR IGNORE INTO event_tags (event_id, tag)
+		SELECT e.id, j.value FROM events e, json_each(e.tags) j WHERE j.value != ''`)
 	for _, name := range []string{"balfolk", "bretonic", "swedish", "occitan", "balkan", "israelic", "tango", "forro", "salsa", "social dance"} {
 		db.Exec("INSERT OR IGNORE INTO dances (name) VALUES (?)", name)
 	}
@@ -940,6 +949,13 @@ func createTables() error {
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id);
+	CREATE TABLE IF NOT EXISTS event_tags (
+		event_id INTEGER NOT NULL,
+		tag TEXT NOT NULL,
+		PRIMARY KEY (event_id, tag),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id);
 	CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,

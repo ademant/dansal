@@ -1720,3 +1720,55 @@ func (c *DansalClient) GetDansalInfo(ctx context.Context) (DansalInfo, error) {
 	err := c.get(ctx, "/api/v1/info", &info)
 	return info, err
 }
+
+type APIKey struct {
+	ID        int    `json:"id"`
+	UserID    int    `json:"user_id"`
+	Name      string `json:"name"`
+	Key       string `json:"key,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (c *DansalClient) ListAPIKeys(ctx context.Context, token string) ([]APIKey, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/apikeys", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var keys []APIKey
+	return keys, json.NewDecoder(resp.Body).Decode(&keys)
+}
+
+func (c *DansalClient) CreateAPIKey(ctx context.Context, token, name, expiresAt string) (*APIKey, error) {
+	payload := map[string]any{"name": name}
+	if expiresAt != "" {
+		payload["expires_at"] = expiresAt
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/apikeys", token, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return nil, apiErr(resp)
+	}
+	var key APIKey
+	return &key, json.NewDecoder(resp.Body).Decode(&key)
+}
+
+func (c *DansalClient) DeleteAPIKey(ctx context.Context, token string, id int) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/apikeys/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}

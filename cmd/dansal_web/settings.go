@@ -2,16 +2,18 @@ package main
 
 import (
 	"net/http"
-
+	"strconv"
 )
 
 type SettingsData struct {
-	User            UserInfo
-	ErrorKey        string
-	Saved           bool
-	VerifySent      bool
-	Verified        bool
+	User             UserInfo
+	ErrorKey         string
+	Saved            bool
+	VerifySent       bool
+	Verified         bool
 	TelegramDeepLink string
+	APIKeys          []APIKey
+	NewAPIKey        *APIKey
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -26,12 +28,14 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.Error(w, "could not load user", http.StatusBadGateway)
 			return
 		}
+		keys, _ := client.ListAPIKeys(r.Context(), token)
 		title := i18n.T(r, "settings_title")
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:       u,
 			Saved:      r.URL.Query().Get("saved") == "1",
 			VerifySent: r.URL.Query().Get("verify_sent") == "1",
 			Verified:   r.URL.Query().Get("verified") == "1",
+			APIKeys:    keys,
 		}))
 	}
 }
@@ -114,6 +118,50 @@ func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *Dansal
 			User:             u,
 			TelegramDeepLink: deepLink,
 		}))
+	}
+}
+
+func settingsCreateAPIKeyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		name := r.FormValue("name")
+		expiresAt := r.FormValue("expires_at")
+		newKey, err := client.CreateAPIKey(r.Context(), token, name, expiresAt)
+		u, _ := client.GetUser(r.Context(), su.ID, token)
+		keys, _ := client.ListAPIKeys(r.Context(), token)
+		title := i18n.T(r, "settings_title")
+		data := SettingsData{User: u, APIKeys: keys}
+		if err != nil {
+			data.ErrorKey = "settings_save_error"
+		} else {
+			data.NewAPIKey = newKey
+		}
+		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, data))
+	}
+}
+
+func settingsDeleteAPIKeyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		_ = client.DeleteAPIKey(r.Context(), token, id)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}
 }
 

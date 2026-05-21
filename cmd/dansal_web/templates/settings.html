@@ -90,6 +90,45 @@
     {{end}}
   </div>
   {{end}}{{end}}
+
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_apikeys_title"}}</h2>
+    {{if .NewAPIKey}}
+    <div class="msg msg-ok" style="margin-bottom:.75rem">
+      <strong>{{$.Strings.T "settings_apikeys_new_key"}}</strong><br>
+      <input type="text" value="{{.NewAPIKey.Key}}" readonly style="margin-top:.4rem;font-family:monospace;font-size:.85rem;width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px" onclick="this.select()">
+    </div>
+    {{end}}
+    {{if .APIKeys}}
+    <table class="apikey-table">
+      <thead><tr>
+        <th>{{$.Strings.T "settings_apikeys_name"}}</th>
+        <th>{{$.Strings.T "settings_apikeys_expires"}}</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+      {{range .APIKeys}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{if .ExpiresAt}}{{.ExpiresAt}}{{else}}{{$.Strings.T "settings_apikeys_no_expiry"}}{{end}}</td>
+        <td>
+          <form method="post" action="/settings/apikeys/{{.ID}}/delete" style="display:inline">
+            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_apikeys_confirm_delete"}}')">{{$.Strings.T "settings_apikeys_delete"}}</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="hint">{{$.Strings.T "settings_apikeys_none"}}</p>
+    {{end}}
+    <form method="post" action="/settings/apikeys/new" class="apikey-new-form">
+      <input type="text" name="name" required placeholder="{{$.Strings.T "settings_apikeys_name"}}" style="flex:1">
+      <input type="date" name="expires_at" title="{{$.Strings.T "settings_apikeys_expires"}}" style="width:140px">
+      <button type="submit" class="btn-secondary">{{$.Strings.T "settings_apikeys_new_btn"}}</button>
+    </form>
+  </div>
   {{end}}
 </div>
 
@@ -120,5 +159,12 @@
 .btn-secondary:hover{background:#e8f0fe}
 .btn-telegram{display:inline-block;padding:.4rem .9rem;background:#0088cc;color:#fff;border-radius:4px;font-size:.9rem;text-decoration:none}
 .btn-telegram:hover{background:#006699}
+.apikey-table{width:100%;border-collapse:collapse;font-size:.88rem;margin-bottom:.75rem}
+.apikey-table th,.apikey-table td{padding:.35rem .5rem;text-align:left;border-bottom:1px solid #eee}
+.apikey-table thead th{font-weight:600;color:#555}
+.apikey-new-form{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;cursor:pointer;background:#fff;color:#333;text-decoration:none}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
 </style>
 {{end}}

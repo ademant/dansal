@@ -106,6 +106,17 @@ update: build install-units
 	systemctl restart $(SERVICE)
 	systemctl try-restart dansal-web.service || true
 
+# deploy: install pre-built binaries and restart services (no build step;
+# run as root after 'make build' as a regular user).
+deploy: install-units
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy requires root"; exit 1; }
+	install -m 755 dansal        $(BINDIR)/dansal
+	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
+	install -m 755 dansal_web    $(BINDIR)/dansal-web
+	systemctl restart $(SERVICE)
+	systemctl try-restart dansal-web.service || true
+	@echo "deployed"
+
 # Build a .deb package. VERSION may be overridden by the CI pipeline
 # (e.g.  make deb DEB_VERSION=0.1.0).
 DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \

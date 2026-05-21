@@ -274,6 +274,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   #map-container{height:280px}
   #week-mini-cal{display:none}
   .week-nav button{display:none}
+  .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
 }
 </style>
 
@@ -529,7 +530,12 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   function buildPopup(e){
     var start=e.s||'';
     var time=start.length>=16?start.slice(0,10)+' '+start.slice(11,16):start.slice(0,10);
-    var place=[e.loc,e.town,e.c].filter(Boolean).join(', ');
+    var place;
+    if(e.sn && e.town){
+      place=escHtml(e.sn)+', '+escHtml(e.town);
+    } else {
+      place=[e.loc,e.town,e.c].filter(Boolean).map(escHtml).join(', ');
+    }
     var badges='';
     if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">Ball</span>';
     if(e.ws){
@@ -544,15 +550,17 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if     (e.fee==='free')     feeHtml='<span class="fee-sym fee-free">0€</span>';
     else if(e.fee==='donation') feeHtml='<span class="fee-sym fee-donation">♥</span>';
     else if(e.fee==='paid')     feeHtml='<span class="fee-sym fee-paid">€</span>';
-    return '<div style="min-width:200px;max-width:280px">'+
-      '<strong style="font-size:.95rem;display:block;margin-bottom:.25rem">'+escHtml(e.t)+'</strong>'+
+    var detailUrl='/events/'+e.id;
+    var isMobile=window.matchMedia('(max-width:640px)').matches;
+    var outerStyle='min-width:200px;max-width:280px';
+    var outerClick='';
+    if(isMobile){ outerStyle+=';cursor:pointer'; outerClick=' onclick="window.location=\''+detailUrl+'\'"'; }
+    return '<div style="'+outerStyle+'"'+outerClick+'>'+
+      '<a href="'+detailUrl+'" style="font-size:.95rem;display:block;margin-bottom:.25rem;font-weight:bold;color:inherit;text-decoration:none">'+escHtml(e.t)+'</a>'+
       (time?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+
-      (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
+      (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+place+'</div>':'')+
       (badges||feeHtml?'<div style="margin-bottom:.35rem">'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
-      '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem">'+
-        '<a href="/events/'+e.id+'" style="font-size:.82rem;color:#1a6eb5">Details</a>'+
-        (e.url?'<a href="'+escHtml(e.url)+'" target="_blank" rel="noopener" style="font-size:.82rem;color:#1a6eb5">Website ↗</a>':'')+
-      '</div></div>';
+      '</div>';
   }
 
   function eventIcon(e){

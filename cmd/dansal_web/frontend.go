@@ -353,6 +353,7 @@ var tmplFuncMap = template.FuncMap{
 			Start              string  `json:"s"`
 			End                string  `json:"e,omitempty"`
 			Location           string  `json:"loc,omitempty"`
+			ShortName          string  `json:"sn,omitempty"`
 			Town               string  `json:"town,omitempty"`
 			Country            string  `json:"c,omitempty"`
 			Lat                float64 `json:"lat"`
@@ -391,7 +392,7 @@ var tmplFuncMap = template.FuncMap{
 			}
 			geo = append(geo, geoEvent{
 				ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
-				Location: e.Location, Town: e.LocationTown, Country: e.LocationCountry,
+				Location: e.Location, ShortName: e.LocationShortName, Town: e.LocationTown, Country: e.LocationCountry,
 				Lat: lat, Lng: lng, URL: e.URL,
 				Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
 				Festival: e.HasFestival,

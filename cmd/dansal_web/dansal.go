@@ -25,6 +25,7 @@ const (
 	dancesTTL    = 5 * time.Minute
 	musiciansTTL = 30 * time.Second
 	locationsTTL = 30 * time.Second
+	eventsTTL    = 30 * time.Second
 )
 
 type DansalClient struct {
@@ -36,6 +37,7 @@ type DansalClient struct {
 	dancesCache    cacheEntry[[]Dance]
 	musiciansCache cacheEntry[[]Musician]
 	locationsCache cacheEntry[[]Location]
+	eventsCache    cacheEntry[[]Event]
 }
 
 // cached fetches from cache when fresh; otherwise calls fetch and stores the result.
@@ -74,6 +76,12 @@ func (c *DansalClient) invalidateMusicians() {
 func (c *DansalClient) invalidateLocations() {
 	c.mu.Lock()
 	c.locationsCache.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
+func (c *DansalClient) invalidateEvents() {
+	c.mu.Lock()
+	c.eventsCache.fetchedAt = time.Time{}
 	c.mu.Unlock()
 }
 
@@ -356,10 +364,13 @@ func (c *DansalClient) Logout(ctx context.Context, token string) error {
 }
 
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
-	path := "/api/v1/events?is_published=true"
-	if after != "" {
-		path += "&start_time_after=" + after
+	if after == "" {
+		return cached(&c.mu, &c.eventsCache, eventsTTL, func() ([]Event, error) {
+			var events []Event
+			return events, c.get(ctx, "/api/v1/events?is_published=true", &events)
+		})
 	}
+	path := "/api/v1/events?is_published=true&start_time_after=" + after
 	var events []Event
 	if err := c.get(ctx, path, &events); err != nil {
 		return nil, err
@@ -1071,6 +1082,7 @@ func (c *DansalClient) CreateEvent(ctx context.Context, req EventCreateReq, toke
 	if err := json.Unmarshal(b, &result); err != nil || len(result) == 0 {
 		return Event{}, fmt.Errorf("no event in response")
 	}
+	c.invalidateEvents()
 	return result[0], nil
 }
 
@@ -1083,6 +1095,7 @@ func (c *DansalClient) DeleteEvent(ctx context.Context, id int, token string) er
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateEvents()
 	return nil
 }
 
@@ -1166,6 +1179,7 @@ func (c *DansalClient) UpdateEvent(ctx context.Context, id int, req EventUpdateR
 	if err := json.Unmarshal(b, &event); err != nil {
 		return Event{}, err
 	}
+	c.invalidateEvents()
 	return event, nil
 }
 

@@ -1975,6 +1975,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		rooms := r.MultipartForm.Value["tt_room"]
 		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
+		musNames := r.MultipartForm.Value["tt_musician_name"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2003,6 +2004,15 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			if i < len(musIDs) {
 				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
 					entry.MusicianID = &v
+				}
+			}
+			if entry.MusicianID == nil && i < len(musNames) {
+				if name := strings.TrimSpace(musNames[i]); name != "" {
+					if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
+						entry.MusicianID = &m.ID
+					} else {
+						log.Printf("create musician %q: %v", name, merr)
+					}
 				}
 			}
 			ttEntries = append(ttEntries, entry)
@@ -2302,6 +2312,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		rooms := r.MultipartForm.Value["tt_room"]
 		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
+		musNames := r.MultipartForm.Value["tt_musician_name"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2330,6 +2341,15 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			if i < len(musIDs) {
 				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
 					entry.MusicianID = &v
+				}
+			}
+			if entry.MusicianID == nil && i < len(musNames) {
+				if name := strings.TrimSpace(musNames[i]); name != "" {
+					if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
+						entry.MusicianID = &m.ID
+					} else {
+						log.Printf("create musician %q: %v", name, merr)
+					}
 				}
 			}
 			ttEntries = append(ttEntries, entry)

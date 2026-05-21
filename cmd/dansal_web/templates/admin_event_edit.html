@@ -322,7 +322,7 @@
         </tr>
         <tr class="tt-row-detail">
           <td colspan="3"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><select name="tt_musician_id"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}"{{if and $entry.MusicianID (eq .ID (derefInt $entry.MusicianID))}} selected{{end}}>{{.Bandname}}</option>{{end}}</select></td>
+          <td colspan="3"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
         </tr>
         {{end}}
         <tr class="tt-row">
@@ -335,7 +335,7 @@
         </tr>
         <tr class="tt-row-detail">
           <td colspan="3"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><select name="tt_musician_id" id="tt-mus-template"><option value="">— {{$.Strings.T "tt_musician"}} —</option>{{range $.Data.Musicians}}<option value="{{.ID}}">{{.Bandname}}</option>{{end}}</select></td>
+          <td colspan="3"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
         </tr>
       </tbody>
     </table>
@@ -383,6 +383,10 @@
 .btn-del-row:hover{color:#c0392b}
 .tt-row-detail td{padding:.1rem .3rem .4rem;vertical-align:middle;border-bottom:1px solid #f0f0f0}
 .tt-row-detail select,.tt-row-detail input{width:100%;padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.85rem;color:#555}
+.tt-mus-wrap{position:relative}
+.tt-mus-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
+.tt-mus-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
+.tt-mus-suggest li:hover{background:#e8f0fe}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .form-actions{display:flex;gap:.75rem;margin-top:.5rem;justify-content:space-between;align-items:center}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
@@ -489,12 +493,40 @@ function growTTTable(el){
     addTTRow();
   }
 }
-function _buildMusicianOpts(selectedID){
-  var h='<option value="">— '+{{$.Strings.T "tt_musician" | jsStr}}+' —</option>';
-  _ttMusicians.forEach(function(m){
-    h+='<option value="'+m.id+'"'+(m.id===selectedID?' selected':'')+'>'+m.name+'</option>';
+function _buildTTMusWidget(){
+  return '<div class="tt-mus-wrap">'+
+    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)">'+
+    '<input type="hidden" name="tt_musician_id" value="">'+
+    '<input type="hidden" name="tt_musician_name" value="">'+
+    '<ul class="tt-mus-suggest" hidden></ul></div>';
+}
+function _ttMusInput(inp){
+  var wrap=inp.closest('.tt-mus-wrap');
+  var idInp=wrap.querySelector('input[name="tt_musician_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_musician_name"]');
+  var suggest=wrap.querySelector('.tt-mus-suggest');
+  var q=inp.value.trim();
+  idInp.value='';
+  nameInp.value=q;
+  if(q.length<3){suggest.hidden=true;suggest.innerHTML='';return;}
+  var ql=q.toLowerCase();
+  var hits=_ttMusicians.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
+  if(!hits.length){suggest.hidden=true;suggest.innerHTML='';return;}
+  suggest.innerHTML='';
+  hits.forEach(function(m){
+    var li=document.createElement('li');
+    li.textContent=m.name;
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      inp.value=m.name;
+      idInp.value=m.id;
+      nameInp.value='';
+      suggest.hidden=true;
+      suggest.innerHTML='';
+    });
+    suggest.appendChild(li);
   });
-  return h;
+  suggest.hidden=false;
 }
 function addTTRow(){
   var tbody=document.getElementById('tt-body');
@@ -509,7 +541,7 @@ function addTTRow(){
   var row2=document.createElement('tr');
   row2.className='tt-row-detail';
   row2.innerHTML='<td colspan="3"><input type="text" name="tt_desc" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></td>'+
-    '<td colspan="3"><select name="tt_musician_id">'+_buildMusicianOpts(0)+'</select></td>';
+    '<td colspan="3">'+_buildTTMusWidget()+'</td>';
   tbody.appendChild(row1);
   tbody.appendChild(row2);
 }

@@ -16,17 +16,20 @@ import (
 
 )
 
-// buildBaseURL returns the configured base URL or infers it from the request.
+// buildBaseURL returns the public base URL for link generation.
+// Priority: configured base_url > X-Base-URL header (set by dansal-web) > infer from request.
 func buildBaseURL(r *http.Request) string {
-	base := strings.TrimRight(config.Server.BaseURL, "/")
-	if base == "" {
-		scheme := "https"
-		if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-			scheme = "http"
-		}
-		base = scheme + "://" + r.Host
+	if base := strings.TrimRight(config.Server.BaseURL, "/"); base != "" {
+		return base
 	}
-	return base
+	if base := strings.TrimRight(r.Header.Get("X-Base-URL"), "/"); base != "" {
+		return base
+	}
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
 }
 
 // buildVerifyURL constructs the verification link using buildBaseURL.

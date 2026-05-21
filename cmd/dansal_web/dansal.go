@@ -1242,7 +1242,8 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 
 // CreateContactPost submits a board post and returns (telegramVerifyURL, error).
 // telegramVerifyURL is non-empty only when the post was submitted with a Telegram username.
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any) (string, error) {
+// baseURL is forwarded so the API can generate correct public links in emails.
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL string) (string, error) {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
@@ -1251,6 +1252,9 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", err
@@ -1361,7 +1365,7 @@ func (c *DansalClient) CheckinBooking(ctx context.Context, qrToken, authToken st
 	return b, json.NewDecoder(resp.Body).Decode(&b)
 }
 
-func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields map[string]any) error {
+func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields map[string]any, baseURL string) error {
 	body, _ := json.Marshal(fields)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/bookings", eventID),
@@ -1370,6 +1374,9 @@ func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields ma
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err

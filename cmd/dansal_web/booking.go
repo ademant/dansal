@@ -32,7 +32,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			"message": r.FormValue("message"),
 		}
 
-		if err := client.CreateBooking(r.Context(), eventID, fields); err != nil {
+		if err := client.CreateBooking(r.Context(), eventID, fields, cfg.publicBaseURL()); err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}

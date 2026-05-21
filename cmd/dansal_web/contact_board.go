@@ -46,7 +46,7 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			"telegram": r.FormValue("telegram"),
 		}
 
-		tgURL, err := client.CreateContactPost(r.Context(), eventID, post)
+		tgURL, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL())
 		if err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return

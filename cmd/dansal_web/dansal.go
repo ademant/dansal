@@ -383,6 +383,14 @@ func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, er
 }
 
 func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organization, error) {
+	orgs, err := c.GetOrganizations(ctx)
+	if err == nil {
+		for _, o := range orgs {
+			if o.ID == id {
+				return o, nil
+			}
+		}
+	}
 	var org Organization
 	if err := c.get(ctx, fmt.Sprintf("/api/v1/organizations/%d", id), &org); err != nil {
 		return Organization{}, err
@@ -831,6 +839,7 @@ func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, org
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateLocations()
 	return nil
 }
 

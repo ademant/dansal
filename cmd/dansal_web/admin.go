@@ -1857,6 +1857,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		createStandaloneLocation := r.FormValue("loc_choice") == "new" && locReq.Location != ""
 		var pricing *Pricing
 		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
 			p := &Pricing{Type: pt}
@@ -1935,6 +1936,26 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			log.Printf("create event error: %v", err)
 			renderErr("admin_save_error")
 			return
+		}
+
+		if createStandaloneLocation {
+			newLoc := Location{
+				Location:  locReq.Location,
+				ShortName: locReq.ShortName,
+				Address:   locReq.Address,
+				Zipcode:   locReq.Zipcode,
+				Town:      locReq.Town,
+				Country:   locReq.Country,
+				Latitude:  locReq.Latitude,
+				Longitude: locReq.Longitude,
+			}
+			if created, lerr := client.CreateLocation(r.Context(), newLoc, getSessionToken(r)); lerr == nil {
+				if orgID != nil {
+					_ = client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, orgID, getSessionToken(r))
+				}
+			} else {
+				log.Printf("create standalone location error: %v", lerr)
+			}
 		}
 
 		if file, header, ferr := r.FormFile("image"); ferr == nil {

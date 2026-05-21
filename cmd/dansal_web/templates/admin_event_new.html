@@ -102,12 +102,11 @@
     <h2>{{$.Strings.T "evt_location"}}</h2>
     <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
     <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
-      <option value="">— {{$.Strings.T "evt_none"}} —</option>
       <option value="existing">{{$.Strings.T "evt_loc_existing"}}</option>
       <option value="new">{{$.Strings.T "evt_loc_new"}}</option>
     </select>
 
-    <div id="loc-existing" hidden>
+    <div id="loc-existing">
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>

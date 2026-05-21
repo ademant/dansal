@@ -399,6 +399,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 		*query += " AND e.created_at >= ?"
 		*args = append(*args, v)
 	}
+	if v := q.Get("source"); v != "" {
+		*query += " AND e.source = ?"
+		*args = append(*args, v)
+	}
 }
 
 // applyPagination appends ORDER BY + LIMIT/OFFSET clauses.
@@ -800,7 +804,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		if shortCode := r.URL.Query().Get("code"); shortCode != "" {
 			w.Header().Set("Content-Type", "application/json")
 			event, err := scanEventRow(db.QueryRow(
-				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
+				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1 AND (e.suggestion_token IS NULL OR e.suggestion_token = '')", shortCode,
 			))
 			if err == sql.ErrNoRows {
 				writeError(w, "Event not found", http.StatusNotFound)
@@ -814,7 +818,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := eventListSelect + " WHERE 1=1"
+	query := eventListSelect + " WHERE (e.suggestion_token IS NULL OR e.suggestion_token = '')"
 	args := []any{}
 
 	if !isAuthorizedAdmin {
@@ -1099,7 +1103,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	id := r.PathValue("id")
 
-	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ?", id))
+	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ? AND (e.suggestion_token IS NULL OR e.suggestion_token = '')", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return

@@ -718,6 +718,9 @@ func migrateDB() {
 	migrateContactPostsCheckConstraint()
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)")
+	db.Exec("ALTER TABLE events ADD COLUMN suggester_email TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE events ADD COLUMN suggestion_token TEXT")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_suggestion_token ON events(suggestion_token)")
 }
 
 func createTables() error {
@@ -768,6 +771,8 @@ func createTables() error {
 		availability TEXT DEFAULT '',
 		tickets_total INTEGER DEFAULT 0,
 		booking_enabled INTEGER DEFAULT 0,
+		suggester_email TEXT DEFAULT '',
+		suggestion_token TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
@@ -1042,6 +1047,7 @@ func reloadConfig(path string) {
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
+	initSuggestRateLimiters()
 	log.Printf("Config reloaded from %s", path)
 }
 
@@ -1101,6 +1107,7 @@ func main() {
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
+	initSuggestRateLimiters()
 
 	smux := http.NewServeMux()
 
@@ -1154,6 +1161,11 @@ func main() {
 	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
 	smux.HandleFunc("GET /api/v1/musician-images/{id}", getMusicianImage)
 	smux.HandleFunc("GET /api/v1/org-images/{id}", getOrgImage)
+
+	// Anonymous suggestion endpoints
+	smux.HandleFunc("POST /api/v1/events/suggest-preview", suggestPreviewHandler)
+	smux.HandleFunc("POST /api/v1/events/suggest", suggestHandler)
+	smux.HandleFunc("GET /api/v1/events/suggest/verify/{token}", suggestVerifyHandler)
 
 	// Protected event writes
 	smux.Handle("POST /api/v1/events/preview", auth(previewEventsHandler))

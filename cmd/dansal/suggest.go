@@ -1,0 +1,271 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+)
+
+var (
+	suggestPreviewRateLimiter *RateLimiter
+	suggestRateLimiter        *RateLimiter
+)
+
+func initSuggestRateLimiters() {
+	suggestPreviewRateLimiter = NewRateLimiter(5, 10*time.Minute)
+	suggestRateLimiter = NewRateLimiter(3, 10*time.Minute)
+}
+
+type SuggestRequest struct {
+	Title              string               `json:"title"`
+	Description        string               `json:"description"`
+	StartTime          string               `json:"start_time"`
+	EndTime            string               `json:"end_time"`
+	HasBall            bool                 `json:"has_ball"`
+	HasWorkshop        bool                 `json:"has_workshop"`
+	HasFestival        bool                 `json:"has_festival"`
+	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty"`
+	IsCancelled        bool                 `json:"is_cancelled"`
+	Tags               []string             `json:"tags"`
+	URL                string               `json:"url,omitempty"`
+	Location           EventLocationRequest `json:"location"`
+	Email              string               `json:"email"`
+	Phone2             string               `json:"phone2"` // honeypot
+}
+
+// POST /api/v1/events/suggest-preview — parse iCal or folkdance-JSON without auth or org_id requirement.
+func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
+	ip := getIP(r)
+	if !suggestPreviewRateLimiter.Allow(ip) {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeError(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+
+	feedType := r.FormValue("type")
+	if feedType == "" {
+		feedType = "ical"
+	}
+
+	src := FetchSource{Type: feedType}
+
+	var body []byte
+	if file, _, err := r.FormFile("file"); err == nil {
+		defer file.Close()
+		body, err = io.ReadAll(io.LimitReader(file, 10<<20))
+		if err != nil {
+			writeError(w, "read failed", http.StatusBadRequest)
+			return
+		}
+	} else {
+		writeError(w, "file is required", http.StatusBadRequest)
+		return
+	}
+
+	reqs, err := parseBodyToRequests(body, src)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	if reqs == nil {
+		reqs = []EventCreateRequest{}
+	}
+	json.NewEncoder(w).Encode(reqs)
+}
+
+// POST /api/v1/events/suggest — submit an anonymous event suggestion.
+func suggestHandler(w http.ResponseWriter, r *http.Request) {
+	ip := getIP(r)
+	if !suggestRateLimiter.Allow(ip) {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, config.Server.MaxBodyBytes))
+	if err != nil {
+		writeError(w, "read failed", http.StatusBadRequest)
+		return
+	}
+
+	var req SuggestRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Honeypot: silently accept without saving.
+	if req.Phone2 != "" {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	if req.Title == "" || req.StartTime == "" {
+		writeError(w, "title and start_time are required", http.StatusBadRequest)
+		return
+	}
+
+	smtpConfigured := config.SMTP.Host != ""
+	if smtpConfigured && req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
+		return
+	}
+
+	if containsLink(req.Title) || containsLink(req.Description) {
+		writeError(w, "links are not allowed in title or description", http.StatusBadRequest)
+		return
+	}
+
+	startTime, err := parseTimeToUnix(req.StartTime)
+	if err != nil {
+		writeError(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	endTime := startTime + 3600
+	if req.EndTime != "" {
+		if et, err2 := parseTimeToUnix(req.EndTime); err2 == nil {
+			endTime = et
+		}
+	}
+
+	tagsJSON, _ := json.Marshal(req.Tags)
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	locID, err := ensureLocation(tx, req.Location)
+	if err != nil {
+		writeError(w, "location: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var suggestionToken string
+	if smtpConfigured {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			writeError(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		suggestionToken = hex.EncodeToString(b)
+	}
+
+	var tokenArg any
+	if suggestionToken != "" {
+		tokenArg = suggestionToken
+	}
+
+	var insertErr error
+	for range 5 {
+		shortCode := generateShortCode()
+		_, insertErr = tx.Exec(
+			`INSERT INTO events
+			 (title, description, start_time, end_time, location_id,
+			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
+			  tags, is_published, url, suggester_email, suggestion_token, short_code)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+			req.Title, req.Description, startTime, endTime, locID,
+			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
+			string(tagsJSON), urlVal(req.URL), req.Email, tokenArg, shortCode,
+		)
+		if insertErr == nil {
+			break
+		}
+		if !strings.Contains(insertErr.Error(), "short_code") {
+			break
+		}
+	}
+	if insertErr != nil {
+		writeError(w, "db error: "+insertErr.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	if smtpConfigured {
+		base := buildBaseURL(r)
+		verifyURL := base + "/api/v1/events/suggest/verify/" + suggestionToken
+		go func() {
+			msg := fmt.Sprintf(
+				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\nIf you did not submit this suggestion, you can ignore this email.",
+				verifyURL,
+			)
+			if err := SendEmail(req.Email, "Confirm your event suggestion", msg); err != nil {
+				log.Printf("suggest: send verify email: %v", err)
+			}
+		}()
+	} else {
+		go notifyAdminsSuggestion(req.Title, req.StartTime)
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// GET /api/v1/events/suggest/verify/{token} — confirm an email-verified suggestion.
+func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		writeError(w, "token required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := db.Exec(`UPDATE events SET suggestion_token = NULL WHERE suggestion_token = ?`, token)
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		writeError(w, "token not found", http.StatusNotFound)
+		return
+	}
+
+	go notifyAdminsSuggestion("", "")
+	w.WriteHeader(http.StatusOK)
+}
+
+// notifyAdminsSuggestion sends a notification to admin users via Telegram and/or email.
+func notifyAdminsSuggestion(title, startTime string) {
+	msg := "A new event suggestion is waiting for review in the admin panel."
+	if title != "" {
+		msg = fmt.Sprintf("New event suggestion: %q (%s) — review in the admin panel.", title, startTime)
+	}
+
+	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
+	if err != nil {
+		log.Printf("suggest: notify admins: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var email, chatID string
+		if err := rows.Scan(&email, &chatID); err != nil {
+			continue
+		}
+		if chatID != "" {
+			if err := sendTelegramMessage(chatID, msg); err != nil {
+				log.Printf("suggest: notify admin telegram: %v", err)
+			}
+		} else if email != "" && config.SMTP.Host != "" {
+			if err := SendEmail(email, "New event suggestion", msg); err != nil {
+				log.Printf("suggest: notify admin email: %v", err)
+			}
+		}
+	}
+}

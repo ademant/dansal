@@ -29,13 +29,8 @@ func (lh *liveHandler) store(h http.Handler) {
 }
 
 func main() {
+	// Register --version before loadConfig() calls flag.Parse().
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
-	flag.Parse()
-
-	if *printVersion {
-		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)
-		os.Exit(0)
-	}
 
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal_web"); err == nil {
 		log.SetOutput(w)
@@ -43,6 +38,11 @@ func main() {
 	}
 
 	cfg := loadConfig()
+
+	if *printVersion {
+		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)
+		os.Exit(0)
+	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	db := initDB(cfg.DBPath)
 	if v := getSiteSetting(db, "site_name"); v != "" {

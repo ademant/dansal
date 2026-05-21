@@ -75,7 +75,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		 FROM contact_posts
 		 WHERE event_id=? AND email_verified=1 AND expires_at > ?
 		 ORDER BY created_at ASC`,
-		eventID, time.Now().UTC().Format(time.RFC3339),
+		eventID, time.Now().UTC().Unix(),
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -181,7 +181,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, verify_token, delete_token, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
-		verifyToken, deleteToken, expiresAt.Format(time.RFC3339),
+		verifyToken, deleteToken, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "failed to create post", http.StatusInternalServerError)
@@ -388,7 +388,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec(
 		`INSERT INTO contact_requests (post_id, sender_email, sender_telegram, message, verify_token, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		postID, req.Email, req.Telegram, req.Message, verifyToken, reqExpiry.Format(time.RFC3339),
+		postID, req.Email, req.Telegram, req.Message, verifyToken, reqExpiry.Unix(),
 	)
 	if err != nil {
 		writeError(w, "failed to create contact request", http.StatusInternalServerError)

@@ -110,14 +110,14 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Exec(
 		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-		token, user.ID, expiresAt.Format(time.RFC3339),
+		token, user.ID, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "Failed to create magic token", http.StatusInternalServerError)
 		return
 	}
 
-	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", now.Format(time.RFC3339), user.ID)
+	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", now.Unix(), user.ID)
 
 	base := req.BaseURL
 	if base == "" {

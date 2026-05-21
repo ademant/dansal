@@ -306,7 +306,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 		src.OrganizationID = &id
 	}
 	if lastFetched.Valid {
-		src.LastFetchedAt = lastFetched.String
+		src.LastFetchedAt = epochStrToRFC3339(lastFetched.String)
 	}
 	if lastResult.Valid {
 		src.LastResult = lastResult.String
@@ -585,7 +585,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("parse iCal: %w", err)
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = CURRENT_TIMESTAMP WHERE id = ?", src.ID)
+	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
 	tx, err := db.Begin()
 	if err != nil {

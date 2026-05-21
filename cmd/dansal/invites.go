@@ -121,7 +121,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = db.Exec(
 		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at) VALUES (?, ?, ?, ?, ?)",
-		token, callerID, req.Role, orgVal, expiresAt.Format(time.RFC3339),
+		token, callerID, req.Role, orgVal, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "Failed to create invite link", http.StatusInternalServerError)
@@ -172,6 +172,8 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		l.ExpiresAt = epochStrToRFC3339(l.ExpiresAt)
+		l.UsedAt = epochStrToRFC3339(l.UsedAt)
 		if orgID.Valid {
 			id := int(orgID.Int64)
 			l.OrgID = &id
@@ -287,7 +289,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Format(time.RFC3339), invite.ID)
+	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)

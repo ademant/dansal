@@ -128,7 +128,7 @@ func importFromRSSSource(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("read body: %w", err)
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = CURRENT_TIMESTAMP WHERE id = ?", src.ID)
+	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
 	// Try RSS 2.0
 	var rssFd rssFeed

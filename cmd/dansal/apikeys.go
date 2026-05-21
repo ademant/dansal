@@ -100,7 +100,7 @@ func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if exp.Valid {
-			k.ExpiresAt = exp.String
+			k.ExpiresAt = epochStrToRFC3339(exp.String)
 		}
 		keys = append(keys, k)
 	}
@@ -128,14 +128,16 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var expiresAt *string
+	var expiresAt *int64
 	if req.ExpiresAt != "" {
-		if _, err := time.Parse(time.RFC3339, req.ExpiresAt); err != nil {
+		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]string{"error": "expires_at must be RFC3339"})
 			return
 		}
-		expiresAt = &req.ExpiresAt
+		epoch := t.Unix()
+		expiresAt = &epoch
 	}
 
 	targetUserID := callerID

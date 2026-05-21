@@ -239,7 +239,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("parse JSON: %w", err)
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = CURRENT_TIMESTAMP WHERE id = ?", src.ID)
+	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
 	tx, err := db.Begin()
 	if err != nil {

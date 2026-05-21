@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -48,21 +49,21 @@ func recordFailedLogin(userID int, username, clientIP string, storedCount int, f
 	window := time.Duration(windowSecs) * time.Second
 
 	var newCount int
-	var newSince string
+	var newSince any // int64 epoch or nil
 	if failedSince != "" {
 		if since, err := parseTokenExpiration(failedSince); err == nil && now.Sub(since) < window {
 			newCount = storedCount + 1
 		} else {
 			newCount = 1
-			newSince = now.Format(time.RFC3339)
+			newSince = now.Unix()
 		}
 	} else {
 		newCount = 1
-		newSince = now.Format(time.RFC3339)
+		newSince = now.Unix()
 	}
 
 	if newCount >= maxFailures {
-		if newSince != "" {
+		if newSince != nil {
 			db.Exec("UPDATE users SET disabled=1, failed_login_count=?, failed_login_since=? WHERE id=?", newCount, newSince, userID)
 		} else {
 			db.Exec("UPDATE users SET disabled=1, failed_login_count=? WHERE id=?", newCount, userID)
@@ -70,7 +71,7 @@ func recordFailedLogin(userID int, username, clientIP string, storedCount int, f
 		log.Printf("auth: user %q disabled after %d failed logins within window (last from %s)", username, newCount, clientIP)
 		credentials.pruneByUserID(userID)
 		db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
-	} else if newSince != "" {
+	} else if newSince != nil {
 		db.Exec("UPDATE users SET failed_login_count=1, failed_login_since=? WHERE id=?", newSince, userID)
 	} else {
 		db.Exec("UPDATE users SET failed_login_count=? WHERE id=?", newCount, userID)
@@ -98,7 +99,6 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 		expirationHours = config.Server.TokenExpirationHours
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(expirationHours) * time.Hour)
-	expiresAtStr := expiresAt.Format(time.RFC3339Nano)
 
 	var fpVal any
 	if fingerprint != "" {
@@ -106,7 +106,7 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 	}
 	_, err = db.Exec(
 		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, token, expiresAtStr, userAgent, ip, fpVal,
+		userID, token, expiresAt.Unix(), userAgent, ip, fpVal,
 	)
 	if err != nil {
 		return "", time.Time{}, err
@@ -157,6 +157,11 @@ func validateToken(token string) (int, string, int, error) {
 }
 
 func parseTokenExpiration(value string) (time.Time, error) {
+	// New format: unix epoch integer stored as integer, scanned as string by SQLite driver.
+	if epoch, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil {
+		return time.Unix(epoch, 0).UTC(), nil
+	}
+	// Legacy RFC3339 text formats kept for backward compatibility during migration.
 	layouts := []string{
 		time.RFC3339Nano,
 		time.RFC3339,
@@ -164,14 +169,24 @@ func parseTokenExpiration(value string) (time.Time, error) {
 		"2006-01-02 15:04:05.999999999",
 		"2006-01-02 15:04:05",
 	}
-
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, value); err == nil {
 			return t, nil
 		}
 	}
-
 	return time.Time{}, fmt.Errorf("unsupported expiration format")
+}
+
+// epochStrToRFC3339 converts a stored epoch integer (possibly scanned as string) to RFC3339.
+// Falls back to returning the value unchanged if it is already formatted text or empty.
+func epochStrToRFC3339(s string) string {
+	if s == "" {
+		return ""
+	}
+	if epoch, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
+		return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
+	}
+	return s
 }
 
 func getClientIP(r *http.Request) string {

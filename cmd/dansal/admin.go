@@ -228,6 +228,8 @@ func adminListSessions(req adminRequest) adminResponse {
 		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt); err != nil {
 			return adminResponse{OK: false, Error: err.Error()}
 		}
+		s.LastSeenAt = epochStrToRFC3339(s.LastSeenAt)
+		s.ExpiresAt = epochStrToRFC3339(s.ExpiresAt)
 		s.Fingerprint = hasFP == 1
 		sessions = append(sessions, s)
 	}

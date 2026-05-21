@@ -119,7 +119,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Server.VerificationExpiryHours) * time.Hour)
 	_, err = db.Exec(
 		"INSERT INTO verification_tokens (token, user_id, channel, expires_at) VALUES (?, ?, ?, ?)",
-		token, targetID, req.Channel, expiresAt.Format(time.RFC3339),
+		token, targetID, req.Channel, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "Failed to create verification token", http.StatusInternalServerError)

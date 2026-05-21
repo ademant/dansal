@@ -43,7 +43,7 @@ func updateLastSeen(token string) {
 	}
 	lastSeenCache[token] = now
 	lastSeenMu.Unlock()
-	go db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Format(time.RFC3339), token)
+	go db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), token)
 }
 
 type ConnLimiter struct {
@@ -265,16 +265,17 @@ func startTokenCleanup() {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			res, err := db.Exec("DELETE FROM tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			now := time.Now().UTC().Unix()
+			res, err := db.Exec("DELETE FROM tokens WHERE expires_at < ?", now)
 			if err != nil {
 				log.Printf("token cleanup: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("token cleanup: removed %d expired token(s)", n)
 			}
-			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
-			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
-			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
-			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", now)
+			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", now)
+			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", now)
+			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", now)
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -702,7 +703,7 @@ func migrateDB() {
 		message TEXT NOT NULL,
 		verify_token TEXT UNIQUE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
 	)`)
 	migrateContactPostsCheckConstraint()
@@ -729,7 +730,7 @@ func migrateDB() {
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at         DATETIME NOT NULL,
+		expires_at         INTEGER NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	)`)
 	// Drop indexes made redundant by UNIQUE constraints or composite-PK leading-column coverage.
@@ -746,6 +747,25 @@ func migrateDB() {
 	db.Exec("DROP INDEX IF EXISTS idx_fetch_source_dances_source_id")
 	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_verification_token")
 	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_approval_token")
+	// #192: composite index for time-range queries.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time)")
+	// #193: convert expires_at and other timestamp fields from RFC3339 text to unix epoch integer.
+	// strftime('%s', ...) understands ISO 8601 / RFC3339 format; typeof()='text' guards are
+	// idempotent — rows already stored as integers are left unchanged.
+	db.Exec("UPDATE tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE tokens SET last_seen_at = CAST(strftime('%s', last_seen_at) AS INTEGER) WHERE last_seen_at IS NOT NULL AND typeof(last_seen_at) = 'text'")
+	db.Exec("UPDATE verification_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE magic_login_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE invite_links SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE invite_links SET used_at = CAST(strftime('%s', used_at) AS INTEGER) WHERE used_at IS NOT NULL AND typeof(used_at) = 'text'")
+	db.Exec("UPDATE api_keys SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE expires_at IS NOT NULL AND typeof(expires_at) = 'text'")
+	db.Exec("UPDATE contact_posts SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE contact_requests SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE bookings SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE pending_registrations SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+	db.Exec("UPDATE fetch_sources SET last_fetched_at = CAST(strftime('%s', last_fetched_at) AS INTEGER) WHERE last_fetched_at IS NOT NULL AND typeof(last_fetched_at) = 'text'")
+	db.Exec("UPDATE users SET failed_login_since = CAST(strftime('%s', failed_login_since) AS INTEGER) WHERE failed_login_since IS NOT NULL AND typeof(failed_login_since) = 'text'")
+	db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
 }
 
 func createTables() error {
@@ -763,8 +783,8 @@ func createTables() error {
 		matrix_verified INTEGER DEFAULT 0,
 		disabled INTEGER DEFAULT 0,
 		failed_login_count INTEGER DEFAULT 0,
-		failed_login_since DATETIME,
-		last_magic_sent_at DATETIME,
+		failed_login_since INTEGER,
+		last_magic_sent_at INTEGER,
 		description TEXT,
 		mastodon TEXT,
 		website TEXT,
@@ -805,11 +825,11 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
 		token TEXT UNIQUE NOT NULL,
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		user_agent TEXT,
 		ip TEXT,
 		fingerprint TEXT,
-		last_seen_at DATETIME,
+		last_seen_at INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -859,7 +879,7 @@ func createTables() error {
 		type TEXT NOT NULL DEFAULT 'ical',
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
-		last_fetched_at DATETIME,
+		last_fetched_at INTEGER,
 		last_result TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -882,7 +902,7 @@ func createTables() error {
 		user_id INTEGER NOT NULL,
 		name TEXT NOT NULL,
 		api_key TEXT UNIQUE NOT NULL,
-		expires_at DATETIME,
+		expires_at INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -912,8 +932,8 @@ func createTables() error {
 		created_by INTEGER NOT NULL,
 		role TEXT NOT NULL DEFAULT 'user',
 		org_id INTEGER,
-		expires_at DATETIME NOT NULL,
-		used_at DATETIME,
+		expires_at INTEGER NOT NULL,
+		used_at INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
@@ -923,7 +943,7 @@ func createTables() error {
 		token TEXT UNIQUE NOT NULL,
 		user_id INTEGER NOT NULL,
 		channel TEXT NOT NULL CHECK(channel IN ('email','telegram','matrix')),
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -931,7 +951,7 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
 		user_id INTEGER NOT NULL,
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -994,7 +1014,7 @@ func createTables() error {
 		email_verified INTEGER DEFAULT 0,
 		verify_token TEXT UNIQUE,
 		delete_token TEXT UNIQUE,
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	);
@@ -1021,7 +1041,7 @@ func createTables() error {
 		verify_token TEXT UNIQUE,
 		qr_token TEXT UNIQUE,
 		lang TEXT NOT NULL DEFAULT '',
-		expires_at DATETIME NOT NULL,
+		expires_at INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	);
@@ -1056,9 +1076,10 @@ func createTables() error {
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at         DATETIME NOT NULL,
+		expires_at         INTEGER NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
+	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);
 	`
 	_, err := db.Exec(schema)
 	return err

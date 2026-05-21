@@ -40,7 +40,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(last_seen_at,''),
 		       expires_at
 		FROM tokens
-		WHERE user_id = ? AND expires_at > datetime('now')
+		WHERE user_id = ? AND expires_at > strftime('%s','now')
 		ORDER BY COALESCE(last_seen_at, created_at) DESC`, userID)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -56,6 +56,8 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		s.LastSeenAt = epochStrToRFC3339(s.LastSeenAt)
+		s.ExpiresAt = epochStrToRFC3339(s.ExpiresAt)
 		s.Fingerprint = hasFP == 1
 		s.Current = s.ID == currentSessionID
 		sessions = append(sessions, s)

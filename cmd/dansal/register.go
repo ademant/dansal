@@ -170,7 +170,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := time.Now().UTC().Add(72 * time.Hour).Format(time.RFC3339)
+	expiresAt := time.Now().UTC().Add(72 * time.Hour).Unix()
 
 	var orgIDArg any
 	if req.OrgID != nil {
@@ -291,6 +291,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 		); err != nil {
 			continue
 		}
+		pr.ExpiresAt = epochStrToRFC3339(pr.ExpiresAt)
 		if orgID.Valid {
 			n := int(orgID.Int64)
 			pr.OrgID = &n

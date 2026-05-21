@@ -190,7 +190,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	result, err := db.Exec(
 		`INSERT INTO bookings (event_id, name, email, persons, message, verify_token, expires_at, lang)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Format(time.RFC3339), lang,
+		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Unix(), lang,
 	)
 	if err != nil {
 		writeError(w, "failed to create booking", http.StatusInternalServerError)
@@ -249,7 +249,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	longExpiry := bookingLongExpiry(eventID)
 	db.Exec(
 		"UPDATE bookings SET status='confirmed', verify_token=NULL, qr_token=?, expires_at=? WHERE id=?",
-		qrToken, longExpiry.Format(time.RFC3339), id,
+		qrToken, longExpiry.Unix(), id,
 	)
 	log.Printf("bookings: verified booking %d for event %d", id, eventID)
 	go sendBookingConfirmedEmail(name, email, lang, eventID, qrToken)

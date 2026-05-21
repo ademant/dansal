@@ -712,32 +712,52 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 
-		var org *Organization
-		var slug string
+		var (
+			org     *Organization
+			slug    string
+			posts   []ContactPost
+			members []OrgMember
+		)
+
+		su := getSessionUser(r)
+		needMembers := su != nil && su.Role != "admin" && event.OrganizationID != nil
+		token := getSessionToken(r)
+
+		var wg sync.WaitGroup
 		if event.OrganizationID != nil {
-			o, err := client.GetOrganization(r.Context(), *event.OrganizationID)
-			if err == nil {
-				org = &o
-				slug = effectiveSlug(o)
-			}
-		}
-
-		posts, _ := client.GetContactPosts(r.Context(), id)
-
-		canManage := false
-		if su := getSessionUser(r); su != nil {
-			if su.Role == "admin" {
-				canManage = true
-			} else if event.OrganizationID != nil {
-				token := getSessionToken(r)
-				members, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				o, err := client.GetOrganization(r.Context(), *event.OrganizationID)
 				if err == nil {
-					for _, m := range members {
-						if m.UserID == su.ID {
-							canManage = true
-							break
-						}
-					}
+					org = &o
+					slug = effectiveSlug(o)
+				}
+			}()
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			posts, _ = client.GetContactPosts(r.Context(), id)
+		}()
+		if needMembers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ms, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
+				if err == nil {
+					members = ms
+				}
+			}()
+		}
+		wg.Wait()
+
+		canManage := su != nil && su.Role == "admin"
+		if !canManage && needMembers {
+			for _, m := range members {
+				if m.UserID == su.ID {
+					canManage = true
+					break
 				}
 			}
 		}

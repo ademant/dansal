@@ -89,6 +89,14 @@ func main() {
 		r.HandleFunc("GET /events/suggest/done", suggestDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
 
+		r.HandleFunc("GET /register", registerPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /register/done", registerDoneHandler(cfg, tmpls, i18n))
+		r.HandleFunc("GET /register/verify/email/{token}", registerVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/registrations", adminRegistrationsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/registrations/{id}/approve", adminRegistrationApproveHandler(cfg, client))
+		r.HandleFunc("POST /admin/registrations/{id}/reject", adminRegistrationRejectHandler(cfg, client))
+
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
 		r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))

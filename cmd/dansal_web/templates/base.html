@@ -165,6 +165,7 @@ footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;bor
     <a href="/admin/dances">{{.Strings.T "nav_admin_dances"}}</a>
     <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
     <a href="/admin/users">{{.Strings.T "nav_admin_users"}}</a>
+    {{if .RegistrationEnabled}}<a href="/admin/registrations">{{.Strings.T "nav_admin_registrations"}}</a>{{end}}
     <a href="/admin/site-config">Site config</a>
     <a href="/admin/info">System info</a>
     {{else}}
@@ -190,6 +191,7 @@ footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;bor
         <button type="submit" class="nav-btn">{{.Strings.T "nav_logout"}}</button>
       </form>
     {{else}}
+      {{if .RegistrationEnabled}}<a class="nav-btn" href="/register">{{.Strings.T "register_btn"}}</a>{{end}}
       <a class="nav-btn" href="/login">{{.Strings.T "nav_login"}}</a>
     {{end}}
   </div>

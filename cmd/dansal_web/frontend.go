@@ -35,9 +35,10 @@ type TemplateData struct {
 	BannerHeight int
 	LogoHeight   int
 	DarkMode     string // "auto", "light", or "dark"
-	AppVersion      string
-	AppBuildTime    string
-	SuggestAvailable bool
+	AppVersion           string
+	AppBuildTime         string
+	SuggestAvailable     bool
+	RegistrationEnabled  bool
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
@@ -75,9 +76,10 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		BannerHeight: bannerHeight,
 		LogoHeight:   logoHeight,
 		DarkMode:     cfg.DarkMode,
-		AppVersion:       Version,
-		AppBuildTime:     BuildTime,
-		SuggestAvailable: suggestAvailable(cfg),
+		AppVersion:          Version,
+		AppBuildTime:        BuildTime,
+		SuggestAvailable:    suggestAvailable(cfg),
+		RegistrationEnabled: suggestAvailable(cfg), // same gate: SMTP or Telegram configured
 	}
 }
 
@@ -599,6 +601,10 @@ type Templates struct {
 	suggestEvent       *template.Template
 	suggestDone        *template.Template
 	suggestVerified    *template.Template
+	register           *template.Template
+	registerDone       *template.Template
+	registerVerified   *template.Template
+	adminRegistrations *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -644,6 +650,10 @@ func loadTemplates() *Templates {
 		suggestEvent:      load("events_suggest"),
 		suggestDone:       load("events_suggest_done"),
 		suggestVerified:   load("events_suggest_verified"),
+		register:          load("register"),
+		registerDone:      load("register_done"),
+		registerVerified:  load("register_verified"),
+		adminRegistrations: load("admin_registrations"),
 	}
 }
 

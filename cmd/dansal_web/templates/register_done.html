@@ -1,0 +1,20 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="suggest-wrap">
+  <h1>{{.Strings.T "register_done_title"}}</h1>
+  {{with .Data}}
+  {{if eq .Channel "telegram"}}
+  <p>{{$.Strings.T "register_done_tg"}}</p>
+  <pre class="tg-cmd">/register {{.TelegramToken}}</pre>
+  {{if .BotName}}<p style="margin-top:.5rem;font-size:.9rem;color:var(--fg-muted)">Bot: @{{.BotName}}</p>{{end}}
+  {{else}}
+  <p>{{$.Strings.T "register_done_email"}}</p>
+  {{end}}
+  {{end}}
+  <p style="margin-top:1.5rem"><a href="/">{{.Strings.T "register_done_back"}}</a></p>
+</div>
+<style>
+.suggest-wrap{max-width:540px;margin:2rem auto}
+.tg-cmd{background:var(--code-bg);border:1px solid var(--border);border-radius:4px;padding:.75rem 1rem;font-size:1rem;margin-top:.75rem;user-select:all}
+</style>
+{{end}}

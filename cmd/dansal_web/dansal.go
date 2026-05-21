@@ -1705,14 +1705,48 @@ func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac Ad
 
 // DansalInfo mirrors the ServiceInfo struct from the dansal API.
 type DansalInfo struct {
-	Service         string `json:"service"`
-	Version         string `json:"version"`
-	BuildTime       string `json:"build_time"`
-	TotalEvents     int    `json:"total_events"`
-	PublishedEvents int    `json:"published_events"`
-	UpcomingEvents  int    `json:"upcoming_events"`
-	DBSizeBytes     int64  `json:"db_size_bytes"`
-	ImagesSizeBytes int64  `json:"images_size_bytes"`
+	Service                 string `json:"service"`
+	Version                 string `json:"version"`
+	BuildTime               string `json:"build_time"`
+	TotalEvents             int    `json:"total_events"`
+	PublishedEvents         int    `json:"published_events"`
+	UpcomingEvents          int    `json:"upcoming_events"`
+	DBSizeBytes             int64  `json:"db_size_bytes"`
+	ImagesSizeBytes         int64  `json:"images_size_bytes"`
+	SelfRegistrationEnabled bool   `json:"self_registration_enabled"`
+}
+
+type PendingRegistration struct {
+	ID                  int    `json:"id"`
+	Username            string `json:"username"`
+	Email               string `json:"email"`
+	RegType             string `json:"reg_type"`
+	OrgID               *int   `json:"org_id,omitempty"`
+	OrgName             string `json:"org_name,omitempty"`
+	OrgDescription      string `json:"org_description,omitempty"`
+	OrgWebsite          string `json:"org_website,omitempty"`
+	OrgContactEmail     string `json:"org_contact_email,omitempty"`
+	VerificationChannel string `json:"verification_channel"`
+	Telegram            string `json:"telegram,omitempty"`
+	TelegramChatID      string `json:"telegram_chat_id,omitempty"`
+	Verified            bool   `json:"verified"`
+	CreatedAt           string `json:"created_at"`
+	ExpiresAt           string `json:"expires_at"`
+}
+
+type RegisterReq struct {
+	Username        string `json:"username"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	RegType         string `json:"reg_type"`
+	OrgID           *int   `json:"org_id,omitempty"`
+	OrgName         string `json:"org_name,omitempty"`
+	OrgDescription  string `json:"org_description,omitempty"`
+	OrgWebsite      string `json:"org_website,omitempty"`
+	OrgContactEmail string `json:"org_contact_email,omitempty"`
+	Channel         string `json:"channel"`
+	Telegram        string `json:"telegram,omitempty"`
+	Phone2          string `json:"phone2,omitempty"`
 }
 
 func (c *DansalClient) GetDansalInfo(ctx context.Context) (DansalInfo, error) {
@@ -1905,6 +1939,88 @@ func (c *DansalClient) VerifySuggestion(ctx context.Context, token string) error
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// Register calls POST /api/v1/register.
+// Returns the raw JSON response (may contain telegram_token).
+func (c *DansalClient) Register(ctx context.Context, req RegisterReq) (map[string]string, error) {
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/register", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		return nil, apiErr(resp)
+	}
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
+}
+
+// VerifyRegistrationEmail calls GET /api/v1/register/verify/email/{token}.
+func (c *DansalClient) VerifyRegistrationEmail(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/register/verify/email/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// ListPendingRegistrations calls GET /api/v1/pending-registrations.
+func (c *DansalClient) ListPendingRegistrations(ctx context.Context, token string) ([]PendingRegistration, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/pending-registrations", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var regs []PendingRegistration
+	if err := json.NewDecoder(resp.Body).Decode(&regs); err != nil {
+		return nil, err
+	}
+	return regs, nil
+}
+
+// ApproveRegistration calls POST /api/v1/pending-registrations/{id}/approve.
+func (c *DansalClient) ApproveRegistration(ctx context.Context, token string, id int, role string) error {
+	body, _ := json.Marshal(map[string]string{"role": role})
+	path := fmt.Sprintf("/api/v1/pending-registrations/%d/approve", id)
+	resp, err := c.authed(ctx, http.MethodPost, path, token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// RejectRegistration calls DELETE /api/v1/pending-registrations/{id}.
+func (c *DansalClient) RejectRegistration(ctx context.Context, token string, id int) error {
+	path := fmt.Sprintf("/api/v1/pending-registrations/%d", id)
+	resp, err := c.authed(ctx, http.MethodDelete, path, token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
 	return nil

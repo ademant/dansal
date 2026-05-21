@@ -195,8 +195,8 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Email verification path.
-	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
+	// Email verification path — link to the web frontend so users see a proper page.
+	verifyURL := base + "/contact-posts/verify/" + verifyToken
 	emailBody := fmt.Sprintf(
 		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n%s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n%s\n\nThis post expires on %s.\n",
 		req.Nickname, verifyURL, deleteURL, expiresAt.Format("2006-01-02"),

@@ -134,6 +134,6 @@ func contactBoardVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			return
 		}
 		title := i18n.T(r, "board_verify_title")
-		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true}))
+		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true, BoardVerify: true}))
 	}
 }

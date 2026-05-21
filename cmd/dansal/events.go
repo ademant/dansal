@@ -386,6 +386,12 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 			*args = append(*args, lat-latDelta, lat+latDelta, lon-lonDelta, lon+lonDelta)
 		}
 	}
+	if v := q.Get("organization_id"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			*query += " AND e.organization_id = ?"
+			*args = append(*args, n)
+		}
+	}
 }
 
 // applyPagination appends ORDER BY + LIMIT/OFFSET clauses.

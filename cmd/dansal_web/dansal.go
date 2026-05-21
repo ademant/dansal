@@ -849,17 +849,8 @@ func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, 
 }
 
 func (c *DansalClient) GetAllEventsByOrg(ctx context.Context, orgID int) ([]Event, error) {
-	var all []Event
-	if err := c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &all); err != nil {
-		return nil, err
-	}
 	var events []Event
-	for _, e := range all {
-		if e.OrganizationID != nil && *e.OrganizationID == orgID {
-			events = append(events, e)
-		}
-	}
-	return events, nil
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?is_published=true&include_past=true&organization_id=%d", orgID), &events)
 }
 
 func (c *DansalClient) GetMusiciansByOrg(ctx context.Context, orgID int) ([]Musician, error) {

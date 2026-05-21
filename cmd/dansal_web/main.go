@@ -51,6 +51,13 @@ func main() {
 	if v := getSiteSetting(db, "contact"); v != "" {
 		cfg.ContactOverride = v
 	}
+	imp := make(map[string]string)
+	for _, lang := range impressumLangs {
+		if v := getSiteSetting(db, "impressum_"+lang); v != "" {
+			imp[lang] = v
+		}
+	}
+	cfg.ImpressumOverride = imp
 	client := &DansalClient{
 		BaseURL: cfg.DansalURL,
 		HTTP:    &http.Client{Timeout: 15 * time.Second},

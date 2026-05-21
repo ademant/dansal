@@ -58,6 +58,17 @@
   </section>
 
   <section class="cfg-section">
+    <h2>{{$.Strings.T "admin_site_config_impressum"}}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:.75rem">{{$.Strings.T "admin_site_config_impressum_hint"}}</p>
+    {{range .ImpressumLangs}}
+    <div class="field">
+      <label>{{.}}</label>
+      <textarea name="impressum_{{.}}" rows="6">{{index $.Data.ImpressumTexts .}}</textarea>
+    </div>
+    {{end}}
+  </section>
+
+  <section class="cfg-section">
     <h2>{{$.Strings.T "admin_site_config_telegram"}}</h2>
     <div class="field">
       <label>{{$.Strings.T "admin_site_config_telegram_token"}}</label>

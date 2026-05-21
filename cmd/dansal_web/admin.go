@@ -2391,6 +2391,8 @@ type AdminSiteConfigData struct {
 	HasFavicon         bool
 	Dances             []Dance
 	DefaultDanceNames  map[string]bool
+	ImpressumTexts     map[string]string
+	ImpressumLangs     []string
 	ErrorMsg           string
 	Success            bool
 }
@@ -2410,6 +2412,14 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 		dances, _ := client.GetDances(r.Context())
 		defaultDanceIDs := loadDefaultDanceIDs(db)
 		defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
+		impTexts := make(map[string]string)
+		for _, lang := range impressumLangs {
+			if v := getSiteSetting(db, "impressum_"+lang); v != "" {
+				impTexts[lang] = v
+			} else {
+				impTexts[lang] = cfg.pagesContent.ImpressumText(lang)
+			}
+		}
 		data := AdminSiteConfigData{
 			SiteName:          getSiteSetting(db, "site_name"),
 			Contact:           getSiteSetting(db, "contact"),
@@ -2422,6 +2432,8 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
 			Dances:            dances,
 			DefaultDanceNames: defaultDanceNames,
+			ImpressumTexts:    impTexts,
+			ImpressumLangs:    impressumLangs,
 			Success:           r.URL.Query().Get("saved") == "1",
 		}
 		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
@@ -2451,6 +2463,16 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		_ = setSiteSetting(db, "contact", contact)
 		cfg.SiteName = siteName
 		cfg.ContactOverride = contact
+
+		// Impressum per language
+		if cfg.ImpressumOverride == nil {
+			cfg.ImpressumOverride = make(map[string]string)
+		}
+		for _, lang := range impressumLangs {
+			text := strings.TrimSpace(r.FormValue("impressum_" + lang))
+			_ = setSiteSetting(db, "impressum_"+lang, text)
+			cfg.ImpressumOverride[lang] = text
+		}
 
 		// Default dance IDs for new events
 		var defaultDanceIDs []int

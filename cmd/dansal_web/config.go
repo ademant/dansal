@@ -40,9 +40,12 @@ type Config struct {
 	configPath   string // path from which config was loaded; used for reload
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
-	SiteName        string `yaml:"site_name"`
-	ContactOverride string
+	SiteName          string `yaml:"site_name"`
+	ContactOverride   string
+	ImpressumOverride map[string]string
 }
+
+var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br", "bzh"}
 
 // publicBaseURL returns the canonical public URL of the web app.
 func (cfg *Config) publicBaseURL() string {
@@ -141,6 +144,13 @@ func reloadConfig(path string, db *sql.DB) *Config {
 	if v := getSiteSetting(db, "contact"); v != "" {
 		cfg.ContactOverride = v
 	}
+	imp := make(map[string]string)
+	for _, lang := range impressumLangs {
+		if v := getSiteSetting(db, "impressum_"+lang); v != "" {
+			imp[lang] = v
+		}
+	}
+	cfg.ImpressumOverride = imp
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	cfg.configPath = path
 	return cfg

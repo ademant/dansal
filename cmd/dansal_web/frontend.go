@@ -45,7 +45,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		contact = cfg.pagesContent.ContactText(lang)
 	}
 	impressumURL := ""
-	if cfg.pagesContent.ImpressumText(lang) != "" {
+	if cfg.ImpressumOverride[lang] != "" || cfg.pagesContent.ImpressumText(lang) != "" {
 		impressumURL = "/impressum"
 	}
 	isMain := r.URL.Path == "/"
@@ -993,9 +993,13 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pc := loadPagesContent(cfg.PagesFile)
 		lang := i18n.detectLang(r)
-		body := pc.ImpressumHTML(lang)
+		var body template.HTML
+		if text := cfg.ImpressumOverride[lang]; text != "" {
+			body = template.HTML(`<pre class="impressum-text">` + template.HTMLEscapeString(text) + `</pre>`)
+		} else {
+			body = cfg.pagesContent.ImpressumHTML(lang)
+		}
 		if body == "" {
 			http.NotFound(w, r)
 			return

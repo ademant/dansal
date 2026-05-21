@@ -296,6 +296,7 @@
           <input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}">
         </div>
         <textarea name="message" required rows="3" placeholder="{{$.Strings.T "board_your_message"}}"></textarea>
+        <p class="board-hint board-verify-hint">{{$.Strings.T "board_contact_verify_hint"}}</p>
         <button type="submit">{{$.Strings.T "board_send_btn"}}</button>
       </form>
     </div>
@@ -310,7 +311,7 @@
     <form class="board-post-form" method="post" action="/events/{{.Event.ID}}/board">
       <div class="board-form-row">
         <label>{{$.Strings.T "board_type_label"}}</label>
-        <select name="type" required>
+        <select name="type" required onchange="boardTypeChanged(this.value)">
           <option value="ride_offer">{{$.Strings.T "board_ride_offer"}}</option>
           <option value="ride_request">{{$.Strings.T "board_ride_request"}}</option>
           <option value="sleep_offer">{{$.Strings.T "board_sleep_offer"}}</option>
@@ -319,12 +320,12 @@
           <option value="ticket_request">{{$.Strings.T "board_ticket_request"}}</option>
         </select>
       </div>
-      <div class="board-form-row">
+      <div class="board-form-row" id="board-city-row">
         <label>{{$.Strings.T "board_city_label"}}</label>
         <input type="text" name="city" required placeholder="{{$.Strings.T "board_city_placeholder"}}">
       </div>
       <div class="board-form-row">
-        <label>{{$.Strings.T "board_persons_label"}}</label>
+        <label id="board-persons-label">{{$.Strings.T "board_persons_label"}}</label>
         <input type="number" name="persons" value="1" min="1" max="20" style="width:5rem">
       </div>
       <div class="board-form-row">
@@ -460,6 +461,7 @@
 .board-method-radio{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
 .btn-tg-verify{display:inline-block;margin-top:.4rem;padding:.45rem 1.1rem;background:#2481cc;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-tg-verify:hover{background:#1a69a4;color:#fff}
+.board-verify-hint{font-size:.8rem;color:var(--fg-hint);margin:.1rem 0}
 </style>
 
 <script>
@@ -482,6 +484,22 @@ function boardContactToggle(form, val) {
   var tgRow = form.querySelector('.board-contact-tg-row');
   if (emailRow) { emailRow.style.display = val === 'email' ? '' : 'none'; var inp = emailRow.querySelector('input'); if(inp) inp.required = val === 'email'; }
   if (tgRow) { tgRow.style.display = val === 'telegram' ? '' : 'none'; var inp2 = tgRow.querySelector('input'); if(inp2) inp2.required = val === 'telegram'; }
+}
+var _boardLabelPersons = {{$.Strings.T "board_persons_label" | jsStr}};
+var _boardLabelPlaces  = {{$.Strings.T "board_num_places_label" | jsStr}};
+var _boardLabelTickets = {{$.Strings.T "board_num_tickets_label" | jsStr}};
+function boardTypeChanged(type) {
+  var cityRow = document.getElementById('board-city-row');
+  var cityInput = cityRow && cityRow.querySelector('input');
+  var isTicket = type === 'ticket_offer' || type === 'ticket_request';
+  if (cityRow) cityRow.style.display = isTicket ? 'none' : '';
+  if (cityInput) cityInput.required = !isTicket;
+  var lbl = document.getElementById('board-persons-label');
+  if (lbl) {
+    if (isTicket) lbl.textContent = _boardLabelTickets;
+    else if (type === 'ride_offer' || type === 'sleep_offer') lbl.textContent = _boardLabelPlaces;
+    else lbl.textContent = _boardLabelPersons;
+  }
 }
 function boardContainsLink(s) {
   var l = s.toLowerCase();

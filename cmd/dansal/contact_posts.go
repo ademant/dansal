@@ -190,7 +190,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 
 	base := buildBaseURL(r)
-	deleteURL := base + "/api/v1/contact-posts/delete/" + deleteToken
+	deleteURL := base + "/contact-posts/delete/" + deleteToken
 
 	if useTelegram {
 		// Return a t.me link; the user opens the bot which sends /start TOKEN to verify.

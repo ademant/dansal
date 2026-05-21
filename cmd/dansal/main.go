@@ -428,6 +428,75 @@ func migrateLocationsLatLng() {
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
 }
 
+// migrateContactPostsCheckConstraint rebuilds contact_posts when the CHECK
+// constraint is missing 'ticket_offer' and 'ticket_request'.
+func migrateContactPostsCheckConstraint() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='contact_posts'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "ticket_offer") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateContactPostsCheckConstraint: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateContactPostsCheckConstraint: pragma off: %v", err)
+		return
+	}
+
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateContactPostsCheckConstraint: begin: %v", err)
+		return
+	}
+
+	stmts := []string{
+		`CREATE TABLE contact_posts_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request')),
+			city TEXT NOT NULL,
+			persons INTEGER NOT NULL DEFAULT 1,
+			message TEXT DEFAULT '',
+			nickname TEXT NOT NULL,
+			email TEXT NOT NULL DEFAULT '',
+			telegram_username TEXT,
+			poster_telegram_chat_id TEXT,
+			email_verified INTEGER DEFAULT 0,
+			verify_token TEXT UNIQUE,
+			delete_token TEXT UNIQUE,
+			expires_at DATETIME NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+		)`,
+		`INSERT INTO contact_posts_v2 SELECT id, event_id, type, city, persons, message, nickname,
+			email, COALESCE(telegram_username,NULL), COALESCE(poster_telegram_chat_id,NULL),
+			email_verified, verify_token, delete_token, expires_at, created_at FROM contact_posts`,
+		`DROP TABLE contact_posts`,
+		`ALTER TABLE contact_posts_v2 RENAME TO contact_posts`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateContactPostsCheckConstraint: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateContactPostsCheckConstraint: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
+}
+
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
@@ -523,7 +592,7 @@ func migrateDB() {
 	db.Exec(`CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request')),
+		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request')),
 		city TEXT NOT NULL,
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
@@ -636,6 +705,7 @@ func migrateDB() {
 		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_verify_token ON contact_requests(verify_token)")
+	migrateContactPostsCheckConstraint()
 }
 
 func createTables() error {
@@ -869,7 +939,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request')),
+		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request')),
 		city TEXT NOT NULL,
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',

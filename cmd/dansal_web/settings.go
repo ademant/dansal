@@ -121,6 +121,7 @@ type VerifyData struct {
 	Success              bool
 	BoardVerify          bool
 	ContactRequestVerify bool
+	BoardDelete          bool
 	ErrorKey             string
 }
 

@@ -1285,6 +1285,25 @@ func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token stri
 	return nil
 }
 
+func (c *DansalClient) DeleteContactPostByToken(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/delete/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 // ── bookings ─────────────────────────────────────────────────────────────────
 
 type Booking struct {

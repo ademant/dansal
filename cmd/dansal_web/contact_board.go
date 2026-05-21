@@ -144,6 +144,20 @@ func contactRequestVerifyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 	}
 }
 
+// GET /contact-posts/delete/{token}
+func contactBoardDeleteByTokenHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		if err := client.DeleteContactPostByToken(r.Context(), token); err != nil {
+			title := i18n.T(r, "board_delete_title")
+			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "board_delete_link_error"}))
+			return
+		}
+		title := i18n.T(r, "board_delete_title")
+		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true, BoardDelete: true}))
+	}
+}
+
 // GET /contact-posts/verify/{token}
 func contactBoardVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

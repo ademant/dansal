@@ -641,6 +641,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE musicians ADD COLUMN genre TEXT")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_end_time ON events(end_time)")
 	db.Exec(`CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL
@@ -994,6 +995,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_events_end_time ON events(end_time);
 	CREATE INDEX IF NOT EXISTS idx_locations_location     ON locations(location);
 	CREATE INDEX IF NOT EXISTS idx_locations_town         ON locations(town);
 	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);

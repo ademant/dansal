@@ -887,7 +887,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 
 	callerRole := r.Header.Get("X-User-Role")
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	isPublished := callerRole == RoleUser || callerRole == RoleAdmin
+	isPublished := callerRole == RoleUser || callerRole == RoleAdmin || callerRole == RolePublisher
 
 	contentType := r.Header.Get("Content-Type")
 	var requests []EventCreateRequest

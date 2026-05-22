@@ -498,6 +498,69 @@ func migrateContactPostsCheckConstraint() {
 	log.Printf("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
 }
 
+// migrateInviteLinksRole rebuilds invite_links to add a CHECK constraint on
+// the role column, matching the constraint already present on users.role.
+func migrateInviteLinksRole() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='invite_links'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "role IN ('admin'") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateInviteLinksRole: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateInviteLinksRole: pragma off: %v", err)
+		return
+	}
+
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateInviteLinksRole: begin: %v", err)
+		return
+	}
+
+	stmts := []string{
+		`CREATE TABLE invite_links_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			token TEXT UNIQUE NOT NULL,
+			created_by INTEGER NOT NULL,
+			role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+			org_id INTEGER,
+			expires_at INTEGER NOT NULL,
+			used_at INTEGER,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO invite_links_v2
+			SELECT id, token, created_by, role, org_id, expires_at, used_at, created_at
+			FROM invite_links`,
+		`DROP TABLE invite_links`,
+		`ALTER TABLE invite_links_v2 RENAME TO invite_links`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateInviteLinksRole: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateInviteLinksRole: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateInviteLinksRole: added CHECK constraint on role")
+}
+
 // migrateEventsFK adds FOREIGN KEY constraints on organization_id and
 // fetch_source_id to the events table (SQLite requires a full table rebuild).
 func migrateEventsFK() {
@@ -868,6 +931,8 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events DROP COLUMN tags")
 	// #196: add FK constraints on events.organization_id and fetch_source_id.
 	migrateEventsFK()
+	// #197: add CHECK constraint on invite_links.role.
+	migrateInviteLinksRole()
 }
 
 func createTables() error {
@@ -1032,7 +1097,7 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
 		created_by INTEGER NOT NULL,
-		role TEXT NOT NULL DEFAULT 'user',
+		role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
 		org_id INTEGER,
 		expires_at INTEGER NOT NULL,
 		used_at INTEGER,

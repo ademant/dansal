@@ -1305,7 +1305,7 @@ func main() {
 	}
 	applyDefaults(config)
 
-	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_foreign_keys=ON",
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_foreign_keys=ON&_cache_size=-8000&_temp_store=memory",
 		config.Server.DBPath)
 	db, err = sql.Open("sqlite3", dsn)
 	if err != nil {

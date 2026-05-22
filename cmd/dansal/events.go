@@ -322,6 +322,16 @@ func addEventToCalendar(cal *ics.Calendar, event Event) {
 
 // ── query-building helpers ─────────────────────────────────────────────────
 
+func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
+	const R = 6371.0
+	dLat := (lat2 - lat1) * math.Pi / 180
+	dLon := (lon2 - lon1) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
 // applyEventFilters appends shared WHERE clauses from query parameters.
 func applyEventFilters(r *http.Request, query *string, args *[]any) {
 	q := r.URL.Query()
@@ -867,6 +877,24 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	annotateEditable(events, userRole, callerID)
+
+	// Post-filter with haversine when a geo radius was requested.
+	if latStr, lonStr, radStr := r.URL.Query().Get("lat"), r.URL.Query().Get("lon"), r.URL.Query().Get("radius_km"); latStr != "" && lonStr != "" && radStr != "" {
+		lat, latErr := strconv.ParseFloat(latStr, 64)
+		lon, lonErr := strconv.ParseFloat(lonStr, 64)
+		radius, radErr := strconv.ParseFloat(radStr, 64)
+		if latErr == nil && lonErr == nil && radErr == nil && radius > 0 {
+			filtered := events[:0]
+			for _, ev := range events {
+				if ev.LocationLat != nil && ev.LocationLng != nil {
+					if haversineKm(lat, lon, *ev.LocationLat, *ev.LocationLng) <= radius {
+						filtered = append(filtered, ev)
+					}
+				}
+			}
+			events = filtered
+		}
+	}
 
 	if strings.Contains(accept, "text/calendar") {
 		cal := ics.NewCalendar()

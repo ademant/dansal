@@ -49,7 +49,7 @@
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
     <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
     <td>{{.Town}}</td>
-    <td>{{.Country}}</td>
+    <td>{{.Country}}{{if .CountryCode}} <span class="cc-badge">[{{.CountryCode}}]</span>{{end}}</td>
     <td>{{$orgName}}</td>
     <td class="ind-cell">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
@@ -92,6 +92,7 @@
 .btn-reset:hover{background:#f0f0f0;border-color:#888}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 </style>
 
 <script>

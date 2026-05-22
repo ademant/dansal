@@ -46,7 +46,8 @@
   <div class="form-row">
     <div>
       <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
-      <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase">
+      <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off">
+      <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
     </div>
     <div style="flex:3">
       <label for="region">{{$.Strings.T "loc_region"}}</label>
@@ -127,6 +128,7 @@
 .btn-secondary:hover{background:#e8e8e8}
 .btn-del{padding:.45rem 1.2rem;background:#b00020;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-del:hover{background:#800016}
+.field-err{color:#b00020;font-size:.8rem;font-weight:normal}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
@@ -283,6 +285,22 @@
     initMap(initLat, initLon, 15);
     placeSelected(initLat, initLon);
   }
+})();
+
+/* ── country_code blur validation ── */
+(function(){
+  var ccInp = document.getElementById('country_code');
+  var ccErr = document.getElementById('country_code_err');
+  if (!ccInp || !ccErr) return;
+  ccInp.addEventListener('input', function() {
+    ccInp.value = ccInp.value.toUpperCase();
+  });
+  ccInp.addEventListener('blur', function() {
+    var v = ccInp.value.trim();
+    var ok = v === '' || /^[A-Z]{2}$/.test(v);
+    ccErr.style.display = ok ? 'none' : 'inline';
+    ccInp.style.borderColor = ok ? '' : '#b00020';
+  });
 })();
 </script>
 {{end}}

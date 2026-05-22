@@ -152,7 +152,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		suggestSubmitThrottle.record(ip)
 
-		if err := client.SuggestEvent(r.Context(), req); err != nil {
+		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
 			pageTitle := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
 				HintSMTP: cfg.SMTPHost != "",

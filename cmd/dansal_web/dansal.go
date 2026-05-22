@@ -1940,13 +1940,16 @@ func (c *DansalClient) SuggestEventPreview(ctx context.Context, body io.Reader, 
 }
 
 // SuggestEvent calls POST /api/v1/events/suggest.
-func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq) error {
+func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL string) error {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		httpReq.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
 		return err

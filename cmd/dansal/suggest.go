@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -138,8 +139,6 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tagsJSON, _ := json.Marshal(req.Tags)
-
 	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -168,20 +167,23 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		tokenArg = suggestionToken
 	}
 
+	var eventID int64
 	var insertErr error
 	for range 5 {
 		shortCode := generateShortCode()
-		_, insertErr = tx.Exec(
+		var res sql.Result
+		res, insertErr = tx.Exec(
 			`INSERT INTO events
 			 (title, description, start_time, end_time, location_id,
 			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
-			  tags, is_published, url, suggester_email, suggestion_token, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+			  is_published, url, suggester_email, suggestion_token, short_code)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
-			string(tagsJSON), urlVal(req.URL), req.Email, tokenArg, shortCode,
+			urlVal(req.URL), req.Email, tokenArg, shortCode,
 		)
 		if insertErr == nil {
+			eventID, _ = res.LastInsertId()
 			break
 		}
 		if !strings.Contains(insertErr.Error(), "short_code") {
@@ -192,6 +194,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "db error: "+insertErr.Error(), http.StatusInternalServerError)
 		return
 	}
+	syncEventTags(tx, int(eventID), filterKnownTags(req.Tags))
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -200,7 +203,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 
 	if smtpConfigured {
 		base := buildBaseURL(r)
-		verifyURL := base + "/api/v1/events/suggest/verify/" + suggestionToken
+		verifyURL := base + "/events/suggest/verify/" + suggestionToken
 		go func() {
 			msg := fmt.Sprintf(
 				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\nIf you did not submit this suggestion, you can ignore this email.",

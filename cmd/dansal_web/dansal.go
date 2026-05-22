@@ -272,6 +272,8 @@ type Location struct {
 	Latitude        *float64 `json:"latitude,omitempty"`
 	Longitude       *float64 `json:"longitude,omitempty"`
 	Internetsite    string   `json:"internetsite"`
+	OsmID           *int64   `json:"osm_id,omitempty"`
+	OsmType         string   `json:"osm_type,omitempty"`
 	CreatedAt       string   `json:"created_at"`
 	OrganizationIDs []int    `json:"organization_ids,omitempty"`
 }

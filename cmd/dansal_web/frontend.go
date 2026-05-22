@@ -315,6 +315,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strconv.FormatFloat(*f, 'f', -1, 64)
 	},
+	"int64Val": func(n *int64) string {
+		if n == nil {
+			return ""
+		}
+		return strconv.FormatInt(*n, 10)
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0

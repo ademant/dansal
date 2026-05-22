@@ -966,6 +966,10 @@ func migrateDB() {
 	// #213: add country_code and region to locations.
 	db.Exec("ALTER TABLE locations ADD COLUMN country_code TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN region TEXT")
+	// #215: add osm_id and osm_type to locations.
+	db.Exec("ALTER TABLE locations ADD COLUMN osm_id INTEGER")
+	db.Exec("ALTER TABLE locations ADD COLUMN osm_type TEXT")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL")
 	// #214: normalize free-text country to ISO 3166-1 alpha-2.
 	for _, row := range []struct{ code, country string }{
 		{"AD", "Andorra"},
@@ -1094,8 +1098,11 @@ func createTables() error {
 		latitude REAL,
 		longitude REAL,
 		internetsite TEXT,
+		osm_id INTEGER,
+		osm_type TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL;
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		bandname TEXT NOT NULL,

@@ -68,6 +68,9 @@
   <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
   <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
 
+  <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
+  <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
+
   <label>{{$.Strings.T "fetch_org"}}</label>
   <div style="display:flex;flex-direction:column;gap:.3rem">
     {{range .Orgs}}{{$orgID := .ID}}
@@ -206,11 +209,16 @@
     var city = a.city||a.town||a.village||a.hamlet||a.municipality||'';
     if (city)                                    document.getElementById('town').value = city;
     if (a.country)                               document.getElementById('country').value = a.country;
+    if (a.country_code)                          document.getElementById('country_code').value = a.country_code.toUpperCase();
+    var region = a.state || a.county || '';
+    if (region)                                  document.getElementById('region').value = region;
     var snInp = document.getElementById('short_name');
     if (!snInp.value) {
       var sn = item.name || a.amenity || '';
       if (sn) snInp.value = sn;
     }
+    document.getElementById('osm_id').value   = item.osm_id   || '';
+    document.getElementById('osm_type').value = item.osm_type || '';
     clearResultMarkers();
     results.innerHTML = '';
     map.closePopup();

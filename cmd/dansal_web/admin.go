@@ -33,6 +33,17 @@ func parseLatLng(s string) *float64 {
 	return nil
 }
 
+func parseOsmID(s string) *int64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return &n
+	}
+	return nil
+}
+
 // requireLogin redirects to /login if no session user, returning false when redirect was sent.
 func requireLogin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 	u := getSessionUser(r)
@@ -1201,6 +1212,8 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Latitude:        parseLatLng(r.FormValue("latitude")),
 			Longitude:       parseLatLng(r.FormValue("longitude")),
 			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:           parseOsmID(r.FormValue("osm_id")),
+			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
 			OrganizationIDs: orgIDs,
 		}
 		token := getSessionToken(r)
@@ -1277,6 +1290,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Latitude:        parseLatLng(r.FormValue("latitude")),
 			Longitude:       parseLatLng(r.FormValue("longitude")),
 			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:           parseOsmID(r.FormValue("osm_id")),
+			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
 			OrganizationIDs: orgIDs,
 		}
 		token := getSessionToken(r)

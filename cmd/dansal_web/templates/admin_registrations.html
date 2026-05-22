@@ -14,6 +14,7 @@
       <th>Type</th>
       <th>Org</th>
       <th>Channel</th>
+      <th>Verified</th>
       <th>{{$.Strings.T "col_date"}}</th>
       <th></th>
     </tr>
@@ -26,6 +27,7 @@
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
     <td>{{.VerificationChannel}}{{if .Telegram}} (@{{.Telegram}}){{end}}</td>
+    <td>{{if .Verified}}✓{{else}}<span class="unverified">pending</span>{{end}}</td>
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td>
       <form method="post" action="/admin/registrations/{{.ID}}/approve" style="display:inline">
@@ -62,5 +64,6 @@
 .btn-danger{background:#a02020;color:#fff}
 .btn-danger:hover{background:#7a1818}
 .hint{color:var(--fg-muted);font-style:italic}
+.unverified{color:#a06000;font-size:.8rem;font-style:italic}
 </style>
 {{end}}

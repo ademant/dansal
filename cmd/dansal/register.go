@@ -260,7 +260,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 		rows, err = db.Query(
 			`SELECT id, username, email, reg_type, org_id, org_name, org_description, org_website,
 			 org_contact_email, verification_channel, telegram, telegram_chat_id, verified, created_at, expires_at
-			 FROM pending_registrations WHERE verified=1 ORDER BY created_at ASC`,
+			 FROM pending_registrations ORDER BY created_at ASC`,
 		)
 	} else {
 		rows, err = db.Query(
@@ -269,7 +269,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			 pr.verified, pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
 			 JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			 WHERE pr.verified=1 AND pr.reg_type='join_org' ORDER BY pr.created_at ASC`,
+			 WHERE pr.reg_type='join_org' ORDER BY pr.created_at ASC`,
 			callerID,
 		)
 	}

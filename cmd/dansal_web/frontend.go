@@ -86,6 +86,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 type IndexData struct {
 	Events          []Event
 	OrgMap          map[int]Organization
+	TagMap          map[string]Tag
 	FederatedEvents []FederatedEvent
 	Dances          []Dance
 }
@@ -94,6 +95,7 @@ type EventData struct {
 	Event            Event
 	Org              *Organization
 	OrgSlug          string
+	TagMap           map[string]Tag
 	ContactPosts     []ContactPost
 	CanManageBoard   bool
 	BoardPosted         bool
@@ -474,6 +476,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ""
 	},
+	"tagName": func(tagMap map[string]Tag, slug string) string {
+		if t, ok := tagMap[slug]; ok {
+			return t.Name
+		}
+		return slug
+	},
 	"orgSlug": orgSlug,
 	"checkinColor": func(status string) string {
 		switch status {
@@ -698,12 +706,14 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		var events []Event
 		var orgs []Organization
 		var dances []Dance
+		var tagMap map[string]Tag
 		var fetchErr error
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(4)
 		go func() { defer wg.Done(); events, fetchErr = client.GetEvents(r.Context(), "") }()
 		go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
 		go func() { defer wg.Done(); dances, _ = client.GetDances(r.Context()) }()
+		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
 		wg.Wait()
 		if fetchErr != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
@@ -718,7 +728,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 			fedEvents, _ = listFederatedEvents(db)
 		}
 		title := i18n.T(r, "events_title")
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, FederatedEvents: fedEvents, Dances: dances}))
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances}))
 	}
 }
 
@@ -741,6 +751,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			slug    string
 			posts   []ContactPost
 			members []OrgMember
+			tagMap  map[string]Tag
 		)
 
 		su := getSessionUser(r)
@@ -748,6 +759,8 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		token := getSessionToken(r)
 
 		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
 		if event.OrganizationID != nil {
 			wg.Add(1)
 			go func() {
@@ -798,6 +811,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			Event:              event,
 			Org:                org,
 			OrgSlug:            slug,
+			TagMap:             tagMap,
 			ContactPosts:       posts,
 			CanManageBoard:     canManage,
 			BoardPosted:        boardPosted,

@@ -145,7 +145,7 @@
     {{if .Tags}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_tags"}}</div>
-      <div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>
+      <div>{{range .Tags}}<span class="tag">{{tagName $.Data.TagMap .}}</span>{{end}}</div>
     </div>
     {{end}}
 

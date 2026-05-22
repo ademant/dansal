@@ -188,12 +188,28 @@ type LocationUpdateRequest struct {
 func getLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query(`SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
+	query := `SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
 		l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
 		l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''), l.created_at,
 		COALESCE(GROUP_CONCAT(lo.organization_id),'')
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		GROUP BY l.id`)
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
+	var args []any
+	if country := r.URL.Query().Get("country"); country != "" {
+		codes, err := parseCountryCodes(country)
+		if err != nil {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		placeholders := strings.Repeat("?,", len(codes))
+		placeholders = placeholders[:len(placeholders)-1]
+		query += " WHERE l.country_code IN (" + placeholders + ")"
+		for _, c := range codes {
+			args = append(args, c)
+		}
+	}
+	query += " GROUP BY l.id"
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -1102,7 +1102,6 @@ func createTables() error {
 		osm_type TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL;
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		bandname TEXT NOT NULL,

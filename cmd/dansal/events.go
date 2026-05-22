@@ -332,8 +332,25 @@ func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 	return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
+// parseCountryCodes splits a comma-separated country param and validates each code.
+func parseCountryCodes(param string) ([]string, error) {
+	if param == "" {
+		return nil, nil
+	}
+	parts := strings.Split(param, ",")
+	codes := make([]string, 0, len(parts))
+	for _, p := range parts {
+		code := strings.TrimSpace(p)
+		if !validCountryCode(code) || code == "" {
+			return nil, fmt.Errorf("invalid country_code %q: must be 2 uppercase letters (e.g. 'DE')", code)
+		}
+		codes = append(codes, code)
+	}
+	return codes, nil
+}
+
 // applyEventFilters appends shared WHERE clauses from query parameters.
-func applyEventFilters(r *http.Request, query *string, args *[]any) {
+func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	q := r.URL.Query()
 
 	if title := q.Get("title"); title != "" {
@@ -377,8 +394,16 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 		*args = append(*args, tag)
 	}
 	if country := q.Get("country"); country != "" {
-		*query += " AND l.country = ?"
-		*args = append(*args, country)
+		codes, err := parseCountryCodes(country)
+		if err != nil {
+			return err
+		}
+		placeholders := strings.Repeat("?,", len(codes))
+		placeholders = placeholders[:len(placeholders)-1]
+		*query += " AND l.country_code IN (" + placeholders + ")"
+		for _, c := range codes {
+			*args = append(*args, c)
+		}
 	}
 	if v := q.Get("musician_id"); v != "" {
 		*query += " AND EXISTS (SELECT 1 FROM event_musicians em WHERE em.event_id = e.id AND em.musician_id = ?)"
@@ -413,6 +438,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 		*query += " AND e.source = ?"
 		*args = append(*args, v)
 	}
+	return nil
 }
 
 // applyPagination appends ORDER BY + LIMIT/OFFSET clauses.
@@ -856,7 +882,10 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	applyEventFilters(r, &query, &args)
+	if err := applyEventFilters(r, &query, &args); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	applyPagination(r, &query, &args)
 
 	rows, err := db.Query(query, args...)

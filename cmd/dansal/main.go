@@ -498,6 +498,104 @@ func migrateContactPostsCheckConstraint() {
 	log.Printf("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
 }
 
+// migrateEventsFK adds FOREIGN KEY constraints on organization_id and
+// fetch_source_id to the events table (SQLite requires a full table rebuild).
+func migrateEventsFK() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='events'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "FOREIGN KEY (organization_id)") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateEventsFK: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateEventsFK: pragma off: %v", err)
+		return
+	}
+
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateEventsFK: begin: %v", err)
+		return
+	}
+
+	stmts := []string{
+		`CREATE TABLE events_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uid TEXT UNIQUE,
+			title TEXT NOT NULL,
+			description TEXT,
+			start_time INTEGER NOT NULL,
+			end_time INTEGER NOT NULL,
+			location_id INTEGER,
+			organization_id INTEGER,
+			has_ball INTEGER DEFAULT 0,
+			has_workshop INTEGER DEFAULT 0,
+			has_festival INTEGER DEFAULT 0,
+			is_cancelled INTEGER DEFAULT 0,
+			is_published INTEGER DEFAULT 0,
+			short_code TEXT UNIQUE,
+			url TEXT,
+			source TEXT,
+			source_last_modified INTEGER,
+			pricing TEXT,
+			workshop_difficulty TEXT DEFAULT '',
+			booking_url TEXT DEFAULT '',
+			availability TEXT DEFAULT '',
+			tickets_total INTEGER DEFAULT 0,
+			booking_enabled INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			changed_at INTEGER,
+			changed_by TEXT DEFAULT '',
+			fetch_source_id INTEGER,
+			suggester_email TEXT DEFAULT '',
+			suggestion_token TEXT,
+			FOREIGN KEY (location_id)     REFERENCES locations(id),
+			FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
+			FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO events_v2
+			SELECT id, uid, title, description, start_time, end_time, location_id, organization_id,
+				has_ball, has_workshop, has_festival, is_cancelled, is_published, short_code,
+				url, source, source_last_modified, pricing, workshop_difficulty, booking_url,
+				availability, tickets_total, booking_enabled, created_at, changed_at, changed_by,
+				fetch_source_id, suggester_email, suggestion_token FROM events`,
+		`DROP TABLE events`,
+		`ALTER TABLE events_v2 RENAME TO events`,
+		`CREATE INDEX IF NOT EXISTS idx_events_url             ON events(url) WHERE url IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_events_end_time        ON events(end_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_created_at      ON events(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_suggestion_token ON events(suggestion_token)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_time_range      ON events(start_time, end_time)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateEventsFK: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateEventsFK: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateEventsFK: added FK constraints on organization_id and fetch_source_id")
+}
+
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
@@ -768,6 +866,8 @@ func migrateDB() {
 	db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
 	// #195: drop legacy events.tags column; event_tags join table is the source of truth.
 	db.Exec("ALTER TABLE events DROP COLUMN tags")
+	// #196: add FK constraints on events.organization_id and fetch_source_id.
+	migrateEventsFK()
 }
 
 func createTables() error {
@@ -820,7 +920,8 @@ func createTables() error {
 		suggester_email TEXT DEFAULT '',
 		suggestion_token TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (location_id) REFERENCES locations(id)
+		FOREIGN KEY (location_id)     REFERENCES locations(id),
+		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

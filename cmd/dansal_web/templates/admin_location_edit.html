@@ -45,6 +45,17 @@
 
   <div class="form-row">
     <div>
+      <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
+      <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase">
+    </div>
+    <div style="flex:3">
+      <label for="region">{{$.Strings.T "loc_region"}}</label>
+      <input id="region" type="text" name="region" value="{{.Location.Region}}">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div>
       <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
       <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
     </div>

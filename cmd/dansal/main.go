@@ -963,6 +963,9 @@ func migrateDB() {
 	migrateEventsFK()
 	// #197: add CHECK constraint on invite_links.role.
 	migrateInviteLinksRole()
+	// #213: add country_code and region to locations.
+	db.Exec("ALTER TABLE locations ADD COLUMN country_code TEXT")
+	db.Exec("ALTER TABLE locations ADD COLUMN region TEXT")
 }
 
 func createTables() error {
@@ -1038,6 +1041,8 @@ func createTables() error {
 		zipcode TEXT,
 		town TEXT,
 		country TEXT,
+		country_code TEXT,
+		region TEXT,
 		latitude REAL,
 		longitude REAL,
 		internetsite TEXT,

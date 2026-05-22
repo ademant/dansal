@@ -752,7 +752,8 @@ func syncEventTags(q querier, eventID int, tags []string) {
 // Location object (including OrganizationIDs via location_organizations).
 func fetchEventLocation(eventID int) ([]Location, error) {
 	const sel = `SELECT l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
-		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''), l.latitude,
+		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''),
+		COALESCE(l.country_code,''), COALESCE(l.region,''), l.latitude,
 		l.longitude, COALESCE(l.internetsite,''), l.created_at,
 		COALESCE(GROUP_CONCAT(lo.organization_id),'')
 		FROM locations l
@@ -764,7 +765,7 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 	var lat, lng sql.NullFloat64
 	err := db.QueryRow(sel, eventID).Scan(
 		&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
-		&loc.Zipcode, &loc.Town, &loc.Country, &lat, &lng,
+		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region, &lat, &lng,
 		&loc.Internetsite, &loc.CreatedAt, &orgIDsStr,
 	)
 	if err != nil {

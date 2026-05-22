@@ -267,6 +267,8 @@ type Location struct {
 	Zipcode         string   `json:"zipcode"`
 	Town            string   `json:"town"`
 	Country         string   `json:"country,omitempty"`
+	CountryCode     string   `json:"country_code,omitempty"`
+	Region          string   `json:"region,omitempty"`
 	Latitude        *float64 `json:"latitude,omitempty"`
 	Longitude       *float64 `json:"longitude,omitempty"`
 	Internetsite    string   `json:"internetsite"`

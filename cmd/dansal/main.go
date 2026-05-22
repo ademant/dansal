@@ -766,6 +766,8 @@ func migrateDB() {
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = CAST(strftime('%s', last_fetched_at) AS INTEGER) WHERE last_fetched_at IS NOT NULL AND typeof(last_fetched_at) = 'text'")
 	db.Exec("UPDATE users SET failed_login_since = CAST(strftime('%s', failed_login_since) AS INTEGER) WHERE failed_login_since IS NOT NULL AND typeof(failed_login_since) = 'text'")
 	db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
+	// #195: drop legacy events.tags column; event_tags join table is the source of truth.
+	db.Exec("ALTER TABLE events DROP COLUMN tags")
 }
 
 func createTables() error {
@@ -804,7 +806,6 @@ func createTables() error {
 		has_workshop INTEGER DEFAULT 0,
 		has_festival INTEGER DEFAULT 0,
 		is_cancelled INTEGER DEFAULT 0,
-		tags TEXT,
 		is_published INTEGER DEFAULT 0,
 		short_code TEXT UNIQUE,
 		url TEXT,

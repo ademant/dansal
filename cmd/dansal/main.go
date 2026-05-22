@@ -929,6 +929,24 @@ func migrateDB() {
 	db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
 	// #195: drop legacy events.tags column; event_tags join table is the source of truth.
 	db.Exec("ALTER TABLE events DROP COLUMN tags")
+	// #208: canonical tags vocabulary table.
+	db.Exec(`CREATE TABLE IF NOT EXISTS tags (
+		slug     TEXT PRIMARY KEY,
+		name     TEXT NOT NULL,
+		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
+	)`)
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Bal Folk',      'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',     'Fest Noz',      'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',      'Session',       'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',      'Concert',       'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',     'Festival',      'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',     'Open Air',      'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('ball',         'Ball',          'format')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',     'Workshop',      'type')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course', 'Music Course',  'type')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',    'Beginners',     'level')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate', 'Intermediate',  'level')")
+	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',     'Advanced',      'level')")
 	// #196: add FK constraints on events.organization_id and fetch_source_id.
 	migrateEventsFK()
 	// #197: add CHECK constraint on invite_links.role.
@@ -1247,6 +1265,11 @@ func createTables() error {
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);
+	CREATE TABLE IF NOT EXISTS tags (
+		slug     TEXT PRIMARY KEY,
+		name     TEXT NOT NULL,
+		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
+	);
 	`
 	_, err := db.Exec(schema)
 	return err

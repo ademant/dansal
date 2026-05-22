@@ -966,6 +966,54 @@ func migrateDB() {
 	// #213: add country_code and region to locations.
 	db.Exec("ALTER TABLE locations ADD COLUMN country_code TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN region TEXT")
+	// #214: normalize free-text country to ISO 3166-1 alpha-2.
+	for _, row := range []struct{ code, country string }{
+		{"AD", "Andorra"},
+		{"AT", "Austria"}, {"AT", "Österreich"}, {"AT", "Oesterreich"},
+		{"BE", "Belgium"}, {"BE", "Belgique"}, {"BE", "België"},
+		{"CH", "Switzerland"}, {"CH", "Schweiz"}, {"CH", "Suisse"}, {"CH", "Svizzera"},
+		{"CZ", "Czech Republic"}, {"CZ", "Czechia"}, {"CZ", "Tschechien"},
+		{"DE", "Germany"}, {"DE", "Deutschland"}, {"DE", "germany"}, {"DE", "de"},
+		{"DK", "Denmark"}, {"DK", "Dänemark"}, {"DK", "Danmark"},
+		{"ES", "Spain"}, {"ES", "España"}, {"ES", "Spanien"},
+		{"FI", "Finland"}, {"FI", "Finnland"},
+		{"FR", "France"}, {"FR", "france"}, {"FR", "fr"},
+		{"GB", "United Kingdom"}, {"GB", "UK"}, {"GB", "Great Britain"},
+		{"HR", "Croatia"}, {"HR", "Kroatien"},
+		{"HU", "Hungary"}, {"HU", "Ungarn"}, {"HU", "Magyarország"},
+		{"IE", "Ireland"}, {"IE", "Irland"},
+		{"IT", "Italy"}, {"IT", "Italien"}, {"IT", "Italia"},
+		{"LU", "Luxembourg"}, {"LU", "Luxemburg"},
+		{"NL", "Netherlands"}, {"NL", "Niederlande"}, {"NL", "Nederland"},
+		{"NO", "Norway"}, {"NO", "Norwegen"}, {"NO", "Norge"},
+		{"PL", "Poland"}, {"PL", "Polen"},
+		{"PT", "Portugal"},
+		{"RO", "Romania"}, {"RO", "Rumänien"},
+		{"SE", "Sweden"}, {"SE", "Schweden"}, {"SE", "Sverige"},
+		{"SI", "Slovenia"}, {"SI", "Slowenien"},
+		{"SK", "Slovakia"}, {"SK", "Slowakei"},
+		{"US", "United States"}, {"US", "USA"},
+	} {
+		db.Exec("UPDATE locations SET country_code = ? WHERE country_code IS NULL AND country = ?", row.code, row.country)
+	}
+}
+
+func logUnmappedCountries() {
+	rows, err := db.Query(`SELECT DISTINCT country FROM locations WHERE country != '' AND country_code IS NULL ORDER BY country`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	var unknown []string
+	for rows.Next() {
+		var c string
+		if rows.Scan(&c) == nil {
+			unknown = append(unknown, c)
+		}
+	}
+	if len(unknown) > 0 {
+		log.Printf("WARNING: %d location(s) have unmapped country values (fix via admin UI): %v", len(unknown), unknown)
+	}
 }
 
 func createTables() error {
@@ -1361,6 +1409,7 @@ func main() {
 		log.Fatal(err)
 	}
 	migrateDB()
+	logUnmappedCountries()
 	initImageCache(config.Server.ImagesDir)
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")

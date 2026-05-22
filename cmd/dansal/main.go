@@ -947,6 +947,18 @@ func migrateDB() {
 	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',    'Beginners',     'level')")
 	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate', 'Intermediate',  'level')")
 	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',     'Advanced',      'level')")
+	// #209: remap free-text event_tags rows to canonical slugs; delete the rest.
+	// OR IGNORE skips rows where the rename would duplicate an existing (event_id, slug) pair.
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'bal-folk'     WHERE lower(tag) IN ('balfolk','bal folk','bal-folk','bal folk festival')")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'fest-noz'     WHERE lower(tag) IN ('fest noz','fest-noz','festnoz','dañserlà')")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'session'      WHERE lower(tag) = 'session'")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'concert'      WHERE lower(tag) IN ('konzert','concert')")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'festival'     WHERE lower(tag) = 'festival'")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'open-air'     WHERE lower(tag) IN ('open air','open-air','open air bal folk')")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'ball'         WHERE lower(tag) = 'ball'")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'workshop'     WHERE lower(tag) IN ('workshop','tanzworkshops','workshops','lernabend/-nachmittag')")
+	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'music-course' WHERE lower(tag) IN ('musikkurs','musikerkurs','instrumenten-workshops','music course')")
+	db.Exec("DELETE FROM event_tags WHERE tag NOT IN (SELECT slug FROM tags)")
 	// #196: add FK constraints on events.organization_id and fetch_source_id.
 	migrateEventsFK()
 	// #197: add CHECK constraint on invite_links.role.

@@ -197,7 +197,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	if channel == "email" {
 		base := buildBaseURL(r)
-		verifyURL := base + "/api/v1/register/verify/email/" + verificationToken
+		verifyURL := base + "/register/verify/email/" + verificationToken
 		go func() {
 			msg := fmt.Sprintf(
 				"Hello %s,\n\nYou requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",

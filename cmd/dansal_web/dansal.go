@@ -1976,14 +1976,19 @@ func (c *DansalClient) VerifySuggestion(ctx context.Context, token string) error
 }
 
 // Register calls POST /api/v1/register.
+// baseURL is the public frontend URL (e.g. https://example.com), passed as X-Base-URL so the
+// API can build a correct email verification link pointing to the frontend.
 // Returns the raw JSON response (may contain telegram_token).
-func (c *DansalClient) Register(ctx context.Context, req RegisterReq) (map[string]string, error) {
+func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL string) (map[string]string, error) {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/register", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		httpReq.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
 		return nil, err

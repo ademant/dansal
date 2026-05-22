@@ -81,7 +81,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			Phone2:          phone2,
 		}
 
-		result, err := client.Register(r.Context(), req)
+		result, err := client.Register(r.Context(), req, cfg.publicBaseURL())
 		if err != nil {
 			errKey := "register_error_other"
 			msg := err.Error()

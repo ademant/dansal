@@ -23,6 +23,7 @@ type cacheEntry[T any] struct {
 const (
 	orgsTTL      = 60 * time.Second
 	dancesTTL    = 5 * time.Minute
+	tagsTTL      = 5 * time.Minute
 	musiciansTTL = 30 * time.Second
 	locationsTTL = 30 * time.Second
 	eventsTTL    = 30 * time.Second
@@ -35,6 +36,7 @@ type DansalClient struct {
 	mu             sync.Mutex
 	orgsCache      cacheEntry[[]Organization]
 	dancesCache    cacheEntry[[]Dance]
+	tagsCache      cacheEntry[[]Tag]
 	musiciansCache cacheEntry[[]Musician]
 	locationsCache cacheEntry[[]Location]
 	eventsCache    cacheEntry[[]Event]
@@ -185,6 +187,12 @@ type Event struct {
 type Dance struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+type Tag struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
 }
 
 type TimetableEntry struct {
@@ -1567,6 +1575,25 @@ func (c *DansalClient) GetDances(ctx context.Context) ([]Dance, error) {
 		var dances []Dance
 		return dances, c.get(ctx, "/api/v1/dances", &dances)
 	})
+}
+
+func (c *DansalClient) GetTags(ctx context.Context) ([]Tag, error) {
+	return cached(&c.mu, &c.tagsCache, tagsTTL, func() ([]Tag, error) {
+		var tags []Tag
+		return tags, c.get(ctx, "/api/v1/tags", &tags)
+	})
+}
+
+func (c *DansalClient) GetTagMap(ctx context.Context) (map[string]Tag, error) {
+	tags, err := c.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]Tag, len(tags))
+	for _, t := range tags {
+		m[t.Slug] = t
+	}
+	return m, nil
 }
 
 func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dance, error) {

@@ -511,6 +511,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				tags = append(tags, t)
 			}
 		}
+		tags = filterKnownTags(tags)
 
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)
@@ -633,6 +634,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				tags = append(tags, t)
 			}
 		}
+		tags = filterKnownTags(tags)
 
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)

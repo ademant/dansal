@@ -1023,6 +1023,19 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if contentType == "application/json" {
+		for _, req := range requests {
+			if err := validateTags(req.Tags); err != nil {
+				writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+	} else {
+		for i := range requests {
+			requests[i].Tags = filterKnownTags(requests[i].Tags)
+		}
+	}
+
 	if callerRole != RoleAdmin {
 		checked := make(map[int]bool)
 		for _, req := range requests {
@@ -1167,6 +1180,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Title == "" {
 		writeError(w, "title is required", http.StatusBadRequest)
+		return
+	}
+	if err := validateTags(req.Tags); err != nil {
+		writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -1511,35 +1528,79 @@ func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery st
 	return false
 }
 
+type Tag struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+}
+
+func knownTagSlugs() (map[string]bool, error) {
+	rows, err := db.Query("SELECT slug FROM tags")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	slugs := make(map[string]bool)
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		slugs[s] = true
+	}
+	return slugs, nil
+}
+
+func filterKnownTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	known, err := knownTagSlugs()
+	if err != nil {
+		return nil
+	}
+	var result []string
+	for _, t := range tags {
+		if known[t] {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+func validateTags(tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	known, err := knownTagSlugs()
+	if err != nil {
+		return err
+	}
+	for _, t := range tags {
+		if !known[t] {
+			return fmt.Errorf("unknown tag %q", t)
+		}
+	}
+	return nil
+}
+
 // GET /api/v1/tags
 func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
-	userRole := r.Header.Get("X-User-Role")
-	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
-
-	query := "SELECT DISTINCT et.tag FROM event_tags et JOIN events e ON e.id = et.event_id WHERE 1=1"
-	var args []any
-	if !isAuthorizedAdmin {
-		query += " AND e.is_published = 1"
-	}
-	query += " ORDER BY et.tag"
-
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query("SELECT slug, name, category FROM tags ORDER BY category, name")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-
-	var tags []string
+	tags := []Tag{}
 	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+		var t Tag
+		if err := rows.Scan(&t.Slug, &t.Name, &t.Category); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		tags = append(tags, tag)
+		tags = append(tags, t)
 	}
 	json.NewEncoder(w).Encode(tags)
 }

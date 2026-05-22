@@ -13,11 +13,12 @@ var (
 )
 
 type SuggestPageData struct {
-	HintSMTP     bool // SMTP configured → show email verification hint
-	PreviewEvents []PreviewEvent
-	PreviewJSON   []string
-	Error        string
+	HintSMTP       bool // SMTP configured → show email verification hint
+	PreviewEvents  []PreviewEvent
+	PreviewJSON    []string
+	Error          string
 	CaptchaSiteKey string
+	GroupedTags    []TagGroup
 }
 
 type SuggestDoneData struct{}
@@ -25,16 +26,18 @@ type SuggestVerifiedData struct {
 	Error string
 }
 
-func suggestPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !suggestAvailable(cfg) {
 			http.NotFound(w, r)
 			return
 		}
+		allTags, _ := client.GetTags(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
+			GroupedTags:    buildGroupedTags(allTags, nil),
 		}))
 	}
 }
@@ -136,6 +139,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			HasBall:     r.FormValue("has_ball") == "1",
 			HasWorkshop: r.FormValue("has_workshop") == "1",
 			HasFestival: r.FormValue("has_festival") == "1",
+			Tags:        r.Form["tags"],
 			URL:         r.FormValue("url"),
 			Location: PreviewLoc{
 				Location: r.FormValue("location"),

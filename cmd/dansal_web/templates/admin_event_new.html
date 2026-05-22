@@ -69,8 +69,19 @@
     <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
     <input id="booking_url" type="url" name="booking_url" placeholder="https://...">
 
-    <label for="tags">{{$.Strings.T "evt_tags"}} <span class="field-hint">({{$.Strings.T "evt_tags_hint"}})</span></label>
-    <input id="tags" type="text" name="tags" placeholder="balfolk, workshop, festival">
+    {{if $.Data.GroupedTags}}
+    <fieldset class="tag-picker">
+      <legend>{{$.Strings.T "evt_tags"}}</legend>
+      {{range $.Data.GroupedTags}}
+      <div class="tag-group">
+        <strong>{{.Category}}</strong>
+        <div class="tag-checks">
+          {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}
+        </div>
+      </div>
+      {{end}}
+    </fieldset>
+    {{end}}
   </section>
 
   <!-- Organisation -->
@@ -250,6 +261,10 @@
 .check-row{display:flex;gap:1.5rem;margin:.5rem 0}
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
 .dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .5rem}
+.tag-picker{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;margin-top:.4rem}
+.tag-picker legend{font-weight:600;font-size:.88rem;color:#444;padding:0 .25rem}
+.tag-group{margin-bottom:.5rem}
+.tag-checks{display:flex;flex-wrap:wrap;gap:.4rem .75rem}
 .check-label input{width:auto}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
 .drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}

@@ -1332,11 +1332,42 @@ type EventPrefill struct {
 	HasBall, HasWorkshop, HasFestival bool
 }
 
+type TagOption struct {
+	Slug    string
+	Name    string
+	Checked bool
+}
+
+type TagGroup struct {
+	Category string
+	Tags     []TagOption
+}
+
+func buildGroupedTags(tags []Tag, checked map[string]bool) []TagGroup {
+	order := []string{"format", "type", "level"}
+	byCategory := make(map[string][]TagOption)
+	for _, t := range tags {
+		byCategory[t.Category] = append(byCategory[t.Category], TagOption{
+			Slug:    t.Slug,
+			Name:    t.Name,
+			Checked: checked[t.Slug],
+		})
+	}
+	var groups []TagGroup
+	for _, cat := range order {
+		if opts, ok := byCategory[cat]; ok {
+			groups = append(groups, TagGroup{Category: cat, Tags: opts})
+		}
+	}
+	return groups
+}
+
 type AdminEventNewData struct {
 	Organizations      []Organization
 	Locations          []Location
 	Musicians          []Musician
 	Dances             []Dance
+	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
 	Prefill            *EventPrefill
@@ -1806,12 +1837,14 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		allTags, _ := client.GetTags(r.Context())
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
+			GroupedTags:        buildGroupedTags(allTags, nil),
 			SelectedDanceNames: selected,
 			Prefill:            prefill,
 		}))
@@ -1830,6 +1863,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
+		allTags, _ := client.GetTags(r.Context())
 		renderErr := func(errKey string) {
 			title := i18n.T(r, "admin_event_new_title")
 			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
@@ -1837,6 +1871,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Locations:     bundle.Locations,
 				Musicians:     bundle.Musicians,
 				Dances:        bundle.Dances,
+				GroupedTags:   buildGroupedTags(allTags, nil),
 				ErrorKey:      errKey,
 			}))
 		}
@@ -1944,14 +1979,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			pricing = p
 		}
 
-		var tags []string
-		if t := strings.TrimSpace(r.FormValue("tags")); t != "" {
-			for _, tag := range strings.Split(t, ",") {
-				if tag = strings.TrimSpace(tag); tag != "" {
-					tags = append(tags, tag)
-				}
-			}
-		}
+		tags := r.MultipartForm.Value["tags"]
 
 		var danceIDs []int
 		for _, v := range r.MultipartForm.Value["dance_ids"] {
@@ -2085,6 +2113,7 @@ type AdminEventEditData struct {
 	Locations          []Location
 	Musicians          []Musician
 	Dances             []Dance
+	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
 }
@@ -2135,14 +2164,20 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		var event Event
 		var eventErr error
 		var bundle RefBundle
+		var allTags []Tag
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(3)
 		go func() { defer wg.Done(); event, eventErr = client.GetEvent(r.Context(), id) }()
 		go func() { defer wg.Done(); bundle = client.FetchRefBundle(r.Context()) }()
+		go func() { defer wg.Done(); allTags, _ = client.GetTags(r.Context()) }()
 		wg.Wait()
 		if eventErr != nil {
 			http.NotFound(w, r)
 			return
+		}
+		checkedTags := make(map[string]bool, len(event.Tags))
+		for _, t := range event.Tags {
+			checkedTags[t] = true
 		}
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
@@ -2151,6 +2186,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			Locations:          bundle.Locations,
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
+			GroupedTags:        buildGroupedTags(allTags, checkedTags),
 			SelectedDanceNames: buildSelectedDanceNames(event),
 		}))
 	}
@@ -2173,6 +2209,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
+		allTags, _ := client.GetTags(r.Context())
 		renderErr := func(errKey string) {
 			event, _ := client.GetEvent(r.Context(), id)
 			title := i18n.T(r, "admin_event_edit_title")
@@ -2182,6 +2219,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Locations:          bundle.Locations,
 				Musicians:          bundle.Musicians,
 				Dances:             bundle.Dances,
+				GroupedTags:        buildGroupedTags(allTags, nil),
 				SelectedDanceNames: buildSelectedDanceNames(event),
 				ErrorKey:           errKey,
 			}))
@@ -2289,14 +2327,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			pricing = p
 		}
 
-		var tags []string
-		if t := strings.TrimSpace(r.FormValue("tags")); t != "" {
-			for _, tag := range strings.Split(t, ",") {
-				if tag = strings.TrimSpace(tag); tag != "" {
-					tags = append(tags, tag)
-				}
-			}
-		}
+		tags := r.MultipartForm.Value["tags"]
 
 		var musicianIDs []int
 		for _, v := range r.MultipartForm.Value["musician_ids"] {

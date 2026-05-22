@@ -96,6 +96,21 @@
       <label class="check-label"><input type="checkbox" name="has_workshop" value="1"> {{$.Strings.T "filter_type_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="has_festival" value="1"> {{$.Strings.T "filter_type_festival"}}</label>
     </div>
+    {{if $.Data.GroupedTags}}
+    <div class="form-row">
+      <fieldset class="tag-picker">
+        <legend>{{$.Strings.T "evt_tags"}}</legend>
+        {{range $.Data.GroupedTags}}
+        <div class="tag-group">
+          <strong>{{.Category}}</strong>
+          <div class="tag-checks">
+            {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}
+          </div>
+        </div>
+        {{end}}
+      </fieldset>
+    </div>
+    {{end}}
     {{if $.Data.HintSMTP}}
     <div class="form-row">
       <label>{{$.Strings.T "suggest_email_label"}} *
@@ -138,6 +153,10 @@
 .form-row input[type=text],.form-row input[type=email],.form-row input[type=datetime-local],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .form-row-checks{display:flex;gap:1.5rem}
+.tag-picker{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;width:100%;box-sizing:border-box}
+.tag-picker legend{font-weight:600;font-size:.88rem;color:#444;padding:0 .25rem}
+.tag-group{margin-bottom:.5rem}
+.tag-checks{display:flex;flex-wrap:wrap;gap:.4rem .75rem}
 .hp-field{display:none!important}
 .suggest-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
 .tab-btn{padding:.4rem .9rem;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:.9rem}

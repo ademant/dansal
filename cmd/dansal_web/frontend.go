@@ -252,6 +252,14 @@ func sanitizeMarkdownHTML(s string) string {
 	})
 }
 
+func validMatrixID(s string) bool {
+	if !strings.HasPrefix(s, "@") {
+		return false
+	}
+	colon := strings.IndexByte(s, ':')
+	return colon > 1 && colon < len(s)-1
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, s string) string {
 		t, ok := parseTime(s)
@@ -571,8 +579,9 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return out
 	},
-	"hasPrefix": strings.HasPrefix,
-	"lower":     strings.ToLower,
+	"hasPrefix":     strings.HasPrefix,
+	"lower":         strings.ToLower,
+	"validMatrixID": validMatrixID,
 	"fmtBytes": func(b int64) string {
 		const unit = 1024
 		if b < unit {

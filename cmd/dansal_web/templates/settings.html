@@ -53,8 +53,19 @@
       {{end}}
     </div>
 
-    <label for="matrix">{{$.Strings.T "settings_matrix"}}</label>
-    <input id="matrix" type="text" name="matrix" value="{{.User.Matrix}}" placeholder="@user:server.org">
+    <div class="field-row">
+      <label for="matrix" style="min-width:0">{{$.Strings.T "settings_matrix"}}</label>
+      <input id="matrix" type="text" name="matrix" value="{{.User.Matrix}}" placeholder="@user:server.org" style="flex:1">
+      {{if .User.Matrix}}
+        {{if not (validMatrixID .User.Matrix)}}
+          <span class="badge badge-danger">{{$.Strings.T "settings_matrix_invalid_id"}}</span>
+        {{else if .User.MatrixVerified}}
+          <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
+        {{else}}
+          <span class="badge badge-warn">{{$.Strings.T "settings_email_not_verified"}}</span>
+        {{end}}
+      {{end}}
+    </div>
 
     <label for="mastodon">{{$.Strings.T "settings_mastodon"}}</label>
     <input id="mastodon" type="text" name="mastodon" value="{{.User.Mastodon}}" placeholder="@user@server.social">
@@ -88,6 +99,16 @@
         <button type="submit" class="btn-secondary">{{$.Strings.T "settings_verify_telegram_btn"}}</button>
       </form>
     {{end}}
+  </div>
+  {{end}}{{end}}
+
+  {{if .User.Matrix}}{{if not .User.MatrixVerified}}
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_verify_matrix_heading"}}</h2>
+    <p class="hint">{{$.Strings.T "settings_verify_matrix_hint"}}</p>
+    <form method="post" action="/settings/verify-matrix">
+      <button type="submit" class="btn-secondary">{{$.Strings.T "settings_verify_matrix_btn"}}</button>
+    </form>
   </div>
   {{end}}{{end}}
 
@@ -151,6 +172,7 @@
 .badge{display:inline-block;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;font-weight:600;white-space:nowrap}
 .badge-ok{background:#d4edda;color:#155724}
 .badge-warn{background:#fff3cd;color:#856404}
+.badge-danger{background:#f8d7da;color:#721c24}
 .form-actions{margin-top:.75rem}
 .form-actions button{padding:.5rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .form-actions button:hover{background:#0d4a80}

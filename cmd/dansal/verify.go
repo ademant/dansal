@@ -106,6 +106,10 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "User has no Matrix ID", http.StatusBadRequest)
 			return
 		}
+		if !isValidMatrixID(user.Matrix) {
+			writeError(w, "Invalid Matrix ID format (must be @localpart:server) — update it in settings first", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Replace any existing pending token for this user+channel.

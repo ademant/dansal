@@ -156,6 +156,10 @@ func main() {
 		r.HandleFunc("POST /admin/events/new", adminEventCreateHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /admin/events/{id}/edit", adminEventEditPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/events/{id}/edit", adminEventSaveHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/events/{id}/save-template", adminTemplateSaveHandler(cfg, db, client))
+		r.HandleFunc("GET /admin/templates", adminTemplatesHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/templates/{id}/delete", adminTemplateDeleteHandler(db))
+		r.HandleFunc("GET /admin/templates/{id}/data", adminTemplateDataHandler(db))
 
 		r.HandleFunc("GET /admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client))

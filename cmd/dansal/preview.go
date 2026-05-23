@@ -63,7 +63,7 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 		if feedType == "ical" {
 			src.Type = detectFetchType(feedURL)
 		}
-		resp, err := fetchClient.Get(feedURL)
+		resp, err := safeClient.Get(feedURL)
 		if err != nil {
 			writeError(w, "fetch failed: "+err.Error(), http.StatusBadGateway)
 			return

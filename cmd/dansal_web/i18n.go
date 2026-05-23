@@ -53,14 +53,20 @@ type I18n struct {
 	langs       map[string]i18nLangDef
 }
 
+const defaultI18nSystemPath = "/etc/dansal/i18n.yaml"
+
 func loadI18n(externalPath string) *I18n {
 	var f i18nFile
 	if err := yaml.Unmarshal(defaultI18nYAML, &f); err != nil || f.Languages == nil {
 		f = i18nFile{Default: "de", Languages: map[string]i18nLangDef{}}
 	}
-	if externalPath != "" {
+	path := externalPath
+	if path == "" {
+		path = defaultI18nSystemPath
+	}
+	if path != "" {
 		var ext i18nFile
-		if raw, err := os.ReadFile(externalPath); err == nil {
+		if raw, err := os.ReadFile(path); err == nil {
 			if yaml.Unmarshal(raw, &ext) == nil && ext.Languages != nil {
 				f = ext
 			}

@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS site_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS event_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    org_id INTEGER,
+    name TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -335,4 +343,66 @@ func listFederatedEvents(db *sql.DB) ([]FederatedEvent, error) {
 		fes = append(fes, fe)
 	}
 	return fes, nil
+}
+
+type EventTemplate struct {
+	ID        int
+	UserID    int
+	OrgID     *int
+	Name      string
+	Data      string
+	CreatedAt string
+}
+
+func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error) {
+	query := "SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE user_id = ?"
+	args := []any{userID}
+	for _, oid := range orgIDs {
+		query += " OR org_id = ?"
+		args = append(args, oid)
+	}
+	query += " ORDER BY name"
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ts []EventTemplate
+	for rows.Next() {
+		var t EventTemplate
+		if err := rows.Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		ts = append(ts, t)
+	}
+	return ts, nil
+}
+
+func getTemplate(db *sql.DB, id int) (EventTemplate, error) {
+	var t EventTemplate
+	err := db.QueryRow(
+		"SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE id = ?", id,
+	).Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt)
+	return t, err
+}
+
+func saveTemplate(db *sql.DB, userID int, orgID *int, name, data string) (int64, error) {
+	res, err := db.Exec(
+		"INSERT INTO event_templates (user_id, org_id, name, data) VALUES (?, ?, ?, ?)",
+		userID, orgID, name, data,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func deleteTemplate(db *sql.DB, id, userID int, isAdmin bool) error {
+	var err error
+	if isAdmin {
+		_, err = db.Exec("DELETE FROM event_templates WHERE id = ?", id)
+	} else {
+		_, err = db.Exec("DELETE FROM event_templates WHERE id = ? AND user_id = ?", id, userID)
+	}
+	return err
 }

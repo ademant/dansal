@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -1344,11 +1345,22 @@ type AdminEventsData struct {
 }
 
 type EventPrefill struct {
-	Title, Description, URL      string
-	Date, EndDate                string
-	StartTime, EndTime           string
-	Location, Town, Country      string
-	HasBall, HasWorkshop, HasFestival bool
+	Title, Description, URL, BookingURL string
+	Date, EndDate                       string
+	StartTime, EndTime                  string
+	Location, Town, Country             string
+	HasBall, HasWorkshop, HasFestival   bool
+	WorkshopDifficulty                  string
+	OrgID                               int
+	LocID                               int
+	PricingType                         string
+	PricingAmount                       float64
+	PricingCurrency                     string
+	PricingLines                        []Price
+	Tags                                []string
+	DanceIDs                            []int
+	CloneMode                           bool
+	OriginalDate                        string // used in clone mode to enforce date change
 }
 
 type TagOption struct {
@@ -1390,6 +1402,7 @@ type AdminEventNewData struct {
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
 	Prefill            *EventPrefill
+	Templates          []EventTemplate
 }
 
 type AdminImportEventsData struct {
@@ -1705,6 +1718,227 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 	}
 }
 
+// getUserOrgIDs returns the IDs of all organisations the given user belongs to.
+func getUserOrgIDs(ctx context.Context, client *DansalClient, userID int, token string) []int {
+	orgs, _ := client.GetOrganizations(ctx)
+	var ids []int
+	for _, o := range orgs {
+		members, err := client.GetOrganizationMembers(ctx, o.ID, token)
+		if err != nil {
+			continue
+		}
+		for _, m := range members {
+			if m.UserID == userID {
+				ids = append(ids, o.ID)
+				break
+			}
+		}
+	}
+	return ids
+}
+
+// prefillFromEvent builds an EventPrefill from an existing event for clone/template use.
+func prefillFromEvent(ev Event) *EventPrefill {
+	pf := &EventPrefill{
+		Title:              ev.Title,
+		Description:        ev.Description,
+		URL:                ev.URL,
+		BookingURL:         ev.BookingURL,
+		HasBall:            ev.HasBall,
+		HasWorkshop:        ev.HasWorkshop,
+		HasFestival:        ev.HasFestival,
+		WorkshopDifficulty: ev.WorkshopDifficulty,
+		Location:           ev.Location,
+		Town:               ev.LocationTown,
+		Country:            ev.LocationCountry,
+		Tags:               ev.Tags,
+		OriginalDate:       isoDateStr(ev.StartTime),
+	}
+	if ev.OrganizationID != nil {
+		pf.OrgID = *ev.OrganizationID
+	}
+	if ev.LocationID != nil {
+		pf.LocID = *ev.LocationID
+	}
+	if p := ev.Pricing; p != nil {
+		pf.PricingType = p.Type
+		pf.PricingAmount = p.Amount
+		pf.PricingCurrency = p.Currency
+		pf.PricingLines = p.Prices
+	}
+	for _, dn := range ev.DanceNames {
+		_ = dn // dance names need to be resolved to IDs separately
+	}
+	return pf
+}
+
+// isoDateStr extracts "YYYY-MM-DD" from "YYYY-MM-DDTHH:MM:SS".
+func isoDateStr(t string) string {
+	if len(t) >= 10 {
+		return t[:10]
+	}
+	return ""
+}
+
+// ── Event Templates ───────────────────────────────────────────────────────────
+
+type AdminTemplatesData struct {
+	Templates []EventTemplate
+	OrgMap    map[int]Organization
+}
+
+func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
+		if su.Role == "admin" {
+			allOrgs, _ := client.GetOrganizations(r.Context())
+			userOrgIDs = make([]int, 0, len(allOrgs))
+			for _, o := range allOrgs {
+				userOrgIDs = append(userOrgIDs, o.ID)
+			}
+		}
+		ts, _ := listTemplates(db, su.ID, userOrgIDs)
+		orgs, _ := client.GetOrganizations(r.Context())
+		orgMap := make(map[int]Organization, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o
+		}
+		title := i18n.T(r, "admin_templates_title")
+		renderTemplate(w, tmpls.adminTemplates, tmplData(r, cfg, i18n, title, AdminTemplatesData{
+			Templates: ts,
+			OrgMap:    orgMap,
+		}))
+	}
+}
+
+func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		eventID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(r.FormValue("name"))
+		if name == "" {
+			http.Error(w, "name is required", http.StatusBadRequest)
+			return
+		}
+		ev, err := client.GetEvent(r.Context(), eventID)
+		if err != nil {
+			http.Error(w, "event not found", http.StatusNotFound)
+			return
+		}
+		var orgID *int
+		if v := strings.TrimSpace(r.FormValue("org_id")); v != "" {
+			if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
+				orgID = &n
+			}
+		}
+		data, _ := json.Marshal(templateDataFromEvent(ev))
+		if _, err := saveTemplate(db, su.ID, orgID, name, string(data)); err != nil {
+			http.Error(w, "save failed", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
+	}
+}
+
+func adminTemplateDeleteHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = deleteTemplate(db, id, su.ID, su.Role == "admin")
+		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
+	}
+}
+
+func adminTemplateDataHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		t, err := getTemplate(db, id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(t.Data))
+	}
+}
+
+type templateEventData struct {
+	Title              string  `json:"title"`
+	Description        string  `json:"description"`
+	URL                string  `json:"url"`
+	BookingURL         string  `json:"booking_url"`
+	HasBall            bool    `json:"has_ball"`
+	HasWorkshop        bool    `json:"has_workshop"`
+	HasFestival        bool    `json:"has_festival"`
+	WorkshopDifficulty string  `json:"workshop_difficulty"`
+	OrgID              int     `json:"org_id"`
+	LocID              int     `json:"loc_id"`
+	PricingType        string  `json:"pricing_type"`
+	PricingAmount      float64 `json:"pricing_amount"`
+	PricingCurrency    string  `json:"pricing_currency"`
+	PricingLines       []Price `json:"pricing_lines"`
+	Tags               []string `json:"tags"`
+	DanceIDs           []int   `json:"dance_ids"`
+}
+
+func templateDataFromEvent(ev Event) templateEventData {
+	d := templateEventData{
+		Title:              ev.Title,
+		Description:        ev.Description,
+		URL:                ev.URL,
+		BookingURL:         ev.BookingURL,
+		HasBall:            ev.HasBall,
+		HasWorkshop:        ev.HasWorkshop,
+		HasFestival:        ev.HasFestival,
+		WorkshopDifficulty: ev.WorkshopDifficulty,
+		Tags:               ev.Tags,
+	}
+	if ev.OrganizationID != nil {
+		d.OrgID = *ev.OrganizationID
+	}
+	if ev.LocationID != nil {
+		d.LocID = *ev.LocationID
+	}
+	if p := ev.Pricing; p != nil {
+		d.PricingType = p.Type
+		d.PricingAmount = p.Amount
+		d.PricingCurrency = p.Currency
+		d.PricingLines = p.Prices
+	}
+	return d
+}
+
 func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -1829,7 +2063,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 
 func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -1837,8 +2071,51 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		defaultDanceIDs := loadDefaultDanceIDs(db)
 		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, bundle.Dances)
 
+		token := getSessionToken(r)
+		var cachedUserOrgIDs []int
+		getUserOrgs := func() []int {
+			if cachedUserOrgIDs != nil {
+				return cachedUserOrgIDs
+			}
+			if su.Role == "admin" {
+				for _, o := range bundle.Orgs {
+					cachedUserOrgIDs = append(cachedUserOrgIDs, o.ID)
+				}
+			} else {
+				cachedUserOrgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
+			}
+			return cachedUserOrgIDs
+		}
+
 		var prefill *EventPrefill
-		if r.URL.Query().Get("title") != "" {
+
+		if cloneID := r.URL.Query().Get("clone_from"); cloneID != "" {
+			if id, err := strconv.Atoi(cloneID); err == nil {
+				if ev, err := client.GetEvent(r.Context(), id); err == nil {
+					pf := prefillFromEvent(ev)
+					// Non-admin cloning an event from an org they don't belong to:
+					// clear org and location so it can't expose restricted data.
+					if su.Role != "admin" && ev.OrganizationID != nil {
+						member := false
+						for _, oid := range getUserOrgs() {
+							if oid == *ev.OrganizationID {
+								member = true
+								break
+							}
+						}
+						if !member {
+							pf.OrgID = 0
+							pf.LocID = 0
+							pf.Location = ""
+							pf.Town = ""
+							pf.Country = ""
+						}
+					}
+					pf.CloneMode = true
+					prefill = pf
+				}
+			}
+		} else if r.URL.Query().Get("title") != "" {
 			prefill = &EventPrefill{
 				Title:       r.URL.Query().Get("title"),
 				Description: r.URL.Query().Get("description"),
@@ -1856,6 +2133,8 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		tmpls2, _ := listTemplates(db, su.ID, getUserOrgs())
+
 		allTags, _ := client.GetTags(r.Context())
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
@@ -1866,6 +2145,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			GroupedTags:        buildGroupedTags(allTags, nil),
 			SelectedDanceNames: selected,
 			Prefill:            prefill,
+			Templates:          tmpls2,
 		}))
 	}
 }
@@ -2135,6 +2415,7 @@ type AdminEventEditData struct {
 	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
+	UserOrgs           []Organization
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -2198,6 +2479,22 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		for _, t := range event.Tags {
 			checkedTags[t] = true
 		}
+		var userOrgs []Organization
+		if su := getSessionUser(r); su != nil {
+			if su.Role == "admin" {
+				userOrgs = bundle.Orgs
+			} else {
+				orgIDSet := make(map[int]bool)
+				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r)) {
+					orgIDSet[oid] = true
+				}
+				for _, o := range bundle.Orgs {
+					if orgIDSet[o.ID] {
+						userOrgs = append(userOrgs, o)
+					}
+				}
+			}
+		}
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
@@ -2207,6 +2504,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			Dances:             bundle.Dances,
 			GroupedTags:        buildGroupedTags(allTags, checkedTags),
 			SelectedDanceNames: buildSelectedDanceNames(event),
+			UserOrgs:           userOrgs,
 		}))
 	}
 }

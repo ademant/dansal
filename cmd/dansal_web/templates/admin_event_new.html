@@ -5,7 +5,29 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
-<form method="post" enctype="multipart/form-data" class="evt-form">
+{{if .Prefill}}{{if .Prefill.CloneMode}}
+<div class="clone-notice">{{$.Strings.T "admin_clone_notice"}}</div>
+{{end}}{{end}}
+
+{{if .Templates}}
+<div class="tpl-bar">
+  <label for="tpl-select" class="tpl-label">{{$.Strings.T "admin_template_load_label"}}</label>
+  <select id="tpl-select" onchange="loadTemplate(this.value)">
+    <option value="">— {{$.Strings.T "admin_template_select_hint"}} —</option>
+    {{range .Templates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+</div>
+{{end}}
+
+<form method="post" enctype="multipart/form-data" class="evt-form"
+  {{if .Prefill}}
+  data-prefill-org="{{.Prefill.OrgID}}"
+  data-prefill-loc="{{.Prefill.LocID}}"
+  data-prefill-pricing-type="{{.Prefill.PricingType}}"
+  data-clone-mode="{{if .Prefill.CloneMode}}1{{end}}"
+  data-original-date="{{.Prefill.OriginalDate}}"
+  {{end}}
+>
 
   <!-- Image -->
   <section class="form-section">
@@ -240,7 +262,7 @@
   {{end}}
 
   <div class="form-actions">
-    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+    <button type="submit" id="save-btn" class="btn-primary" disabled>{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
@@ -290,6 +312,10 @@
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+.clone-notice{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem;color:#856404}
+.tpl-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+.tpl-label{font-weight:600;font-size:.88rem;color:#444;white-space:nowrap}
+.tpl-bar select{padding:.38rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 </style>
 
 <script>
@@ -483,5 +509,99 @@ function geocodeLocation(){
     .catch(function(){status.textContent='Geocoding failed';})
     .finally(function(){btn.disabled=false;});
 }
+
+// Template loading
+function loadTemplate(id){
+  if(!id) return;
+  fetch('/admin/templates/'+id+'/data')
+    .then(function(r){return r.json();})
+    .then(function(d){applyTemplateData(d);})
+    .catch(function(){alert('Could not load template');});
+}
+function applyTemplateData(d){
+  if(d.title) document.querySelector('[name=title]').value=d.title;
+  if(d.description) document.querySelector('[name=description]').value=d.description;
+  if(d.url) document.querySelector('[name=url]').value=d.url;
+  if(d.booking_url) document.querySelector('[name=booking_url]').value=d.booking_url;
+  document.querySelector('[name=has_ball]').checked=!!d.has_ball;
+  document.querySelector('[name=has_workshop]').checked=!!d.has_workshop;
+  document.querySelector('[name=has_festival]').checked=!!d.has_festival;
+  if(d.has_workshop) toggleWorkshopDifficulty();
+  if(d.workshop_difficulty){
+    var el=document.querySelector('[name=workshop_difficulty][value="'+d.workshop_difficulty+'"]');
+    if(el) el.checked=true;
+  }
+  if(d.org_id){
+    var oc=document.getElementById('org_choice');
+    oc.value='existing';toggleOrgNew();
+    var os=document.getElementById('org_id');
+    if(os) os.value=d.org_id;
+  }
+  if(d.loc_id){
+    var lc=document.getElementById('loc_choice');
+    lc.value='existing';toggleLocNew();
+    var ls=document.getElementById('loc_id');
+    if(ls) ls.value=d.loc_id;
+  }
+  var ptEl=document.getElementById('pricing_type');
+  if(ptEl&&d.pricing_type){ptEl.value=d.pricing_type;togglePricing();}
+  if(d.pricing_amount) document.getElementById('pricing_amount').value=d.pricing_amount;
+  if(d.pricing_currency) document.getElementById('pricing_currency').value=d.pricing_currency;
+  if(d.tags&&d.tags.length){
+    document.querySelectorAll('[name=tags]').forEach(function(cb){
+      cb.checked=d.tags.indexOf(cb.value)!==-1;
+    });
+  }
+  document.querySelector('.evt-form').dispatchEvent(new Event('input',{bubbles:true}));
+}
+
+// Apply prefill for org/loc on page load (clone mode)
+(function(){
+  var form=document.querySelector('.evt-form');
+  if(!form) return;
+  var prefillOrg=parseInt(form.dataset.prefillOrg)||0;
+  var prefillLoc=parseInt(form.dataset.prefillLoc)||0;
+  var prefillPt=form.dataset.prefillPricingType||'';
+  if(prefillOrg){
+    var oc=document.getElementById('org_choice');
+    if(oc){oc.value='existing';toggleOrgNew();}
+    var os=document.getElementById('org_id');
+    if(os) os.value=prefillOrg;
+  }
+  if(prefillLoc){
+    var lc=document.getElementById('loc_choice');
+    if(lc){lc.value='existing';toggleLocNew();}
+    var ls=document.getElementById('loc_id');
+    if(ls) ls.value=prefillLoc;
+  }
+  if(prefillPt){
+    var ptEl=document.getElementById('pricing_type');
+    if(ptEl){ptEl.value=prefillPt;togglePricing();}
+  }
+})();
+
+// Required-field gate: enable save only when all [required] fields are filled.
+// In clone mode, also require the date to differ from the original.
+(function(){
+  var form=document.querySelector('.evt-form');
+  var btn=document.getElementById('save-btn');
+  if(!form||!btn) return;
+  var cloneMode=form.dataset.cloneMode==='1';
+  var origDate=form.dataset.originalDate||'';
+  function check(){
+    var ok=true;
+    form.querySelectorAll('[required]').forEach(function(el){
+      if(!el.value.trim()) ok=false;
+    });
+    if(cloneMode){
+      var dateEl=document.getElementById('date');
+      if(dateEl&&dateEl.value===origDate) ok=false;
+    }
+    btn.disabled=!ok;
+  }
+  form.addEventListener('input',check);
+  form.addEventListener('change',check);
+  check();
+})();
 </script>
 {{end}}

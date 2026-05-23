@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -47,6 +49,61 @@ func (t uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 var fetchClient = &http.Client{
 	Timeout:   30 * time.Second,
 	Transport: uaTransport{rt: http.DefaultTransport},
+}
+
+// safeClient is used for user-supplied URLs; it blocks requests to private,
+// loopback, and link-local addresses to prevent SSRF.
+var safeClient = &http.Client{
+	Timeout:   30 * time.Second,
+	Transport: uaTransport{rt: &http.Transport{DialContext: safeDialContext}},
+}
+
+var privateRanges = func() []*net.IPNet {
+	cidrs := []string{
+		"127.0.0.0/8",    // loopback
+		"::1/128",        // IPv6 loopback
+		"10.0.0.0/8",     // private
+		"172.16.0.0/12",  // private
+		"192.168.0.0/16", // private
+		"169.254.0.0/16", // link-local (AWS metadata etc.)
+		"fe80::/10",      // IPv6 link-local
+		"fc00::/7",       // IPv6 unique-local
+		"0.0.0.0/8",      // unspecified
+		"100.64.0.0/10",  // shared address space (RFC 6598)
+	}
+	var nets []*net.IPNet
+	for _, c := range cidrs {
+		_, n, _ := net.ParseCIDR(c)
+		nets = append(nets, n)
+	}
+	return nets
+}()
+
+func isPrivateIP(ip net.IP) bool {
+	for _, n := range privateRanges {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip.IP) {
+			return nil, fmt.Errorf("request to private/internal address denied")
+		}
+	}
+	// Dial the first resolved address explicitly so we connect to what we checked.
+	return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 }
 
 // ensureLocation returns the id of an existing location matching loc.Location,

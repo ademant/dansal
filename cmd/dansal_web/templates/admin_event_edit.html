@@ -354,14 +354,34 @@
 
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
-      <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+      <button type="submit" id="save-btn" class="btn-primary" disabled>{{$.Strings.T "admin_save"}}</button>
       <a href="/events/{{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+      <a href="/admin/events/new?clone_from={{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_clone"}}</a>
     </div>
     <form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this event?')">
       <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
     </form>
   </div>
 </form>
+
+{{if .UserOrgs}}
+<details class="save-tpl-details" style="margin-top:1rem">
+  <summary>{{$.Strings.T "admin_save_as_template"}}</summary>
+  <form method="post" action="/admin/events/{{.Event.ID}}/save-template" class="save-tpl-form">
+    <label for="tpl-name" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_name_label"}}</label>
+    <input id="tpl-name" type="text" name="name" required placeholder="{{$.Strings.T "admin_template_name_placeholder"}}" style="width:100%;max-width:320px;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
+    <label for="tpl-org" style="margin-top:.5rem;display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_org_label"}}</label>
+    <select id="tpl-org" name="org_id" style="padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
+      <option value="">{{$.Strings.T "admin_template_personal"}}</option>
+      {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <div style="margin-top:.75rem">
+      <button type="submit" class="btn-secondary">{{$.Strings.T "admin_template_save_btn"}}</button>
+    </div>
+  </form>
+</details>
+{{end}}
+
 {{end}}
 
 <style>
@@ -420,6 +440,8 @@
 .btn-chip-del:hover{color:#c0392b}
 .btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
 .btn-del:hover{background:#800016}
+.save-tpl-details{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem}
+.save-tpl-details summary{font-weight:600;font-size:.9rem;cursor:pointer;color:#1a6eb5}
 </style>
 
 <script>
@@ -660,6 +682,23 @@ function showGeoMap(lat,lon){
       showPreview(f);
     }
   });
+})();
+
+// Required-field gate: enable save button only when all [required] inputs are non-empty.
+(function(){
+  var form=document.querySelector('.evt-form');
+  var btn=document.getElementById('save-btn');
+  if(!form||!btn) return;
+  function check(){
+    var ok=true;
+    form.querySelectorAll('[required]').forEach(function(el){
+      if(!el.value.trim()) ok=false;
+    });
+    btn.disabled=!ok;
+  }
+  form.addEventListener('input',check);
+  form.addEventListener('change',check);
+  check();
 })();
 </script>
 {{end}}

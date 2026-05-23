@@ -274,12 +274,13 @@ func sendMatrixMessage(matrixID, text string) error {
 	defer resp.Body.Close()
 
 	var roomResult struct {
-		RoomID string `json:"room_id"`
-		Error  string `json:"error"`
+		RoomID  string `json:"room_id"`
+		Error   string `json:"error"`
+		ErrCode string `json:"errcode"`
 	}
 	json.NewDecoder(resp.Body).Decode(&roomResult)
 	if roomResult.RoomID == "" {
-		return fmt.Errorf("Matrix createRoom failed: %s", roomResult.Error)
+		return fmt.Errorf("Matrix createRoom failed: %s %s", roomResult.ErrCode, roomResult.Error)
 	}
 
 	txnID := strconv.FormatInt(time.Now().UnixNano(), 10)

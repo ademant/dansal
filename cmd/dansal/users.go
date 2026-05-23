@@ -338,6 +338,10 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		user.TelegramChatID = ""
 	}
 	if req.Matrix != "" && req.Matrix != user.Matrix {
+		if !isValidMatrixID(req.Matrix) {
+			writeError(w, "Invalid Matrix ID: must be @localpart:server", http.StatusBadRequest)
+			return
+		}
 		user.Matrix = req.Matrix
 		user.MatrixVerified = false
 	}
@@ -386,6 +390,15 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(user)
+}
+
+// isValidMatrixID checks that s is a fully-qualified Matrix user ID: @localpart:server
+func isValidMatrixID(s string) bool {
+	if !strings.HasPrefix(s, "@") {
+		return false
+	}
+	colon := strings.IndexByte(s, ':')
+	return colon > 1 && colon < len(s)-1
 }
 
 // DELETE /api/v1/users/{id} - Delete a user

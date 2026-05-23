@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -55,6 +56,9 @@ CREATE TABLE IF NOT EXISTS federated_events (
     end_time TEXT,
     url TEXT,
     location_name TEXT,
+    description TEXT,
+    image_url TEXT,
+    tags TEXT,
     raw_json TEXT,
     received_at INTEGER NOT NULL
 );
@@ -73,6 +77,10 @@ CREATE TABLE IF NOT EXISTS event_templates (
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
+	// Idempotent column additions for schema evolution
+	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
+	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
+	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
 	return db
 }
 
@@ -304,19 +312,25 @@ type FederatedEvent struct {
 	EndTime      string
 	URL          string
 	LocationName string
+	Description  string
+	ImageURL     string
+	Tags         []string
 	RawJSON      string
 	ReceivedAt   int64
 }
 
 func upsertFederatedEvent(db *sql.DB, fe FederatedEvent) error {
+	tagsStr := strings.Join(fe.Tags, ",")
 	_, err := db.Exec(
-		`INSERT INTO federated_events (ap_id, actor_id, name, start_time, end_time, url, location_name, raw_json, received_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO federated_events (ap_id, actor_id, name, start_time, end_time, url, location_name, description, image_url, tags, raw_json, received_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(ap_id) DO UPDATE SET
 		   actor_id=excluded.actor_id, name=excluded.name, start_time=excluded.start_time,
 		   end_time=excluded.end_time, url=excluded.url, location_name=excluded.location_name,
+		   description=excluded.description, image_url=excluded.image_url, tags=excluded.tags,
 		   raw_json=excluded.raw_json, received_at=excluded.received_at`,
-		fe.APID, fe.ActorID, fe.Name, fe.StartTime, fe.EndTime, fe.URL, fe.LocationName, fe.RawJSON, fe.ReceivedAt,
+		fe.APID, fe.ActorID, fe.Name, fe.StartTime, fe.EndTime, fe.URL, fe.LocationName,
+		fe.Description, fe.ImageURL, tagsStr, fe.RawJSON, fe.ReceivedAt,
 	)
 	return err
 }
@@ -328,7 +342,7 @@ func deleteFederatedEvent(db *sql.DB, apID string) error {
 
 func listFederatedEvents(db *sql.DB) ([]FederatedEvent, error) {
 	rows, err := db.Query(
-		"SELECT id, ap_id, actor_id, name, start_time, end_time, url, location_name, raw_json, received_at FROM federated_events ORDER BY start_time ASC",
+		"SELECT id, ap_id, actor_id, name, start_time, end_time, url, location_name, COALESCE(description,''), COALESCE(image_url,''), COALESCE(tags,''), raw_json, received_at FROM federated_events ORDER BY start_time ASC",
 	)
 	if err != nil {
 		return nil, err
@@ -337,8 +351,12 @@ func listFederatedEvents(db *sql.DB) ([]FederatedEvent, error) {
 	var fes []FederatedEvent
 	for rows.Next() {
 		var fe FederatedEvent
-		if err := rows.Scan(&fe.ID, &fe.APID, &fe.ActorID, &fe.Name, &fe.StartTime, &fe.EndTime, &fe.URL, &fe.LocationName, &fe.RawJSON, &fe.ReceivedAt); err != nil {
+		var tagsStr string
+		if err := rows.Scan(&fe.ID, &fe.APID, &fe.ActorID, &fe.Name, &fe.StartTime, &fe.EndTime, &fe.URL, &fe.LocationName, &fe.Description, &fe.ImageURL, &tagsStr, &fe.RawJSON, &fe.ReceivedAt); err != nil {
 			return nil, err
+		}
+		if tagsStr != "" {
+			fe.Tags = strings.Split(tagsStr, ",")
 		}
 		fes = append(fes, fe)
 	}

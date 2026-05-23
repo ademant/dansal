@@ -88,22 +88,23 @@ type APDocument struct {
 }
 
 type APEvent struct {
-	Context      any `json:"@context,omitempty"`
-	Type         string      `json:"type"`
-	ID           string      `json:"id"`
-	Name         string      `json:"name"`
-	Content      string      `json:"content,omitempty"`
-	MediaType    string      `json:"mediaType,omitempty"`
-	StartTime    string      `json:"startTime,omitempty"`
-	EndTime      string      `json:"endTime,omitempty"`
-	Published    string      `json:"published,omitempty"`
-	Updated      string      `json:"updated,omitempty"`
-	AttributedTo string      `json:"attributedTo,omitempty"`
-	To           []string    `json:"to,omitempty"`
-	CC           []string    `json:"cc,omitempty"`
-	Location     *APPlace    `json:"location,omitempty"`
-	URL          string      `json:"url,omitempty"`
-	Tag          []APHashtag `json:"tag,omitempty"`
+	Context      any          `json:"@context,omitempty"`
+	Type         string       `json:"type"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Content      string       `json:"content,omitempty"`
+	MediaType    string       `json:"mediaType,omitempty"`
+	StartTime    string       `json:"startTime,omitempty"`
+	EndTime      string       `json:"endTime,omitempty"`
+	Published    string       `json:"published,omitempty"`
+	Updated      string       `json:"updated,omitempty"`
+	AttributedTo string       `json:"attributedTo,omitempty"`
+	Organizer    any          `json:"organizer,omitempty"`
+	To           []string     `json:"to,omitempty"`
+	CC           []string     `json:"cc,omitempty"`
+	Location     *APPlace     `json:"location,omitempty"`
+	URL          string       `json:"url,omitempty"`
+	Tag          []APHashtag  `json:"tag,omitempty"`
 	Attachment   []APDocument `json:"attachment,omitempty"`
 }
 

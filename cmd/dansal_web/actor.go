@@ -606,10 +606,47 @@ func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent
 	startTime, _ := obj["startTime"].(string)
 	endTime, _ := obj["endTime"].(string)
 	eventURL, _ := obj["url"].(string)
+
+	description, _ := obj["content"].(string)
+	if description == "" {
+		description, _ = obj["summary"].(string)
+	}
+
 	var locationName string
 	if loc, ok := obj["location"].(map[string]any); ok {
 		locationName, _ = loc["name"].(string)
 	}
+
+	var imageURL string
+	if attachments, ok := obj["attachment"].([]any); ok {
+		for _, a := range attachments {
+			att, ok := a.(map[string]any)
+			if !ok {
+				continue
+			}
+			mt, _ := att["mediaType"].(string)
+			if strings.HasPrefix(mt, "image/") {
+				imageURL, _ = att["url"].(string)
+				break
+			}
+		}
+	}
+
+	var tags []string
+	if tagList, ok := obj["tag"].([]any); ok {
+		for _, t := range tagList {
+			tag, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+			if tp, _ := tag["type"].(string); tp == "Hashtag" {
+				if n, _ := tag["name"].(string); n != "" {
+					tags = append(tags, strings.TrimPrefix(n, "#"))
+				}
+			}
+		}
+	}
+
 	rawBytes, _ := json.Marshal(obj)
 	return FederatedEvent{
 		APID:         apID,
@@ -619,6 +656,9 @@ func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent
 		EndTime:      endTime,
 		URL:          eventURL,
 		LocationName: locationName,
+		Description:  description,
+		ImageURL:     imageURL,
+		Tags:         tags,
 		RawJSON:      string(rawBytes),
 		ReceivedAt:   time.Now().Unix(),
 	}
@@ -702,6 +742,18 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		published = t.UTC().Format(time.RFC3339)
 	}
 
+	eventURL := e.URL
+	if eventURL == "" {
+		eventURL = eventID
+	}
+
+	var updated string
+	if t, ok := parseTime(e.ChangedAt); ok {
+		updated = t.UTC().Format(time.RFC3339)
+	} else {
+		updated = published
+	}
+
 	apEvent := APEvent{
 		Type:         "Event",
 		ID:           eventID,
@@ -711,10 +763,12 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		StartTime:    e.StartTime,
 		EndTime:      e.EndTime,
 		Published:    published,
+		Updated:      updated,
 		AttributedTo: base,
 		To:           []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:           []string{base + "/followers"},
-		URL:          e.URL,
+		URL:          eventURL,
+		Organizer:    map[string]string{"type": "Group", "id": base},
 	}
 	locationName := e.Location
 	if locationName == "" {

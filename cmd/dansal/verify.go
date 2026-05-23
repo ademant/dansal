@@ -258,10 +258,12 @@ func sendMatrixMessage(matrixID, text string) error {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
+	// Create a minimal private room — no preset, no inline invite.
+	// "trusted_private_chat" is not recognised by all Conduit versions and
+	// triggers M_BAD_JSON; splitting create + invite avoids the issue.
 	createBody, _ := json.Marshal(map[string]any{
-		"is_direct": true,
-		"invite":    []string{matrixID},
-		"preset":    "trusted_private_chat",
+		"is_direct":  true,
+		"visibility": "private",
 	})
 	req, _ := http.NewRequest("POST", homeserver+"/_matrix/client/v3/createRoom", bytes.NewReader(createBody))
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -280,7 +282,28 @@ func sendMatrixMessage(matrixID, text string) error {
 	}
 	json.NewDecoder(resp.Body).Decode(&roomResult)
 	if roomResult.RoomID == "" {
-		return fmt.Errorf("Matrix createRoom failed: %s %s", roomResult.ErrCode, roomResult.Error)
+		return fmt.Errorf("Matrix createRoom failed: %s: %s", roomResult.ErrCode, roomResult.Error)
+	}
+
+	// Invite the target user into the room.
+	inviteBody, _ := json.Marshal(map[string]string{"user_id": matrixID})
+	inviteURL := fmt.Sprintf("%s/_matrix/client/v3/rooms/%s/invite",
+		homeserver, url.PathEscape(roomResult.RoomID))
+	req3, _ := http.NewRequest("POST", inviteURL, bytes.NewReader(inviteBody))
+	req3.Header.Set("Authorization", "Bearer "+accessToken)
+	req3.Header.Set("Content-Type", "application/json")
+	resp3, err := client.Do(req3)
+	if err != nil {
+		return fmt.Errorf("Matrix invite: %w", err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode >= 300 {
+		var invErr struct {
+			ErrCode string `json:"errcode"`
+			Error   string `json:"error"`
+		}
+		json.NewDecoder(resp3.Body).Decode(&invErr)
+		return fmt.Errorf("Matrix invite failed: %s: %s", invErr.ErrCode, invErr.Error)
 	}
 
 	txnID := strconv.FormatInt(time.Now().UnixNano(), 10)

@@ -78,9 +78,9 @@
       <legend>{{$.Strings.T "evt_tags"}}</legend>
       {{range $.Data.GroupedTags}}
       <div class="tag-group">
-        <strong>{{.Category}}</strong>
+        <strong>{{$.Strings.T (tagCatKey .Category)}}</strong>
         <div class="tag-checks">
-          {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"{{if .Checked}} checked{{end}}> {{.Name}}</label>{{end}}
+          {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"{{if .Checked}} checked{{end}}> {{$.Strings.T (tagKey .Slug)}}</label>{{end}}
         </div>
       </div>
       {{end}}
@@ -332,8 +332,8 @@
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
-          <td colspan="3"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td colspan="2"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td colspan="4"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
         {{end}}
         <tr class="tt-row">
@@ -345,8 +345,8 @@
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
-          <td colspan="3"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          <td colspan="3"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td colspan="2"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td colspan="4"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
       </tbody>
     </table>
@@ -555,8 +555,8 @@ function addTTRow(){
     '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
   var row2=document.createElement('tr');
   row2.className='tt-row-detail';
-  row2.innerHTML='<td colspan="3"><input type="text" name="tt_desc" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></td>'+
-    '<td colspan="3">'+_buildTTMusWidget()+'</td>';
+  row2.innerHTML='<td colspan="2">'+_buildTTMusWidget()+'</td>'+
+    '<td colspan="4"><input type="text" name="tt_desc" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></td>';
   tbody.appendChild(row1);
   tbody.appendChild(row2);
 }
@@ -579,6 +579,40 @@ function delRow(btn){
     if(row2&&row2.classList.contains('tt-row-detail'))row2.remove();
   }
 }
+
+// Pre-fill first timetable row from event data when no timetable exists yet
+{{if not .Event.Timetable}}
+(function(){
+  var row=document.querySelector('#tt-body .tt-row');
+  if(!row)return;
+  var startInp=row.querySelector('[name="tt_start"]');
+  var endInp=row.querySelector('[name="tt_end"]');
+  var locSel=row.querySelector('[name="tt_loc_id"]');
+  if(startInp)startInp.value={{isoTime .Event.StartTime | jsStr}};
+  if(endInp)endInp.value={{isoTime .Event.EndTime | jsStr}};
+  if(locSel&&_ttDefaultLocID)locSel.value=_ttDefaultLocID;
+  {{if .Event.Musicians}}
+  var detail=row.nextElementSibling;
+  if(detail&&detail.classList.contains('tt-row-detail')){
+    var musInp=detail.querySelector('.tt-mus-input');
+    var musIDInp=detail.querySelector('[name="tt_musician_id"]');
+    if(musInp)musInp.value={{(index .Event.Musicians 0).Bandname | jsStr}};
+    if(musIDInp)musIDInp.value={{(index .Event.Musicians 0).ID}};
+  }
+  {{end}}
+  row.dataset.default='1';
+})();
+document.querySelector('.evt-form').addEventListener('submit',function(){
+  var defRow=document.querySelector('#tt-body .tt-row[data-default="1"]');
+  if(!defRow)return;
+  var titleInp=defRow.querySelector('[name="tt_title"]');
+  if(titleInp&&titleInp.value.trim()!=='')return;
+  defRow.querySelectorAll('input,select').forEach(function(i){i.disabled=true;});
+  var detail=defRow.nextElementSibling;
+  if(detail&&detail.classList.contains('tt-row-detail'))
+    detail.querySelectorAll('input,select').forEach(function(i){i.disabled=true;});
+});
+{{end}}
 
 // Growing pricing table
 function growPricingTable(el){

@@ -970,6 +970,10 @@ func migrateDB() {
 	db.Exec("ALTER TABLE locations ADD COLUMN osm_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN osm_type TEXT")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL")
+	// #221: move music-course and workshop from type→format; remove ball tag.
+	db.Exec("UPDATE tags SET category = 'format' WHERE slug IN ('music-course', 'workshop')")
+	db.Exec("DELETE FROM event_tags WHERE tag = 'ball'")
+	db.Exec("DELETE FROM tags WHERE slug = 'ball'")
 	// #214: normalize free-text country to ISO 3166-1 alpha-2.
 	for _, row := range []struct{ code, country string }{
 		{"AD", "Andorra"},

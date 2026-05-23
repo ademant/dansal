@@ -488,6 +488,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return slug
 	},
+	"tagKey": func(slug string) string {
+		return "tag_" + strings.ReplaceAll(slug, "-", "_")
+	},
+	"tagCatKey": func(cat string) string {
+		return "tag_cat_" + cat
+	},
 	"orgSlug": orgSlug,
 	"checkinColor": func(status string) string {
 		switch status {

@@ -1734,6 +1734,25 @@ func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac Ad
 	return nil
 }
 
+// MatrixLogin exchanges username+password for a token and stores it server-side.
+// Returns a human-readable error string on failure, empty string on success.
+func (c *DansalClient) MatrixLogin(ctx context.Context, token, homeserver, username, password string) error {
+	body, _ := json.Marshal(map[string]string{
+		"homeserver": homeserver,
+		"username":   username,
+		"password":   password,
+	})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/admin/matrix-login", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 // DansalInfo mirrors the ServiceInfo struct from the dansal API.
 type DansalInfo struct {
 	Service                 string `json:"service"`

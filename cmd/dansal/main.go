@@ -1585,6 +1585,7 @@ func main() {
 	// Admin site config (protected, admin-only)
 	smux.Handle("GET /api/v1/admin/config", auth(getAdminConfig))
 	smux.Handle("PATCH /api/v1/admin/config", auth(patchAdminConfig))
+	smux.Handle("POST /api/v1/admin/matrix-login", auth(matrixLogin))
 
 	// Middleware chain: MetricsMiddleware is outermost to capture all status codes.
 	handler := MetricsMiddleware(smux)(middlewareChain(icsRouter(smux),

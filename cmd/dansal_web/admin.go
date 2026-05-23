@@ -2973,6 +2973,61 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 	}
 }
 
+func adminSiteConfigMatrixLoginHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		homeserver := strings.TrimSpace(r.FormValue("matrix_homeserver"))
+		username := strings.TrimSpace(r.FormValue("matrix_username"))
+		password := r.FormValue("matrix_password")
+
+		if err := client.MatrixLogin(r.Context(), token, homeserver, username, password); err != nil {
+			ac, _ := client.GetAdminConfig(r.Context(), token)
+			dances, _ := client.GetDances(r.Context())
+			defaultDanceIDs := loadDefaultDanceIDs(db)
+			defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
+			impTexts := make(map[string]string)
+			for _, lang := range impressumLangs {
+				if v := getSiteSetting(db, "impressum_"+lang); v != "" {
+					impTexts[lang] = v
+				} else {
+					impTexts[lang] = cfg.pagesContent.ImpressumText(lang)
+				}
+			}
+			data := AdminSiteConfigData{
+				SiteName:          getSiteSetting(db, "site_name"),
+				Contact:           getSiteSetting(db, "contact"),
+				TelegramBotToken:  ac.TelegramBotToken,
+				TelegramBotName:   ac.TelegramBotName,
+				MatrixHomeserver:  ac.MatrixHomeserver,
+				MatrixAccessToken: ac.MatrixAccessToken,
+				HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
+				HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
+				HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
+				Dances:            dances,
+				DefaultDanceNames: defaultDanceNames,
+				ImpressumTexts:    impTexts,
+				ImpressumLangs:    impressumLangs,
+				ErrorMsg:          err.Error(),
+			}
+			renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
+			return
+		}
+		http.Redirect(w, r, "/admin/site-config?saved=1", http.StatusSeeOther)
+	}
+}
+
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 
 // findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.

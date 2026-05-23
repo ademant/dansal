@@ -91,6 +91,25 @@
       <label>{{$.Strings.T "admin_site_config_matrix_token"}}</label>
       <input type="text" name="matrix_access_token" value="{{.MatrixAccessToken}}" autocomplete="off" spellcheck="false">
     </div>
+    <details class="matrix-login-details">
+      <summary>{{$.Strings.T "admin_site_config_matrix_login_title"}}</summary>
+      <form method="post" action="/admin/site-config/matrix-login" class="matrix-login-form">
+        <div class="field">
+          <label>{{$.Strings.T "admin_site_config_matrix_homeserver"}}</label>
+          <input type="url" name="matrix_homeserver" placeholder="https://matrix.example.org">
+        </div>
+        <div class="field">
+          <label>{{$.Strings.T "admin_site_config_matrix_username"}}</label>
+          <input type="text" name="matrix_username" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>{{$.Strings.T "admin_site_config_matrix_password"}}</label>
+          <input type="password" name="matrix_password" autocomplete="current-password">
+        </div>
+        <p class="hint">{{$.Strings.T "admin_site_config_matrix_login_hint"}}</p>
+        <button type="submit" class="btn-secondary">{{$.Strings.T "admin_site_config_matrix_login_btn"}}</button>
+      </form>
+    </details>
   </section>
 
   <div class="cfg-actions">
@@ -117,5 +136,10 @@
 .cfg-actions{margin-top:.5rem}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
+.btn-secondary{padding:.4rem 1rem;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;cursor:pointer}
+.btn-secondary:hover{background:var(--bg-hover)}
+.matrix-login-details{margin-top:.75rem}
+.matrix-login-details summary{cursor:pointer;font-size:.9rem;color:var(--fg-2);font-weight:600}
+.matrix-login-form{margin-top:.75rem;padding:.75rem;background:var(--bg);border:1px solid var(--border-lite);border-radius:4px}
 </style>
 {{end}}

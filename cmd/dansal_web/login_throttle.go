@@ -5,15 +5,16 @@ import (
 	"time"
 )
 
-const (
-	loginMaxFailures = 5
-	loginWindow      = 10 * time.Minute
-	loginMaxDelay    = 32 * time.Second
-)
+const loginMaxDelay = 32 * time.Second
+
+// authBlock is the log prefix matched by the fail2ban filter.
+const authBlock = "dansal-web: AUTH_BLOCK"
 
 type loginThrottle struct {
-	mu      sync.Mutex
-	entries map[string]*throttleEntry
+	mu          sync.Mutex
+	entries     map[string]*throttleEntry
+	maxFailures int
+	window      time.Duration
 }
 
 type throttleEntry struct {
@@ -21,8 +22,12 @@ type throttleEntry struct {
 	windowStart time.Time
 }
 
-func newLoginThrottle() *loginThrottle {
-	lt := &loginThrottle{entries: make(map[string]*throttleEntry)}
+func newLoginThrottle(maxFailures int, window time.Duration) *loginThrottle {
+	lt := &loginThrottle{
+		entries:     make(map[string]*throttleEntry),
+		maxFailures: maxFailures,
+		window:      window,
+	}
 	go lt.sweep()
 	return lt
 }
@@ -32,7 +37,7 @@ func (lt *loginThrottle) isBlocked(ip string) bool {
 	lt.mu.Lock()
 	defer lt.mu.Unlock()
 	e := lt.entries[ip]
-	return e != nil && time.Since(e.windowStart) <= loginWindow && e.failures >= loginMaxFailures
+	return e != nil && time.Since(e.windowStart) <= lt.window && e.failures >= lt.maxFailures
 }
 
 // recordFailure increments the counter and returns the backoff delay to sleep.
@@ -44,11 +49,11 @@ func (lt *loginThrottle) recordFailure(ip string) time.Duration {
 	if e == nil {
 		e = &throttleEntry{windowStart: time.Now()}
 		lt.entries[ip] = e
-	} else if time.Since(e.windowStart) > loginWindow {
+	} else if time.Since(e.windowStart) > lt.window {
 		e.failures = 0
 		e.windowStart = time.Now()
 	}
-	if e.failures < loginMaxFailures {
+	if e.failures < lt.maxFailures {
 		e.failures++
 	}
 	delay := time.Duration(1<<uint(e.failures-1)) * time.Second
@@ -66,13 +71,13 @@ func (lt *loginThrottle) reset(ip string) {
 }
 
 func (lt *loginThrottle) sweep() {
-	ticker := time.NewTicker(loginWindow)
+	ticker := time.NewTicker(lt.window)
 	defer ticker.Stop()
 	for range ticker.C {
 		lt.mu.Lock()
 		now := time.Now()
 		for ip, e := range lt.entries {
-			if now.Sub(e.windowStart) > loginWindow {
+			if now.Sub(e.windowStart) > lt.window {
 				delete(lt.entries, ip)
 			}
 		}

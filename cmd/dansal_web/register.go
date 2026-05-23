@@ -40,6 +40,15 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.NotFound(w, r)
 			return
 		}
+		ip := getClientIP(r)
+		if authThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/register", authBlock, ip)
+			title := i18n.T(r, "register_title")
+			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
+				Error: "login_error_throttled",
+			}))
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
@@ -81,6 +90,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			Phone2:          phone2,
 		}
 
+		authThrottle.record(ip)
 		result, err := client.Register(r.Context(), req, cfg.publicBaseURL())
 		if err != nil {
 			errKey := "register_error_other"

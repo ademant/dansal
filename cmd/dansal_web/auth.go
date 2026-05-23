@@ -71,7 +71,10 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 }
 
 func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	throttle := newLoginThrottle()
+	throttle := newLoginThrottle(
+		cfg.LoginMaxFailures,
+		time.Duration(cfg.LoginWindowMins)*time.Minute,
+	)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -83,7 +86,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		ip := getClientIP(r)
 
 		if throttle.isBlocked(ip) {
-			log.Printf("login blocked from %s: rate limit", ip)
+			log.Printf("%s ip=%s path=/login", authBlock, ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey: "login_error_throttled",
@@ -145,6 +148,15 @@ func logoutHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		if authThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/magic", authBlock, ip)
+			title := i18n.T(r, "login_title")
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
+				ErrorKey: "login_error_throttled",
+			}))
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
@@ -155,6 +167,7 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			channel = "email"
 		}
 		if identifier != "" {
+			authThrottle.record(ip)
 			_ = client.RequestMagicLogin(r.Context(), identifier, channel, cfg.publicBaseURL())
 		}
 		http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)

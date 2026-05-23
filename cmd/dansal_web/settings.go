@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -79,6 +80,13 @@ func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if !ok {
 			return
 		}
+		ip := getClientIP(r)
+		if authThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/settings/verify", authBlock, ip)
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		authThrottle.record(ip)
 		token := getSessionToken(r)
 		baseURL := cfg.publicBaseURL()
 
@@ -101,6 +109,13 @@ func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if !ok {
 			return
 		}
+		ip := getClientIP(r)
+		if authThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/settings/verify-telegram", authBlock, ip)
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		authThrottle.record(ip)
 		token := getSessionToken(r)
 		baseURL := cfg.publicBaseURL()
 
@@ -127,6 +142,13 @@ func settingsMatrixVerifyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 		if !ok {
 			return
 		}
+		ip := getClientIP(r)
+		if authThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/settings/verify-matrix", authBlock, ip)
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		authThrottle.record(ip)
 		token := getSessionToken(r)
 		baseURL := cfg.publicBaseURL()
 

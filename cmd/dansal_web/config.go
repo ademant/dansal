@@ -50,6 +50,12 @@ type Config struct {
 	CaptchaSiteKey   string `yaml:"captcha_site_key"`
 	CaptchaSecretKey string `yaml:"captcha_secret_key"`
 
+	// Rate limiting for auth endpoints
+	LoginMaxFailures   int `yaml:"login_max_failures"`    // max bad login attempts before block; default 5
+	LoginWindowMins    int `yaml:"login_window_mins"`     // sliding window for login failures; default 10
+	AuthRateLimit      int `yaml:"auth_rate_limit"`       // max requests per window for register/magic/verify; default 10
+	AuthRateWindowMins int `yaml:"auth_rate_window_mins"` // window in minutes; default 10
+
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`
 	ContactOverride   string
@@ -68,15 +74,19 @@ func (cfg *Config) publicBaseURL() string {
 
 func loadConfig() *Config {
 	cfg := &Config{
-		Listen:           ":8080",
-		DBPath:           "web.db",
-		PollSecs:         300,
-		ImagesDir:        "/var/lib/dansal-web",
-		BannerHeightMain: 200,
-		BannerHeightSub:  0,
-		LogoHeightMain:   48,
-		LogoHeightSub:    32,
-		DarkMode:         "auto",
+		Listen:             ":8080",
+		DBPath:             "web.db",
+		PollSecs:           300,
+		ImagesDir:          "/var/lib/dansal-web",
+		BannerHeightMain:   200,
+		BannerHeightSub:    0,
+		LogoHeightMain:     48,
+		LogoHeightSub:      32,
+		DarkMode:           "auto",
+		LoginMaxFailures:   5,
+		LoginWindowMins:    10,
+		AuthRateLimit:      10,
+		AuthRateWindowMins: 10,
 	}
 
 	configPath := ""
@@ -118,15 +128,19 @@ func loadConfig() *Config {
 // Returns nil on any error so the caller can keep the current config.
 func reloadConfig(path string, db *sql.DB) *Config {
 	cfg := &Config{
-		Listen:           ":8080",
-		DBPath:           "web.db",
-		PollSecs:         300,
-		ImagesDir:        "/var/lib/dansal-web",
-		BannerHeightMain: 200,
-		BannerHeightSub:  0,
-		LogoHeightMain:   48,
-		LogoHeightSub:    32,
-		DarkMode:         "auto",
+		Listen:             ":8080",
+		DBPath:             "web.db",
+		PollSecs:           300,
+		ImagesDir:          "/var/lib/dansal-web",
+		BannerHeightMain:   200,
+		BannerHeightSub:    0,
+		LogoHeightMain:     48,
+		LogoHeightSub:      32,
+		DarkMode:           "auto",
+		LoginMaxFailures:   5,
+		LoginWindowMins:    10,
+		AuthRateLimit:      10,
+		AuthRateWindowMins: 10,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

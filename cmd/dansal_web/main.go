@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+// authThrottle is the shared rate limiter for register, magic-login, and verify endpoints.
+// Initialised in main() after config is loaded.
+var authThrottle *submissionThrottle
+
 // liveHandler is an http.Handler whose inner handler can be swapped atomically.
 // This lets systemctl reload rebuild all route closures with new config+i18n
 // without stopping the server.
@@ -38,6 +42,11 @@ func main() {
 	}
 
 	cfg := loadConfig()
+
+	authThrottle = newSubmissionThrottle(
+		cfg.AuthRateLimit,
+		time.Duration(cfg.AuthRateWindowMins)*time.Minute,
+	)
 
 	if *printVersion {
 		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)

@@ -6,8 +6,16 @@
   {{with .Data}}
   {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
-  {{if .VerifySent}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_verify_sent"}}</p>{{end}}
-  {{if .Verified}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_email_verified_ok"}}</p>{{end}}
+  {{if .VerifySent}}<p class="msg msg-ok" role="status">
+    {{if eq .VerifySent "telegram"}}{{$.Strings.T "settings_verify_sent_telegram"}}
+    {{else if eq .VerifySent "matrix"}}{{$.Strings.T "settings_verify_sent_matrix"}}
+    {{else}}{{$.Strings.T "settings_verify_sent"}}{{end}}
+  </p>{{end}}
+  {{if .VerifiedChannel}}<p class="msg msg-ok" role="status">
+    {{if eq .VerifiedChannel "telegram"}}{{$.Strings.T "settings_telegram_verified_ok"}}
+    {{else if eq .VerifiedChannel "matrix"}}{{$.Strings.T "settings_matrix_verified_ok"}}
+    {{else}}{{$.Strings.T "settings_email_verified_ok"}}{{end}}
+  </p>{{end}}
 
   <div class="settings-card">
     <h2>{{$.Strings.T "settings_account"}}</h2>
@@ -46,9 +54,9 @@
       <input id="telegram" type="text" name="telegram" value="{{.User.Telegram}}" placeholder="@handle" style="flex:1">
       {{if .User.Telegram}}
         {{if .User.TelegramVerified}}
-          <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
+          <span class="badge badge-ok">{{$.Strings.T "settings_telegram_verified"}}</span>
         {{else}}
-          <span class="badge badge-warn">{{$.Strings.T "settings_email_not_verified"}}</span>
+          <span class="badge badge-warn">{{$.Strings.T "settings_telegram_not_verified"}}</span>
         {{end}}
       {{end}}
     </div>
@@ -60,9 +68,9 @@
         {{if not (validMatrixID .User.Matrix)}}
           <span class="badge badge-danger">{{$.Strings.T "settings_matrix_invalid_id"}}</span>
         {{else if .User.MatrixVerified}}
-          <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
+          <span class="badge badge-ok">{{$.Strings.T "settings_matrix_verified"}}</span>
         {{else}}
-          <span class="badge badge-warn">{{$.Strings.T "settings_email_not_verified"}}</span>
+          <span class="badge badge-warn">{{$.Strings.T "settings_matrix_not_verified"}}</span>
         {{end}}
       {{end}}
     </div>

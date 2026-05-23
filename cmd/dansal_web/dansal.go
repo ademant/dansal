@@ -1235,27 +1235,31 @@ func (c *DansalClient) AddTimetableEntries(ctx context.Context, eventID int, ent
 	return nil
 }
 
-func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) error {
+func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.BaseURL+"/api/v1/verify/"+token, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("invalid")
+		return "", fmt.Errorf("invalid")
 	}
 	if resp.StatusCode == http.StatusGone {
-		return fmt.Errorf("expired")
+		return "", fmt.Errorf("expired")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
+		return "", apiErr(resp)
 	}
-	return nil
+	var result struct {
+		Channel string `json:"channel"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Channel, nil
 }
 
 type OrgMember struct {

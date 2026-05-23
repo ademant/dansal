@@ -9,8 +9,8 @@ type SettingsData struct {
 	User             UserInfo
 	ErrorKey         string
 	Saved            bool
-	VerifySent       bool
-	Verified         bool
+	VerifySent       string // channel name: "email", "telegram", "matrix"
+	VerifiedChannel  string // channel name after token consumption
 	TelegramDeepLink string
 	APIKeys          []APIKey
 	NewAPIKey        *APIKey
@@ -31,11 +31,11 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		keys, _ := client.ListAPIKeys(r.Context(), token)
 		title := i18n.T(r, "settings_title")
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
-			User:       u,
-			Saved:      r.URL.Query().Get("saved") == "1",
-			VerifySent: r.URL.Query().Get("verify_sent") == "1",
-			Verified:   r.URL.Query().Get("verified") == "1",
-			APIKeys:    keys,
+			User:            u,
+			Saved:           r.URL.Query().Get("saved") == "1",
+			VerifySent:      r.URL.Query().Get("verify_sent"),
+			VerifiedChannel: r.URL.Query().Get("verified"),
+			APIKeys:         keys,
 		}))
 	}
 }
@@ -91,7 +91,7 @@ func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			}))
 			return
 		}
-		http.Redirect(w, r, "/settings?verify_sent=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings?verify_sent=email", http.StatusSeeOther)
 	}
 }
 
@@ -139,7 +139,7 @@ func settingsMatrixVerifyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 			}))
 			return
 		}
-		http.Redirect(w, r, "/settings?verify_sent=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings?verify_sent=matrix", http.StatusSeeOther)
 	}
 }
 
@@ -198,9 +198,12 @@ type VerifyData struct {
 func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		err := client.ConsumeVerification(r.Context(), token)
+		channel, err := client.ConsumeVerification(r.Context(), token)
 		if err == nil && getSessionUser(r) != nil {
-			http.Redirect(w, r, "/settings?verified=1", http.StatusSeeOther)
+			if channel == "" {
+				channel = "email"
+			}
+			http.Redirect(w, r, "/settings?verified="+channel, http.StatusSeeOther)
 			return
 		}
 		title := i18n.T(r, "verify_title")

@@ -35,8 +35,9 @@ type ServerConfig struct {
 	TelegramBotName            string `yaml:"telegram_bot_name"`
 	MatrixHomeserver           string `yaml:"matrix_homeserver"`
 	MatrixAccessToken          string `yaml:"matrix_access_token"`
-	MagicLoginExpirySecs int      `yaml:"magic_login_expiry_secs"`
-	MagicLoginRateSecs   int      `yaml:"magic_login_rate_secs"`
+	MagicLoginExpirySecs    int      `yaml:"magic_login_expiry_secs"`
+	MagicLoginRateSecs      int      `yaml:"magic_login_rate_secs"`
+	HeartbeatIntervalMins   int      `yaml:"heartbeat_interval_mins"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
@@ -137,6 +138,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.MagicLoginRateSecs == 0 {
 		cfg.Server.MagicLoginRateSecs = 10
+	}
+	if cfg.Server.HeartbeatIntervalMins == 0 {
+		cfg.Server.HeartbeatIntervalMins = 5
 	}
 	if len(cfg.Server.ReservedUsernames) == 0 {
 		cfg.Server.ReservedUsernames = []string{

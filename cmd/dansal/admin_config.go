@@ -10,17 +10,19 @@ import (
 )
 
 type AdminConfigResponse struct {
-	TelegramBotToken  string `json:"telegram_bot_token"`
-	TelegramBotName   string `json:"telegram_bot_name"`
-	MatrixHomeserver  string `json:"matrix_homeserver"`
-	MatrixAccessToken string `json:"matrix_access_token"`
+	TelegramBotToken      string `json:"telegram_bot_token"`
+	TelegramBotName       string `json:"telegram_bot_name"`
+	MatrixHomeserver      string `json:"matrix_homeserver"`
+	MatrixAccessToken     string `json:"matrix_access_token"`
+	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins"`
 }
 
 type AdminConfigPatch struct {
-	TelegramBotToken  *string `json:"telegram_bot_token"`
-	TelegramBotName   *string `json:"telegram_bot_name"`
-	MatrixHomeserver  *string `json:"matrix_homeserver"`
-	MatrixAccessToken *string `json:"matrix_access_token"`
+	TelegramBotToken      *string `json:"telegram_bot_token"`
+	TelegramBotName       *string `json:"telegram_bot_name"`
+	MatrixHomeserver      *string `json:"matrix_homeserver"`
+	MatrixAccessToken     *string `json:"matrix_access_token"`
+	HeartbeatIntervalMins *int    `json:"heartbeat_interval_mins"`
 }
 
 func getAdminConfig(w http.ResponseWriter, r *http.Request) {
@@ -30,10 +32,11 @@ func getAdminConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(AdminConfigResponse{
-		TelegramBotToken:  config.Server.TelegramBotToken,
-		TelegramBotName:   config.Server.TelegramBotName,
-		MatrixHomeserver:  config.Server.MatrixHomeserver,
-		MatrixAccessToken: config.Server.MatrixAccessToken,
+		TelegramBotToken:      config.Server.TelegramBotToken,
+		TelegramBotName:       config.Server.TelegramBotName,
+		MatrixHomeserver:      config.Server.MatrixHomeserver,
+		MatrixAccessToken:     config.Server.MatrixAccessToken,
+		HeartbeatIntervalMins: config.Server.HeartbeatIntervalMins,
 	})
 }
 
@@ -59,6 +62,9 @@ func patchAdminConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MatrixAccessToken != nil {
 		config.Server.MatrixAccessToken = *req.MatrixAccessToken
+	}
+	if req.HeartbeatIntervalMins != nil && *req.HeartbeatIntervalMins > 0 {
+		config.Server.HeartbeatIntervalMins = *req.HeartbeatIntervalMins
 	}
 	if configFilePath != "" {
 		if err := saveConfig(configFilePath); err != nil {

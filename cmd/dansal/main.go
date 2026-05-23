@@ -1585,6 +1585,7 @@ func main() {
 	// Admin site config (protected, admin-only)
 	smux.Handle("GET /api/v1/admin/config", auth(getAdminConfig))
 	smux.Handle("PATCH /api/v1/admin/config", auth(patchAdminConfig))
+	smux.Handle("GET /api/v1/admin/heartbeat", auth(getHeartbeatStatus))
 	smux.Handle("POST /api/v1/admin/matrix-login", auth(matrixLogin))
 
 	// Middleware chain: MetricsMiddleware is outermost to capture all status codes.
@@ -1599,6 +1600,7 @@ func main() {
 
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 	startMetricsServer()
+	go runHeartbeat()
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)

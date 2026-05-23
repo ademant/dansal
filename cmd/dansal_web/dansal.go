@@ -313,6 +313,7 @@ type UserInfo struct {
 	Website          string `json:"website"`
 	EmailVerified    bool   `json:"email_verified"`
 	TelegramVerified bool   `json:"telegram_verified"`
+	MatrixVerified   bool   `json:"matrix_verified"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -918,6 +919,19 @@ func (c *DansalClient) UpdateUser(ctx context.Context, id int, fields map[string
 
 func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, baseURL, token string) error {
 	body, _ := json.Marshal(map[string]string{"channel": "email", "base_url": baseURL})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/verify", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) SendMatrixVerification(ctx context.Context, id int, baseURL, token string) error {
+	body, _ := json.Marshal(map[string]string{"channel": "matrix", "base_url": baseURL})
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/verify", id), token, body)
 	if err != nil {
 		return err
@@ -1702,10 +1716,24 @@ func (c *DansalClient) VerifyContactRequest(ctx context.Context, token string) e
 }
 
 type AdminConfig struct {
-	TelegramBotToken  string `json:"telegram_bot_token"`
-	TelegramBotName   string `json:"telegram_bot_name"`
-	MatrixHomeserver  string `json:"matrix_homeserver"`
-	MatrixAccessToken string `json:"matrix_access_token"`
+	TelegramBotToken      string `json:"telegram_bot_token"`
+	TelegramBotName       string `json:"telegram_bot_name"`
+	MatrixHomeserver      string `json:"matrix_homeserver"`
+	MatrixAccessToken     string `json:"matrix_access_token"`
+	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins"`
+}
+
+type ChannelStatus struct {
+	Configured  bool      `json:"configured"`
+	OK          bool      `json:"ok"`
+	LastChecked time.Time `json:"last_checked"`
+	Error       string    `json:"error,omitempty"`
+}
+
+type HeartbeatStatus struct {
+	Email    ChannelStatus `json:"email"`
+	Telegram ChannelStatus `json:"telegram"`
+	Matrix   ChannelStatus `json:"matrix"`
 }
 
 func (c *DansalClient) GetAdminConfig(ctx context.Context, token string) (AdminConfig, error) {
@@ -1732,6 +1760,19 @@ func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac Ad
 		return apiErr(resp)
 	}
 	return nil
+}
+
+func (c *DansalClient) GetHeartbeatStatus(ctx context.Context, token string) (HeartbeatStatus, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/admin/heartbeat", token, nil)
+	if err != nil {
+		return HeartbeatStatus{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return HeartbeatStatus{}, apiErr(resp)
+	}
+	var s HeartbeatStatus
+	return s, json.NewDecoder(resp.Body).Decode(&s)
 }
 
 // MatrixLogin exchanges username+password for a token and stores it server-side.

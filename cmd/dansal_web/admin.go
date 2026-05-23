@@ -2833,21 +2833,22 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 // ── Admin Site Config ─────────────────────────────────────────────────────────
 
 type AdminSiteConfigData struct {
-	SiteName           string
-	Contact            string
-	TelegramBotToken   string
-	TelegramBotName    string
-	MatrixHomeserver   string
-	MatrixAccessToken  string
-	HasLogo            bool
-	HasBanner          bool
-	HasFavicon         bool
-	Dances             []Dance
-	DefaultDanceNames  map[string]bool
-	ImpressumTexts     map[string]string
-	ImpressumLangs     []string
-	ErrorMsg           string
-	Success            bool
+	SiteName              string
+	Contact               string
+	TelegramBotToken      string
+	TelegramBotName       string
+	MatrixHomeserver      string
+	MatrixAccessToken     string
+	HeartbeatIntervalMins int
+	HasLogo               bool
+	HasBanner             bool
+	HasFavicon            bool
+	Dances                []Dance
+	DefaultDanceNames     map[string]bool
+	ImpressumTexts        map[string]string
+	ImpressumLangs        []string
+	ErrorMsg              string
+	Success               bool
 }
 
 func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -2874,20 +2875,21 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			}
 		}
 		data := AdminSiteConfigData{
-			SiteName:          getSiteSetting(db, "site_name"),
-			Contact:           getSiteSetting(db, "contact"),
-			TelegramBotToken:  ac.TelegramBotToken,
-			TelegramBotName:   ac.TelegramBotName,
-			MatrixHomeserver:  ac.MatrixHomeserver,
-			MatrixAccessToken: ac.MatrixAccessToken,
-			HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
-			HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
-			HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
-			Dances:            dances,
-			DefaultDanceNames: defaultDanceNames,
-			ImpressumTexts:    impTexts,
-			ImpressumLangs:    impressumLangs,
-			Success:           r.URL.Query().Get("saved") == "1",
+			SiteName:              getSiteSetting(db, "site_name"),
+			Contact:               getSiteSetting(db, "contact"),
+			TelegramBotToken:      ac.TelegramBotToken,
+			TelegramBotName:       ac.TelegramBotName,
+			MatrixHomeserver:      ac.MatrixHomeserver,
+			MatrixAccessToken:     ac.MatrixAccessToken,
+			HeartbeatIntervalMins: ac.HeartbeatIntervalMins,
+			HasLogo:               len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
+			HasBanner:             len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
+			HasFavicon:            len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
+			Dances:                dances,
+			DefaultDanceNames:     defaultDanceNames,
+			ImpressumTexts:        impTexts,
+			ImpressumLangs:        impressumLangs,
+			Success:               r.URL.Query().Get("saved") == "1",
 		}
 		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
 	}
@@ -2937,12 +2939,17 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		j, _ := json.Marshal(defaultDanceIDs)
 		_ = setSiteSetting(db, "default_dance_ids", string(j))
 
-		// Telegram / Matrix via dansal API
+		// Telegram / Matrix / heartbeat via dansal API
+		heartbeatMins, _ := strconv.Atoi(r.FormValue("heartbeat_interval_mins"))
+		if heartbeatMins <= 0 {
+			heartbeatMins = 5
+		}
 		ac := AdminConfig{
-			TelegramBotToken:  strings.TrimSpace(r.FormValue("telegram_bot_token")),
-			TelegramBotName:   strings.TrimSpace(r.FormValue("telegram_bot_name")),
-			MatrixHomeserver:  strings.TrimSpace(r.FormValue("matrix_homeserver")),
-			MatrixAccessToken: strings.TrimSpace(r.FormValue("matrix_access_token")),
+			TelegramBotToken:      strings.TrimSpace(r.FormValue("telegram_bot_token")),
+			TelegramBotName:       strings.TrimSpace(r.FormValue("telegram_bot_name")),
+			MatrixHomeserver:      strings.TrimSpace(r.FormValue("matrix_homeserver")),
+			MatrixAccessToken:     strings.TrimSpace(r.FormValue("matrix_access_token")),
+			HeartbeatIntervalMins: heartbeatMins,
 		}
 		_ = client.PatchAdminConfig(r.Context(), token, ac)
 
@@ -3006,20 +3013,21 @@ func adminSiteConfigMatrixLoginHandler(cfg *Config, tmpls *Templates, db *sql.DB
 				}
 			}
 			data := AdminSiteConfigData{
-				SiteName:          getSiteSetting(db, "site_name"),
-				Contact:           getSiteSetting(db, "contact"),
-				TelegramBotToken:  ac.TelegramBotToken,
-				TelegramBotName:   ac.TelegramBotName,
-				MatrixHomeserver:  ac.MatrixHomeserver,
-				MatrixAccessToken: ac.MatrixAccessToken,
-				HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
-				HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
-				HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
-				Dances:            dances,
-				DefaultDanceNames: defaultDanceNames,
-				ImpressumTexts:    impTexts,
-				ImpressumLangs:    impressumLangs,
-				ErrorMsg:          err.Error(),
+				SiteName:              getSiteSetting(db, "site_name"),
+				Contact:               getSiteSetting(db, "contact"),
+				TelegramBotToken:      ac.TelegramBotToken,
+				TelegramBotName:       ac.TelegramBotName,
+				MatrixHomeserver:      ac.MatrixHomeserver,
+				MatrixAccessToken:     ac.MatrixAccessToken,
+				HeartbeatIntervalMins: ac.HeartbeatIntervalMins,
+				HasLogo:               len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
+				HasBanner:             len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
+				HasFavicon:            len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
+				Dances:                dances,
+				DefaultDanceNames:     defaultDanceNames,
+				ImpressumTexts:        impTexts,
+				ImpressumLangs:        impressumLangs,
+				ErrorMsg:              err.Error(),
 			}
 			renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
 			return
@@ -3113,6 +3121,7 @@ type AdminInfoData struct {
 	API          DansalInfo
 	OutboundIP   string
 	LoadAvg      string
+	Heartbeat    HeartbeatStatus
 }
 
 func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -3126,7 +3135,9 @@ func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			return
 		}
 
+		token := getSessionToken(r)
 		info, _ := client.GetDansalInfo(r.Context())
+		heartbeat, _ := client.GetHeartbeatStatus(r.Context(), token)
 
 		outboundIP := outboundIP()
 		loadAvg := readLoadAvg()
@@ -3137,6 +3148,7 @@ func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			API:          info,
 			OutboundIP:   outboundIP,
 			LoadAvg:      loadAvg,
+			Heartbeat:    heartbeat,
 		}
 		renderTemplate(w, tmpls.adminInfo, tmplData(r, cfg, i18n, "System info", data))
 	}

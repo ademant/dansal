@@ -121,6 +121,28 @@ func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *Dansal
 	}
 }
 
+func settingsMatrixVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		baseURL := cfg.publicBaseURL()
+
+		if err := client.SendMatrixVerification(r.Context(), su.ID, baseURL, token); err != nil {
+			u, _ := client.GetUser(r.Context(), su.ID, token)
+			title := i18n.T(r, "settings_title")
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_verify_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/settings?verify_sent=1", http.StatusSeeOther)
+	}
+}
+
 func settingsCreateAPIKeyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

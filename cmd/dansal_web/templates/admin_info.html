@@ -43,13 +43,44 @@
     </table>
   </section>
 
+  <section class="cfg-section">
+    <h2>Channel heartbeat</h2>
+    <table class="plain-table">
+      <tr>
+        <th>Email</th>
+        <td>{{if not .Heartbeat.Email.Configured}}<span class="hb-skip">not configured</span>
+            {{else if .Heartbeat.Email.OK}}<span class="hb-ok">OK</span>
+            {{else}}<span class="hb-err">error: {{.Heartbeat.Email.Error}}</span>{{end}}</td>
+        <td class="hb-ts">{{if not .Heartbeat.Email.LastChecked.IsZero}}{{.Heartbeat.Email.LastChecked.Format "2006-01-02 15:04:05 UTC"}}{{end}}</td>
+      </tr>
+      <tr>
+        <th>Telegram</th>
+        <td>{{if not .Heartbeat.Telegram.Configured}}<span class="hb-skip">not configured</span>
+            {{else if .Heartbeat.Telegram.OK}}<span class="hb-ok">OK</span>
+            {{else}}<span class="hb-err">error: {{.Heartbeat.Telegram.Error}}</span>{{end}}</td>
+        <td class="hb-ts">{{if not .Heartbeat.Telegram.LastChecked.IsZero}}{{.Heartbeat.Telegram.LastChecked.Format "2006-01-02 15:04:05 UTC"}}{{end}}</td>
+      </tr>
+      <tr>
+        <th>Matrix</th>
+        <td>{{if not .Heartbeat.Matrix.Configured}}<span class="hb-skip">not configured</span>
+            {{else if .Heartbeat.Matrix.OK}}<span class="hb-ok">OK</span>
+            {{else}}<span class="hb-err">error: {{.Heartbeat.Matrix.Error}}</span>{{end}}</td>
+        <td class="hb-ts">{{if not .Heartbeat.Matrix.LastChecked.IsZero}}{{.Heartbeat.Matrix.LastChecked.Format "2006-01-02 15:04:05 UTC"}}{{end}}</td>
+      </tr>
+    </table>
+  </section>
+
 </div>
 {{end}}
 
 <style>
 .info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.5rem;margin-top:1rem}
 .plain-table{width:100%;border-collapse:collapse}
-.plain-table th{text-align:left;font-weight:600;padding:.3rem .6rem .3rem 0;white-space:nowrap;width:40%}
+.plain-table th{text-align:left;font-weight:600;padding:.3rem .6rem .3rem 0;white-space:nowrap;width:30%}
 .plain-table td{padding:.3rem 0}
+.hb-ok{color:#155724;font-weight:600}
+.hb-err{color:#721c24;font-weight:600}
+.hb-skip{color:#856404}
+.hb-ts{font-size:.8rem;color:#666;padding-left:.5rem;white-space:nowrap}
 </style>
 {{end}}

@@ -49,18 +49,24 @@
     </div>
 
     <div class="check-row">
-      <label class="check-label"><input type="checkbox" name="has_ball"{{if .Event.HasBall}} checked{{end}}> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop"{{if .Event.HasWorkshop}} checked{{end}} onchange="toggleWorkshopDifficulty()"> {{$.Strings.T "filter_type_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_festival"{{if .Event.HasFestival}} checked{{end}}> {{$.Strings.T "filter_type_festival"}}</label>
-      <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
-      <label class="check-label"><input type="checkbox" name="is_published"{{if .Event.IsPublished}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="ball"{{if hasTag .Event.Tags "ball"}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop"{{if hasTag .Event.Tags "dance-workshop"}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop"{{if hasTag .Event.Tags "musician-workshop"}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="festival"{{if hasTag .Event.Tags "festival"}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="open-air"{{if hasTag .Event.Tags "open-air"}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="session"{{if hasTag .Event.Tags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="concert"{{if hasTag .Event.Tags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
     </div>
-    <div id="workshop-difficulty"{{if not .Event.HasWorkshop}} hidden{{end}} style="margin-top:.5rem">
+    <div class="check-row" style="margin-top:.25rem">
+      <label class="check-label"><input type="checkbox" name="is_published"{{if .Event.IsPublished}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
+      <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
+    </div>
+    <div id="workshop-difficulty"{{if and (not (hasTag .Event.Tags "dance-workshop")) (not (hasTag .Event.Tags "musician-workshop"))}} hidden{{end}} style="margin-top:.5rem">
       <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
       <div class="check-row">
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="beginner"{{if eq .Event.WorkshopDifficulty "beginner"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_beginner"}}</label>
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="advanced"{{if eq .Event.WorkshopDifficulty "advanced"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_advanced"}}</label>
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="profi"{{if eq .Event.WorkshopDifficulty "profi"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_profi"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="beginners"{{if hasTag .Event.Tags "beginners"}} checked{{end}}> {{$.Strings.T "tag_beginners"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="intermediate"{{if hasTag .Event.Tags "intermediate"}} checked{{end}}> {{$.Strings.T "tag_intermediate"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="advanced"{{if hasTag .Event.Tags "advanced"}} checked{{end}}> {{$.Strings.T "tag_advanced"}}</label>
       </div>
     </div>
 
@@ -72,20 +78,6 @@
 
     <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
     <input id="booking_url" type="url" name="booking_url" value="{{.Event.BookingURL}}" placeholder="https://...">
-
-    {{if $.Data.GroupedTags}}
-    <fieldset class="tag-picker">
-      <legend>{{$.Strings.T "evt_tags"}}</legend>
-      {{range $.Data.GroupedTags}}
-      <div class="tag-group">
-        <strong>{{$.Strings.T (tagCatKey .Category)}}</strong>
-        <div class="tag-checks">
-          {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"{{if .Checked}} checked{{end}}> {{$.Strings.T (tagKey .Slug)}}</label>{{end}}
-        </div>
-      </div>
-      {{end}}
-    </fieldset>
-    {{end}}
 
     <label for="availability">{{$.Strings.T "evt_availability"}}</label>
     <select id="availability" name="availability">
@@ -451,8 +443,9 @@ function onStartDateChange(v){
   var ed=document.getElementById('end_date');
   if(ed&&!ed.value) ed.value=v;
 }
-function toggleWorkshopDifficulty(){
-  document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
+function toggleDifficulty(){
+  var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
+  document.getElementById('workshop-difficulty').hidden=!show;
 }
 function toggleOrgNew(){
   var v=document.getElementById('org_choice').value;

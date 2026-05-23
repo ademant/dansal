@@ -69,16 +69,20 @@
     </div>
 
     <div class="check-row">
-      <label class="check-label"><input type="checkbox" name="has_ball" {{if and .Prefill .Prefill.HasBall}}checked{{end}}> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop" onchange="toggleWorkshopDifficulty()" {{if and .Prefill .Prefill.HasWorkshop}}checked{{end}}> {{$.Strings.T "filter_type_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_festival" {{if and .Prefill .Prefill.HasFestival}}checked{{end}}> {{$.Strings.T "filter_type_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="ball" id="tag-ball"{{if and .Prefill (hasTag .Prefill.Tags "ball")}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop"{{if and .Prefill (hasTag .Prefill.Tags "dance-workshop")}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop"{{if and .Prefill (hasTag .Prefill.Tags "musician-workshop")}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="festival"{{if and .Prefill (hasTag .Prefill.Tags "festival")}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="open-air"{{if and .Prefill (hasTag .Prefill.Tags "open-air")}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="session"{{if and .Prefill (hasTag .Prefill.Tags "session")}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="concert"{{if and .Prefill (hasTag .Prefill.Tags "concert")}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
     </div>
     <div id="workshop-difficulty" hidden style="margin-top:.5rem">
       <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
       <div class="check-row">
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="beginner"> {{$.Strings.T "workshop_difficulty_beginner"}}</label>
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="advanced"> {{$.Strings.T "workshop_difficulty_advanced"}}</label>
-        <label class="check-label"><input type="radio" name="workshop_difficulty" value="profi"> {{$.Strings.T "workshop_difficulty_profi"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="beginners"{{if and .Prefill (hasTag .Prefill.Tags "beginners")}} checked{{end}}> {{$.Strings.T "tag_beginners"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="intermediate"{{if and .Prefill (hasTag .Prefill.Tags "intermediate")}} checked{{end}}> {{$.Strings.T "tag_intermediate"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="advanced"{{if and .Prefill (hasTag .Prefill.Tags "advanced")}} checked{{end}}> {{$.Strings.T "tag_advanced"}}</label>
       </div>
     </div>
 
@@ -90,20 +94,6 @@
 
     <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
     <input id="booking_url" type="url" name="booking_url" placeholder="https://...">
-
-    {{if $.Data.GroupedTags}}
-    <fieldset class="tag-picker">
-      <legend>{{$.Strings.T "evt_tags"}}</legend>
-      {{range $.Data.GroupedTags}}
-      <div class="tag-group">
-        <strong>{{.Category}}</strong>
-        <div class="tag-checks">
-          {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}
-        </div>
-      </div>
-      {{end}}
-    </fieldset>
-    {{end}}
   </section>
 
   <!-- Organisation -->
@@ -323,8 +313,9 @@ function onStartDateChange(v){
   var ed=document.getElementById('end_date');
   if(ed&&!ed.value) ed.value=v;
 }
-function toggleWorkshopDifficulty(){
-  document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
+function toggleDifficulty(){
+  var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
+  document.getElementById('workshop-difficulty').hidden=!show;
 }
 function toggleOrgNew(){
   var v=document.getElementById('org_choice').value;
@@ -523,14 +514,6 @@ function applyTemplateData(d){
   if(d.description) document.querySelector('[name=description]').value=d.description;
   if(d.url) document.querySelector('[name=url]').value=d.url;
   if(d.booking_url) document.querySelector('[name=booking_url]').value=d.booking_url;
-  document.querySelector('[name=has_ball]').checked=!!d.has_ball;
-  document.querySelector('[name=has_workshop]').checked=!!d.has_workshop;
-  document.querySelector('[name=has_festival]').checked=!!d.has_festival;
-  if(d.has_workshop) toggleWorkshopDifficulty();
-  if(d.workshop_difficulty){
-    var el=document.querySelector('[name=workshop_difficulty][value="'+d.workshop_difficulty+'"]');
-    if(el) el.checked=true;
-  }
   if(d.org_id){
     var oc=document.getElementById('org_choice');
     oc.value='existing';toggleOrgNew();
@@ -551,6 +534,7 @@ function applyTemplateData(d){
     document.querySelectorAll('[name=tags]').forEach(function(cb){
       cb.checked=d.tags.indexOf(cb.value)!==-1;
     });
+    toggleDifficulty();
   }
   document.querySelector('.evt-form').dispatchEvent(new Event('input',{bubbles:true}));
 }

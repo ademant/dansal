@@ -126,6 +126,7 @@ func main() {
 		r.HandleFunc("POST /settings", settingsUpdateHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/verify", settingsSendVerifyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/verify-telegram", settingsTelegramVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /settings/verify-matrix", settingsMatrixVerifyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/apikeys/new", settingsCreateAPIKeyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/apikeys/{id}/delete", settingsDeleteAPIKeyHandler(cfg, client))
 		r.HandleFunc("POST /magic", magicRequestHandler(cfg, tmpls, client, i18n))

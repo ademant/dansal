@@ -1374,6 +1374,15 @@ type TagGroup struct {
 	Tags     []TagOption
 }
 
+func sliceContains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func buildGroupedTags(tags []Tag, checked map[string]bool) []TagGroup {
 	order := []string{"format", "type", "level"}
 	byCategory := make(map[string][]TagOption)
@@ -2116,6 +2125,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				}
 			}
 		} else if r.URL.Query().Get("title") != "" {
+			prefillTags := r.URL.Query()["tags"]
 			prefill = &EventPrefill{
 				Title:       r.URL.Query().Get("title"),
 				Description: r.URL.Query().Get("description"),
@@ -2127,22 +2137,18 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				Location:    r.URL.Query().Get("location"),
 				Town:        r.URL.Query().Get("town"),
 				Country:     r.URL.Query().Get("country"),
-				HasBall:     r.URL.Query().Get("has_ball") == "1",
-				HasWorkshop: r.URL.Query().Get("has_workshop") == "1",
-				HasFestival: r.URL.Query().Get("has_festival") == "1",
+				Tags:        prefillTags,
 			}
 		}
 
 		tmpls2, _ := listTemplates(db, su.ID, getUserOrgs())
 
-		allTags, _ := client.GetTags(r.Context())
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
-			GroupedTags:        buildGroupedTags(allTags, nil),
 			SelectedDanceNames: selected,
 			Prefill:            prefill,
 			Templates:          tmpls2,
@@ -2162,7 +2168,6 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
-		allTags, _ := client.GetTags(r.Context())
 		renderErr := func(errKey string) {
 			title := i18n.T(r, "admin_event_new_title")
 			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
@@ -2170,7 +2175,6 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Locations:     bundle.Locations,
 				Musicians:     bundle.Musicians,
 				Dances:        bundle.Dances,
-				GroupedTags:   buildGroupedTags(allTags, nil),
 				ErrorKey:      errKey,
 			}))
 		}
@@ -2288,21 +2292,20 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		req := EventCreateReq{
-			Title:              strings.TrimSpace(r.FormValue("title")),
-			Description:        strings.TrimSpace(r.FormValue("description")),
-			StartTime:          startTime,
-			EndTime:            endTime,
-			HasBall:            r.FormValue("has_ball") == "on",
-			HasWorkshop:        r.FormValue("has_workshop") == "on",
-			HasFestival:        r.FormValue("has_festival") == "on",
-			WorkshopDifficulty: r.FormValue("workshop_difficulty"),
-			BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
-			Tags:               tags,
-			URL:                strings.TrimSpace(r.FormValue("url")),
-			OrganizationID:     orgID,
-			Pricing:            pricing,
-			Location:           locReq,
-			Dances:             danceIDs,
+			Title:          strings.TrimSpace(r.FormValue("title")),
+			Description:    strings.TrimSpace(r.FormValue("description")),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			HasBall:        sliceContains(tags, "ball"),
+			HasWorkshop:    sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival:    sliceContains(tags, "festival"),
+			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
+			Tags:           tags,
+			URL:            strings.TrimSpace(r.FormValue("url")),
+			OrganizationID: orgID,
+			Pricing:        pricing,
+			Location:       locReq,
+			Dances:         danceIDs,
 		}
 
 		if req.Title == "" {
@@ -2464,20 +2467,14 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		var event Event
 		var eventErr error
 		var bundle RefBundle
-		var allTags []Tag
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(2)
 		go func() { defer wg.Done(); event, eventErr = client.GetEvent(r.Context(), id) }()
 		go func() { defer wg.Done(); bundle = client.FetchRefBundle(r.Context()) }()
-		go func() { defer wg.Done(); allTags, _ = client.GetTags(r.Context()) }()
 		wg.Wait()
 		if eventErr != nil {
 			http.NotFound(w, r)
 			return
-		}
-		checkedTags := make(map[string]bool, len(event.Tags))
-		for _, t := range event.Tags {
-			checkedTags[t] = true
 		}
 		var userOrgs []Organization
 		if su := getSessionUser(r); su != nil {
@@ -2502,7 +2499,6 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			Locations:          bundle.Locations,
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
-			GroupedTags:        buildGroupedTags(allTags, checkedTags),
 			SelectedDanceNames: buildSelectedDanceNames(event),
 			UserOrgs:           userOrgs,
 		}))
@@ -2526,7 +2522,6 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
-		allTags, _ := client.GetTags(r.Context())
 		renderErr := func(errKey string) {
 			event, _ := client.GetEvent(r.Context(), id)
 			title := i18n.T(r, "admin_event_edit_title")
@@ -2536,7 +2531,6 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Locations:          bundle.Locations,
 				Musicians:          bundle.Musicians,
 				Dances:             bundle.Dances,
-				GroupedTags:        buildGroupedTags(allTags, nil),
 				SelectedDanceNames: buildSelectedDanceNames(event),
 				ErrorKey:           errKey,
 			}))
@@ -2661,27 +2655,26 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
-			Title:              strings.TrimSpace(r.FormValue("title")),
-			Description:        strings.TrimSpace(r.FormValue("description")),
-			StartTime:          startTime,
-			EndTime:            endTime,
-			HasBall:            r.FormValue("has_ball") == "on",
-			HasWorkshop:        r.FormValue("has_workshop") == "on",
-			HasFestival:        r.FormValue("has_festival") == "on",
-			WorkshopDifficulty: r.FormValue("workshop_difficulty"),
-			BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
-			IsCancelled:        r.FormValue("is_cancelled") == "on",
-			Availability:       r.FormValue("availability"),
-			TicketsTotal:       ticketsTotal,
-			BookingEnabled:     r.FormValue("booking_enabled") == "on",
-			IsPublished:        r.FormValue("is_published") == "on",
-			Tags:               tags,
-			URL:                strings.TrimSpace(r.FormValue("url")),
-			OrganizationID:     orgID,
-			Pricing:            pricing,
-			Location:           locReq,
-			Musicians:          musicianIDs,
-			Dances:             danceIDs,
+			Title:          strings.TrimSpace(r.FormValue("title")),
+			Description:    strings.TrimSpace(r.FormValue("description")),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			HasBall:        sliceContains(tags, "ball"),
+			HasWorkshop:    sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival:    sliceContains(tags, "festival"),
+			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
+			IsCancelled:    r.FormValue("is_cancelled") == "on",
+			Availability:   r.FormValue("availability"),
+			TicketsTotal:   ticketsTotal,
+			BookingEnabled: r.FormValue("booking_enabled") == "on",
+			IsPublished:    r.FormValue("is_published") == "on",
+			Tags:           tags,
+			URL:            strings.TrimSpace(r.FormValue("url")),
+			OrganizationID: orgID,
+			Pricing:        pricing,
+			Location:       locReq,
+			Musicians:      musicianIDs,
+			Dances:         danceIDs,
 		}
 
 		if req.Title == "" {
@@ -3283,14 +3276,8 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			if e.Location.Country != "" {
 				q.Set("country", e.Location.Country)
 			}
-			if e.HasBall {
-				q.Set("has_ball", "1")
-			}
-			if e.HasWorkshop {
-				q.Set("has_workshop", "1")
-			}
-			if e.HasFestival {
-				q.Set("has_festival", "1")
+			for _, tag := range e.Tags {
+				q.Add("tags", tag)
 			}
 			http.Redirect(w, r, "/admin/events/new?"+q.Encode(), http.StatusSeeOther)
 			return

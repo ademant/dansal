@@ -582,6 +582,14 @@ var tmplFuncMap = template.FuncMap{
 	"hasPrefix":     strings.HasPrefix,
 	"lower":         strings.ToLower,
 	"validMatrixID": validMatrixID,
+	"hasTag": func(tags []string, slug string) bool {
+		for _, t := range tags {
+			if t == slug {
+				return true
+			}
+		}
+		return false
+	},
 	"fmtBytes": func(b int64) string {
 		const unit = 1024
 		if b < unit {

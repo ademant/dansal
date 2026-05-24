@@ -1138,9 +1138,10 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 				Indexable:                 true,
 				Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
 				PublicKey: PublicKey{
-					ID:           base + "#main-key",
-					Owner:        base,
-					PublicKeyPem: actor.PublicKeyPEM,
+					ID:              base + "#main-key",
+					Owner:           base,
+					PublicKeyPem:    actor.PublicKeyPEM,
+					PublicKeyMultibase: actor.PublicKeyMultibase,
 				},
 			}
 			writeJSON(w, http.StatusOK, a)

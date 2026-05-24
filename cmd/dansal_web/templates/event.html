@@ -12,6 +12,16 @@
 <div class="evt-header">
   <h1>{{.Title}}</h1>
   {{if $.User}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
+  {{if not .IsPublished}}
+  <div class="evt-draft-banner">
+    <span>{{$.Strings.T "evt_draft_notice"}}</span>
+    {{if $.User}}
+    <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
+      <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
+    </form>
+    {{end}}
+  </div>
+  {{end}}
   {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
   {{if eq .Availability "limited"}}<p><span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span></p>{{end}}
   {{if eq .Availability "sold_out"}}<p><span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span></p>{{end}}
@@ -378,6 +388,9 @@
 {{end}}{{/* .Data */}}
 
 <style>
+.evt-draft-banner{display:flex;align-items:center;gap:1rem;margin:.5rem 0 .75rem;padding:.6rem 1rem;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;font-size:.9rem;font-weight:600}
+.btn-pub-event{padding:.3rem .8rem;background:#217a3c;color:#fff;border:none;border-radius:4px;font-size:.85rem;cursor:pointer;font-weight:600}
+.btn-pub-event:hover{background:#155727}
 .evt-hero{margin:0 -1rem 0;background:#111;max-height:420px;overflow:hidden}
 .evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
 .evt-header{padding:1.25rem 0 .75rem}

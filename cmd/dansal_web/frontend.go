@@ -771,7 +771,12 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			http.NotFound(w, r)
 			return
 		}
-		event, err := client.GetEvent(r.Context(), id)
+		var event Event
+		if token := getSessionToken(r); token != "" {
+			event, err = client.GetEventAuthed(r.Context(), id, token)
+		} else {
+			event, err = client.GetEvent(r.Context(), id)
+		}
 		if err != nil {
 			http.NotFound(w, r)
 			return

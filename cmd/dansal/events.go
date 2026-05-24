@@ -1353,6 +1353,26 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(event)
 }
 
+// POST /api/v1/events/{id}/publish — set is_published=1 (admin/publisher only).
+func publishEvent(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	result, err := db.Exec("UPDATE events SET is_published=1 WHERE id=? AND (suggestion_token IS NULL OR suggestion_token='')", id)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /api/v1/events/{id}
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")

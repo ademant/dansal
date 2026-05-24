@@ -401,6 +401,34 @@ func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {
 	return event, nil
 }
 
+func (c *DansalClient) GetEventAuthed(ctx context.Context, id int, token string) (Event, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/events/%d", id), token, nil)
+	if err != nil {
+		return Event{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return Event{}, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return Event{}, apiErr(resp)
+	}
+	var event Event
+	return event, json.NewDecoder(resp.Body).Decode(&event)
+}
+
+func (c *DansalClient) PublishEvent(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/publish", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
 	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
 		var orgs []Organization

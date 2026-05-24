@@ -1340,8 +1340,9 @@ type AdminEventsData struct {
 	FilterMusicianID   int
 	FilterType         string // "ball", "workshop", "festival"
 	FilterDance        string
-	FilterCreatedAfter string
-	FilterSource       string
+	FilterCreatedAfter  string
+	FilterSource        string
+	FilterUnpublished   bool
 }
 
 type EventPrefill struct {
@@ -1659,6 +1660,30 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
+func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.PublishEvent(r.Context(), id, token); err != nil {
+			http.Error(w, "publish failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/events?unpublished=1"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
 func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -1965,6 +1990,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		filterDance := q.Get("dance")
 		createdAfter := q.Get("created_after")
 		filterSource := q.Get("source")
+		filterUnpublished := q.Get("unpublished") == "1"
 
 		params := url.Values{}
 		if includePast {
@@ -1988,6 +2014,12 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		if filterSource != "" {
 			params.Set("source", filterSource)
+		}
+		if filterUnpublished {
+			params.Set("is_published", "false")
+			if !includePast {
+				params.Set("include_past", "true")
+			}
 		}
 
 		token := getSessionToken(r)
@@ -2064,8 +2096,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterMusicianID:   musicianID,
 			FilterType:         filterType,
 			FilterDance:        filterDance,
-			FilterCreatedAfter: createdAfter,
-			FilterSource:       filterSource,
+			FilterCreatedAfter:  createdAfter,
+			FilterSource:        filterSource,
+			FilterUnpublished:   filterUnpublished,
 		}))
 	}
 }

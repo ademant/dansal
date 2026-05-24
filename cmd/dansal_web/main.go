@@ -154,6 +154,7 @@ func main() {
 		r.HandleFunc("POST /admin/bookings/{id}/approve", adminBookingApproveHandler(cfg, client))
 		r.HandleFunc("POST /admin/bookings/{id}/cancel", adminBookingCancelHandler(cfg, client))
 		r.HandleFunc("POST /admin/bookings/{id}/delete", adminBookingDeleteHandler(cfg, client))
+		r.HandleFunc("POST /admin/events/{id}/publish", adminEventPublishHandler(cfg, client))
 		r.HandleFunc("POST /admin/events/{id}/delete", adminEventDeleteHandler(cfg, db, client))
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminEventImageDeleteHandler(cfg, client))
 		r.HandleFunc("POST /admin/musicians/{id}/image/delete", adminMusicianImageDeleteHandler(cfg, client))

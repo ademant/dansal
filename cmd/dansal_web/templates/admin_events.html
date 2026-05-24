@@ -5,6 +5,7 @@
   <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
   <a href="/admin/events/import" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#217a3c;color:#fff;border-radius:4px;font-size:.9rem">↑ {{.Strings.T "admin_import_title"}}</a>
   <a href="/admin/events?source=suggestion&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#856404;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_suggestions"}}</a>
+  <a href="/admin/events?unpublished=1" style="text-decoration:none;padding:.4rem 1rem;background:#6c5ce7;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_unpublished"}}</a>
 </div>
 {{with .Data}}{{if .FilterCreatedAfter}}
 <p class="import-notice">{{$.Strings.T "admin_import_recent_filter"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
@@ -79,6 +80,7 @@
     <td style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
+      {{if not .IsPublished}}<button type="button" class="btn-sm btn-pub" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_publish"}}'))pubEvent({{.ID}})">{{$.Strings.T "admin_event_publish"}}</button>{{end}}
       <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
   </tr>
@@ -110,12 +112,19 @@
 .btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.btn-pub{background:#217a3c;color:#fff;border:none}
+.btn-pub:hover{background:#155727}
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delEvent(id){
   var f=document.createElement('form');
   f.method='post';f.action='/admin/events/'+id+'/delete';
+  document.body.appendChild(f);f.submit();
+}
+function pubEvent(id){
+  var f=document.createElement('form');
+  f.method='post';f.action='/admin/events/'+id+'/publish';
   document.body.appendChild(f);f.submit();
 }
 </script>

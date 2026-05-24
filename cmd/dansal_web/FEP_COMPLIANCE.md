@@ -37,12 +37,44 @@ Federation Enhancement Proposals (FEPs) are standards that extend and enhance th
 
 ### FEP-1a2b: Discovery and WebFinger
 
-**Status**: ⚠️ Planned (Not Yet Implemented)
+**Status**: ✅ Implemented
 
-**Planned Implementation**:
-- WebFinger support for actor discovery
-- `.well-known/webfinger` endpoint
-- Proper JRD (JSON Resource Descriptor) format
+**Compliance Details**:
+
+1. **WebFinger Protocol Support**
+   - ✅ RFC 7033 compliant WebFinger implementation
+   - ✅ `.well-known/webfinger` endpoint
+   - ✅ Proper JRD (JSON Resource Descriptor) format
+   - ✅ `acct:user@domain` URI scheme support
+
+2. **Actor Discovery**
+   - ✅ Actor lookup by username/organization slug
+   - ✅ Proper Content-Type: `application/jrd+json`
+   - ✅ CORS support for cross-domain requests
+   - ✅ Error handling for invalid requests
+
+3. **Response Format**
+   - ✅ Standard JRD structure with Subject, Aliases, and Links
+   - ✅ Self link with `application/activity+json` type
+   - ✅ Proper actor URL generation
+
+**Implementation Notes**:
+- Supports both direct actor lookup and organization-based discovery
+- Handles the special `relay` actor case
+- Returns appropriate HTTP status codes (400, 404, 200)
+
+**Example Response**:
+```json
+{
+  "subject": "acct:user@example.com",
+  "aliases": ["https://example.com/actors/user"],
+  "links": [{
+    "rel": "self",
+    "type": "application/activity+json",
+    "href": "https://example.com/actors/user"
+  }]
+}
+```
 
 ### FEP-c7d1: Moderation and Filtering
 
@@ -101,7 +133,7 @@ func generateEd25519KeyPairWithMultibase() (publicPEM, privatePEM, multibaseKey 
 | FEP | Status | Description |
 |-----|--------|-------------|
 | 8b5d | ✅ Partial | Modern cryptography and key formats |
-| 1a2b | ⚠️ Planned | WebFinger discovery |
+| 1a2b | ✅ Implemented | WebFinger discovery and actor lookup |
 | c7d1 | ⚠️ Planned | Moderation and filtering |
 
 ## Testing and Validation
@@ -122,10 +154,10 @@ func generateEd25519KeyPairWithMultibase() (publicPEM, privatePEM, multibaseKey 
 
 ### High Priority
 
-1. **FEP-1a2b WebFinger Implementation**
-   - Implement `.well-known/webfinger` endpoint
-   - Add JRD format support
-   - Enable actor discovery via email-style identifiers
+1. **FEP-c7d1 Moderation Tools**
+   - Content filtering system
+   - User reporting mechanism
+   - Admin moderation interface
 
 2. **FEP-c7d1 Moderation Tools**
    - Content filtering system
@@ -151,6 +183,11 @@ func generateEd25519KeyPairWithMultibase() (publicPEM, privatePEM, multibaseKey 
 
 ## Compliance Statement
 
-Dansal currently implements core ActivityPub functionality with partial FEP-8b5d compliance for modern cryptography. The implementation provides both legacy RSA and modern Ed25519 key formats, ensuring compatibility with the broadest range of ActivityPub implementations while moving toward modern standards.
+Dansal implements core ActivityPub functionality with:
+- ✅ **Full FEP-1a2b compliance** for WebFinger-based actor discovery
+- ✅ **Partial FEP-8b5d compliance** for modern cryptography (Ed25519 + multibase)
+- ✅ **Complete ActivityPub protocol support** for core functionality
 
-Future development will focus on completing FEP-8b5d compliance and implementing additional FEPs for discovery, moderation, and enhanced functionality.
+The implementation provides both legacy RSA and modern Ed25519 key formats, ensuring compatibility with the broadest range of ActivityPub implementations while supporting modern standards.
+
+Future development will focus on completing FEP-8b5d compliance and implementing additional FEPs for moderation, filtering, and enhanced functionality.

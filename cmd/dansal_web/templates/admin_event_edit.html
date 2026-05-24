@@ -220,7 +220,7 @@
       </select>
     </div>
 
-    <div id="loc-new" hidden class="loc-new-fields">
+    <div id="loc-new" style="display:none" class="loc-new-fields">
       <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
       <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
       <label for="new_loc_short_name">{{$.Strings.T "loc_short_name"}}</label>
@@ -477,7 +477,7 @@ function toggleOrgNew(){
 function toggleLocNew(){
   var v=document.getElementById('loc_choice').value;
   document.getElementById('loc-existing').hidden=(v!=='existing');
-  document.getElementById('loc-new').hidden=(v!=='new');
+  document.getElementById('loc-new').style.display=(v==='new')?'flex':'none';
 }
 function togglePricing(){
   var v=document.getElementById('pricing_type').value;
@@ -618,23 +618,23 @@ function delRow(btn){
 }
 
 // Pre-fill first timetable row from event data when no timetable exists yet
-{{if not .Event.Timetable}}
+{{if not $.Data.Event.Timetable}}
 (function(){
   var row=document.querySelector('#tt-body .tt-row');
   if(!row)return;
   var startInp=row.querySelector('[name="tt_start"]');
   var endInp=row.querySelector('[name="tt_end"]');
   var locSel=row.querySelector('[name="tt_loc_id"]');
-  if(startInp)startInp.value={{isoTime .Event.StartTime | jsStr}};
-  if(endInp)endInp.value={{isoTime .Event.EndTime | jsStr}};
+  if(startInp)startInp.value={{isoTime $.Data.Event.StartTime | jsStr}};
+  if(endInp)endInp.value={{isoTime $.Data.Event.EndTime | jsStr}};
   if(locSel&&_ttDefaultLocID)locSel.value=_ttDefaultLocID;
-  {{if .Event.Musicians}}
+  {{if $.Data.Event.Musicians}}
   var detail=row.nextElementSibling;
   if(detail&&detail.classList.contains('tt-row-detail')){
     var musInp=detail.querySelector('.tt-mus-input');
     var musIDInp=detail.querySelector('[name="tt_musician_id"]');
-    if(musInp)musInp.value={{(index .Event.Musicians 0).Bandname | jsStr}};
-    if(musIDInp)musIDInp.value={{(index .Event.Musicians 0).ID}};
+    if(musInp)musInp.value={{(index $.Data.Event.Musicians 0).Bandname | jsStr}};
+    if(musIDInp)musIDInp.value={{(index $.Data.Event.Musicians 0).ID}};
   }
   {{end}}
   row.dataset.default='1';

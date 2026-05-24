@@ -14,6 +14,7 @@ import (
 
 const defaultSocket = "./dansal.sock"
 const defaultConfigPath = "/etc/dansal/config.yaml"
+const defaultWebConfigPath = "/etc/dansal/web.yaml"
 
 func socketFromConfig() string {
 	data, err := os.ReadFile(defaultConfigPath)

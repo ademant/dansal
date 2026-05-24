@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -38,6 +39,40 @@ func cmdSMTPShow(_ []string) {
 	tw.Flush()
 }
 
+// syncWebSMTPHost reads web.yaml and sets smtp_host to match the API config.
+// If web.yaml doesn't exist, it does nothing. Errors are printed as warnings.
+func syncWebSMTPHost(webPath, host string) {
+	data, err := os.ReadFile(webPath)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: read %s: %v\n", webPath, err)
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	found := false
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "smtp_host:") {
+			if host == "" {
+				lines[i] = "#smtp_host:"
+			} else {
+				lines[i] = "smtp_host: " + host
+			}
+			found = true
+			break
+		}
+	}
+	if !found && host != "" {
+		lines = append(lines, "smtp_host: "+host)
+	}
+	if err := os.WriteFile(webPath, []byte(strings.Join(lines, "\n")), 0640); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: write %s: %v\n", webPath, err)
+		return
+	}
+	fmt.Printf("updated smtp_host in %s\n", webPath)
+}
+
 func cmdSMTPSet(args []string) {
 	fs := flag.NewFlagSet("smtp-set", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["smtp-set"]) }
@@ -48,6 +83,7 @@ func cmdSMTPSet(args []string) {
 	fromName := fs.String("from-name", "", "display name in From header")
 	tlsMode := fs.String("tls", "", "TLS mode: starttls, tls, none")
 	timeout := fs.Int("timeout", 0, "dial and send timeout in seconds (default 30)")
+	webConfig := fs.String("web-config", defaultWebConfigPath, "path to dansal-web config YAML")
 	fs.Parse(args)
 
 	if *host == "" && *port == 0 && *username == "" && *from == "" && *fromName == "" && *tlsMode == "" && *timeout == 0 {
@@ -68,7 +104,27 @@ func cmdSMTPSet(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Println("SMTP settings updated.")
-	cmdSMTPShow(nil)
+
+	// Re-fetch the live config so we sync the actual stored host (not just --host flag).
+	cfgResp := send(socketPath, request{Cmd: "smtp-get"})
+	if cfgResp.OK {
+		var cfg smtpConfig
+		json.Unmarshal(cfgResp.Data, &cfg)
+		syncWebSMTPHost(*webConfig, cfg.Host)
+
+		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(tw, "host\t%s\n", cfg.Host)
+		fmt.Fprintf(tw, "port\t%d\n", cfg.Port)
+		fmt.Fprintf(tw, "username\t%s\n", cfg.Username)
+		fmt.Fprintf(tw, "from\t%s\n", cfg.From)
+		fmt.Fprintf(tw, "from_name\t%s\n", cfg.FromName)
+		fmt.Fprintf(tw, "tls\t%s\n", cfg.TLS)
+		fmt.Fprintf(tw, "timeout_secs\t%d\n", cfg.TimeoutSecs)
+		fmt.Fprintf(tw, "password_set\t%v\n", cfg.PasswordSet)
+		tw.Flush()
+	} else {
+		cmdSMTPShow(nil)
+	}
 }
 
 func cmdSMTPSetPassword(args []string) {

@@ -85,9 +85,10 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 		Indexable:                 true,
 		Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
 		PublicKey: PublicKey{
-			ID:           base + "#main-key",
-			Owner:        base,
-			PublicKeyPem: actor.PublicKeyPEM,
+			ID:              base + "#main-key",
+			Owner:           base,
+			PublicKeyPem:    actor.PublicKeyPEM,
+			PublicKeyMultibase: actor.PublicKeyMultibase,
 		},
 	}
 	if org.ImageURL != "" {

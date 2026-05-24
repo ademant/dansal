@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS actors (
     private_key_pem TEXT NOT NULL,
     public_key_ed25519_pem TEXT,
     private_key_ed25519_pem TEXT,
+    public_key_multibase TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS followers (
@@ -94,14 +95,15 @@ type ActorRecord struct {
 	PrivateKeyPEM        string
 	PublicKeyEd25519PEM  string
 	PrivateKeyEd25519PEM string
+	PublicKeyMultibase   string
 }
 
 func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 	var a ActorRecord
 	err := db.QueryRow(
-		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem FROM actors WHERE org_slug = ?",
+		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase FROM actors WHERE org_slug = ?",
 		slug,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase)
 	if err != nil {
 		return nil, err
 	}
@@ -111,9 +113,9 @@ func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
 	var a ActorRecord
 	err := db.QueryRow(
-		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem FROM actors WHERE org_id = ?",
+		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase FROM actors WHERE org_id = ?",
 		orgID,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase)
 	if err != nil {
 		return nil, err
 	}
@@ -140,14 +142,14 @@ func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 	}
 
 	// Generate Ed25519 key pair
-	pubEd25519, privEd25519, err := generateEd25519KeyPair()
+	pubEd25519, privEd25519, multibaseKey, err := generateEd25519KeyPairWithMultibase()
 	if err != nil {
 		return nil, err
 	}
 
 	_, err = db.Exec(
-		"INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem) VALUES (?, ?, ?, ?, ?, ?)",
-		orgID, orgSlug, pub, priv, pubEd25519, privEd25519,
+		"INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		orgID, orgSlug, pub, priv, pubEd25519, privEd25519, multibaseKey,
 	)
 	if err != nil {
 		return nil, err

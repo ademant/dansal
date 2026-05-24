@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/multiformats/go-multibase"
 )
 
 type pubKeyEntry struct {
@@ -117,6 +119,47 @@ func generateEd25519KeyPair() (publicPEM, privatePEM string, err error) {
 	}))
 
 	return publicPEM, privatePEM, nil
+}
+
+// generateEd25519KeyPairWithMultibase generates an Ed25519 key pair and returns PEM-encoded strings plus multibase-encoded public key
+func generateEd25519KeyPairWithMultibase() (publicPEM, privatePEM, multibaseKey string, err error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to generate Ed25519 key pair: %w", err)
+	}
+
+	// Encode private key as PEM
+	privDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to marshal Ed25519 private key: %w", err)
+	}
+	privatePEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "ED25519 PRIVATE KEY",
+		Bytes: privDER,
+	}))
+
+	// Encode public key as PEM
+	pubDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to marshal Ed25519 public key: %w", err)
+	}
+	publicPEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubDER,
+	}))
+
+	// Encode public key in multibase format (base58btc)
+	// Extract raw Ed25519 public key bytes
+	var rawPublicKey [ed25519.PublicKeySize]byte
+	copy(rawPublicKey[:], publicKey)
+	
+	// Encode in multibase with base58btc encoding
+	multibaseKey, err = multibase.Encode(multibase.Base58BTC, rawPublicKey[:])
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to encode public key in multibase: %w", err)
+	}
+
+	return publicPEM, privatePEM, multibaseKey, nil
 }
 
 func parsePrivateKey(pemStr string) (*rsa.PrivateKey, error) {

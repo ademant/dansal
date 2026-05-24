@@ -20,9 +20,10 @@ var APContext = []any{
 }
 
 type PublicKey struct {
-	ID           string `json:"id"`
-	Owner        string `json:"owner"`
-	PublicKeyPem string `json:"publicKeyPem"`
+	ID              string `json:"id"`
+	Owner           string `json:"owner"`
+	PublicKeyPem    string `json:"publicKeyPem"`
+	PublicKeyMultibase string `json:"publicKeyMultibase,omitempty"`
 }
 
 type APEndpoints struct {

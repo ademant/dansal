@@ -85,25 +85,35 @@ CREATE TABLE IF NOT EXISTS event_templates (
 	// Idempotent column additions for schema evolution
 	
 	// Add Ed25519 key columns (required for WebFinger implementation)
-	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_ed25519_pem TEXT")
-	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS private_key_ed25519_pem TEXT")
-	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_multibase TEXT")
+	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_ed25519_pem TEXT"); err != nil {
+		log.Printf("Warning: could not add public_key_ed25519_pem column: %v", err)
+	}
+	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS private_key_ed25519_pem TEXT"); err != nil {
+		log.Printf("Warning: could not add private_key_ed25519_pem column: %v", err)
+	}
+	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_multibase TEXT"); err != nil {
+		log.Printf("Warning: could not add public_key_multibase column: %v", err)
+	}
 	
 	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
 	
 	// Create schema_migrations table for tracking
-	db.Exec(`
+	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			migration_name TEXT UNIQUE NOT NULL,
 			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)
-	`)
+	`); err != nil {
+		log.Printf("Warning: could not create schema_migrations table: %v", err)
+	}
 	
 	// Mark the ed25519 migration as applied
-	db.Exec("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('001_add_ed25519_keys')")
+	if _, err := db.Exec("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('001_add_ed25519_keys')"); err != nil {
+		log.Printf("Warning: could not record ed25519 migration: %v", err)
+	}
 	
 	return db
 }

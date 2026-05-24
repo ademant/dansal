@@ -16,9 +16,25 @@
   <div class="evt-draft-banner">
     <span>{{$.Strings.T "evt_draft_notice"}}</span>
     {{if $.User}}
-    <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
-      <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
-    </form>
+      {{if eq $.User.Role "admin"}}
+      <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
+        <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
+      </form>
+      {{else if and $.Data.UserOrgs .OrganizationID}}
+      <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
+        <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
+      </form>
+      {{else if $.Data.UserOrgs}}
+      <form method="post" action="/events/{{.ID}}/assign-org" class="evt-assign-form">
+        <select name="org_id" required class="evt-assign-select">
+          <option value="">{{$.Strings.T "evt_assign_org_label"}}</option>
+          {{range $.Data.UserOrgs}}
+          <option value="{{.ID}}">{{.Name}}</option>
+          {{end}}
+        </select>
+        <button type="submit" class="btn-pub-event">{{$.Strings.T "evt_assign_org_btn"}}</button>
+      </form>
+      {{end}}
     {{end}}
   </div>
   {{end}}
@@ -391,6 +407,8 @@
 .evt-draft-banner{display:flex;align-items:center;gap:1rem;margin:.5rem 0 .75rem;padding:.6rem 1rem;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;font-size:.9rem;font-weight:600}
 .btn-pub-event{padding:.3rem .8rem;background:#217a3c;color:#fff;border:none;border-radius:4px;font-size:.85rem;cursor:pointer;font-weight:600}
 .btn-pub-event:hover{background:#155727}
+.evt-assign-form{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.evt-assign-select{padding:.25rem .5rem;border:1px solid #ffc107;border-radius:4px;font-size:.85rem;background:#fff;color:#333}
 .evt-hero{margin:0 -1rem 0;background:#111;max-height:420px;overflow:hidden}
 .evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
 .evt-header{padding:1.25rem 0 .75rem}

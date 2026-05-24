@@ -80,7 +80,6 @@
     <td style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
-      {{if not .IsPublished}}<button type="button" class="btn-sm btn-pub" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_publish"}}'))pubEvent({{.ID}})">{{$.Strings.T "admin_event_publish"}}</button>{{end}}
       <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
   </tr>

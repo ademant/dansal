@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -105,6 +106,7 @@ type EventData struct {
 	BoardError          string
 	BookingOK        bool
 	BookingError     string
+	UserOrgs         []Organization
 }
 
 type OrgData struct {
@@ -783,11 +785,12 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		var (
-			org     *Organization
-			slug    string
-			posts   []ContactPost
-			members []OrgMember
-			tagMap  map[string]Tag
+			org      *Organization
+			slug     string
+			posts    []ContactPost
+			members  []OrgMember
+			tagMap   map[string]Tag
+			userOrgs []Organization
 		)
 
 		su := getSessionUser(r)
@@ -820,6 +823,24 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				ms, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
 				if err == nil {
 					members = ms
+				}
+			}()
+		}
+		// For non-admin users viewing an unpublished event: fetch their orgs for assign/publish flow.
+		if su != nil && su.Role != "admin" && !event.IsPublished {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				allOrgs, _ := client.GetOrganizations(r.Context())
+				orgIDs := getUserOrgIDsFromOrgs(r.Context(), client, su.ID, token, allOrgs)
+				idSet := make(map[int]bool, len(orgIDs))
+				for _, oid := range orgIDs {
+					idSet[oid] = true
+				}
+				for _, o := range allOrgs {
+					if idSet[o.ID] {
+						userOrgs = append(userOrgs, o)
+					}
 				}
 			}()
 		}
@@ -857,7 +878,56 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BoardError:         boardError,
 			BookingOK:          bookingOK,
 			BookingError:       bookingError,
+			UserOrgs:           userOrgs,
 		}))
+	}
+}
+
+// getUserOrgIDsFromOrgs returns org IDs the given user belongs to, given an already-fetched org list.
+func getUserOrgIDsFromOrgs(ctx context.Context, client *DansalClient, userID int, token string, allOrgs []Organization) []int {
+	var ids []int
+	for _, o := range allOrgs {
+		members, err := client.GetOrganizationMembers(ctx, o.ID, token)
+		if err != nil {
+			continue
+		}
+		for _, m := range members {
+			if m.UserID == userID {
+				ids = append(ids, o.ID)
+				break
+			}
+		}
+	}
+	return ids
+}
+
+func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su := getSessionUser(r)
+		if su == nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		orgID, err := strconv.Atoi(r.FormValue("org_id"))
+		if err != nil || orgID == 0 {
+			http.Error(w, "invalid org_id", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.AssignEventOrg(r.Context(), id, orgID, token); err != nil {
+			http.Error(w, "assign failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/events/%d", id), http.StatusSeeOther)
 	}
 }
 

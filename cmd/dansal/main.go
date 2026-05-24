@@ -1510,6 +1510,7 @@ func main() {
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))
+	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))

@@ -1173,18 +1173,19 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	id := r.PathValue("id")
 
-	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ? AND (e.suggestion_token IS NULL OR e.suggestion_token = '')", id))
+	// Unauthenticated callers only see published non-suggestion events.
+	var query string
+	if userRole != "" {
+		query = eventListSelect + " WHERE e.id = ?"
+	} else {
+		query = eventListSelect + " WHERE e.id = ? AND e.is_published = 1 AND (e.suggestion_token IS NULL OR e.suggestion_token = '')"
+	}
+	event, err := scanEventRow(db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Unauthenticated callers may only view published events.
-	if userRole == "" && !event.IsPublished {
-		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
 
@@ -1353,21 +1354,79 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(event)
 }
 
-// POST /api/v1/events/{id}/publish — set is_published=1 (admin/publisher only).
+// POST /api/v1/events/{id}/publish — set is_published=1.
+// Admin/publisher: can publish any event. Regular user: only events assigned to their org.
 func publishEvent(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RolePublisher {
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	id := r.PathValue("id")
+
+	if userRole == RoleAdmin || userRole == RolePublisher {
+		result, err := db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
+		if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if n, _ := result.RowsAffected(); n == 0 {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if userRole == RoleUser {
+		var orgID sql.NullInt64
+		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=? AND is_published=0", id).Scan(&orgID); err == sql.ErrNoRows {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	writeError(w, "Forbidden", http.StatusForbidden)
+}
+
+// POST /api/v1/events/{id}/assign-org — assign an organisation to an unpublished event.
+// Admin/publisher: any org. Regular user: only orgs they are a member of.
+func assignEventOrg(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	if userRole != RoleAdmin && userRole != RolePublisher && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+
 	id := r.PathValue("id")
-	result, err := db.Exec("UPDATE events SET is_published=1 WHERE id=? AND (suggestion_token IS NULL OR suggestion_token='')", id)
+	var req struct {
+		OrgID int `json:"org_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrgID == 0 {
+		writeError(w, "org_id required", http.StatusBadRequest)
+		return
+	}
+
+	if userRole == RoleUser && !isOrgMember(callerID, req.OrgID) {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	result, err := db.Exec("UPDATE events SET organization_id=? WHERE id=? AND is_published=0", req.OrgID, id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found or already published", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

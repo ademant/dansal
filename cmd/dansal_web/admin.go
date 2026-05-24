@@ -2504,7 +2504,8 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		var bundle RefBundle
 		var wg sync.WaitGroup
 		wg.Add(2)
-		go func() { defer wg.Done(); event, eventErr = client.GetEvent(r.Context(), id) }()
+		tok := getSessionToken(r)
+		go func() { defer wg.Done(); event, eventErr = client.GetEventAuthed(r.Context(), id, tok) }()
 		go func() { defer wg.Done(); bundle = client.FetchRefBundle(r.Context()) }()
 		wg.Wait()
 		if eventErr != nil {
@@ -2557,8 +2558,9 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
+		saveTok := getSessionToken(r)
 		renderErr := func(errKey string) {
-			event, _ := client.GetEvent(r.Context(), id)
+			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
 			title := i18n.T(r, "admin_event_edit_title")
 			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 				Event:              event,

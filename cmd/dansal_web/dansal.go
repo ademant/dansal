@@ -429,6 +429,19 @@ func (c *DansalClient) PublishEvent(ctx context.Context, id int, token string) e
 	return nil
 }
 
+func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token string) error {
+	body, _ := json.Marshal(map[string]int{"org_id": orgID})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/assign-org", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
 	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
 		var orgs []Organization

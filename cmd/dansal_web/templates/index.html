@@ -31,6 +31,7 @@
 <div class="map-toolbar">
   <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
   <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
+  <span id="map-some-missing-coords" hidden></span>
   <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
 </div>
 
@@ -173,6 +174,7 @@
 .map-toolbar button{padding:.3rem .9rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem}
 .map-toolbar button:hover{background:var(--link);color:#fff}
 #map-no-coords{color:var(--fg-faint);font-size:.85rem}
+#map-some-missing-coords{color:var(--fg-warn);font-size:.85rem;margin-left:.5rem}
 .filters{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem}
 .filter-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .filter-row input,.filter-row select{padding:.35rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
@@ -509,7 +511,6 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   // ── Map ───────────────────────────────────────────────────────────────────
   var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);
   var map = null, clusterGroup = null, allMarkers = {};
-  var mapFitted = false;
 
   var diffLabels = {
     "beginner": "{{$.Strings.T "workshop_difficulty_beginner"}}",
@@ -641,21 +642,55 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     var layers=[];
     var weekDates=Object.keys(weekSet).sort();
     var weekStart=weekDates[0], weekEnd=weekDates[weekDates.length-1];
+    
+    // Count visible events that should be on map
+    var visibleEventIds = {};
+    visible.forEach(function(r){ 
+      var eId = parseInt(r.dataset.id);
+      var eStart = r.dataset.date;
+      var eEnd = r.dataset.endDate || eStart;
+      if(eStart<=weekEnd && eEnd>=weekStart) {
+        visibleEventIds[eId] = true;
+      }
+    });
+    
     eventsGeo.forEach(function(e){
       if(!allMarkers[e.id] || !visIds[e.id]) return;
       var eStart=(e.s||'').slice(0,10);
       var eEnd=e.e||eStart;
       if(eStart<=weekEnd && eEnd>=weekStart) layers.push(allMarkers[e.id]);
     });
+    
     var noCoords = document.getElementById('map-no-coords');
+    var someMissingCoords = document.getElementById('map-some-missing-coords');
+    
+    // Count how many visible events have coordinates
+    var eventsWithCoords = 0;
+    eventsGeo.forEach(function(e){
+      if(visibleEventIds[e.id]) {
+        eventsWithCoords++;
+      }
+    });
+    
+    var visibleEventCount = Object.keys(visibleEventIds).length;
+    
     if(layers.length===0){
       noCoords.hidden=false;
+      if(someMissingCoords) someMissingCoords.hidden = true;
     } else {
       noCoords.hidden=true;
       layers.forEach(function(m){ clusterGroup.addLayer(m); });
-      if(!mapFitted){
-        try{ map.fitBounds(clusterGroup.getBounds(),{padding:[30,30],maxZoom:9}); }catch(_){}
-        mapFitted=true;
+      
+      // Always fit map bounds when weekly calendar changes to show all events for the current week
+      try{ map.fitBounds(clusterGroup.getBounds(),{padding:[30,30],maxZoom:9}); }catch(_){}
+      
+      // Show warning if some events in weekly view don't have coordinates
+      if(someMissingCoords && visibleEventCount > eventsWithCoords) {
+        someMissingCoords.hidden = false;
+        someMissingCoords.textContent = (visibleEventCount - eventsWithCoords) + ' ' + 
+          (visibleEventCount - eventsWithCoords === 1 ? '{{$.Strings.T "map_one_event_no_coords"}}' : '{{$.Strings.T "map_multiple_events_no_coords"}}');
+      } else if(someMissingCoords) {
+        someMissingCoords.hidden = true;
       }
     }
   }
@@ -666,7 +701,6 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       var t=this.dataset.type;
       typeFilter[t]=!typeFilter[t];
       this.classList.toggle('type-active',typeFilter[t]);
-      mapFitted=false;
       applyFilters();
     });
   });
@@ -677,7 +711,6 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     document.getElementById('f-fee').value   = '';
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
-    mapFitted=false;
     applyFilters();
   }
 

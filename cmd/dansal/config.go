@@ -42,6 +42,13 @@ type ServerConfig struct {
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
 	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
+	
+	// Passwordless Authentication Enhancement (#258)
+	SessionPersistenceDays int      `yaml:"session_persistence_days"`
+	RefreshTokenExpirationDays int `yaml:"refresh_token_expiration_days"`
+	MaxDevicesPerUser int           `yaml:"max_devices_per_user"`
+	GuestModeEnabled bool           `yaml:"guest_mode_enabled"`
+	MobileDeepLinkBaseURL string    `yaml:"mobile_deep_link_base_url"`
 }
 
 type SMTPConfig struct {
@@ -146,6 +153,20 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.ReservedUsernames = []string{
 			"admin", "administrator", "root", "superuser", "sysadmin", "system", "su",
 		}
+	}
+	
+	// Passwordless Authentication Enhancement (#258) defaults
+	if cfg.Server.SessionPersistenceDays == 0 {
+		cfg.Server.SessionPersistenceDays = 30
+	}
+	if cfg.Server.RefreshTokenExpirationDays == 0 {
+		cfg.Server.RefreshTokenExpirationDays = 90
+	}
+	if cfg.Server.MaxDevicesPerUser == 0 {
+		cfg.Server.MaxDevicesPerUser = 5
+	}
+	if cfg.Server.MobileDeepLinkBaseURL == "" {
+		cfg.Server.MobileDeepLinkBaseURL = cfg.Server.BaseURL
 	}
 }
 

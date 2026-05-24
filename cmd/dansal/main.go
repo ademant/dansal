@@ -1095,6 +1095,10 @@ func createTables() error {
 		ip TEXT,
 		fingerprint TEXT,
 		last_seen_at INTEGER,
+		is_persistent INTEGER DEFAULT 0,
+		refresh_token TEXT,
+		refresh_expires_at INTEGER,
+		device_name TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -1523,6 +1527,8 @@ func main() {
 	smux.HandleFunc("DELETE /api/v1/login", logout)
 	smux.HandleFunc("POST /api/v1/login/magic", requestMagicLogin)
 	smux.HandleFunc("GET /api/v1/login/magic/{token}", useMagicLogin)
+	smux.HandleFunc("POST /api/v1/login/refresh", refreshToken) // #258: Token refresh endpoint
+	smux.HandleFunc("POST /api/v1/login/guest", guestLogin)     // #258: Guest login endpoint
 
 	// Verification endpoints (public)
 	smux.HandleFunc("GET /api/v1/verify/{token}", consumeVerification)

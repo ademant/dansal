@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 
 )
 
@@ -125,10 +126,34 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	magicURL := base + "/api/v1/login/magic/" + token
 
+	// Enhanced message with deep link support (#258)
+	deepLinkURL := magicURL
+	if config.Server.MobileDeepLinkBaseURL != "" {
+		deepLinkURL = config.Server.MobileDeepLinkBaseURL + "/auth/magic?token=" + token
+	}
+
 	msgText := fmt.Sprintf(
-		"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
-		user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
+		"Hello %s,\n\nclick the link below to log in without a password:\n\n🔗 %s\n\n",
+		user.Username, magicURL,
 	)
+	
+	if deepLinkURL != magicURL {
+		msgText += fmt.Sprintf("📱 Mobile users: %s\n\n", deepLinkURL)
+	}
+	
+	msgText += fmt.Sprintf("This link expires in %d minutes and can only be used once.",
+		config.Server.MagicLoginExpirySecs/60,
+	)
+	
+	// Add prominent call-to-action for different channels
+	switch req.Channel {
+	case "telegram":
+		msgText = "🔐 *Login Link*\n\n" + msgText + "\n👆 *Tap to login instantly*"
+	case "matrix":
+		msgText = "🔐 Login Link\n\n" + msgText + "\n👆 Click to login instantly"
+	default: // email
+		msgText = "<h2>Your Login Link</h2>\n<p>" + strings.ReplaceAll(msgText, "\n", "<br/>") + "</p>\n<p><strong>👆 Click the link above to login</strong></p>"
+	}
 
 	switch req.Channel {
 	case "telegram":
@@ -156,6 +181,18 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Username, req.Channel)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// getDeviceType extracts device type from user agent
+func getDeviceType(userAgent string) string {
+	if strings.Contains(userAgent, "iPhone") || strings.Contains(userAgent, "iPad") {
+		return "iOS"
+	} else if strings.Contains(userAgent, "Android") {
+		return "Android"
+	} else if strings.Contains(userAgent, "Mobile") {
+		return "Mobile"
+	}
+	return "Unknown"
 }
 
 // buildMagicBase returns the base URL (scheme + host) for magic link construction.
@@ -214,17 +251,35 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := getClientIP(r)
-	sessionToken, sessionExpiry, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, "")
+	
+	// Check if this is a mobile deep link request
+	isMobile := strings.Contains(r.UserAgent(), "Mobile") || 
+	           strings.Contains(r.UserAgent(), "Android") || 
+	           strings.Contains(r.UserAgent(), "iPhone") ||
+	           strings.Contains(r.UserAgent(), "iPad")
+	
+	// For mobile devices, make sessions persistent by default
+	persistentSession := isMobile
+	deviceName := "Mobile Device"
+	if isMobile {
+		deviceName = fmt.Sprintf("Mobile Device (%s)", getDeviceType(r.UserAgent()))
+	}
+	
+	sessionToken, refreshToken, sessionExpiry, _, err := createTokenInDB(
+		user.ID, r.UserAgent(), clientIP, "", persistentSession, deviceName,
+	)
 	if err != nil {
 		log.Printf("magic: failed to create session for user %d: %v", user.ID, err)
 		writeError(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("magic: user %d (%s) logged in via magic link from %s", user.ID, user.Username, clientIP)
+	log.Printf("magic: user %d (%s) logged in via magic link from %s (persistent: %t)", user.ID, user.Username, clientIP, persistentSession)
 	json.NewEncoder(w).Encode(LoginResponse{
-		Token:     sessionToken,
-		ExpiresAt: sessionExpiry.Format(time.RFC3339),
-		User:      user,
+		Token:        sessionToken,
+		ExpiresAt:    sessionExpiry.Format(time.RFC3339),
+		RefreshToken: refreshToken,
+		Persistent:   persistentSession,
+		User:         user,
 	})
 }

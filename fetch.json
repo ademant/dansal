@@ -1,0 +1,93 @@
+[
+  {
+    "id": 1,
+    "url": "https://www.folkclub-marburg.de/wp/wp-content/plugins/bal-folk-eventlist/ical/Bal-Folk-Marburg-Calendar.ics",
+    "type": "ical",
+    "tags": [
+      "balfolk"
+    ],
+    "organization_id": 1,
+    "last_fetched_at": "2026-05-18 09:21:50",
+    "created_at": "2026-05-18T09:09:10Z"
+  },
+  {
+    "id": 2,
+    "url": "https://7schritt.de/kalender/liste/?ical=1",
+    "type": "ical",
+    "tags": [
+      "balfolk"
+    ],
+    "last_fetched_at": "2026-05-18 09:21:48",
+    "created_at": "2026-05-18T09:15:16Z"
+  },
+  {
+    "id": 4,
+    "url": "https://folkstanz.in-berlin.de/pda/",
+    "type": "ical",
+    "tags": [
+      "balfolk"
+    ],
+    "last_fetched_at": "2026-05-18 15:02:05",
+    "created_at": "2026-05-18T09:21:19Z"
+  },
+  {
+    "id": 5,
+    "url": "https://www.balfolk-koeln.de/veranstaltungen/tags/balfolk/ical/",
+    "type": "ical",
+    "tags": [
+      "balfolk"
+    ],
+    "last_fetched_at": "2026-05-18 09:23:10",
+    "created_at": "2026-05-18T09:23:10Z"
+  },
+  {
+    "id": 6,
+    "url": "https://www.balfolk-koeln.de/veranstaltungen/kategorie/lernabend/ical/",
+    "type": "ical",
+    "tags": [
+      "workshop"
+    ],
+    "last_fetched_at": "2026-05-18 09:23:48",
+    "created_at": "2026-05-18T09:23:48Z"
+  },
+  {
+    "id": 7,
+    "url": "https://calendar.google.com/calendar/ical/kgtusmbghnbrkobbpv1hus8l80%40group.calendar.google.com/public/basic.ics",
+    "type": "ical",
+    "tags": [
+      "workshop"
+    ],
+    "last_fetched_at": "2026-05-18 15:02:12",
+    "created_at": "2026-05-18T09:27:37Z"
+  },
+  {
+    "id": 8,
+    "url": "https://spreefolk.de/?mec-ical-feed=1",
+    "type": "ical",
+    "tags": [
+      "workshop"
+    ],
+    "last_fetched_at": "2026-05-18 15:02:17",
+    "created_at": "2026-05-18T09:29:24Z"
+  },
+  {
+    "id": 9,
+    "url": "https://wuefolk.de/wps/events/?ical=1\u0026custom=1\u0026category=Tanz,bal-folk",
+    "type": "ical",
+    "tags": [
+      "workshop"
+    ],
+    "last_fetched_at": "2026-05-18 15:02:36",
+    "created_at": "2026-05-18T09:31:47Z"
+  },
+  {
+    "id": 10,
+    "url": "https://balfolk.jetzt/feed/ics/collection/Festivals",
+    "type": "ical",
+    "tags": [
+      "festival"
+    ],
+    "last_fetched_at": "2026-05-18 09:38:34",
+    "created_at": "2026-05-18T09:38:34Z"
+  }
+]

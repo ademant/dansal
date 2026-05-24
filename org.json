@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "name": "Folkclub Marburg",
+    "actor_name": "folkclubmarburg",
+    "website": "https://www.folkclub-marburg.de/wp/balfolk",
+    "created_at": "2026-05-18T09:03:35Z"
+  },
+  {
+    "id": 2,
+    "name": "7 Schritt",
+    "actor_name": "7schritt",
+    "website": "https://7schritt.de",
+    "created_at": "2026-05-18T09:14:42Z"
+  },
+  {
+    "id": 3,
+    "name": "Folkstanz in Berlin",
+    "actor_name": "folkstanzinberlin",
+    "website": "https://folkstanz.in-berlin.de",
+    "created_at": "2026-05-18T09:20:19Z"
+  },
+  {
+    "id": 4,
+    "name": "Balfolk Köln",
+    "actor_name": "balfolkkoeln",
+    "website": "https://balfolk.koeln",
+    "created_at": "2026-05-18T09:22:39Z"
+  },
+  {
+    "id": 5,
+    "name": "FolkClub Frankfurt",
+    "actor_name": "folkclubfrankfurt",
+    "website": "https://www.folkclubfrankfurt.de/",
+    "created_at": "2026-05-18T09:27:09Z"
+  },
+  {
+    "id": 6,
+    "name": "Spreefolk",
+    "actor_name": "spreefolk",
+    "website": "https://spreefolk.de",
+    "created_at": "2026-05-18T09:28:55Z"
+  },
+  {
+    "id": 7,
+    "name": "Folkclub Würzburg",
+    "actor_name": "wuefolk",
+    "website": "https://wuefolk.de/wps/",
+    "created_at": "2026-05-18T09:31:17Z"
+  },
+  {
+    "id": 8,
+    "name": "Balfolk Bonn",
+    "created_at": "2026-05-18T10:09:11Z"
+  }
+]

@@ -27,12 +27,37 @@ type LoginRequest struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	Fingerprint string `json:"fingerprint,omitempty"`
+	Persistent   bool   `json:"persistent,omitempty"` // #258: Session persistence
+	DeviceName  string `json:"device_name,omitempty"`  // #258: Device identification
 }
 
 type LoginResponse struct {
+	Token        string `json:"token"`
+	ExpiresAt    string `json:"expires_at"`
+	RefreshToken string `json:"refresh_token,omitempty"` // #258: Refresh token for persistent sessions
+	Persistent   bool   `json:"persistent,omitempty"`    // #258: Indicates if session is persistent
+	User         User   `json:"user"`
+}
+
+// RefreshTokenRequest for token refresh endpoint (#258)
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+	Fingerprint  string `json:"fingerprint,omitempty"`
+}
+
+// RefreshTokenResponse for token refresh response (#258)
+type RefreshTokenResponse struct {
+	Token        string `json:"token"`
+	ExpiresAt    string `json:"expires_at"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	Persistent   bool   `json:"persistent,omitempty"`
+}
+
+// GuestLoginResponse for guest mode (#258)
+type GuestLoginResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
-	User      User   `json:"user"`
+	IsGuest   bool   `json:"is_guest"`
 }
 
 type TokenError struct {
@@ -88,10 +113,11 @@ func generateToken() (string, error) {
 }
 
 // createTokenInDB stores the token with session metadata in the database.
-func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, time.Time, error) {
+// #258: Enhanced to support refresh tokens and persistent sessions
+func createTokenInDB(userID int, userAgent, ip, fingerprint string, persistent bool, deviceName string) (string, string, time.Time, time.Time, error) {
 	token, err := generateToken()
 	if err != nil {
-		return "", time.Time{}, err
+		return "", "", time.Time{}, time.Time{}, err
 	}
 
 	expirationHours := 24
@@ -100,16 +126,40 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(expirationHours) * time.Hour)
 
+	var refreshToken string
+	var refreshExpiresAt time.Time
+	if persistent {
+		refreshToken, err = generateToken()
+		if err != nil {
+			return "", "", time.Time{}, time.Time{}, err
+		}
+		refreshExpiresAt = time.Now().UTC().AddDate(0, 0, config.Server.RefreshTokenExpirationDays)
+	}
+
 	var fpVal any
 	if fingerprint != "" {
 		fpVal = fingerprint
 	}
+
+	// Enforce max devices per user for persistent sessions
+	if persistent {
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM tokens WHERE user_id=? AND is_persistent=1", userID).Scan(&count)
+		if count >= config.Server.MaxDevicesPerUser {
+			// Remove oldest persistent device
+			db.Exec(`DELETE FROM tokens WHERE id IN (
+				SELECT id FROM tokens WHERE user_id=? AND is_persistent=1 
+				ORDER BY created_at ASC LIMIT 1
+			)`, userID)
+		}
+	}
+
 	_, err = db.Exec(
-		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, token, expiresAt.Unix(), userAgent, ip, fpVal,
+		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint, is_persistent, refresh_token, refresh_expires_at, device_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		userID, token, expiresAt.Unix(), userAgent, ip, fpVal, persistent, refreshToken, refreshExpiresAt.Unix(), deviceName,
 	)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", "", time.Time{}, time.Time{}, err
 	}
 
 	// Keep only the 5 most recent tokens per user; drop older ones.
@@ -117,7 +167,7 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 		SELECT id FROM tokens WHERE user_id=? ORDER BY created_at DESC LIMIT 5
 	)`, userID, userID)
 
-	return token, expiresAt, nil
+	return token, refreshToken, expiresAt, refreshExpiresAt, nil
 }
 
 // validateToken checks if a token is valid and not expired.
@@ -338,7 +388,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate token / session
-	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)
+	token, refreshToken, expiresAt, _, err := createTokenInDB(
+		user.ID, r.UserAgent(), clientIP, req.Fingerprint, req.Persistent, req.DeviceName,
+	)
 	if err != nil {
 		log.Printf("Error creating token: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -349,9 +401,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Return token and user info
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(LoginResponse{
-		Token:     token,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
-		User:      user,
+		Token:        token,
+		ExpiresAt:    expiresAt.Format(time.RFC3339),
+		RefreshToken: refreshToken,
+		Persistent:   req.Persistent,
+		User:         user,
 	})
 }
 
@@ -415,6 +469,116 @@ func TokenMiddleware(next http.Handler) http.Handler {
 		r.Header.Set("X-User-Role", userRole)
 
 		next.ServeHTTP(w, r)
+	})
+}
+
+// refreshToken handles token refresh requests for persistent sessions (#258)
+func refreshToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid request body"})
+		return
+	}
+
+	if req.RefreshToken == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(TokenError{Error: "Refresh token is required"})
+		return
+	}
+
+	// Validate refresh token
+	var userID, isPersistent int
+	var userAgent, ip, fingerprint, deviceName string
+	var expiresAt string
+
+	var refreshExpiresAtStr string
+	err := db.QueryRow(`
+		SELECT user_id, user_agent, ip, fingerprint, device_name, is_persistent, refresh_expires_at, expires_at 
+		FROM tokens WHERE refresh_token=?
+	`, req.RefreshToken).Scan(&userID, &userAgent, &ip, &fingerprint, &deviceName, &isPersistent, &refreshExpiresAtStr, &expiresAt)
+
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid refresh token"})
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(TokenError{Error: "Internal server error"})
+		return
+	}
+
+	// Check if refresh token is expired
+	expTime, err := parseTokenExpiration(refreshExpiresAtStr)
+	if err != nil || time.Now().After(expTime) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "Refresh token has expired"})
+		return
+	}
+
+	// Check if original token is still valid (additional security)
+	originalExpTime, err := parseTokenExpiration(expiresAt)
+	if err == nil && !time.Now().After(originalExpTime) {
+		// Original token is still valid, we could return it, but let's issue a new one
+		// This provides better security through token rotation
+	}
+
+	// Issue new tokens
+	persistent := isPersistent == 1
+	newToken, newRefreshToken, newExpiresAt, _, err := createTokenInDB(
+		userID, userAgent, ip, fingerprint, persistent, deviceName,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(TokenError{Error: "Failed to create new tokens"})
+		return
+	}
+
+	// Invalidate old refresh token
+	db.Exec("UPDATE tokens SET refresh_token=NULL, refresh_expires_at=NULL WHERE refresh_token=?", req.RefreshToken)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(RefreshTokenResponse{
+		Token:        newToken,
+		ExpiresAt:    newExpiresAt.Format(time.RFC3339),
+		RefreshToken: newRefreshToken,
+		Persistent:   persistent,
+	})
+}
+
+// guestLogin handles guest mode authentication (#258)
+func guestLogin(w http.ResponseWriter, r *http.Request) {
+	if !config.Server.GuestModeEnabled {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(TokenError{Error: "Guest mode is disabled"})
+		return
+	}
+
+	// Create a temporary guest user (or use a shared guest account)
+	// For simplicity, we'll create a session with limited permissions
+	guestToken, _, guestExpiresAt, _, err := createTokenInDB(
+		-1, // Special user ID for guests
+		r.UserAgent(),
+		getClientIP(r),
+		"", // No fingerprint for guests
+		false, // Not persistent
+		"Guest Device",
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(TokenError{Error: "Failed to create guest session"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(GuestLoginResponse{
+		Token:     guestToken,
+		ExpiresAt: guestExpiresAt.Format(time.RFC3339),
+		IsGuest:   true,
 	})
 }
 

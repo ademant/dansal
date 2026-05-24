@@ -169,6 +169,10 @@ func main() {
 		cmdVacuum()
 	case "backup":
 		cmdBackup(rest)
+	case "enhanced-backup":
+		cmdEnhancedBackup(rest)
+	case "enhanced-restore":
+		cmdEnhancedRestore(rest)
 	case "incremental-backup":
 		cmdIncrementalBackup(rest)
 	case "restore":
@@ -242,6 +246,11 @@ SMTP:
   smtp-set-password [--password P]                   Set (obscured) SMTP account password
   smtp-test    --to EMAIL                            Send a test email
   backup             [--output PATH]                 Full backup (config + db + images)
+  enhanced-backup    [--output P] [--include-web]     Enhanced backup with dansal-web support
+                   [--web-db P] [--config P] [--images P]
+                   [--encrypt] [--password P] [--secure]
+  enhanced-restore   --input PATH [--output DIR]     Restore enhanced backup
+                   [--password P]
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
   restore            --input PATH                    Restore from a backup archive
   password-backup    [--output PATH] [--password P]  Encrypted backup (AES-256-GCM)
@@ -466,6 +475,70 @@ Remove a user from an organization.
 Flags:
   --org-id    Organization ID (required)
   --username  Username to remove (required)`,
+
+	"enhanced-backup": `Usage: dansal_admin enhanced-backup [options]
+
+Create an enhanced backup including both dansal and dansal-web components.
+Supports encryption and secure mode (credentials removed).
+
+Normal mode:
+  - Includes config.yaml, calendar.db, images/
+  - Optionally includes web.db when --include-web is specified
+  - Password hashes and API keys are preserved
+
+Secure mode (--secure):
+  - Removes all credentials from databases before backup
+  - Password hashes set to empty strings
+  - API keys removed
+  - Safe for sharing or cloud storage
+
+Encrypted mode (--encrypt):
+  - Encrypts the entire backup with AES-256-GCM
+  - Uses Argon2 for key derivation (memory-hard)
+  - Password can be provided via flag or prompted
+
+Flags:
+  --output        Destination file path
+  --include-web   Include dansal-web database (web.db)
+  --web-db        Path to dansal-web database (default: /var/lib/dansal-web/web.db)
+  --config        Path to config.yaml (default: /etc/dansal/config.yaml)
+  --images        Path to images directory (default: from config)
+  --encrypt       Encrypt the backup
+  --password      Encryption password (prompted if omitted)
+  --secure        Remove credentials from backup (secure mode)
+
+Examples:
+  # Normal backup with dansal-web
+  dansal_admin enhanced-backup --include-web
+
+  # Secure backup (no credentials)
+  dansal_admin enhanced-backup --secure --include-web
+
+  # Encrypted backup
+  dansal_admin enhanced-backup --encrypt --include-web
+
+  # Encrypted backup with custom output
+  dansal_admin enhanced-backup --encrypt --output /backups/dansal.tar.gz.enc --include-web`,
+
+	"enhanced-restore": `Usage: dansal_admin enhanced-restore --input PATH [--output DIR] [--password P]
+
+Restore from an enhanced backup archive.
+For encrypted backups, password can be provided via flag or prompted.
+
+Flags:
+  --input      Path to backup file (required)
+  --output     Destination directory (default: ./dansal-restored-<timestamp>)
+  --password   Decryption password (prompted if omitted)
+
+Examples:
+  # Restore normal backup
+  dansal_admin enhanced-restore --input backup.tar.gz
+
+  # Restore encrypted backup
+  dansal_admin enhanced-restore --input backup.tar.gz.enc
+
+  # Restore to specific directory
+  dansal_admin enhanced-restore --input backup.tar.gz --output /tmp/restore`,
 
 	"password-backup": `Usage: dansal_admin password-backup [--output PATH] [--password STR]
 

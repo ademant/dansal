@@ -32,8 +32,8 @@ require (
 	github.com/ebitengine/purego v0.8.3 // indirect
 	github.com/gen2brain/avif v0.4.4
 	github.com/tetratelabs/wazero v1.9.0 // indirect
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/image v0.40.0
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0
 )

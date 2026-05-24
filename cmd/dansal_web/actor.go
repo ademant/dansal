@@ -176,7 +176,8 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 			}
 			for _, org := range orgs {
 				if effectiveSlug(org) == slug {
-					actor, err = ensureActor(db, org.ID, slug)
+					// Use the organization's effective slug (which respects ActorName)
+					actor, err = ensureActor(db, org.ID, effectiveSlug(org))
 					if err != nil {
 						writeJSONError(w, http.StatusInternalServerError, "actor init error")
 						return

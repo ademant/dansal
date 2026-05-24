@@ -196,6 +196,8 @@ func main() {
 
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))
 
+		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
+
 		r.HandleFunc("GET /admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/fetchurls/new", adminFetchurlNewPostHandler(cfg, tmpls, client, i18n))

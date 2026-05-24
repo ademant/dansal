@@ -3211,6 +3211,24 @@ func readLoadAvg() string {
 	return ""
 }
 
+// ── Management page ────────────────────────────────────────────────────────────
+
+func adminManagementHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		title := i18n.T(r, "nav_management")
+		data := struct {
+			RegistrationEnabled bool
+		}{
+			RegistrationEnabled: cfg.SMTPHost != "" || cfg.TelegramBotToken != "",
+		}
+		renderTemplate(w, tmpls.adminManagement, tmplData(r, cfg, i18n, title, data))
+	}
+}
+
 // ── Import events ─────────────────────────────────────────────────────────────
 
 func adminImportEventsPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {

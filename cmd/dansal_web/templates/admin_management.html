@@ -1,0 +1,77 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="admin-wrap">
+  <h1>{{.Strings.T "nav_management"}}</h1>
+
+  <div class="management-tabs">
+    <div class="tab-content" id="tab-dances">
+      <h2>{{.Strings.T "nav_admin_dances"}}</h2>
+      <p><a href="/admin/dances" class="btn-secondary">{{.Strings.T "admin_dances_title"}}</a></p>
+    </div>
+
+    <div class="tab-content" id="tab-feeds">
+      <h2>{{.Strings.T "nav_admin_fetchurls"}}</h2>
+      <p><a href="/admin/fetchurls" class="btn-secondary">{{.Strings.T "admin_fetchurls_title"}}</a></p>
+    </div>
+
+    <div class="tab-content" id="tab-templates">
+      <h2>{{.Strings.T "nav_admin_templates"}}</h2>
+      <p><a href="/admin/templates" class="btn-secondary">{{.Strings.T "admin_templates_title"}}</a></p>
+    </div>
+
+    <div class="tab-content" id="tab-users">
+      <h2>{{.Strings.T "nav_admin_users"}}</h2>
+      <p><a href="/admin/users" class="btn-secondary">{{.Strings.T "admin_users_title"}}</a></p>
+    </div>
+
+    {{if .Data.RegistrationEnabled}}
+    <div class="tab-content" id="tab-registrations">
+      <h2>{{.Strings.T "nav_admin_registrations"}}</h2>
+      <p><a href="/admin/registrations" class="btn-secondary">{{.Strings.T "admin_registrations_title"}}</a></p>
+    </div>
+    {{end}}
+
+    <div class="tab-content" id="tab-site-config">
+      <h2>Site config</h2>
+      <p><a href="/admin/site-config" class="btn-secondary">Site Configuration</a></p>
+    </div>
+  </div>
+</div>
+
+<style>
+.management-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.tab-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.tab-content h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--heading);
+}
+
+.btn-secondary {
+  display: inline-block;
+  padding: .4rem .8rem;
+  background: var(--btn-bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: .9rem;
+}
+
+.btn-secondary:hover {
+  background: var(--btn-bg-h);
+}
+</style>
+{{end}}

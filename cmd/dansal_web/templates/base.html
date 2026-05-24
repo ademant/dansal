@@ -168,13 +168,7 @@ footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;bor
     <a href="/admin/musicians">{{.Strings.T "nav_musicians"}}</a>
     <a href="/admin/organizations">{{.Strings.T "nav_orgs"}}</a>
     <a href="/admin/locations">{{.Strings.T "nav_admin_locations"}}</a>
-    <a href="/admin/dances">{{.Strings.T "nav_admin_dances"}}</a>
-    <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
-    <a href="/admin/templates">{{.Strings.T "nav_admin_templates"}}</a>
-    <a href="/admin/users">{{.Strings.T "nav_admin_users"}}</a>
-    {{if .RegistrationEnabled}}<a href="/admin/registrations">{{.Strings.T "nav_admin_registrations"}}</a>{{end}}
-    <a href="/admin/site-config">Site config</a>
-    <a href="/admin/info">System info</a>
+    <a href="/admin/management">{{.Strings.T "nav_management"}}</a>
     {{else}}
     <a href="/">{{.Strings.T "nav_events"}}</a>
     <a href="/musicians">{{.Strings.T "nav_musicians"}}</a>

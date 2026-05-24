@@ -107,6 +107,24 @@
     </div>
     {{end}}
 
+    {{/* Food & Drinks */}}
+    {{if or .Food .Drink}}
+    <div class="sidebar-block">
+      {{if .Food}}
+      <div class="sidebar-food-row">
+        <span class="sidebar-food-icon">{{if eq .Food "sold"}}🍽️{{else if eq .Food "potluck"}}🥘{{else if eq .Food "none"}}🚫{{end}}</span>
+        <span class="sidebar-food-text">{{if eq .Food "sold"}}{{$.Strings.T "food_sold"}}{{else if eq .Food "potluck"}}{{$.Strings.T "food_potluck"}}{{else if eq .Food "none"}}{{$.Strings.T "food_none"}}{{end}}</span>
+      </div>
+      {{end}}
+      {{if .Drink}}
+      <div class="sidebar-food-row">
+        <span class="sidebar-food-icon">{{if eq .Drink "alcohol"}}🍺{{else if eq .Drink "soft"}}🥤{{else if eq .Drink "none"}}💧{{end}}</span>
+        <span class="sidebar-food-text">{{if eq .Drink "alcohol"}}{{$.Strings.T "drink_alcohol"}}{{else if eq .Drink "soft"}}{{$.Strings.T "drink_soft"}}{{else if eq .Drink "none"}}{{$.Strings.T "drink_none"}}{{end}}</span>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+
     {{/* Admission */}}
     {{with .Pricing}}
     {{$cur := .Currency}}
@@ -392,6 +410,9 @@
 .sidebar-link{display:inline-block;color:var(--link);font-size:.9rem;text-decoration:none}
 .sidebar-link:hover{text-decoration:underline}
 .sidebar-meta-text{font-size:.85rem;color:var(--fg-dim)}
+.sidebar-food-row{display:flex;align-items:center;gap:.45rem;font-size:.88rem;color:var(--fg-2);margin-bottom:.3rem}
+.sidebar-food-icon{font-size:1rem;line-height:1}
+.sidebar-food-text{line-height:1.3}
 .evt-org{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.1rem 1.25rem;margin-top:.5rem}
 .evt-org h2{font-size:1rem;margin-bottom:.35rem}
 .org-links{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}

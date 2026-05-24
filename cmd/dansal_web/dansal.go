@@ -173,6 +173,8 @@ type Event struct {
 	Availability    string     `json:"availability,omitempty"`
 	TicketsTotal    int        `json:"tickets_total,omitempty"`
 	BookingEnabled  bool       `json:"booking_enabled,omitempty"`
+	Food            string     `json:"food,omitempty"`
+	Drink           string     `json:"drink,omitempty"`
 	Pricing         *Pricing         `json:"pricing,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	DanceNames      []string         `json:"dance_names,omitempty"`
@@ -1023,6 +1025,8 @@ type EventCreateReq struct {
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
 	BookingURL           string      `json:"booking_url,omitempty"`
+	Food                 string      `json:"food,omitempty"`
+	Drink                string      `json:"drink,omitempty"`
 	Tags                 []string    `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
@@ -1041,6 +1045,8 @@ type EventUpdateReq struct {
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
 	BookingURL           string      `json:"booking_url,omitempty"`
+	Food                 string      `json:"food,omitempty"`
+	Drink                string      `json:"drink,omitempty"`
 	IsCancelled          bool        `json:"is_cancelled"`
 	Availability         string      `json:"availability,omitempty"`
 	TicketsTotal         int         `json:"tickets_total,omitempty"`

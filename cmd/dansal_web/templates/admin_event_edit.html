@@ -257,6 +257,27 @@
     </div>
   </section>
 
+  <!-- Food & Drinks -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_food_drink"}}</h2>
+
+    <label>{{$.Strings.T "food_label"}}</label>
+    <div class="radio-group">
+      <label class="check-label"><input type="radio" name="food" value=""{{if eq .Event.Food ""}} checked{{end}}> {{$.Strings.T "food_unset"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="sold"{{if eq .Event.Food "sold"}} checked{{end}}> {{$.Strings.T "food_sold"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="potluck"{{if eq .Event.Food "potluck"}} checked{{end}}> {{$.Strings.T "food_potluck"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="none"{{if eq .Event.Food "none"}} checked{{end}}> {{$.Strings.T "food_none"}}</label>
+    </div>
+
+    <label style="margin-top:.75rem">{{$.Strings.T "drink_label"}}</label>
+    <div class="radio-group">
+      <label class="check-label"><input type="radio" name="drink" value=""{{if eq .Event.Drink ""}} checked{{end}}> {{$.Strings.T "drink_unset"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="alcohol"{{if eq .Event.Drink "alcohol"}} checked{{end}}> {{$.Strings.T "drink_alcohol"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="soft"{{if eq .Event.Drink "soft"}} checked{{end}}> {{$.Strings.T "drink_soft"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="none"{{if eq .Event.Drink "none"}} checked{{end}}> {{$.Strings.T "drink_none"}}</label>
+    </div>
+  </section>
+
   <!-- Pricing -->
   <section class="form-section">
     <h2>{{$.Strings.T "evt_admission"}}</h2>
@@ -389,6 +410,7 @@
 .field-row>div{flex:1;min-width:120px}
 .field-hint{font-weight:400;color:#888;font-size:.82rem}
 .check-row{display:flex;gap:1.5rem;margin:.5rem 0;flex-wrap:wrap}
+.radio-group{display:flex;flex-direction:column;gap:.35rem;margin:.4rem 0 0}
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
 .check-label input{width:auto}
 .dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .5rem}

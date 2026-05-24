@@ -1006,6 +1006,9 @@ func migrateDB() {
 	} {
 		db.Exec("UPDATE locations SET country_code = ? WHERE country_code IS NULL AND country = ?", row.code, row.country)
 	}
+	// #229: food and drink availability fields.
+	db.Exec("ALTER TABLE events ADD COLUMN food TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE events ADD COLUMN drink TEXT DEFAULT ''")
 }
 
 func logUnmappedCountries() {
@@ -1073,6 +1076,8 @@ func createTables() error {
 		availability TEXT DEFAULT '',
 		tickets_total INTEGER DEFAULT 0,
 		booking_enabled INTEGER DEFAULT 0,
+		food TEXT DEFAULT '',
+		drink TEXT DEFAULT '',
 		suggester_email TEXT DEFAULT '',
 		suggestion_token TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

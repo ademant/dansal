@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"flag"
 	"log"
+	"net"
 	"os"
 	"strings"
 
@@ -122,6 +123,11 @@ func loadConfig() *Config {
 		log.Fatal("dansal_url is required (set via config file or DANSAL_URL env var)")
 	}
 
+	// Validate domain format to ensure it's a proper hostname
+	if !isValidDomain(cfg.Domain) {
+		log.Fatalf("invalid domain format: %s. Domain must be a valid hostname (e.g., example.com or sub.example.com)", cfg.Domain)
+	}
+
 	cfg.configPath = configPath
 	return cfg
 }
@@ -182,4 +188,72 @@ func reloadConfig(path string, db *sql.DB) *Config {
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	cfg.configPath = path
 	return cfg
+}
+
+// isValidDomain validates that a string is a proper domain name
+// Supports both bare domains (example.com) and subdomains (sub.example.com)
+func isValidDomain(domain string) bool {
+	// Basic checks
+	if domain == "" || len(domain) > 253 {
+		return false
+	}
+	
+	// Check if it's a valid hostname
+	// This allows for domains like example.com, sub.example.com, etc.
+	// but rejects invalid formats like "example..com" or "example.com/"
+	if strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
+		return false
+	}
+	
+	// Use net package to validate hostname format
+	// This is more comprehensive than regex and handles international domains
+	if _, err := net.LookupHost(domain); err != nil {
+		// If DNS lookup fails, it might still be a valid format but not resolvable
+		// So we do additional format validation
+		if !isValidDomainFormat(domain) {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// isValidDomainFormat checks if a string follows basic domain name format rules
+func isValidDomainFormat(domain string) bool {
+	// Domain must contain at least one dot
+	if !strings.Contains(domain, ".") {
+		return false
+	}
+	
+	// Check each label (part between dots)
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		
+		// Check for invalid characters (basic check - not comprehensive)
+		for _, c := range label {
+			if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && 
+			   !(c >= '0' && c <= '9') && c != '-' {
+				return false
+			}
+		}
+		
+		// Label cannot start or end with hyphen
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+	}
+	
+	// Top-level domain must be at least 2 characters
+	if len(labels[len(labels)-1]) < 2 {
+		return true
+	}
+	
+	return false
 }

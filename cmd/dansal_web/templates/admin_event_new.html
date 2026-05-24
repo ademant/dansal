@@ -69,7 +69,7 @@
     </div>
 
     <div class="check-row">
-      <label class="check-label"><input type="checkbox" name="tags" value="ball" id="tag-ball"{{if and .Prefill (hasTag .Prefill.Tags "ball")}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="bal-folk" id="tag-ball"{{if and .Prefill (hasTag .Prefill.Tags "bal-folk")}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop"{{if and .Prefill (hasTag .Prefill.Tags "dance-workshop")}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop"{{if and .Prefill (hasTag .Prefill.Tags "musician-workshop")}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="festival"{{if and .Prefill (hasTag .Prefill.Tags "festival")}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>

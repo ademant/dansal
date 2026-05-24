@@ -1009,6 +1009,8 @@ func migrateDB() {
 	// #229: food and drink availability fields.
 	db.Exec("ALTER TABLE events ADD COLUMN food TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE events ADD COLUMN drink TEXT DEFAULT ''")
+	// #248: backfill bal-folk tag for events with has_ball=1 that lost it when ball tag was deleted.
+	db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id, 'bal-folk' FROM events WHERE has_ball = 1")
 }
 
 func logUnmappedCountries() {

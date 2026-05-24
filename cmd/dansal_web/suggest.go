@@ -157,7 +157,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			Description:        description,
 			StartTime:          r.FormValue("start_time"),
 			EndTime:            r.FormValue("end_time"),
-			HasBall:            sliceContains(tags, "ball"),
+			HasBall:            sliceContains(tags, "bal-folk"),
 			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
 			HasFestival:        sliceContains(tags, "festival"),
 			Tags:               tags,

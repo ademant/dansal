@@ -10,6 +10,7 @@ import (
 	"log/syslog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,10 +18,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sql.DB
+var redisClient *redis.Client
 var rateLimiter *RateLimiter
 var loginRateLimiter *RateLimiter
 var connLimiter *ConnLimiter
@@ -28,6 +31,15 @@ var configFilePath string
 
 var lastSeenMu sync.Mutex
 var lastSeenCache = make(map[string]time.Time)
+
+// Performance Optimization (#260) - Cache variables
+var cacheMu sync.RWMutex
+var memoryCache = make(map[string]cacheEntry)
+
+type cacheEntry struct {
+	data      []byte
+	expiresAt time.Time
+}
 
 const lastSeenUpdateInterval = 60 * time.Second
 
@@ -158,8 +170,15 @@ func (g *gzipResponseWriter) WriteHeader(code int) {
 
 // GzipMiddleware compresses responses when the client supports gzip.
 // Image paths are excluded — AVIF is already compressed binary data.
+// Performance Optimization (#260) - Now respects config setting
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Respect config setting for gzip compression
+		if !config.Server.GzipEnabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
 		if strings.HasPrefix(r.URL.Path, "/api/v1/images/") ||
 			!strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
@@ -1370,6 +1389,28 @@ func createTables() error {
 		return err
 	}
 
+	// Performance Optimization (#260) - Add database indexes
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_time)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_events_organization ON events(organization_id)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_events_published ON events(is_published)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_events_source ON events(source)`)
+	if err != nil {
+		return err
+	}
+	
 	// Apply migrations for existing databases
 	err = applyDatabaseMigrations(db)
 	return err
@@ -1451,6 +1492,119 @@ func reloadConfig(path string) {
 	log.Printf("Config reloaded from %s", path)
 }
 
+// Performance Optimization (#260) - Cache functions
+func getCache(key string) ([]byte, bool) {
+	// Try memory cache first
+	cacheMu.RLock()
+	entry, found := memoryCache[key]
+	cacheMu.RUnlock()
+	
+	if found && time.Now().Before(entry.expiresAt) {
+		return entry.data, true
+	}
+	
+	// Try Redis cache if available
+	if redisClient != nil {
+		ctx := context.Background()
+		cachedData, err := redisClient.Get(ctx, key).Bytes()
+		if err == nil && len(cachedData) > 0 {
+			// Update memory cache
+			cacheMu.Lock()
+			memoryCache[key] = cacheEntry{
+				data:      cachedData,
+				expiresAt: time.Now().Add(time.Duration(config.Server.CacheTTLMinutes) * time.Minute),
+			}
+			cacheMu.Unlock()
+			return cachedData, true
+		}
+	}
+	
+	return nil, false
+}
+
+func setCache(key string, data []byte) {
+	expiresAt := time.Now().Add(time.Duration(config.Server.CacheTTLMinutes) * time.Minute)
+	
+	// Update memory cache
+	cacheMu.Lock()
+	memoryCache[key] = cacheEntry{
+		data:      data,
+		expiresAt: expiresAt,
+	}
+	cacheMu.Unlock()
+	
+	// Update Redis cache if available
+	if redisClient != nil {
+		ctx := context.Background()
+		redisClient.Set(ctx, key, data, time.Duration(config.Server.CacheTTLMinutes)*time.Minute)
+	}
+	
+	// Clean up expired memory cache entries periodically
+	if len(memoryCache)%100 == 0 {
+		go cleanupMemoryCache()
+	}
+}
+
+func cleanupMemoryCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	
+	now := time.Now()
+	for key, entry := range memoryCache {
+		if now.After(entry.expiresAt) {
+			delete(memoryCache, key)
+		}
+	}
+}
+
+func withCaching(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip caching for non-GET requests
+		if r.Method != "GET" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
+		// Skip caching for authenticated requests (personalized content)
+		if r.Header.Get("Authorization") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
+		// Create cache key from URL and query parameters
+		cacheKey := "cache:" + r.URL.Path
+		if len(r.URL.RawQuery) > 0 {
+			cacheKey += "?" + r.URL.RawQuery
+		}
+		
+		// Try to serve from cache
+		if cachedData, found := getCache(cacheKey); found {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Cache", "HIT")
+			w.WriteHeader(http.StatusOK)
+			w.Write(cachedData)
+			return
+		}
+		
+		// Cache miss - proceed and cache response
+		rec := httptest.NewRecorder()
+		next.ServeHTTP(rec, r)
+		
+		// Only cache successful responses
+		if rec.Code == http.StatusOK {
+			setCache(cacheKey, rec.Body.Bytes())
+		}
+		
+		// Copy response back to original writer
+		for k, v := range rec.Header() {
+			w.Header()[k] = v
+		}
+		w.Header().Set("X-Cache", "MISS")
+		w.WriteHeader(rec.Code)
+		w.Write(rec.Body.Bytes())
+	})
+}
+
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
@@ -1493,6 +1647,21 @@ func main() {
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
+
+	// Initialize Redis client for caching (#260)
+	if config.Server.CacheEnabled && config.Server.RedisURL != "" {
+		redisClient = redis.NewClient(&redis.Options{
+			Addr: config.Server.RedisURL,
+		})
+		_, err = redisClient.Ping(context.Background()).Result()
+		if err != nil {
+			log.Printf("Warning: Redis connection failed: %v. Falling back to memory cache only.", err)
+			redisClient = nil
+		} else {
+			log.Printf("Redis cache connected to %s", config.Server.RedisURL)
+		}
+	}
+
 	if err = createTables(); err != nil {
 		log.Fatal(err)
 	}
@@ -1518,8 +1687,8 @@ func main() {
 	// optAuth enriches the response when a token is present but does not require one.
 	optAuth := OptionalTokenMiddleware
 
-	// Info endpoint (public)
-	smux.HandleFunc("GET /api/v1/info", getInfo)
+	// Info endpoint (public) - with caching
+	smux.Handle("GET /api/v1/info", withCaching(http.HandlerFunc(getInfo)))
 
 	// Authentication endpoints (no token required)
 	smux.HandleFunc("GET /api/v1/login", login)
@@ -1551,8 +1720,8 @@ func main() {
 
 	// Public reads — OptionalTokenMiddleware enriches the response when a valid
 	// token is present (e.g. editable flag, unpublished events).
-	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
-	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
+	smux.Handle("GET /api/v1/events", withCaching(optAuth(http.HandlerFunc(getEvents))))
+	smux.Handle("GET /api/v1/events/{id}", withCaching(optAuth(http.HandlerFunc(getEvent))))
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))
 	smux.Handle("GET /api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation)))
 	smux.Handle("GET /api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations)))

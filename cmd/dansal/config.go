@@ -12,7 +12,6 @@ type ServerConfig struct {
 	Port                 int      `yaml:"port"`
 	TokenExpirationHours int      `yaml:"token_expiration_hours"`
 	AdminAllowedIPs      []string `yaml:"admin_allowed_ips"`
-	RateLimit            int      `yaml:"rate_limit"`
 	MaxBodyBytes         int64    `yaml:"max_body_bytes"`
 	ReadTimeoutSecs      int      `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs     int      `yaml:"write_timeout_secs"`
@@ -49,6 +48,14 @@ type ServerConfig struct {
 	MaxDevicesPerUser int           `yaml:"max_devices_per_user"`
 	GuestModeEnabled bool           `yaml:"guest_mode_enabled"`
 	MobileDeepLinkBaseURL string    `yaml:"mobile_deep_link_base_url"`
+	
+	// Performance Optimization (#260)
+	CacheEnabled      bool   `yaml:"cache_enabled"`
+	CacheTTLMinutes   int    `yaml:"cache_ttl_minutes"`
+	RedisURL          string `yaml:"redis_url"`
+	GzipEnabled       bool   `yaml:"gzip_enabled"`
+	RateLimit         int    `yaml:"rate_limit"`
+	RateLimitWindow   int    `yaml:"rate_limit_window"`
 }
 
 type SMTPConfig struct {
@@ -167,6 +174,17 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.MobileDeepLinkBaseURL == "" {
 		cfg.Server.MobileDeepLinkBaseURL = cfg.Server.BaseURL
+	}
+	
+	// Performance Optimization (#260) defaults
+	if cfg.Server.CacheTTLMinutes == 0 {
+		cfg.Server.CacheTTLMinutes = 30
+	}
+	if cfg.Server.RateLimit == 0 {
+		cfg.Server.RateLimit = 100
+	}
+	if cfg.Server.RateLimitWindow == 0 {
+		cfg.Server.RateLimitWindow = 60
 	}
 }
 

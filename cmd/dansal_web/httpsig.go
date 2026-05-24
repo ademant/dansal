@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -85,6 +86,36 @@ func generateRSAKeyPair() (publicPEM, privatePEM string, err error) {
 		return "", "", err
 	}
 	publicPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+	return publicPEM, privatePEM, nil
+}
+
+// generateEd25519KeyPair generates an Ed25519 key pair and returns them as PEM-encoded strings
+func generateEd25519KeyPair() (publicPEM, privatePEM string, err error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate Ed25519 key pair: %w", err)
+	}
+
+	// Encode private key as PEM
+	privDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to marshal Ed25519 private key: %w", err)
+	}
+	privatePEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "ED25519 PRIVATE KEY",
+		Bytes: privDER,
+	}))
+
+	// Encode public key as PEM
+	pubDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to marshal Ed25519 public key: %w", err)
+	}
+	publicPEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubDER,
+	}))
+
 	return publicPEM, privatePEM, nil
 }
 

@@ -152,25 +152,35 @@ type ActorRecord struct {
 
 func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 	var a ActorRecord
+	var publicKeyEd25519PEM, privateKeyEd25519PEM, publicKeyMultibase sql.NullString
 	err := db.QueryRow(
 		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase FROM actors WHERE org_slug = ?",
 		slug,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &publicKeyEd25519PEM, &privateKeyEd25519PEM, &publicKeyMultibase)
 	if err != nil {
 		return nil, err
 	}
+	// Convert NULL values to empty strings
+	a.PublicKeyEd25519PEM = publicKeyEd25519PEM.String
+	a.PrivateKeyEd25519PEM = privateKeyEd25519PEM.String
+	a.PublicKeyMultibase = publicKeyMultibase.String
 	return &a, nil
 }
 
 func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
 	var a ActorRecord
+	var publicKeyEd25519PEM, privateKeyEd25519PEM, publicKeyMultibase sql.NullString
 	err := db.QueryRow(
 		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase FROM actors WHERE org_id = ?",
 		orgID,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM, &publicKeyEd25519PEM, &privateKeyEd25519PEM, &publicKeyMultibase)
 	if err != nil {
 		return nil, err
 	}
+	// Convert NULL values to empty strings
+	a.PublicKeyEd25519PEM = publicKeyEd25519PEM.String
+	a.PrivateKeyEd25519PEM = privateKeyEd25519PEM.String
+	a.PublicKeyMultibase = publicKeyMultibase.String
 	return &a, nil
 }
 

@@ -74,12 +74,13 @@
     </div>
     <div class="form-row form-row-2col">
       <label>{{$.Strings.T "evt_start"}} *
-        <input type="datetime-local" name="start_time" required>
+        <input type="datetime-local" id="sg-start" name="start_time" required onchange="onStartChange()">
       </label>
       <label>{{$.Strings.T "evt_end"}}
-        <input type="datetime-local" name="end_time">
+        <input type="datetime-local" id="sg-end" name="end_time" onchange="onEndChange()" data-err-msg="{{$.Strings.T "suggest_error_end_before_start"}}">
       </label>
     </div>
+    <p id="sg-end-err" class="form-error" style="display:none;margin-top:-.5rem"></p>
     <div class="form-row form-row-2col">
       <label>{{$.Strings.T "col_location"}}
         <input type="text" name="location" maxlength="100">
@@ -111,6 +112,16 @@
         </div>
       </div>
     </div>
+    {{if $.Data.Dances}}
+    <div class="form-row">
+      <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}}</label>
+      <div class="check-row">
+        {{range $.Data.Dances}}
+        <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"> {{.Name}}</label>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
     <div class="form-row">
       <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
       <div class="check-row">
@@ -190,6 +201,30 @@ function switchTab(btn, id) {
 function toggleDifficulty() {
   var show = document.getElementById('tag-dance-workshop').checked || document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden = !show;
+}
+function onStartChange() {
+  var st = document.getElementById('sg-start');
+  var et = document.getElementById('sg-end');
+  if (st.value && !et.value) {
+    et.value = st.value;
+  }
+  validateEndTime();
+}
+function onEndChange() {
+  validateEndTime();
+}
+function validateEndTime() {
+  var st = document.getElementById('sg-start');
+  var et = document.getElementById('sg-end');
+  var err = document.getElementById('sg-end-err');
+  if (et.value && st.value && et.value <= st.value) {
+    err.textContent = et.dataset.errMsg;
+    err.style.display = '';
+    et.setCustomValidity(et.dataset.errMsg);
+  } else {
+    err.style.display = 'none';
+    et.setCustomValidity('');
+  }
 }
 </script>
 {{end}}

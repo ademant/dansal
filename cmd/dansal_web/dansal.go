@@ -1981,6 +1981,7 @@ type SuggestEventReq struct {
 	HasFestival        bool       `json:"has_festival"`
 	WorkshopDifficulty string     `json:"workshop_difficulty,omitempty"`
 	Tags               []string   `json:"tags,omitempty"`
+	DanceIDs           []int      `json:"dance_ids,omitempty"`
 	URL                string     `json:"url,omitempty"`
 	Food               string     `json:"food,omitempty"`
 	Drink              string     `json:"drink,omitempty"`

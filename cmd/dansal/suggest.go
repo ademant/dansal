@@ -34,6 +34,7 @@ type SuggestRequest struct {
 	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty"`
 	IsCancelled        bool                 `json:"is_cancelled"`
 	Tags               []string             `json:"tags"`
+	DanceIDs           []int                `json:"dance_ids,omitempty"`
 	URL                string               `json:"url,omitempty"`
 	Food               string               `json:"food,omitempty"`
 	Drink              string               `json:"drink,omitempty"`
@@ -197,6 +198,9 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	syncEventTags(tx, int(eventID), filterKnownTags(req.Tags))
+	for _, danceID := range req.DanceIDs {
+		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
+	}
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)

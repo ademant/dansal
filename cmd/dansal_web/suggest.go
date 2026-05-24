@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +22,7 @@ type SuggestPageData struct {
 	CaptchaSiteKey string
 	GroupedTags    []TagGroup
 	FormToken      string
+	Dances         []Dance
 }
 
 type SuggestDoneData struct{}
@@ -34,11 +36,13 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.NotFound(w, r)
 			return
 		}
+		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
 			FormToken:      newFormToken(),
+			Dances:         dances,
 		}))
 	}
 }
@@ -76,6 +80,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			previewJSON[i] = string(b)
 		}
 
+		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "",
@@ -83,6 +88,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			PreviewJSON:    previewJSON,
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
 			FormToken:      newFormToken(),
+			Dances:         dances,
 		}))
 	}
 }
@@ -140,6 +146,12 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 
 		tags := r.Form["tags"]
+		var danceIDs []int
+		for _, s := range r.Form["dance_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				danceIDs = append(danceIDs, id)
+			}
+		}
 		req := SuggestEventReq{
 			Title:              title,
 			Description:        description,
@@ -149,6 +161,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
 			HasFestival:        sliceContains(tags, "festival"),
 			Tags:               tags,
+			DanceIDs:           danceIDs,
 			URL:                r.FormValue("url"),
 			Food:               r.FormValue("food"),
 			Drink:              r.FormValue("drink"),

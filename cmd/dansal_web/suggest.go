@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ type SuggestPageData struct {
 	Error          string
 	CaptchaSiteKey string
 	GroupedTags    []TagGroup
+	FormToken      string
 }
 
 type SuggestDoneData struct{}
@@ -36,6 +38,7 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
+			FormToken:      newFormToken(),
 		}))
 	}
 }
@@ -79,6 +82,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			PreviewEvents:  events,
 			PreviewJSON:    previewJSON,
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
+			FormToken:      newFormToken(),
 		}))
 	}
 }
@@ -91,6 +95,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 		ip := getClientIP(r)
 		if suggestSubmitThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/suggest", authBlock, ip)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP: cfg.SMTPHost != "",
@@ -101,6 +106,11 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 

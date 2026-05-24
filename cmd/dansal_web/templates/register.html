@@ -12,7 +12,8 @@
   </div>
 
   <form method="post" action="/register">
-    <input type="hidden" name="phone2" value="">
+    <input type="hidden" name="_form_ts" value="{{.FormToken}}">
+    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
 
     <div id="tab-join" class="reg-tab">
       <input type="hidden" name="reg_type" value="join_org" form="reg-join-hidden">
@@ -97,6 +98,7 @@
 .btn-primary{background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.5rem 1.25rem;font-size:1rem;cursor:pointer;margin-top:.5rem}
 .btn-primary:hover{background:#0d4a80}
 .form-error{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem}
+.hp-field{display:none!important}
 </style>
 <script>
 function switchTab(tab) {

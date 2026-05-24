@@ -29,6 +29,7 @@ type LoginPageData struct {
 	Username  string
 	MagicSent string // "email" or "telegram" when a link was just sent
 	Next      string
+	FormToken string
 }
 
 // safeNext returns next only when it is a local path with no host or scheme,
@@ -66,6 +67,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 			MagicSent: r.URL.Query().Get("magic_sent"),
 			Next:      r.URL.Query().Get("next"),
+			FormToken: newFormToken(),
 		}))
 	}
 }
@@ -84,6 +86,11 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		password := r.FormValue("password")
 		next := safeNext(r.FormValue("next"))
 		ip := getClientIP(r)
+
+		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+			http.Redirect(w, r, next, http.StatusSeeOther)
+			return
+		}
 
 		if throttle.isBlocked(ip) {
 			log.Printf("%s ip=%s path=/login", authBlock, ip)
@@ -161,11 +168,15 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		identifier := r.FormValue("identifier")
 		channel := r.FormValue("channel")
 		if channel == "" {
 			channel = "email"
 		}
+		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+			http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)
+			return
+		}
+		identifier := r.FormValue("identifier")
 		if identifier != "" {
 			authThrottle.record(ip)
 			_ = client.RequestMagicLogin(r.Context(), identifier, channel, cfg.publicBaseURL())

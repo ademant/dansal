@@ -55,6 +55,7 @@ type Config struct {
 	LoginWindowMins    int `yaml:"login_window_mins"`     // sliding window for login failures; default 10
 	AuthRateLimit      int `yaml:"auth_rate_limit"`       // max requests per window for register/magic/verify; default 10
 	AuthRateWindowMins int `yaml:"auth_rate_window_mins"` // window in minutes; default 10
+	MinSubmitSecs      int `yaml:"min_submit_secs"`       // minimum seconds between form load and submit; 0 disables; default 3
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`
@@ -87,6 +88,7 @@ func loadConfig() *Config {
 		LoginWindowMins:    10,
 		AuthRateLimit:      10,
 		AuthRateWindowMins: 10,
+		MinSubmitSecs:      3,
 	}
 
 	configPath := ""
@@ -141,6 +143,7 @@ func reloadConfig(path string, db *sql.DB) *Config {
 		LoginWindowMins:    10,
 		AuthRateLimit:      10,
 		AuthRateWindowMins: 10,
+		MinSubmitSecs:      3,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

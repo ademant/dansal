@@ -8,8 +8,9 @@ import (
 )
 
 type RegisterPageData struct {
-	Orgs  []Organization
-	Error string
+	Orgs      []Organization
+	Error     string
+	FormToken string
 }
 
 type RegisterDoneData struct {
@@ -30,7 +31,7 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		}
 		orgs, _ := client.GetOrganizations(r.Context())
 		title := i18n.T(r, "register_title")
-		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{Orgs: orgs}))
+		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{Orgs: orgs, FormToken: newFormToken()}))
 	}
 }
 
@@ -65,6 +66,11 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgWebsite := strings.TrimSpace(r.FormValue("org_website"))
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
 		phone2 := r.FormValue("phone2")
+
+		if phone2 != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+			http.Redirect(w, r, "/register/done?ch=email", http.StatusSeeOther)
+			return
+		}
 
 		var orgID *int
 		if regType == "join_org" {

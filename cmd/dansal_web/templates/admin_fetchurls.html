@@ -34,8 +34,8 @@
       <th data-sort="str">{{$.Strings.T "fetch_type"}}</th>
       <th>{{$.Strings.T "fetch_tags"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
-      <th data-sort="str">{{$.Strings.T "fetch_last_fetched"}}</th>
-      <th data-sort="str">{{$.Strings.T "fetch_last_result"}}</th>
+      <th data-sort="str"><span class="header-multiline">{{$.Strings.T "fetch_last_fetched"}}</span></th>
+      <th data-sort="str"><span class="header-multiline">{{$.Strings.T "fetch_last_result"}}</span></th>
       <th></th>
     </tr>
   </thead>
@@ -135,5 +135,24 @@ document.getElementById('bulk-action').addEventListener('change', function() {
 .btn-run:hover{background:#1a5a1a}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+
+/* Compact header styling */
+.header-multiline{display:block;line-height:1.1;font-size:.8rem}
+
+/* Improved table layout */
+.event-table th{padding:.4rem .5rem;font-size:.85rem}
+.event-table td{padding:.4rem .5rem}
+.col-check{width:2.2rem}
+.url-cell{max-width:240px}
+.date-cell{white-space:nowrap;color:#666;font-size:.8rem}
+.result-cell{max-width:140px;font-size:.78rem}
+
+/* Responsive improvements */
+@media (max-width: 1024px) {
+  .url-cell{max-width:200px;font-size:.85rem}
+  .result-cell{max-width:120px}
+  .col-actions{flex-wrap:wrap;gap:.2rem}
+  .btn-sm{font-size:.75rem;padding:.15rem .4rem}
+}
 </style>
 {{end}}

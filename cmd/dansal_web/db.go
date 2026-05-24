@@ -2,11 +2,37 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// addColumnIfNotExists adds a column to a table if it doesn't already exist
+// SQLite doesn't support IF NOT EXISTS with ALTER TABLE, so we need to check first
+func addColumnIfNotExists(db *sql.DB, table, column, columnType string) {
+	// Check if column exists
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?",
+		table, column,
+	).Scan(&count)
+	
+	if err != nil {
+		log.Printf("Warning: could not check if column %s exists in table %s: %v", column, table, err)
+		return
+	}
+	
+	if count == 0 {
+		// Column doesn't exist, add it
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType)); err != nil {
+			log.Printf("Warning: could not add column %s to table %s: %v", column, table, err)
+		} else {
+			log.Printf("Added column %s to table %s", column, table)
+		}
+	}
+}
 
 func initDB(path string) *sql.DB {
 	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on")
@@ -85,15 +111,10 @@ CREATE TABLE IF NOT EXISTS event_templates (
 	// Idempotent column additions for schema evolution
 	
 	// Add Ed25519 key columns (required for WebFinger implementation)
-	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_ed25519_pem TEXT"); err != nil {
-		log.Printf("Warning: could not add public_key_ed25519_pem column: %v", err)
-	}
-	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS private_key_ed25519_pem TEXT"); err != nil {
-		log.Printf("Warning: could not add private_key_ed25519_pem column: %v", err)
-	}
-	if _, err := db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_multibase TEXT"); err != nil {
-		log.Printf("Warning: could not add public_key_multibase column: %v", err)
-	}
+	// SQLite doesn't support IF NOT EXISTS with ALTER TABLE, so we check first
+	addColumnIfNotExists(db, "actors", "public_key_ed25519_pem", "TEXT")
+	addColumnIfNotExists(db, "actors", "private_key_ed25519_pem", "TEXT")
+	addColumnIfNotExists(db, "actors", "public_key_multibase", "TEXT")
 	
 	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")

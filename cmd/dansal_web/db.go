@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -393,6 +394,75 @@ type FederatedEvent struct {
 	ReceivedAt   int64
 }
 
+type RSVP struct {
+	ID        int64
+	APID      string
+	EventAPID string
+	ActorID   string
+	RSVPType  string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type Interaction struct {
+	ID             int64
+	APID           string
+	TargetType     string
+	TargetID       string
+	ActorID        string
+	InteractionType string
+	Content        string
+	CreatedAt      time.Time
+}
+
+type LocationActor struct {
+	ID                   int
+	Slug                 string
+	Name                 string
+	Description          string
+	Address              string
+	Latitude             *float64
+	Longitude            *float64
+	PublicKeyPEM         string
+	PrivateKeyPEM        string
+	PublicKeyEd25519PEM  string
+	PrivateKeyEd25519PEM string
+	PublicKeyMultibase   string
+	CreatedAt            time.Time
+}
+
+type MusicianActor struct {
+	ID                   int
+	Slug                 string
+	Name                 string
+	MusicBrainzID        string
+	Description          string
+	ImageURL             string
+	PublicKeyPEM         string
+	PrivateKeyPEM        string
+	PublicKeyEd25519PEM  string
+	PrivateKeyEd25519PEM string
+	PublicKeyMultibase   string
+	CreatedAt            time.Time
+}
+
+type WebFingerAlias struct {
+	ID         int
+	Alias      string
+	TargetType string
+	TargetID   int
+	CreatedAt  time.Time
+}
+
+type EventUpdate struct {
+	ID        int
+	EventAPID string
+	UpdateType string
+	UpdateAPID string
+	UpdatedAt  time.Time
+}
+
 func upsertFederatedEvent(db *sql.DB, fe FederatedEvent) error {
 	tagsStr := strings.Join(fe.Tags, ",")
 	_, err := db.Exec(
@@ -497,4 +567,210 @@ func deleteTemplate(db *sql.DB, id, userID int, isAdmin bool) error {
 		_, err = db.Exec("DELETE FROM event_templates WHERE id = ? AND user_id = ?", id, userID)
 	}
 	return err
+}
+
+// RSVP functions
+func createRSVP(db *sql.DB, rsvp RSVP) error {
+	_, err := db.Exec(
+		`INSERT INTO rsvps (ap_id, event_ap_id, actor_id, rsvp_type, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		rsvp.APID, rsvp.EventAPID, rsvp.ActorID, rsvp.RSVPType, rsvp.Status, rsvp.CreatedAt, rsvp.UpdatedAt,
+	)
+	return err
+}
+
+func getRSVP(db *sql.DB, apID string) (*RSVP, error) {
+	var r RSVP
+	err := db.QueryRow(
+		`SELECT id, ap_id, event_ap_id, actor_id, rsvp_type, status, created_at, updated_at
+		 FROM rsvps WHERE ap_id = ?`,
+		apID,
+	).Scan(&r.ID, &r.APID, &r.EventAPID, &r.ActorID, &r.RSVPType, &r.Status, &r.CreatedAt, &r.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func listRSVPsByEvent(db *sql.DB, eventAPID string) ([]RSVP, error) {
+	rows, err := db.Query(
+		`SELECT id, ap_id, event_ap_id, actor_id, rsvp_type, status, created_at, updated_at
+		 FROM rsvps WHERE event_ap_id = ? ORDER BY created_at ASC`,
+		eventAPID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var rsvps []RSVP
+	for rows.Next() {
+		var r RSVP
+		if err := rows.Scan(&r.ID, &r.APID, &r.EventAPID, &r.ActorID, &r.RSVPType, &r.Status, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rsvps = append(rsvps, r)
+	}
+	return rsvps, nil
+}
+
+func updateRSVPStatus(db *sql.DB, apID, status string) error {
+	_, err := db.Exec(
+		`UPDATE rsvps SET status = ?, updated_at = ? WHERE ap_id = ?`,
+		status, time.Now(), apID,
+	)
+	return err
+}
+
+// Interaction functions
+func createInteraction(db *sql.DB, interaction Interaction) error {
+	_, err := db.Exec(
+		`INSERT INTO interactions (ap_id, target_type, target_id, actor_id, interaction_type, content, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		interaction.APID, interaction.TargetType, interaction.TargetID, interaction.ActorID,
+		interaction.InteractionType, interaction.Content, interaction.CreatedAt,
+	)
+	return err
+}
+
+func listInteractionsByTarget(db *sql.DB, targetID string) ([]Interaction, error) {
+	rows, err := db.Query(
+		`SELECT id, ap_id, target_type, target_id, actor_id, interaction_type, content, created_at
+		 FROM interactions WHERE target_id = ? ORDER BY created_at DESC`,
+		targetID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var interactions []Interaction
+	for rows.Next() {
+		var i Interaction
+		if err := rows.Scan(&i.ID, &i.APID, &i.TargetType, &i.TargetID, &i.ActorID, &i.InteractionType, &i.Content, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		interactions = append(interactions, i)
+	}
+	return interactions, nil
+}
+
+// Location Actor functions
+func createLocationActor(db *sql.DB, actor LocationActor) error {
+	_, err := db.Exec(
+		`INSERT INTO location_actors (
+			slug, name, description, address, latitude, longitude,
+			public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		actor.Slug, actor.Name, actor.Description, actor.Address, actor.Latitude, actor.Longitude,
+		actor.PublicKeyPEM, actor.PrivateKeyPEM, actor.PublicKeyEd25519PEM, actor.PrivateKeyEd25519PEM, actor.PublicKeyMultibase,
+	)
+	return err
+}
+
+func getLocationActorBySlug(db *sql.DB, slug string) (*LocationActor, error) {
+	var a LocationActor
+	var latitude, longitude sql.NullFloat64
+	err := db.QueryRow(
+		`SELECT id, slug, name, description, address, latitude, longitude,
+			public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase, created_at
+		 FROM location_actors WHERE slug = ?`,
+		slug,
+	).Scan(
+		&a.ID, &a.Slug, &a.Name, &a.Description, &a.Address, &latitude, &longitude,
+		&a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase, &a.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if latitude.Valid {
+		a.Latitude = &latitude.Float64
+	}
+	if longitude.Valid {
+		a.Longitude = &longitude.Float64
+	}
+	return &a, nil
+}
+
+// Musician Actor functions
+func createMusicianActor(db *sql.DB, actor MusicianActor) error {
+	_, err := db.Exec(
+		`INSERT INTO musician_actors (
+			slug, name, musicbrainz_id, description, image_url,
+			public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		actor.Slug, actor.Name, actor.MusicBrainzID, actor.Description, actor.ImageURL,
+		actor.PublicKeyPEM, actor.PrivateKeyPEM, actor.PublicKeyEd25519PEM, actor.PrivateKeyEd25519PEM, actor.PublicKeyMultibase,
+	)
+	return err
+}
+
+func getMusicianActorBySlug(db *sql.DB, slug string) (*MusicianActor, error) {
+	var a MusicianActor
+	err := db.QueryRow(
+		`SELECT id, slug, name, musicbrainz_id, description, image_url,
+			public_key_pem, private_key_pem, public_key_ed25519_pem, private_key_ed25519_pem, public_key_multibase, created_at
+		 FROM musician_actors WHERE slug = ?`,
+		slug,
+	).Scan(
+		&a.ID, &a.Slug, &a.Name, &a.MusicBrainzID, &a.Description, &a.ImageURL,
+		&a.PublicKeyPEM, &a.PrivateKeyPEM, &a.PublicKeyEd25519PEM, &a.PrivateKeyEd25519PEM, &a.PublicKeyMultibase, &a.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// WebFinger Alias functions
+func createWebFingerAlias(db *sql.DB, alias WebFingerAlias) error {
+	_, err := db.Exec(
+		`INSERT INTO webfinger_aliases (alias, target_type, target_id) VALUES (?, ?, ?)`,
+		alias.Alias, alias.TargetType, alias.TargetID,
+	)
+	return err
+}
+
+func getWebFingerAlias(db *sql.DB, alias string) (*WebFingerAlias, error) {
+	var a WebFingerAlias
+	err := db.QueryRow(
+		`SELECT id, alias, target_type, target_id, created_at FROM webfinger_aliases WHERE alias = ?`,
+		alias,
+	).Scan(&a.ID, &a.Alias, &a.TargetType, &a.TargetID, &a.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// Event Update functions
+func createEventUpdate(db *sql.DB, update EventUpdate) error {
+	_, err := db.Exec(
+		`INSERT INTO event_updates (event_ap_id, update_type, update_ap_id, updated_at)
+		 VALUES (?, ?, ?, ?)`,
+		update.EventAPID, update.UpdateType, update.UpdateAPID, update.UpdatedAt,
+	)
+	return err
+}
+
+func listEventUpdates(db *sql.DB, eventAPID string) ([]EventUpdate, error) {
+	rows, err := db.Query(
+		`SELECT id, event_ap_id, update_type, update_ap_id, updated_at
+		 FROM event_updates WHERE event_ap_id = ? ORDER BY updated_at DESC`,
+		eventAPID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var updates []EventUpdate
+	for rows.Next() {
+		var u EventUpdate
+		if err := rows.Scan(&u.ID, &u.EventAPID, &u.UpdateType, &u.UpdateAPID, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		updates = append(updates, u)
+	}
+	return updates, nil
 }

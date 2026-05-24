@@ -107,6 +107,87 @@ type APEvent struct {
 	URL          string       `json:"url,omitempty"`
 	Tag          []APHashtag  `json:"tag,omitempty"`
 	Attachment   []APDocument `json:"attachment,omitempty"`
+	Duration     string       `json:"duration,omitempty"` // ISO 8601 duration
+	Category     []string     `json:"category,omitempty"` // Event categories
+	Icon         *APDocument  `json:"icon,omitempty"`     // Event icon
+}
+
+type APLocationActor struct {
+	Context           any          `json:"@context"`
+	Type              string       `json:"type"`
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	Summary           string       `json:"summary,omitempty"`
+	PreferredUsername string       `json:"preferredUsername"`
+	Inbox             string       `json:"inbox"`
+	Outbox            string       `json:"outbox"`
+	Followers         string       `json:"followers"`
+	Location          *APPlace     `json:"location,omitempty"`
+	Icon              *APDocument  `json:"icon,omitempty"`
+	PublicKey         PublicKey    `json:"publicKey"`
+}
+
+type APMusicianActor struct {
+	Context           any          `json:"@context"`
+	Type              string       `json:"type"`
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	Summary           string       `json:"summary,omitempty"`
+	PreferredUsername string       `json:"preferredUsername"`
+	Inbox             string       `json:"inbox"`
+	Outbox            string       `json:"outbox"`
+	Followers         string       `json:"followers"`
+	Image             *APDocument  `json:"image,omitempty"`
+	MusicBrainzID     string       `json:"musicbrainzId,omitempty"`
+	PublicKey         PublicKey    `json:"publicKey"`
+}
+
+type APRSVP struct {
+	Context    any    `json:"@context"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Actor      string `json:"actor"`
+	Object     string `json:"object"`
+	RSVPType   string `json:"rsvpType"` // "Yes", "No", "Maybe", "Interested"
+	Published  string `json:"published,omitempty"`
+	To         []string `json:"to,omitempty"`
+	CC         []string `json:"cc,omitempty"`
+}
+
+type APLike struct {
+	Context    any    `json:"@context"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Actor      string `json:"actor"`
+	Object     string `json:"object"`
+	Published  string `json:"published,omitempty"`
+	To         []string `json:"to,omitempty"`
+	CC         []string `json:"cc,omitempty"`
+}
+
+type APAnnounce struct {
+	Context    any    `json:"@context"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Actor      string `json:"actor"`
+	Object     string `json:"object"`
+	Published  string `json:"published,omitempty"`
+	To         []string `json:"to,omitempty"`
+	CC         []string `json:"cc,omitempty"`
+}
+
+type APComment struct {
+	Context    any    `json:"@context"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Actor      string `json:"actor"`
+	InReplyTo  string `json:"inReplyTo,omitempty"`
+	Content    string `json:"content"`
+	MediaType  string `json:"mediaType,omitempty"`
+	Published  string `json:"published,omitempty"`
+	To         []string `json:"to,omitempty"`
+	CC         []string `json:"cc,omitempty"`
+	Tag        []APHashtag `json:"tag,omitempty"`
 }
 
 type OrderedCollection struct {

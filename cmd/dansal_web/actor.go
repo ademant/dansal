@@ -1004,3 +1004,514 @@ func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox
 	}
 	return nil
 }
+
+// RSVP functions
+func sendRSVPAccept(cfg *Config, actor *ActorRecord, rsvpAPID, attendeeURI string) {
+	base := actorURL(cfg, actor.OrgSlug)
+	rsvpAccept := Activity{
+		Context: APContext,
+		Type:    "Accept",
+		ID:      base + "#rsvp-accept-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:   base,
+		Object: map[string]any{
+			"type":     "Offer",
+			"id":       rsvpAPID,
+			"actor":    attendeeURI,
+			"object":   rsvpAPID,
+			"rsvpType": "Yes",
+	},
+		To: []string{attendeeURI},
+	}
+	body, err := json.Marshal(rsvpAccept)
+	if err != nil {
+		log.Printf("sendRSVPAccept marshal: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	inboxURL, err := resolveInboxURL(ctx, &DansalClient{HTTP: http.DefaultClient}, attendeeURI)
+	if err != nil {
+		log.Printf("sendRSVPAccept: resolve inbox for %s: %v", attendeeURI, err)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inboxURL, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("sendRSVPAccept new request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/activity+json")
+	keyID := base + "#main-key"
+	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
+		log.Printf("sendRSVPAccept sign: %v", err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("sendRSVPAccept post: %v", err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		log.Printf("sendRSVPAccept: remote returned %d for %s", resp.StatusCode, inboxURL)
+	}
+}
+
+func rsvpHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("name")
+		eventID := r.PathValue("event")
+
+		_, err := getActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		rsvps, err := listRSVPsByEvent(db, eventID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		items := make([]any, 0, len(rsvps))
+		for _, rsvp := range rsvps {
+			items = append(items, APRSVP{
+				Context:    APContext,
+				Type:       "Offer",
+				ID:         rsvp.APID,
+				Actor:      rsvp.ActorID,
+				Object:     eventID,
+				RSVPType:   rsvp.RSVPType,
+				Published:  rsvp.CreatedAt.Format(time.RFC3339),
+				To:         []string{actorURL(cfg, slug)},
+			})
+		}
+
+		base := actorURL(cfg, slug)
+		col := OrderedCollection{
+			Context:    APContext,
+			Type:       "OrderedCollection",
+			ID:         base + "/events/" + eventID + "/rsvps",
+			TotalItems: len(items),
+			Items:      make([]string, len(items)),
+		}
+		for i, item := range items {
+			if obj, ok := item.(APRSVP); ok {
+				col.Items[i] = obj.ID
+			}
+		}
+		writeJSON(w, http.StatusOK, col)
+	}
+}
+
+func interactionHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("name")
+		eventID := r.PathValue("event")
+
+		_, err := getActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		interactions, err := listInteractionsByTarget(db, eventID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		items := make([]any, 0, len(interactions))
+		for _, interaction := range interactions {
+			switch interaction.InteractionType {
+			case "Like":
+				items = append(items, APLike{
+					Context:    APContext,
+					Type:       "Like",
+					ID:         interaction.APID,
+					Actor:      interaction.ActorID,
+					Object:     eventID,
+					Published:  interaction.CreatedAt.Format(time.RFC3339),
+				})
+			case "Dislike":
+				items = append(items, APLike{
+					Context:    APContext,
+					Type:       "Dislike",
+					ID:         interaction.APID,
+					Actor:      interaction.ActorID,
+					Object:     eventID,
+					Published:  interaction.CreatedAt.Format(time.RFC3339),
+				})
+			case "Announce":
+				items = append(items, APAnnounce{
+					Context:    APContext,
+					Type:       "Announce",
+					ID:         interaction.APID,
+					Actor:      interaction.ActorID,
+					Object:     eventID,
+					Published:  interaction.CreatedAt.Format(time.RFC3339),
+				})
+			case "Comment":
+				items = append(items, APComment{
+					Context:    APContext,
+					Type:       "Note",
+					ID:         interaction.APID,
+					Actor:      interaction.ActorID,
+					InReplyTo:  eventID,
+					Content:    interaction.Content,
+					MediaType:  "text/html",
+					Published:  interaction.CreatedAt.Format(time.RFC3339),
+				})
+			}
+		}
+
+		base := actorURL(cfg, slug)
+		col := OrderedCollection{
+			Context:    APContext,
+			Type:       "OrderedCollection",
+			ID:         base + "/events/" + eventID + "/interactions",
+			TotalItems: len(items),
+			Items:      make([]string, len(items)),
+		}
+		for i, item := range items {
+			switch v := item.(type) {
+			case APLike:
+				col.Items[i] = v.ID
+			case APAnnounce:
+				col.Items[i] = v.ID
+			case APComment:
+				col.Items[i] = v.ID
+			}
+		}
+		writeJSON(w, http.StatusOK, col)
+	}
+}
+
+// Location Actor functions
+func locationActorURL(cfg *Config, slug string) string {
+	return "https://" + cfg.Domain + "/locations/" + slug
+}
+
+func buildLocationActor(cfg *Config, actor LocationActor) APLocationActor {
+	base := locationActorURL(cfg, actor.Slug)
+	la := APLocationActor{
+		Context:           APContext,
+		Type:              "Place",
+		ID:                base,
+		Name:              actor.Name,
+		Summary:           actor.Description,
+		PreferredUsername: actor.Slug,
+		Inbox:             base + "/inbox",
+		Outbox:            base + "/outbox",
+		Followers:         base + "/followers",
+		PublicKey: PublicKey{
+			ID:              base + "#main-key",
+			Owner:           base,
+			PublicKeyPem:    actor.PublicKeyPEM,
+			PublicKeyMultibase: actor.PublicKeyMultibase,
+		},
+	}
+	if actor.Address != "" || actor.Latitude != nil || actor.Longitude != nil {
+		place := &APPlace{
+			Type:      "Place",
+			Name:      actor.Name,
+			Address:   &APPostalAddress{Type: "PostalAddress", StreetAddress: actor.Address},
+		}
+		if actor.Latitude != nil {
+			place.Latitude = actor.Latitude
+		}
+		if actor.Longitude != nil {
+			place.Longitude = actor.Longitude
+		}
+		la.Location = place
+	}
+	if actor.Description != "" {
+		la.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: "https://" + cfg.Domain + "/static/location-icon.jpg"}
+	}
+	return la
+}
+
+func locationActorHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		locationActor, err := getLocationActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "location actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		la := buildLocationActor(cfg, *locationActor)
+		writeJSON(w, http.StatusOK, la)
+	}
+}
+
+func locationActorInboxHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		_, err := getLocationActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "location actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "read error")
+			return
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(body, &raw); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+
+		activityType, _ := raw["type"].(string)
+		log.Printf("Location actor %s received activity: %s", slug, activityType)
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// Musician Actor functions
+func musicianActorURL(cfg *Config, slug string) string {
+	return "https://" + cfg.Domain + "/musicians/" + slug
+}
+
+func buildMusicianActor(cfg *Config, actor MusicianActor) APMusicianActor {
+	base := musicianActorURL(cfg, actor.Slug)
+	ma := APMusicianActor{
+		Context:           APContext,
+		Type:              "Person",
+		ID:                base,
+		Name:              actor.Name,
+		Summary:           actor.Description,
+		PreferredUsername: actor.Slug,
+		Inbox:             base + "/inbox",
+		Outbox:            base + "/outbox",
+		Followers:         base + "/followers",
+		PublicKey: PublicKey{
+			ID:              base + "#main-key",
+			Owner:           base,
+			PublicKeyPem:    actor.PublicKeyPEM,
+			PublicKeyMultibase: actor.PublicKeyMultibase,
+		},
+	}
+	if actor.MusicBrainzID != "" {
+		ma.MusicBrainzID = "https://musicbrainz.org/artist/" + actor.MusicBrainzID
+	}
+	if actor.ImageURL != "" {
+		ma.Image = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: actor.ImageURL}
+	}
+	return ma
+}
+
+func musicianActorHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		musicianActor, err := getMusicianActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "musician actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		ma := buildMusicianActor(cfg, *musicianActor)
+		writeJSON(w, http.StatusOK, ma)
+	}
+}
+
+func musicianActorInboxHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+
+		_, err := getMusicianActorBySlug(db, slug)
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "musician actor not found")
+			return
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "read error")
+			return
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(body, &raw); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+
+		activityType, _ := raw["type"].(string)
+		log.Printf("Musician actor %s received activity: %s", slug, activityType)
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// Enhanced WebFinger handler
+func enhancedWebFingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resource := r.URL.Query().Get("resource")
+		if resource == "" {
+			writeJSONError(w, http.StatusBadRequest, "resource parameter required")
+			return
+		}
+
+		var slug, resourceType string
+		prefix := "acct:"
+		if strings.HasPrefix(resource, prefix) {
+			account := strings.TrimPrefix(resource, prefix)
+			parts := strings.SplitN(account, "@", 2)
+			if len(parts) != 2 || parts[1] != cfg.Domain {
+				writeJSONError(w, http.StatusNotFound, "user not found")
+				return
+			}
+			slug = parts[0]
+			resourceType = "organization"
+		} else if strings.HasPrefix(resource, "https://") || strings.HasPrefix(resource, "http://") {
+			u, err := url.Parse(resource)
+			if err != nil {
+				writeJSONError(w, http.StatusBadRequest, "invalid URL")
+				return
+			}
+			if u.Host != cfg.Domain {
+				writeJSONError(w, http.StatusNotFound, "user not found")
+				return
+			}
+			parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+			if len(parts) >= 2 {
+				slug = parts[1]
+				resourceType = parts[0]
+			}
+		} else {
+			slug = resource
+			resourceType = "organization"
+		}
+
+		if slug == "" {
+			writeJSONError(w, http.StatusNotFound, "user not found")
+			return
+		}
+
+		alias, err := getWebFingerAlias(db, slug)
+		if err == nil {
+			slug = getTargetSlugForAlias(db, alias)
+			resourceType = alias.TargetType
+		}
+
+		var actorURLStr string
+		switch resourceType {
+		case "organization":
+			actor, err := getActorBySlug(db, slug)
+			if err == sql.ErrNoRows {
+				if slug == "relay" {
+					writeJSONError(w, http.StatusNotFound, "user not found")
+					return
+				}
+				orgs, err := client.GetOrganizations(r.Context())
+				if err != nil {
+					writeJSONError(w, http.StatusInternalServerError, "upstream error")
+					return
+				}
+				for _, org := range orgs {
+					if effectiveSlug(org) == slug {
+						actor, err = ensureActor(db, org.ID, effectiveSlug(org))
+						if err != nil {
+							writeJSONError(w, http.StatusInternalServerError, "actor init error")
+							return
+						}
+						break
+					}
+				}
+				if actor == nil {
+					writeJSONError(w, http.StatusNotFound, "user not found")
+					return
+				}
+			} else if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			actorURLStr = actorURL(cfg, actor.OrgSlug)
+		case "locations":
+			locationActor, err := getLocationActorBySlug(db, slug)
+			if err == sql.ErrNoRows {
+				writeJSONError(w, http.StatusNotFound, "location not found")
+				return
+			} else if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			actorURLStr = locationActorURL(cfg, locationActor.Slug)
+		case "musicians":
+			musicianActor, err := getMusicianActorBySlug(db, slug)
+			if err == sql.ErrNoRows {
+				writeJSONError(w, http.StatusNotFound, "musician not found")
+				return
+			} else if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			actorURLStr = musicianActorURL(cfg, musicianActor.Slug)
+		default:
+			writeJSONError(w, http.StatusNotFound, "user not found")
+			return
+		}
+
+		base := actorURLStr
+		wf := WebFinger{
+			Subject: resource,
+			Aliases: []string{base},
+			Links: []WebFingerLink{
+				{
+					Rel:  "self",
+					Type: "application/activity+json",
+					Href: base,
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/jrd+json")
+		json.NewEncoder(w).Encode(wf)
+	}
+}
+
+func getTargetSlugForAlias(db *sql.DB, alias *WebFingerAlias) string {
+	switch alias.TargetType {
+	case "organization":
+		actor, err := getActorBySlug(db, strconv.Itoa(alias.TargetID))
+		if err == nil {
+			return actor.OrgSlug
+		}
+	case "location":
+		location, err := getLocationActorBySlug(db, strconv.Itoa(alias.TargetID))
+		if err == nil {
+			return location.Slug
+		}
+	case "musician":
+		musician, err := getMusicianActorBySlug(db, strconv.Itoa(alias.TargetID))
+		if err == nil {
+			return musician.Slug
+		}
+	}
+	return ""
+}

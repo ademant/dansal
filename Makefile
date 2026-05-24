@@ -117,6 +117,49 @@ deploy: install-units
 	systemctl try-restart dansal-web.service || true
 	@echo "deployed"
 
+# Fresh installation with service configuration
+fresh-install: install install-web
+	@[ "$(shell id -u)" = "0" ] || { echo "fresh-install requires root"; exit 1; }
+	# Configure nginx if installed
+	if command -v nginx >/dev/null 2>&1; then \
+		echo "Configuring nginx..."; \
+		install -d -m 755 /etc/nginx/sites-enabled; \
+		install -m 644 deploy/nginx/dansal.conf /etc/nginx/sites-available/dansal.conf; \
+		ln -sf /etc/nginx/sites-available/dansal.conf /etc/nginx/sites-enabled/dansal.conf; \
+		test -f /etc/nginx/nginx.conf && nginx -t && systemctl reload nginx || echo "nginx config test failed"; \
+	else \
+		echo "nginx not found — nginx configuration skipped (template in deploy/nginx/)"; \
+	fi
+	# Configure redis if installed
+	if command -v redis-server >/dev/null 2>&1; then \
+		echo "Configuring redis..."; \
+		systemctl enable --now redis-server; \
+	else \
+		echo "redis not found — redis configuration skipped"; \
+	fi
+	# Configure certbot if installed
+	if command -v certbot >/dev/null 2>&1; then \
+		echo "Configuring certbot..."; \
+		install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy; \
+		install -m 755 deploy/certbot/nginx-reload.sh /etc/letsencrypt/renewal-hooks/deploy/nginx-reload.sh; \
+		systemctl enable --now certbot.timer 2>/dev/null || true; \
+	else \
+		echo "certbot not found — certbot configuration skipped"; \
+	fi
+	# Configure fail2ban if installed (already handled in install target)
+	if [ -d /etc/fail2ban ]; then \
+		echo "fail2ban already configured in install target"; \
+	else \
+		echo "fail2ban not found — fail2ban configuration skipped (templates in deploy/fail2ban/)"; \
+	fi
+	# Final status
+	echo "Fresh installation complete!";
+	echo "Services configured:";
+	command -v nginx >/dev/null 2>&1 && echo "  ✅ nginx (HTTP/3 ready)" || echo "  ❌ nginx (not installed)";
+	command -v redis-server >/dev/null 2>&1 && echo "  ✅ redis" || echo "  ❌ redis (not installed)";
+	command -v certbot >/dev/null 2>&1 && echo "  ✅ certbot" || echo "  ❌ certbot (not installed)";
+	[ -d /etc/fail2ban ] && echo "  ✅ fail2ban" || echo "  ❌ fail2ban (not installed)";
+
 # Build a .deb package. VERSION may be overridden by the CI pipeline
 # (e.g.  make deb DEB_VERSION=0.1.0).
 DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \

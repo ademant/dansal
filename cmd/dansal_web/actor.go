@@ -138,13 +138,19 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// webfingerHandler handles WebFinger requests for actor discovery (RFC 7033)
+// Implements the WebFinger protocol: https://tools.ietf.org/html/rfc7033
+// Supports acct:user@domain format for ActivityPub actor discovery
 func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract and validate resource parameter
 		resource := r.URL.Query().Get("resource")
 		if resource == "" {
 			writeJSONError(w, http.StatusBadRequest, "resource parameter required")
 			return
 		}
+
+		// Validate acct: URI scheme
 		prefix := "acct:"
 		if !strings.HasPrefix(resource, prefix) {
 			writeJSONError(w, http.StatusBadRequest, "only acct: resources supported")

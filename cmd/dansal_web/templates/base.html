@@ -9,7 +9,25 @@
   else if(s==='light'){h.classList.add('light');h.classList.remove('dark')}
   else if(s==='auto'){h.classList.remove('dark');h.classList.remove('light')}
 })();
+
+// Mobile detection and optimizations (#259)
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+if (isMobile) {
+  document.body.classList.add('mobile-device');
+  console.log('Mobile device detected - applying mobile optimizations');
+  
+  // Add mobile-specific event listeners
+  document.addEventListener('touchstart', function() {}, {passive: true});
+  
+  // Lazy loading for images on mobile
+  const lazyImages = document.querySelectorAll('img[data-src]');
+  lazyImages.forEach(img => {
+    img.setAttribute('src', img.getAttribute('data-src'));
+    img.removeAttribute('data-src');
+  });
+}
 </script>
+=======
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — {{.SiteName}}</title>
@@ -151,9 +169,194 @@ footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;bor
 .md-content blockquote{border-left:3px solid var(--blockquote-border);padding:.25rem .75rem;color:var(--fg-dim);margin:.5rem 0}
 .md-content code{background:var(--code-bg);border-radius:3px;padding:.05rem .3rem;font-size:.9em;color:var(--fg)}
 .chip{display:inline-block;background:var(--bg-subtle);color:var(--fg-dim);border-radius:3px;padding:.1rem .5rem;font-size:.82rem;margin:.1rem .1rem 0 0}
+
+/* Mobile UX Improvements (#259) */
+@media(max-width:768px){
+  /* Touch-friendly controls - larger tap targets */
+  button, .btn, a.btn, input[type="submit"], input[type="button"], .nav-link {
+    min-height:44px;
+    min-width:44px;
+    padding:.5rem 1rem;
+  }
+  
+  /* Mobile navigation - bottom navigation bar */
+  .mobile-nav {
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    background:var(--bg-card);
+    border-top:1px solid var(--border);
+    display:flex;
+    justify-content:space-around;
+    padding:.5rem 0;
+    z-index:1000;
+  }
+  
+  .mobile-nav-btn {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    color:var(--fg-muted);
+    text-decoration:none;
+    font-size:.8rem;
+  }
+  
+  .mobile-nav-btn.active {
+    color:var(--link);
+  }
+  
+  .mobile-nav-btn i {
+    font-size:1.5rem;
+    margin-bottom:.2rem;
+  }
+  
+  /* Adaptive layouts - optimized for small screens */
+  .main-content {
+    padding-bottom:60px; /* Space for mobile nav */
+  }
+  
+  .event-card {
+    padding:1rem;
+    margin:.5rem 0;
+  }
+  
+  /* Swipe gestures support */
+  .swipe-container {
+    touch-action:pan-y;
+    overflow-x:hidden;
+  }
+  
+  /* Mobile-optimized event creation form */
+  .event-form {
+    display:flex;
+    flex-direction:column;
+    gap:1rem;
+  }
+  
+  .event-form .form-group {
+    width:100%;
+  }
+  
+  .event-form input,
+  .event-form select,
+  .event-form textarea {
+    font-size:1rem;
+    padding:.75rem;
+  }
+  
+  /* Step-by-step wizard for complex forms */
+  .form-wizard {
+    display:none;
+  }
+  
+  .form-wizard.active {
+    display:block;
+  }
+  
+  .wizard-nav {
+    display:flex;
+    justify-content:space-between;
+    padding:1rem 0;
+  }
+  
+  .wizard-step {
+    flex:1;
+    text-align:center;
+    padding:.5rem;
+    color:var(--fg-muted);
+  }
+  
+  .wizard-step.active {
+    color:var(--link);
+    border-bottom:2px solid var(--link);
+  }
+}
+
+/* Touch-friendly enhancements */
+@media(hover:none)and(pointer:coarse){
+  /* Larger touch targets for buttons */
+  button, .btn, a.btn {
+    padding:.75rem 1.5rem;
+  }
+  
+  /* Better spacing for touch */
+  .event-list .event-item {
+    padding:1rem;
+  }
+  
+  /* Prevent double-tap zoom */
+  img {
+    touch-action:manipulation;
+  }
+}
+
+/* Performance optimizations */
+@media(max-width:768px)and(prefers-reduced-motion:no-preference){
+  /* Smooth scrolling for better UX */
+  html {
+    scroll-behavior:smooth;
+  }
+}
 </style>
+=======
+
+<!-- PWA Support (#259) -->
+{{if .Config.PWAEnabled}}
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#4a6baf">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
+<link rel="mask-icon" href="/static/images/maskable-icon.png" color="#4a6baf">
+{{end}}
+
+<!-- Mobile Optimization (#259) -->
+{{if .Config.MobileOptimized}}
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+{{end}}
+
 </head>
 <body>
+
+<!-- PWA Service Worker Registration (#259) -->
+{{if .Config.PWAEnabled}}
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }).catch(function(err) {
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  });
+}
+
+// Install prompt for PWA
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Show install button in UI
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.style.display = 'block';
+});
+
+function installPWA() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      }
+      deferredPrompt = null;
+    });
+  }
+}
+</script>
+{{end}}
+=======
 <nav>
   <a class="nav-brand" href="/"><img src="/logo.svg" alt="{{.SiteName}}"><span class="nav-brand-name">{{.SiteName}}</span></a>
   <div class="nav-lang">
@@ -292,5 +495,6 @@ function attachTileLayer(map){
     <div class="footer-right">{{if .ImpressumURL}}<a href="{{.ImpressumURL}}">{{.Strings.T "nav_impressum"}}</a>{{end}}</div>
   </div>
 </footer>
+{{template "mobile_nav" .}}
 </body>
 </html>{{end}}

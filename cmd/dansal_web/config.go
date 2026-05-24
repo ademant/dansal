@@ -50,6 +50,16 @@ type Config struct {
 	// Captcha (Cloudflare Turnstile)
 	CaptchaSiteKey   string `yaml:"captcha_site_key"`
 	CaptchaSecretKey string `yaml:"captcha_secret_key"`
+	
+	// Mobile UX Improvements (#259)
+	MobileOptimized      bool   `yaml:"mobile_optimized"`
+	PWAEnabled           bool   `yaml:"pwa_enabled"`
+	ServiceWorkerCache   bool   `yaml:"service_worker_cache"`
+	ImageQualityMobile   int    `yaml:"image_quality_mobile"`
+	MaxImageSizeMobile   []int  `yaml:"max_image_size_mobile"`
+	BundleAnalyzer      bool   `yaml:"bundle_analyzer"`
+	MinifyAssets         bool   `yaml:"minify_assets"`
+	CriticalCSS          bool   `yaml:"critical_css"`
 
 	// Rate limiting for auth endpoints
 	LoginMaxFailures   int `yaml:"login_max_failures"`    // max bad login attempts before block; default 5
@@ -90,6 +100,15 @@ func loadConfig() *Config {
 		AuthRateLimit:      10,
 		AuthRateWindowMins: 10,
 		MinSubmitSecs:      3,
+		// Mobile UX Improvements (#259) defaults
+		MobileOptimized:      true,
+		PWAEnabled:           true,
+		ServiceWorkerCache:   true,
+		ImageQualityMobile:   85,
+		MaxImageSizeMobile:   []int{800, 800},
+		BundleAnalyzer:      false,
+		MinifyAssets:         true,
+		CriticalCSS:          true,
 	}
 
 	configPath := ""

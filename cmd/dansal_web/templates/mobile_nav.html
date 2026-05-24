@@ -1,0 +1,33 @@
+{{define "mobile_nav"}}
+{{if .Config.MobileOptimized}}
+<div class="mobile-nav">
+  <a href="/" class="mobile-nav-btn {{if eq .CurrentPage "home"}}active{{end}}">
+    <i class="icon">📅</i>
+    <span>{{.I18n.nav_events}}</span>
+  </a>
+  <a href="/map" class="mobile-nav-btn {{if eq .CurrentPage "map"}}active{{end}}">
+    <i class="icon">🗺️</i>
+    <span>{{.I18n.nav_map}}</span>
+  </a>
+  <a href="/orgs" class="mobile-nav-btn {{if eq .CurrentPage "orgs"}}active{{end}}">
+    <i class="icon">👥</i>
+    <span>{{.I18n.nav_orgs}}</span>
+  </a>
+  {{if .User}}
+  <a href="/suggest" class="mobile-nav-btn {{if eq .CurrentPage "suggest"}}active{{end}}">
+    <i class="icon">➕</i>
+    <span>{{.I18n.nav_suggest}}</span>
+  </a>
+  <a href="/settings" class="mobile-nav-btn {{if eq .CurrentPage "settings"}}active{{end}}">
+    <i class="icon">⚙️</i>
+    <span>{{.I18n.nav_settings}}</span>
+  </a>
+  {{else}}
+  <a href="/login" class="mobile-nav-btn {{if eq .CurrentPage "login"}}active{{end}}">
+    <i class="icon">🔒</i>
+    <span>{{.I18n.nav_login}}</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
+{{end}}

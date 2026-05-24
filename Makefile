@@ -117,6 +117,119 @@ deploy: install-units
 	systemctl try-restart dansal-web.service || true
 	@echo "deployed"
 
+# safe-update: update to new version with backup and verification
+# Usage: make safe-update VERSION=1.2.3
+safe-update:
+	@[ "$(shell id -u)" = "0" ] || { echo "safe-update requires root"; exit 1; }
+	# Validate version parameter
+	@if [ -z "$$VERSION" ]; then \
+		echo "ERROR: VERSION parameter required"; \
+		echo "Usage: make safe-update VERSION=x.y.z"; \
+		exit 1; \
+	fi
+	# Create backup directory with timestamp
+	BACKUP_DIR="/var/backups/dansal/$$(date +%Y%m%d_%H%M%S)_v$$VERSION";
+	echo "Creating backup to $$BACKUP_DIR...";
+	install -d -m 755 "$$BACKUP_DIR";
+	# Backup current binaries
+	cp -a $(BINDIR)/dansal        "$$BACKUP_DIR/dansal.bak"
+	cp -a $(BINDIR)/dansal_admin  "$$BACKUP_DIR/dansal_admin.bak"
+	cp -a $(BINDIR)/dansal-web    "$$BACKUP_DIR/dansal-web.bak"
+	# Backup configuration files
+	cp -a $(SYSCONFDIR)/config.yaml "$$BACKUP_DIR/config.yaml.bak"
+	cp -a $(SYSCONFDIR)/web.yaml    "$$BACKUP_DIR/web.yaml.bak"
+	# Backup database
+	cp -a $(STATEDIR)/calendar.db  "$$BACKUP_DIR/calendar.db.bak"
+	# Verify backup
+	if [ -f "$$BACKUP_DIR/dansal.bak" ] && \
+	   [ -f "$$BACKUP_DIR/config.yaml.bak" ] && \
+	   [ -f "$$BACKUP_DIR/calendar.db.bak" ]; then \
+		echo "✅ Backup created successfully"; \
+	else \
+		echo "❌ Backup failed"; \
+		exit 1; \
+	fi
+	# Check current service status
+	echo "Checking current service status...";
+	SERVICE_ACTIVE=$$(systemctl is-active $(SERVICE) && echo "active" || echo "inactive");
+	WEB_ACTIVE=$$(systemctl is-active dansal-web.service 2>/dev/null && echo "active" || echo "inactive");
+	echo "Current status: dansal=$$SERVICE_ACTIVE, dansal-web=$$WEB_ACTIVE";
+	# Stop services for safe update
+	echo "Stopping services...";
+	systemctl stop $(SERVICE) 2>/dev/null || true;
+	systemctl stop dansal-web.service 2>/dev/null || true;
+	# Install new version
+	echo "Installing new version $$VERSION...";
+	install -m 755 dansal        $(BINDIR)/dansal
+	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
+	install -m 755 dansal_web    $(BINDIR)/dansal-web
+	# Verify installation
+	if [ -f $(BINDIR)/dansal ] && [ -f $(BINDIR)/dansal-web ]; then \
+		echo "✅ New binaries installed"; \
+	else \
+		echo "❌ Installation failed - restoring backup..."; \
+		cp -a "$$BACKUP_DIR/dansal.bak"        $(BINDIR)/dansal
+		cp -a "$$BACKUP_DIR/dansal_admin.bak"  $(BINDIR)/dansal_admin
+		cp -a "$$BACKUP_DIR/dansal-web.bak"    $(BINDIR)/dansal-web
+		exit 1; \
+	fi
+	# Start services
+	echo "Starting services...";
+	if [ "$$SERVICE_ACTIVE" = "active" ]; then \
+		systemctl start $(SERVICE); \
+	fi
+	if [ "$$WEB_ACTIVE" = "active" ]; then \
+		systemctl start dansal-web.service; \
+	fi
+	# Verify services are running
+	sleep 2;
+	NEW_SERVICE_STATUS=$$(systemctl is-active $(SERVICE) && echo "✅" || echo "❌");
+	NEW_WEB_STATUS=$$(systemctl is-active dansal-web.service 2>/dev/null && echo "✅" || echo "❌");
+	echo "Update complete!";
+	echo "Service status: dansal=$$NEW_SERVICE_STATUS, dansal-web=$$NEW_WEB_STATUS";
+	echo "Backup located at: $$BACKUP_DIR";
+	echo "To rollback: sudo make rollback BACKUP_DIR=$$BACKUP_DIR";
+
+# rollback: restore from backup
+# Usage: make rollback BACKUP_DIR=/var/backups/dansal/TIMESTAMP_vVERSION
+rollback:
+	@[ "$(shell id -u)" = "0" ] || { echo "rollback requires root"; exit 1; }
+	@if [ -z "$$BACKUP_DIR" ]; then \
+		echo "ERROR: BACKUP_DIR parameter required"; \
+		echo "Usage: make rollback BACKUP_DIR=/path/to/backup"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$$BACKUP_DIR" ]; then \
+		echo "ERROR: Backup directory $$BACKUP_DIR not found"; \
+		exit 1; \
+	fi
+	# Check current service status
+	SERVICE_ACTIVE=$$(systemctl is-active $(SERVICE) && echo "active" || echo "inactive");
+	WEB_ACTIVE=$$(systemctl is-active dansal-web.service 2>/dev/null && echo "active" || echo "inactive");
+	# Stop services
+	echo "Stopping services for rollback...";
+	systemctl stop $(SERVICE) 2>/dev/null || true;
+	systemctl stop dansal-web.service 2>/dev/null || true;
+	# Restore from backup
+	echo "Restoring from $$BACKUP_DIR...";
+	cp -a "$$BACKUP_DIR/dansal.bak"        $(BINDIR)/dansal
+	cp -a "$$BACKUP_DIR/dansal_admin.bak"  $(BINDIR)/dansal_admin
+	cp -a "$$BACKUP_DIR/dansal-web.bak"    $(BINDIR)/dansal-web
+	cp -a "$$BACKUP_DIR/config.yaml.bak"  $(SYSCONFDIR)/config.yaml
+	cp -a "$$BACKUP_DIR/web.yaml.bak"     $(SYSCONFDIR)/web.yaml
+	cp -a "$$BACKUP_DIR/calendar.db.bak" $(STATEDIR)/calendar.db
+	chown $(SERVICE):$(SERVICE) $(STATEDIR)/calendar.db;
+	chmod 640 $(STATEDIR)/calendar.db;
+	# Start services
+	echo "Starting services...";
+	if [ "$$SERVICE_ACTIVE" = "active" ]; then \
+		systemctl start $(SERVICE); \
+	fi
+	if [ "$$WEB_ACTIVE" = "active" ]; then \
+		systemctl start dansal-web.service; \
+	fi
+	echo "Rollback complete!";
+
 # Fresh installation with service configuration
 fresh-install: install install-web
 	@[ "$(shell id -u)" = "0" ] || { echo "fresh-install requires root"; exit 1; }

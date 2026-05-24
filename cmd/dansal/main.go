@@ -1608,10 +1608,26 @@ func withCaching(next http.Handler) http.Handler {
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
+	printVersionOnly := flag.Bool("V", false, "print version only")
+	printBuildInfo := flag.Bool("build-info", false, "print detailed build information")
 	flag.Parse()
 
-	if *printVersion {
-		fmt.Printf("dansal %s (built %s)\n", Version, BuildTime)
+	if *printVersion || *printVersionOnly {
+		if *printVersionOnly {
+			fmt.Printf("%s\n", Version)
+		} else {
+			fmt.Printf("dansal %s (built %s)\n", Version, BuildTime)
+		}
+		os.Exit(0)
+	}
+
+	if *printBuildInfo {
+		fmt.Printf("dansal Build Information:\n")
+		fmt.Printf("  Version:     %s\n", Version)
+		fmt.Printf("  Build Time:  %s\n", BuildTime)
+		fmt.Printf("  Go Version:  %s\n", runtime.Version())
+		fmt.Printf("  OS/Arch:     %s/%s\n", runtime.GOOS, runtime.GOARCH)
+		fmt.Printf("  CPU Cores:   %d\n", runtime.NumCPU())
 		os.Exit(0)
 	}
 

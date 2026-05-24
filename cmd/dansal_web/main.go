@@ -35,6 +35,8 @@ func (lh *liveHandler) store(h http.Handler) {
 func main() {
 	// Register --version before loadConfig() calls flag.Parse().
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
+	printVersionOnly := flag.Bool("V", false, "print version only")
+	printBuildInfo := flag.Bool("build-info", false, "print detailed build information")
 
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal_web"); err == nil {
 		log.SetOutput(w)
@@ -48,8 +50,22 @@ func main() {
 		time.Duration(cfg.AuthRateWindowMins)*time.Minute,
 	)
 
-	if *printVersion {
-		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)
+	if *printVersion || *printVersionOnly {
+		if *printVersionOnly {
+			fmt.Printf("%s\n", Version)
+		} else {
+			fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)
+		}
+		os.Exit(0)
+	}
+
+	if *printBuildInfo {
+		fmt.Printf("dansal-web Build Information:\n")
+		fmt.Printf("  Version:     %s\n", Version)
+		fmt.Printf("  Build Time:  %s\n", BuildTime)
+		fmt.Printf("  Go Version:  %s\n", runtime.Version())
+		fmt.Printf("  OS/Arch:     %s/%s\n", runtime.GOOS, runtime.GOARCH)
+		fmt.Printf("  CPU Cores:   %d\n", runtime.NumCPU())
 		os.Exit(0)
 	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)

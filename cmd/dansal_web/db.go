@@ -13,6 +13,8 @@ func initDB(path string) *sql.DB {
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
+	
+	// Create tables
 	if _, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS actors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,9 +83,28 @@ CREATE TABLE IF NOT EXISTS event_templates (
 		log.Fatalf("init db schema: %v", err)
 	}
 	// Idempotent column additions for schema evolution
+	
+	// Add Ed25519 key columns (required for WebFinger implementation)
+	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_ed25519_pem TEXT")
+	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS private_key_ed25519_pem TEXT")
+	db.Exec("ALTER TABLE actors ADD COLUMN IF NOT EXISTS public_key_multibase TEXT")
+	
 	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
+	
+	// Create schema_migrations table for tracking
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			migration_name TEXT UNIQUE NOT NULL,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	
+	// Mark the ed25519 migration as applied
+	db.Exec("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('001_add_ed25519_keys')")
+	
 	return db
 }
 

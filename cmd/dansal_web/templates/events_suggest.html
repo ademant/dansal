@@ -91,26 +91,42 @@
         <input type="text" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
       </label>
     </div>
-    <div class="form-row form-row-checks">
-      <label class="check-label"><input type="checkbox" name="has_ball" value="1"> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop" value="1"> {{$.Strings.T "filter_type_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_festival" value="1"> {{$.Strings.T "filter_type_festival"}}</label>
-    </div>
-    {{if $.Data.GroupedTags}}
     <div class="form-row">
-      <fieldset class="tag-picker">
-        <legend>{{$.Strings.T "evt_tags"}}</legend>
-        {{range $.Data.GroupedTags}}
-        <div class="tag-group">
-          <strong>{{.Category}}</strong>
-          <div class="tag-checks">
-            {{range .Tags}}<label class="check-label"><input type="checkbox" name="tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}
-          </div>
+      <div class="check-row">
+        <label class="check-label"><input type="checkbox" name="tags" value="ball"> {{$.Strings.T "tag_ball"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="festival"> {{$.Strings.T "tag_festival"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="open-air"> {{$.Strings.T "tag_open_air"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="session"> {{$.Strings.T "tag_session"}}</label>
+        <label class="check-label"><input type="checkbox" name="tags" value="concert"> {{$.Strings.T "tag_concert"}}</label>
+      </div>
+      <div id="workshop-difficulty" hidden style="margin-top:.5rem">
+        <div class="check-row">
+          <label class="check-label"><input type="checkbox" name="tags" value="beginners"> {{$.Strings.T "tag_beginners"}}</label>
+          <label class="check-label"><input type="checkbox" name="tags" value="intermediate"> {{$.Strings.T "tag_intermediate"}}</label>
+          <label class="check-label"><input type="checkbox" name="tags" value="advanced"> {{$.Strings.T "tag_advanced"}}</label>
         </div>
-        {{end}}
-      </fieldset>
+      </div>
     </div>
-    {{end}}
+    <div class="form-row">
+      <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
+      <div class="check-row">
+        <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
+        <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
+        <label class="check-label"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
+        <label class="check-label"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
+      <div class="check-row">
+        <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
+        <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
+        <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
+        <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+      </div>
+    </div>
     {{if $.Data.HintSMTP}}
     <div class="form-row">
       <label>{{$.Strings.T "suggest_email_label"}} *
@@ -152,11 +168,8 @@
 .form-row label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
 .form-row input[type=text],.form-row input[type=email],.form-row input[type=datetime-local],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.form-row-checks{display:flex;gap:1.5rem}
-.tag-picker{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;width:100%;box-sizing:border-box}
-.tag-picker legend{font-weight:600;font-size:.88rem;color:#444;padding:0 .25rem}
-.tag-group{margin-bottom:.5rem}
-.tag-checks{display:flex;flex-wrap:wrap;gap:.4rem .75rem}
+.check-row{display:flex;gap:1rem;flex-wrap:wrap;margin:.3rem 0}
+.form-label-sm{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.25rem}
 .hp-field{display:none!important}
 .suggest-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
 .tab-btn{padding:.4rem .9rem;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:.9rem}
@@ -171,6 +184,10 @@ function switchTab(btn, id) {
   btn.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
   document.getElementById('tab-' + id).hidden = false;
+}
+function toggleDifficulty() {
+  var show = document.getElementById('tag-dance-workshop').checked || document.getElementById('tag-musician-workshop').checked;
+  document.getElementById('workshop-difficulty').hidden = !show;
 }
 </script>
 {{end}}

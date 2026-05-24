@@ -32,12 +32,10 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.NotFound(w, r)
 			return
 		}
-		allTags, _ := client.GetTags(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
-			GroupedTags:    buildGroupedTags(allTags, nil),
 		}))
 	}
 }
@@ -131,16 +129,19 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
+		tags := r.Form["tags"]
 		req := SuggestEventReq{
-			Title:       title,
-			Description: description,
-			StartTime:   r.FormValue("start_time"),
-			EndTime:     r.FormValue("end_time"),
-			HasBall:     r.FormValue("has_ball") == "1",
-			HasWorkshop: r.FormValue("has_workshop") == "1",
-			HasFestival: r.FormValue("has_festival") == "1",
-			Tags:        r.Form["tags"],
-			URL:         r.FormValue("url"),
+			Title:              title,
+			Description:        description,
+			StartTime:          r.FormValue("start_time"),
+			EndTime:            r.FormValue("end_time"),
+			HasBall:            sliceContains(tags, "ball"),
+			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival:        sliceContains(tags, "festival"),
+			Tags:               tags,
+			URL:                r.FormValue("url"),
+			Food:               r.FormValue("food"),
+			Drink:              r.FormValue("drink"),
 			Location: PreviewLoc{
 				Location: r.FormValue("location"),
 				Town:     r.FormValue("town"),

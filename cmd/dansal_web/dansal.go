@@ -1982,6 +1982,8 @@ type SuggestEventReq struct {
 	WorkshopDifficulty string     `json:"workshop_difficulty,omitempty"`
 	Tags               []string   `json:"tags,omitempty"`
 	URL                string     `json:"url,omitempty"`
+	Food               string     `json:"food,omitempty"`
+	Drink              string     `json:"drink,omitempty"`
 	Location           PreviewLoc `json:"location"`
 	Email              string     `json:"email"`
 	Phone2             string     `json:"phone2"` // honeypot

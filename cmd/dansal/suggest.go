@@ -35,6 +35,8 @@ type SuggestRequest struct {
 	IsCancelled        bool                 `json:"is_cancelled"`
 	Tags               []string             `json:"tags"`
 	URL                string               `json:"url,omitempty"`
+	Food               string               `json:"food,omitempty"`
+	Drink              string               `json:"drink,omitempty"`
 	Location           EventLocationRequest `json:"location"`
 	Email              string               `json:"email"`
 	Phone2             string               `json:"phone2"` // honeypot
@@ -176,11 +178,11 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO events
 			 (title, description, start_time, end_time, location_id,
 			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
-			  is_published, url, suggester_email, suggestion_token, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+			  is_published, url, food, drink, suggester_email, suggestion_token, short_code)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
-			urlVal(req.URL), req.Email, tokenArg, shortCode,
+			urlVal(req.URL), req.Food, req.Drink, req.Email, tokenArg, shortCode,
 		)
 		if insertErr == nil {
 			eventID, _ = res.LastInsertId()

@@ -24,11 +24,11 @@ StateDirectoryMode=0750
 ConfigurationDirectory=dansal
 ConfigurationDirectoryMode=0750
 
-# Sandboxing
+# Security Hardening - Least Privilege
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
+ProtectSystem=full
+ProtectHome=read-only
 PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -39,9 +39,26 @@ LockPersonality=true
 RestrictRealtime=true
 RestrictNamespaces=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-SystemCallFilter=@system-service
+SystemCallFilter=@system-service @clock @cpu-emulation @debug @keyring @module @mount @obsolete @raw-io @reboot @resources @setuid @swap
 SystemCallArchitectures=native
 MemoryDenyWriteExecute=true
+RemoveIPC=true
+PrivateUsers=true
+ProtectHostname=true
+ProtectProc=invisible
+ReadWritePaths=/var/lib/dansal /run/dansal /etc/dansal
+ReadOnlyPaths=/usr/share/zoneinfo /etc/ssl/certs
+TemporaryFileSystem=/var/tmp
+DevicePolicy=closed
+DeviceAllow=char-pts rw
+DeviceAllow=char-tty rw
+DeviceAllow=char-random rw
+DeviceAllow=char-urandom rw
+DeviceAllow=char-null rw
+DeviceAllow=char-zero rw
+DeviceAllow=char-full rw
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_SETGID CAP_SETUID
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target

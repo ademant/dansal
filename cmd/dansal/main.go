@@ -1349,6 +1349,12 @@ func createTables() error {
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);
+	CREATE INDEX IF NOT EXISTS idx_events_filter ON events(is_published, start_time, end_time, location_id);
+	CREATE INDEX IF NOT EXISTS idx_locations_geo ON locations(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_events_org_published ON events(organization_id, is_published, start_time) WHERE organization_id IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_events_tag_search ON event_tags(tag, event_id);
+	CREATE INDEX IF NOT EXISTS idx_musicians_name ON musicians(bandname);
+	CREATE INDEX IF NOT EXISTS idx_organizations_name ON organizations(name);
 	CREATE TABLE IF NOT EXISTS tags (
 		slug     TEXT PRIMARY KEY,
 		name     TEXT NOT NULL,
@@ -1356,7 +1362,66 @@ func createTables() error {
 	);
 	`
 	_, err := db.Exec(schema)
+	if err != nil {
+		return err
+	}
+
+	// Apply migrations for existing databases
+	err = applyDatabaseMigrations(db)
 	return err
+}
+
+func applyDatabaseMigrations(db *sql.DB) error {
+	// Create schema_migrations table if it doesn't exist
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			migration_name TEXT UNIQUE NOT NULL,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create schema_migrations table: %w", err)
+	}
+
+	// Check if performance indexes migration has been applied
+	var migrationExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE migration_name = '001_add_performance_indexes')
+	`).Scan(&migrationExists)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	if !migrationExists {
+		log.Printf("Applying database performance indexes migration...")
+		_, err = db.Exec(`
+			-- Composite index for event filtering
+			CREATE INDEX IF NOT EXISTS idx_events_filter ON events(is_published, start_time, end_time, location_id);
+
+			-- Geospatial index for location-based queries
+			CREATE INDEX IF NOT EXISTS idx_locations_geo ON locations(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+
+			-- Organization-based event queries
+			CREATE INDEX IF NOT EXISTS idx_events_org_published ON events(organization_id, is_published, start_time) WHERE organization_id IS NOT NULL;
+
+			-- Tag search optimization
+			CREATE INDEX IF NOT EXISTS idx_events_tag_search ON event_tags(tag, event_id);
+
+			-- Musician and organization name searches
+			CREATE INDEX IF NOT EXISTS idx_musicians_name ON musicians(bandname);
+			CREATE INDEX IF NOT EXISTS idx_organizations_name ON organizations(name);
+
+			-- Record migration
+			INSERT INTO schema_migrations (migration_name) VALUES ('001_add_performance_indexes');
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to apply performance indexes migration: %w", err)
+		}
+		log.Printf("Database performance indexes migration applied successfully")
+	}
+
+	return nil
 }
 
 func reloadConfig(path string) {

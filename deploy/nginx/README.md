@@ -366,6 +366,29 @@ The configuration includes two rate limiting zones:
    - Burst capacity: 10 requests
    - Applies to sensitive endpoints: `/api/v1/login`, `/api/v1/register`, `/api/v1/verify`, `/api/v1/invites`
 
+**Implementation Details:**
+
+The template uses **separate location blocks** for different rate limits:
+
+```nginx
+# Main API endpoint with general rate limiting
+location /api/ {
+    limit_req zone=api_limit burst=20 nodelay;
+    # ... proxy settings
+}
+
+# Auth endpoints with stricter rate limiting
+location ~* /api/v1/(login|register|verify|invites) {
+    limit_req zone=auth_limit burst=10 nodelay;
+    # ... proxy settings
+}
+```
+
+**Why separate location blocks?**
+- nginx `if` directives create new contexts where many directives (including `limit_req`) are not allowed
+- Using regex location blocks (`~*`) is the proper way to apply different rate limits to specific endpoints
+- This approach is compatible with all nginx versions that support rate limiting
+
 **How it works:**
 - Uses nginx's `limit_req` module with shared memory zones
 - Tracks requests by client IP address (`$binary_remote_addr`)

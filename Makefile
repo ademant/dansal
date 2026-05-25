@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin \
-        run fmt vet clean install install-web install-units update deb
+        run fmt vet clean install install-web install-units update deb deploy-nginx
 
 build:
 	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
@@ -158,3 +158,38 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	dpkg-deb --build --root-owner-group $$DEB_DIR \
 	    dansal_$(DEB_VERSION)_$(DEB_ARCH).deb; \
 	echo "Built dansal_$(DEB_VERSION)_$(DEB_ARCH).deb"
+
+# Deploy nginx configuration using domain from web.yaml
+deploy-nginx:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx requires root"; exit 1; }
+	@if [ ! -f /etc/dansal/web.yaml ]; then \
+	    echo "Error: /etc/dansal/web.yaml not found"; \
+	    echo "Run 'make install-web' first or ensure web.yaml is properly configured"; \
+	    exit 1; \
+	fi
+	DOMAIN=$$(grep -E '^domain:' /etc/dansal/web.yaml | awk '{print $$2}' | tr -d '"'); \
+	if [ -z "$$DOMAIN" ]; then \
+	    echo "Error: Could not extract domain from /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+
+# Deploy both web application and nginx configuration
+deploy-full: install-web deploy-nginx

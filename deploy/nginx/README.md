@@ -148,10 +148,27 @@ sudo apt install certbot python3-certbot-nginx
 
 #### Recommended: Get certificates before deploying nginx config
 ```bash
-sudo certbot certonly --nginx -d events.example.com
+sudo certbot certonly --nginx -d your-domain.com
 ```
 
-This creates certificates in `/etc/letsencrypt/live/events.example.com/` which our template expects.
+**Important**: Replace `your-domain.com` with your actual domain name. The `deploy-nginx` target will:
+1. Extract the domain from `/etc/dansal/web.yaml`
+2. Replace ALL occurrences of `events.example.com` in the template with your domain
+3. This includes server_name, SSL certificate paths, and comments
+
+This creates certificates in `/etc/letsencrypt/live/your-domain.com/` which our template expects.
+
+#### Verify certificate paths
+After running certbot, check that certificates exist:
+```bash
+ls -la /etc/letsencrypt/live/your-domain.com/
+```
+
+You should see:
+- `fullchain.pem` (certificate chain)
+- `privkey.pem` (private key)
+- `cert.pem` (certificate)
+- `chain.pem` (intermediate certificates)
 
 ### 2. Configure dansal.conf
 

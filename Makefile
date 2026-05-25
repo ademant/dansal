@@ -177,13 +177,21 @@ deploy-nginx:
 	install -d -m 755 /etc/nginx/sites-available
 	install -d -m 755 /etc/nginx/sites-enabled
 	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
 	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
 	# Enable the site by creating a symlink
 	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
 	# Test the nginx configuration
 	if nginx -t; then \
 	    echo "nginx configuration test passed"; \
-	    # Reload nginx to apply changes
+	    # Reload nginx to apply changes \
 	    systemctl reload nginx || systemctl restart nginx; \
 	    echo "nginx configuration deployed and reloaded successfully"; \
 	else \

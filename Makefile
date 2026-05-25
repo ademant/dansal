@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin \
-        run fmt vet clean install install-web install-units update deb
+        run fmt vet clean install install-web install-units update deb deploy-nginx
 
 build:
 	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
@@ -54,7 +54,253 @@ install: build
 		echo "Installed $(SYSCONFDIR)/config.yaml"; \
 	else \
 		echo "$(SYSCONFDIR)/config.yaml already exists — not overwriting"; \
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
 	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	fi
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Create nginx sites-available directory if it doesn't exist
+	install -d -m 755 /etc/nginx/sites-available
+	install -d -m 755 /etc/nginx/sites-enabled
+	# Deploy the nginx configuration template
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/sites-available/dansal
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/sites-available/dansal"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/sites-available/dansal; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Enable the site by creating a symlink
+	ln -sf /etc/nginx/sites-available/dansal /etc/nginx/sites-enabled/dansal
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
 	# binaries
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
@@ -158,3 +404,54 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	dpkg-deb --build --root-owner-group $$DEB_DIR \
 	    dansal_$(DEB_VERSION)_$(DEB_ARCH).deb; \
 	echo "Built dansal_$(DEB_VERSION)_$(DEB_ARCH).deb"
+
+# Deploy nginx configuration using domain from web.yaml
+.ONESHELL:
+deploy-nginx:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx requires root"; exit 1; }
+	@if [ ! -f /etc/dansal/web.yaml ]; then \
+	    echo "Error: /etc/dansal/web.yaml not found"; \
+	    echo "Run 'make install-web' first or ensure web.yaml is properly configured"; \
+	    exit 1; \
+	fi
+	# Extract domain with more robust parsing (handles various YAML formats)
+	DOMAIN=$$(grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/domain:[[:space:]]*"?([^"]+)"?/\1/'); \
+	[ -z "$$DOMAIN" ] && { echo "Error: Could not extract domain from /etc/dansal/web.yaml"; echo "Expected format: domain: \"your-domain.com\" or domain: your-domain.com"; echo "Current domain line in /etc/dansal/web.yaml:"; grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/^/    /' || echo "    (no domain line found)"; exit 1; }; \
+	echo "Deploying nginx configuration for domain: $$DOMAIN"
+	# Validate domain format (basic check for dots and valid characters)
+	if ! echo "$$DOMAIN" | grep -q '\.'; then \
+	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
+	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
+	    exit 1; \
+	fi
+	# Create nginx conf.d directory if it doesn't exist
+	install -d -m 755 /etc/nginx/conf.d
+	# Deploy the nginx configuration template to conf.d
+	# Replace domain in server_name, SSL certificate paths, and comments
+	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal.conf
+	# Verify the replacement worked
+	if ! grep -q "$$DOMAIN" /etc/nginx/conf.d/dansal.conf; then \
+	    echo "Error: Domain replacement failed. Check if sed command worked."; \
+	    echo "Expected domain: $$DOMAIN"; \
+	    echo "Check the generated file: /etc/nginx/conf.d/dansal.conf"; \
+	    exit 1; \
+	fi
+	# Specifically check that server_name was replaced
+	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/conf.d/dansal.conf; then \
+	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
+	    echo "Check for empty server_name directives in the generated file"; \
+	    exit 1; \
+	fi
+	# Test the nginx configuration
+	if nginx -t; then \
+	    echo "nginx configuration test passed"; \
+	    # Reload nginx to apply changes \
+	    systemctl reload nginx || systemctl restart nginx; \
+	    echo "nginx configuration deployed and reloaded successfully"; \
+	else \
+	    echo "Error: nginx configuration test failed"; \
+	    exit 1; \
+	fi
+
+# Deploy both web application and nginx configuration
+deploy-full: install-web deploy-nginx

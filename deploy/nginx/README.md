@@ -48,6 +48,20 @@ make
 sudo make install
 ```
 
+### 2. Install certbot for TLS certificates
+
+#### Install certbot with nginx plugin:
+```bash
+sudo apt install certbot python3-certbot-nginx
+```
+
+#### Recommended: Get certificates before deploying nginx config
+```bash
+sudo certbot certonly --nginx -d events.example.com
+```
+
+This creates certificates in `/etc/letsencrypt/live/events.example.com/` which our template expects.
+
 ### 2. Configure dansal.conf
 
 1. Copy the template:
@@ -139,6 +153,113 @@ The configuration uses two server blocks:
    - Fallback for older clients
    - Supports TLS 1.2 and 1.3
    - Same functionality as HTTP/3 server
+
+### Certbot Integration Best Practices
+
+Our nginx template is designed to work seamlessly with certbot. Here are best practices for integration:
+
+#### Certificate Paths
+The template uses standard Let's Encrypt paths:
+```nginx
+ssl_certificate     /etc/letsencrypt/live/events.example.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/events.example.com/privkey.pem;
+```
+
+#### Recommended Workflow
+
+**Option 1: Certbot First (Recommended)**
+```bash
+# 1. Get certificate before deploying nginx config
+sudo certbot certonly --nginx -d your-domain.com
+
+# 2. Deploy dansal-web
+sudo make install-web
+
+# 3. Deploy nginx configuration (replaces domain automatically)
+sudo make deploy-nginx
+
+# 4. Test and reload
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Option 2: Certbot After Deployment**
+```bash
+# 1. Deploy nginx config (uses dummy certs initially)
+sudo make deploy-nginx
+
+# 2. Get certificate - certbot will modify the config
+sudo certbot --nginx -d your-domain.com
+
+# 3. Test
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+#### Certificate Renewal
+
+Certbot automatically sets up renewal. Test it with:
+```bash
+# Dry run (test renewal without making changes)
+sudo certbot renew --dry-run
+
+# Check renewal timer
+sudo systemctl list-timers | grep certbot
+```
+
+#### Multi-Domain Setup
+
+If you need multiple domains, edit the deployed config:
+```bash
+sudo nano /etc/nginx/sites-available/dansal
+```
+
+Add additional server names:
+```nginx
+server_name your-domain.com www.your-domain.com;
+```
+
+Then update certificates:
+```bash
+sudo certbot --expand -d your-domain.com,www.your-domain.com
+```
+
+#### Troubleshooting Certbot Issues
+
+1. **Certificate not found**:
+   ```bash
+   # Check certbot certificates
+   sudo certbot certificates
+   
+   # Verify paths match in nginx config
+   ls -la /etc/letsencrypt/live/your-domain.com/
+   ```
+
+2. **Permission issues**:
+   ```bash
+   sudo chown -R root:root /etc/letsencrypt/
+   sudo chmod -R 755 /etc/letsencrypt/
+   sudo systemctl restart nginx
+   ```
+
+3. **Certbot renewal failures**:
+   ```bash
+   # Check renewal logs
+   sudo journalctl -u certbot -f
+   
+   # Manual renewal test
+   sudo certbot renew --force-renewal --dry-run
+   ```
+
+#### Advanced: Custom Certificate Paths
+
+If you use custom certificate paths, modify the template before deployment:
+```bash
+sed -i 's|/etc/letsencrypt/live/events.example.com|/your/custom/path|g' deploy/nginx/dansal.conf
+```
+
+Then deploy normally:
+```bash
+sudo make deploy-nginx
+```
 
 ### Rate Limiting
 
@@ -252,6 +373,76 @@ If you prefer separate hostnames for API and web frontend, see the commented sec
 Example:
 - `https://api.example.com` → REST API only
 - `https://events.example.com` → Web frontend only
+
+## Using Makefile with Certbot
+
+The `deploy-nginx` Makefile target is designed to work seamlessly with certbot:
+
+### Complete Deployment Workflow
+
+```bash
+# 1. Install dansal and dansal-web
+sudo make install
+sudo make install-web
+
+# 2. Get TLS certificate with certbot
+sudo certbot certonly --nginx -d your-domain.com
+
+# 3. Deploy nginx configuration (auto-replaces domain)
+sudo make deploy-nginx
+
+# 4. Verify everything works
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot renew --dry-run
+```
+
+### Domain Replacement
+
+The `deploy-nginx` target automatically:
+1. Reads `domain:` from `/etc/dansal/web.yaml`
+2. Replaces `events.example.com` with your actual domain
+3. Deploys to `/etc/nginx/sites-available/dansal`
+
+Example `/etc/dansal/web.yaml`:
+```yaml
+domain: "your-domain.com"
+```
+
+### Certbot Renewal Hooks
+
+To ensure nginx reloads after certificate renewal, create a renewal hook:
+
+```bash
+sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy/
+sudo nano /etc/letsencrypt/renewal-hooks/deploy/dansal-reload.sh
+```
+
+Add this content:
+```bash
+#!/bin/bash
+systemctl reload nginx
+```
+
+Make it executable:
+```bash
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/dansal-reload.sh
+```
+
+### Verifying Certbot Integration
+
+Check that certbot recognizes your nginx configuration:
+
+```bash
+# List certbot certificates
+sudo certbot certificates
+
+# Check renewal configuration
+sudo certbot show-renewal
+
+# Test renewal process
+sudo certbot renew --dry-run
+```
 
 ## Upgrading from HTTP/2-only
 

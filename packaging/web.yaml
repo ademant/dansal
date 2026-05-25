@@ -46,6 +46,11 @@ poll_secs: 300
 
 # --- Federation ---
 
+# Name of the global relay actor that publishes all events on this instance.
+# Change this only before first deployment, or use dansal_admin to rename later.
+# Default: "relay"
+relay_actor_name: "relay"
+
 # Whether to show events federated from followed organisations in the main
 # event list. Federated events are always stored in the local database;
 # this only controls their visibility on the public index page.

@@ -32,6 +32,11 @@
   <input id="actor_name" type="text" name="actor_name" value="{{.Org.ActorName}}" placeholder="my-org">
   <span id="actor-name-status" style="font-size:.82rem;margin-top:-.2rem"></span>
   <p class="field-hint">{{$.Strings.T "org_actor_name_hint"}}</p>
+  {{if .HasActorWithFollowers}}
+  <div class="warning-box" style="margin-top: 0.5rem; padding: 0.5rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+    <strong>⚠️ {{$.Strings.T "admin_actor_name_change_warning"}}</strong>
+  </div>
+  {{end}}
 
   <label for="website">{{$.Strings.T "org_website"}}</label>
   <input id="website" type="url" name="website" value="{{.Org.Website}}" placeholder="https://example.org">

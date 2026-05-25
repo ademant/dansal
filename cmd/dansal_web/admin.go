@@ -93,6 +93,7 @@ type AdminOrgEditData struct {
 	Members             []OrgMember
 	AssignedLocations   []Location
 	UnassignedLocations []Location
+	HasActorWithFollowers bool // True if organization has an actor that has followers
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -252,8 +253,13 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		}
 		token := getSessionToken(r)
 		var follows []FollowRecord
+		hasActorWithFollowers := false
 		if actor, err := getActorByOrgID(db, id); err == nil {
 			follows, _ = listFollows(db, actor.ID)
+			// Check if this actor has any followers
+			if len(follows) > 0 {
+				hasActorWithFollowers = true
+			}
 		}
 		members, _ := client.GetOrganizationMembers(r.Context(), id, token)
 		allLocations, _ := client.GetLocations(r.Context())
@@ -280,6 +286,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			Members:             members,
 			AssignedLocations:   assigned,
 			UnassignedLocations: unassigned,
+			HasActorWithFollowers: hasActorWithFollowers,
 		}))
 	}
 }
@@ -443,7 +450,7 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
-func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)
 		if !ok {
@@ -458,6 +465,14 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.NotFound(w, r)
 			return
 		}
+		
+		// Fetch original organization to detect actor name changes
+		originalOrg, err := client.GetOrganization(r.Context(), id)
+		if err != nil {
+			http.Error(w, "failed to load organization: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
@@ -491,6 +506,17 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 				return
 			}
 		}
+		
+		// Handle actor rename if actor name changed
+		if org.ActorName != originalOrg.ActorName {
+			newSlug := effectiveSlug(org)
+			if newSlug != effectiveSlug(originalOrg) {
+				if _, err := ensureActorWithMove(cfg, db, id, newSlug); err != nil {
+					log.Printf("actor rename for org %d: %v", id, err)
+				}
+			}
+		}
+		
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
 }
@@ -561,7 +587,7 @@ func adminOrgCheckActorNameHandler(cfg *Config, client *DansalClient) http.Handl
 			json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "empty"})
 			return
 		}
-		if name == "relay" {
+		if name == cfg.RelayActorName {
 			json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "reserved"})
 			return
 		}

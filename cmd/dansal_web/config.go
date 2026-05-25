@@ -26,7 +26,8 @@ type Config struct {
 	NodeInfoMaintainerEmail string `yaml:"nodeinfo_maintainer_email"`
 
 	// Federation
-	ShowFederatedEvents bool `yaml:"show_federated_events"`
+	RelayActorName      string `yaml:"relay_actor_name"`
+	ShowFederatedEvents bool   `yaml:"show_federated_events"`
 
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg

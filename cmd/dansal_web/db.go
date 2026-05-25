@@ -81,6 +81,35 @@ CREATE TABLE IF NOT EXISTS event_templates (
 	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
+	
+	// Add columns for event transfer tracking if they don't exist
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS delivered_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			org_id INTEGER NOT NULL,
+			delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			transferred_to INTEGER,
+			transferred_at DATETIME,
+			is_update INTEGER DEFAULT 0,
+			UNIQUE(event_id, org_id)
+		)
+	`)
+	
+	// Migrate data from old to new table if needed
+	var oldTableExists int
+	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='delivered'").Scan(&oldTableExists)
+	if oldTableExists > 0 {
+		// Copy data from old table to new table
+		db.Exec(`
+			INSERT OR IGNORE INTO delivered_new (event_id, org_id, delivered_at)
+			SELECT event_id, org_id, delivered_at FROM delivered
+		`)
+		// Rename tables to switch to new schema
+		db.Exec("DROP TABLE delivered")
+		db.Exec("ALTER TABLE delivered_new RENAME TO delivered")
+	}
+	
 	return db
 }
 
@@ -117,13 +146,68 @@ func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
 }
 
 // ensureRelayActor creates (or fetches) the special relay actor with org_id=0.
-func ensureRelayActor(db *sql.DB) (*ActorRecord, error) {
-	return ensureActor(db, 0, "relay")
+func ensureRelayActor(db *sql.DB, relayName string) (*ActorRecord, error) {
+	return ensureActor(db, 0, relayName)
 }
 
 func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 	a, err := getActorByOrgID(db, orgID)
 	if err == nil {
+		// Check if slug has changed - this indicates an actor rename
+		if a.OrgSlug != orgSlug {
+			// Migrate to new slug while preserving cryptographic keys
+			_, err = db.Exec(
+				"UPDATE actors SET org_slug = ? WHERE org_id = ?",
+				orgSlug, orgID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			// Return updated actor record
+			return getActorByOrgID(db, orgID)
+		}
+		return a, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	pub, priv, err := generateRSAKeyPair()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (?, ?, ?, ?)",
+		orgID, orgSlug, pub, priv,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return getActorByOrgID(db, orgID)
+}
+
+// ensureActorWithMove is like ensureActor but also sends ActivityPub Move activities
+// when the actor slug changes. Use this when you want followers to be notified.
+func ensureActorWithMove(cfg *Config, db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
+	a, err := getActorByOrgID(db, orgID)
+	if err == nil {
+		// Check if slug has changed - this indicates an actor rename
+		if a.OrgSlug != orgSlug {
+			oldSlug := a.OrgSlug
+			// Migrate to new slug while preserving cryptographic keys
+			_, err = db.Exec(
+				"UPDATE actors SET org_slug = ? WHERE org_id = ?",
+				orgSlug, orgID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			// Send Move activities to inform followers about the rename
+			go deliverActorMove(cfg, db, oldSlug, orgSlug, orgID)
+			// Return updated actor record
+			return getActorByOrgID(db, orgID)
+		}
 		return a, nil
 	}
 	if err != sql.ErrNoRows {
@@ -193,6 +277,80 @@ func markDelivered(db *sql.DB, eventID, orgID int) error {
 		eventID, orgID,
 	)
 	return err
+}
+
+// markDeliveredWithType records delivery with specific type (update/transfer)
+func markDeliveredWithType(db *sql.DB, eventID, orgID int, isUpdate bool) error {
+	_, err := db.Exec(
+		"INSERT OR IGNORE INTO delivered (event_id, org_id, is_update) VALUES (?, ?, ?)",
+		eventID, orgID, isUpdate,
+	)
+	return err
+}
+
+// markEventTransferred updates delivery record to indicate transfer
+func markEventTransferred(db *sql.DB, eventID, oldOrgID, newOrgID int) error {
+	_, err := db.Exec(
+		`UPDATE delivered SET transferred_to = ?, transferred_at = CURRENT_TIMESTAMP 
+		 WHERE event_id = ? AND org_id = ?`,
+		newOrgID, eventID, oldOrgID,
+	)
+	return err
+}
+
+// getEventDeliveryHistory gets delivery records for an event
+func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
+	OrgID         int
+	DeliveredAt   string
+	TransferredTo *int
+	TransferredAt *string
+	IsUpdate      bool
+}, error) {
+	rows, err := db.Query(
+		`SELECT org_id, delivered_at, transferred_to, transferred_at, is_update 
+		 FROM delivered WHERE event_id = ? ORDER BY delivered_at`,
+		eventID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var history []struct {
+		OrgID         int
+		DeliveredAt   string
+		TransferredTo *int
+		TransferredAt *string
+		IsUpdate      bool
+	}
+	
+	for rows.Next() {
+		var h struct {
+			OrgID         int
+			DeliveredAt   string
+			TransferredTo *int
+			TransferredAt *string
+			IsUpdate      bool
+		}
+		var transferredTo sql.NullInt64
+		var transferredAt sql.NullString
+		
+		if err := rows.Scan(&h.OrgID, &h.DeliveredAt, &transferredTo, &transferredAt, &h.IsUpdate); err != nil {
+			return nil, err
+		}
+		
+		if transferredTo.Valid {
+			val := int(transferredTo.Int64)
+			h.TransferredTo = &val
+		}
+		if transferredAt.Valid {
+			h.TransferredAt = &transferredAt.String
+		}
+		
+		history = append(history, h)
+	}
+	
+	return history, nil
 }
 
 func isDelivered(db *sql.DB, eventID, orgID int) bool {

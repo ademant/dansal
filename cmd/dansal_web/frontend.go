@@ -1120,14 +1120,14 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 		// Relay actor: synthetic profile with no backing org
 		if actor.OrgID == 0 {
-			base := actorURL(cfg, "relay")
+			base := actorURL(cfg, cfg.RelayActorName)
 			a := Actor{
 				Context:                   APContext,
 				Type:                      "Application",
 				ID:                        base,
-				Name:                      "relay@" + cfg.Domain,
+				Name:                      cfg.RelayActorName + "@" + cfg.Domain,
 				URL:                       "https://" + cfg.Domain,
-				PreferredUsername:         "relay",
+				PreferredUsername:         cfg.RelayActorName,
 				Inbox:                     base + "/inbox",
 				Outbox:                    base + "/outbox",
 				Followers:                 base + "/followers",

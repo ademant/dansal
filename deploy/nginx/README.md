@@ -2,6 +2,97 @@
 
 This directory contains nginx configuration templates for deploying dansal behind a reverse proxy with HTTP/3 (QUIC) support.
 
+## Nginx Version Requirements
+
+### HTTP/3 (QUIC) Support
+
+**Minimum version for HTTP/3:** nginx 1.25.0+
+
+- **nginx 1.25.0+** - First stable version with HTTP/3 support
+- **Recommended:** nginx 1.25.3+ (latest stable)
+
+**Required compile flags:**
+```bash
+./configure --with-http_v3_module
+```
+
+### HTTP/2 Only (No HTTP/3)
+
+If you don't need HTTP/3, you can use:
+- **nginx 1.9.5+** - First version with HTTP/2 support
+- **Recommended:** Any recent stable version (1.18+)
+
+### Feature Matrix
+
+| Feature | Minimum nginx Version | Notes |
+|---------|----------------------|-------|
+| HTTP/3 (QUIC) | 1.25.0+ | Requires `--with-http_v3_module` |
+| HTTP/2 | 1.9.5+ | Built into most modern distributions |
+| Rate Limiting | 1.1.10+ | Uses `limit_req` module |
+| TLS 1.3 | 1.13.0+ | Required for HTTP/3 |
+| SNI | 1.7.0+ | Server Name Indication |
+| IPv6 | 1.5.0+ | Dual-stack support |
+
+### Checking Your nginx Version
+
+```bash
+# Check installed version
+nginx -v
+
+# Check compiled modules
+nginx -V
+
+# Check for HTTP/3 module specifically
+nginx -V 2>&1 | grep -o http_v3_module
+```
+
+### Distribution Support
+
+| Distribution | Package | HTTP/3 Support | Notes |
+|--------------|---------|----------------|-------|
+| **Ubuntu 22.04+** | `nginx` | ❌ No | Use PPA or compile from source |
+| **Ubuntu 23.10+** | `nginx` | ✅ Yes | nginx 1.25.3+ |
+| **Debian 12+** | `nginx` | ❌ No | Backports available |
+| **Debian Testing** | `nginx` | ✅ Yes | nginx 1.25+ |
+| **CentOS 7** | `nginx` | ❌ No | Too old, compile manually |
+| **CentOS 8+** | `nginx` | ✅ Yes | nginx 1.25+ in EPEL |
+
+### Installation Options
+
+#### Option 1: Official nginx Repository (Recommended)
+```bash
+# Add official nginx repository
+sudo apt install curl gnupg2 ca-certificates lsb-release ubuntu-keyring
+curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor \
+    | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+     http://nginx.org/packages/mainline/ubuntu `lsb_release -cs` nginx" \
+    | sudo tee /etc/apt/sources.list.d/nginx.list
+
+# Install nginx
+sudo apt update
+sudo apt install nginx
+```
+
+#### Option 2: Compile from Source
+```bash
+# Install dependencies
+sudo apt build-dep nginx
+
+# Download and compile
+wget https://nginx.org/download/nginx-1.25.3.tar.gz
+tar -xzvf nginx-1.25.3.tar.gz
+cd nginx-1.25.3
+
+# Configure with HTTP/3 module
+./configure --with-http_v3_module --with-http_ssl_module \
+            --with-http_realip_module --with-http_stub_status_module
+
+# Build and install
+make
+sudo make install
+```
+
 ## Features
 
 - **HTTP/3 (QUIC) support** - Modern protocol for faster connections
@@ -327,6 +418,35 @@ sudo journalctl -u nginx -f
 ```bash
 sudo tcpdump -i any udp port 443 -n
 ```
+
+### Version Compatibility Issues
+
+1. **HTTP/3 not working**:
+   ```bash
+   # Check nginx version
+   nginx -v
+   
+   # Check for HTTP/3 module
+   nginx -V 2>&1 | grep http_v3_module
+   
+   # If missing, you need nginx 1.25.0+
+   ```
+
+2. **Rate limiting errors**:
+   ```bash
+   # Check if limit_req module is available
+   nginx -V 2>&1 | grep limit_req
+   
+   # If missing, reinstall nginx with the module
+   ```
+
+3. **TLS 1.3 required for HTTP/3**:
+   ```bash
+   # Check OpenSSL version
+   openssl version
+   
+   # HTTP/3 requires OpenSSL 1.1.1+ or OpenSSL 3.0+
+   ```
 
 ### Rate limiting issues
 

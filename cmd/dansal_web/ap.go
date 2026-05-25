@@ -54,6 +54,7 @@ type Activity struct {
 	ID      string      `json:"id"`
 	Actor   string      `json:"actor"`
 	Object  any `json:"object"`
+	Target  string      `json:"target,omitempty"`
 	To      []string    `json:"to,omitempty"`
 	CC      []string    `json:"cc,omitempty"`
 }

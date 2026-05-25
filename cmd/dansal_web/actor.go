@@ -435,7 +435,7 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]any) *Actor
 	}
 
 	// Fallback: relay actor handles Accept and unroutable activities.
-	actor, err := getActorBySlug(db, "relay")
+	actor, err := getActorBySlug(db, cfg.RelayActorName)
 	if err != nil {
 		return nil
 	}

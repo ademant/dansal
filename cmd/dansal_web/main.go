@@ -178,7 +178,7 @@ func main() {
 		r.HandleFunc("GET /admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /admin/organizations/new", adminOrgCreateHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n, db))
-		r.HandleFunc("POST /admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/organizations/{id}/delete", adminOrgDeleteHandler(cfg, client))
 		r.HandleFunc("POST /admin/organizations/{id}/run-feeds", adminOrgRunFeedsHandler(cfg, client))
 		r.HandleFunc("POST /admin/organizations/{id}/members", adminOrgMemberHandler(cfg, client))
@@ -248,7 +248,7 @@ func main() {
 		}
 	}()
 
-	relayActor, err := ensureRelayActor(db)
+	relayActor, err := ensureRelayActor(db, cfg.RelayActorName)
 	if err != nil {
 		log.Printf("relay actor init: %v", err)
 	}

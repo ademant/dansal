@@ -200,8 +200,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		verifyURL := base + "/register/verify/email/" + verificationToken
 		go func() {
 			msg := fmt.Sprintf(
-				"Hello %s,\n\nYou requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
-				req.Username, verifyURL,
+				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
+				verifyURL,
 			)
 			if err := SendEmail(req.Email, "Confirm your registration", msg); err != nil {
 				log.Printf("register: send verify email: %v", err)

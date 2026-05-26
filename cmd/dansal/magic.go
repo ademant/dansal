@@ -126,8 +126,8 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	magicURL := base + "/api/v1/login/magic/" + token
 
 	msgText := fmt.Sprintf(
-		"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
-		user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
+		"Use the link below to sign in to dansal:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
+		magicURL, config.Server.MagicLoginExpirySecs/60,
 	)
 
 	switch req.Channel {

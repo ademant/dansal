@@ -260,7 +260,7 @@
   <details class="booking-details">
     <summary>{{$.Strings.T "book_summary"}}</summary>
     <form class="booking-form" method="post" action="/events/{{.Event.ID}}/book">
-      <input type="hidden" name="_form_token" value="{{.Data.BookFormToken}}">
+      <input type="hidden" name="_form_token" value="{{$.Data.BookFormToken}}">
       <div class="booking-form-row">
         <label>{{$.Strings.T "book_name_label"}}</label>
         <input type="text" name="name" required placeholder="{{$.Strings.T "book_name_placeholder"}}">
@@ -357,7 +357,7 @@
   <details class="board-post-details">
     <summary>{{$.Strings.T "board_post_summary"}}</summary>
     <form class="board-post-form" method="post" action="/events/{{.Event.ID}}/board">
-      <input type="hidden" name="_form_token" value="{{.Data.BoardFormToken}}">
+      <input type="hidden" name="_form_token" value="{{$.Data.BoardFormToken}}">
       <div class="board-form-row">
         <label>{{$.Strings.T "board_type_label"}}</label>
         <select name="type" required onchange="boardTypeChanged(this.value)">

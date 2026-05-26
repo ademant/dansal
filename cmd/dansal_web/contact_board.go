@@ -27,12 +27,12 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
 		}
@@ -118,12 +118,12 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
 		}

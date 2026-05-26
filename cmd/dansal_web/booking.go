@@ -26,12 +26,12 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip=%s path=%s", ip, r.URL.Path)
+			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}

@@ -1629,6 +1629,42 @@ func (c *DansalClient) GenerateMagicLink(ctx context.Context, userID int, sessio
 	return result.URL, nil
 }
 
+type SessionInfo struct {
+	ID         int    `json:"id"`
+	UserAgent  string `json:"user_agent"`
+	IP         string `json:"ip"`
+	Fingerprint bool   `json:"fingerprint"`
+	CreatedAt  string `json:"created_at"`
+	LastSeenAt string `json:"last_seen_at"`
+	ExpiresAt  string `json:"expires_at"`
+	Current    bool   `json:"current"`
+}
+
+func (c *DansalClient) GetSessions(ctx context.Context, token string) ([]SessionInfo, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/sessions", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var sessions []SessionInfo
+	return sessions, json.NewDecoder(resp.Body).Decode(&sessions)
+}
+
+func (c *DansalClient) RevokeSession(ctx context.Context, sessionID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/sessions/%d", sessionID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) DeleteUser(ctx context.Context, id int, token string) error {
 	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", id), token, nil)
 	if err != nil {

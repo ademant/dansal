@@ -275,6 +275,10 @@ func startTokenCleanup() {
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", now)
 			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", now)
 			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", now)
+			if config != nil && config.Server.SessionIdleTimeoutMins > 0 {
+				idleCutoff := now - int64(config.Server.SessionIdleTimeoutMins*60)
+				db.Exec("DELETE FROM tokens WHERE last_seen_at IS NOT NULL AND last_seen_at < ?", idleCutoff)
+			}
 			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", now)
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24

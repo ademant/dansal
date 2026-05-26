@@ -112,10 +112,15 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 		return "", time.Time{}, err
 	}
 
-	// Keep only the 5 most recent tokens per user; drop older ones.
+	// Keep only the N most recent tokens per user; drop older ones.
+	// N is the smaller of 5 and the configured concurrent session limit (when > 0).
+	limit := 5
+	if config != nil && config.Server.SessionMaxConcurrent > 0 && config.Server.SessionMaxConcurrent < limit {
+		limit = config.Server.SessionMaxConcurrent
+	}
 	db.Exec(`DELETE FROM tokens WHERE user_id=? AND id NOT IN (
-		SELECT id FROM tokens WHERE user_id=? ORDER BY created_at DESC LIMIT 5
-	)`, userID, userID)
+		SELECT id FROM tokens WHERE user_id=? ORDER BY created_at DESC LIMIT ?
+	)`, userID, userID, limit)
 
 	return token, expiresAt, nil
 }

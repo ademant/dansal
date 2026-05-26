@@ -68,6 +68,9 @@ type Config struct {
 	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"`  // cleanup interval; default 5
 	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`       // bind token to client IP; default false
 
+	// Session management
+	SessionIdleTimeoutMins int `yaml:"session_idle_timeout_mins"` // 0 = disabled; shown as client-side warning
+
 	// Per-user rate limiting for authorized POST endpoints
 	UserRateLimitGlobal int            `yaml:"user_rate_limit_global"` // max POST requests/minute per user; default 100
 	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 5/minute each

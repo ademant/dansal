@@ -36,10 +36,11 @@ type TemplateData struct {
 	BannerHeight int
 	LogoHeight   int
 	DarkMode     string // "auto", "light", or "dark"
-	AppVersion           string
-	AppBuildTime         string
-	SuggestAvailable     bool
-	RegistrationEnabled  bool
+	AppVersion              string
+	AppBuildTime            string
+	SuggestAvailable        bool
+	RegistrationEnabled     bool
+	SessionIdleTimeoutMins  int
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
@@ -77,10 +78,11 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		BannerHeight: bannerHeight,
 		LogoHeight:   logoHeight,
 		DarkMode:     cfg.DarkMode,
-		AppVersion:          Version,
-		AppBuildTime:        BuildTime,
-		SuggestAvailable:    suggestAvailable(cfg),
-		RegistrationEnabled: suggestAvailable(cfg), // same gate: SMTP or Telegram configured
+		AppVersion:             Version,
+		AppBuildTime:           BuildTime,
+		SuggestAvailable:       suggestAvailable(cfg),
+		RegistrationEnabled:    suggestAvailable(cfg), // same gate: SMTP or Telegram configured
+		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
 	}
 }
 
@@ -606,6 +608,13 @@ var tmplFuncMap = template.FuncMap{
 			exp++
 		}
 		return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+	},
+	"truncUA": func(s string) string {
+		const max = 60
+		if len(s) <= max {
+			return s
+		}
+		return s[:max] + "…"
 	},
 }
 

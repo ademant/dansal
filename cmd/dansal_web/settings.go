@@ -15,6 +15,7 @@ type SettingsData struct {
 	TelegramDeepLink string
 	APIKeys          []APIKey
 	NewAPIKey        *APIKey
+	Sessions         []SessionInfo
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -30,6 +31,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			return
 		}
 		keys, _ := client.ListAPIKeys(r.Context(), token)
+		sessions, _ := client.GetSessions(r.Context(), token)
 		title := i18n.T(r, "settings_title")
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
@@ -37,6 +39,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			VerifySent:      r.URL.Query().Get("verify_sent"),
 			VerifiedChannel: r.URL.Query().Get("verified"),
 			APIKeys:         keys,
+			Sessions:        sessions,
 		}))
 	}
 }
@@ -189,6 +192,23 @@ func settingsCreateAPIKeyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 			data.NewAPIKey = newKey
 		}
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, data))
+	}
+}
+
+func settingsSessionRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		_ = client.RevokeSession(r.Context(), id, token)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}
 }
 

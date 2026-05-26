@@ -39,6 +39,8 @@ type ServerConfig struct {
 	MagicLoginRateSecs            int      `yaml:"magic_login_rate_secs"`
 	MaxOpenTokensPerAddress       int      `yaml:"max_open_tokens_per_address"`
 	HeartbeatIntervalMins   int      `yaml:"heartbeat_interval_mins"`
+	SessionIdleTimeoutMins  int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
+	SessionMaxConcurrent    int      `yaml:"session_max_concurrent"`    // 0 = unlimited
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`

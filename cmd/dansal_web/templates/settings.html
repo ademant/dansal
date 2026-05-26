@@ -121,6 +121,40 @@
   {{end}}{{end}}
 
   <div class="settings-card">
+    <h2>{{$.Strings.T "settings_sessions_title"}}</h2>
+    {{if .Sessions}}
+    <table class="apikey-table">
+      <thead><tr>
+        <th>{{$.Strings.T "settings_sessions_last_seen"}}</th>
+        <th>Browser / IP</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+      {{range .Sessions}}
+      <tr{{if .Current}} class="session-current"{{end}}>
+        <td>{{if .LastSeenAt}}{{.LastSeenAt}}{{else}}—{{end}}</td>
+        <td style="font-size:.82rem;max-width:260px;word-break:break-all">
+          {{if .UserAgent}}<span title="{{.UserAgent}}">{{.UserAgent | truncUA}}</span>{{end}}
+          {{if .IP}}<span class="session-ip">{{.IP}}</span>{{end}}
+          {{if .Current}}<span class="badge badge-ok" style="margin-left:.3rem">{{$.Strings.T "settings_sessions_current"}}</span>{{end}}
+        </td>
+        <td>
+          {{if not .Current}}
+          <form method="post" action="/settings/sessions/{{.ID}}/revoke" style="display:inline">
+            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_sessions_confirm_revoke"}}')">{{$.Strings.T "settings_sessions_revoke"}}</button>
+          </form>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="hint">{{$.Strings.T "settings_sessions_none"}}</p>
+    {{end}}
+  </div>
+
+  <div class="settings-card">
     <h2>{{$.Strings.T "settings_apikeys_title"}}</h2>
     {{if .NewAPIKey}}
     <div class="msg msg-ok" style="margin-bottom:.75rem">
@@ -196,5 +230,35 @@
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;cursor:pointer;background:#fff;color:#333;text-decoration:none}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.session-current td{background:#f0f4ff}
+.session-ip{display:block;color:#888;font-size:.78rem}
+#idle-warning{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:.6rem 1.2rem;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:999;display:none}
 </style>
+{{if gt .SessionIdleTimeoutMins 0}}
+<div id="idle-warning"></div>
+<script>
+(function(){
+  var idleMs = {{.SessionIdleTimeoutMins}} * 60 * 1000;
+  var warnMs = Math.max(idleMs - 60000, idleMs * 0.9);
+  var last = Date.now();
+  var warn = document.getElementById('idle-warning');
+  var warned = false;
+  function reset() { last = Date.now(); if (warned) { warned = false; warn.style.display = 'none'; } }
+  ['mousemove','keydown','scroll','touchstart','click'].forEach(function(e){ document.addEventListener(e, reset, {passive:true}); });
+  setInterval(function(){
+    var idle = Date.now() - last;
+    if (idle >= idleMs) {
+      window.location.href = '/logout';
+    } else if (idle >= warnMs) {
+      if (!warned) {
+        warned = true;
+        var secs = Math.ceil((idleMs - idle) / 1000);
+        warn.textContent = 'You will be logged out in ' + secs + 's due to inactivity.';
+        warn.style.display = 'block';
+      }
+    }
+  }, 5000);
+})();
+</script>
+{{end}}
 {{end}}

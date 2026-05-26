@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin \
-        run fmt vet clean install install-web install-units update deb deploy-nginx
+        run fmt vet clean install install-web install-units update check-config deb deploy-nginx
 
 build:
 	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
@@ -105,6 +105,11 @@ update: build install-units
 	install -m 755 dansal_web    $(BINDIR)/dansal-web
 	systemctl restart $(SERVICE)
 	systemctl try-restart dansal-web.service || true
+	@$(MAKE) --no-print-directory check-config
+
+check-config:
+	@packaging/check-config packaging/config.yaml $(SYSCONFDIR)/config.yaml
+	@packaging/check-config packaging/web.yaml    $(SYSCONFDIR)/web.yaml
 
 # deploy: install pre-built binaries and restart services (no build step;
 # run as root after 'make build' as a regular user).

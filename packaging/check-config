@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""
+Compare an installed dansal YAML config against the packaged template and
+report any keys that are present in the template but absent from the
+installed file. Purely informational — always exits 0.
+
+Usage: check-config <template.yaml> <installed.yaml>
+
+Handles both flat configs (web.yaml — all keys at top level) and nested
+configs (config.yaml — two levels: section header then leaf keys).
+"""
+import re, sys, os
+
+
+def parse_keys(path):
+    """Return dict of (section, key) -> stripped_line for non-commented keys.
+
+    Top-level keys with a value on the same line are stored as ('', key).
+    Top-level keys with no value (section headers) set the current section;
+    their indented children are stored as (section, key).
+    """
+    result = {}
+    section = None
+    try:
+        with open(path) as f:
+            for line in f:
+                s = line.rstrip()
+                if not s or s.lstrip().startswith('#'):
+                    continue
+                # Top-level key (no leading whitespace)
+                m = re.match(r'^([A-Za-z_]\w*):(.*)', s)
+                if m:
+                    key, rest = m.group(1), m.group(2).strip()
+                    if rest == '' or rest.startswith('#'):
+                        # No value on this line → section header
+                        section = key
+                    else:
+                        # Leaf value at top level (flat config)
+                        result[('', key)] = s
+                    continue
+                # Indented key (child of the current section)
+                m = re.match(r'^[ \t]+([A-Za-z_]\w*):', s)
+                if m and section is not None:
+                    result[(section, m.group(1))] = s.lstrip()
+    except OSError as e:
+        print(f"  check-config: cannot read {path}: {e}", file=sys.stderr)
+    return result
+
+
+def check(template_path, installed_path):
+    if not os.path.exists(installed_path):
+        return
+
+    tmpl = parse_keys(template_path)
+    inst = parse_keys(installed_path)
+
+    missing = [(k, line) for k, line in tmpl.items() if k not in inst]
+    if not missing:
+        return
+
+    basename = os.path.basename(template_path)
+    n = len(missing)
+    print(f"\n  WARNING: {installed_path} is missing {n} key(s) added since your last install.")
+    print(f"  Add the following to the appropriate section in {installed_path}:\n")
+
+    cur_section = None
+    for (section, _key), line in sorted(missing, key=lambda x: x[0]):
+        label = section if section else "(top level)"
+        if label != cur_section:
+            print(f"  [{label}]")
+            cur_section = label
+        print(f"    {line.lstrip()}")
+
+    print(f"\n  See packaging/{basename} for documentation and context.\n")
+
+
+if len(sys.argv) != 3:
+    print(f"Usage: {sys.argv[0]} <template.yaml> <installed.yaml>", file=sys.stderr)
+    sys.exit(1)
+
+check(sys.argv[1], sys.argv[2])

@@ -96,18 +96,20 @@ CREATE TABLE IF NOT EXISTS event_templates (
 		)
 	`)
 	
-	// Migrate data from old to new table if needed
+	// Migrate data from old delivered table to new schema inside a single transaction
+	// so that a failure between DROP and RENAME cannot orphan the data.
 	var oldTableExists int
 	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='delivered'").Scan(&oldTableExists)
 	if oldTableExists > 0 {
-		// Copy data from old table to new table
-		db.Exec(`
-			INSERT OR IGNORE INTO delivered_new (event_id, org_id, delivered_at)
-			SELECT event_id, org_id, delivered_at FROM delivered
-		`)
-		// Rename tables to switch to new schema
-		db.Exec("DROP TABLE delivered")
-		db.Exec("ALTER TABLE delivered_new RENAME TO delivered")
+		if tx, err := db.Begin(); err == nil {
+			tx.Exec(`INSERT OR IGNORE INTO delivered_new (event_id, org_id, delivered_at)
+				SELECT event_id, org_id, delivered_at FROM delivered`)
+			tx.Exec("DROP TABLE delivered")
+			tx.Exec("ALTER TABLE delivered_new RENAME TO delivered")
+			if err := tx.Commit(); err != nil {
+				tx.Rollback()
+			}
+		}
 	}
 	
 	return db

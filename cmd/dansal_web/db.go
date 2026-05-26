@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS delivered (
     event_id INTEGER NOT NULL,
     org_id INTEGER NOT NULL,
     delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    transferred_to INTEGER,
+    transferred_at DATETIME,
+    is_update INTEGER DEFAULT 0,
     UNIQUE(event_id, org_id)
 );
 CREATE TABLE IF NOT EXISTS follows (
@@ -82,35 +85,10 @@ CREATE TABLE IF NOT EXISTS event_templates (
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
 	
-	// Add columns for event transfer tracking if they don't exist
-	db.Exec(`
-		CREATE TABLE IF NOT EXISTS delivered_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			event_id INTEGER NOT NULL,
-			org_id INTEGER NOT NULL,
-			delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			transferred_to INTEGER,
-			transferred_at DATETIME,
-			is_update INTEGER DEFAULT 0,
-			UNIQUE(event_id, org_id)
-		)
-	`)
-	
-	// Migrate data from old delivered table to new schema inside a single transaction
-	// so that a failure between DROP and RENAME cannot orphan the data.
-	var oldTableExists int
-	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='delivered'").Scan(&oldTableExists)
-	if oldTableExists > 0 {
-		if tx, err := db.Begin(); err == nil {
-			tx.Exec(`INSERT OR IGNORE INTO delivered_new (event_id, org_id, delivered_at)
-				SELECT event_id, org_id, delivered_at FROM delivered`)
-			tx.Exec("DROP TABLE delivered")
-			tx.Exec("ALTER TABLE delivered_new RENAME TO delivered")
-			if err := tx.Commit(); err != nil {
-				tx.Rollback()
-			}
-		}
-	}
+	// Idempotent additions for delivered transfer/update tracking columns
+	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_to INTEGER")
+	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
+	db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
 	
 	return db
 }

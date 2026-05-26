@@ -52,7 +52,7 @@
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" oninput="onStartDateChange(this.value)" value="{{if .Prefill}}{{.Prefill.Date}}{{end}}">
+        <input id="date" type="date" name="date" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value)" value="{{if .Prefill}}{{.Prefill.Date}}{{end}}">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
@@ -64,7 +64,7 @@
       </div>
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
-        <input id="end_date" type="date" name="end_date" value="{{if .Prefill}}{{.Prefill.EndDate}}{{end}}">
+        <input id="end_date" type="date" name="end_date" onchange="this.removeAttribute('data-auto')" value="{{if .Prefill}}{{.Prefill.EndDate}}{{end}}">
       </div>
     </div>
 
@@ -311,7 +311,10 @@
 <script>
 function onStartDateChange(v){
   var ed=document.getElementById('end_date');
-  if(ed&&!ed.value) ed.value=v;
+  if(ed&&(!ed.value||ed.hasAttribute('data-auto'))){
+    ed.value=v;
+    ed.setAttribute('data-auto','1');
+  }
 }
 function toggleDifficulty(){
   var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;

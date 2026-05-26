@@ -169,7 +169,7 @@ deploy-nginx:
 	    exit 1; \
 	fi
 	# Extract domain with more robust parsing (handles various YAML formats)
-	DOMAIN=$$(grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/domain:[[:space:]]*"?([^"]+)"?/\1/'); \
+	DOMAIN=$$(grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); \
 	[ -z "$$DOMAIN" ] && { echo "Error: Could not extract domain from /etc/dansal/web.yaml"; echo "Expected format: domain: \"your-domain.com\" or domain: your-domain.com"; echo "Current domain line in /etc/dansal/web.yaml:"; grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/^/    /' || echo "    (no domain line found)"; exit 1; }; \
 	echo "Deploying nginx configuration for domain: $$DOMAIN"
 	# Validate domain format (basic check for dots and valid characters)

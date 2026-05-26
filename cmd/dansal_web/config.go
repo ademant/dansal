@@ -68,6 +68,10 @@ type Config struct {
 	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"`  // cleanup interval; default 5
 	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`       // bind token to client IP; default false
 
+	// Per-user rate limiting for authorized POST endpoints
+	UserRateLimitGlobal int            `yaml:"user_rate_limit_global"` // max POST requests/minute per user; default 100
+	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 5/minute each
+
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`
 	ContactOverride   string
@@ -106,6 +110,7 @@ func loadConfig() *Config {
 		PublicThrottleForgetHours: 1,
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
+		UserRateLimitGlobal:       100,
 	}
 
 	configPath := ""
@@ -167,6 +172,7 @@ func reloadConfig(path string, db *sql.DB) *Config {
 		PublicThrottleForgetHours: 1,
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
+		UserRateLimitGlobal:       100,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

@@ -58,6 +58,16 @@ type Config struct {
 	AuthRateWindowMins int `yaml:"auth_rate_window_mins"` // window in minutes; default 10
 	MinSubmitSecs      int `yaml:"min_submit_secs"`       // minimum seconds between form load and submit; 0 disables; default 3
 
+	// Rate limiting for public form endpoints (booking, board, suggest)
+	PublicRateLimit           int `yaml:"public_rate_limit"`            // max requests per window; default 10
+	PublicRateWindowMins      int `yaml:"public_rate_window_mins"`      // window in minutes; default 10
+	PublicThrottleForgetHours int `yaml:"public_throttle_forget_hours"` // forget inactive entries after N hours; default 1
+
+	// Form token anti-bot protection
+	FormTokenMaxAgeMins  int  `yaml:"form_token_max_age_mins"`  // token validity window; default 10
+	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"`  // cleanup interval; default 5
+	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`       // bind token to client IP; default false
+
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName          string `yaml:"site_name"`
 	ContactOverride   string
@@ -76,21 +86,26 @@ func (cfg *Config) publicBaseURL() string {
 
 func loadConfig() *Config {
 	cfg := &Config{
-		Listen:             ":8080",
-		DBPath:             "web.db",
-		PollSecs:           300,
-		ImagesDir:          "/var/lib/dansal-web",
-		BannerHeightMain:   200,
-		BannerHeightSub:    0,
-		LogoHeightMain:     48,
-		LogoHeightSub:      32,
-		DarkMode:           "auto",
-		LoginMaxFailures:   5,
-		LoginWindowMins:    10,
-		AuthRateLimit:      10,
-		AuthRateWindowMins: 10,
-		MinSubmitSecs:      3,
-		RelayActorName:     "relay",
+		Listen:                    ":8080",
+		DBPath:                    "web.db",
+		PollSecs:                  300,
+		ImagesDir:                 "/var/lib/dansal-web",
+		BannerHeightMain:          200,
+		BannerHeightSub:           0,
+		LogoHeightMain:            48,
+		LogoHeightSub:             32,
+		DarkMode:                  "auto",
+		LoginMaxFailures:          5,
+		LoginWindowMins:           10,
+		AuthRateLimit:             10,
+		AuthRateWindowMins:        10,
+		MinSubmitSecs:             3,
+		RelayActorName:            "relay",
+		PublicRateLimit:           10,
+		PublicRateWindowMins:      10,
+		PublicThrottleForgetHours: 1,
+		FormTokenMaxAgeMins:       10,
+		FormTokenCleanupMins:      5,
 	}
 
 	configPath := ""
@@ -132,21 +147,26 @@ func loadConfig() *Config {
 // Returns nil on any error so the caller can keep the current config.
 func reloadConfig(path string, db *sql.DB) *Config {
 	cfg := &Config{
-		Listen:             ":8080",
-		DBPath:             "web.db",
-		PollSecs:           300,
-		ImagesDir:          "/var/lib/dansal-web",
-		BannerHeightMain:   200,
-		BannerHeightSub:    0,
-		LogoHeightMain:     48,
-		LogoHeightSub:      32,
-		DarkMode:           "auto",
-		LoginMaxFailures:   5,
-		LoginWindowMins:    10,
-		AuthRateLimit:      10,
-		AuthRateWindowMins: 10,
-		MinSubmitSecs:      3,
-		RelayActorName:     "relay",
+		Listen:                    ":8080",
+		DBPath:                    "web.db",
+		PollSecs:                  300,
+		ImagesDir:                 "/var/lib/dansal-web",
+		BannerHeightMain:          200,
+		BannerHeightSub:           0,
+		LogoHeightMain:            48,
+		LogoHeightSub:             32,
+		DarkMode:                  "auto",
+		LoginMaxFailures:          5,
+		LoginWindowMins:           10,
+		AuthRateLimit:             10,
+		AuthRateWindowMins:        10,
+		MinSubmitSecs:             3,
+		RelayActorName:            "relay",
+		PublicRateLimit:           10,
+		PublicRateWindowMins:      10,
+		PublicThrottleForgetHours: 1,
+		FormTokenMaxAgeMins:       10,
+		FormTokenCleanupMins:      5,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

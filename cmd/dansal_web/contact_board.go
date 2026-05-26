@@ -6,11 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
-
 )
-
-var boardThrottle = newSubmissionThrottle(10, 10*time.Minute)
 
 // POST /events/{id}/board
 func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -21,8 +17,8 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			return
 		}
 		ip := getClientIP(r)
-		if boardThrottle.isBlocked(ip) {
-			log.Printf("board post blocked from %s: rate limit", ip)
+		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
 			return
 		}
@@ -51,7 +47,7 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
 		}
-		boardThrottle.record(ip)
+		publicThrottle.record(ip + "|" + r.UserAgent())
 		if tgURL != "" {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1&board_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
 			return
@@ -102,8 +98,8 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		ip := getClientIP(r)
-		if boardThrottle.isBlocked(ip) {
-			log.Printf("board contact blocked from %s: rate limit", ip)
+		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
 			return
 		}
@@ -121,7 +117,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
 			return
 		}
-		boardThrottle.record(ip)
+		publicThrottle.record(ip + "|" + r.UserAgent())
 		if tgURL != "" {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1&board_contact_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
 			return

@@ -10,6 +10,9 @@ const loginMaxDelay = 32 * time.Second
 // authBlock is the log prefix matched by the fail2ban filter.
 const authBlock = "dansal-web: AUTH_BLOCK"
 
+// publicBlock is the log prefix for public form endpoint rate limits.
+const publicBlock = "dansal-web: PUBLIC_BLOCK"
+
 type loginThrottle struct {
 	mu          sync.Mutex
 	entries     map[string]*throttleEntry

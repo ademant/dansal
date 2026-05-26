@@ -17,6 +17,10 @@ import (
 // Initialised in main() after config is loaded.
 var authThrottle *submissionThrottle
 
+// publicThrottle is the shared rate limiter for all public form endpoints (booking, board, suggest).
+// Key is IP + "|" + User-Agent. Initialised in main() after config is loaded.
+var publicThrottle *submissionThrottle
+
 // liveHandler is an http.Handler whose inner handler can be swapped atomically.
 // This lets systemctl reload rebuild all route closures with new config+i18n
 // without stopping the server.
@@ -46,6 +50,11 @@ func main() {
 	authThrottle = newSubmissionThrottle(
 		cfg.AuthRateLimit,
 		time.Duration(cfg.AuthRateWindowMins)*time.Minute,
+	)
+	publicThrottle = newSubmissionThrottleForget(
+		cfg.PublicRateLimit,
+		time.Duration(cfg.PublicRateWindowMins)*time.Minute,
+		time.Duration(cfg.PublicThrottleForgetHours)*time.Hour,
 	)
 
 	if *printVersion {

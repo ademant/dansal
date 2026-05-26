@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
-
 )
 
 // POST /events/{id}/book
@@ -13,6 +13,12 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
+			return
+		}
+		ip := getClientIP(r)
+		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -36,6 +42,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}
+		publicThrottle.record(ip + "|" + r.UserAgent())
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
 	}
 }

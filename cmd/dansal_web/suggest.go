@@ -6,13 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
-var (
-	suggestPreviewThrottle = newSubmissionThrottle(5, 10*time.Minute)
-	suggestSubmitThrottle  = newSubmissionThrottle(3, 10*time.Minute)
-)
 
 type SuggestPageData struct {
 	HintSMTP       bool // SMTP configured → show email verification hint
@@ -54,7 +49,9 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 		ip := getClientIP(r)
-		if suggestPreviewThrottle.isBlocked(ip) {
+		key := ip + "|" + r.UserAgent()
+		if publicThrottle.isBlocked(key) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP: cfg.SMTPHost != "",
@@ -62,7 +59,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}))
 			return
 		}
-		suggestPreviewThrottle.record(ip)
+		publicThrottle.record(key)
 
 		events, err := client.SuggestEventPreview(r.Context(), r.Body, r.Header.Get("Content-Type"))
 		if err != nil {
@@ -100,8 +97,9 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 		ip := getClientIP(r)
-		if suggestSubmitThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/suggest", authBlock, ip)
+		key := ip + "|" + r.UserAgent()
+		if publicThrottle.isBlocked(key) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP: cfg.SMTPHost != "",
@@ -174,7 +172,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			Phone2: r.FormValue("phone2"),
 		}
 
-		suggestSubmitThrottle.record(ip)
+		publicThrottle.record(key)
 
 		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
 			pageTitle := i18n.T(r, "suggest_event_title")

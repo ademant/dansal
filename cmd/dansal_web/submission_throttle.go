@@ -6,10 +6,11 @@ import (
 )
 
 type submissionThrottle struct {
-	mu      sync.Mutex
-	entries map[string]*submissionEntry
-	limit   int
-	window  time.Duration
+	mu          sync.Mutex
+	entries     map[string]*submissionEntry
+	limit       int
+	window      time.Duration
+	forgetAfter time.Duration
 }
 
 type submissionEntry struct {
@@ -18,10 +19,15 @@ type submissionEntry struct {
 }
 
 func newSubmissionThrottle(limit int, window time.Duration) *submissionThrottle {
+	return newSubmissionThrottleForget(limit, window, window)
+}
+
+func newSubmissionThrottleForget(limit int, window, forgetAfter time.Duration) *submissionThrottle {
 	st := &submissionThrottle{
-		entries: make(map[string]*submissionEntry),
-		limit:   limit,
-		window:  window,
+		entries:     make(map[string]*submissionEntry),
+		limit:       limit,
+		window:      window,
+		forgetAfter: forgetAfter,
 	}
 	go st.sweep()
 	return st
@@ -56,9 +62,9 @@ func (st *submissionThrottle) sweep() {
 	for range ticker.C {
 		st.mu.Lock()
 		now := time.Now()
-		for ip, e := range st.entries {
-			if now.Sub(e.windowStart) > st.window {
-				delete(st.entries, ip)
+		for key, e := range st.entries {
+			if now.Sub(e.windowStart) > st.forgetAfter {
+				delete(st.entries, key)
 			}
 		}
 		st.mu.Unlock()

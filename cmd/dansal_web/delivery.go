@@ -38,25 +38,24 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 			continue
 		}
 		orgID := *e.OrganizationID
+		actor, actorErr := getActorByOrgID(db, orgID)
 
 		// Deliver to org followers
-		if !isDelivered(db, e.ID, orgID) {
-			actor, err := getActorByOrgID(db, orgID)
-			if err == nil {
-				activity := buildCreateActivity(cfg, actor.OrgSlug, e)
-				if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
-					log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
-				} else {
-					if err := markDelivered(db, e.ID, orgID); err != nil {
-						log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
-					}
+		if actorErr == nil && !isDelivered(db, e.ID, orgID) {
+			activity := buildCreateActivity(cfg, actor.OrgSlug, e)
+			if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+				log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
+			} else {
+				if err := markDelivered(db, e.ID, orgID); err != nil {
+					log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
 				}
 			}
 		}
 
-		// Additionally deliver to relay followers wrapped in Announce{Create{Event}}
-		if relayActor != nil && !isDelivered(db, e.ID, 0) {
-			activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, e)
+		// Relay Announce{Create{Event}}: relay actor signs the outer activity,
+		// but the inner Create preserves the org's identity and attribution.
+		if relayActor != nil && actorErr == nil && !isDelivered(db, e.ID, 0) {
+			activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, actor.OrgSlug, e)
 			if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
 				log.Printf("relay delivery event %d: %v", e.ID, err)
 			} else {
@@ -104,9 +103,12 @@ func deliverEventToFollowers(cfg *Config, db *sql.DB, orgID int, event Event) {
 	deliverToFollowers(cfg, db, actor, activity)
 }
 
-func buildAnnounceActivity(cfg *Config, slug string, e Event) Activity {
-	base := actorURL(cfg, slug)
-	innerCreate := buildCreateActivity(cfg, slug, e)
+// buildAnnounceActivity wraps the org's Create inside a relay Announce.
+// relaySlug signs the outer Announce; orgSlug is preserved in the inner
+// Create so remote servers see the original org as the event creator.
+func buildAnnounceActivity(cfg *Config, relaySlug, orgSlug string, e Event) Activity {
+	base := actorURL(cfg, relaySlug)
+	innerCreate := buildCreateActivity(cfg, orgSlug, e)
 	return Activity{
 		Type:   "Announce",
 		ID:     base + "/activities/announce-" + strconv.FormatInt(time.Now().UnixNano(), 36),

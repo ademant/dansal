@@ -150,6 +150,29 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Per-address open-token limit: prevent spam floods targeting a single address.
+	limit := config.Server.MaxOpenTokensPerAddress
+	var openCount int
+	db.QueryRow(
+		"SELECT COUNT(*) FROM pending_registrations WHERE LOWER(email)=LOWER(?) AND verified=0 AND expires_at>strftime('%s','now')",
+		req.Email,
+	).Scan(&openCount)
+	if openCount >= limit {
+		writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+		return
+	}
+	if req.Telegram != "" {
+		var openTg int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM pending_registrations WHERE telegram=? AND verified=0 AND expires_at>strftime('%s','now')",
+			req.Telegram,
+		).Scan(&openTg)
+		if openTg >= limit {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
+	}
+
 	// Validate org_id for join_org.
 	if req.RegType == "join_org" {
 		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *req.OrgID).Scan(&c)

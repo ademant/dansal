@@ -421,8 +421,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     var wv = document.getElementById('week-main');
     wv.innerHTML = html;
-    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(); });
-    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(); });
+    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
   }
 
   // ── Mini monthly calendar ─────────────────────────────────────────────────
@@ -507,7 +507,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
         var p=this.dataset.mon.split('-');
         var rowMon=new Date(+p[0],+p[1]-1,+p[2]);
         weekOffset=Math.round((rowMon-getWeekStart(0))/(7*86400000));
-        renderWeek(); renderMiniCal(); updateMapMarkers();
+        renderWeek(); renderMiniCal(); updateMapMarkers(true);
       });
     });
   }
@@ -521,7 +521,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       var dx=e.changedTouches[0].clientX-sx; sx=null;
       if(Math.abs(dx)>50){
         weekOffset+=dx<0?1:-1;
-        renderWeek(); renderMiniCal(); updateMapMarkers();
+        renderWeek(); renderMiniCal(); updateMapMarkers(true);
       }
     },{passive:true});
   })();
@@ -651,7 +651,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
   }
 
-  function updateMapMarkers(){
+  function updateMapMarkers(refit){
     if(!map) return;
     clusterGroup.clearLayers();
     var visIds={};
@@ -661,6 +661,11 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     var layers=[];
     var weekDates=Object.keys(weekSet).sort();
     var weekStart=weekDates[0], weekEnd=weekDates[weekDates.length-1];
+    var weekTotal=0;
+    visible.forEach(function(r){
+      var s=r.dataset.date||'', e=r.dataset.endDate||s;
+      if(s<=weekEnd && e>=weekStart) weekTotal++;
+    });
     eventsGeo.forEach(function(e){
       if(!allMarkers[e.id] || !visIds[e.id]) return;
       var eStart=(e.s||'').slice(0,10);
@@ -668,12 +673,10 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       if(eStart<=weekEnd && eEnd>=weekStart) layers.push(allMarkers[e.id]);
     });
     var noCoords = document.getElementById('map-no-coords');
-    if(layers.length===0){
-      noCoords.hidden=false;
-    } else {
-      noCoords.hidden=true;
+    noCoords.hidden = !(weekTotal > 0 && weekTotal > layers.length);
+    if(layers.length > 0){
       layers.forEach(function(m){ clusterGroup.addLayer(m); });
-      if(!mapFitted){
+      if(refit || !mapFitted){
         try{ map.fitBounds(clusterGroup.getBounds(),{padding:[30,30],maxZoom:9}); }catch(_){}
         mapFitted=true;
       }

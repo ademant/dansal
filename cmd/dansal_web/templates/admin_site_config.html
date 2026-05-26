@@ -69,6 +69,15 @@
   </section>
 
   <section class="cfg-section">
+    <h2>{{$.Strings.T "admin_site_config_holiday"}}</h2>
+    <div class="field">
+      <label>{{$.Strings.T "admin_site_config_holiday_country"}}</label>
+      <input type="text" name="holiday_country" value="{{.HolidayCountry}}" placeholder="DE" style="max-width:80px">
+      <p class="hint">{{$.Strings.T "admin_site_config_holiday_hint"}}</p>
+    </div>
+  </section>
+
+  <section class="cfg-section">
     <h2>{{$.Strings.T "admin_site_config_heartbeat"}}</h2>
     <div class="field">
       <label>{{$.Strings.T "admin_site_config_heartbeat_interval"}}</label>

@@ -244,6 +244,8 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .week-table th{background:var(--bg-subtle);font-weight:600;font-size:.8rem;padding:.5rem .4rem;text-align:center;border:1px solid var(--border-lite);white-space:nowrap;color:var(--fg-2)}
 .week-table td{vertical-align:top;padding:.4rem;border:1px solid var(--border-lite);min-width:120px}
 .week-table th.wt-today,.week-table td.wt-today{background:var(--cal-today)}
+.week-table th.wt-weekend,.week-table td.wt-weekend{background:var(--cal-weekend)}
+.week-table th.wt-weekend.wt-today,.week-table td.wt-weekend.wt-today{background:var(--cal-today)}
 .cal-evt{display:block;background:var(--cal-evt-bg);border:1px solid var(--cal-evt-border);border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem;text-decoration:none;color:var(--heading);font-size:.82rem}
 .cal-evt:hover{background:var(--cal-today);border-color:var(--link)}
 .cal-evt.cal-cancelled{background:var(--badge-danger-bg);border-color:var(--badge-danger-fg);opacity:.75}
@@ -272,6 +274,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 .mc-today{color:var(--link)!important;font-weight:700!important}
 .mc-grid td{line-height:1.1;vertical-align:top}
 .mc-dot{display:block;width:4px;height:4px;border-radius:50%;background:var(--link);margin:.15rem auto 0}
+.mc-weekend{background:var(--cal-weekend)!important}
+.mc-weekend.mc-today{background:var(--cal-today)!important}
 @media(max-width:640px){
   .filter-row input[type=date]{display:none}
   #map-container{height:280px}
@@ -295,6 +299,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var weekOffset = 0;
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
+  var HOLIDAYS = new Set({{.Data.HolidayDates}});
   var regionCountry = '', regionTown = '';
   var REGION = {
     allCountries: "{{$.Strings.T "filter_all_countries"}}",
@@ -374,7 +379,10 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     html += '<div class="week-table-wrap"><table class="week-table"><thead><tr>';
     days.forEach(function(d,i){
-      html += '<th'+(keys[i]===today?' class="wt-today"':'')+'>'+escHtml(fmtDay.format(d))+'</th>';
+      var thCls=[];
+      if(keys[i]===today) thCls.push('wt-today');
+      if(d.getDay()===0||HOLIDAYS.has(keys[i])) thCls.push('wt-weekend');
+      html += '<th'+(thCls.length?' class="'+thCls.join(' ')+'"':'')+'>'+escHtml(fmtDay.format(d))+'</th>';
     });
     html += '</tr></thead><tbody>';
 
@@ -403,7 +411,10 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     html += '<tr>';
     days.forEach(function(d,i){
       var k=keys[i];
-      html += '<td'+(k===today?' class="wt-today"':'')+'>'+
+      var tdCls=[];
+      if(k===today) tdCls.push('wt-today');
+      if(d.getDay()===0||HOLIDAYS.has(k)) tdCls.push('wt-weekend');
+      html += '<td'+(tdCls.length?' class="'+tdCls.join(' ')+'"':'')+'>'+
         byDay[k].map(function(r){
           var start=r.dataset.start||'';
           var time=start.length>=16?start.slice(11,16):'';
@@ -482,6 +493,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       for(var col=0;col<7;col++){
         var iso=dateToIso(cur);
         var cls=(cur.getMonth()!==miniCalMonth?'mc-other':'')+(iso===today?' mc-today':'');
+        if(col===6||HOLIDAYS.has(iso)) cls=(cls?cls+' ':'')+'mc-weekend';
         var dot=evtDates[iso]?'<span class="mc-dot"></span>':'';
         html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+dot+'</td>';
         cur.setDate(cur.getDate()+1);

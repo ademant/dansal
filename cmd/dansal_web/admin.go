@@ -2905,6 +2905,7 @@ type AdminSiteConfigData struct {
 	DefaultDanceNames     map[string]bool
 	ImpressumTexts        map[string]string
 	ImpressumLangs        []string
+	HolidayCountry        string
 	ErrorMsg              string
 	Success               bool
 }
@@ -2947,6 +2948,7 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			DefaultDanceNames:     defaultDanceNames,
 			ImpressumTexts:        impTexts,
 			ImpressumLangs:        impressumLangs,
+			HolidayCountry:        getSiteSetting(db, "holiday_country"),
 			Success:               r.URL.Query().Get("saved") == "1",
 		}
 		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
@@ -2972,8 +2974,10 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		// Text settings
 		siteName := strings.TrimSpace(r.FormValue("site_name"))
 		contact := strings.TrimSpace(r.FormValue("contact"))
+		holidayCountry := strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country")))
 		_ = setSiteSetting(db, "site_name", siteName)
 		_ = setSiteSetting(db, "contact", contact)
+		_ = setSiteSetting(db, "holiday_country", holidayCountry)
 		cfg.SiteName = siteName
 		cfg.ContactOverride = contact
 

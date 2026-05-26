@@ -90,6 +90,7 @@ type IndexData struct {
 	TagMap          map[string]Tag
 	FederatedEvents []FederatedEvent
 	Dances          []Dance
+	HolidayDates    template.JS // JSON array of "YYYY-MM-DD" strings
 }
 
 type EventData struct {
@@ -765,7 +766,24 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 			fedEvents, _ = listFederatedEvents(db)
 		}
 		title := i18n.T(r, "events_title")
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances}))
+		holidayDates := template.JS("[]")
+		if hc := getSiteSetting(db, "holiday_country"); hc != "" {
+			now := time.Now()
+			h := publicHolidays(hc, now.Year())
+			if now.Month() >= 10 {
+				for k, v := range publicHolidays(hc, now.Year()+1) {
+					h[k] = v
+				}
+			}
+			if len(h) > 0 {
+				dates := make([]string, 0, len(h))
+				for d := range h {
+					dates = append(dates, `"`+d+`"`)
+				}
+				holidayDates = template.JS("[" + strings.Join(dates, ",") + "]")
+			}
+		}
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates}))
 	}
 }
 

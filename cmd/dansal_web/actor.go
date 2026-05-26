@@ -8,14 +8,52 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
 )
+
+// safeFedDial resolves the target host and rejects any address that resolves
+// to a loopback, private, link-local, or otherwise non-routable IP to prevent SSRF.
+func safeFedDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("safeFedDial: bad addr %q: %w", addr, err)
+	}
+	resolved, err := net.DefaultResolver.LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range resolved {
+		ip, err := netip.ParseAddr(a)
+		if err != nil {
+			return nil, fmt.Errorf("safeFedDial: parse IP %q: %w", a, err)
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+			return nil, fmt.Errorf("safeFedDial: %q resolves to non-routable IP %s", host, a)
+		}
+	}
+	var d net.Dialer
+	return d.DialContext(ctx, network, net.JoinHostPort(resolved[0], port))
+}
+
+// fedHTTPClient is used for all outbound ActivityPub requests.
+// It enforces per-request timeouts and blocks private/loopback destinations.
+var fedHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		DialContext:           safeFedDial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		MaxIdleConns:          50,
+	},
+}
 
 var (
 	slugTranslit = strings.NewReplacer(
@@ -679,17 +717,24 @@ func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent
 	}
 }
 
-// validateAPURL returns an error if rawURL is not a valid https URL with a non-empty host.
-// All outbound ActivityPub fetches must use https to prevent SSRF via non-HTTP schemes.
+// validateAPURL returns an error if rawURL is not a safe, routable https URL.
+// It blocks non-https schemes, empty hosts, and known local/internal hostnames.
+// DNS-level blocking is handled by safeFedDial at connect time.
 func validateAPURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return fmt.Errorf("ActivityPub URL must be https with a non-empty host: %q", rawURL)
 	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || host == "local" ||
+		strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".localhost") ||
+		strings.HasSuffix(host, ".internal") || strings.HasSuffix(host, ".lan") {
+		return fmt.Errorf("ActivityPub URL targets a local hostname: %q", rawURL)
+	}
 	return nil
 }
 
-func resolveInboxURL(ctx context.Context, client *DansalClient, actorURI string) (string, error) {
+func resolveInboxURL(ctx context.Context, _ *DansalClient, actorURI string) (string, error) {
 	if err := validateAPURL(actorURI); err != nil {
 		return "", err
 	}
@@ -698,13 +743,16 @@ func resolveInboxURL(ctx context.Context, client *DansalClient, actorURI string)
 		return "", err
 	}
 	req.Header.Set("Accept", "application/activity+json")
-	resp, err := client.HTTP.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+	}
 	var actor map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&actor); err != nil {
 		return "", err
 	}
 	inbox, _ := actor["inbox"].(string)
@@ -726,7 +774,9 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]any, 
 		log.Printf("sendAccept marshal: %v", err)
 		return
 	}
-	req, err := http.NewRequest(http.MethodPost, inboxURL, bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inboxURL, bytes.NewReader(body))
 	if err != nil {
 		log.Printf("sendAccept new request: %v", err)
 		return
@@ -737,7 +787,7 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]any, 
 		log.Printf("sendAccept sign: %v", err)
 		return
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("sendAccept post: %v", err)
 		return
@@ -865,7 +915,7 @@ func buildDeleteActivity(cfg *Config, slug string, eventID int) Activity {
 
 // resolveActorFromInput resolves a webfinger address (@user@host) or AP URL to
 // the canonical AP actor URL and its inbox URL.
-func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input string) (apID, inboxURL string, err error) {
+func resolveActorFromInput(ctx context.Context, _ *http.Client, input string) (apID, inboxURL string, err error) {
 	input = strings.TrimSpace(input)
 	if strings.HasPrefix(input, "@") {
 		parts := strings.SplitN(strings.TrimPrefix(input, "@"), "@", 2)
@@ -882,11 +932,14 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 			return "", "", err
 		}
 		req.Header.Set("Accept", "application/json")
-		resp, err := httpClient.Do(req)
+		resp, err := fedHTTPClient.Do(req)
 		if err != nil {
 			return "", "", err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", "", fmt.Errorf("webfinger returned HTTP %d", resp.StatusCode)
+		}
 		var wf struct {
 			Links []struct {
 				Rel  string `json:"rel"`
@@ -894,7 +947,7 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 				Href string `json:"href"`
 			} `json:"links"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&wf); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&wf); err != nil {
 			return "", "", err
 		}
 		for _, l := range wf.Links {
@@ -920,13 +973,16 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 		return "", "", err
 	}
 	req.Header.Set("Accept", "application/activity+json")
-	resp, err := httpClient.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		return "", "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+	}
 	var actor map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&actor); err != nil {
 		return "", "", err
 	}
 	inboxURL, _ = actor["inbox"].(string)
@@ -961,7 +1017,7 @@ func sendFollowActivity(cfg *Config, actor *ActorRecord, followeeAPID, followeeI
 	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
 		return "", fmt.Errorf("sign: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -1001,7 +1057,7 @@ func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox
 	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
 		return fmt.Errorf("sign: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

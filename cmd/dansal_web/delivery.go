@@ -182,7 +182,7 @@ func postToInbox(inboxURL, keyID, privateKeyPEM string, body []byte) error {
 	if err := SignRequest(req, keyID, privateKeyPEM, body); err != nil {
 		return fmt.Errorf("sign: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fedHTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -3182,6 +3182,21 @@ type AdminInfoData struct {
 	Heartbeat    HeartbeatStatus
 }
 
+func adminManagementHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		title := i18n.T(r, "admin_management_title")
+		renderTemplate(w, tmpls.adminManagement, tmplData(r, cfg, i18n, title, nil))
+	}
+}
+
 func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)

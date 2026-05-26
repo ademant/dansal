@@ -27,14 +27,12 @@
     <div class="form-group">
       <label for="field-username">{{$.Strings.T "register_username"}}</label>
       <input type="text" id="field-username" name="username" required autocomplete="username" class="form-input">
+      <p class="form-hint">{{$.Strings.T "register_username_hint"}}</p>
     </div>
     <div class="form-group">
       <label for="field-email">{{$.Strings.T "register_email"}}</label>
       <input type="email" id="field-email" name="email" required autocomplete="email" class="form-input">
-    </div>
-    <div class="form-group">
-      <label for="field-password">{{$.Strings.T "register_password"}}</label>
-      <input type="password" id="field-password" name="password" required minlength="8" autocomplete="new-password" class="form-input">
+      <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
 
     {{/* join_org fields */}}
@@ -98,6 +96,7 @@
 .btn-primary{background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.5rem 1.25rem;font-size:1rem;cursor:pointer;margin-top:.5rem}
 .btn-primary:hover{background:#0d4a80}
 .form-error{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem}
+.form-hint{font-size:.82rem;color:var(--fg-muted);margin:.2rem 0 0}
 .hp-field{display:none!important}
 </style>
 <script>

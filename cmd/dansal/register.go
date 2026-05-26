@@ -93,12 +93,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		writeError(w, "username, email and password are required", http.StatusBadRequest)
-		return
-	}
-	if len(req.Password) < 8 {
-		writeError(w, "password must be at least 8 characters", http.StatusBadRequest)
+	if req.Username == "" || req.Email == "" {
+		writeError(w, "username and email are required", http.StatusBadRequest)
 		return
 	}
 	if isReservedUsername(req.Username) {
@@ -200,13 +196,22 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrgID
 	}
 
+	pass := req.Password
+	if pass == "" {
+		pass, err = randomHex32()
+		if err != nil {
+			writeError(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	_, dbErr := db.Exec(
 		`INSERT INTO pending_registrations
 		 (verification_token, approval_token, username, email, password_hash,
 		  reg_type, org_id, org_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, expires_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		verificationToken, approvalToken, req.Username, req.Email, hashPassword(req.Password),
+		verificationToken, approvalToken, req.Username, req.Email, hashPassword(pass),
 		req.RegType, orgIDArg, req.OrgName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, expiresAt,
 	)

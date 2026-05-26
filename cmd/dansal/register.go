@@ -279,8 +279,7 @@ func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/pending-registrations
 func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := intHeader(r, "X-User-ID")
+	callerID, callerRole := callerFromRequest(r)
 
 	var rows interface{ Next() bool; Scan(...any) error; Close() error }
 	var err error
@@ -334,8 +333,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/pending-registrations/{id}/approve
 func approveRegHandler(w http.ResponseWriter, r *http.Request) {
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := intHeader(r, "X-User-ID")
+	callerID, callerRole := callerFromRequest(r)
 
 	id, err := intPathValue(r, "id")
 	if err != nil {
@@ -432,19 +430,8 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("register: approved pending registration %d — new user %q (role=%s)", id, pr.Username, role)
 
-	// Send welcome notification.
-	go func() {
-		msg := fmt.Sprintf("Your registration has been approved! You can now log in as %q.", pr.Username)
-		if pr.TelegramChatID != "" {
-			if err := sendTelegramMessage(pr.TelegramChatID, msg); err != nil {
-				log.Printf("register: welcome telegram: %v", err)
-			}
-		} else if pr.Email != "" && config.SMTP.Host != "" {
-			if err := SendEmail(pr.Email, "Your registration was approved", msg); err != nil {
-				log.Printf("register: welcome email: %v", err)
-			}
-		}
-	}()
+	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
+		fmt.Sprintf("Your registration has been approved! You can now log in as %q.", pr.Username))
 
 	user := User{
 		ID:       int(userID),
@@ -459,8 +446,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/pending-registrations/{id}
 func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := intHeader(r, "X-User-ID")
+	callerID, callerRole := callerFromRequest(r)
 
 	id, err := intPathValue(r, "id")
 	if err != nil {
@@ -493,15 +479,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
 	log.Printf("register: rejected pending registration %d", id)
 
-	// Notify user.
-	go func() {
-		msg := "Your registration request was not approved."
-		if pr.TelegramChatID != "" {
-			sendTelegramMessage(pr.TelegramChatID, msg)
-		} else if pr.Email != "" && config.SMTP.Host != "" {
-			SendEmail(pr.Email, "Registration not approved", msg)
-		}
-	}()
+	go notifyUser(pr.TelegramChatID, pr.Email, "Registration not approved", "Your registration request was not approved.")
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -536,11 +514,7 @@ func notifyApprovers(pendingID int) {
 		for rows.Next() {
 			var email, chatID string
 			rows.Scan(&email, &chatID)
-			if chatID != "" {
-				sendTelegramMessage(chatID, msg)
-			} else if email != "" && config.SMTP.Host != "" {
-				SendEmail(email, "New registration request", msg)
-			}
+			notifyUser(chatID, email, "New registration request", msg)
 		}
 	}
 
@@ -557,24 +531,10 @@ func notifyApprovers(pendingID int) {
 			for orgRows.Next() {
 				var email, chatID string
 				orgRows.Scan(&email, &chatID)
-				if chatID != "" {
-					sendTelegramMessage(chatID, msg)
-				} else if email != "" && config.SMTP.Host != "" {
-					SendEmail(email, "New registration request for your organisation", msg)
-				}
+				notifyUser(chatID, email, "New registration request for your organisation", msg)
 			}
 		}
 	}
-}
-
-func intHeader(r *http.Request, key string) (int, error) {
-	v := r.Header.Get(key)
-	if v == "" {
-		return 0, fmt.Errorf("missing header %s", key)
-	}
-	var n int
-	_, err := fmt.Sscan(v, &n)
-	return n, err
 }
 
 func intPathValue(r *http.Request, key string) (int, error) {

@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 // buildBaseURL returns the public base URL for link generation.
@@ -38,18 +35,13 @@ func buildVerifyURL(r *http.Request, token string) string {
 }
 
 func generateVerificationToken() (string, error) {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return generateToken(24)
 }
 
 // POST /api/v1/users/{id}/verify — generate and send a verification link.
 // Callers may only verify their own account unless they are admin.
 func sendVerification(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	targetID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

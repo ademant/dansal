@@ -1,15 +1,11 @@
 package main
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
-
 )
 
 // roleRank returns a numeric rank for role comparison (higher = more privileged).
@@ -51,11 +47,7 @@ type UseInviteRequest struct {
 }
 
 func generateInviteToken() (string, error) {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return generateToken(24)
 }
 
 // POST /api/v1/invites — create an invite link.
@@ -63,9 +55,7 @@ func generateInviteToken() (string, error) {
 func createInvite(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden: only admin and user roles may create invite links", http.StatusForbidden)
@@ -142,9 +132,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 func listInvites(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	var rows *sql.Rows
 	var err error
@@ -186,9 +174,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/invites/{token} — revoke an unused invite link.
 // Admins may revoke any link; others may only revoke their own.
 func revokeInvite(w http.ResponseWriter, r *http.Request) {
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	token := r.PathValue("token")
 

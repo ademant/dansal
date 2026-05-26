@@ -155,8 +155,8 @@ func adminListInvites(req adminRequest) adminResponse {
 			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
 		)
 	} else {
-		var userID int
-		if err := db.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&userID); err != nil {
+		userID, lookupErr := userIDByUsername(req.Username)
+		if lookupErr != nil {
 			return adminResponse{OK: false, Error: "user not found"}
 		}
 		rows, err = db.Query(
@@ -203,8 +203,8 @@ func adminListSessions(req adminRequest) adminResponse {
 	if req.Username == "" {
 		return adminResponse{OK: false, Error: "username is required"}
 	}
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&userID); err != nil {
+	userID, err := userIDByUsername(req.Username)
+	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
 	rows, err := db.Query(`
@@ -400,8 +400,8 @@ func adminAddMember(req adminRequest) adminResponse {
 	if req.OrgID == 0 || req.Username == "" {
 		return adminResponse{OK: false, Error: "org_id and username are required"}
 	}
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID); err != nil {
+	userID, err := userIDByUsername(req.Username)
+	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
 	if _, err := db.Exec(
@@ -499,8 +499,8 @@ func adminRemoveMember(req adminRequest) adminResponse {
 	if req.OrgID == 0 || req.Username == "" {
 		return adminResponse{OK: false, Error: "org_id and username are required"}
 	}
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID); err != nil {
+	userID, err := userIDByUsername(req.Username)
+	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
 	result, err := db.Exec(

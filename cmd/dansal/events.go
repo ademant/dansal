@@ -468,10 +468,12 @@ func applyPagination(r *http.Request, query *string, args *[]any) {
 
 // ── event insert / update ──────────────────────────────────────────────────
 
-func generateShortCode() string {
+func generateShortCode() (string, error) {
 	b := make([]byte, 4)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b), nil
 }
 
 // urlVal returns nil when s is empty so the DB column stays NULL.
@@ -637,7 +639,10 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		insFetchSourceID = fetchSourceID
 	}
 	for range 5 {
-		shortCode = generateShortCode()
+		shortCode, err = generateShortCode()
+		if err != nil {
+			return 0, "", false, err
+		}
 		var sourceArg any
 		if source != "" {
 			sourceArg = source
@@ -831,8 +836,7 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 // GET /api/v1/events
 func getEvents(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
-	userRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, userRole := callerFromRequest(r)
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
 	// Short-code lookup for public clients (e.g. ?code=a1b2c3d4).
@@ -950,8 +954,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 func createEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, callerRole := callerFromRequest(r)
 	isPublished := callerRole == RoleUser || callerRole == RoleAdmin || callerRole == RolePublisher
 
 	contentType := r.Header.Get("Content-Type")
@@ -1169,8 +1172,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/events/{id}
 func getEvent(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
-	userRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, userRole := callerFromRequest(r)
 	id := r.PathValue("id")
 
 	// Unauthenticated callers only see published non-suggestion events.
@@ -1227,12 +1229,11 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/v1/events/{id} — full event update
 func updateEvent(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
@@ -1357,8 +1358,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/events/{id}/publish — set is_published=1.
 // Admin/publisher: can publish any event. Regular user: only events assigned to their org.
 func publishEvent(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, userRole := callerFromRequest(r)
 	id := r.PathValue("id")
 
 	if userRole == RoleAdmin || userRole == RolePublisher {
@@ -1399,8 +1399,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/events/{id}/assign-org — assign an organisation to an unpublished event.
 // Admin/publisher: any org. Regular user: only orgs they are a member of.
 func assignEventOrg(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RolePublisher && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -1434,7 +1433,7 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/events/{id}
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -1443,7 +1442,6 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if userRole != RoleAdmin {
-		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var orgID sql.NullInt64
 		db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {

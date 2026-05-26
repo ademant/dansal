@@ -280,8 +280,7 @@ func deleteContactPostByToken(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/contact-posts/{id}
 // Requires auth. Allowed for: admin role, or org member of the event's organisation.
 func deleteContactPost(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	postID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

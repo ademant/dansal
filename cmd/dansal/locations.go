@@ -235,8 +235,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 func createLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	requesterRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, requesterRole := callerFromRequest(r)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -388,7 +387,7 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 func patchLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	requesterRole := r.Header.Get("X-User-Role")
+	callerID, requesterRole := callerFromRequest(r)
 	id := r.PathValue("id")
 
 	if requesterRole != RoleAdmin {
@@ -396,7 +395,6 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var exists int
 		if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
 			writeError(w, "Location not found", http.StatusNotFound)
@@ -529,7 +527,7 @@ func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
 func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	requesterRole := r.Header.Get("X-User-Role")
+	callerID, requesterRole := callerFromRequest(r)
 	id := r.PathValue("id")
 
 	if requesterRole != RoleAdmin {
@@ -537,7 +535,6 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var exists int
 		if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
 			writeError(w, "Location not found", http.StatusNotFound)

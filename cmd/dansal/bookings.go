@@ -91,8 +91,7 @@ func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole
 // GET /api/v1/events/{id}/bookings
 // Requires auth. Org member or admin only.
 func listBookings(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -267,8 +266,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 // PATCH /api/v1/bookings/{id}/status
 // Requires auth. Org member or admin only. Accepts {"status":"approved"|"cancelled"}.
 func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	bookingID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -318,8 +316,7 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/bookings/checkin/{qr_token}
 // Requires auth. Org member or admin only. Returns booking details and marks as checked_in.
 func checkinBooking(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	qrToken := r.PathValue("qr_token")
 
@@ -356,8 +353,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/bookings/{id}
 // Requires auth. Org member or admin only.
 func deleteBooking(w http.ResponseWriter, r *http.Request) {
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	bookingID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

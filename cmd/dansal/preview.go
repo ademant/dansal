@@ -17,8 +17,7 @@ import (
 func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, callerRole := callerFromRequest(r)
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		writeError(w, "invalid multipart form", http.StatusBadRequest)

@@ -24,11 +24,7 @@ type Session struct {
 func getSessions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	userID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusUnauthorized)
-		return
-	}
+	userID, _ := callerFromRequest(r)
 	currentSessionID, _ := strconv.Atoi(r.Header.Get("X-Session-ID"))
 
 	rows, err := db.Query(`
@@ -68,12 +64,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/sessions/{id} — revoke a specific session.
 // Users may revoke their own sessions; admins may revoke any session.
 func deleteSession(w http.ResponseWriter, r *http.Request) {
-	callerID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusUnauthorized)
-		return
-	}
-	callerRole := r.Header.Get("X-User-Role")
+	callerID, callerRole := callerFromRequest(r)
 
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

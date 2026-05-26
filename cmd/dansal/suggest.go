@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -157,12 +155,11 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 
 	var suggestionToken string
 	if smtpConfigured {
-		b := make([]byte, 32)
-		if _, err := rand.Read(b); err != nil {
+		suggestionToken, err = randomHex32()
+		if err != nil {
 			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		suggestionToken = hex.EncodeToString(b)
 	}
 
 	var tokenArg any
@@ -171,9 +168,13 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var eventID int64
+	var shortCode string
 	var insertErr error
 	for range 5 {
-		shortCode := generateShortCode()
+		shortCode, insertErr = generateShortCode()
+		if insertErr != nil {
+			break
+		}
 		var res sql.Result
 		res, insertErr = tx.Exec(
 			`INSERT INTO events
@@ -267,14 +268,6 @@ func notifyAdminsSuggestion(title, startTime string) {
 		if err := rows.Scan(&email, &chatID); err != nil {
 			continue
 		}
-		if chatID != "" {
-			if err := sendTelegramMessage(chatID, msg); err != nil {
-				log.Printf("suggest: notify admin telegram: %v", err)
-			}
-		} else if email != "" && config.SMTP.Host != "" {
-			if err := SendEmail(email, "New event suggestion", msg); err != nil {
-				log.Printf("suggest: notify admin email: %v", err)
-			}
-		}
+		notifyUser(chatID, email, "New event suggestion", msg)
 	}
 }

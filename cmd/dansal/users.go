@@ -121,12 +121,28 @@ func validateRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
 }
 
+const userSelectCols = "id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at"
+
+type userScanner interface{ Scan(...any) error }
+
+func scanUser(s userScanner) (User, error) {
+	var u User
+	var emailVer, telegramVer, matrixVer, disabled int
+	if err := s.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &u.CreatedAt); err != nil {
+		return User{}, err
+	}
+	u.EmailVerified = emailVer == 1
+	u.TelegramVerified = telegramVer == 1
+	u.MatrixVerified = matrixVer == 1
+	u.Disabled = disabled == 1
+	return u, nil
+}
 
 // GET /api/v1/users - List all users
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users")
+	rows, err := db.Query("SELECT " + userSelectCols + " FROM users")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -135,16 +151,11 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	users := []User{}
 	for rows.Next() {
-		var user User
-		var emailVer, telegramVer, matrixVer, disabled int
-		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Description, &user.Telegram, &user.TelegramChatID, &user.Matrix, &user.Mastodon, &user.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &user.CreatedAt); err != nil {
+		user, err := scanUser(rows)
+		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		user.EmailVerified = emailVer == 1
-		user.TelegramVerified = telegramVer == 1
-		user.MatrixVerified = matrixVer == 1
-		user.Disabled = disabled == 1
 		users = append(users, user)
 	}
 
@@ -238,17 +249,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	id := r.PathValue("id")
 
-	var user User
-	var emailVer, telegramVer, matrixVer, disabled int
-	err := db.QueryRow(
-		"SELECT id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users WHERE id = ?",
-		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Description, &user.Telegram, &user.TelegramChatID, &user.Matrix, &user.Mastodon, &user.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &user.CreatedAt)
-	user.EmailVerified = emailVer == 1
-	user.TelegramVerified = telegramVer == 1
-	user.MatrixVerified = matrixVer == 1
-	user.Disabled = disabled == 1
-
+	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -272,13 +273,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requesterIDStr := r.Header.Get("X-User-ID")
-	requesterRole := r.Header.Get("X-User-Role")
-	requesterID, err := strconv.Atoi(requesterIDStr)
-	if err != nil {
-		writeError(w, "Invalid requester information", http.StatusUnauthorized)
-		return
-	}
+	requesterID, requesterRole := callerFromRequest(r)
 
 	var req UserUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -305,10 +300,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user exists
-	var user User
-	var emailVer, telegramVer, matrixVer, disabledInt int
-	err = db.QueryRow("SELECT id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users WHERE id = ?", id).
-		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Description, &user.Telegram, &user.TelegramChatID, &user.Matrix, &user.Mastodon, &user.Website, &emailVer, &telegramVer, &matrixVer, &disabledInt, &user.CreatedAt)
+	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -317,10 +309,6 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	user.EmailVerified = emailVer == 1
-	user.TelegramVerified = telegramVer == 1
-	user.MatrixVerified = matrixVer == 1
-	user.Disabled = disabledInt == 1
 
 	if req.Email != "" && req.Email != user.Email {
 		user.Email = req.Email

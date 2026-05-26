@@ -73,9 +73,7 @@ func validateAPIKey(key string) (int, string, error) {
 func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerRole := r.Header.Get("X-User-Role")
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	var rows *sql.Rows
 	var err error
@@ -111,9 +109,7 @@ func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerRole := r.Header.Get("X-User-Role")
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	var req CreateAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -186,9 +182,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	callerRole := r.Header.Get("X-User-Role")
-	callerIDStr := r.Header.Get("X-User-ID")
-	callerID, _ := strconv.Atoi(callerIDStr)
+	callerID, callerRole := callerFromRequest(r)
 
 	keyID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

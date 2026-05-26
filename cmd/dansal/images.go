@@ -255,7 +255,7 @@ func fitImage(img image.Image, maxW, maxH int) image.Image {
 
 // DELETE /api/v1/images/{event_id}
 func deleteEventImage(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -270,7 +270,6 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userRole != RoleAdmin {
-		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var orgID sql.NullInt64
 		if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
@@ -301,7 +300,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/images/{event_id}
 func uploadEventImage(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -321,7 +320,6 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userRole != RoleAdmin {
-		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
 			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
 			return

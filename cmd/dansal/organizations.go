@@ -261,8 +261,7 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 // description, contact_email, and social media fields only.
 func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	callerRole := r.Header.Get("X-User-Role")
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerID, callerRole := callerFromRequest(r)
 	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return

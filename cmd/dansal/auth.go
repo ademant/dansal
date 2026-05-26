@@ -78,8 +78,7 @@ func recordFailedLogin(userID int, username, clientIP string, storedCount int, f
 	}
 }
 
-// generateToken creates a secure random token
-func generateToken() (string, error) {
+func generateSessionToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -89,7 +88,7 @@ func generateToken() (string, error) {
 
 // createTokenInDB stores the token with session metadata in the database.
 func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, time.Time, error) {
-	token, err := generateToken()
+	token, err := generateSessionToken()
 	if err != nil {
 		return "", time.Time{}, err
 	}

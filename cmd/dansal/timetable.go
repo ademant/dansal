@@ -162,12 +162,11 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
@@ -209,12 +208,11 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	userRole := r.Header.Get("X-User-Role")
+	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)

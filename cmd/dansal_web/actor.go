@@ -548,6 +548,16 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
+		// Only allow updates from the actor that originally created the event.
+		if storedActor, err := getFederatedEventActor(db, fe.APID); err == nil {
+			if storedActor != actorField {
+				log.Printf("inbox: Update rejected for %s: actor %q not owner (owner: %q)", fe.APID, actorField, storedActor)
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+		} else if err != sql.ErrNoRows {
+			log.Printf("inbox: check event actor for %s: %v", fe.APID, err)
+		}
 		if err := upsertFederatedEvent(db, fe); err != nil {
 			log.Printf("inbox: update federated event %s: %v", fe.APID, err)
 		}
@@ -562,9 +572,20 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			apID, _ = v["id"].(string)
 		}
 		if apID != "" {
-			if err := deleteFederatedEvent(db, apID); err != nil {
-				log.Printf("inbox: delete federated event %s: %v", apID, err)
+			// Only allow deletion by the actor that created the event.
+			if storedActor, err := getFederatedEventActor(db, apID); err == nil {
+				if storedActor != actorField {
+					log.Printf("inbox: Delete rejected for %s: actor %q not owner (owner: %q)", apID, actorField, storedActor)
+					w.WriteHeader(http.StatusAccepted)
+					return
+				}
+				if err := deleteFederatedEvent(db, apID); err != nil {
+					log.Printf("inbox: delete federated event %s: %v", apID, err)
+				}
+			} else if err != sql.ErrNoRows {
+				log.Printf("inbox: check event actor for delete %s: %v", apID, err)
 			}
+			// ErrNoRows: event not in DB, nothing to do.
 		}
 		w.WriteHeader(http.StatusAccepted)
 

@@ -478,6 +478,14 @@ func deleteFederatedEvent(db *sql.DB, apID string) error {
 	return err
 }
 
+// getFederatedEventActor returns the actor_id stored for the given AP object ID,
+// or sql.ErrNoRows when the event is not in the database.
+func getFederatedEventActor(db *sql.DB, apID string) (string, error) {
+	var actorID string
+	err := db.QueryRow("SELECT actor_id FROM federated_events WHERE ap_id=?", apID).Scan(&actorID)
+	return actorID, err
+}
+
 func listFederatedEvents(db *sql.DB) ([]FederatedEvent, error) {
 	rows, err := db.Query(
 		"SELECT id, ap_id, actor_id, name, start_time, end_time, url, location_name, COALESCE(description,''), COALESCE(image_url,''), COALESCE(tags,''), raw_json, received_at FROM federated_events ORDER BY start_time ASC",

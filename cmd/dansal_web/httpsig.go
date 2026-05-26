@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 type pubKeyEntry struct {
 	pem       string
+	owner     string
 	fetchedAt time.Time
 }
 
@@ -29,47 +31,60 @@ var (
 	pubKeyCacheTTL = 10 * time.Minute
 )
 
-func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, actorURL string) (string, error) {
-	// actorURL comes from the keyId field in an HTTP Signature header — validate
-	// it is a proper https URL before making an outbound request.
-	if u, err := url.Parse(actorURL); err != nil || u.Scheme != "https" || u.Host == "" {
-		return "", fmt.Errorf("actor URL must be https with a non-empty host: %q", actorURL)
+// fetchActorPublicKey fetches the public key PEM and owner URL for the given
+// keyID. keyID may include a fragment (e.g. "https://host/actor#main-key");
+// the fragment is stripped for the actual HTTP GET, but used as a cache key.
+func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID string) (pemStr, owner string, err error) {
+	u, err := url.Parse(keyID)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return "", "", fmt.Errorf("key ID must be an https URL with non-empty host: %q", keyID)
 	}
+
 	pubKeyCacheMu.Lock()
-	if e, ok := pubKeyCache[actorURL]; ok && time.Since(e.fetchedAt) < pubKeyCacheTTL {
+	if e, ok := pubKeyCache[keyID]; ok && time.Since(e.fetchedAt) < pubKeyCacheTTL {
 		pubKeyCacheMu.Unlock()
-		return e.pem, nil
+		return e.pem, e.owner, nil
 	}
 	pubKeyCacheMu.Unlock()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, actorURL, nil)
+	// Strip fragment for the HTTP request (fragments are client-side only).
+	u.Fragment = ""
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Accept", "application/activity+json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+	}
 
 	var actor struct {
 		PublicKey struct {
+			Owner        string `json:"owner"`
 			PublicKeyPem string `json:"publicKeyPem"`
 		} `json:"publicKey"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
-		return "", fmt.Errorf("decode actor: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&actor); err != nil {
+		return "", "", fmt.Errorf("decode actor: %w", err)
 	}
 	if actor.PublicKey.PublicKeyPem == "" {
-		return "", fmt.Errorf("no publicKeyPem in actor response")
+		return "", "", fmt.Errorf("no publicKeyPem in actor response")
 	}
 
 	pubKeyCacheMu.Lock()
-	pubKeyCache[actorURL] = pubKeyEntry{pem: actor.PublicKey.PublicKeyPem, fetchedAt: time.Now()}
+	pubKeyCache[keyID] = pubKeyEntry{
+		pem:       actor.PublicKey.PublicKeyPem,
+		owner:     actor.PublicKey.Owner,
+		fetchedAt: time.Now(),
+	}
 	pubKeyCacheMu.Unlock()
 
-	return actor.PublicKey.PublicKeyPem, nil
+	return actor.PublicKey.PublicKeyPem, actor.PublicKey.Owner, nil
 }
 
 func generateRSAKeyPair() (publicPEM, privatePEM string, err error) {
@@ -207,6 +222,87 @@ func VerifyRequest(r *http.Request, pubKeyPEM string) error {
 	hashed := h.Sum(nil)
 
 	return rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hashed, sig)
+}
+
+const inboxDateTolerance = 5 * time.Minute
+
+// verifyInboxRequest performs full HTTP Signature verification for an inbound
+// ActivityPub POST: required-header enforcement, Digest validation, Date
+// freshness, key-owner↔actor matching, and RSA signature verification.
+func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Request, body []byte, actorField string) error {
+	sigHeader := r.Header.Get("Signature")
+	if sigHeader == "" {
+		return fmt.Errorf("missing Signature header")
+	}
+	params := parseSignatureHeader(sigHeader)
+
+	keyID := params["keyId"]
+	if keyID == "" {
+		return fmt.Errorf("missing keyId in Signature header")
+	}
+
+	// Enforce required signed headers for inbox POSTs.
+	headersParam := params["headers"]
+	for _, required := range []string{"(request-target)", "host", "date", "digest"} {
+		found := false
+		for _, h := range strings.Fields(headersParam) {
+			if h == required {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("required header %q not covered by signature", required)
+		}
+	}
+
+	// Validate Digest against the raw body.
+	digestHdr := r.Header.Get("Digest")
+	if digestHdr == "" {
+		return fmt.Errorf("missing Digest header")
+	}
+	bodyHash := sha256.Sum256(body)
+	expectedDigest := "SHA-256=" + base64.StdEncoding.EncodeToString(bodyHash[:])
+	if digestHdr != expectedDigest {
+		return fmt.Errorf("Digest header mismatch")
+	}
+
+	// Enforce Date freshness.
+	dateHdr := r.Header.Get("Date")
+	if dateHdr == "" {
+		return fmt.Errorf("missing Date header")
+	}
+	t, err := http.ParseTime(dateHdr)
+	if err != nil {
+		return fmt.Errorf("invalid Date header: %w", err)
+	}
+	if age := time.Since(t); age < -inboxDateTolerance || age > inboxDateTolerance {
+		return fmt.Errorf("Date header outside ±5 min window: %v", t)
+	}
+
+	// Fetch key PEM and owner via the keyId from the Signature header.
+	pubKeyPEM, owner, err := fetchActorPublicKey(ctx, httpClient, keyID)
+	if err != nil {
+		return fmt.Errorf("fetch public key %q: %w", keyID, err)
+	}
+
+	// Verify that the key's owner matches the declared activity actor.
+	if actorField != "" {
+		// Derive the base actor URL by stripping any key fragment.
+		keyBase := keyID
+		if idx := strings.Index(keyBase, "#"); idx != -1 {
+			keyBase = keyBase[:idx]
+		}
+		effectiveOwner := owner
+		if effectiveOwner == "" {
+			effectiveOwner = keyBase // fallback when owner absent in actor doc
+		}
+		if effectiveOwner != actorField {
+			return fmt.Errorf("key owner %q does not match activity actor %q", effectiveOwner, actorField)
+		}
+	}
+
+	return VerifyRequest(r, pubKeyPEM)
 }
 
 func parseSignatureHeader(header string) map[string]string {

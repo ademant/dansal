@@ -380,7 +380,7 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		processInboxActivity(w, r, cfg, db, client, actor, raw)
+		processInboxActivity(w, r, cfg, db, client, actor, raw, body)
 	}
 }
 
@@ -401,7 +401,7 @@ func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Hand
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
-		processInboxActivity(w, r, cfg, db, client, actor, raw)
+		processInboxActivity(w, r, cfg, db, client, actor, raw, body)
 	}
 }
 
@@ -442,19 +442,13 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]any) *Actor
 	return actor
 }
 
-func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]any) {
+func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]any, body []byte) {
 	activityType, _ := raw["type"].(string)
 	actorField, _ := raw["actor"].(string)
 
 	if actorField != "" {
-		pubKeyPEM, err := fetchActorPublicKey(r.Context(), client.HTTP, actorField)
-		if err != nil {
-			log.Printf("inbox: fetch public key for %s: %v", actorField, err)
-			writeJSONError(w, http.StatusUnauthorized, "could not fetch sender key")
-			return
-		}
-		if err := VerifyRequest(r, pubKeyPEM); err != nil {
-			log.Printf("inbox: signature verification failed for %s: %v", actorField, err)
+		if err := verifyInboxRequest(r.Context(), client.HTTP, r, body, actorField); err != nil {
+			log.Printf("inbox: verification failed for %s: %v", actorField, err)
 			writeJSONError(w, http.StatusUnauthorized, "signature verification failed")
 			return
 		}

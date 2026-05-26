@@ -26,6 +26,11 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
 		}
+		if r.FormValue("honeypot") != "" {
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
+			return
+		}
 
 		persons, _ := strconv.Atoi(r.FormValue("persons"))
 		if persons < 1 {
@@ -105,6 +110,11 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		}
 		if err := r.ParseForm(); err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			return
+		}
+		if r.FormValue("honeypot") != "" {
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
 			return
 		}
 

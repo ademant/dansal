@@ -25,6 +25,11 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}
+		if r.FormValue("honeypot") != "" {
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
+			return
+		}
 
 		persons, _ := strconv.Atoi(r.FormValue("persons"))
 		if persons < 1 {

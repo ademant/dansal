@@ -277,6 +277,7 @@
         <label>{{$.Strings.T "book_message_label"}}</label>
         <textarea name="message" rows="2" placeholder="{{$.Strings.T "book_message_placeholder"}}"></textarea>
       </div>
+      <input type="text" name="honeypot" style="display:none" tabindex="-1" autocomplete="off">
       <button type="submit" class="btn-booking-submit">{{$.Strings.T "book_submit_btn"}}</button>
     </form>
   </details>
@@ -341,6 +342,7 @@
         </div>
         <textarea name="message" required rows="3" placeholder="{{$.Strings.T "board_your_message"}}"></textarea>
         <p class="board-hint board-verify-hint">{{$.Strings.T "board_contact_verify_hint"}}</p>
+        <input type="text" name="honeypot" style="display:none" tabindex="-1" autocomplete="off">
         <button type="submit">{{$.Strings.T "board_send_btn"}}</button>
       </form>
     </div>
@@ -396,6 +398,7 @@
         <input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}">
         <span class="board-hint">{{$.Strings.T "board_telegram_hint"}}</span>
       </div>
+      <input type="text" name="honeypot" style="display:none" tabindex="-1" autocomplete="off">
       <button type="submit" class="btn-board-submit">{{$.Strings.T "board_submit_btn"}}</button>
     </form>
   </details>

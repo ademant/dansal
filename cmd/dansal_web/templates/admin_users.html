@@ -31,7 +31,7 @@
   </select>
   <button name="action" value="role" type="submit" class="btn-sm">{{$.Strings.T "users_bulk_change_role"}}</button>
   <button name="action" value="delete" type="button" id="bulk-del-btn" class="btn-sm btn-del"
-          onclick="confirmTypedDelete('DELETE',function(){document.getElementById('bulk-del-submit').click();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
+          onclick="return confirmTypedDelete('DELETE',function(){document.getElementById('bulk-del-submit').click();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
   <button name="action" value="delete" type="submit" id="bulk-del-submit" style="display:none"></button>
 </div>
 {{end}}
@@ -90,7 +90,7 @@
     <td class="col-actions">
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
-              onclick="confirmTypedDelete('{{js .Username}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
+              onclick="return confirmTypedDelete('{{js .Username}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
     </td>
     {{end}}
   </tr>
@@ -262,6 +262,7 @@ function confirmTypedDelete(name,cb){
   inp.value='';document.getElementById('ctd-ok').disabled=true;
   document.getElementById('ctd-modal').hidden=false;
   setTimeout(function(){inp.focus();},50);
+  return false;
 }
 document.getElementById('ctd-input').addEventListener('input',function(){
   document.getElementById('ctd-ok').disabled=(this.value!==_ctdExpected);

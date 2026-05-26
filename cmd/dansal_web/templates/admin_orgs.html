@@ -36,7 +36,7 @@
         <button type="submit" class="btn-sm btn-run">{{$.Strings.T "org_run_feeds"}}</button>
       </form>
       {{end}}
-      <button type="button" class="btn-sm btn-del" onclick="confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">{{$.Strings.T "admin_delete"}}</button>
+      <button type="button" class="btn-sm btn-del" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">{{$.Strings.T "admin_delete"}}</button>
       {{end}}
     </td>
   </tr>
@@ -86,6 +86,7 @@ function confirmTypedDelete(name,cb){
   inp.value='';document.getElementById('ctd-ok').disabled=true;
   document.getElementById('ctd-modal').hidden=false;
   setTimeout(function(){inp.focus();},50);
+  return false;
 }
 document.getElementById('ctd-input').addEventListener('input',function(){
   document.getElementById('ctd-ok').disabled=(this.value!==_ctdExpected);

@@ -107,6 +107,8 @@ type EventData struct {
 	BookingOK        bool
 	BookingError     string
 	UserOrgs         []Organization
+	BookFormToken    string
+	BoardFormToken   string
 }
 
 type OrgData struct {
@@ -864,6 +866,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		bookingOK := r.URL.Query().Get("book_ok") == "1"
 		bookingError := r.URL.Query().Get("book_error")
 
+		clientIP := getClientIP(r)
 		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
 			Event:              event,
 			Org:                org,
@@ -879,6 +882,8 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BookingOK:          bookingOK,
 			BookingError:       bookingError,
 			UserOrgs:           userOrgs,
+			BookFormToken:      issueFormToken(clientIP),
+			BoardFormToken:     issueFormToken(clientIP),
 		}))
 	}
 }

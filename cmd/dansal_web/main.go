@@ -56,6 +56,7 @@ func main() {
 		time.Duration(cfg.PublicRateWindowMins)*time.Minute,
 		time.Duration(cfg.PublicThrottleForgetHours)*time.Hour,
 	)
+	startFormTokenCleanup(cfg.FormTokenMaxAgeMins, cfg.FormTokenCleanupMins)
 
 	if *printVersion {
 		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)

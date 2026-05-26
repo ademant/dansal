@@ -63,7 +63,7 @@
   }
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;line-height:1.6;color:var(--fg);background:var(--bg);padding:0 1rem;display:flex;flex-direction:column;min-height:100vh}
+body{font-family:system-ui,sans-serif;line-height:1.6;color:var(--fg);background:var(--bg);padding:0 1rem 3rem;display:flex;flex-direction:column;min-height:100vh}
 nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
 .nav-brand{display:flex;align-items:center;gap:.6rem;text-decoration:none}
 .nav-brand img{object-fit:contain;height:{{.LogoHeight}}px;width:{{.LogoHeight}}px}
@@ -119,7 +119,8 @@ a:hover{color:var(--link-h)}
 .detail-label{font-weight:600;min-width:120px;display:inline-block;color:var(--fg-dim)}
 .fediverse{background:var(--fedi-bg);border:1px solid var(--fedi-border);border-radius:6px;padding:1rem;margin-bottom:1rem}
 .fediverse code{font-size:.95rem;background:var(--code-bg);padding:.1rem .3rem;border-radius:3px;color:var(--fg)}
-footer{color:var(--fg-hint);font-size:.8rem;margin-top:2rem;padding:.75rem 0;border-top:1px solid var(--border-lite)}
+footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px solid var(--border-lite);background:var(--bg);position:fixed;bottom:0;left:0;right:0;z-index:100;transform:translateY(100%);transition:transform .25s ease}
+footer.footer-visible{transform:translateY(0)}
 .footer-inner{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.5rem}
 .footer-left{text-align:left;color:var(--fg-hint)}
 .footer-center{text-align:center}
@@ -287,6 +288,15 @@ function attachTileLayer(map){
     }
   });
 }
+(function(){
+  var lastY=window.scrollY,footer=document.querySelector('footer');
+  window.addEventListener('scroll',function(){
+    var y=window.scrollY;
+    if(y>lastY&&y>80){footer.classList.add('footer-visible');}
+    else if(y<lastY){footer.classList.remove('footer-visible');}
+    lastY=y;
+  },{passive:true});
+})();
 </script>
 <main>
 {{block "content" .}}{{end}}

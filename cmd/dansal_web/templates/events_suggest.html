@@ -81,17 +81,25 @@
       </label>
     </div>
     <p id="sg-end-err" class="form-error" style="display:none;margin-top:-.5rem"></p>
+    <div class="form-row">
+      <label class="form-label-sm">{{$.Strings.T "suggest_location_search"}}</label>
+      <div style="display:flex;gap:.5rem">
+        <input type="text" id="nominatim-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}" style="flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
+        <button type="button" id="nominatim-btn" class="btn-primary" style="padding:.45rem .9rem;margin-top:0;font-size:.88rem">{{$.Strings.T "suggest_location_search_btn"}}</button>
+      </div>
+      <ul id="nominatim-results" hidden style="list-style:none;margin:.25rem 0 0;padding:0;border:1px solid #ccc;border-radius:4px;background:#fff;max-height:180px;overflow-y:auto"></ul>
+    </div>
     <div class="form-row form-row-2col">
       <label>{{$.Strings.T "col_location"}}
-        <input type="text" name="location" maxlength="100">
+        <input type="text" id="sg-location" name="location" maxlength="100">
       </label>
       <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
-        <input type="text" name="town" maxlength="100">
+        <input type="text" id="sg-town" name="town" maxlength="100">
       </label>
     </div>
     <div class="form-row">
       <label>{{$.Strings.T "col_country"}}
-        <input type="text" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
+        <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
       </label>
     </div>
     <div class="form-row">
@@ -157,11 +165,13 @@
   </div>
 
   <div id="tab-import" class="tab-panel" hidden>
-  <form method="post" action="/events/suggest" enctype="multipart/form-data">
+  <form id="import-form" method="post" action="/events/suggest" enctype="multipart/form-data">
     <div class="form-row">
-      <label>{{$.Strings.T "admin_import_file_label"}}
-        <input type="file" name="file" accept=".ics,.json">
-      </label>
+      <div id="drop-zone" class="drop-zone">
+        <span id="drop-label">{{$.Strings.T "suggest_drop_zone_label"}}</span>
+        <input type="file" id="import-file" name="file" accept=".ics,.json" style="display:none">
+      </div>
+      <p id="drop-filename" class="drop-filename" hidden></p>
     </div>
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
   </form>
@@ -189,6 +199,12 @@
 .tab-btn.active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
 .btn-primary{padding:.5rem 1.4rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.95rem;margin-top:.5rem}
 .btn-primary:hover{background:#155a8a}
+.drop-zone{border:2px dashed var(--border-mid,#ccc);border-radius:6px;padding:2rem 1rem;text-align:center;cursor:pointer;color:var(--fg-muted,#666);transition:background .15s}
+.drop-zone:hover,.drop-zone.drag-over{background:var(--bg-hover,#f0f4ff);border-color:var(--link,#1a6eb5)}
+.drop-filename{font-size:.88rem;color:var(--fg-2,#555);margin-top:.3rem}
+#nominatim-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
+#nominatim-results li:last-child{border-bottom:none}
+#nominatim-results li:hover{background:#f0f4ff}
 </style>
 
 <script>
@@ -226,5 +242,78 @@ function validateEndTime() {
     et.setCustomValidity('');
   }
 }
+// Nominatim location search
+(function(){
+  var btn = document.getElementById('nominatim-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var q = document.getElementById('nominatim-q').value.trim();
+    if (!q) return;
+    btn.disabled = true;
+    var lang = document.documentElement.lang || 'en';
+    fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q) + '&limit=5&addressdetails=1', {
+      headers: {'Accept-Language': lang}
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(results) {
+      btn.disabled = false;
+      var ul = document.getElementById('nominatim-results');
+      ul.innerHTML = '';
+      if (!results.length) {
+        var li = document.createElement('li');
+        li.textContent = '{{$.Strings.T "suggest_location_no_results"}}';
+        ul.appendChild(li); ul.hidden = false; return;
+      }
+      results.forEach(function(res) {
+        var li = document.createElement('li');
+        li.textContent = res.display_name;
+        li.addEventListener('click', function() {
+          var a = res.address || {};
+          document.getElementById('sg-location').value = res.name || a.amenity || a.building || a.house_number || '';
+          document.getElementById('sg-town').value = a.city || a.town || a.village || a.municipality || a.suburb || '';
+          document.getElementById('sg-country').value = (a.country_code || '').toUpperCase();
+          ul.hidden = true;
+        });
+        ul.appendChild(li);
+      });
+      ul.hidden = false;
+    })
+    .catch(function(){ btn.disabled = false; });
+  });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#nominatim-results') && e.target !== document.getElementById('nominatim-q')) {
+      var ul = document.getElementById('nominatim-results');
+      if (ul) ul.hidden = true;
+    }
+  });
+})();
+// Drag & drop import
+(function(){
+  var dz = document.getElementById('drop-zone');
+  var inp = document.getElementById('import-file');
+  if (!dz || !inp) return;
+  function setFile(f) {
+    if (!f) return;
+    inp.files = f instanceof DataTransfer ? f.files : f;
+    var name = document.getElementById('drop-filename');
+    name.textContent = (f instanceof DataTransfer ? f.files[0] : f[0]).name;
+    name.hidden = false;
+  }
+  dz.addEventListener('click', function(){ inp.click(); });
+  inp.addEventListener('change', function(){ if(this.files[0]){ var n=document.getElementById('drop-filename'); n.textContent=this.files[0].name; n.hidden=false; } });
+  dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
+  dz.addEventListener('drop', function(e){
+    e.preventDefault(); dz.classList.remove('drag-over');
+    var dt = e.dataTransfer;
+    if (dt.files.length) {
+      var f = dt.files[0];
+      try { inp.files = dt.files; } catch(_) {}
+      var n = document.getElementById('drop-filename');
+      n.textContent = f.name; n.hidden = false;
+      document.getElementById('import-label') && (document.getElementById('import-label').textContent = f.name);
+    }
+  });
+})();
 </script>
 {{end}}

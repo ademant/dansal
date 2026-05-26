@@ -299,6 +299,7 @@ func deliverActorMove(cfg *Config, db *sql.DB, oldSlug, newSlug string, orgID in
 		ID:     newActorURL + "/activities/move-" + strconv.FormatInt(time.Now().UnixNano(), 36),
 		Actor:  newActorURL,
 		Object: oldActorURL,
+		Target: newActorURL,
 		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:     []string{newActorURL + "/followers"},
 	}

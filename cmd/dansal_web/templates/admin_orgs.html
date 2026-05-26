@@ -36,7 +36,7 @@
         <button type="submit" class="btn-sm btn-run">{{$.Strings.T "org_run_feeds"}}</button>
       </form>
       {{end}}
-      <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "org_confirm_delete"}}'))delOrg({{.Org.ID}})">{{$.Strings.T "admin_delete"}}</button>
+      <button type="button" class="btn-sm btn-del" onclick="confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">{{$.Strings.T "admin_delete"}}</button>
       {{end}}
     </td>
   </tr>
@@ -65,8 +65,32 @@
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
 </style>
+<div id="ctd-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:440px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+    <p id="ctd-prompt" style="margin:0 0 .75rem;font-size:.95rem;color:var(--fg,#333)"></p>
+    <input id="ctd-input" type="text" autocomplete="off" style="width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;box-sizing:border-box;margin-bottom:.75rem">
+    <div style="display:flex;gap:.5rem">
+      <button id="ctd-ok" class="btn-del btn-sm" disabled onclick="ctdConfirm()">{{$.Strings.T "admin_delete"}}</button>
+      <button class="btn-sm" onclick="ctdClose()">{{$.Strings.T "admin_magic_link_close"}}</button>
+    </div>
+  </div>
+</div>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delOrg(id){var f=document.createElement('form');f.method='post';f.action='/admin/organizations/'+id+'/delete';document.body.appendChild(f);f.submit();}
+var _ctdCb=null,_ctdExpected='';
+function confirmTypedDelete(name,cb){
+  _ctdExpected=name;_ctdCb=cb;
+  document.getElementById('ctd-prompt').textContent='{{$.Strings.T "admin_confirm_type_hint"}}: "'+name+'"';
+  var inp=document.getElementById('ctd-input');
+  inp.value='';document.getElementById('ctd-ok').disabled=true;
+  document.getElementById('ctd-modal').hidden=false;
+  setTimeout(function(){inp.focus();},50);
+}
+document.getElementById('ctd-input').addEventListener('input',function(){
+  document.getElementById('ctd-ok').disabled=(this.value!==_ctdExpected);
+});
+function ctdConfirm(){if(_ctdCb)_ctdCb();ctdClose();}
+function ctdClose(){document.getElementById('ctd-modal').hidden=true;_ctdCb=null;}
 </script>
 {{end}}

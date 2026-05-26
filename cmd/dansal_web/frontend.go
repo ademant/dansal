@@ -923,6 +923,22 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		token := getSessionToken(r)
+		members, err := client.GetOrganizationMembers(r.Context(), orgID, token)
+		if err != nil {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		isMember := false
+		for _, m := range members {
+			if m.UserID == su.ID {
+				isMember = true
+				break
+			}
+		}
+		if !isMember {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		if err := client.AssignEventOrg(r.Context(), id, orgID, token); err != nil {
 			http.Error(w, "assign failed: "+err.Error(), http.StatusBadGateway)
 			return

@@ -256,8 +256,8 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		hasActorWithFollowers := false
 		if actor, err := getActorByOrgID(db, id); err == nil {
 			follows, _ = listFollows(db, actor.ID)
-			// Check if this actor has any followers
-			if len(follows) > 0 {
+			// Check incoming followers (distinct from outgoing follows above)
+			if fs, _ := listFollowers(db, id); len(fs) > 0 {
 				hasActorWithFollowers = true
 			}
 		}

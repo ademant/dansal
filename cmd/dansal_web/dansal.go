@@ -1602,6 +1602,33 @@ func (c *DansalClient) GetAllUsers(ctx context.Context, token string) ([]UserInf
 	return users, json.NewDecoder(resp.Body).Decode(&users)
 }
 
+func (c *DansalClient) GenerateMagicLink(ctx context.Context, userID int, sessionToken, baseURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/users/%d/magic-link", c.BaseURL, userID), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", apiErr(resp)
+	}
+	var result struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.URL, nil
+}
+
 func (c *DansalClient) DeleteUser(ctx context.Context, id int, token string) error {
 	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", id), token, nil)
 	if err != nil {

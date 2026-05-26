@@ -87,6 +87,7 @@
     </td>
     {{if $.Data.IsAdmin}}
     <td class="col-actions">
+      <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
               onclick="if(confirm('{{$.Strings.T "admin_user_confirm_delete"}}'))delUser({{$uid}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
@@ -151,6 +152,19 @@
 
 {{end}}
 
+<div id="magic-link-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:520px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 .75rem">{{$.Strings.T "admin_magic_link_title"}}</h3>
+    <p id="magic-link-toast" hidden style="background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.88rem">{{$.Strings.T "admin_magic_link_copied"}}</p>
+    <p style="font-size:.85rem;color:var(--fg-muted);margin-bottom:.5rem">{{$.Strings.T "admin_magic_link_hint"}}</p>
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <input id="magic-link-input" type="text" readonly style="flex:1;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;background:var(--bg);color:var(--fg);font-family:monospace">
+      <button type="button" class="btn-sm" onclick="copyMagicLink()">{{$.Strings.T "admin_invite_copy"}}</button>
+    </div>
+    <button type="button" class="btn-sm" onclick="closeMagicModal()">{{$.Strings.T "admin_magic_link_close"}}</button>
+  </div>
+</div>
+
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
@@ -203,6 +217,30 @@ function copyText(t) {
 function copyInvite() {
   var el = document.getElementById('new-invite-url');
   if (el) copyText(el.textContent.trim());
+}
+function genMagicLink(uid) {
+  fetch('/admin/users/' + uid + '/magic-link', {method:'POST'})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(d){
+      var inp = document.getElementById('magic-link-input');
+      inp.value = d.url;
+      document.getElementById('magic-link-modal').hidden = false;
+      document.getElementById('magic-link-toast').hidden = true;
+      if(navigator.clipboard) {
+        navigator.clipboard.writeText(d.url).then(function(){
+          document.getElementById('magic-link-toast').hidden = false;
+        });
+      }
+    })
+    .catch(function(){ alert('Failed to generate magic link'); });
+}
+function copyMagicLink() {
+  var inp = document.getElementById('magic-link-input');
+  copyText(inp.value);
+  document.getElementById('magic-link-toast').hidden = false;
+}
+function closeMagicModal() {
+  document.getElementById('magic-link-modal').hidden = true;
 }
 (function(){
   var cbAll = document.getElementById('cb-all');

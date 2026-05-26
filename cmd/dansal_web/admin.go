@@ -1526,6 +1526,31 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 	}
 }
 
+func adminGenerateMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		link, err := client.GenerateMagicLink(r.Context(), id, getSessionToken(r), cfg.publicBaseURL())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"url": link})
+	}
+}
+
 func adminUserDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

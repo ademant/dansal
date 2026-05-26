@@ -11,6 +11,56 @@ import (
 
 )
 
+// POST /api/v1/users/{id}/magic-link — admin generates a one-time login link for a user.
+// Returns {"url":"...","expires_at":"..."} without sending anything.
+func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Header.Get("X-User-Role") != "admin" {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+	var userID int
+	err = db.QueryRow("SELECT id FROM users WHERE id=? AND disabled=0", targetID).Scan(&userID)
+	if err == sql.ErrNoRows {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	token, err := generateVerificationToken()
+	if err != nil {
+		writeError(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC()
+	expiresAt := now.Add(time.Duration(config.Server.MagicLoginExpirySecs) * time.Second)
+	db.Exec("DELETE FROM magic_login_tokens WHERE user_id=?", userID)
+	_, err = db.Exec(
+		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+		token, userID, expiresAt.Unix(),
+	)
+	if err != nil {
+		writeError(w, "Failed to create token", http.StatusInternalServerError)
+		return
+	}
+	base := buildMagicBase(r)
+	if b := r.Header.Get("X-Base-URL"); b != "" {
+		base = b
+	}
+	log.Printf("magic: admin user %s generated login link for user %d", r.Header.Get("X-User-ID"), userID)
+	json.NewEncoder(w).Encode(map[string]string{
+		"url":        base + "/api/v1/login/magic/" + token,
+		"expires_at": expiresAt.Format(time.RFC3339),
+	})
+}
+
 // POST /api/v1/login/magic — request a magic login link.
 // Body: {"username":"..."} or {"email":"..."}, optional "channel":"email"|"telegram".
 // Always returns 204 to prevent user enumeration.

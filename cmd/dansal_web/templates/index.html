@@ -41,6 +41,9 @@
 </div>
 
 
+<!-- Region selector -->
+<div id="region-bar" class="region-bar"></div>
+
 <!-- Event table -->
 <div class="table-wrap">
 <table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
@@ -49,8 +52,8 @@
       <th data-col="date"      class="sortable sorted-asc" tabindex="0" aria-sort="ascending">{{$.Strings.T "col_date"}}</th>
       <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_title"}}</th>
       <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_location"}}</th>
-      <th data-col="country"   class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_country"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
+      <th class="col-food">{{$.Strings.T "food_label"}}/{{$.Strings.T "drink_label"}}</th>
       <th class="col-fee">{{$.Strings.T "col_fee"}}</th>
     </tr>
   </thead>
@@ -73,7 +76,9 @@
       data-start="{{.StartTime}}"
       data-town="{{.LocationTown}}"
       data-availability="{{.Availability}}"
-      data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}">
+      data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
+      data-food="{{.Food}}"
+      data-drink="{{.Drink}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
@@ -95,7 +100,13 @@
       {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.Data.TagMap .}}</span>{{end}}
       {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
     </td>
-    <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid">€</span>{{end}}{{end}}</td>
+    <td class="col-food">
+      {{if eq .Food "sold"}}<span class="food-icon" title="{{$.Strings.T "food_sold"}}">🍽️</span>{{end}}
+      {{if eq .Food "potluck"}}<span class="food-icon" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{end}}
+      {{if eq .Drink "alcohol"}}<span class="food-icon" title="{{$.Strings.T "drink_alcohol"}}">🍷</span>{{end}}
+      {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
+    </td>
+    <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$.Strings.T "filter_fee_free"}}">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$.Strings.T "filter_fee_donation"}}">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$.Strings.T "filter_fee_paid"}}">€</span>{{end}}{{end}}</td>
   </tr>
   {{end}}
   {{range $.Data.FederatedEvents}}
@@ -119,8 +130,8 @@
       <span class="fed-source">↗ {{sourceDomain .ActorID}}</span>
     </td>
     <td class="col-venue">{{.LocationName}}</td>
-    <td></td>
     <td class="col-type"></td>
+    <td class="col-food"></td>
     <td class="col-fee"></td>
   </tr>
   {{end}}
@@ -192,11 +203,16 @@ th.sortable{cursor:pointer;user-select:none}
 th.sortable::after{content:" ↕";color:var(--fg-hint);font-size:.8em}
 th.sorted-asc::after{content:" ↑";color:var(--link)}
 th.sorted-desc::after{content:" ↓";color:var(--link)}
-.col-date{white-space:nowrap;min-width:110px}
+.col-date{min-width:90px}
 .col-venue .venue{display:block}
 .col-venue .town{display:block;color:var(--fg-muted);font-size:.85em}
 .col-type{min-width:90px}
+.col-food{text-align:center;white-space:nowrap}
+.food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
 .col-fee{white-space:nowrap;text-align:center}
+.region-bar{display:flex;align-items:center;gap:.4rem;margin:.75rem 0 .5rem;flex-wrap:wrap}
+.region-bar select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
+.region-sep{color:var(--fg-faint);font-size:1.1rem;line-height:1}
 .fee-sym{display:inline-block;padding:.1rem .35rem;border-radius:3px;font-size:.78rem;font-weight:600}
 .fee-free{background:#d1fae5;color:#065f46}
 .fee-donation{background:#fef3c7;color:#92400e}
@@ -280,6 +296,11 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var weekOffset = 0;
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
+  var regionCountry = '', regionTown = '';
+  var REGION = {
+    allCountries: "{{$.Strings.T "filter_all_countries"}}",
+    allTowns: "{{$.Strings.T "filter_all_towns"}}"
+  };
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -671,12 +692,57 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
   });
 
+  // ── Region selector ───────────────────────────────────────────────────────
+  function buildRegionBar(){
+    var countries = {};
+    rows.forEach(function(r){ var c=r.dataset.country||''; if(c) countries[c]=1; });
+    var sortedC = Object.keys(countries).sort();
+    var bar = document.getElementById('region-bar');
+    if(sortedC.length === 0){ bar.hidden=true; return; }
+    var html = '<select id="f-country"><option value="">'+escHtml(REGION.allCountries)+'</option>';
+    sortedC.forEach(function(c){ html+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; });
+    html += '</select><span id="region-town-wrap" hidden><span class="region-sep"> ›</span> <select id="f-town"><option value="">'+escHtml(REGION.allTowns)+'</option></select></span>';
+    bar.innerHTML = html;
+    document.getElementById('f-country').addEventListener('change', function(){
+      regionCountry = this.value;
+      regionTown = '';
+      updateTownDropdown();
+      mapFitted = false;
+      applyFilters();
+    });
+  }
+
+  function updateTownDropdown(){
+    var wrap = document.getElementById('region-town-wrap');
+    if(!regionCountry){ wrap.hidden=true; return; }
+    var towns = {};
+    rows.forEach(function(r){
+      if((r.dataset.country||'')===regionCountry){ var t=r.dataset.town||''; if(t) towns[t]=1; }
+    });
+    var sorted = Object.keys(towns).sort();
+    var sel = document.getElementById('f-town');
+    var html = '<option value="">'+escHtml(REGION.allTowns)+'</option>';
+    sorted.forEach(function(t){ html+='<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>'; });
+    sel.innerHTML = html;
+    sel.value = regionTown;
+    wrap.hidden = false;
+    sel.addEventListener('change', function(){
+      regionTown = this.value;
+      mapFitted = false;
+      applyFilters();
+    });
+  }
+
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
     document.getElementById('f-dance').value = '';
     document.getElementById('f-fee').value   = '';
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
+    regionCountry = ''; regionTown = '';
+    var fc = document.getElementById('f-country');
+    if(fc) fc.value = '';
+    updateTownDropdown();
     mapFitted=false;
     applyFilters();
   }
@@ -703,6 +769,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       }
       // Fee filter: unknown fee events (data-fee="") are not excluded by this filter
       if(feeFilter && r.dataset.fee && r.dataset.fee!==feeFilter) return false;
+      if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
+      if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
       return true;
     });
 
@@ -785,6 +853,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   });
 
   // Initialise map and first render
+  buildRegionBar();
   initMap();
   applyFilters();
 })();

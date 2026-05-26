@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS event_templates (
     data TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS delivery_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id TEXT NOT NULL,
+    org_id INTEGER NOT NULL,
+    inbox_url TEXT NOT NULL,
+    activity_json TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    last_error TEXT,
+    next_attempt_at INTEGER NOT NULL,
+    UNIQUE(activity_id, org_id, inbox_url)
+);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -569,4 +580,69 @@ func deleteTemplate(db *sql.DB, id, userID int, isAdmin bool) error {
 		_, err = db.Exec("DELETE FROM event_templates WHERE id = ? AND user_id = ?", id, userID)
 	}
 	return err
+}
+
+// DeliveryFailure holds a record of a failed ActivityPub inbox POST for retry.
+type DeliveryFailure struct {
+	ActivityID   string
+	OrgID        int
+	InboxURL     string
+	ActivityJSON string
+	Attempts     int
+	LastError    string
+	NextAttempt  int64
+}
+
+// insertDeliveryFailure records a new per-follower delivery failure.
+// Uses INSERT OR IGNORE so repeated calls for the same (activity, org, inbox)
+// do not reset the attempt counter set by retries.
+func insertDeliveryFailure(db *sql.DB, activityID string, orgID int, inboxURL, activityJSON, lastError string, nextAttempt int64) error {
+	_, err := db.Exec(`
+		INSERT OR IGNORE INTO delivery_failures
+		(activity_id, org_id, inbox_url, activity_json, attempts, last_error, next_attempt_at)
+		VALUES (?, ?, ?, ?, 1, ?, ?)`,
+		activityID, orgID, inboxURL, activityJSON, lastError, nextAttempt,
+	)
+	return err
+}
+
+// updateDeliveryFailure updates attempt count, error, and next retry time for an existing record.
+func updateDeliveryFailure(db *sql.DB, activityID string, orgID int, inboxURL, lastError string, attempts int, nextAttempt int64) error {
+	_, err := db.Exec(
+		`UPDATE delivery_failures SET attempts=?, last_error=?, next_attempt_at=?
+		 WHERE activity_id=? AND org_id=? AND inbox_url=?`,
+		attempts, lastError, nextAttempt, activityID, orgID, inboxURL,
+	)
+	return err
+}
+
+// deleteDeliveryFailure removes a failure record after successful delivery.
+func deleteDeliveryFailure(db *sql.DB, activityID string, orgID int, inboxURL string) {
+	db.Exec(
+		"DELETE FROM delivery_failures WHERE activity_id=? AND org_id=? AND inbox_url=?",
+		activityID, orgID, inboxURL,
+	)
+}
+
+// pendingDeliveryFailures returns up to 100 failure records whose retry time has passed.
+func pendingDeliveryFailures(db *sql.DB, nowUnix int64) ([]DeliveryFailure, error) {
+	rows, err := db.Query(`
+		SELECT activity_id, org_id, inbox_url, activity_json, attempts, COALESCE(last_error, '')
+		FROM delivery_failures WHERE next_attempt_at <= ?
+		ORDER BY next_attempt_at LIMIT 100`,
+		nowUnix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DeliveryFailure
+	for rows.Next() {
+		var f DeliveryFailure
+		if err := rows.Scan(&f.ActivityID, &f.OrgID, &f.InboxURL, &f.ActivityJSON, &f.Attempts, &f.LastError); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }

@@ -22,7 +22,60 @@ func startDelivery(cfg *Config, db *sql.DB, client *DansalClient, relayActor *Ac
 	}
 }
 
+const maxDeliveryAttempts = 8
+
+// deliveryBackoff returns the number of seconds to wait before the next retry.
+func deliveryBackoff(attempts int) int64 {
+	switch {
+	case attempts <= 1:
+		return 5 * 60
+	case attempts == 2:
+		return 15 * 60
+	case attempts == 3:
+		return 60 * 60
+	case attempts == 4:
+		return 4 * 60 * 60
+	default:
+		return 24 * 60 * 60
+	}
+}
+
+// retryFailedDeliveries retries pending per-follower delivery failures with backoff.
+func retryFailedDeliveries(cfg *Config, db *sql.DB) {
+	failures, err := pendingDeliveryFailures(db, time.Now().Unix())
+	if err != nil {
+		log.Printf("delivery retry: list pending: %v", err)
+		return
+	}
+	for _, f := range failures {
+		actor, err := getActorByOrgID(db, f.OrgID)
+		if err != nil {
+			log.Printf("delivery retry: get actor org %d: %v", f.OrgID, err)
+			continue
+		}
+		base := actorURL(cfg, actor.OrgSlug)
+		keyID := base + "#main-key"
+		if err := postToInbox(f.InboxURL, keyID, actor.PrivateKeyPEM, []byte(f.ActivityJSON)); err != nil {
+			newAttempts := f.Attempts + 1
+			if newAttempts > maxDeliveryAttempts {
+				log.Printf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, err)
+				deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
+			} else {
+				nextAttempt := time.Now().Unix() + deliveryBackoff(newAttempts)
+				if dbErr := updateDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL, err.Error(), newAttempts, nextAttempt); dbErr != nil {
+					log.Printf("delivery retry: update record: %v", dbErr)
+				}
+			}
+		} else {
+			log.Printf("delivery retry: succeeded to %s (activity %s)", f.InboxURL, f.ActivityID)
+			deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
+		}
+	}
+}
+
 func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *ActorRecord, since time.Time) {
+	retryFailedDeliveries(cfg, db)
+
 	after := since.UTC().Format(time.RFC3339)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -85,10 +138,17 @@ func deliverToFollowers(cfg *Config, db *sql.DB, actor *ActorRecord, activity Ac
 
 	base := actorURL(cfg, actor.OrgSlug)
 	keyID := base + "#main-key"
+	now := time.Now().Unix()
 
 	for _, f := range followers {
 		if err := postToInbox(f.InboxURL, keyID, actor.PrivateKeyPEM, body); err != nil {
 			log.Printf("deliver to %s: %v", f.InboxURL, err)
+			nextAttempt := now + deliveryBackoff(1)
+			if dbErr := insertDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL, string(body), err.Error(), nextAttempt); dbErr != nil {
+				log.Printf("delivery: record failure for %s: %v", f.InboxURL, dbErr)
+			}
+		} else {
+			deleteDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL)
 		}
 	}
 	return nil

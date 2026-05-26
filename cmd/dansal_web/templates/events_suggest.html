@@ -44,7 +44,7 @@
       </label>
     </div>
     {{end}}
-    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+    <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
     {{if .CaptchaSiteKey}}
     <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -155,7 +155,7 @@
       </label>
     </div>
     {{end}}
-    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+    <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
     {{if .CaptchaSiteKey}}
     <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

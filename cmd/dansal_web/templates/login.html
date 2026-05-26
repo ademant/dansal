@@ -13,7 +13,7 @@
   <form method="post" action="/login" class="login-form" autocomplete="on">
     {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
     <input type="hidden" name="_form_ts" value="{{.FormToken}}">
-    <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+    <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
     <label for="username">{{$.Strings.T "login_username"}}</label>
     <input id="username" type="text" name="username" value="{{.Username}}"
            required autofocus autocomplete="username">
@@ -27,7 +27,7 @@
     <summary>{{$.Strings.T "login_magic_title"}}</summary>
     <form method="post" action="/magic" class="login-form" style="margin-top:.75rem">
       <input type="hidden" name="_form_ts" value="{{.FormToken}}">
-      <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+      <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
       <label for="magic-identifier">{{$.Strings.T "login_magic_identifier"}}</label>
       <input id="magic-identifier" type="text" name="identifier" required autocomplete="username email">
       <div class="magic-btns">

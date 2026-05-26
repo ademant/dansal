@@ -90,6 +90,7 @@ func loadConfig() *Config {
 		AuthRateLimit:      10,
 		AuthRateWindowMins: 10,
 		MinSubmitSecs:      3,
+		RelayActorName:     "relay",
 	}
 
 	configPath := ""
@@ -145,6 +146,7 @@ func reloadConfig(path string, db *sql.DB) *Config {
 		AuthRateLimit:      10,
 		AuthRateWindowMins: 10,
 		MinSubmitSecs:      3,
+		RelayActorName:     "relay",
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

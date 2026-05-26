@@ -92,7 +92,6 @@
       {{if or .LocationShortName .Location}}<span class="venue">{{if .LocationShortName}}{{.LocationShortName}}{{else}}{{.Location}}{{end}}</span>{{end}}
       {{if .LocationTown}}<span class="town">{{.LocationTown}}</span>{{end}}
     </td>
-    <td>{{.LocationCountry}}</td>
     <td class="col-type">
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}

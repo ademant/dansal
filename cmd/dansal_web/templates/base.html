@@ -285,6 +285,7 @@ function attachTileLayer(map){
 }
 (function(){
   var lastY=window.scrollY,footer=document.querySelector('footer');
+  if(!footer)return;
   window.addEventListener('scroll',function(){
     var y=window.scrollY;
     if(y>lastY&&y>80){footer.classList.add('footer-visible');}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -172,7 +173,13 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 		return "new"
 	}
 
-	// Match found — determine whether feed has newer data.
+	// Always check whether the feed's location geodata differs from the DB —
+	// location coordinates can change independently of the event record.
+	if previewLocationUpdated(found.id, req.Location) {
+		return "updated"
+	}
+
+	// Match found — determine whether event data has changed.
 	if req.SourceLastModified > 0 {
 		if req.SourceLastModified > found.srcMod {
 			return "updated"
@@ -180,7 +187,7 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 		return "exists"
 	}
 
-	// No source timestamps — compare key fields.
+	// No source timestamps — compare key event fields.
 	startStr := req.StartTime
 	if len(req.Date) > 0 {
 		startStr = req.Date[0].StartTime
@@ -197,6 +204,33 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 		return "updated"
 	}
 	return "exists"
+}
+
+// previewLocationUpdated returns true when the feed supplies coordinates that
+// differ meaningfully from what is stored in the DB for the matched event's
+// location. A tolerance of 0.0001° (~11 m) avoids false positives from
+// floating-point rounding in different feed sources.
+func previewLocationUpdated(eventID int, loc EventLocationRequest) bool {
+	if loc.Latitude == nil && loc.Longitude == nil {
+		return false // feed carries no geodata — nothing to compare
+	}
+	const eps = 0.0001
+	var dbLat, dbLng *float64
+	db.QueryRow(`SELECT l.latitude, l.longitude
+		FROM events e JOIN locations l ON e.location_id = l.id
+		WHERE e.id = ?`, eventID).Scan(&dbLat, &dbLng)
+
+	if loc.Latitude != nil {
+		if dbLat == nil || math.Abs(*loc.Latitude-*dbLat) > eps {
+			return true
+		}
+	}
+	if loc.Longitude != nil {
+		if dbLng == nil || math.Abs(*loc.Longitude-*dbLng) > eps {
+			return true
+		}
+	}
+	return false
 }
 
 func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {

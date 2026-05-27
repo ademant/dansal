@@ -115,10 +115,13 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	var id int64
 	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
 	if err == nil {
+		// Update coordinates whenever the feed supplies them — not only when
+		// the DB has NULL. This lets corrected geodata flow in from the source.
 		if loc.Latitude != nil || loc.Longitude != nil {
-			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=? AND latitude IS NULL AND longitude IS NULL",
+			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=?",
 				loc.Latitude, loc.Longitude, id)
 		}
+		// For text fields keep the backfill-only policy to preserve manual edits.
 		if loc.ShortName != "" || loc.Address != "" || loc.Town != "" || loc.Zipcode != "" || loc.Country != "" {
 			q.Exec(`UPDATE locations SET
 				short_name = COALESCE(NULLIF(short_name,''), ?),

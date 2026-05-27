@@ -1491,6 +1491,114 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 	}
 }
 
+// adminLocationMergeHandler merges two or more selected locations into one.
+// The newest location (by created_at) is the base; missing fields are filled
+// from the others. Events and org assignments are transferred; remaining
+// locations are deleted.
+func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		ids := parseFormIDs(r.Form, "loc_ids")
+		if len(ids) < 2 {
+			http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+			return
+		}
+		ctx := r.Context()
+		token := getSessionToken(r)
+
+		var locs []Location
+		for _, id := range ids {
+			if loc, err := client.GetLocation(ctx, id); err == nil {
+				locs = append(locs, loc)
+			}
+		}
+		if len(locs) < 2 {
+			http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+			return
+		}
+
+		// Base = newest by created_at.
+		base := locs[0]
+		for _, l := range locs[1:] {
+			if l.CreatedAt > base.CreatedAt {
+				base = l
+			}
+		}
+
+		// Fill missing fields and collect merged org IDs from all locations.
+		orgSet := make(map[int]bool)
+		for _, oid := range base.OrganizationIDs {
+			orgSet[oid] = true
+		}
+		for _, l := range locs {
+			if l.ID == base.ID {
+				continue
+			}
+			if base.ShortName == ""    { base.ShortName = l.ShortName }
+			if base.Address == ""      { base.Address = l.Address }
+			if base.Zipcode == ""      { base.Zipcode = l.Zipcode }
+			if base.Town == ""         { base.Town = l.Town }
+			if base.Country == ""      { base.Country = l.Country }
+			if base.CountryCode == ""  { base.CountryCode = l.CountryCode }
+			if base.Region == ""       { base.Region = l.Region }
+			if base.Latitude == nil    { base.Latitude = l.Latitude }
+			if base.Longitude == nil   { base.Longitude = l.Longitude }
+			if base.Internetsite == "" { base.Internetsite = l.Internetsite }
+			if base.OsmID == nil       { base.OsmID = l.OsmID }
+			if base.OsmType == ""      { base.OsmType = l.OsmType }
+			for _, oid := range l.OrganizationIDs {
+				orgSet[oid] = true
+			}
+		}
+		mergedOrgs := make([]int, 0, len(orgSet))
+		for oid := range orgSet {
+			mergedOrgs = append(mergedOrgs, oid)
+		}
+		base.OrganizationIDs = mergedOrgs
+
+		// Update base location (applies merged fields + org assignments).
+		_ = client.UpdateLocation(ctx, base.ID, base, token)
+
+		// Reassign events from dropped locations to base before deleting.
+		var dropIDs []int
+		for _, l := range locs {
+			if l.ID != base.ID {
+				dropIDs = append(dropIDs, l.ID)
+			}
+		}
+		ph := make([]string, len(dropIDs))
+		dropArgs := make([]interface{}, len(dropIDs)+1)
+		dropArgs[0] = base.ID
+		for i, id := range dropIDs {
+			ph[i] = "?"
+			dropArgs[i+1] = id
+		}
+		db.ExecContext(ctx,
+			"UPDATE events SET location_id=? WHERE location_id IN ("+strings.Join(ph, ",")+")",
+			dropArgs...)
+
+		// Delete dropped locations (cascade cleans their location_organizations).
+		for _, id := range dropIDs {
+			_ = client.DeleteLocation(ctx, id, token)
+		}
+
+		client.invalidateLocations()
+		client.invalidateEvents()
+		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+	}
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
@@ -1897,6 +2005,203 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		if fetchErr == nil && event.OrganizationID != nil {
 			go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
 		}
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+	}
+}
+
+// adminEventMergeHandler merges two or more selected events into one.
+// Among user-edited events the newest (by changed_at) is the base; otherwise
+// the newest by created_at. Tags, musicians and dances are unioned; other empty
+// fields are filled from non-base events. Non-base events are deleted.
+func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		ids := parseFormIDs(r.Form, "event_ids")
+		if len(ids) < 2 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		ctx := r.Context()
+		token := getSessionToken(r)
+
+		ph := make([]string, len(ids))
+		qargs := make([]interface{}, len(ids))
+		for i, id := range ids {
+			ph[i] = "?"
+			qargs[i] = id
+		}
+		inClause := "(" + strings.Join(ph, ",") + ")"
+
+		// Determine base from DB (newest user-edited, or newest by created_at).
+		type evRow struct {
+			id        int
+			changedAt int64
+			changedBy string
+			createdAt string
+		}
+		evrows, err := db.QueryContext(ctx,
+			"SELECT id, COALESCE(changed_at,0), COALESCE(changed_by,''), created_at FROM events WHERE id IN "+inClause,
+			qargs...)
+		if err != nil {
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+		var dbRows []evRow
+		for evrows.Next() {
+			var er evRow
+			evrows.Scan(&er.id, &er.changedAt, &er.changedBy, &er.createdAt)
+			dbRows = append(dbRows, er)
+		}
+		evrows.Close()
+		if len(dbRows) < 2 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+
+		hasEdited := false
+		for _, er := range dbRows {
+			if er.changedBy != "" {
+				hasEdited = true
+				break
+			}
+		}
+		baseRow := dbRows[0]
+		for _, er := range dbRows[1:] {
+			if hasEdited {
+				baseEdited := baseRow.changedBy != ""
+				erEdited := er.changedBy != ""
+				if !baseEdited && erEdited {
+					baseRow = er
+					continue
+				}
+				if baseEdited && !erEdited {
+					continue
+				}
+				if er.changedAt > baseRow.changedAt {
+					baseRow = er
+				}
+			} else {
+				if er.createdAt > baseRow.createdAt {
+					baseRow = er
+				}
+			}
+		}
+		baseID := baseRow.id
+
+		base, err := client.GetEventAuthed(ctx, baseID, token)
+		if err != nil {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+
+		tagSet := make(map[string]bool)
+		for _, t := range base.Tags {
+			tagSet[t] = true
+		}
+		musicianSet := make(map[int]bool)
+		for _, m := range base.Musicians {
+			musicianSet[m.ID] = true
+		}
+
+		for _, id := range ids {
+			if id == baseID {
+				continue
+			}
+			ev, err := client.GetEventAuthed(ctx, id, token)
+			if err != nil {
+				continue
+			}
+			if base.Description == ""        { base.Description = ev.Description }
+			if base.URL == ""                { base.URL = ev.URL }
+			if base.BookingURL == ""         { base.BookingURL = ev.BookingURL }
+			if base.Availability == ""       { base.Availability = ev.Availability }
+			if base.Pricing == nil           { base.Pricing = ev.Pricing }
+			if base.Food == ""               { base.Food = ev.Food }
+			if base.Drink == ""              { base.Drink = ev.Drink }
+			if base.WorkshopDifficulty == "" { base.WorkshopDifficulty = ev.WorkshopDifficulty }
+			base.HasBall     = base.HasBall     || ev.HasBall
+			base.HasWorkshop = base.HasWorkshop || ev.HasWorkshop
+			base.HasFestival = base.HasFestival || ev.HasFestival
+			for _, t := range ev.Tags      { tagSet[t] = true }
+			for _, m := range ev.Musicians { musicianSet[m.ID] = true }
+		}
+
+		tags := make([]string, 0, len(tagSet))
+		for t := range tagSet {
+			tags = append(tags, t)
+		}
+		mids := make([]int, 0, len(musicianSet))
+		for id := range musicianSet {
+			mids = append(mids, id)
+		}
+
+		drows, _ := db.QueryContext(ctx,
+			"SELECT DISTINCT dance_id FROM event_dances WHERE event_id IN "+inClause,
+			qargs...)
+		var danceIDs []int
+		if drows != nil {
+			for drows.Next() {
+				var did int
+				drows.Scan(&did)
+				danceIDs = append(danceIDs, did)
+			}
+			drows.Close()
+		}
+
+		req := EventUpdateReq{
+			Title:              base.Title,
+			Description:        base.Description,
+			StartTime:          base.StartTime,
+			EndTime:            base.EndTime,
+			HasBall:            base.HasBall,
+			HasWorkshop:        base.HasWorkshop,
+			HasFestival:        base.HasFestival,
+			WorkshopDifficulty: base.WorkshopDifficulty,
+			IsCancelled:        base.IsCancelled,
+			IsPublished:        base.IsPublished,
+			BookingURL:         base.BookingURL,
+			Availability:       base.Availability,
+			TicketsTotal:       base.TicketsTotal,
+			BookingEnabled:     base.BookingEnabled,
+			Food:               base.Food,
+			Drink:              base.Drink,
+			Tags:               tags,
+			URL:                base.URL,
+			OrganizationID:     base.OrganizationID,
+			Pricing:            base.Pricing,
+			Location: EventLocReq{
+				Location:  base.Location,
+				ShortName: base.LocationShortName,
+				Address:   base.LocationAddress,
+				Zipcode:   base.LocationZipcode,
+				Town:      base.LocationTown,
+				Country:   base.LocationCountry,
+				Latitude:  base.LocationLat,
+				Longitude: base.LocationLng,
+			},
+			Musicians: mids,
+			Dances:    danceIDs,
+		}
+		_, _ = client.UpdateEvent(ctx, baseID, req, token)
+
+		for _, id := range ids {
+			if id != baseID {
+				_ = client.DeleteEvent(ctx, id, token)
+			}
+		}
+
+		client.invalidateEvents()
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
 }

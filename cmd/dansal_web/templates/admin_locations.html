@@ -25,6 +25,8 @@
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
   <button type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge"
+          onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
 {{end}}
 
@@ -90,6 +92,8 @@
 .btn-reset:hover{background:#f0f0f0;border-color:#888}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.btn-merge{background:#856404;color:#fff;border:none}
+.btn-merge:hover{background:#664e03}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 </style>
 

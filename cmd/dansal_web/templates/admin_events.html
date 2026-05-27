@@ -53,10 +53,17 @@
 
 {{if .Events}}
 <p class="result-count">{{len .Events}} {{$.Strings.T "admin_events_count"}}</p>
+<form method="post" action="/admin/events/merge" id="event-bulk-form">
+<div class="bulk-bar" id="event-bulk-bar">
+  <span id="event-bulk-count"></span>
+  <button type="submit" class="btn-sm btn-merge"
+          onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+</div>
 <div class="table-wrap">
 <table class="event-table" data-sortable>
   <thead>
     <tr>
+      <th class="col-cb"><input type="checkbox" id="event-cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
       <th data-sort="str">{{$.Strings.T "col_date"}}</th>
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "col_location"}}</th>
@@ -67,6 +74,7 @@
   <tbody>
   {{range .Events}}
   <tr>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"></td>
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
     <td>{{if and .LocationShortName .LocationTown}}{{.LocationShortName}}, {{.LocationTown}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
@@ -85,6 +93,7 @@
   </tbody>
 </table>
 </div>
+</form>
 {{else}}
 <p>{{$.Strings.T "no_events_found"}}</p>
 {{end}}
@@ -111,6 +120,10 @@
 .btn-del:hover{background:#800016}
 .btn-pub{background:#217a3c;color:#fff;border:none}
 .btn-pub:hover{background:#155727}
+.btn-merge{background:#856404;color:#fff;border:none}
+.btn-merge:hover{background:#664e03}
+.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
+.col-cb{width:2rem;text-align:center}
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
@@ -124,5 +137,20 @@ function pubEvent(id){
   f.method='post';f.action='/admin/events/'+id+'/publish';
   document.body.appendChild(f);f.submit();
 }
+(function(){
+  var cbAll=document.getElementById('event-cb-all');
+  if(!cbAll) return;
+  var cbs=document.querySelectorAll('.event-cb');
+  var countEl=document.getElementById('event-bulk-count');
+  function updateCount(){
+    var n=document.querySelectorAll('.event-cb:checked').length;
+    countEl.textContent=n>0?n+' ✓':'';
+  }
+  cbAll.addEventListener('change',function(){
+    cbs.forEach(function(cb){cb.checked=cbAll.checked;});
+    updateCount();
+  });
+  cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+})();
 </script>
 {{end}}

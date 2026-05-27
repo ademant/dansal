@@ -839,9 +839,13 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 }
 
 type AdminFetchurlNewData struct {
-	Orgs     []Organization
-	ErrorKey string
-	URL      string
+	Orgs         []Organization
+	ErrorKey     string
+	URL          string
+	Type         string
+	OrgID        int
+	FromImport   bool
+	CreatedAfter string
 }
 
 func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -851,8 +855,16 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 			return
 		}
 		orgs, _ := client.GetOrganizations(r.Context())
+		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
 		title := i18n.T(r, "fetch_new_title")
-		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{Orgs: orgs}))
+		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
+			Orgs:         orgs,
+			URL:          r.URL.Query().Get("url"),
+			Type:         r.URL.Query().Get("type"),
+			OrgID:        orgID,
+			FromImport:   r.URL.Query().Get("from_import") != "" || r.URL.Query().Get("created_after") != "",
+			CreatedAfter: r.URL.Query().Get("created_after"),
+		}))
 	}
 }
 
@@ -881,15 +893,31 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, client *DansalCl
 				orgID = &n
 			}
 		}
+		createdAfter := r.FormValue("created_after")
 		token := getSessionToken(r)
 		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, token); err != nil {
 			orgs, _ := client.GetOrganizations(r.Context())
+			orgIDInt := 0
+			if orgID != nil {
+				orgIDInt = *orgID
+			}
 			title := i18n.T(r, "fetch_new_title")
 			renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
-				Orgs:     orgs,
-				ErrorKey: "fetch_add_error",
-				URL:      rawURL,
+				Orgs:         orgs,
+				ErrorKey:     "fetch_add_error",
+				URL:          rawURL,
+				Type:         typ,
+				OrgID:        orgIDInt,
+				FromImport:   createdAfter != "",
+				CreatedAfter: createdAfter,
 			}))
+			return
+		}
+		if createdAfter != "" {
+			q := url.Values{}
+			q.Set("created_after", createdAfter)
+			q.Set("include_past", "1")
+			http.Redirect(w, r, "/admin/events?"+q.Encode(), http.StatusSeeOther)
 			return
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
@@ -3508,6 +3536,22 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 
 		if len(selected) > 0 {
 			client.CreateEventBatch(r.Context(), selected, token)
+		}
+
+		feedURL := r.FormValue("feed_url")
+		feedType := r.FormValue("feed_type")
+		if feedURL != "" {
+			q := url.Values{}
+			q.Set("url", feedURL)
+			if feedType != "" {
+				q.Set("type", feedType)
+			}
+			if orgID > 0 {
+				q.Set("org_id", strconv.Itoa(orgID))
+			}
+			q.Set("created_after", createdAt)
+			http.Redirect(w, r, "/admin/fetchurls/new?"+q.Encode(), http.StatusSeeOther)
+			return
 		}
 
 		q := url.Values{}

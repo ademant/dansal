@@ -3,9 +3,13 @@
 <h1>{{.Strings.T "fetch_new_title"}}</h1>
 
 {{with .Data}}
+{{if .FromImport}}
+<p class="import-notice">{{$.Strings.T "fetch_from_import_notice"}}</p>
+{{end}}
 {{if .ErrorKey}}<p class="form-error">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
 <form method="post" action="/admin/fetchurls/new" class="edit-form">
+  {{if .CreatedAfter}}<input type="hidden" name="created_after" value="{{.CreatedAfter}}">{{end}}
   <div class="form-row">
     <label for="url">{{$.Strings.T "fetch_url"}}</label>
     <input type="url" id="url" name="url" value="{{.URL}}" required autofocus
@@ -14,17 +18,17 @@
   <div class="form-row">
     <label for="type">{{$.Strings.T "fetch_type"}}</label>
     <select id="type" name="type">
-      <option value="">{{$.Strings.T "fetch_type_auto"}}</option>
-      <option value="ical">iCal</option>
-      <option value="rss">{{$.Strings.T "fetch_type_rss"}}</option>
-      <option value="folkdance-json">Folkdance JSON</option>
+      <option value="" {{if eq .Type ""}}selected{{end}}>{{$.Strings.T "fetch_type_auto"}}</option>
+      <option value="ical" {{if eq .Type "ical"}}selected{{end}}>iCal</option>
+      <option value="rss" {{if eq .Type "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
+      <option value="folkdance-json" {{if eq .Type "folkdance-json"}}selected{{end}}>Folkdance JSON</option>
     </select>
   </div>
   <div class="form-row">
     <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
     <select id="organization_id" name="organization_id">
       <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
-      {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      {{range .Orgs}}<option value="{{.ID}}"{{if eq .ID $.Data.OrgID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </div>
   <div class="form-row">
@@ -33,11 +37,18 @@
   </div>
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "fetch_add"}}</button>
+    {{if .FromImport}}
+    <a href="/admin/events{{if .CreatedAfter}}?created_after={{.CreatedAfter}}&include_past=1{{end}}" class="btn-sm">{{$.Strings.T "admin_skip"}}</a>
+    {{else}}
     <a href="/admin/fetchurls" class="btn-sm">{{$.Strings.T "admin_cancel"}}</a>
+    {{end}}
   </div>
 </form>
 {{end}}
 
+<style>
+.import-notice{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .85rem;margin-bottom:1rem;font-size:.9rem}
+</style>
 <script>
 document.getElementById('url').addEventListener('blur', function() {
   var u = this.value.toLowerCase();

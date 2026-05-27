@@ -11,6 +11,8 @@
 {{if .PreviewEvents}}
 <h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
 <form method="post" action="/admin/events/import/confirm">
+  <input type="hidden" name="feed_url" value="{{.FeedURL}}">
+  <input type="hidden" name="feed_type" value="{{.FeedType}}">
 
   {{if $.Data.Orgs}}
   <div class="assign-section">

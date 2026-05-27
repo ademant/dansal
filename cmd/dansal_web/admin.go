@@ -942,6 +942,7 @@ type AdminFetchurlEditData struct {
 	OrgMap             map[int]Organization
 	Dances             []Dance
 	SelectedDanceNames map[string]bool
+	Templates          []EventTemplate
 	ErrorKey           string
 }
 
@@ -1057,9 +1058,9 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, client *DansalCl
 	}
 }
 
-func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -1081,6 +1082,15 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		}
 		dances, _ := client.GetDances(r.Context())
 		selected := buildSelectedDanceNamesFromIDs(src.DanceIDs, dances)
+		var orgIDs []int
+		if su.Role == "admin" {
+			for _, o := range orgs {
+				orgIDs = append(orgIDs, o.ID)
+			}
+		} else {
+			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
+		}
+		templates, _ := listTemplates(db, su.ID, orgIDs)
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
 			Source:             src,
@@ -1088,13 +1098,14 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			OrgMap:             orgMap,
 			Dances:             dances,
 			SelectedDanceNames: selected,
+			Templates:          templates,
 		}))
 	}
 }
 
-func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -1130,8 +1141,16 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			}
 		}
 
+		var templateID *int
+		if v := r.FormValue("template_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				templateID = &n
+			}
+		}
+		templateMode := r.FormValue("template_mode")
+
 		token := getSessionToken(r)
-		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, token); err != nil {
+		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgMap := make(map[int]Organization, len(orgs))
@@ -1140,6 +1159,15 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			}
 			dances, _ := client.GetDances(r.Context())
 			selected := buildSelectedDanceNamesFromIDs(danceIDs, dances)
+			var orgIDs []int
+			if su.Role == "admin" {
+				for _, o := range orgs {
+					orgIDs = append(orgIDs, o.ID)
+				}
+			} else {
+				orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
+			}
+			templates, _ := listTemplates(db, su.ID, orgIDs)
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
 				Source:             src,
@@ -1147,6 +1175,7 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				OrgMap:             orgMap,
 				Dances:             dances,
 				SelectedDanceNames: selected,
+				Templates:          templates,
 				ErrorKey:           "admin_save_error",
 			}))
 			return
@@ -1255,7 +1284,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 						}
 						if !hasTag {
 							newTags := append(src.Tags, newTag)
-							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, token)
+							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, token)
 						}
 					}
 				}
@@ -1633,6 +1662,11 @@ type EventPrefill struct {
 	PricingLines                        []Price
 	Tags                                []string
 	DanceIDs                            []int
+	Food                                string
+	Drink                               string
+	TicketsTotal                        int
+	BookingEnabled                      bool
+	Timetable                           []TimetableEntry
 	CloneMode                           bool
 	OriginalDate                        string // used in clone mode to enforce date change
 }
@@ -2316,6 +2350,14 @@ func isoDateStr(t string) string {
 	return ""
 }
 
+// isoTimeStr extracts "HH:MM" from "YYYY-MM-DDTHH:MM:SS".
+func isoTimeStr(t string) string {
+	if len(t) >= 16 {
+		return t[11:16]
+	}
+	return ""
+}
+
 // ── Event Templates ───────────────────────────────────────────────────────────
 
 type AdminTemplatesData struct {
@@ -2385,7 +2427,11 @@ func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 		}
 		data, _ := json.Marshal(templateDataFromEvent(ev))
 		if _, err := saveTemplate(db, su.ID, orgID, name, string(data)); err != nil {
-			http.Error(w, "save failed", http.StatusInternalServerError)
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				http.Error(w, "a template with that name already exists", http.StatusConflict)
+			} else {
+				http.Error(w, "save failed", http.StatusInternalServerError)
+			}
 			return
 		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -2429,36 +2475,275 @@ func adminTemplateDataHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+type AdminTemplateAssignData struct {
+	EventIDs  []int
+	Templates []EventTemplate
+}
+
+func adminTemplateAssignPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		var eventIDs []int
+		for _, v := range r.URL.Query()["event_ids"] {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				eventIDs = append(eventIDs, n)
+			}
+		}
+		if len(eventIDs) == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		token := getSessionToken(r)
+		var orgIDs []int
+		if su.Role == "admin" {
+			allOrgs, _ := client.GetOrganizations(r.Context())
+			for _, o := range allOrgs {
+				orgIDs = append(orgIDs, o.ID)
+			}
+		} else {
+			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
+		}
+		ts, _ := listTemplates(db, su.ID, orgIDs)
+		title := i18n.T(r, "admin_template_assign_title")
+		renderTemplate(w, tmpls.adminTemplateAssign, tmplData(r, cfg, i18n, title, AdminTemplateAssignData{
+			EventIDs:  eventIDs,
+			Templates: ts,
+		}))
+	}
+}
+
+func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var eventIDs []int
+		for _, v := range r.Form["event_ids"] {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				eventIDs = append(eventIDs, n)
+			}
+		}
+		if len(eventIDs) == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		templateID, err := strconv.Atoi(r.FormValue("template_id"))
+		if err != nil || templateID == 0 {
+			http.Error(w, "template_id required", http.StatusBadRequest)
+			return
+		}
+		tpl, err := getTemplate(db, templateID)
+		if err != nil {
+			http.Error(w, "template not found", http.StatusNotFound)
+			return
+		}
+		var td templateEventData
+		if err := json.Unmarshal([]byte(tpl.Data), &td); err != nil {
+			http.Error(w, "bad template data", http.StatusInternalServerError)
+			return
+		}
+		fields := make(map[string]bool)
+		for _, f := range r.Form["fields"] {
+			fields[f] = true
+		}
+
+		// Pre-fetch location details if needed.
+		var locForTemplate *EventLocReq
+		if fields["loc"] && td.LocID > 0 {
+			bundle := client.FetchRefBundle(r.Context())
+			for _, l := range bundle.Locations {
+				if l.ID == td.LocID {
+					locForTemplate = &EventLocReq{
+						Location:  l.Location,
+						Address:   l.Address,
+						Town:      l.Town,
+						Country:   l.Country,
+						Latitude:  l.Latitude,
+						Longitude: l.Longitude,
+					}
+					break
+				}
+			}
+		}
+
+		token := getSessionToken(r)
+		for _, evID := range eventIDs {
+			ev, err := client.GetEvent(r.Context(), evID)
+			if err != nil {
+				log.Printf("template assign get event %d: %v", evID, err)
+				continue
+			}
+			var danceIDs []int
+			drows, _ := db.QueryContext(r.Context(), "SELECT dance_id FROM event_dances WHERE event_id = ?", evID)
+			if drows != nil {
+				for drows.Next() {
+					var did int
+					drows.Scan(&did)
+					danceIDs = append(danceIDs, did)
+				}
+				drows.Close()
+			}
+			var musicianIDs []int
+			for _, m := range ev.Musicians {
+				musicianIDs = append(musicianIDs, m.ID)
+			}
+			req := EventUpdateReq{
+				Title:              ev.Title,
+				Description:        ev.Description,
+				StartTime:          ev.StartTime,
+				EndTime:            ev.EndTime,
+				HasBall:            ev.HasBall,
+				HasWorkshop:        ev.HasWorkshop,
+				HasFestival:        ev.HasFestival,
+				WorkshopDifficulty: ev.WorkshopDifficulty,
+				IsCancelled:        ev.IsCancelled,
+				IsPublished:        ev.IsPublished,
+				BookingURL:         ev.BookingURL,
+				Availability:       ev.Availability,
+				TicketsTotal:       ev.TicketsTotal,
+				BookingEnabled:     ev.BookingEnabled,
+				Food:               ev.Food,
+				Drink:              ev.Drink,
+				Tags:               ev.Tags,
+				URL:                ev.URL,
+				OrganizationID:     ev.OrganizationID,
+				Pricing:            ev.Pricing,
+				Location: EventLocReq{
+					Location:  ev.Location,
+					ShortName: ev.LocationShortName,
+					Address:   ev.LocationAddress,
+					Zipcode:   ev.LocationZipcode,
+					Town:      ev.LocationTown,
+					Country:   ev.LocationCountry,
+					Latitude:  ev.LocationLat,
+					Longitude: ev.LocationLng,
+				},
+				Musicians: musicianIDs,
+				Dances:    danceIDs,
+			}
+			if fields["timing"] {
+				req.StartTime = td.StartTime
+				req.EndTime = td.EndTime
+			}
+			if fields["org"] && td.OrgID > 0 {
+				oid := td.OrgID
+				req.OrganizationID = &oid
+			}
+			if fields["loc"] && locForTemplate != nil {
+				req.Location = *locForTemplate
+			}
+			if fields["type_flags"] {
+				req.HasBall = td.HasBall
+				req.HasWorkshop = td.HasWorkshop
+				req.HasFestival = td.HasFestival
+				req.WorkshopDifficulty = td.WorkshopDifficulty
+			}
+			if fields["url"] {
+				req.URL = td.URL
+				req.BookingURL = td.BookingURL
+			}
+			if fields["pricing"] {
+				if td.PricingType != "" && td.PricingType != "none" {
+					p := &Pricing{Type: td.PricingType}
+					switch td.PricingType {
+					case "single":
+						p.Amount = td.PricingAmount
+						p.Currency = td.PricingCurrency
+					case "multiple":
+						p.Prices = td.PricingLines
+					}
+					req.Pricing = p
+				} else {
+					req.Pricing = nil
+				}
+			}
+			if fields["tags"] {
+				req.Tags = td.Tags
+			}
+			if fields["dances"] {
+				req.Dances = td.DanceIDs
+			}
+			if fields["food_drink"] {
+				req.Food = td.Food
+				req.Drink = td.Drink
+			}
+			if fields["booking"] {
+				req.BookingEnabled = td.BookingEnabled
+				req.TicketsTotal = td.TicketsTotal
+			}
+			if _, err := client.UpdateEvent(r.Context(), evID, req, token); err != nil {
+				log.Printf("template assign update event %d: %v", evID, err)
+			}
+			if fields["timetable"] && len(td.Timetable) > 0 {
+				var ttEntries []TimetableEntryReq
+				for _, e := range td.Timetable {
+					ttEntries = append(ttEntries, TimetableEntryReq{
+						StartTime:   e.StartTime,
+						EndTime:     e.EndTime,
+						Title:       e.Title,
+						Description: e.Description,
+						Room:        e.Room,
+						LocationID:  e.LocationID,
+						MusicianID:  e.MusicianID,
+					})
+				}
+				if err := client.ReplaceTimetable(r.Context(), evID, ttEntries, token); err != nil {
+					log.Printf("template assign timetable event %d: %v", evID, err)
+				}
+			}
+		}
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+	}
+}
+
 type templateEventData struct {
-	Title              string  `json:"title"`
-	Description        string  `json:"description"`
-	URL                string  `json:"url"`
-	BookingURL         string  `json:"booking_url"`
-	HasBall            bool    `json:"has_ball"`
-	HasWorkshop        bool    `json:"has_workshop"`
-	HasFestival        bool    `json:"has_festival"`
-	WorkshopDifficulty string  `json:"workshop_difficulty"`
-	OrgID              int     `json:"org_id"`
-	LocID              int     `json:"loc_id"`
-	PricingType        string  `json:"pricing_type"`
-	PricingAmount      float64 `json:"pricing_amount"`
-	PricingCurrency    string  `json:"pricing_currency"`
-	PricingLines       []Price `json:"pricing_lines"`
-	Tags               []string `json:"tags"`
-	DanceIDs           []int   `json:"dance_ids"`
+	URL                string           `json:"url"`
+	BookingURL         string           `json:"booking_url"`
+	StartTime          string           `json:"start_time"`
+	EndTime            string           `json:"end_time"`
+	HasBall            bool             `json:"has_ball"`
+	HasWorkshop        bool             `json:"has_workshop"`
+	HasFestival        bool             `json:"has_festival"`
+	WorkshopDifficulty string           `json:"workshop_difficulty"`
+	OrgID              int              `json:"org_id"`
+	LocID              int              `json:"loc_id"`
+	PricingType        string           `json:"pricing_type"`
+	PricingAmount      float64          `json:"pricing_amount"`
+	PricingCurrency    string           `json:"pricing_currency"`
+	PricingLines       []Price          `json:"pricing_lines"`
+	Tags               []string         `json:"tags"`
+	DanceIDs           []int            `json:"dance_ids"`
+	Food               string           `json:"food"`
+	Drink              string           `json:"drink"`
+	TicketsTotal       int              `json:"tickets_total"`
+	BookingEnabled     bool             `json:"booking_enabled"`
+	Timetable          []TimetableEntry `json:"timetable"`
 }
 
 func templateDataFromEvent(ev Event) templateEventData {
 	d := templateEventData{
-		Title:              ev.Title,
-		Description:        ev.Description,
 		URL:                ev.URL,
 		BookingURL:         ev.BookingURL,
+		StartTime:          isoTimeStr(ev.StartTime),
+		EndTime:            isoTimeStr(ev.EndTime),
 		HasBall:            ev.HasBall,
 		HasWorkshop:        ev.HasWorkshop,
 		HasFestival:        ev.HasFestival,
 		WorkshopDifficulty: ev.WorkshopDifficulty,
 		Tags:               ev.Tags,
+		Food:               ev.Food,
+		Drink:              ev.Drink,
+		TicketsTotal:       ev.TicketsTotal,
+		BookingEnabled:     ev.BookingEnabled,
+		Timetable:          ev.Timetable,
 	}
 	if ev.OrganizationID != nil {
 		d.OrgID = *ev.OrganizationID
@@ -2958,6 +3243,7 @@ type AdminEventEditData struct {
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
 	UserOrgs           []Organization
+	Templates          []EventTemplate
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -2992,7 +3278,7 @@ func loadDefaultDanceIDs(db *sql.DB) []int {
 	return ids
 }
 
-func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
 		if !ok {
@@ -3033,6 +3319,21 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			}
 		}
 		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+		var editTemplates []EventTemplate
+		if !event.IsPublished && event.Source == "suggestion" {
+			if su := getSessionUser(r); su != nil {
+				tok := getSessionToken(r)
+				var orgIDs []int
+				if su.Role == "admin" {
+					for _, o := range bundle.Orgs {
+						orgIDs = append(orgIDs, o.ID)
+					}
+				} else {
+					orgIDs = getUserOrgIDs(r.Context(), client, su.ID, tok)
+				}
+				editTemplates, _ = listTemplates(db, su.ID, orgIDs)
+			}
+		}
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
@@ -3044,6 +3345,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			Dances:             bundle.Dances,
 			SelectedDanceNames: buildSelectedDanceNames(event),
 			UserOrgs:           userOrgs,
+			Templates:          editTemplates,
 		}))
 	}
 }
@@ -3226,6 +3528,88 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Dances:         danceIDs,
 		}
 
+		// Apply template overrides if submitted (suggestion acceptance flow).
+		var tplOverride *templateEventData
+		var tplFieldsSet map[string]bool
+		if tplIDStr := r.FormValue("tpl_id"); tplIDStr != "" {
+			if tplID, err2 := strconv.Atoi(tplIDStr); err2 == nil && tplID > 0 {
+				if tpl, err2 := getTemplate(db, tplID); err2 == nil {
+					var td templateEventData
+					if err2 := json.Unmarshal([]byte(tpl.Data), &td); err2 == nil {
+						tplOverride = &td
+						tplFieldsSet = make(map[string]bool)
+						for _, f := range r.MultipartForm.Value["tpl_fields"] {
+							tplFieldsSet[f] = true
+						}
+					}
+				}
+			}
+		}
+		if tplOverride != nil {
+			if tplFieldsSet["timing"] {
+				req.StartTime = tplOverride.StartTime
+				req.EndTime = tplOverride.EndTime
+			}
+			if tplFieldsSet["org"] && tplOverride.OrgID > 0 {
+				oid := tplOverride.OrgID
+				req.OrganizationID = &oid
+			}
+			if tplFieldsSet["loc"] && tplOverride.LocID > 0 {
+				for _, l := range bundle.Locations {
+					if l.ID == tplOverride.LocID {
+						req.Location = EventLocReq{
+							Location:  l.Location,
+							Address:   l.Address,
+							Town:      l.Town,
+							Country:   l.Country,
+							Latitude:  l.Latitude,
+							Longitude: l.Longitude,
+						}
+						break
+					}
+				}
+			}
+			if tplFieldsSet["type_flags"] {
+				req.HasBall = tplOverride.HasBall
+				req.HasWorkshop = tplOverride.HasWorkshop
+				req.HasFestival = tplOverride.HasFestival
+				req.WorkshopDifficulty = tplOverride.WorkshopDifficulty
+			}
+			if tplFieldsSet["url"] {
+				req.URL = tplOverride.URL
+				req.BookingURL = tplOverride.BookingURL
+			}
+			if tplFieldsSet["pricing"] {
+				if tplOverride.PricingType != "" && tplOverride.PricingType != "none" {
+					p := &Pricing{Type: tplOverride.PricingType}
+					switch tplOverride.PricingType {
+					case "single":
+						p.Amount = tplOverride.PricingAmount
+						p.Currency = tplOverride.PricingCurrency
+					case "multiple":
+						p.Prices = tplOverride.PricingLines
+					}
+					req.Pricing = p
+				} else {
+					req.Pricing = nil
+				}
+			}
+			if tplFieldsSet["tags"] {
+				req.Tags = tplOverride.Tags
+			}
+			if tplFieldsSet["dances"] {
+				req.Dances = tplOverride.DanceIDs
+			}
+			if tplFieldsSet["food_drink"] {
+				req.Food = tplOverride.Food
+				req.Drink = tplOverride.Drink
+			}
+			if tplFieldsSet["booking"] {
+				req.BookingEnabled = tplOverride.BookingEnabled
+				req.TicketsTotal = tplOverride.TicketsTotal
+			}
+		}
+
 		if req.Title == "" {
 			renderErr("evt_title_required")
 			return
@@ -3247,54 +3631,68 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 
-		starts := r.MultipartForm.Value["tt_start"]
-		ends := r.MultipartForm.Value["tt_end"]
-		titles := r.MultipartForm.Value["tt_title"]
-		descs := r.MultipartForm.Value["tt_desc"]
-		rooms := r.MultipartForm.Value["tt_room"]
-		locIDs := r.MultipartForm.Value["tt_loc_id"]
-		musIDs := r.MultipartForm.Value["tt_musician_id"]
-		musNames := r.MultipartForm.Value["tt_musician_name"]
 		var ttEntries []TimetableEntryReq
-		for i, s := range starts {
-			s = strings.TrimSpace(s)
-			if i >= len(titles) {
-				break
+		if tplOverride != nil && tplFieldsSet["timetable"] && len(tplOverride.Timetable) > 0 {
+			for _, e := range tplOverride.Timetable {
+				ttEntries = append(ttEntries, TimetableEntryReq{
+					StartTime:   e.StartTime,
+					EndTime:     e.EndTime,
+					Title:       e.Title,
+					Description: e.Description,
+					Room:        e.Room,
+					LocationID:  e.LocationID,
+					MusicianID:  e.MusicianID,
+				})
 			}
-			t := strings.TrimSpace(titles[i])
-			if s == "" && t == "" {
-				continue
-			}
-			entry := TimetableEntryReq{StartTime: s, Title: t}
-			if i < len(ends) {
-				entry.EndTime = strings.TrimSpace(ends[i])
-			}
-			if i < len(descs) {
-				entry.Description = strings.TrimSpace(descs[i])
-			}
-			if i < len(rooms) {
-				entry.Room = strings.TrimSpace(rooms[i])
-			}
-			if i < len(locIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
-					entry.LocationID = &v
+		} else {
+			starts := r.MultipartForm.Value["tt_start"]
+			ends := r.MultipartForm.Value["tt_end"]
+			titles := r.MultipartForm.Value["tt_title"]
+			descs := r.MultipartForm.Value["tt_desc"]
+			rooms := r.MultipartForm.Value["tt_room"]
+			locIDs := r.MultipartForm.Value["tt_loc_id"]
+			musIDs := r.MultipartForm.Value["tt_musician_id"]
+			musNames := r.MultipartForm.Value["tt_musician_name"]
+			for i, s := range starts {
+				s = strings.TrimSpace(s)
+				if i >= len(titles) {
+					break
 				}
-			}
-			if i < len(musIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
-					entry.MusicianID = &v
+				t := strings.TrimSpace(titles[i])
+				if s == "" && t == "" {
+					continue
 				}
-			}
-			if entry.MusicianID == nil && i < len(musNames) {
-				if name := strings.TrimSpace(musNames[i]); name != "" {
-					if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
-						entry.MusicianID = &m.ID
-					} else {
-						log.Printf("create musician %q: %v", name, merr)
+				entry := TimetableEntryReq{StartTime: s, Title: t}
+				if i < len(ends) {
+					entry.EndTime = strings.TrimSpace(ends[i])
+				}
+				if i < len(descs) {
+					entry.Description = strings.TrimSpace(descs[i])
+				}
+				if i < len(rooms) {
+					entry.Room = strings.TrimSpace(rooms[i])
+				}
+				if i < len(locIDs) {
+					if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+						entry.LocationID = &v
 					}
 				}
+				if i < len(musIDs) {
+					if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
+						entry.MusicianID = &v
+					}
+				}
+				if entry.MusicianID == nil && i < len(musNames) {
+					if name := strings.TrimSpace(musNames[i]); name != "" {
+						if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
+							entry.MusicianID = &m.ID
+						} else {
+							log.Printf("create musician %q: %v", name, merr)
+						}
+					}
+				}
+				ttEntries = append(ttEntries, entry)
 			}
-			ttEntries = append(ttEntries, entry)
 		}
 		if err := client.ReplaceTimetable(r.Context(), id, ttEntries, getSessionToken(r)); err != nil {
 			log.Printf("replace timetable error: %v", err)

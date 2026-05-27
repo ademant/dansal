@@ -34,6 +34,33 @@ type FetchSource struct {
 	LastFetchedAt  string   `json:"last_fetched_at,omitempty"`
 	LastResult     string   `json:"last_result,omitempty"`
 	CreatedAt      string   `json:"created_at"`
+	TemplateID     *int     `json:"template_id,omitempty"`
+	TemplateMode   string   `json:"template_mode,omitempty"`
+}
+
+// fetchSourceCols is the SELECT column list for fetch_sources rows.
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode"
+
+// templateImportData mirrors the JSON stored in event_templates.data.
+type templateImportData struct {
+	URL             string    `json:"url"`
+	BookingURL      string    `json:"booking_url"`
+	HasBall         bool      `json:"has_ball"`
+	HasWorkshop     bool      `json:"has_workshop"`
+	HasFestival     bool      `json:"has_festival"`
+	WorkshopDiff    string    `json:"workshop_difficulty"`
+	OrgID           int       `json:"org_id"`
+	LocID           int       `json:"loc_id"`
+	PricingType     string    `json:"pricing_type"`
+	PricingAmount   float64   `json:"pricing_amount"`
+	PricingCurrency string    `json:"pricing_currency"`
+	PricingLines    []Price   `json:"pricing_lines"`
+	Tags            []string  `json:"tags"`
+	DanceIDs        []int     `json:"dance_ids"`
+	Food            string    `json:"food"`
+	Drink           string    `json:"drink"`
+	TicketsTotal    int       `json:"tickets_total"`
+	BookingEnabled  bool      `json:"booking_enabled"`
 }
 
 type uaTransport struct{ rt http.RoundTripper }
@@ -355,8 +382,9 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var src FetchSource
 	var tagsJSON, danceIDsCSV string
 	var lastFetched, lastResult sql.NullString
-	var orgID sql.NullInt64
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt); err != nil {
+	var orgID, templateID sql.NullInt64
+	var templateMode sql.NullString
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -378,6 +406,13 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	}
 	if lastResult.Valid {
 		src.LastResult = lastResult.String
+	}
+	if templateID.Valid {
+		id := int(templateID.Int64)
+		src.TemplateID = &id
+	}
+	if templateMode.Valid {
+		src.TemplateMode = templateMode.String
 	}
 	return src, nil
 }
@@ -426,7 +461,7 @@ func setFetchSourceDances(id int, danceIDs []int) error {
 
 // GET /api/v1/fetchurl
 func getFetchSources(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at FROM fetch_sources ORDER BY id ASC")
+	rows, err := db.Query("SELECT " + fetchSourceCols + " FROM fetch_sources ORDER BY id ASC")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -451,7 +486,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 func getFetchSource(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "Fetch source not found", http.StatusNotFound)
@@ -469,7 +504,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "not found", http.StatusNotFound)
@@ -484,6 +519,8 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		Tags           []string `json:"tags"`
 		DanceIDs       []int    `json:"dance_ids"`
 		OrganizationID *int     `json:"organization_id"`
+		TemplateID     *int     `json:"template_id"`
+		TemplateMode   string   `json:"template_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid body", http.StatusBadRequest)
@@ -498,15 +535,21 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	}
 	src.DanceIDs = req.DanceIDs
 	src.OrganizationID = req.OrganizationID
+	src.TemplateID = req.TemplateID
+	src.TemplateMode = req.TemplateMode
 
 	tagsJSON, _ := json.Marshal(src.Tags)
 	var orgVal any
 	if src.OrganizationID != nil {
 		orgVal = *src.OrganizationID
 	}
+	var tplVal any
+	if src.TemplateID != nil {
+		tplVal = *src.TemplateID
+	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, src.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -536,6 +579,102 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 		return importFromRSSSource(src)
 	default:
 		return importFromICalSource(src)
+	}
+}
+
+// loadTemplateForSource loads and parses the template associated with a fetch source.
+// Returns nil, nil when no template is set.
+func loadTemplateForSource(templateID int) (*templateImportData, error) {
+	var dataJSON string
+	err := db.QueryRow("SELECT data FROM event_templates WHERE id = ?", templateID).Scan(&dataJSON)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var td templateImportData
+	if err := json.Unmarshal([]byte(dataJSON), &td); err != nil {
+		return nil, err
+	}
+	return &td, nil
+}
+
+// locationRequestByID returns an EventLocationRequest populated from a stored location.
+func locationRequestByID(id int) (EventLocationRequest, bool) {
+	var loc EventLocationRequest
+	err := db.QueryRow(
+		`SELECT COALESCE(location,''), COALESCE(short_name,''), COALESCE(address,''), COALESCE(zipcode,''),
+		 COALESCE(town,''), COALESCE(country,''), latitude, longitude
+		 FROM locations WHERE id = ?`, id,
+	).Scan(&loc.Location, &loc.ShortName, &loc.Address, &loc.Zipcode,
+		&loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude)
+	if err != nil {
+		return EventLocationRequest{}, false
+	}
+	return loc, true
+}
+
+// applyTemplateToRequest applies template data to an EventCreateRequest.
+// mode "fetch_master": template fills in only zero/empty fields.
+// mode "template_master": template overrides all fields.
+func applyTemplateToRequest(req *EventCreateRequest, td templateImportData, mode string) {
+	override := mode == "template_master"
+
+	if td.OrgID != 0 && (override || req.OrganizationID == nil) {
+		id := td.OrgID
+		req.OrganizationID = &id
+	}
+	if td.LocID != 0 && (override || req.Location.Location == "") {
+		if loc, ok := locationRequestByID(td.LocID); ok {
+			req.Location = loc
+		}
+	}
+	if td.URL != "" && (override || req.URL == "") {
+		req.URL = td.URL
+	}
+	if td.BookingURL != "" && (override || req.BookingURL == "") {
+		req.BookingURL = td.BookingURL
+	}
+	if override || (!req.HasBall && !req.HasWorkshop && !req.HasFestival) {
+		req.HasBall = td.HasBall
+		req.HasWorkshop = td.HasWorkshop
+		req.HasFestival = td.HasFestival
+	}
+	if td.WorkshopDiff != "" && (override || req.WorkshopDifficulty == "") {
+		req.WorkshopDifficulty = td.WorkshopDiff
+	}
+	if td.Food != "" && (override || req.Food == "") {
+		req.Food = td.Food
+	}
+	if td.Drink != "" && (override || req.Drink == "") {
+		req.Drink = td.Drink
+	}
+	if len(td.Tags) > 0 && (override || len(req.Tags) == 0) {
+		if override {
+			req.Tags = td.Tags
+		} else {
+			seen := make(map[string]bool)
+			for _, t := range req.Tags {
+				seen[t] = true
+			}
+			for _, t := range td.Tags {
+				if !seen[t] {
+					req.Tags = append(req.Tags, t)
+				}
+			}
+		}
+	}
+	if len(td.DanceIDs) > 0 && (override || len(req.Dances) == 0) {
+		req.Dances = td.DanceIDs
+	}
+	if td.PricingType != "" && (override || req.Pricing == nil) {
+		req.Pricing = &Pricing{
+			Type:     td.PricingType,
+			Amount:   td.PricingAmount,
+			Currency: td.PricingCurrency,
+			Prices:   td.PricingLines,
+		}
 	}
 }
 
@@ -763,6 +902,12 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				FetchSourceID:      src.ID,
 			}
 
+			if src.TemplateID != nil {
+				if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
+					applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
+				}
+			}
+
 			locationID, err := ensureLocation(tx, eventReq.Location)
 			if err != nil {
 				return nil, false, err
@@ -914,7 +1059,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 		placeholders[i] = "?"
 		args[i] = id
 	}
-	query := "SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	query := "SELECT " + fetchSourceCols + " FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -981,7 +1126,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 
 	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "Fetch source not found", http.StatusNotFound)

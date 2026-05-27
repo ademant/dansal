@@ -194,6 +194,12 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 			FetchSourceID:  src.ID,
 		}
 
+		if src.TemplateID != nil {
+			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
+				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
+			}
+		}
+
 		locationID, err := ensureLocation(tx, eventReq.Location)
 		if err != nil {
 			return nil, false, err
@@ -277,6 +283,12 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 			OrganizationID: src.OrganizationID,
 			Dances:         src.DanceIDs,
 			FetchSourceID:  src.ID,
+		}
+
+		if src.TemplateID != nil {
+			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
+				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
+			}
 		}
 
 		locationID, err := ensureLocation(tx, eventReq.Location)

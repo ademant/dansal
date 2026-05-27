@@ -36,6 +36,22 @@
   </div>
   {{end}}
 
+  {{if .Templates}}
+  <label for="template_id">{{$.Strings.T "admin_fetchurl_template_label"}}</label>
+  <select id="template_id" name="template_id">
+    <option value="">—</option>
+    {{range .Templates}}
+    <option value="{{.ID}}"{{if $.Data.Source.TemplateID}}{{if eq (derefInt $.Data.Source.TemplateID) .ID}} selected{{end}}{{end}}>{{.Name}}</option>
+    {{end}}
+  </select>
+
+  <label for="template_mode">{{$.Strings.T "admin_fetchurl_template_mode_label"}}</label>
+  <select id="template_mode" name="template_mode">
+    <option value="fetch_master"{{if eq .Source.TemplateMode "fetch_master"}} selected{{end}}>{{$.Strings.T "admin_fetchurl_template_mode_fetch"}}</option>
+    <option value="template_master"{{if eq .Source.TemplateMode "template_master"}} selected{{end}}>{{$.Strings.T "admin_fetchurl_template_mode_tpl"}}</option>
+  </select>
+  {{end}}
+
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/fetchurls" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>

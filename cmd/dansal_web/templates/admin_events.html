@@ -58,6 +58,7 @@
   <span id="event-bulk-count"></span>
   <button type="submit" class="btn-sm btn-merge"
           onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+  <button type="button" class="btn-sm" id="event-bulk-tpl-btn">{{$.Strings.T "evt_apply_template_btn"}}</button>
 </div>
 <div class="table-wrap">
 <table class="event-table" data-sortable>
@@ -151,6 +152,14 @@ function pubEvent(id){
     updateCount();
   });
   cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+  var tplBtn=document.getElementById('event-bulk-tpl-btn');
+  if(tplBtn){tplBtn.addEventListener('click',function(){
+    var checked=document.querySelectorAll('.event-cb:checked');
+    if(!checked.length)return;
+    var p=new URLSearchParams();
+    checked.forEach(function(cb){p.append('event_ids',cb.value);});
+    window.location.href='/admin/events/template-assign?'+p.toString();
+  });}
 })();
 </script>
 {{end}}

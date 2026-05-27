@@ -343,6 +343,12 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
+		if src.TemplateID != nil {
+			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
+				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
+			}
+		}
+
 		locationID, err := ensureLocation(tx, eventReq.Location)
 		if err != nil {
 			return nil, false, err

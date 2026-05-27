@@ -5,7 +5,7 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
-<form method="post" enctype="multipart/form-data" class="evt-form">
+<form id="evt-edit-form" method="post" enctype="multipart/form-data" class="evt-form">
 
   <!-- Image -->
   <section class="form-section">
@@ -378,6 +378,33 @@
     </form>
   </div>
 </form>
+
+{{if and (not .Event.IsPublished) (eq .Event.Source "suggestion") .Templates}}
+<details class="save-tpl-details" style="margin-top:1rem" id="suggestion-tpl-details">
+  <summary>{{$.Strings.T "admin_suggestion_apply_template"}}</summary>
+  <div class="save-tpl-form">
+    <label class="assign-label" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.4rem">{{$.Strings.T "admin_template_assign_select"}}</label>
+    <select name="tpl_id" form="evt-edit-form" class="assign-select">
+      <option value="">— {{$.Strings.T "admin_template_select_hint"}} —</option>
+      {{range .Templates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <div class="assign-label" style="margin-top:.75rem;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.4rem">{{$.Strings.T "admin_template_assign_fields"}}</div>
+    <div class="field-grid">
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timing" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_timing"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="org" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_org"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="loc" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_loc"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="type_flags" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_type_flags"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="url" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_url"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="pricing" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_pricing"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="tags" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_tags"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="dances" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_dances"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="food_drink" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_food_drink"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="booking" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_booking"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timetable" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_timetable"}}</label>
+    </div>
+  </div>
+</details>
+{{end}}
 
 {{if .UserOrgs}}
 <details class="save-tpl-details" style="margin-top:1rem">

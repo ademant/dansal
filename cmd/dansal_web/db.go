@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS event_templates (
     data TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_templates_name ON event_templates(user_id, name);
 CREATE TABLE IF NOT EXISTS delivery_failures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     activity_id TEXT NOT NULL,

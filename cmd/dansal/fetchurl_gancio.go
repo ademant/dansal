@@ -264,6 +264,12 @@ func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
+		if src.TemplateID != nil {
+			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
+				applyTemplateToRequest(&req, *td, src.TemplateMode)
+			}
+		}
+
 		locationID, err := ensureLocation(tx, req.Location)
 		if err != nil {
 			return nil, false, err

@@ -1,0 +1,52 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_template_assign_title"}}</h1>
+
+{{with .Data}}
+{{if not .Templates}}
+<p class="muted">{{$.Strings.T "admin_template_assign_no_templates"}}</p>
+{{else}}
+<form method="post" action="/admin/events/template-assign">
+  {{range .EventIDs}}<input type="hidden" name="event_ids" value="{{.}}">{{end}}
+
+  <div class="assign-section">
+    <label class="assign-label">{{$.Strings.T "admin_template_assign_select"}}</label>
+    <select name="template_id" required class="assign-select">
+      <option value="">— {{$.Strings.T "admin_template_select_hint"}} —</option>
+      {{range .Templates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+
+  <div class="assign-section">
+    <div class="assign-label">{{$.Strings.T "admin_template_assign_fields"}}</div>
+    <div class="field-grid">
+      <label class="field-check"><input type="checkbox" name="fields" value="timing"> {{$.Strings.T "admin_template_assign_field_timing"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="org"> {{$.Strings.T "admin_template_assign_field_org"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="loc"> {{$.Strings.T "admin_template_assign_field_loc"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="type_flags"> {{$.Strings.T "admin_template_assign_field_type_flags"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="url"> {{$.Strings.T "admin_template_assign_field_url"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="pricing"> {{$.Strings.T "admin_template_assign_field_pricing"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="tags"> {{$.Strings.T "admin_template_assign_field_tags"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="dances"> {{$.Strings.T "admin_template_assign_field_dances"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="food_drink"> {{$.Strings.T "admin_template_assign_field_food_drink"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="booking"> {{$.Strings.T "admin_template_assign_field_booking"}}</label>
+      <label class="field-check"><input type="checkbox" name="fields" value="timetable"> {{$.Strings.T "admin_template_assign_field_timetable"}}</label>
+    </div>
+  </div>
+
+  <div style="margin-top:1.25rem;display:flex;gap:.75rem;align-items:center">
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_template_assign_submit"}} ({{len .EventIDs}})</button>
+    <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+</form>
+{{end}}
+{{end}}
+
+<style>
+.assign-section{margin-bottom:1.25rem}
+.assign-label{font-weight:600;font-size:.88rem;color:#444;margin-bottom:.4rem}
+.assign-select{padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem;min-width:220px}
+.field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem .75rem;margin-top:.4rem}
+.field-check{display:flex;align-items:center;gap:.4rem;font-size:.9rem;cursor:pointer}
+</style>
+{{end}}

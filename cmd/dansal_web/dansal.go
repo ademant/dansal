@@ -184,6 +184,7 @@ type Event struct {
 	DanceNames      []string         `json:"dance_names,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`
 	CreatedAt       string           `json:"created_at"`
+	Source          string           `json:"source,omitempty"`
 	SourceURL       string           `json:"source_url,omitempty"`
 	ChangedAt       string           `json:"changed_at,omitempty"`
 	ChangedBy       string           `json:"changed_by,omitempty"`
@@ -294,6 +295,8 @@ type FetchSource struct {
 	LastFetchedAt  string   `json:"last_fetched_at,omitempty"`
 	LastResult     string   `json:"last_result,omitempty"`
 	CreatedAt      string   `json:"created_at"`
+	TemplateID     *int     `json:"template_id,omitempty"`
+	TemplateMode   string   `json:"template_mode,omitempty"`
 }
 
 type LoginResponse struct {
@@ -749,12 +752,14 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 	return src, json.NewDecoder(resp.Body).Decode(&src)
 }
 
-func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, token string) error {
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode string, token string) error {
 	payload := map[string]any{
 		"type":            typ,
 		"tags":            tags,
 		"dance_ids":       danceIDs,
 		"organization_id": orgID,
+		"template_id":     templateID,
+		"template_mode":   templateMode,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, body)

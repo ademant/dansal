@@ -513,10 +513,12 @@ function loadTemplate(id){
     .catch(function(){alert('Could not load template');});
 }
 function applyTemplateData(d){
-  if(d.title) document.querySelector('[name=title]').value=d.title;
-  if(d.description) document.querySelector('[name=description]').value=d.description;
   if(d.url) document.querySelector('[name=url]').value=d.url;
   if(d.booking_url) document.querySelector('[name=booking_url]').value=d.booking_url;
+  var stEl=document.getElementById('start_time');
+  if(stEl&&d.start_time) stEl.value=d.start_time;
+  var etEl=document.getElementById('end_time');
+  if(etEl&&d.end_time) etEl.value=d.end_time;
   if(d.org_id){
     var oc=document.getElementById('org_choice');
     oc.value='existing';toggleOrgNew();
@@ -538,6 +540,39 @@ function applyTemplateData(d){
       cb.checked=d.tags.indexOf(cb.value)!==-1;
     });
     toggleDifficulty();
+  }
+  if(d.dance_ids&&d.dance_ids.length){
+    document.querySelectorAll('[name=dance_ids]').forEach(function(cb){
+      cb.checked=d.dance_ids.indexOf(parseInt(cb.value,10))!==-1;
+    });
+  }
+  if(d.timetable&&d.timetable.length){
+    var tbody=document.getElementById('tt-body');
+    tbody.innerHTML='';
+    d.timetable.forEach(function(e){
+      var row1=document.createElement('tr');
+      row1.className='tt-row';
+      row1.innerHTML='<td><input type="time" name="tt_start"></td>'+
+        '<td><input type="time" name="tt_end"></td>'+
+        '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
+        '<td><input type="text" name="tt_room"></td>'+
+        '<td><select name="tt_loc_id">'+_buildLocOpts(e.location_id||0)+'</select></td>'+
+        '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
+      row1.querySelector('[name=tt_start]').value=e.start_time||'';
+      row1.querySelector('[name=tt_end]').value=e.end_time||'';
+      row1.querySelector('[name=tt_title]').value=e.title||'';
+      row1.querySelector('[name=tt_room]').value=e.room||'';
+      var row2=document.createElement('tr');
+      row2.className='tt-row-detail';
+      row2.innerHTML='<td colspan="3"><input type="text" name="tt_desc"></td>'+
+        '<td colspan="3">'+_buildTTMusWidget()+'</td>';
+      row2.querySelector('[name=tt_desc]').value=e.description||'';
+      if(e.musician_id) row2.querySelector('[name=tt_musician_id]').value=e.musician_id;
+      if(e.musician_name) row2.querySelector('.tt-mus-input').value=e.musician_name;
+      tbody.appendChild(row1);
+      tbody.appendChild(row2);
+    });
+    addTTRow();
   }
   document.querySelector('.evt-form').dispatchEvent(new Event('input',{bubbles:true}));
 }

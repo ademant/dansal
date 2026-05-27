@@ -1015,6 +1015,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN drink TEXT DEFAULT ''")
 	// #248: backfill bal-folk tag for events with has_ball=1 that lost it when ball tag was deleted.
 	db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id, 'bal-folk' FROM events WHERE has_ball = 1")
+	// #342: template integration for fetch sources.
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL")
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_mode TEXT NOT NULL DEFAULT ''")
 }
 
 func logUnmappedCountries() {
@@ -1154,7 +1157,9 @@ func createTables() error {
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at INTEGER,
 		last_result TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL,
+		template_mode TEXT NOT NULL DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

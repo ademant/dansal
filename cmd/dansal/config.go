@@ -44,6 +44,7 @@ type ServerConfig struct {
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
 	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
+	PKIDir               string   `yaml:"pki_dir"`
 }
 
 type SMTPConfig struct {

@@ -22,6 +22,7 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
+	software.sslmate.com/src/go-pkcs12 v0.7.1 // indirect
 )
 
 require (

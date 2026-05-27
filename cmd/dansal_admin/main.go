@@ -216,6 +216,16 @@ func main() {
 		cmdFetchAll()
 	case "prune-images":
 		cmdPruneImages()
+	case "mtls-init":
+		cmdMTLSInit(rest)
+	case "mtls-issue":
+		cmdMTLSIssue(rest)
+	case "mtls-revoke":
+		cmdMTLSRevoke(rest)
+	case "mtls-list":
+		cmdMTLSList(rest)
+	case "mtls-ca-cert":
+		cmdMTLSCACert(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -288,6 +298,14 @@ Heartbeat:
   restore            --input PATH                    Restore from a backup archive
   password-backup    [--output PATH] [--password P]  Encrypted backup (AES-256-GCM)
   password-restore   --input PATH   [--password P]   Decrypt and restore an encrypted backup
+
+mTLS PKI:
+  mtls-init                                          Generate CA key and self-signed certificate
+  mtls-issue   --username STR [--days N]             Issue a client certificate (default 3 years)
+               [--password STR]                       PKCS12 import password (default: none)
+  mtls-revoke  --username STR                        Revoke a certificate and update CRL
+  mtls-list                                          List issued certificates and their status
+  mtls-ca-cert                                       Print the CA certificate (PEM)
 
 Roles: admin, user, publisher, viewer
 
@@ -577,6 +595,41 @@ Decrypt a backup created by password-backup and restore it.
 Flags:
   --input     Path to the encrypted backup file (required)
   --password  Decryption password (prompted if omitted)`,
+
+	"mtls-init": `Usage: dansal_admin mtls-init
+
+Generate a CA key (RSA-4096) and a self-signed CA certificate.
+Files are written to the PKI directory (default /var/lib/dansal/pki).
+Errors if a CA already exists; use mtls-ca-cert to view the existing one.`,
+
+	"mtls-issue": `Usage: dansal_admin mtls-issue --username STR [--days N] [--password STR]
+
+Issue a client certificate signed by the dansal CA.
+Generates:
+  issued/<username>.key   — RSA-2048 private key
+  issued/<username>.crt   — signed certificate (CN=username)
+  issued/<username>.p12   — PKCS#12 bundle for browser import
+
+Flags:
+  --username  Username (CN field of the certificate) (required)
+  --days      Validity period in days (default: 1095 = 3 years)
+  --password  PKCS#12 import password (default: no password)`,
+
+	"mtls-revoke": `Usage: dansal_admin mtls-revoke --username STR
+
+Revoke a user's certificate and regenerate the CRL (crl.pem).
+The certificate file is kept on disk for audit purposes.
+
+Flags:
+  --username  Username whose certificate to revoke (required)`,
+
+	"mtls-list": `Usage: dansal_admin mtls-list
+
+List all issued certificates with their status (valid / REVOKED / expired).`,
+
+	"mtls-ca-cert": `Usage: dansal_admin mtls-ca-cert
+
+Print the CA certificate in PEM format (for piping into nginx config or distribution).`,
 }
 
 func cmdHelp(args []string) {

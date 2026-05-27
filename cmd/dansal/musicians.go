@@ -79,8 +79,6 @@ func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 
 // GET /api/v1/musicians - List all musicians; optional ?organization_id=N filter
 func getMusicians(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	var rows *sql.Rows
 	var err error
 	if orgIDStr := r.URL.Query().Get("organization_id"); orgIDStr != "" {
@@ -110,13 +108,11 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		musicians = append(musicians, m)
 	}
 
-	json.NewEncoder(w).Encode(musicians)
+	writeJSON(w, musicians)
 }
 
 // GET /api/v1/musicians/{id} - Get single musician
 func getMusician(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	id := r.PathValue("id")
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err == sql.ErrNoRows {
@@ -127,7 +123,7 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(musician)
+	writeJSON(w, musician)
 }
 
 // POST /api/v1/musicians - Create one or more musicians

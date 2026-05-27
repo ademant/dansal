@@ -13,7 +13,6 @@ type Dance struct {
 
 // GET /api/v1/dances
 func getDances(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query("SELECT id, name FROM dances ORDER BY name")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -29,12 +28,11 @@ func getDances(w http.ResponseWriter, r *http.Request) {
 		}
 		dances = append(dances, d)
 	}
-	json.NewEncoder(w).Encode(dances)
+	writeJSON(w, dances)
 }
 
 // POST /api/v1/dances
 func createDance(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("X-User-Role") != RoleAdmin {
 		writeError(w, "Forbidden: only admins may create dances", http.StatusForbidden)
 		return
@@ -51,6 +49,7 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to create dance", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(d)
 }

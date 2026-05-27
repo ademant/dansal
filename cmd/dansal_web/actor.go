@@ -169,12 +169,6 @@ func actorsListHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
 func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resource := r.URL.Query().Get("resource")

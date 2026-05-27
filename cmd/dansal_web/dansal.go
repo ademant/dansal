@@ -2038,7 +2038,8 @@ type PreviewEvent struct {
 	URL         string      `json:"url,omitempty"`
 	Location    PreviewLoc  `json:"location"`
 	OrganizationID *int     `json:"organization_id,omitempty"`
-	Pricing     *Pricing    `json:"pricing,omitempty"`
+	Pricing        *Pricing `json:"pricing,omitempty"`
+	Status         string   `json:"duplicate_status,omitempty"`
 }
 
 type PreviewLoc struct {

@@ -25,16 +25,18 @@
         <th>{{$.Strings.T "col_title"}}</th>
         <th>{{$.Strings.T "col_location"}}</th>
         <th>{{$.Strings.T "col_country"}}</th>
+        <th>{{$.Strings.T "admin_import_col_status"}}</th>
       </tr>
     </thead>
     <tbody>
     {{range $i, $e := .PreviewEvents}}
     <tr>
-      <td><input type="checkbox" name="sel_{{$i}}" value="1" class="row-cb" checked></td>
+      <td><input type="checkbox" name="sel_{{$i}}" value="1" class="row-cb"{{if ne $e.Status "exists"}} checked{{end}} data-status="{{$e.Status}}"></td>
       <td style="white-space:nowrap">{{formatDate $.LangCode $e.StartTime}}</td>
       <td>{{$e.Title}}{{if $e.IsCancelled}} <span class="badge cancelled">✕</span>{{end}}</td>
       <td>{{if $e.Location.Town}}{{$e.Location.Town}}{{else}}{{$e.Location.Location}}{{end}}</td>
       <td>{{$e.Location.Country}}</td>
+      <td>{{if eq $e.Status "exists"}}<span class="badge status-exists">{{$.Strings.T "admin_import_status_exists"}}</span>{{else if eq $e.Status "updated"}}<span class="badge status-updated">{{$.Strings.T "admin_import_status_updated"}}</span>{{else}}<span class="badge status-new">{{$.Strings.T "admin_import_status_new"}}</span>{{end}}</td>
       <input type="hidden" name="event_{{$i}}" value="{{index $.Data.PreviewJSON $i}}">
     </tr>
     {{end}}
@@ -42,7 +44,7 @@
   </table>
   </div>
   <div style="margin-top:1rem">
-    <button type="submit" class="btn-primary" id="import-btn">{{$.Strings.T "admin_import_create_btn"}} ({{len .PreviewEvents}})</button>
+    <button type="submit" class="btn-primary" id="import-btn">{{$.Strings.T "admin_import_create_btn"}} (<span id="import-count">0</span>)</button>
   </div>
 </form>
 {{else}}
@@ -83,6 +85,9 @@
 .btn-primary:hover{background:#155a9a}
 .check-label{display:flex;align-items:center;gap:.3rem;font-size:.875rem;cursor:pointer}
 .badge.cancelled{background:#f8d7da;color:#721c24;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
+.badge.status-new{background:#d4edda;color:#155724;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
+.badge.status-exists{background:#e2e3e5;color:#383d41;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
+.badge.status-updated{background:#fff3cd;color:#856404;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 </style>
 <script>
 function toggleAll(cb) {
@@ -91,9 +96,10 @@ function toggleAll(cb) {
 }
 function updateBtn() {
   var n = document.querySelectorAll('.row-cb:checked').length;
-  var btn = document.getElementById('import-btn');
-  if (btn) btn.textContent = btn.textContent.replace(/\(\d+\)/, '('+n+')');
+  var el = document.getElementById('import-count');
+  if (el) el.textContent = n;
 }
 document.querySelectorAll('.row-cb').forEach(function(c){ c.addEventListener('change', updateBtn); });
+updateBtn();
 </script>
 {{end}}

@@ -129,6 +129,7 @@ type EventCreateRequest struct {
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
 	Pricing            *Pricing             `json:"pricing,omitempty"`
 	FetchSourceID      int                  `json:"fetch_source_id,omitempty"`
+	DuplicateStatus    string               `json:"duplicate_status,omitempty"`
 }
 
 type EventLocationRequest struct {

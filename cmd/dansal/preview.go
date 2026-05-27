@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,7 +100,103 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 	if reqs == nil {
 		reqs = []EventCreateRequest{}
 	}
+	for i := range reqs {
+		reqs[i].DuplicateStatus = previewDuplicateStatus(reqs[i])
+	}
 	json.NewEncoder(w).Encode(reqs)
+}
+
+// previewDuplicateStatus checks the DB for a matching event using the same
+// three-tier dedup logic as insertEvent and returns "new", "exists", or "updated".
+func previewDuplicateStatus(req EventCreateRequest) string {
+	type row struct {
+		id         int
+		title      string
+		startTime  int64
+		isCancelled bool
+		srcMod     int64
+	}
+
+	scan := func(r *sql.Row) (row, error) {
+		var ro row
+		var cancelled int
+		err := r.Scan(&ro.id, &ro.title, &ro.startTime, &cancelled, &ro.srcMod)
+		ro.isCancelled = cancelled == 1
+		return ro, err
+	}
+
+	var found row
+	var lookupErr error = sql.ErrNoRows
+
+	if req.UID != "" {
+		found, lookupErr = scan(db.QueryRow(
+			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE uid=?", req.UID,
+		))
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			return "new"
+		}
+	}
+
+	if lookupErr == sql.ErrNoRows && req.URL != "" {
+		found, lookupErr = scan(db.QueryRow(
+			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE url=?", req.URL,
+		))
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			return "new"
+		}
+	}
+
+	if lookupErr == sql.ErrNoRows {
+		startStr := req.StartTime
+		if len(req.Date) > 0 {
+			startStr = req.Date[0].StartTime
+		}
+		startEpoch, err := parseTimeToUnix(startStr)
+		if err == nil {
+			var locID int64
+			db.QueryRow("SELECT id FROM locations WHERE location=?", req.Location.Location).Scan(&locID)
+			if locID > 0 {
+				const threeHours = int64(3 * 60 * 60)
+				found, lookupErr = scan(db.QueryRow(
+					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE title=? AND location_id=? AND ABS(start_time-?)<? ",
+					req.Title, locID, startEpoch, threeHours,
+				))
+				if lookupErr != nil && lookupErr != sql.ErrNoRows {
+					return "new"
+				}
+			}
+		}
+	}
+
+	if lookupErr == sql.ErrNoRows {
+		return "new"
+	}
+
+	// Match found — determine whether feed has newer data.
+	if req.SourceLastModified > 0 {
+		if req.SourceLastModified > found.srcMod {
+			return "updated"
+		}
+		return "exists"
+	}
+
+	// No source timestamps — compare key fields.
+	startStr := req.StartTime
+	if len(req.Date) > 0 {
+		startStr = req.Date[0].StartTime
+	}
+	if startEpoch, err := parseTimeToUnix(startStr); err == nil {
+		if startEpoch != found.startTime {
+			return "updated"
+		}
+	}
+	if req.IsCancelled != found.isCancelled {
+		return "updated"
+	}
+	if req.Title != found.title {
+		return "updated"
+	}
+	return "exists"
 }
 
 func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {

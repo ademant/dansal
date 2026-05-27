@@ -437,3 +437,39 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// POST /api/v1/users/{id}/password - Admin sets a user's password directly
+func setUserPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		writeError(w, "Forbidden: only admins may set passwords", http.StatusForbidden)
+		return
+	}
+
+	id := r.PathValue("id")
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Password == "" {
+		writeError(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := db.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(req.Password), id)
+	if err != nil {
+		writeError(w, "Failed to update password", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

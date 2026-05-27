@@ -51,9 +51,9 @@
   <tbody>
   {{range .Users}}
   {{$uid := .ID}}
-  <tr>
+  <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td>{{.Username}}</td>
+    <td>{{.Username}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     {{if $.Data.IsAdmin}}<td class="email-cell">{{.Email}}</td>{{end}}
     <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
@@ -88,6 +88,14 @@
     </td>
     {{if $.Data.IsAdmin}}
     <td class="col-actions">
+      {{if .Disabled}}
+      <button type="button" class="btn-sm btn-warn"
+              onclick="if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
+      {{else}}
+      <button type="button" class="btn-sm"
+              onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
+      {{end}}
+      <button type="button" class="btn-sm" onclick="openPasswordModal({{$uid}})">{{$.Strings.T "admin_user_password_reset"}}</button>
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
               onclick="return confirmTypedDelete('{{js .Username}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
@@ -99,6 +107,23 @@
 </table>
 </div>
 </form>
+
+{{if $.Data.IsAdmin}}
+<div class="invite-section">
+  <h2>{{$.Strings.T "admin_user_create_title"}}</h2>
+  <form method="post" action="/admin/users/new" class="create-user-form">
+    <input type="text" name="username" placeholder="{{$.Strings.T "settings_username"}}" required>
+    <input type="email" name="email" placeholder="{{$.Strings.T "settings_email"}}" required>
+    <input type="password" name="password" placeholder="{{$.Strings.T "admin_user_new_password"}}" required>
+    <select name="role">
+      <option value="user">user</option>
+      <option value="publisher">publisher</option>
+      <option value="viewer">viewer</option>
+    </select>
+    <button type="submit" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;border:none;cursor:pointer">{{$.Strings.T "admin_user_create_btn"}}</button>
+  </form>
+</div>
+{{end}}
 
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_invite_active"}}</h2>
@@ -186,11 +211,17 @@
 .invite-section h2{font-size:1.1rem;margin-bottom:.75rem}
 .invite-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
 .invite-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.create-user-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.create-user-form input,.create-user-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
 .invite-link-cell code{word-break:break-all}
 .invite-banner{background:#d4edda;border:1px solid #a3d9a5;border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
 .invite-banner code{background:#fff;padding:.2rem .4rem;border-radius:3px;font-size:.85rem;word-break:break-all}
 .muted{color:#888;font-size:.85rem}
+.btn-warn{background:#e67e00;color:#fff;border:none}
+.btn-warn:hover{background:#c06000}
+.badge-disabled{display:inline-block;background:#f0b429;color:#333;border-radius:3px;padding:.1rem .35rem;font-size:.75rem;font-weight:600;vertical-align:middle}
+.user-disabled-row td{opacity:.6}
 </style>
 
 <div id="ctd-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
@@ -286,5 +317,40 @@ function ctdClose(){document.getElementById('ctd-modal').hidden=true;_ctdCb=null
   });
   cbs.forEach(function(cb){ cb.addEventListener('change', updateCount); });
 })();
+function toggleDisable(id, disabled) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/users/' + id + '/disable';
+  var d = document.createElement('input'); d.name = 'disabled'; d.value = disabled ? '1' : '0'; f.appendChild(d);
+  document.body.appendChild(f); f.submit();
+}
+var _pwUID = 0;
+function openPasswordModal(uid) {
+  _pwUID = uid;
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-modal').hidden = false;
+  setTimeout(function(){ document.getElementById('pw-input').focus(); }, 50);
+}
+function submitPassword() {
+  var pw = document.getElementById('pw-input').value;
+  if (!pw) return;
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/users/' + _pwUID + '/password';
+  var p = document.createElement('input'); p.name = 'password'; p.value = pw; f.appendChild(p);
+  document.body.appendChild(f); f.submit();
+}
+function closePwModal() { document.getElementById('pw-modal').hidden = true; }
 </script>
+
+<div id="pw-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "admin_user_password_reset"}}</h3>
+    <input id="pw-input" type="password" autocomplete="new-password"
+           placeholder="{{$.Strings.T "admin_user_new_password"}}"
+           style="width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;box-sizing:border-box;margin-bottom:.75rem">
+    <div style="display:flex;gap:.5rem">
+      <button class="btn-sm btn-del" onclick="submitPassword()">{{$.Strings.T "admin_user_password_reset"}}</button>
+      <button class="btn-sm" onclick="closePwModal()">{{$.Strings.T "admin_magic_link_close"}}</button>
+    </div>
+  </div>
+</div>
 {{end}}

@@ -1957,6 +1957,84 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	}
 }
 
+func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		disabled := r.FormValue("disabled") == "1"
+		_ = client.SetUserDisabled(r.Context(), id, disabled, getSessionToken(r))
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminUserCreateDirectHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		username := r.FormValue("username")
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+		role := r.FormValue("role")
+		if role == "" {
+			role = "user"
+		}
+		_, _ = client.CreateUserDirect(r.Context(), username, email, password, role, getSessionToken(r))
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminUserPasswordResetHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		password := r.FormValue("password")
+		if password != "" {
+			_ = client.SetUserPassword(r.Context(), id, password, getSessionToken(r))
+		}
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
 func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

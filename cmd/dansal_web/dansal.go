@@ -323,6 +323,7 @@ type UserInfo struct {
 	EmailVerified    bool   `json:"email_verified"`
 	TelegramVerified bool   `json:"telegram_verified"`
 	MatrixVerified   bool   `json:"matrix_verified"`
+	Disabled         bool   `json:"disabled"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -1696,6 +1697,51 @@ func (c *DansalClient) DeleteUser(ctx context.Context, id int, token string) err
 		return apiErr(resp)
 	}
 	return nil
+}
+
+func (c *DansalClient) SetUserDisabled(ctx context.Context, id int, disabled bool, token string) error {
+	body, _ := json.Marshal(map[string]any{"disabled": disabled})
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) SetUserPassword(ctx context.Context, id int, password, token string) error {
+	body, _ := json.Marshal(map[string]string{"password": password})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/password", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) CreateUserDirect(ctx context.Context, username, email, password, role, token string) (UserInfo, error) {
+	body, _ := json.Marshal(map[string]string{
+		"username": username,
+		"email":    email,
+		"password": password,
+		"role":     role,
+	})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/users", token, body)
+	if err != nil {
+		return UserInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return UserInfo{}, apiErr(resp)
+	}
+	var u UserInfo
+	return u, json.NewDecoder(resp.Body).Decode(&u)
 }
 
 func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, token string) error {

@@ -11,6 +11,21 @@ import (
 
 )
 
+// createMagicToken generates and stores a magic login token for userID, replacing any existing one.
+func createMagicToken(userID int) (token string, expiresAt time.Time, err error) {
+	token, err = generateVerificationToken()
+	if err != nil {
+		return
+	}
+	expiresAt = time.Now().UTC().Add(time.Duration(config.Server.MagicLoginExpirySecs) * time.Second)
+	db.Exec("DELETE FROM magic_login_tokens WHERE user_id=?", userID)
+	_, err = db.Exec(
+		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+		token, userID, expiresAt.Unix(),
+	)
+	return
+}
+
 // POST /api/v1/users/{id}/magic-link — admin generates a one-time login link for a user.
 // Returns {"url":"...","expires_at":"..."} without sending anything.
 func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
@@ -34,29 +49,14 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-	token, err := generateVerificationToken()
-	if err != nil {
-		writeError(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	now := time.Now().UTC()
-	expiresAt := now.Add(time.Duration(config.Server.MagicLoginExpirySecs) * time.Second)
-	db.Exec("DELETE FROM magic_login_tokens WHERE user_id=?", userID)
-	_, err = db.Exec(
-		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-		token, userID, expiresAt.Unix(),
-	)
+	token, expiresAt, err := createMagicToken(userID)
 	if err != nil {
 		writeError(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
-	base := buildMagicBase(r)
-	if b := r.Header.Get("X-Base-URL"); b != "" {
-		base = b
-	}
 	log.Printf("magic: admin user %s generated login link for user %d", r.Header.Get("X-User-ID"), userID)
 	json.NewEncoder(w).Encode(map[string]string{
-		"url":        base + "/api/v1/login/magic/" + token,
+		"url":        buildBaseURL(r) + "/api/v1/login/magic/" + token,
 		"expires_at": expiresAt.Format(time.RFC3339),
 	})
 }
@@ -146,32 +146,17 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := generateVerificationToken()
-	if err != nil {
-		writeError(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-
-	now := time.Now().UTC()
-	expiresAt := now.Add(time.Duration(config.Server.MagicLoginExpirySecs) * time.Second)
-
-	// Replace any existing unused magic token for this user.
-	db.Exec("DELETE FROM magic_login_tokens WHERE user_id=?", user.ID)
-
-	_, err = db.Exec(
-		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-		token, user.ID, expiresAt.Unix(),
-	)
+	token, _, err := createMagicToken(user.ID)
 	if err != nil {
 		writeError(w, "Failed to create magic token", http.StatusInternalServerError)
 		return
 	}
 
-	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", now.Unix(), user.ID)
+	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", time.Now().UTC().Unix(), user.ID)
 
 	base := req.BaseURL
 	if base == "" {
-		base = buildMagicBase(r)
+		base = buildBaseURL(r)
 	}
 	magicURL := base + "/api/v1/login/magic/" + token
 
@@ -206,19 +191,6 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Username, req.Channel)
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// buildMagicBase returns the base URL (scheme + host) for magic link construction.
-func buildMagicBase(r *http.Request) string {
-	base := config.Server.BaseURL
-	if base != "" {
-		return base
-	}
-	scheme := "https"
-	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-		scheme = "http"
-	}
-	return scheme + "://" + r.Host
 }
 
 // GET /api/v1/login/magic/{token} — consume a magic login token and issue a session.

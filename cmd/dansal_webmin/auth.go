@@ -2,13 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
+
+type contextKey int
+
+const ctxSessionUser contextKey = 1
 
 const (
 	cookieToken = "dwm_token"
@@ -19,9 +25,14 @@ type SessionUser struct {
 	ID       int    `json:"id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	CertAuth bool   `json:"cert_auth,omitempty"`
 }
 
 func getSessionUser(r *http.Request) *SessionUser {
+	// Check request context first (set by cert-auth middleware)
+	if u, ok := r.Context().Value(ctxSessionUser).(*SessionUser); ok && u != nil {
+		return u
+	}
 	c, err := r.Cookie(cookieUser)
 	if err != nil {
 		return nil
@@ -35,6 +46,33 @@ func getSessionUser(r *http.Request) *SessionUser {
 		return nil
 	}
 	return &u
+}
+
+// extractCN parses the CN value from a DN string like "CN=alice,O=dansal"
+func extractCN(dn string) string {
+	for _, part := range strings.Split(dn, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(strings.ToUpper(part), "CN=") {
+			return part[3:]
+		}
+	}
+	return ""
+}
+
+// certAuthUser looks up a user by CN in the admin socket and returns them
+// if they have role=admin. Returns nil if not found or not admin.
+func certAuthUser(cfg *Config, cn string) *SessionUser {
+	users, err := listAdminUsers(cfg.AdminSocket)
+	if err != nil {
+		log.Printf("cert auth: socket error: %v", err)
+		return nil
+	}
+	for _, u := range users {
+		if u.Username == cn && u.Role == "admin" {
+			return &SessionUser{ID: u.ID, Username: u.Username, Role: u.Role, CertAuth: true}
+		}
+	}
+	return nil
 }
 
 func getSessionToken(r *http.Request) string {
@@ -82,6 +120,22 @@ func clearSession(w http.ResponseWriter) {
 
 func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Cert auth: check nginx-forwarded mTLS headers (trusted because webmin only binds localhost)
+		if r.Header.Get("X-Client-Verified") == "SUCCESS" {
+			cn := extractCN(r.Header.Get("X-Client-DN"))
+			if cn != "" {
+				if su := certAuthUser(cfg, cn); su != nil {
+					// Refresh session cookie and inject user into context for this request
+					setSession(w, "", *su, time.Now().Add(24*time.Hour))
+					next(w, r.WithContext(context.WithValue(r.Context(), ctxSessionUser, su)))
+					return
+				}
+				// Cert present but CN is not an admin user
+				http.Error(w, "Forbidden: certificate CN does not match an admin user", http.StatusForbidden)
+				return
+			}
+		}
+
 		if getSessionUser(r) == nil {
 			http.Redirect(w, r, "/login?next="+r.URL.RequestURI(), http.StatusSeeOther)
 			return
@@ -132,6 +186,17 @@ func apiLogin(ctx *http.Request, dansalURL, username, password string) (*loginRe
 
 func loginPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Auto-login via cert if verified
+		if r.Header.Get("X-Client-Verified") == "SUCCESS" {
+			cn := extractCN(r.Header.Get("X-Client-DN"))
+			if cn != "" {
+				if su := certAuthUser(cfg, cn); su != nil {
+					setSession(w, "", *su, time.Now().Add(24*time.Hour))
+					http.Redirect(w, r, "/", http.StatusSeeOther)
+					return
+				}
+			}
+		}
 		if getSessionUser(r) != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return

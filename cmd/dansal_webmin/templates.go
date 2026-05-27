@@ -13,6 +13,8 @@ var templateFS embed.FS
 type Templates struct {
 	login     *template.Template
 	dashboard *template.Template
+	users     *template.Template
+	sessions  *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -27,6 +29,8 @@ func loadTemplates() *Templates {
 	return &Templates{
 		login:     load("login"),
 		dashboard: load("dashboard"),
+		users:     load("users"),
+		sessions:  load("sessions"),
 	}
 }
 

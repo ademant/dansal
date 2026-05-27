@@ -47,6 +47,12 @@ func main() {
 		mux.HandleFunc("POST /login", loginPostHandler(cfg, tmpls))
 		mux.HandleFunc("POST /logout", logoutHandler(cfg))
 		mux.HandleFunc("GET /", requireLogin(cfg, dashboardHandler(cfg, tmpls)))
+		mux.HandleFunc("GET /users", requireLogin(cfg, usersPageHandler(cfg, tmpls)))
+		mux.HandleFunc("POST /users/new", requireLogin(cfg, userCreateHandler(cfg)))
+		mux.HandleFunc("GET /users/{username}/sessions", requireLogin(cfg, userSessionsPageHandler(cfg, tmpls)))
+		mux.HandleFunc("POST /users/{username}/sessions/{id}/revoke", requireLogin(cfg, userRevokeSessionHandler(cfg)))
+		mux.HandleFunc("POST /users/{username}/reset-password", requireLogin(cfg, userResetPasswordHandler(cfg)))
+		mux.HandleFunc("POST /users/{username}/delete", requireLogin(cfg, userDeleteHandler(cfg)))
 		return mux
 	}
 

@@ -1,11 +1,68 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>Dashboard</h1>
-<div class="card">
-  <div class="card-title">Welcome</div>
-  <p>Signed in as <strong>{{.User.Username}}</strong>.</p>
-  <p style="margin-top:.75rem;color:var(--fg-dim);font-size:.95rem">
-    Use the navigation above to manage users, run maintenance tasks, and configure notifications.
-  </p>
+{{with .Data}}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem">
+
+  <div class="card">
+    <div class="card-title">dansal-webmin</div>
+    <table>
+      <tr><th style="width:40%">Version</th><td>{{.WebminVersion}}</td></tr>
+      <tr><th>Built</th><td>{{.WebminBuildTime}}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">dansal API</div>
+    {{if .DansalError}}
+    <div class="alert alert-danger" style="margin:0">Error: {{.DansalError}}</div>
+    {{else if .DansalInfo}}
+    <table>
+      <tr><th style="width:40%">Version</th><td>{{.DansalInfo.Version}}</td></tr>
+      <tr><th>Built</th><td>{{.DansalInfo.BuildTime}}</td></tr>
+      <tr><th>Total events</th><td>{{.DansalInfo.TotalEvents}}</td></tr>
+      <tr><th>Published</th><td>{{.DansalInfo.PublishedEvents}}</td></tr>
+      <tr><th>Upcoming</th><td>{{.DansalInfo.UpcomingEvents}}</td></tr>
+      <tr><th>Database</th><td>{{.DansalInfo.DBSize}}</td></tr>
+      <tr><th>Images</th><td>{{.DansalInfo.ImagesSize}}</td></tr>
+    </table>
+    {{end}}
+  </div>
+
+  {{if .Disk}}
+  <div class="card">
+    <div class="card-title">Disk — {{.Disk.Path}}</div>
+    <table>
+      <tr><th style="width:40%">Used</th><td>{{.Disk.Used}} ({{.Disk.Pct}}%)</td></tr>
+      <tr><th>Free</th><td>{{.Disk.Free}}</td></tr>
+      <tr><th>Total</th><td>{{.Disk.Total}}</td></tr>
+    </table>
+    <div style="margin-top:.75rem;background:var(--bg-subtle);border-radius:3px;height:8px;overflow:hidden">
+      <div style="background:#1a6eb5;height:100%;width:{{.Disk.Pct}}%"></div>
+    </div>
+  </div>
+  {{end}}
+
 </div>
+
+<div class="card">
+  <div class="card-title">Services &amp; timers</div>
+  <table>
+    <thead>
+      <tr><th>Unit</th><th>State</th><th>Sub-state</th></tr>
+    </thead>
+    <tbody>
+    {{range .Services}}
+    <tr>
+      <td><code>{{.Name}}</code></td>
+      <td><span class="badge badge-{{.Badge}}">{{.ActiveState}}</span></td>
+      <td style="color:var(--fg-muted);font-size:.85rem">{{.SubState}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+
+<p style="color:var(--fg-muted);font-size:.82rem;text-align:right">Collected at {{.CollectedAt}}</p>
+{{end}}
 {{end}}

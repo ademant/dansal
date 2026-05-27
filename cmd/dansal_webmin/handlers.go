@@ -10,7 +10,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		d := tmplData(cfg, "Dashboard", nil)
+		d := tmplData(cfg, "Dashboard", dashboardDataMap(collectDashboard(r.Context(), cfg)))
 		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.dashboard, d)
 	}

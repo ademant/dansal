@@ -1,0 +1,12 @@
+[Unit]
+Description=Dansal nightly backup
+After=dansal.service
+Requires=dansal.service
+
+[Service]
+Type=oneshot
+User=dansal
+Group=dansal
+WorkingDirectory=/var/lib/dansal
+ExecStart=/usr/bin/dansal_admin backup
+NoNewPrivileges=true

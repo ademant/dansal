@@ -35,7 +35,6 @@
       {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
       <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
-      <th data-sort="str">{{$.Strings.T "loc_country"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th title="Geo / Town / Website">✓</th>
       <th></th>
@@ -49,7 +48,6 @@
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
     <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
     <td>{{.Town}}</td>
-    <td>{{.Country}}{{if .CountryCode}} <span class="cc-badge">[{{.CountryCode}}]</span>{{end}}</td>
     <td>{{$orgName}}</td>
     <td class="ind-cell">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>

@@ -19,3 +19,7 @@ session_secret: ""
 
 # Display name shown in the navigation header.
 site_name: "Dansal Webmin"
+
+# Public subdomain for dansal-webmin (used by deploy-nginx-webmin).
+# Example: webmin.example.com
+# webmin_domain: "webmin.example.com"

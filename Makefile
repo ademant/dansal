@@ -239,5 +239,21 @@ deploy-nginx:
 	    exit 1; \
 	fi
 
+# Deploy nginx configuration for dansal-webmin using subdomain from webmin.yaml
+.ONESHELL:
+deploy-nginx-webmin:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx-webmin requires root"; exit 1; }
+	@if [ ! -f /etc/dansal/webmin.yaml ]; then \
+	    echo "Error: /etc/dansal/webmin.yaml not found — run 'make install-webmin' first"; \
+	    exit 1; \
+	fi
+	WEBMIN_DOMAIN=$$(grep -E '^[[:space:]]*webmin_domain:' /etc/dansal/webmin.yaml | sed -E 's/webmin_domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); \
+	[ -z "$$WEBMIN_DOMAIN" ] && { echo "Error: webmin_domain not set in /etc/dansal/webmin.yaml"; exit 1; }; \
+	echo "Deploying nginx configuration for webmin domain: $$WEBMIN_DOMAIN"
+	install -d -m 755 /etc/nginx/conf.d
+	sed "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" deploy/nginx/dansal-webmin.conf > /etc/nginx/conf.d/dansal-webmin.conf
+	nginx -t && systemctl reload nginx
+	echo "dansal-webmin nginx configuration deployed"
+
 # Deploy both web application and nginx configuration
 deploy-full: install-web deploy-nginx

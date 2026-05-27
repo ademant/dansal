@@ -60,7 +60,6 @@
       <th data-sort="str">{{$.Strings.T "col_date"}}</th>
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "col_location"}}</th>
-      <th data-sort="str">{{$.Strings.T "col_country"}}</th>
       <th data-sort="str">Status</th>
       <th></th>
     </tr>
@@ -71,7 +70,6 @@
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
     <td>{{if and .LocationShortName .LocationTown}}{{.LocationShortName}}, {{.LocationTown}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
-    <td>{{.LocationCountry}}</td>
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub">✓</span>

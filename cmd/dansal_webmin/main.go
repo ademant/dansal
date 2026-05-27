@@ -58,6 +58,11 @@ func main() {
 		mux.HandleFunc("POST /notifications/telegram", requireLogin(cfg, notificationsTelegramSaveHandler(cfg)))
 		mux.HandleFunc("POST /notifications/matrix", requireLogin(cfg, notificationsMatrixSaveHandler(cfg)))
 		mux.HandleFunc("POST /notifications/heartbeat", requireLogin(cfg, notificationsHeartbeatSaveHandler(cfg)))
+		mux.HandleFunc("GET /maintenance", requireLogin(cfg, maintenancePageHandler(cfg, tmpls)))
+		mux.HandleFunc("POST /maintenance/vacuum", requireLogin(cfg, maintenanceVacuumHandler(cfg)))
+		mux.HandleFunc("POST /maintenance/prune-images", requireLogin(cfg, maintenancePruneImagesHandler(cfg)))
+		mux.HandleFunc("POST /maintenance/fetch-all", requireLogin(cfg, maintenanceFetchAllHandler(cfg)))
+		mux.HandleFunc("POST /maintenance/backup", requireLogin(cfg, maintenanceBackupHandler(cfg)))
 		return mux
 	}
 

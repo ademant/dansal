@@ -16,6 +16,7 @@ type Templates struct {
 	users         *template.Template
 	sessions      *template.Template
 	notifications *template.Template
+	maintenance   *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -33,6 +34,7 @@ func loadTemplates() *Templates {
 		users:         load("users"),
 		sessions:      load("sessions"),
 		notifications: load("notifications"),
+		maintenance:   load("maintenance"),
 	}
 }
 

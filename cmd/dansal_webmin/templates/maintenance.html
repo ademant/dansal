@@ -1,0 +1,59 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Maintenance</h1>
+{{with .Data}}
+{{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem">
+
+<div class="card">
+  <div class="card-title">Backup</div>
+  <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:.75rem">
+    Creates a full backup (config + database + images) as a .tar.gz archive.
+  </p>
+  <form method="POST" action="/maintenance/backup">
+    <div class="form-group">
+      <label>Output path <span style="color:var(--fg-muted);font-size:.85rem">(optional — defaults to /var/lib/dansal/)</span></label>
+      <input type="text" name="output" placeholder="/var/lib/dansal/dansal-backup.tar.gz">
+    </div>
+    <button type="submit" class="btn"
+      onclick="return confirm('Create a full backup now?')">Run backup</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Database vacuum</div>
+  <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:.75rem">
+    Reclaims unused space from the SQLite database. Safe to run at any time.
+  </p>
+  <form method="POST" action="/maintenance/vacuum">
+    <button type="submit" class="btn"
+      onclick="return confirm('Run VACUUM on the database? This may take a moment.')">Run vacuum</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Fetch all feeds</div>
+  <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:.75rem">
+    Triggers an immediate fetch of all configured feed sources. The hourly timer runs this automatically.
+  </p>
+  <form method="POST" action="/maintenance/fetch-all">
+    <button type="submit" class="btn"
+      onclick="return confirm('Fetch all feed sources now?')">Fetch all feeds</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Prune orphaned images</div>
+  <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:.75rem">
+    Removes image files that no longer have a matching database record. The weekly timer runs this automatically.
+  </p>
+  <form method="POST" action="/maintenance/prune-images">
+    <button type="submit" class="btn btn-secondary"
+      onclick="return confirm('Remove orphaned images? This will permanently delete files.')">Prune images</button>
+  </form>
+</div>
+
+</div>
+{{end}}
+{{end}}

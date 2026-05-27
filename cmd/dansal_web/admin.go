@@ -1448,9 +1448,11 @@ type AdminEventNewData struct {
 }
 
 type FeedLocation struct {
-	Idx     int
-	Name    string // original location.location from the feed
-	Display string // "Name, Town Country" for the UI
+	Idx             int
+	Name            string // original location.location from the feed
+	Display         string // "Name, Town Country" for the UI
+	MatchedDBLocID   int    // non-zero when a DB location with the same name exists
+	MatchedDBLocName string // display name of the matched DB location
 }
 
 type AdminImportEventsData struct {
@@ -3412,6 +3414,13 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
 
+		// Build a name→location map so we can auto-match feed locations to
+		// existing DB locations without the admin having to pick them manually.
+		locByName := make(map[string]Location, len(locs))
+		for _, l := range locs {
+			locByName[l.Location] = l
+		}
+
 		seen := map[string]bool{}
 		var uniqLocs []FeedLocation
 		for _, e := range events {
@@ -3424,11 +3433,19 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				if e.Location.Country != "" {
 					display += " " + e.Location.Country
 				}
-				uniqLocs = append(uniqLocs, FeedLocation{
+				fl := FeedLocation{
 					Idx:     len(uniqLocs),
 					Name:    e.Location.Location,
 					Display: display,
-				})
+				}
+				if dbLoc, ok := locByName[e.Location.Location]; ok {
+					fl.MatchedDBLocID = dbLoc.ID
+					fl.MatchedDBLocName = dbLoc.Location
+					if dbLoc.Town != "" {
+						fl.MatchedDBLocName += ", " + dbLoc.Town
+					}
+				}
+				uniqLocs = append(uniqLocs, fl)
 			}
 		}
 

@@ -24,7 +24,7 @@
   </div>
   {{end}}
 
-  {{if and $.Data.UniqueFeedLocs $.Data.Locations}}
+  {{if $.Data.UniqueFeedLocs}}
   <div class="assign-section">
     <div class="assign-label">{{$.Strings.T "admin_import_loc_mapping_title"}}</div>
     <table class="loc-map-table">
@@ -35,15 +35,23 @@
       </tr></thead>
       <tbody>
       {{range $.Data.UniqueFeedLocs}}
+      {{$fl := .}}
       <tr>
         <td class="feed-loc-name">{{.Display}}</td>
         <td style="padding:0 .5rem;color:#999">→</td>
         <td>
           <input type="hidden" name="loc_feed_{{.Idx}}" value="{{.Name}}">
-          <select name="loc_map_{{.Idx}}" class="assign-select">
-            <option value="">{{$.Strings.T "admin_import_loc_keep"}}</option>
-            {{range $.Data.Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
-          </select>
+          {{if .MatchedDBLocID}}
+            <input type="hidden" name="loc_map_{{.Idx}}" value="{{.MatchedDBLocID}}">
+            <span class="loc-auto-matched">✓ {{.MatchedDBLocName}}</span>
+          {{else if $.Data.Locations}}
+            <select name="loc_map_{{.Idx}}" class="assign-select">
+              <option value="">{{$.Strings.T "admin_import_loc_keep"}}</option>
+              {{range $.Data.Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+            </select>
+          {{else}}
+            <span style="color:#999;font-size:.85rem">—</span>
+          {{end}}
         </td>
       </tr>
       {{end}}
@@ -134,6 +142,7 @@
 .loc-map-table th{text-align:left;padding:.3rem .5rem;color:#555;font-weight:600;border-bottom:1px solid #dde}
 .loc-map-table td{padding:.35rem .5rem;vertical-align:middle}
 .feed-loc-name{max-width:20rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333}
+.loc-auto-matched{color:#155724;font-size:.875rem;font-weight:500}
 .badge.status-new{background:#d4edda;color:#155724;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-exists{background:#e2e3e5;color:#383d41;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-updated{background:#fff3cd;color:#856404;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}

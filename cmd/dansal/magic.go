@@ -223,13 +223,10 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM magic_login_tokens WHERE id=?", id)
 
 	// Load user; re-enable if disabled (magic link proves email ownership).
-	var user User
 	db.Exec("UPDATE users SET disabled=0, failed_login_count=0, failed_login_since=NULL WHERE id=?", userID)
 	credentials.pruneByUserID(userID)
 
-	err = db.QueryRow(
-		"SELECT id, username, email, role, created_at FROM users WHERE id=?", userID,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt)
+	user, err := getUserByID(userID)
 	if err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return

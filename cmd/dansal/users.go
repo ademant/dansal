@@ -138,6 +138,18 @@ func scanUser(s userScanner) (User, error) {
 	return u, nil
 }
 
+func getUserByID(id int) (User, error) {
+	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id=?", id))
+}
+
+func getUserByUsername(username string) (User, error) {
+	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE username=?", username))
+}
+
+func getUserByEmail(email string) (User, error) {
+	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE email=?", email))
+}
+
 // GET /api/v1/users - List all users
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

@@ -66,13 +66,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user User
-	var emailVer, telegramVer, matrixVer, disabled int
-	err = db.QueryRow(
-		"SELECT id, username, email, role, COALESCE(telegram,''), COALESCE(matrix,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users WHERE id=?",
-		targetID,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Telegram, &user.Matrix,
-		&emailVer, &telegramVer, &matrixVer, &disabled, &user.CreatedAt)
+	user, err := getUserByID(targetID)
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return

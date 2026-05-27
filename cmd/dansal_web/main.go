@@ -246,7 +246,7 @@ func main() {
 		r.HandleFunc("GET /api/v1/musician-images/{id}", imageProxyHandler(client, "/api/v1/musician-images/"))
 		r.HandleFunc("GET /api/v1/org-images/{id}", imageProxyHandler(client, "/api/v1/org-images/"))
 
-		return feedRouter(cfg, db, client)(r)
+		return certAuthMiddleware(client)(feedRouter(cfg, db, client)(r))
 	}
 
 	i18n := loadI18n(cfg.I18nFile)

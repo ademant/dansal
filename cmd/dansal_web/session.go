@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"time"
 )
+
+type sessionContextKey int
+
+const ctxSessionUser sessionContextKey = 1
 
 const (
 	cookieToken = "dsw_token"
@@ -18,7 +23,15 @@ type SessionUser struct {
 	Role     string `json:"role"`
 }
 
+func withSessionUser(r *http.Request, u *SessionUser) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), ctxSessionUser, u))
+}
+
 func getSessionUser(r *http.Request) *SessionUser {
+	// Check request context first (set by cert-auth middleware)
+	if u, ok := r.Context().Value(ctxSessionUser).(*SessionUser); ok && u != nil {
+		return u
+	}
 	c, err := r.Cookie(cookieUser)
 	if err != nil {
 		return nil

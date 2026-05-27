@@ -378,6 +378,25 @@ func (c *DansalClient) Login(ctx context.Context, username, password, clientIP, 
 	return &lr, nil
 }
 
+func (c *DansalClient) CertLogin(ctx context.Context, username string) (*LoginResponse, error) {
+	body, _ := json.Marshal(map[string]string{"username": username})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/cert-login", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var lr LoginResponse
+	return &lr, json.NewDecoder(resp.Body).Decode(&lr)
+}
+
 func (c *DansalClient) Logout(ctx context.Context, token string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/login", nil)
 	if err != nil {

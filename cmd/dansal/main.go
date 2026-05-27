@@ -1465,6 +1465,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/login", login)
 	smux.HandleFunc("POST /api/v1/login", login)
 	smux.HandleFunc("DELETE /api/v1/login", logout)
+	smux.HandleFunc("POST /api/v1/cert-login", certLogin)
 	smux.HandleFunc("POST /api/v1/login/magic", requestMagicLogin)
 	smux.HandleFunc("GET /api/v1/login/magic/{token}", useMagicLogin)
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -301,6 +302,58 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return token and user info
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(LoginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt.Format(time.RFC3339),
+		User:      user,
+	})
+}
+
+// POST /api/v1/cert-login — create a session for a user authenticated via mTLS cert.
+// Only accepts requests from loopback (127.0.0.1 / ::1); only issues tokens for admin users.
+func certLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Restrict to loopback only
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if host != "127.0.0.1" && host != "::1" {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" {
+		writeError(w, "username is required", http.StatusBadRequest)
+		return
+	}
+
+	var user User
+	err := db.QueryRow(
+		"SELECT id, username, email, role, created_at, COALESCE(disabled,0) FROM users WHERE username=?",
+		req.Username,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, new(int))
+	if err == sql.ErrNoRows {
+		writeError(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if user.Role != RoleAdmin {
+		writeError(w, "Forbidden: only admin users may authenticate via certificate", http.StatusForbidden)
+		return
+	}
+
+	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), "cert", "")
+	if err != nil {
+		writeError(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(LoginResponse{
 		Token:     token,

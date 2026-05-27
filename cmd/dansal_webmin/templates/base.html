@@ -1,0 +1,84 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — {{.SiteName}}</title>
+<style>
+:root{
+  --bg:#f5f7fa;--bg-card:#fff;--bg-subtle:#eef1f7;
+  --fg:#222;--fg-dim:#555;--fg-muted:#777;
+  --border:#d0d5e0;--link:#1a6eb5;
+  --nav-bg:#1a1a2e;--nav-fg:#c0c8ff;
+  --btn-bg:#1a6eb5;--btn-fg:#fff;--btn-bg-h:#0d4a80;
+  --badge-ok-bg:#d4edda;--badge-ok-fg:#155724;
+  --badge-warn-bg:#fff3cd;--badge-warn-fg:#856404;
+  --badge-danger-bg:#f8d7da;--badge-danger-fg:#721c24;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;line-height:1.6;color:var(--fg);background:var(--bg);min-height:100vh}
+nav{background:var(--nav-bg);color:var(--nav-fg);padding:.5rem 1.5rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.nav-brand{color:#fff;font-size:1.05rem;font-weight:700;text-decoration:none;letter-spacing:.02em}
+.nav-brand:hover{opacity:.85}
+.nav-links{display:flex;gap:1rem;flex:1}
+.nav-links a{color:var(--nav-fg);text-decoration:none;font-size:.95rem;padding:.2rem .4rem;border-radius:3px}
+.nav-links a:hover,.nav-links a.active{color:#fff;background:rgba(255,255,255,.1)}
+.nav-user{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-user-name{color:var(--nav-fg);font-size:.9rem}
+.nav-btn{background:transparent;border:1px solid var(--nav-fg);color:var(--nav-fg);border-radius:4px;padding:.2rem .7rem;font-size:.85rem;cursor:pointer;text-decoration:none}
+.nav-btn:hover{background:var(--nav-fg);color:var(--nav-bg)}
+main{max-width:1100px;margin:0 auto;padding:1.5rem 1.5rem 3rem}
+h1{font-size:1.5rem;margin-bottom:1.25rem;color:#1a1a2e}
+h2{font-size:1.15rem;margin:1.5rem 0 .6rem;color:#333}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem;margin-bottom:1rem}
+.card-title{font-size:1rem;font-weight:600;margin-bottom:.75rem;color:#333;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+label{display:block;font-size:.9rem;font-weight:500;margin-bottom:.25rem;color:var(--fg-dim)}
+input[type=text],input[type=password],input[type=email],select,textarea{
+  width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:4px;
+  font-size:.95rem;font-family:inherit;background:#fff;color:var(--fg)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#1a6eb5;box-shadow:0 0 0 2px rgba(26,110,181,.15)}
+.form-group{margin-bottom:1rem}
+.btn{display:inline-block;padding:.45rem 1.1rem;border:none;border-radius:4px;cursor:pointer;font-size:.95rem;font-family:inherit;text-decoration:none;background:var(--btn-bg);color:var(--btn-fg)}
+.btn:hover{background:var(--btn-bg-h)}
+.btn-secondary{background:#6c757d}.btn-secondary:hover{background:#5a6268}
+.btn-danger{background:#dc3545}.btn-danger:hover{background:#c82333}
+.alert{padding:.75rem 1rem;border-radius:4px;margin-bottom:1rem;font-size:.95rem}
+.alert-danger{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border:1px solid #f5c6cb}
+.alert-ok{background:var(--badge-ok-bg);color:var(--badge-ok-fg);border:1px solid #c3e6cb}
+.alert-warn{background:var(--badge-warn-bg);color:var(--badge-warn-fg);border:1px solid #ffeeba}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{text-align:left;padding:.5rem .75rem;background:var(--bg-subtle);border-bottom:2px solid var(--border);color:var(--fg-dim);font-weight:600}
+td{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+tr:hover td{background:var(--bg-subtle)}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:3px;font-size:.8rem;font-weight:600}
+.badge-ok{background:var(--badge-ok-bg);color:var(--badge-ok-fg)}
+.badge-warn{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
+.badge-danger{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
+footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-brand">{{.SiteName}}</a>
+  {{if .User}}
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/users">Users</a>
+    <a href="/maintenance">Maintenance</a>
+    <a href="/notifications">Notifications</a>
+  </div>
+  <div class="nav-user">
+    <span class="nav-user-name">{{.User.Username}}</span>
+    <form method="POST" action="/logout" style="display:inline">
+      <button type="submit" class="nav-btn">Logout</button>
+    </form>
+  </div>
+  {{end}}
+</nav>
+<main>
+{{block "content" .}}{{end}}
+</main>
+<footer>dansal-webmin {{.Version}}</footer>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,62 @@
+package main
+
+import (
+	"flag"
+	"log"
+	"os"
+
+	"gopkg.in/yaml.v2"
+)
+
+var Version   = "dev"
+var BuildTime = "unknown"
+
+const defaultConfigPath = "/etc/dansal/webmin.yaml"
+
+type Config struct {
+	Listen        string `yaml:"listen"`
+	DansalURL     string `yaml:"dansal_url"`
+	AdminSocket   string `yaml:"admin_socket"`
+	SessionSecret string `yaml:"session_secret"`
+	SiteName      string `yaml:"site_name"`
+	configPath    string
+}
+
+func loadConfig() *Config {
+	configPath := flag.String("config", defaultConfigPath, "path to webmin.yaml")
+	flag.Parse()
+	return loadConfigFrom(*configPath)
+}
+
+func reloadConfig(path string) *Config {
+	cfg := loadConfigFrom(path)
+	return cfg
+}
+
+func loadConfigFrom(path string) *Config {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("read config %s: %v", path, err)
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		log.Fatalf("parse config: %v", err)
+	}
+	if cfg.Listen == "" {
+		cfg.Listen = "127.0.0.1:8090"
+	}
+	if cfg.DansalURL == "" {
+		cfg.DansalURL = "http://127.0.0.1:8000"
+	}
+	if cfg.AdminSocket == "" {
+		cfg.AdminSocket = "/run/dansal/dansal.sock"
+	}
+	if cfg.SessionSecret == "" {
+		log.Fatal("session_secret must be set in webmin.yaml")
+	}
+	if cfg.SiteName == "" {
+		cfg.SiteName = "Dansal Webmin"
+	}
+	cfg.configPath = path
+	return &cfg
+}

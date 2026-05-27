@@ -11,11 +11,11 @@ SYSTEMDDIR := /etc/systemd/system
 
 .DEFAULT_GOAL := build
 
-.PHONY: build build-dansal build-dansal_web build-dansal_admin \
-        run fmt vet clean install install-web install-units update check-config deb deploy-nginx
+.PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
+        run fmt vet clean install install-web install-webmin install-units update check-config deb deploy-nginx
 
 build:
-	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
+	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
 
 build-dansal:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal ./cmd/dansal
@@ -25,6 +25,9 @@ build-dansal_web:
 
 build-dansal_admin:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_admin ./cmd/dansal_admin
+
+build-dansal_webmin:
+	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_webmin ./cmd/dansal_webmin
 
 fmt:
 	go fmt ./...
@@ -36,7 +39,7 @@ run: build-dansal
 	./dansal --config ./config.yaml
 
 clean:
-	rm -f dansal dansal_web dansal_admin *.deb
+	rm -f dansal dansal_web dansal_admin dansal_webmin *.deb
 
 install: build
 	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }
@@ -92,6 +95,19 @@ install-web: build-dansal_web
 	$(MAKE) install-units
 	systemctl enable --now dansal-web.service
 
+install-webmin: build-dansal_webmin
+	@[ "$(shell id -u)" = "0" ] || { echo "install-webmin requires root"; exit 1; }
+	@if [ ! -f $(SYSCONFDIR)/webmin.yaml ]; then \
+		install -m 640 -o root -g $(SERVICE) packaging/webmin.yaml $(SYSCONFDIR)/webmin.yaml; \
+		echo "Installed $(SYSCONFDIR)/webmin.yaml — set session_secret before starting"; \
+	else \
+		echo "$(SYSCONFDIR)/webmin.yaml already exists — not overwriting"; \
+	fi
+	install -m 755 dansal_webmin $(BINDIR)/dansal-webmin
+	install -m 644 dansal-webmin.service $(SYSTEMDDIR)/dansal-webmin.service
+	systemctl daemon-reload
+	systemctl enable dansal-webmin.service
+
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
 	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
@@ -127,8 +143,10 @@ deploy: install-units
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
 	install -m 755 dansal_web    $(BINDIR)/dansal-web
+	install -m 755 dansal_webmin $(BINDIR)/dansal-webmin
 	systemctl restart $(SERVICE)
 	systemctl try-restart dansal-web.service || true
+	systemctl try-restart dansal-webmin.service || true
 	@echo "deployed"
 
 # Build a .deb package. VERSION may be overridden by the CI pipeline

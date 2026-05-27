@@ -1,0 +1,11 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="card">
+  <div class="card-title">Welcome</div>
+  <p>Signed in as <strong>{{.User.Username}}</strong>.</p>
+  <p style="margin-top:.75rem;color:var(--fg-dim);font-size:.95rem">
+    Use the navigation above to manage users, run maintenance tasks, and configure notifications.
+  </p>
+</div>
+{{end}}

@@ -1,0 +1,21 @@
+# dansal-webmin configuration
+# Install to /etc/dansal/webmin.yaml
+# Protect this file: chmod 640, chown root:dansal
+
+# Address and port the webmin panel listens on (loopback only).
+# nginx with ssl_verify_client on terminates TLS and enforces mTLS.
+listen: "127.0.0.1:8090"
+
+# Internal URL of the dansal REST API (used for admin authentication).
+dansal_url: "http://127.0.0.1:8000"
+
+# Path to the dansal admin socket (for maintenance operations).
+admin_socket: "/run/dansal/dansal.sock"
+
+# Secret used to sign session cookies. Generate with:
+#   openssl rand -hex 32
+# REQUIRED — webmin will refuse to start if this is empty.
+session_secret: ""
+
+# Display name shown in the navigation header.
+site_name: "Dansal Webmin"

@@ -168,7 +168,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "name and email are required", http.StatusBadRequest)
 		return
 	}
-	if !strings.Contains(req.Email, "@") {
+	if !isValidEmail(req.Email) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}

@@ -147,7 +147,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request, ticket_offer, ticket_request", http.StatusBadRequest)
 		return
 	}
-	if req.Email != "" && !strings.Contains(req.Email, "@") {
+	if req.Email != "" && !isValidEmail(req.Email) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
@@ -340,7 +340,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "email or telegram is required", http.StatusBadRequest)
 		return
 	}
-	if req.Email != "" && !strings.Contains(req.Email, "@") {
+	if req.Email != "" && !isValidEmail(req.Email) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}

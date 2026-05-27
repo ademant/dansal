@@ -392,15 +392,6 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-// isValidMatrixID checks that s is a fully-qualified Matrix user ID: @localpart:server
-func isValidMatrixID(s string) bool {
-	if !strings.HasPrefix(s, "@") {
-		return false
-	}
-	colon := strings.IndexByte(s, ':')
-	return colon > 1 && colon < len(s)-1
-}
-
 // DELETE /api/v1/users/{id} - Delete a user
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

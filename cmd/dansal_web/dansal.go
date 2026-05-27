@@ -132,9 +132,13 @@ func (c *DansalClient) FetchRefBundle(ctx context.Context) RefBundle {
 func apiErr(resp *http.Response) error {
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	var body struct {
-		Error string `json:"error"`
+		Error   string `json:"error"`
+		ErrorID string `json:"error_id"`
 	}
 	if json.Unmarshal(b, &body) == nil && body.Error != "" {
+		if body.ErrorID != "" {
+			return fmt.Errorf("dansal API %d: %s (error_id: %s)", resp.StatusCode, body.Error, body.ErrorID)
+		}
 		return fmt.Errorf("dansal API %d: %s", resp.StatusCode, body.Error)
 	}
 	if msg := strings.TrimSpace(string(b)); msg != "" {

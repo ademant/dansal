@@ -1603,6 +1603,7 @@ func main() {
 		CORSMiddleware,
 		SecurityHeadersMiddleware,
 		GzipMiddleware,
+		ErrorIDMiddleware, // inside Gzip so it sees uncompressed JSON
 		MaxBodyMiddleware,
 		ConnLimitMiddleware,
 		RateLimitMiddleware,

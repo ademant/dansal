@@ -114,6 +114,14 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	}
 	var id int64
 	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
+	if err == sql.ErrNoRows && loc.Address != "" {
+		// Gancio's iCal export stores LOCATION as "name - address". When the
+		// same data arrives via the JSON API (name and address separate), the
+		// exact lookup above misses. Try the composite format as a fallback so
+		// that JSON imports match locations originally created from the iCal feed.
+		composite := loc.Location + " - " + loc.Address
+		err = q.QueryRow("SELECT id FROM locations WHERE location = ?", composite).Scan(&id)
+	}
 	if err == nil {
 		// Update coordinates whenever the feed supplies them — not only when
 		// the DB has NULL. This lets corrected geodata flow in from the source.

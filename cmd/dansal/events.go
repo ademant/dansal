@@ -1092,17 +1092,8 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contentType == "application/json" {
-		for _, req := range requests {
-			if err := validateTags(req.Tags); err != nil {
-				writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-	} else {
-		for i := range requests {
-			requests[i].Tags = filterKnownTags(requests[i].Tags)
-		}
+	for i := range requests {
+		requests[i].Tags = filterKnownTags(requests[i].Tags)
 	}
 
 	if callerRole != RoleAdmin {

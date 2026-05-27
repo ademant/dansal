@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -21,6 +22,94 @@ import (
 	"sync"
 	"time"
 )
+
+// geoDistKm returns the haversine distance in km between two lat/lon points.
+func geoDistKm(lat1, lon1, lat2, lon2 float64) float64 {
+	const R = 6371.0
+	dLat := (lat2 - lat1) * math.Pi / 180
+	dLon := (lon2 - lon1) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
+// sortLocsByDistanceThenName sorts in-place: by distance from refLat/refLng (when
+// both the reference and the candidate have coordinates), falling back to name.
+func sortLocsByDistanceThenName(locs []Location, refLat, refLng *float64) {
+	sort.SliceStable(locs, func(i, j int) bool {
+		li, lj := locs[i], locs[j]
+		if refLat != nil && refLng != nil {
+			iHas := li.Latitude != nil && li.Longitude != nil
+			jHas := lj.Latitude != nil && lj.Longitude != nil
+			if iHas && jHas {
+				di := geoDistKm(*refLat, *refLng, *li.Latitude, *li.Longitude)
+				dj := geoDistKm(*refLat, *refLng, *lj.Latitude, *lj.Longitude)
+				if math.Abs(di-dj) > 0.1 {
+					return di < dj
+				}
+			}
+		}
+		ni := li.ShortName
+		if ni == "" {
+			ni = li.Location
+		}
+		nj := lj.ShortName
+		if nj == "" {
+			nj = lj.Location
+		}
+		return ni < nj
+	})
+}
+
+// splitEventLocations divides all locations into two groups for the event-edit
+// location dropdown: org-first (same org as the event's pre-assigned location)
+// and others. Within each group locations are sorted by distance from the
+// pre-assigned location (when it has coordinates), then by name.
+func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Location) {
+	if event.LocationID == nil {
+		others = append([]Location(nil), allLocs...)
+		sortLocsByDistanceThenName(others, nil, nil)
+		return
+	}
+	var refLat, refLng *float64
+	var evOrgIDs map[int]bool
+	for _, loc := range allLocs {
+		if loc.ID == *event.LocationID {
+			refLat = loc.Latitude
+			refLng = loc.Longitude
+			if len(loc.OrganizationIDs) > 0 {
+				evOrgIDs = make(map[int]bool, len(loc.OrganizationIDs))
+				for _, oid := range loc.OrganizationIDs {
+					evOrgIDs[oid] = true
+				}
+			}
+			break
+		}
+	}
+	if len(evOrgIDs) == 0 {
+		others = append([]Location(nil), allLocs...)
+		sortLocsByDistanceThenName(others, refLat, refLng)
+		return
+	}
+	for _, loc := range allLocs {
+		inOrg := false
+		for _, oid := range loc.OrganizationIDs {
+			if evOrgIDs[oid] {
+				inOrg = true
+				break
+			}
+		}
+		if inOrg {
+			orgFirst = append(orgFirst, loc)
+		} else {
+			others = append(others, loc)
+		}
+	}
+	sortLocsByDistanceThenName(orgFirst, refLat, refLng)
+	sortLocsByDistanceThenName(others, refLat, refLng)
+	return
+}
 
 // parseLatLng parses a form string to *float64; returns nil for empty or invalid input.
 func parseLatLng(s string) *float64 {
@@ -278,6 +367,50 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 				unassigned = append(unassigned, loc)
 			}
 		}
+		// Collect reference coordinates from assigned locations that have them.
+		var refLats, refLngs []float64
+		for _, loc := range assigned {
+			if loc.Latitude != nil && loc.Longitude != nil {
+				refLats = append(refLats, *loc.Latitude)
+				refLngs = append(refLngs, *loc.Longitude)
+			}
+		}
+		sort.SliceStable(unassigned, func(i, j int) bool {
+			li, lj := unassigned[i], unassigned[j]
+			if len(refLats) > 0 {
+				iHas := li.Latitude != nil && li.Longitude != nil
+				jHas := lj.Latitude != nil && lj.Longitude != nil
+				if iHas != jHas {
+					return iHas
+				}
+				if iHas {
+					di, dj := math.MaxFloat64, math.MaxFloat64
+					for k := range refLats {
+						if d := geoDistKm(refLats[k], refLngs[k], *li.Latitude, *li.Longitude); d < di {
+							di = d
+						}
+						if d := geoDistKm(refLats[k], refLngs[k], *lj.Latitude, *lj.Longitude); d < dj {
+							dj = d
+						}
+					}
+					if math.Abs(di-dj) > 0.1 {
+						return di < dj
+					}
+				}
+			}
+			if li.Town != lj.Town {
+				return li.Town < lj.Town
+			}
+			ni := li.ShortName
+			if ni == "" {
+				ni = li.Location
+			}
+			nj := lj.ShortName
+			if nj == "" {
+				nj = lj.Location
+			}
+			return ni < nj
+		})
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 			Org:                 org,
@@ -2511,7 +2644,9 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 type AdminEventEditData struct {
 	Event              Event
 	Organizations      []Organization
-	Locations          []Location
+	Locations          []Location   // all locations (used for timetable rows)
+	LocOrgFirst        []Location   // location dropdown: same-org locations first
+	LocOthers          []Location   // location dropdown: remaining locations
 	Musicians          []Musician
 	Dances             []Dance
 	GroupedTags        []TagGroup
@@ -2592,11 +2727,14 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				}
 			}
 		}
+		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
+			LocOrgFirst:        locOrgFirst,
+			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
 			Dances:             bundle.Dances,
 			SelectedDanceNames: buildSelectedDanceNames(event),
@@ -2625,11 +2763,14 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		saveTok := getSessionToken(r)
 		renderErr := func(errKey string) {
 			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
+			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
 			title := i18n.T(r, "admin_event_edit_title")
 			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 				Event:              event,
 				Organizations:      bundle.Orgs,
 				Locations:          bundle.Locations,
+				LocOrgFirst:        locOrgFirst,
+				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
 				Dances:             bundle.Dances,
 				SelectedDanceNames: buildSelectedDanceNames(event),
@@ -3444,6 +3585,15 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 					if dbLoc.Town != "" {
 						fl.MatchedDBLocName += ", " + dbLoc.Town
 					}
+				} else if e.Location.Address != "" {
+					composite := e.Location.Location + " - " + e.Location.Address
+					if dbLoc, ok := locByName[composite]; ok {
+						fl.MatchedDBLocID = dbLoc.ID
+						fl.MatchedDBLocName = dbLoc.Location
+						if dbLoc.Town != "" {
+							fl.MatchedDBLocName += ", " + dbLoc.Town
+						}
+					}
 				}
 				uniqLocs = append(uniqLocs, fl)
 			}
@@ -3532,13 +3682,20 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 								locField["zipcode"] = dbLoc.Zipcode
 								locField["town"] = dbLoc.Town
 								locField["country"] = dbLoc.Country
-								delete(locField, "latitude")
-								delete(locField, "longitude")
-								if dbLoc.Latitude != nil {
-									locField["latitude"] = *dbLoc.Latitude
-								}
-								if dbLoc.Longitude != nil {
-									locField["longitude"] = *dbLoc.Longitude
+								// Keep the feed's coordinates when present — they may be
+								// newer than what's in the DB. Fall back to DB values only
+								// when the feed doesn't supply any geodata.
+								_, hasLat := locField["latitude"]
+								_, hasLon := locField["longitude"]
+								if !hasLat && !hasLon {
+									delete(locField, "latitude")
+									delete(locField, "longitude")
+									if dbLoc.Latitude != nil {
+										locField["latitude"] = *dbLoc.Latitude
+									}
+									if dbLoc.Longitude != nil {
+										locField["longitude"] = *dbLoc.Longitude
+									}
 								}
 							}
 						}

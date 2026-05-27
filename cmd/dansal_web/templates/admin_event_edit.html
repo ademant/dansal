@@ -216,7 +216,9 @@
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>
-        {{range .Locations}}<option value="{{.ID}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{range .LocOrgFirst}}<option value="{{.ID}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{if and .LocOrgFirst .LocOthers}}<option disabled>— {{$.Strings.T "loc_sep_no_org"}} —</option>{{end}}
+        {{range .LocOthers}}<option value="{{.ID}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
       </select>
     </div>
 

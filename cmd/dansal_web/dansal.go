@@ -2047,9 +2047,12 @@ type PreviewEvent struct {
 }
 
 type PreviewLoc struct {
-	Location string `json:"location"`
-	Town     string `json:"town,omitempty"`
-	Country  string `json:"country,omitempty"`
+	Location  string   `json:"location"`
+	Town      string   `json:"town,omitempty"`
+	Country   string   `json:"country,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 func (c *DansalClient) PreviewEvents(ctx context.Context, body io.Reader, contentType, token string) ([]PreviewEvent, error) {

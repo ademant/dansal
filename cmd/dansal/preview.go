@@ -156,6 +156,10 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 		if err == nil {
 			var locID int64
 			db.QueryRow("SELECT id FROM locations WHERE location=?", req.Location.Location).Scan(&locID)
+			if locID == 0 && req.Location.Address != "" {
+				composite := req.Location.Location + " - " + req.Location.Address
+				db.QueryRow("SELECT id FROM locations WHERE location=?", composite).Scan(&locID)
+			}
 			if locID > 0 {
 				const threeHours = int64(3 * 60 * 60)
 				found, lookupErr = scan(db.QueryRow(

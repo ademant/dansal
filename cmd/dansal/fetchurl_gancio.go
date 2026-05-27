@@ -9,16 +9,41 @@ import (
 	"time"
 )
 
+// gancioStringOrSlice unmarshals a JSON value that may be either a string
+// or an array of strings (Gancio's online_locations field varies by event).
+type gancioStringOrSlice []string
+
+func (s *gancioStringOrSlice) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '[' {
+		var arr []string
+		if err := json.Unmarshal(b, &arr); err != nil {
+			return err
+		}
+		*s = arr
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	if str != "" {
+		*s = []string{str}
+	} else {
+		*s = nil
+	}
+	return nil
+}
+
 type gancioEvent struct {
-	ID              int64    `json:"id"`
-	Title           string   `json:"title"`
-	Slug            string   `json:"slug"`
-	StartDatetime   int64    `json:"start_datetime"`
-	EndDatetime     int64    `json:"end_datetime"`
-	Tags            []string `json:"tags"`
-	OnlineLocations []string `json:"online_locations"`
-	MultiDate       bool     `json:"multidate"`
-	ParentID        *int64   `json:"parentId"`
+	ID              int64                `json:"id"`
+	Title           string               `json:"title"`
+	Slug            string               `json:"slug"`
+	StartDatetime   int64                `json:"start_datetime"`
+	EndDatetime     int64                `json:"end_datetime"`
+	Tags            []string             `json:"tags"`
+	OnlineLocations gancioStringOrSlice  `json:"online_locations"`
+	MultiDate       bool                 `json:"multidate"`
+	ParentID        *int64               `json:"parentId"`
 	Place           struct {
 		ID        int64    `json:"id"`
 		Name      string   `json:"name"`

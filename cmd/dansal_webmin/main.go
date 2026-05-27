@@ -53,6 +53,11 @@ func main() {
 		mux.HandleFunc("POST /users/{username}/sessions/{id}/revoke", requireLogin(cfg, userRevokeSessionHandler(cfg)))
 		mux.HandleFunc("POST /users/{username}/reset-password", requireLogin(cfg, userResetPasswordHandler(cfg)))
 		mux.HandleFunc("POST /users/{username}/delete", requireLogin(cfg, userDeleteHandler(cfg)))
+		mux.HandleFunc("GET /notifications", requireLogin(cfg, notificationsPageHandler(cfg, tmpls)))
+		mux.HandleFunc("POST /notifications/smtp", requireLogin(cfg, notificationsSMTPSaveHandler(cfg)))
+		mux.HandleFunc("POST /notifications/telegram", requireLogin(cfg, notificationsTelegramSaveHandler(cfg)))
+		mux.HandleFunc("POST /notifications/matrix", requireLogin(cfg, notificationsMatrixSaveHandler(cfg)))
+		mux.HandleFunc("POST /notifications/heartbeat", requireLogin(cfg, notificationsHeartbeatSaveHandler(cfg)))
 		return mux
 	}
 

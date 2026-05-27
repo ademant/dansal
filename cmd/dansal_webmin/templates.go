@@ -11,10 +11,11 @@ import (
 var templateFS embed.FS
 
 type Templates struct {
-	login     *template.Template
-	dashboard *template.Template
-	users     *template.Template
-	sessions  *template.Template
+	login         *template.Template
+	dashboard     *template.Template
+	users         *template.Template
+	sessions      *template.Template
+	notifications *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -27,10 +28,11 @@ func loadTemplates() *Templates {
 		return t
 	}
 	return &Templates{
-		login:     load("login"),
-		dashboard: load("dashboard"),
-		users:     load("users"),
-		sessions:  load("sessions"),
+		login:         load("login"),
+		dashboard:     load("dashboard"),
+		users:         load("users"),
+		sessions:      load("sessions"),
+		notifications: load("notifications"),
 	}
 }
 

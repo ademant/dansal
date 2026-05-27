@@ -1598,12 +1598,6 @@ func main() {
 	smux.Handle("GET /api/v1/sessions", auth(getSessions))
 	smux.Handle("DELETE /api/v1/sessions/{id}", auth(deleteSession))
 
-	// Admin site config (protected, admin-only)
-	smux.Handle("GET /api/v1/admin/config", auth(getAdminConfig))
-	smux.Handle("PATCH /api/v1/admin/config", auth(patchAdminConfig))
-	smux.Handle("GET /api/v1/admin/heartbeat", auth(getHeartbeatStatus))
-	smux.Handle("POST /api/v1/admin/matrix-login", auth(matrixLogin))
-
 	// Middleware chain: MetricsMiddleware is outermost to capture all status codes.
 	handler := MetricsMiddleware(smux)(middlewareChain(icsRouter(smux),
 		CORSMiddleware,

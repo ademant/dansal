@@ -52,7 +52,14 @@ type request struct {
 	SMTPFromName    string `json:"smtp_from_name,omitempty"`
 	SMTPTLS         string `json:"smtp_tls,omitempty"`
 	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
-	SMTPTo          string `json:"smtp_to,omitempty"`
+	SMTPTo                string `json:"smtp_to,omitempty"`
+	TelegramBotToken      string `json:"telegram_bot_token,omitempty"`
+	TelegramBotName       string `json:"telegram_bot_name,omitempty"`
+	MatrixHomeserver      string `json:"matrix_homeserver,omitempty"`
+	MatrixAccessToken     string `json:"matrix_access_token,omitempty"`
+	MatrixUsername        string `json:"matrix_username,omitempty"`
+	MatrixPassword        string `json:"matrix_password,omitempty"`
+	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
 }
 
 type response struct {
@@ -191,6 +198,20 @@ func main() {
 		cmdSMTPSetPassword(rest)
 	case "smtp-test":
 		cmdSMTPTest(rest)
+	case "telegram-show":
+		cmdTelegramShow(rest)
+	case "telegram-set":
+		cmdTelegramSet(rest)
+	case "matrix-show":
+		cmdMatrixShow(rest)
+	case "matrix-set":
+		cmdMatrixSet(rest)
+	case "matrix-login":
+		cmdMatrixLogin(rest)
+	case "heartbeat-show":
+		cmdHeartbeatShow(rest)
+	case "heartbeat-set":
+		cmdHeartbeatSet(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -241,6 +262,21 @@ SMTP:
                [--from F] [--from-name N] [--tls M] [--timeout S]
   smtp-set-password [--password P]                   Set (obscured) SMTP account password
   smtp-test    --to EMAIL                            Send a test email
+
+Telegram:
+  telegram-show                                      Show Telegram bot configuration
+  telegram-set [--token T] [--name N]               Set Telegram bot token and/or name
+
+Matrix:
+  matrix-show                                        Show Matrix homeserver configuration
+  matrix-set   [--homeserver URL] [--token T]        Set Matrix homeserver URL and/or access token
+  matrix-login --homeserver URL --username U         Obtain and store a Matrix access token
+               [--password P]
+
+Heartbeat:
+  heartbeat-show                                     Show notification channel status
+  heartbeat-set --interval N                         Set heartbeat check interval (minutes)
+
   backup             [--output PATH]                 Full backup (config + db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
   restore            --input PATH                    Restore from a backup archive
@@ -388,6 +424,50 @@ Send a test email using the current SMTP configuration.
 
 Flags:
   --to  Recipient email address (required)`,
+
+	"telegram-show": `Usage: dansal_admin telegram-show
+
+Show the current Telegram bot configuration.`,
+
+	"telegram-set": `Usage: dansal_admin telegram-set [--token T] [--name N]
+
+Set the Telegram bot token and/or bot name.
+
+Flags:
+  --token  Telegram bot token
+  --name   Telegram bot username`,
+
+	"matrix-show": `Usage: dansal_admin matrix-show
+
+Show the current Matrix homeserver configuration.`,
+
+	"matrix-set": `Usage: dansal_admin matrix-set [--homeserver URL] [--token T]
+
+Set the Matrix homeserver URL and/or access token directly.
+
+Flags:
+  --homeserver  Matrix homeserver URL
+  --token       Matrix access token`,
+
+	"matrix-login": `Usage: dansal_admin matrix-login --homeserver URL --username U [--password P]
+
+Obtain a Matrix access token via username/password and store it in config.
+
+Flags:
+  --homeserver  Matrix homeserver URL (required)
+  --username    Matrix username (required)
+  --password    Matrix password (prompted if omitted)`,
+
+	"heartbeat-show": `Usage: dansal_admin heartbeat-show
+
+Show the current status of all notification channels (email, Telegram, Matrix).`,
+
+	"heartbeat-set": `Usage: dansal_admin heartbeat-set --interval N
+
+Set the heartbeat check interval.
+
+Flags:
+  --interval  Check interval in minutes (required, must be > 0)`,
 
 	"export": `Usage: dansal_admin export --table TABLE [--output FILE] [--db PATH]
 

@@ -28,7 +28,14 @@ type adminRequest struct {
 	SMTPFromName    string `json:"smtp_from_name,omitempty"`
 	SMTPTLS         string `json:"smtp_tls,omitempty"`
 	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
-	SMTPTo          string `json:"smtp_to,omitempty"`
+	SMTPTo               string `json:"smtp_to,omitempty"`
+	TelegramBotToken     string `json:"telegram_bot_token,omitempty"`
+	TelegramBotName      string `json:"telegram_bot_name,omitempty"`
+	MatrixHomeserver     string `json:"matrix_homeserver,omitempty"`
+	MatrixAccessToken    string `json:"matrix_access_token,omitempty"`
+	MatrixUsername       string `json:"matrix_username,omitempty"`
+	MatrixPassword       string `json:"matrix_password,omitempty"`
+	HeartbeatIntervalMins int   `json:"heartbeat_interval_mins,omitempty"`
 }
 
 type adminResponse struct {
@@ -123,6 +130,20 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminSMTPSetPassword(req)
 	case "smtp-test":
 		return adminSMTPTest(req)
+	case "telegram-get":
+		return adminTelegramGet()
+	case "telegram-set":
+		return adminTelegramSet(req)
+	case "matrix-get":
+		return adminMatrixGet()
+	case "matrix-set":
+		return adminMatrixSet(req)
+	case "matrix-login":
+		return adminMatrixLogin(req)
+	case "heartbeat-get":
+		return adminHeartbeatGet()
+	case "heartbeat-set":
+		return adminHeartbeatSet(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}

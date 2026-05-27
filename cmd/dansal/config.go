@@ -11,7 +11,6 @@ import (
 type ServerConfig struct {
 	Port                 int      `yaml:"port"`
 	TokenExpirationHours int      `yaml:"token_expiration_hours"`
-	AdminAllowedIPs      []string `yaml:"admin_allowed_ips"`
 	RateLimit            int      `yaml:"rate_limit"`
 	MaxBodyBytes         int64    `yaml:"max_body_bytes"`
 	ReadTimeoutSecs      int      `yaml:"read_timeout_secs"`

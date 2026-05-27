@@ -131,15 +131,3 @@ func probeMatrix() ChannelStatus {
 	return ChannelStatus{Configured: true, OK: true, LastChecked: time.Now()}
 }
 
-// GET /api/v1/admin/heartbeat
-func getHeartbeatStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	heartbeatMu.RLock()
-	status := heartbeatResult
-	heartbeatMu.RUnlock()
-	json.NewEncoder(w).Encode(status)
-}

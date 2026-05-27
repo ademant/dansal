@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -193,32 +192,6 @@ func epochStrToRFC3339(s string) string {
 	return s
 }
 
-func adminLoginAllowed(ip string) bool {
-	if config == nil || len(config.Server.AdminAllowedIPs) == 0 {
-		return true
-	}
-
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return false
-	}
-
-	for _, allowed := range config.Server.AdminAllowedIPs {
-		if strings.Contains(allowed, "/") {
-			_, cidr, err := net.ParseCIDR(allowed)
-			if err == nil && cidr.Contains(parsedIP) {
-				return true
-			}
-			continue
-		}
-		if net.ParseIP(allowed) != nil && net.ParseIP(allowed).Equal(parsedIP) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // GET /api/v1/login - Login endpoint to get OAuth token
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -317,13 +290,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(req.Password), user.ID)
 	}
 	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", user.ID)
-
-	if user.Role == RoleAdmin && !adminLoginAllowed(clientIP) {
-		log.Printf("auth failed from %s: admin login not allowed", clientIP)
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(TokenError{Error: "Admin login not allowed from this IP address"})
-		return
-	}
 
 	// Generate token / session
 	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)

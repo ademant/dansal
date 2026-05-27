@@ -1050,12 +1050,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		var ids []int
-		for _, s := range r.Form["src_ids"] {
-			if n, err := strconv.Atoi(s); err == nil {
-				ids = append(ids, n)
-			}
-		}
+		ids := parseFormIDs(r.Form, "src_ids")
 		if len(ids) == 0 {
 			http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
 			return
@@ -1076,13 +1071,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
-			var orgID *int
-			if v := r.FormValue("organization_id"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil {
-					orgID = &n
-				}
-			}
-			_ = client.BulkAssignFetchSourceOrg(r.Context(), ids, orgID, token)
+			_ = client.BulkAssignFetchSourceOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), token)
 		case "add-tag":
 			newTag := strings.TrimSpace(r.FormValue("new_tag"))
 			if newTag != "" {
@@ -1180,20 +1169,9 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		var ids []int
-		for _, s := range r.Form["loc_ids"] {
-			if n, err := strconv.Atoi(s); err == nil {
-				ids = append(ids, n)
-			}
-		}
-		var orgID *int
-		if v := r.FormValue("organization_id"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil {
-				orgID = &n
-			}
-		}
+		ids := parseFormIDs(r.Form, "loc_ids")
 		if len(ids) > 0 {
-			client.BulkAssignLocationOrg(r.Context(), ids, orgID, getSessionToken(r))
+			client.BulkAssignLocationOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), getSessionToken(r))
 		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}
@@ -1646,18 +1624,14 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		token := getSessionToken(r)
 		action := r.FormValue("action")
-		for _, idStr := range r.Form["user_ids"] {
-			id, err := strconv.Atoi(idStr)
-			if err != nil {
-				continue
-			}
+		orgID := parseFormOptionalInt(r.Form, "org_id")
+		for _, id := range parseFormIDs(r.Form, "user_ids") {
 			switch action {
 			case "delete":
 				_ = client.DeleteUser(r.Context(), id, token)
 			case "org":
-				orgID, err := strconv.Atoi(r.FormValue("org_id"))
-				if err == nil {
-					_ = client.AddOrgMember(r.Context(), orgID, id, token)
+				if orgID != nil {
+					_ = client.AddOrgMember(r.Context(), *orgID, id, token)
 				}
 			case "role":
 				if role := r.FormValue("role"); role != "" {

@@ -203,6 +203,8 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 	switch src.Type {
 	case "folkdance-json":
 		return parseFolkdanceJSONToRequests(body, src)
+	case "gancio-json":
+		return parseGancioJSONToRequests(body, src)
 	default:
 		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))
 		if err != nil {

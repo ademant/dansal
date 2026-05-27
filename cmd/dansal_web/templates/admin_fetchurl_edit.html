@@ -13,6 +13,7 @@
   <select id="type" name="type">
     <option value="ical"{{if eq .Source.Type "ical"}} selected{{end}}>iCal</option>
     <option value="folkdance-json"{{if eq .Source.Type "folkdance-json"}} selected{{end}}>folkdance-json</option>
+    <option value="gancio-json"{{if eq .Source.Type "gancio-json"}} selected{{end}}>gancio-json</option>
   </select>
 
   <label for="tags">{{$.Strings.T "fetch_tags"}}</label>

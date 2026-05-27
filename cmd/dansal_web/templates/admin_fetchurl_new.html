@@ -22,6 +22,7 @@
       <option value="ical" {{if eq .Type "ical"}}selected{{end}}>iCal</option>
       <option value="rss" {{if eq .Type "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
       <option value="folkdance-json" {{if eq .Type "folkdance-json"}}selected{{end}}>Folkdance JSON</option>
+      <option value="gancio-json" {{if eq .Type "gancio-json"}}selected{{end}}>Gancio JSON</option>
     </select>
   </div>
   <div class="form-row">
@@ -56,6 +57,8 @@ document.getElementById('url').addEventListener('blur', function() {
   if (sel.value !== '') return; // don't override an explicit choice
   if (u.indexOf('.ics') !== -1 || u.indexOf('ical') !== -1 || u.indexOf('calendar') !== -1) {
     sel.value = 'ical';
+  } else if (u.indexOf('/api/events') !== -1) {
+    sel.value = 'gancio-json';
   } else if (u.indexOf('folkdance') !== -1 || u.indexOf('.json') !== -1) {
     sel.value = 'folkdance-json';
   } else if (u.indexOf('rss') !== -1 || u.indexOf('atom') !== -1 ||

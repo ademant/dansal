@@ -519,6 +519,8 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 	switch src.Type {
 	case "folkdance-json":
 		return importFromFolkdanceJSON(src)
+	case "gancio-json":
+		return importFromGancioJSON(src)
 	case "rss":
 		return importFromRSSSource(src)
 	default:

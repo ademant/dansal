@@ -389,6 +389,9 @@ func httpContentType(rawURL string) string {
 // detectFetchType infers the fetch type from the URL and a HEAD request when
 // the caller has not supplied an explicit type.
 func detectFetchType(rawURL string) string {
+	if gancioJSONProbe(rawURL) {
+		return "gancio-json"
+	}
 	if folkdanceJSONProbe(rawURL) {
 		return "folkdance-json"
 	}
@@ -410,5 +413,5 @@ func detectFetchType(rawURL string) string {
 
 // validFetchType returns true for recognised fetch type strings.
 func validFetchType(t string) bool {
-	return t == "ical" || t == "folkdance-json" || t == "rss"
+	return t == "ical" || t == "folkdance-json" || t == "gancio-json" || t == "rss"
 }

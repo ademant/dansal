@@ -338,7 +338,7 @@ func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func (c *DansalClient) Login(ctx context.Context, username, password string) (*LoginResponse, error) {
+func (c *DansalClient) Login(ctx context.Context, username, password, clientIP, userAgent string) (*LoginResponse, error) {
 	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login",
 		bytes.NewReader(body))
@@ -346,6 +346,12 @@ func (c *DansalClient) Login(ctx context.Context, username, password string) (*L
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if clientIP != "" {
+		req.Header.Set("X-Forwarded-For", clientIP)
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -1033,11 +1039,17 @@ func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channe
 	return nil
 }
 
-func (c *DansalClient) UseMagicLogin(ctx context.Context, token string) (*LoginResponse, error) {
+func (c *DansalClient) UseMagicLogin(ctx context.Context, token, clientIP, userAgent string) (*LoginResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.BaseURL+"/api/v1/login/magic/"+token, nil)
 	if err != nil {
 		return nil, err
+	}
+	if clientIP != "" {
+		req.Header.Set("X-Forwarded-For", clientIP)
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

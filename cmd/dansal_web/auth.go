@@ -87,7 +87,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 
-		lr, err := client.Login(r.Context(), username, password)
+		lr, err := client.Login(r.Context(), username, password, ip, r.UserAgent())
 		if err != nil {
 			delay := throttle.recordFailure(ip)
 			log.Printf("login failed from %s: invalid credentials for %q", ip, username)
@@ -172,7 +172,7 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		lr, err := client.UseMagicLogin(r.Context(), token)
+		lr, err := client.UseMagicLogin(r.Context(), token, getClientIP(r), r.UserAgent())
 		if err != nil {
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{

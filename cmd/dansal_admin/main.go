@@ -212,6 +212,10 @@ func main() {
 		cmdHeartbeatShow(rest)
 	case "heartbeat-set":
 		cmdHeartbeatSet(rest)
+	case "fetch-all":
+		cmdFetchAll()
+	case "prune-images":
+		cmdPruneImages()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -250,6 +254,8 @@ Organization management:
 Maintenance:
   fill-location-fields [--db PATH] [--apply]         Parse address/town from location names
   vacuum                                             Reclaim unused database space
+  fetch-all                                          Fetch all configured feed sources
+  prune-images                                       Remove image files with no matching DB record
 
 Data export/import:
   export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
@@ -1068,4 +1074,46 @@ func cmdRemoveMember(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Printf("removed %s from organization %d\n", *username, *orgID)
+}
+
+func cmdFetchAll() {
+	resp := send(socketPath, request{Cmd: "fetch-all"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var results []struct {
+		ID     int    `json:"id"`
+		URL    string `json:"url"`
+		Events int    `json:"events"`
+		Error  string `json:"error,omitempty"`
+	}
+	json.Unmarshal(resp.Data, &results)
+	errCount := 0
+	total := 0
+	for _, r := range results {
+		if r.Error != "" {
+			fmt.Fprintf(os.Stderr, "error [%d] %s: %s\n", r.ID, r.URL, r.Error)
+			errCount++
+		} else {
+			fmt.Printf("[%d] %s: %d events\n", r.ID, r.URL, r.Events)
+			total += r.Events
+		}
+	}
+	fmt.Printf("fetched %d source(s), %d event(s) total, %d error(s)\n", len(results), total, errCount)
+	if errCount > 0 {
+		os.Exit(1)
+	}
+}
+
+func cmdPruneImages() {
+	resp := send(socketPath, request{Cmd: "prune-images"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var result struct {
+		Removed    int   `json:"removed"`
+		FreedBytes int64 `json:"freed_bytes"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	fmt.Printf("removed %d orphaned image(s), freed %s\n", result.Removed, formatSize(result.FreedBytes))
 }

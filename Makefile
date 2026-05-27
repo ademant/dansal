@@ -94,9 +94,18 @@ install-web: build-dansal_web
 
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
-	install -m 644 dansal.service     $(SYSTEMDDIR)/dansal.service
-	install -m 644 dansal-web.service $(SYSTEMDDIR)/dansal-web.service
+	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
+	install -m 644 dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
+	install -m 644 dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
+	install -m 644 dansal-fetch.timer       $(SYSTEMDDIR)/dansal-fetch.timer
+	install -m 644 dansal-backup.service    $(SYSTEMDDIR)/dansal-backup.service
+	install -m 644 dansal-backup.timer      $(SYSTEMDDIR)/dansal-backup.timer
+	install -m 644 dansal-vacuum.service    $(SYSTEMDDIR)/dansal-vacuum.service
+	install -m 644 dansal-vacuum.timer      $(SYSTEMDDIR)/dansal-vacuum.timer
+	install -m 644 dansal-prune-images.service  $(SYSTEMDDIR)/dansal-prune-images.service
+	install -m 644 dansal-prune-images.timer    $(SYSTEMDDIR)/dansal-prune-images.timer
 	systemctl daemon-reload
+	systemctl enable --now dansal-fetch.timer dansal-backup.timer dansal-vacuum.timer dansal-prune-images.timer
 
 update: build install-units
 	@[ "$(shell id -u)" = "0" ] || { echo "update requires root"; exit 1; }

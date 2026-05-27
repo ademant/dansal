@@ -3,9 +3,14 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 type adminRequest struct {
@@ -144,9 +149,50 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminHeartbeatGet()
 	case "heartbeat-set":
 		return adminHeartbeatSet(req)
+	case "fetch-all":
+		return adminFetchAll()
+	case "prune-images":
+		return adminPruneImages()
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
+}
+
+func adminFetchAll() adminResponse {
+	rows, err := db.Query("SELECT " + fetchSourceCols + " FROM fetch_sources ORDER BY id")
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	defer rows.Close()
+	var sources []FetchSource
+	for rows.Next() {
+		src, err := scanFetchSource(rows)
+		if err != nil {
+			continue
+		}
+		sources = append(sources, src)
+	}
+
+	type sourceResult struct {
+		ID     int    `json:"id"`
+		URL    string `json:"url"`
+		Events int    `json:"events"`
+		Error  string `json:"error,omitempty"`
+	}
+	results := make([]sourceResult, 0, len(sources))
+	for _, src := range sources {
+		events, _, fetchErr := importFromSource(src)
+		r := sourceResult{ID: src.ID, URL: src.URL}
+		if fetchErr != nil {
+			r.Error = fetchErr.Error()
+			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+fetchErr.Error(), src.ID)
+		} else {
+			r.Events = len(events)
+			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(events)), src.ID)
+		}
+		results = append(results, r)
+	}
+	return adminResponse{OK: true, Data: results}
 }
 
 func adminListUsers() adminResponse {
@@ -432,6 +478,57 @@ func adminAddMember(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}
+}
+
+func adminPruneImages() adminResponse {
+	imagesDir := config.Server.ImagesDir
+	type pruneResult struct {
+		Removed    int   `json:"removed"`
+		FreedBytes int64 `json:"freed_bytes"`
+	}
+	var result pruneResult
+	err := filepath.WalkDir(imagesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if !strings.HasSuffix(d.Name(), ".avif") {
+			return nil
+		}
+		idStr := strings.TrimSuffix(d.Name(), ".avif")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(imagesDir, path)
+		parts := strings.SplitN(rel, string(filepath.Separator), 2)
+		var table, col string
+		switch parts[0] {
+		case "musicians":
+			table, col = "musicians", "id"
+		case "orgs":
+			table, col = "organizations", "id"
+		default:
+			table, col = "events", "id"
+		}
+		var exists int
+		db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE "+col+" = ?", id).Scan(&exists)
+		if exists > 0 {
+			return nil
+		}
+		info, _ := os.Stat(path)
+		if removeErr := os.Remove(path); removeErr == nil {
+			if info != nil {
+				result.FreedBytes += info.Size()
+			}
+			result.Removed++
+			log.Printf("prune-images: removed %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	return adminResponse{OK: true, Data: result}
 }
 
 func adminVacuum() adminResponse {

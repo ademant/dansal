@@ -11,6 +11,45 @@
 {{if .PreviewEvents}}
 <h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
 <form method="post" action="/admin/events/import/confirm">
+
+  {{if $.Data.Orgs}}
+  <div class="assign-section">
+    <label class="assign-label" for="org_id">{{$.Strings.T "admin_import_org_label"}}</label>
+    <select id="org_id" name="org_id" class="assign-select">
+      <option value="">{{$.Strings.T "admin_import_org_none"}}</option>
+      {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+  {{end}}
+
+  {{if and $.Data.UniqueFeedLocs $.Data.Locations}}
+  <div class="assign-section">
+    <div class="assign-label">{{$.Strings.T "admin_import_loc_mapping_title"}}</div>
+    <table class="loc-map-table">
+      <thead><tr>
+        <th>{{$.Strings.T "admin_import_col_feed_loc"}}</th>
+        <th></th>
+        <th>{{$.Strings.T "admin_import_col_db_loc"}}</th>
+      </tr></thead>
+      <tbody>
+      {{range $.Data.UniqueFeedLocs}}
+      <tr>
+        <td class="feed-loc-name">{{.Display}}</td>
+        <td style="padding:0 .5rem;color:#999">→</td>
+        <td>
+          <input type="hidden" name="loc_feed_{{.Idx}}" value="{{.Name}}">
+          <select name="loc_map_{{.Idx}}" class="assign-select">
+            <option value="">{{$.Strings.T "admin_import_loc_keep"}}</option>
+            {{range $.Data.Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+          </select>
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
   <div style="margin-bottom:.75rem">
     <label class="check-label">
       <input type="checkbox" id="sel-all" onchange="toggleAll(this)"> {{$.Strings.T "admin_import_select_all"}}
@@ -85,6 +124,13 @@
 .btn-primary:hover{background:#155a9a}
 .check-label{display:flex;align-items:center;gap:.3rem;font-size:.875rem;cursor:pointer}
 .badge.cancelled{background:#f8d7da;color:#721c24;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
+.assign-section{margin-bottom:1rem;padding:.75rem;background:#f8f9fc;border:1px solid #e2e6ea;border-radius:6px}
+.assign-label{font-weight:600;font-size:.875rem;margin-bottom:.4rem}
+.assign-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;min-width:14rem}
+.loc-map-table{border-collapse:collapse;font-size:.875rem}
+.loc-map-table th{text-align:left;padding:.3rem .5rem;color:#555;font-weight:600;border-bottom:1px solid #dde}
+.loc-map-table td{padding:.35rem .5rem;vertical-align:middle}
+.feed-loc-name{max-width:20rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333}
 .badge.status-new{background:#d4edda;color:#155724;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-exists{background:#e2e3e5;color:#383d41;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-updated{background:#fff3cd;color:#856404;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}

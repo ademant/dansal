@@ -115,6 +115,8 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "magic-link":
+		return adminMagicLink(req)
 	case "list-invites":
 		return adminListInvites(req)
 	case "revoke-invite":
@@ -264,6 +266,27 @@ func adminRevokeInvite(req adminRequest) adminResponse {
 	}
 	db.Exec("DELETE FROM invite_links WHERE token=?", req.InviteToken)
 	return adminResponse{OK: true}
+}
+
+func adminMagicLink(req adminRequest) adminResponse {
+	if req.Username == "" {
+		return adminResponse{OK: false, Error: "username is required"}
+	}
+	userID, err := userIDByUsername(req.Username)
+	if err != nil {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	token, _, err := createMagicToken(userID)
+	if err != nil {
+		return adminResponse{OK: false, Error: "failed to create token: " + err.Error()}
+	}
+	base := config.Server.BaseURL
+	if base == "" {
+		base = fmt.Sprintf("http://localhost%s", getPort())
+	}
+	url := base + "/api/v1/login/magic/" + token
+	data, _ := json.Marshal(map[string]string{"url": url})
+	return adminResponse{OK: true, Data: data}
 }
 
 func adminListSessions(req adminRequest) adminResponse {

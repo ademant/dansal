@@ -172,6 +172,24 @@ func userRevokeSessionHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := r.PathValue("username")
+		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "magic-link", Username: username})
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil || !resp.OK {
+			msg := "socket error"
+			if err == nil {
+				msg = resp.Error
+			}
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": msg})
+			return
+		}
+		w.Write(resp.Data)
+	}
+}
+
 func userDeleteHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.PathValue("username")

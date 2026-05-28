@@ -44,6 +44,8 @@
       <td style="white-space:nowrap">
         <a href="/users/{{.Username}}/sessions" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem">Sessions</a>
         <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
+          onclick="showMagicLink('{{.Username}}')">Magic Link</button>
+        <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
           onclick="document.getElementById('reset-{{.Username}}').style.display='block'">Reset PW</button>
         <form method="POST" action="/users/{{.Username}}/delete"
           style="display:inline"
@@ -71,4 +73,59 @@
   {{end}}
 </div>
 {{end}}
+
+<!-- Magic link modal -->
+<div id="ml-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card,#fff);border-radius:8px;padding:1.5rem;max-width:480px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 .75rem">Magic login link</h3>
+    <p style="font-size:.85rem;color:#666;margin-bottom:.5rem">One-time login link for this admin. Share it securely — it expires after first use.</p>
+    <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
+      <input id="ml-url" type="text" readonly style="flex:1;font-family:monospace;font-size:.8rem;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px">
+      <button class="btn" onclick="copyML()">Copy</button>
+    </div>
+    <p id="ml-copied" style="display:none;font-size:.82rem;color:green;margin-bottom:.5rem">Copied!</p>
+    <div id="ml-qr" style="text-align:center;margin-bottom:.75rem"></div>
+    <button class="btn btn-secondary" onclick="closeMagicModal()">Close</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous"></script>
+<script>
+function showMagicLink(username) {
+  document.getElementById('ml-url').value = '';
+  document.getElementById('ml-qr').innerHTML = '';
+  document.getElementById('ml-copied').style.display = 'none';
+  var modal = document.getElementById('ml-modal');
+  modal.style.display = 'flex';
+
+  fetch('/users/' + username + '/magic-link', {method: 'POST', headers: {'X-Requested-With': 'xhr'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) { alert(d.error); closeMagicModal(); return; }
+      document.getElementById('ml-url').value = d.url;
+      QRCode.toCanvas(document.createElement('canvas'), d.url, {width: 200}, function(err, canvas) {
+        if (!err) document.getElementById('ml-qr').appendChild(canvas);
+      });
+    })
+    .catch(function(){ alert('Failed to generate link'); closeMagicModal(); });
+}
+
+function closeMagicModal() {
+  document.getElementById('ml-modal').style.display = 'none';
+}
+
+function copyML() {
+  var v = document.getElementById('ml-url').value;
+  if (!v) return;
+  navigator.clipboard.writeText(v).then(function(){
+    var p = document.getElementById('ml-copied');
+    p.style.display = 'block';
+    setTimeout(function(){ p.style.display = 'none'; }, 2000);
+  });
+}
+
+document.getElementById('ml-modal').addEventListener('click', function(e){
+  if (e.target === this) closeMagicModal();
+});
+</script>
 {{end}}

@@ -11,6 +11,8 @@
   <strong>{{$.Strings.T "admin_invite_create"}}:</strong>
   <code id="new-invite-url">{{.BaseURL}}/invites/{{.NewInviteToken}}</code>
   <button type="button" class="btn-sm" onclick="copyInvite()">{{$.Strings.T "admin_invite_copy"}}</button>
+  <button type="button" class="btn-sm" onclick="toggleQR('invite-qr','new-invite-url')">{{$.Strings.T "admin_qr_show"}}</button>
+  <div id="invite-qr" style="display:none;margin-top:.5rem"></div>
 </div>
 {{end}}
 
@@ -183,10 +185,12 @@
     <h3 style="margin:0 0 .75rem">{{$.Strings.T "admin_magic_link_title"}}</h3>
     <p id="magic-link-toast" hidden style="background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.88rem">{{$.Strings.T "admin_magic_link_copied"}}</p>
     <p style="font-size:.85rem;color:var(--fg-muted);margin-bottom:.5rem">{{$.Strings.T "admin_magic_link_hint"}}</p>
-    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
       <input id="magic-link-input" type="text" readonly style="flex:1;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;background:var(--bg);color:var(--fg);font-family:monospace">
       <button type="button" class="btn-sm" onclick="copyMagicLink()">{{$.Strings.T "admin_invite_copy"}}</button>
+      <button type="button" class="btn-sm" onclick="toggleQR('magic-link-qr','magic-link-input')">{{$.Strings.T "admin_qr_show"}}</button>
     </div>
+    <div id="magic-link-qr" style="display:none;text-align:center;margin-bottom:.75rem"></div>
     <button type="button" class="btn-sm" onclick="closeMagicModal()">{{$.Strings.T "admin_magic_link_close"}}</button>
   </div>
 </div>
@@ -339,7 +343,21 @@ function submitPassword() {
   document.body.appendChild(f); f.submit();
 }
 function closePwModal() { document.getElementById('pw-modal').hidden = true; }
+
+function toggleQR(containerId, sourceId) {
+  var el = document.getElementById(containerId);
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  var url = document.getElementById(sourceId).value || document.getElementById(sourceId).textContent;
+  url = url.trim();
+  if (!url) return;
+  el.innerHTML = '';
+  el.style.display = 'block';
+  QRCode.toCanvas(document.createElement('canvas'), url, {width: 200, margin: 2}, function(err, canvas) {
+    if (!err) el.appendChild(canvas);
+  });
+}
 </script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous"></script>
 
 <div id="pw-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">

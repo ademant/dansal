@@ -29,10 +29,8 @@ type Location struct {
 	OsmType              string   `json:"osm_type,omitempty"`
 	CreatedAt            string   `json:"created_at"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd              string   `json:"notes_md,omitempty"`
-	WheelchairAccessible bool     `json:"wheelchair_accessible,omitempty"`
-	HearingLoop          bool     `json:"hearing_loop,omitempty"`
-	VisualSupport        bool     `json:"visual_support,omitempty"`
+	NotesMd    string          `json:"notes_md,omitempty"`
+	Attributes map[string]bool `json:"attributes,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -65,10 +63,39 @@ type LocationCreateRequest struct {
 	OsmID                *int64   `json:"osm_id,omitempty"`
 	OsmType              string   `json:"osm_type,omitempty"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd              string   `json:"notes_md"`
-	WheelchairAccessible bool     `json:"wheelchair_accessible"`
-	HearingLoop          bool     `json:"hearing_loop"`
-	VisualSupport        bool     `json:"visual_support"`
+	NotesMd    string          `json:"notes_md"`
+	Attributes map[string]bool `json:"attributes,omitempty"`
+}
+
+// locationCols is the shared SELECT column list used by all location queries.
+// Must match the scanLocation scan order exactly.
+const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
+	l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
+	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
+	l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
+	COALESCE(l.attributes,'{}')`
+
+func scanLocation(s scanner, loc *Location) error {
+	var orgIDsStr, attrsJSON string
+	if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
+		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
+		&loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON); err != nil {
+		return err
+	}
+	if attrsJSON != "" && attrsJSON != "{}" {
+		json.Unmarshal([]byte(attrsJSON), &loc.Attributes)
+	}
+	loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
+	return nil
+}
+
+func attrsJSON(attrs map[string]bool) string {
+	if len(attrs) == 0 {
+		return "{}"
+	}
+	b, _ := json.Marshal(attrs)
+	return string(b)
 }
 
 func parseOrgIDs(s string) []int {
@@ -141,11 +168,7 @@ func similarLocations(name, street, town string) []Location {
 	base := streetBase(street)
 	var rows *sql.Rows
 	var err error
-	const cols = `SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''), l.town,
-		       COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
-		       l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
-		       l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-		       COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0)
+	const cols = `SELECT ` + locationCols + `
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
 	if base != "" {
 		rows, err = db.Query(cols+`
@@ -167,18 +190,9 @@ func similarLocations(name, street, town string) []Location {
 	var result []Location
 	for rows.Next() {
 		var loc Location
-		var orgIDsStr string
-		var whlInt, hlInt, vsInt int
-		if err := rows.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
-			&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
-			&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
-			&loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &whlInt, &hlInt, &vsInt); err != nil {
+		if err := scanLocation(rows, &loc); err != nil {
 			continue
 		}
-		loc.WheelchairAccessible = whlInt == 1
-		loc.HearingLoop = hlInt == 1
-		loc.VisualSupport = vsInt == 1
-		loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
 		result = append(result, loc)
 	}
 	return result
@@ -194,23 +208,16 @@ type LocationUpdateRequest struct {
 	Region               string   `json:"region"`
 	Latitude             *float64 `json:"latitude,omitempty"`
 	Longitude            *float64 `json:"longitude,omitempty"`
-	Internetsite         string   `json:"internetsite"`
-	NotesMd              string   `json:"notes_md"`
-	WheelchairAccessible bool     `json:"wheelchair_accessible"`
-	HearingLoop          bool     `json:"hearing_loop"`
-	VisualSupport        bool     `json:"visual_support"`
+	Internetsite string          `json:"internetsite"`
+	NotesMd      string          `json:"notes_md"`
+	Attributes   map[string]bool `json:"attributes,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
 func getLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	query := `SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
-		l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
-		l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''), l.created_at,
-		COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-		COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0)
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
+	query := `SELECT ` + locationCols + ` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
 	var args []any
 	if country := r.URL.Query().Get("country"); country != "" {
 		codes, err := parseCountryCodes(country)
@@ -237,16 +244,10 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	locations := []Location{}
 	for rows.Next() {
 		var location Location
-		var orgIDsStr string
-		var whlInt, hlInt, vsInt int
-		if err := rows.Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.CountryCode, &location.Region, &location.Latitude, &location.Longitude, &location.Internetsite, &location.OsmID, &location.OsmType, &location.CreatedAt, &orgIDsStr, &location.NotesMd, &whlInt, &hlInt, &vsInt); err != nil {
+		if err := scanLocation(rows, &location); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		location.WheelchairAccessible = whlInt == 1
-		location.HearingLoop = hlInt == 1
-		location.VisualSupport = vsInt == 1
-		location.OrganizationIDs = parseOrgIDs(orgIDsStr)
 		locations = append(locations, location)
 	}
 
@@ -343,8 +344,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		similar := similarLocations(req.Location, street, town)
 
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, notes_md, wheelchair_accessible, hearing_loop, visual_support) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, req.NotesMd, req.WheelchairAccessible, req.HearingLoop, req.VisualSupport,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, notes_md, attributes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, req.NotesMd, attrsJSON(req.Attributes),
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -368,10 +369,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			OsmID:                req.OsmID,
 			OsmType:              req.OsmType,
 			OrganizationIDs:      req.OrganizationIDs,
-			NotesMd:              req.NotesMd,
-			WheelchairAccessible: req.WheelchairAccessible,
-			HearingLoop:          req.HearingLoop,
-			VisualSupport:        req.VisualSupport,
+			NotesMd:    req.NotesMd,
+			Attributes: req.Attributes,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -387,20 +386,9 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var location Location
-	var orgIDsStr string
-	var whlInt, hlInt, vsInt int
-	err := db.QueryRow(`SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
-		l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
-		l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''), l.created_at,
-		COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-		COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0)
+	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id,
-	).Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.CountryCode, &location.Region, &location.Latitude, &location.Longitude, &location.Internetsite, &location.OsmID, &location.OsmType, &location.CreatedAt, &orgIDsStr, &location.NotesMd, &whlInt, &hlInt, &vsInt)
-	location.WheelchairAccessible = whlInt == 1
-	location.HearingLoop = hlInt == 1
-	location.VisualSupport = vsInt == 1
-	location.OrganizationIDs = parseOrgIDs(orgIDsStr)
+		WHERE l.id=? GROUP BY l.id`, id), &location)
 
 	if err == sql.ErrNoRows {
 		writeError(w, "Location not found", http.StatusNotFound)
@@ -453,10 +441,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		OsmID                *int64   `json:"osm_id"`
 		OsmType              string   `json:"osm_type"`
 		OrganizationIDs      []int    `json:"organization_ids"`
-		NotesMd              string   `json:"notes_md"`
-		WheelchairAccessible bool     `json:"wheelchair_accessible"`
-		HearingLoop          bool     `json:"hearing_loop"`
-		VisualSupport        bool     `json:"visual_support"`
+		NotesMd    string          `json:"notes_md"`
+		Attributes map[string]bool `json:"attributes,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -468,19 +454,9 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var loc Location
-	var orgIDsStr string
-	var whlInt2, hlInt2, vsInt2 int
-	err := db.QueryRow(`SELECT l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
-		l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
-		l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''), l.created_at,
-		COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-		COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0)
+	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id,
-	).Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address, &loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region, &loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType, &loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &whlInt2, &hlInt2, &vsInt2)
-	loc.WheelchairAccessible = whlInt2 == 1
-	loc.HearingLoop = hlInt2 == 1
-	loc.VisualSupport = vsInt2 == 1
+		WHERE l.id=? GROUP BY l.id`, id), &loc)
 	if err == sql.ErrNoRows {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
@@ -509,13 +485,11 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	loc.OsmType = req.OsmType
 	loc.OrganizationIDs = req.OrganizationIDs
 	loc.NotesMd = req.NotesMd
-	loc.WheelchairAccessible = req.WheelchairAccessible
-	loc.HearingLoop = req.HearingLoop
-	loc.VisualSupport = req.VisualSupport
+	loc.Attributes = req.Attributes
 
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, notes_md=?, wheelchair_accessible=?, hearing_loop=?, visual_support=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, loc.NotesMd, loc.WheelchairAccessible, loc.HearingLoop, loc.VisualSupport, loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, notes_md=?, attributes=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, loc.NotesMd, attrsJSON(loc.Attributes), loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

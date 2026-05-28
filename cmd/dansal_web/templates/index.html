@@ -79,9 +79,12 @@
       data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
       data-food="{{.Food}}"
       data-drink="{{.Drink}}"
-      data-wheelchair="{{if .LocationWheelchair}}1{{else}}0{{end}}"
-      data-hearing-loop="{{if .LocationHearingLoop}}1{{else}}0{{end}}"
-      data-visual-support="{{if .LocationVisualSupport}}1{{else}}0{{end}}">
+      {{- $ea := mergeAttrs .LocationAttributes .Attributes}}
+      data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
+      data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
+      data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
+      data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
+      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}

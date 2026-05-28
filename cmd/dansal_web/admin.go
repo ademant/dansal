@@ -112,6 +112,37 @@ func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Lo
 }
 
 // parseLatLng parses a form string to *float64; returns nil for empty or invalid input.
+var locAttrKeys = []string{"wheelchair", "hearing_loop", "visual_support", "bar", "kitchen"}
+
+func locationAttrsFromForm(r *http.Request) map[string]bool {
+	attrs := map[string]bool{}
+	for _, k := range locAttrKeys {
+		if r.FormValue("attr_"+k) == "1" {
+			attrs[k] = true
+		}
+	}
+	if len(attrs) == 0 {
+		return nil
+	}
+	return attrs
+}
+
+func eventAttrsFromForm(r *http.Request) map[string]bool {
+	attrs := map[string]bool{}
+	for _, k := range locAttrKeys {
+		v := r.FormValue("attr_" + k)
+		if v == "1" {
+			attrs[k] = true
+		} else if v == "0" {
+			attrs[k] = false
+		}
+	}
+	if len(attrs) == 0 {
+		return nil
+	}
+	return attrs
+}
+
 func parseLatLng(s string) *float64 {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -1489,10 +1520,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			OsmID:                parseOsmID(r.FormValue("osm_id")),
 			OsmType:              strings.TrimSpace(r.FormValue("osm_type")),
 			OrganizationIDs:      orgIDs,
-			NotesMd:              strings.TrimSpace(r.FormValue("notes_md")),
-			WheelchairAccessible: r.FormValue("wheelchair_accessible") == "1",
-			HearingLoop:          r.FormValue("hearing_loop") == "1",
-			VisualSupport:        r.FormValue("visual_support") == "1",
+			NotesMd:    strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes: locationAttrsFromForm(r),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
@@ -2293,6 +2322,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			BookingEnabled:     base.BookingEnabled,
 			Food:               base.Food,
 			Drink:              base.Drink,
+			Attributes:         base.Attributes,
 			Tags:               tags,
 			URL:                base.URL,
 			OrganizationID:     base.OrganizationID,
@@ -2695,6 +2725,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				BookingEnabled:     ev.BookingEnabled,
 				Food:               ev.Food,
 				Drink:              ev.Drink,
+				Attributes:         ev.Attributes,
 				Tags:               ev.Tags,
 				URL:                ev.URL,
 				OrganizationID:     ev.OrganizationID,
@@ -2806,6 +2837,7 @@ type templateEventData struct {
 	DanceIDs           []int            `json:"dance_ids"`
 	Food               string           `json:"food"`
 	Drink              string           `json:"drink"`
+	Attributes         map[string]bool  `json:"attributes,omitempty"`
 	TicketsTotal       int              `json:"tickets_total"`
 	BookingEnabled     bool             `json:"booking_enabled"`
 	Timetable          []TimetableEntry `json:"timetable"`
@@ -2824,6 +2856,7 @@ func templateDataFromEvent(ev Event) templateEventData {
 		Tags:               ev.Tags,
 		Food:               ev.Food,
 		Drink:              ev.Drink,
+		Attributes:         ev.Attributes,
 		TicketsTotal:       ev.TicketsTotal,
 		BookingEnabled:     ev.BookingEnabled,
 		Timetable:          ev.Timetable,
@@ -3205,6 +3238,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
+			Attributes:     eventAttrsFromForm(r),
 			Tags:           tags,
 			URL:            strings.TrimSpace(r.FormValue("url")),
 			OrganizationID: orgID,
@@ -3597,6 +3631,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
+			Attributes:     eventAttrsFromForm(r),
 			IsCancelled:    r.FormValue("is_cancelled") == "on",
 			Availability:   r.FormValue("availability"),
 			TicketsTotal:   ticketsTotal,

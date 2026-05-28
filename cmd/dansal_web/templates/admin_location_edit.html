@@ -84,9 +84,14 @@
 
   <fieldset class="access-fieldset">
     <legend>{{$.Strings.T "access_label"}}</legend>
-    <label class="check-label"><input type="checkbox" name="wheelchair_accessible" value="1"{{if .Location.WheelchairAccessible}} checked{{end}}> {{$.Strings.T "access_wheelchair"}}</label>
-    <label class="check-label"><input type="checkbox" name="hearing_loop" value="1"{{if .Location.HearingLoop}} checked{{end}}> {{$.Strings.T "access_hearing_loop"}}</label>
-    <label class="check-label"><input type="checkbox" name="visual_support" value="1"{{if .Location.VisualSupport}} checked{{end}}> {{$.Strings.T "access_visual_support"}}</label>
+    <label class="check-label"><input type="checkbox" name="attr_wheelchair" value="1"{{if index .Location.Attributes "wheelchair"}} checked{{end}}> {{$.Strings.T "access_wheelchair"}}</label>
+    <label class="check-label"><input type="checkbox" name="attr_hearing_loop" value="1"{{if index .Location.Attributes "hearing_loop"}} checked{{end}}> {{$.Strings.T "access_hearing_loop"}}</label>
+    <label class="check-label"><input type="checkbox" name="attr_visual_support" value="1"{{if index .Location.Attributes "visual_support"}} checked{{end}}> {{$.Strings.T "access_visual_support"}}</label>
+  </fieldset>
+  <fieldset class="access-fieldset">
+    <legend>{{$.Strings.T "venue_label"}}</legend>
+    <label class="check-label"><input type="checkbox" name="attr_bar" value="1"{{if index .Location.Attributes "bar"}} checked{{end}}> {{$.Strings.T "attr_bar"}}</label>
+    <label class="check-label"><input type="checkbox" name="attr_kitchen" value="1"{{if index .Location.Attributes "kitchen"}} checked{{end}}> {{$.Strings.T "attr_kitchen"}}</label>
   </fieldset>
 
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>

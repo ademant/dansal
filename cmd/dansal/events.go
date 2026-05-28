@@ -58,15 +58,14 @@ type Event struct {
 	LocationCountry string           `json:"location_country,omitempty"`
 	LocationLat              *float64         `json:"location_lat,omitempty"`
 	LocationLng              *float64         `json:"location_lng,omitempty"`
-	LocationWheelchair       bool             `json:"location_wheelchair,omitempty"`
-	LocationHearingLoop      bool             `json:"location_hearing_loop,omitempty"`
-	LocationVisualSupport    bool             `json:"location_visual_support,omitempty"`
+	LocationAttributes map[string]bool  `json:"location_attributes,omitempty"`
+	Attributes         map[string]bool  `json:"attributes,omitempty"`
 	BookingURL      string           `json:"booking_url,omitempty"`
 	Availability    string           `json:"availability,omitempty"`
 	TicketsTotal    int              `json:"tickets_total,omitempty"`
 	BookingEnabled  bool             `json:"booking_enabled,omitempty"`
-	Food            string           `json:"food,omitempty"`
-	Drink           string           `json:"drink,omitempty"`
+	Food       string          `json:"food,omitempty"`
+	Drink      string          `json:"drink,omitempty"`
 	DanceNames      []string         `json:"dance_names,omitempty"`
 	ChangedAt     string `json:"changed_at,omitempty"`
 	ChangedBy     string `json:"changed_by,omitempty"`
@@ -97,6 +96,7 @@ type EventUpdateRequest struct {
 	BookingEnabled       bool                 `json:"booking_enabled,omitempty"`
 	Food                 string               `json:"food,omitempty"`
 	Drink                string               `json:"drink,omitempty"`
+	Attributes           map[string]bool      `json:"attributes,omitempty"`
 	IsPublished    bool                 `json:"is_published"`
 	Tags           []string             `json:"tags"`
 	URL            string               `json:"url"`
@@ -121,6 +121,7 @@ type EventCreateRequest struct {
 	BookingURL           string               `json:"booking_url,omitempty"`
 	Food                 string               `json:"food,omitempty"`
 	Drink                string               `json:"drink,omitempty"`
+	Attributes           map[string]bool      `json:"attributes,omitempty"`
 	Tags               []string             `json:"tags"`
 	URL                string               `json:"url,omitempty"`
 	Location           EventLocationRequest `json:"location"`
@@ -178,7 +179,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -227,7 +228,8 @@ type scanner interface {
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt, wheelchairInt, hearingLoopInt, visualSupportInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
+	var locAttrsJSON, evtAttrsJSON string
 	var startEpoch, endEpoch, changedAtEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
@@ -241,7 +243,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&locLat, &locLng, &event.WorkshopDifficulty, &event.BookingURL,
 		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV,
 		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink,
-		&wheelchairInt, &hearingLoopInt, &visualSupportInt); err != nil {
+		&locAttrsJSON, &evtAttrsJSON); err != nil {
 		return Event{}, err
 	}
 	if locLat.Valid {
@@ -266,9 +268,12 @@ func scanEventRow(s scanner) (Event, error) {
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.BookingEnabled = bookingEnabledInt == 1
-	event.LocationWheelchair = wheelchairInt == 1
-	event.LocationHearingLoop = hearingLoopInt == 1
-	event.LocationVisualSupport = visualSupportInt == 1
+	if locAttrsJSON != "" && locAttrsJSON != "{}" {
+		json.Unmarshal([]byte(locAttrsJSON), &event.LocationAttributes)
+	}
+	if evtAttrsJSON != "" && evtAttrsJSON != "{}" {
+		json.Unmarshal([]byte(evtAttrsJSON), &event.Attributes)
+	}
 	event.ImageURL = eventImageURL(event.ID)
 	if orgID.Valid {
 		v := int(orgID.Int64)
@@ -497,7 +502,7 @@ func urlVal(s string) any {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink string, attributes map[string]bool) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -656,8 +661,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, attributes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, attrsJSON(attributes),
 		)
 		if err == nil {
 			break
@@ -706,7 +711,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.Attributes)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1311,12 +1316,12 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?,
+		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, attributes=?,
 		 changed_at=?, changed_by=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
-		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink,
+		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, attrsJSON(req.Attributes),
 		time.Now().UTC().Unix(), changedByUser, id,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

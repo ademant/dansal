@@ -540,6 +540,26 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return pct
 	},
+	"mergeAttrs": func(loc, evt map[string]bool) map[string]bool {
+		merged := make(map[string]bool, len(loc)+len(evt))
+		for k, v := range loc {
+			merged[k] = v
+		}
+		for k, v := range evt {
+			merged[k] = v
+		}
+		return merged
+	},
+	"attrState": func(attrs map[string]bool, key string) string {
+		v, ok := attrs[key]
+		if !ok {
+			return ""
+		}
+		if v {
+			return "1"
+		}
+		return "0"
+	},
 	"markdownHTML": func(s string) template.HTML {
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(s), &buf); err != nil {

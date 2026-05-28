@@ -1021,10 +1021,16 @@ func migrateDB() {
 	// #366: per-org and per-location markdown notes.
 	db.Exec("ALTER TABLE organizations ADD COLUMN notes_md TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN notes_md TEXT")
-	// #367-370: location accessibility flags.
+	// #367-370: location accessibility flags (replaced by attributes JSON in next migration).
 	db.Exec("ALTER TABLE locations ADD COLUMN wheelchair_accessible INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE locations ADD COLUMN hearing_loop INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE locations ADD COLUMN visual_support INTEGER NOT NULL DEFAULT 0")
+	// attributes JSON replaces individual boolean columns on locations; events get overrides.
+	db.Exec("ALTER TABLE locations ADD COLUMN attributes TEXT")
+	db.Exec("ALTER TABLE events ADD COLUMN attributes TEXT")
+	db.Exec("ALTER TABLE locations DROP COLUMN wheelchair_accessible")
+	db.Exec("ALTER TABLE locations DROP COLUMN hearing_loop")
+	db.Exec("ALTER TABLE locations DROP COLUMN visual_support")
 }
 
 func logUnmappedCountries() {
@@ -1094,6 +1100,7 @@ func createTables() error {
 		booking_enabled INTEGER DEFAULT 0,
 		food TEXT DEFAULT '',
 		drink TEXT DEFAULT '',
+		attributes TEXT,
 		suggester_email TEXT DEFAULT '',
 		suggestion_token TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1128,9 +1135,7 @@ func createTables() error {
 		osm_id INTEGER,
 		osm_type TEXT,
 		notes_md TEXT,
-		wheelchair_accessible INTEGER NOT NULL DEFAULT 0,
-		hearing_loop INTEGER NOT NULL DEFAULT 0,
-		visual_support INTEGER NOT NULL DEFAULT 0,
+		attributes TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (

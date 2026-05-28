@@ -173,9 +173,8 @@ type Event struct {
 	LocationCountry string     `json:"location_country,omitempty"`
 	LocationLat          *float64   `json:"location_lat,omitempty"`
 	LocationLng          *float64   `json:"location_lng,omitempty"`
-	LocationWheelchair   bool       `json:"location_wheelchair,omitempty"`
-	LocationHearingLoop  bool       `json:"location_hearing_loop,omitempty"`
-	LocationVisualSupport bool      `json:"location_visual_support,omitempty"`
+	LocationAttributes   map[string]bool `json:"location_attributes,omitempty"`
+	Attributes           map[string]bool `json:"attributes,omitempty"`
 	BookingURL      string     `json:"booking_url,omitempty"`
 	Availability    string     `json:"availability,omitempty"`
 	TicketsTotal    int        `json:"tickets_total,omitempty"`
@@ -288,10 +287,8 @@ type Location struct {
 	OsmType         string   `json:"osm_type,omitempty"`
 	CreatedAt            string   `json:"created_at"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd              string   `json:"notes_md,omitempty"`
-	WheelchairAccessible bool     `json:"wheelchair_accessible,omitempty"`
-	HearingLoop          bool     `json:"hearing_loop,omitempty"`
-	VisualSupport        bool     `json:"visual_support,omitempty"`
+	NotesMd    string          `json:"notes_md,omitempty"`
+	Attributes map[string]bool `json:"attributes,omitempty"`
 }
 
 type FetchSource struct {
@@ -1116,9 +1113,10 @@ type EventCreateReq struct {
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
 	BookingURL           string      `json:"booking_url,omitempty"`
-	Food                 string      `json:"food,omitempty"`
-	Drink                string      `json:"drink,omitempty"`
-	Tags                 []string    `json:"tags,omitempty"`
+	Food                 string          `json:"food,omitempty"`
+	Drink                string          `json:"drink,omitempty"`
+	Attributes           map[string]bool `json:"attributes,omitempty"`
+	Tags                 []string        `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
 	Pricing        *Pricing    `json:"pricing,omitempty"`
@@ -1136,9 +1134,10 @@ type EventUpdateReq struct {
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
 	BookingURL           string      `json:"booking_url,omitempty"`
-	Food                 string      `json:"food,omitempty"`
-	Drink                string      `json:"drink,omitempty"`
-	IsCancelled          bool        `json:"is_cancelled"`
+	Food                 string          `json:"food,omitempty"`
+	Drink                string          `json:"drink,omitempty"`
+	Attributes           map[string]bool `json:"attributes,omitempty"`
+	IsCancelled          bool            `json:"is_cancelled"`
 	Availability         string      `json:"availability,omitempty"`
 	TicketsTotal         int         `json:"tickets_total,omitempty"`
 	BookingEnabled       bool        `json:"booking_enabled,omitempty"`

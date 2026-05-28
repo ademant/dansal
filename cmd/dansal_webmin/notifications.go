@@ -59,25 +59,25 @@ type notificationsData struct {
 func loadNotificationsData(socketPath string) notificationsData {
 	d := notificationsData{Errors: map[string]string{}}
 	var smtp smtpConfig
-	if err := getSocketData(socketPath, "smtp-show", &smtp); err != nil {
+	if err := getSocketData(socketPath, "smtp-get", &smtp); err != nil {
 		d.Errors["smtp"] = err.Error()
 	} else {
 		d.SMTP = &smtp
 	}
 	var tg telegramConfig
-	if err := getSocketData(socketPath, "telegram-show", &tg); err != nil {
+	if err := getSocketData(socketPath, "telegram-get", &tg); err != nil {
 		d.Errors["telegram"] = err.Error()
 	} else {
 		d.Telegram = &tg
 	}
 	var mx matrixConfig
-	if err := getSocketData(socketPath, "matrix-show", &mx); err != nil {
+	if err := getSocketData(socketPath, "matrix-get", &mx); err != nil {
 		d.Errors["matrix"] = err.Error()
 	} else {
 		d.Matrix = &mx
 	}
 	var hb heartbeatConfig
-	if err := getSocketData(socketPath, "heartbeat-show", &hb); err != nil {
+	if err := getSocketData(socketPath, "heartbeat-get", &hb); err != nil {
 		d.Errors["heartbeat"] = err.Error()
 	} else {
 		d.Heartbeat = &hb

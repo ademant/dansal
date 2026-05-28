@@ -174,6 +174,7 @@ type Event struct {
 	LocationLat          *float64   `json:"location_lat,omitempty"`
 	LocationLng          *float64   `json:"location_lng,omitempty"`
 	LocationAttributes   map[string]bool `json:"location_attributes,omitempty"`
+	LocationParking      string          `json:"location_parking,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
 	OrgContactName  string     `json:"org_contact_name,omitempty"`
 	OrgContactEmail string     `json:"org_contact_email,omitempty"`
@@ -294,6 +295,7 @@ type Location struct {
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
 	NotesMd    string          `json:"notes_md,omitempty"`
 	Attributes map[string]bool `json:"attributes,omitempty"`
+	Parking    string          `json:"parking,omitempty"`
 }
 
 type FetchSource struct {

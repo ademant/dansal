@@ -60,6 +60,7 @@
       {{if index .Attributes "visual_support"}}<span class="ind ind-ok" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
       {{if index .Attributes "bar"}}<span class="ind ind-ok" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
       {{if index .Attributes "kitchen"}}<span class="ind ind-ok" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
+      {{if eq .Parking "free"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_free"}}">🅿</span>{{else if eq .Parking "paid"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{else if eq .Parking "none"}}<span class="ind ind-no" title="{{$.Strings.T "parking_none"}}">🅿</span>{{end}}
     </td>
     <td class="col-actions">
       <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>

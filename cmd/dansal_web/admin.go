@@ -1523,6 +1523,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			OrganizationIDs:      orgIDs,
 			NotesMd:    strings.TrimSpace(r.FormValue("notes_md")),
 			Attributes: locationAttrsFromForm(r),
+			Parking:    r.FormValue("parking"),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {

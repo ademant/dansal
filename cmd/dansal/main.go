@@ -1034,6 +1034,8 @@ func migrateDB() {
 	db.Exec("ALTER TABLE organizations ADD COLUMN contact_name TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN contact_name TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN contact_email TEXT")
+	// #377: parking space tag for locations.
+	db.Exec("ALTER TABLE locations ADD COLUMN parking TEXT")
 }
 
 func logUnmappedCountries() {
@@ -1141,6 +1143,7 @@ func createTables() error {
 		osm_type TEXT,
 		notes_md TEXT,
 		attributes TEXT,
+		parking TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (

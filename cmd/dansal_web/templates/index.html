@@ -24,6 +24,12 @@
     <option value="donation">{{$.Strings.T "filter_fee_donation"}}</option>
     <option value="paid">{{$.Strings.T "filter_fee_paid"}}</option>
   </select>
+  <select id="f-parking" aria-label="{{$.Strings.T "filter_all_parking"}}">
+    <option value="">{{$.Strings.T "filter_all_parking"}}</option>
+    <option value="free">{{$.Strings.T "parking_free"}}</option>
+    <option value="paid">{{$.Strings.T "parking_paid"}}</option>
+    <option value="none">{{$.Strings.T "parking_none"}}</option>
+  </select>
 </div>
 
 <!-- Map -->
@@ -84,7 +90,8 @@
       data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
       data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
       data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
-      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
+      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}"
+      data-parking="{{.LocationParking}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
@@ -768,8 +775,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   }
 
   function applyFilters(){
-    var dance     = document.getElementById('f-dance').value.toLowerCase();
-    var feeFilter = document.getElementById('f-fee').value;
+    var dance          = document.getElementById('f-dance').value.toLowerCase();
+    var feeFilter      = document.getElementById('f-fee').value;
+    var parkingFilter  = document.getElementById('f-parking').value;
     var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
     var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
 
@@ -789,6 +797,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       }
       // Fee filter: unknown fee events (data-fee="") are not excluded by this filter
       if(feeFilter && r.dataset.fee && r.dataset.fee!==feeFilter) return false;
+      // Parking filter: events with no parking data are not excluded
+      if(parkingFilter && r.dataset.parking && r.dataset.parking!==parkingFilter) return false;
       if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
       if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
       return true;
@@ -854,7 +864,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
   });
 
-  ['f-dance','f-fee'].forEach(function(id){
+  ['f-dance','f-fee','f-parking'].forEach(function(id){
     var el=document.getElementById(id);
     el.addEventListener('input',  applyFilters);
     el.addEventListener('change', applyFilters);

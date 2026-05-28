@@ -92,6 +92,13 @@
     <legend>{{$.Strings.T "venue_label"}}</legend>
     <label class="check-label"><input type="checkbox" name="attr_bar" value="1"{{if index .Location.Attributes "bar"}} checked{{end}}> {{$.Strings.T "attr_bar"}}</label>
     <label class="check-label"><input type="checkbox" name="attr_kitchen" value="1"{{if index .Location.Attributes "kitchen"}} checked{{end}}> {{$.Strings.T "attr_kitchen"}}</label>
+    <label for="parking">{{$.Strings.T "parking_label"}}</label>
+    <select id="parking" name="parking">
+      <option value="">{{$.Strings.T "parking_unknown"}}</option>
+      <option value="none"{{if eq .Location.Parking "none"}} selected{{end}}>{{$.Strings.T "parking_none"}}</option>
+      <option value="free"{{if eq .Location.Parking "free"}} selected{{end}}>{{$.Strings.T "parking_free"}}</option>
+      <option value="paid"{{if eq .Location.Parking "paid"}} selected{{end}}>{{$.Strings.T "parking_paid"}}</option>
+    </select>
   </fieldset>
 
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>

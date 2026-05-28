@@ -401,6 +401,10 @@ var tmplFuncMap = template.FuncMap{
 			Availability       string  `json:"av,omitempty"`
 			BookingEnabled     bool    `json:"book,omitempty"`
 			Fee                string  `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
+			Food               string  `json:"food,omitempty"`
+			Drink              string  `json:"drink,omitempty"`
+			Wheelchair         bool    `json:"wc,omitempty"`
+			HearingLoop        bool    `json:"hl,omitempty"`
 		}
 		var geo []geoEvent
 		for _, e := range events {
@@ -424,6 +428,14 @@ var tmplFuncMap = template.FuncMap{
 			if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
 				end = t.Format("2006-01-02")
 			}
+			// Merge location + event attributes for accessibility flags (event overrides location).
+			merged := map[string]bool{}
+			for k, v := range e.LocationAttributes {
+				merged[k] = v
+			}
+			for k, v := range e.Attributes {
+				merged[k] = v
+			}
 			geo = append(geo, geoEvent{
 				ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
 				Location: e.Location, ShortName: e.LocationShortName, Town: e.LocationTown, Country: e.LocationCountry,
@@ -432,7 +444,8 @@ var tmplFuncMap = template.FuncMap{
 				Festival: e.HasFestival,
 				Cancelled: e.IsCancelled, Availability: e.Availability,
 				BookingEnabled: e.BookingEnabled,
-				Fee: fee,
+				Fee: fee, Food: e.Food, Drink: e.Drink,
+				Wheelchair: merged["wheelchair"], HearingLoop: merged["hearing_loop"],
 			})
 		}
 		if geo == nil {

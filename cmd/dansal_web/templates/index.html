@@ -94,6 +94,7 @@
       data-parking="{{.LocationParking}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
+      {{with isoTime .StartTime}}<span class="date-time">{{.}}</span>{{end}}
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </td>
     <td>
@@ -117,6 +118,8 @@
       {{if eq .Food "potluck"}}<span class="food-icon" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{end}}
       {{if eq .Drink "alcohol"}}<span class="food-icon" title="{{$.Strings.T "drink_alcohol"}}">🍷</span>{{end}}
       {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
+      {{if index $ea "wheelchair"}}<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
+      {{if index $ea "hearing_loop"}}<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>{{end}}
     </td>
     <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$.Strings.T "filter_fee_free"}}">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$.Strings.T "filter_fee_donation"}}">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$.Strings.T "filter_fee_paid"}}">€</span>{{end}}{{end}}</td>
   </tr>
@@ -238,7 +241,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .badge.avail-limited{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.avail-sold-out{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
 .is-cancelled td a.title-cancelled{text-decoration:line-through;color:var(--fg-hint)}
-.date-main{display:block}
+.date-main{display:block}.date-time{display:block;font-size:.8rem;color:var(--fg-muted)}
 .pagination-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
 #page-info{color:var(--fg-muted);font-size:.9rem}
 #load-more{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.9rem}
@@ -309,7 +312,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var visible = [];
   var shown = 0;
   var sortCol = 'date', sortDir = 1;
-  var weekOffset = 0;
+  var weekOffset = urlToWeekOffset();
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
   var HOLIDAYS = new Set({{.Data.HolidayDates}});
@@ -323,6 +326,18 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function todayIso(){ return dateToIso(new Date()); }
   function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function urlToWeekOffset(){
+    var w=new URLSearchParams(window.location.search).get('week');
+    if(!w) return 0;
+    var t=new Date(w+'T00:00:00');
+    if(isNaN(t.getTime())) return 0;
+    return Math.round((t-getWeekStart(0))/(7*86400000));
+  }
+
+  function pushWeekState(){
+    history.pushState({wo:weekOffset},'','?week='+dateToIso(getWeekStart(weekOffset)));
+  }
 
   // ── Week view ─────────────────────────────────────────────────────────────
   function getWeekStart(offset){
@@ -445,8 +460,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     var wv = document.getElementById('week-main');
     wv.innerHTML = html;
-    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
-    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
   }
 
   // ── Mini monthly calendar ─────────────────────────────────────────────────
@@ -532,7 +547,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
         var p=this.dataset.mon.split('-');
         var rowMon=new Date(+p[0],+p[1]-1,+p[2]);
         weekOffset=Math.round((rowMon-getWeekStart(0))/(7*86400000));
-        renderWeek(); renderMiniCal(); updateMapMarkers(true);
+        pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
       });
     });
   }
@@ -546,7 +561,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       var dx=e.changedTouches[0].clientX-sx; sx=null;
       if(Math.abs(dx)>50){
         weekOffset+=dx<0?1:-1;
-        renderWeek(); renderMiniCal(); updateMapMarkers(true);
+        pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
       }
     },{passive:true});
   })();
@@ -585,6 +600,13 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if     (e.fee==='free')     feeHtml='<span class="fee-sym fee-free">0€</span>';
     else if(e.fee==='donation') feeHtml='<span class="fee-sym fee-donation">♥</span>';
     else if(e.fee==='paid')     feeHtml='<span class="fee-sym fee-paid">€</span>';
+    var extras='';
+    if(e.food==='sold')     extras+='<span class="food-icon" title="{{$.Strings.T "food_sold"}}">🍽️</span>';
+    if(e.food==='potluck')  extras+='<span class="food-icon" title="{{$.Strings.T "food_potluck"}}">🥘</span>';
+    if(e.drink==='alcohol') extras+='<span class="food-icon" title="{{$.Strings.T "drink_alcohol"}}">🍷</span>';
+    if(e.drink==='soft')    extras+='<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>';
+    if(e.wc) extras+='<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>';
+    if(e.hl) extras+='<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>';
     var detailUrl='/events/'+e.id;
     var isMobile=window.matchMedia('(max-width:640px)').matches;
     var outerStyle='min-width:200px;max-width:280px';
@@ -594,7 +616,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       '<a href="'+detailUrl+'" style="font-size:.95rem;display:block;margin-bottom:.25rem;font-weight:bold;color:inherit;text-decoration:none">'+escHtml(e.t)+'</a>'+
       (time?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+
       (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+place+'</div>':'')+
-      (badges||feeHtml?'<div style="margin-bottom:.35rem">'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
+      (badges||feeHtml?'<div style="margin-bottom:.2rem">'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
+      (extras?'<div style="margin-top:.1rem">'+extras+'</div>':'')+
       '</div>';
   }
 
@@ -762,8 +785,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
-    document.getElementById('f-dance').value = '';
-    document.getElementById('f-fee').value   = '';
+    document.getElementById('f-dance').value    = '';
+    document.getElementById('f-fee').value      = '';
+    document.getElementById('f-parking').value  = '';
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
     regionCountry = ''; regionTown = '';
@@ -885,7 +909,15 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   // Initialise map and first render
   buildRegionBar();
   initMap();
+  // Record initial week in history so back-button works from within the page.
+  history.replaceState({wo:weekOffset},'',window.location.href);
   applyFilters();
+
+  // Restore week when the user navigates back/forward within this page.
+  window.addEventListener('popstate',function(ev){
+    weekOffset=(ev.state&&typeof ev.state.wo==='number')?ev.state.wo:urlToWeekOffset();
+    syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(false);
+  });
 })();
 </script>
 {{end}}

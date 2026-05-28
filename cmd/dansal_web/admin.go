@@ -1594,10 +1594,14 @@ func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) ht
 			return
 		}
 
-		// Base = newest by created_at.
+		// Base = oldest by created_at (lowest ID as tiebreaker).
+		// The oldest location is canonical: it has the most event history,
+		// appears in existing iCal feeds and external links, and is the one
+		// other systems have persisted. Keeping it avoids breaking those
+		// references when the newer duplicate is deleted.
 		base := locs[0]
 		for _, l := range locs[1:] {
-			if l.CreatedAt > base.CreatedAt {
+			if l.CreatedAt < base.CreatedAt || (l.CreatedAt == base.CreatedAt && l.ID < base.ID) {
 				base = l
 			}
 		}
@@ -1653,6 +1657,21 @@ func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) ht
 		db.ExecContext(ctx,
 			"UPDATE events SET location_id=? WHERE location_id IN ("+strings.Join(ph, ",")+")",
 			dropArgs...)
+
+		// Reassign event_locations rows for dropped locations. UPDATE OR IGNORE
+		// skips pairs where the base is already a secondary location for that
+		// event; the subsequent DELETE removes any rows that couldn't be
+		// reassigned (i.e. the drop was redundant with an existing base entry).
+		db.ExecContext(ctx,
+			"UPDATE OR IGNORE event_locations SET location_id=? WHERE location_id IN ("+strings.Join(ph, ",")+")",
+			dropArgs...)
+		dropOnlyArgs := make([]interface{}, len(dropIDs))
+		for i, id := range dropIDs {
+			dropOnlyArgs[i] = id
+		}
+		db.ExecContext(ctx,
+			"DELETE FROM event_locations WHERE location_id IN ("+strings.Join(ph, ",")+")",
+			dropOnlyArgs...)
 
 		// Delete dropped locations (cascade cleans their location_organizations).
 		for _, id := range dropIDs {

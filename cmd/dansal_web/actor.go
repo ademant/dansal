@@ -150,7 +150,7 @@ func actorsListHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slugs, err := listOrgActorSlugs(db)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "database error")
+			writeJSONError(w, r, http.StatusInternalServerError, "database error")
 			return
 		}
 		type entry struct {
@@ -173,48 +173,48 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 	return func(w http.ResponseWriter, r *http.Request) {
 		resource := r.URL.Query().Get("resource")
 		if resource == "" {
-			writeJSONError(w, http.StatusBadRequest, "resource parameter required")
+			writeJSONError(w, r, http.StatusBadRequest, "resource parameter required")
 			return
 		}
 		prefix := "acct:"
 		if !strings.HasPrefix(resource, prefix) {
-			writeJSONError(w, http.StatusBadRequest, "only acct: resources supported")
+			writeJSONError(w, r, http.StatusBadRequest, "only acct: resources supported")
 			return
 		}
 		account := strings.TrimPrefix(resource, prefix)
 		parts := strings.SplitN(account, "@", 2)
 		if len(parts) != 2 || parts[1] != cfg.Domain {
-			writeJSONError(w, http.StatusNotFound, "user not found")
+			writeJSONError(w, r, http.StatusNotFound, "user not found")
 			return
 		}
 		slug := parts[0]
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {
-				writeJSONError(w, http.StatusNotFound, "user not found")
+				writeJSONError(w, r, http.StatusNotFound, "user not found")
 				return
 			}
 			orgs, err := client.GetOrganizations(r.Context())
 			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "upstream error")
+				writeJSONError(w, r, http.StatusInternalServerError, "upstream error")
 				return
 			}
 			for _, org := range orgs {
 				if effectiveSlug(org) == slug {
 					actor, err = ensureActor(db, org.ID, slug)
 					if err != nil {
-						writeJSONError(w, http.StatusInternalServerError, "actor init error")
+						writeJSONError(w, r, http.StatusInternalServerError, "actor init error")
 						return
 					}
 					break
 				}
 			}
 			if actor == nil {
-				writeJSONError(w, http.StatusNotFound, "user not found")
+				writeJSONError(w, r, http.StatusNotFound, "user not found")
 				return
 			}
 		} else if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -302,10 +302,10 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
-			writeJSONError(w, http.StatusNotFound, "actor not found")
+			writeJSONError(w, r, http.StatusNotFound, "actor not found")
 			return
 		} else if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -360,16 +360,16 @@ func followersHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
-			writeJSONError(w, http.StatusNotFound, "actor not found")
+			writeJSONError(w, r, http.StatusNotFound, "actor not found")
 			return
 		} else if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
 		fs, err := listFollowers(db, actor.OrgID)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -395,21 +395,21 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
-			writeJSONError(w, http.StatusNotFound, "actor not found")
+			writeJSONError(w, r, http.StatusNotFound, "actor not found")
 			return
 		} else if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "read error")
+			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return
 		}
 		var raw map[string]any
 		if err := json.Unmarshal(body, &raw); err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 		processInboxActivity(w, r, cfg, db, client, actor, raw, body)
@@ -420,12 +420,12 @@ func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "read error")
+			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return
 		}
 		var raw map[string]any
 		if err := json.Unmarshal(body, &raw); err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 		actor := resolveSharedInboxActor(cfg, db, raw)
@@ -481,7 +481,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 	if actorField != "" {
 		if err := verifyInboxRequest(r.Context(), client.HTTP, r, body, actorField); err != nil {
 			log.Printf("inbox: verification failed for %s: %v", actorField, err)
-			writeJSONError(w, http.StatusUnauthorized, "signature verification failed")
+			writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
 			return
 		}
 	}
@@ -489,7 +489,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 	switch activityType {
 	case "Follow":
 		if actorField == "" {
-			writeJSONError(w, http.StatusBadRequest, "missing actor")
+			writeJSONError(w, r, http.StatusBadRequest, "missing actor")
 			return
 		}
 		inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
@@ -498,11 +498,11 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			inboxURL = ""
 		}
 		if inboxURL == "" {
-			writeJSONError(w, http.StatusBadRequest, "could not resolve actor inbox")
+			writeJSONError(w, r, http.StatusBadRequest, "could not resolve actor inbox")
 			return
 		}
 		if err := addFollower(db, actor.OrgID, actorField, inboxURL); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 		go sendAccept(cfg, actor, raw, actorField, inboxURL)
@@ -511,12 +511,12 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 	case "Undo":
 		obj, _ := raw["object"].(map[string]any)
 		if obj == nil {
-			writeJSONError(w, http.StatusBadRequest, "missing object")
+			writeJSONError(w, r, http.StatusBadRequest, "missing object")
 			return
 		}
 		objType, _ := obj["type"].(string)
 		if objType != "Follow" {
-			writeJSONError(w, http.StatusBadRequest, "only Undo{Follow} supported")
+			writeJSONError(w, r, http.StatusBadRequest, "only Undo{Follow} supported")
 			return
 		}
 		undoActor := actorField
@@ -524,11 +524,11 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			undoActor, _ = obj["actor"].(string)
 		}
 		if undoActor == "" {
-			writeJSONError(w, http.StatusBadRequest, "missing actor")
+			writeJSONError(w, r, http.StatusBadRequest, "missing actor")
 			return
 		}
 		if err := removeFollower(db, actor.OrgID, undoActor); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -622,7 +622,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		w.WriteHeader(http.StatusAccepted)
 
 	default:
-		writeJSONError(w, http.StatusBadRequest, "unsupported activity type")
+		writeJSONError(w, r, http.StatusBadRequest, "unsupported activity type")
 	}
 }
 

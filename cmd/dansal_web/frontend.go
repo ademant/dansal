@@ -800,7 +800,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
 		wg.Wait()
 		if fetchErr != nil {
-			http.Error(w, "could not load events", http.StatusBadGateway)
+			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
 			return
 		}
 		orgMap := make(map[int]Organization, len(orgs))
@@ -1011,7 +1011,7 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := client.AssignEventOrg(r.Context(), id, orgID, token); err != nil {
-			http.Error(w, "assign failed: "+err.Error(), http.StatusBadGateway)
+			logHTTPError(w, r, "assign failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/events/%d", id), http.StatusSeeOther)
@@ -1026,7 +1026,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		if err == sql.ErrNoRows {
 			orgs, oErr := client.GetOrganizations(r.Context())
 			if oErr != nil {
-				http.Error(w, "upstream error", http.StatusBadGateway)
+				logHTTPError(w, r, "upstream error", http.StatusBadGateway)
 				return
 			}
 			for _, o := range orgs {
@@ -1040,7 +1040,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 				return
 			}
 		} else if err != nil {
-			http.Error(w, "database error", http.StatusInternalServerError)
+			logHTTPError(w, r, "database error", http.StatusInternalServerError)
 			return
 		}
 
@@ -1104,7 +1104,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 		go func() { defer wg.Done(); locs, _ = client.GetLocations(r.Context()) }()
 		wg.Wait()
 		if orgsErr != nil {
-			http.Error(w, "could not load organizations", http.StatusBadGateway)
+			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
 			return
 		}
 
@@ -1178,30 +1178,30 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {
-				writeJSONError(w, http.StatusNotFound, "actor not found")
+				writeJSONError(w, r, http.StatusNotFound, "actor not found")
 				return
 			}
 			orgs, err := client.GetOrganizations(r.Context())
 			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "upstream error")
+				writeJSONError(w, r, http.StatusInternalServerError, "upstream error")
 				return
 			}
 			for _, org := range orgs {
 				if effectiveSlug(org) == slug {
 					actor, err = ensureActor(db, org.ID, slug)
 					if err != nil {
-						writeJSONError(w, http.StatusInternalServerError, "actor init error")
+						writeJSONError(w, r, http.StatusInternalServerError, "actor init error")
 						return
 					}
 					break
 				}
 			}
 			if actor == nil {
-				writeJSONError(w, http.StatusNotFound, "actor not found")
+				writeJSONError(w, r, http.StatusNotFound, "actor not found")
 				return
 			}
 		} else if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -1234,7 +1234,7 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 		org, err := client.GetOrganization(r.Context(), actor.OrgID)
 		if err != nil {
-			writeJSONError(w, http.StatusNotFound, "org not found")
+			writeJSONError(w, r, http.StatusNotFound, "org not found")
 			return
 		}
 
@@ -1253,12 +1253,12 @@ func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
 		apiURL := client.BaseURL + prefix + id
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
 		if err != nil {
-			http.Error(w, "proxy error", http.StatusBadGateway)
+			logHTTPError(w, r, "proxy error", http.StatusBadGateway)
 			return
 		}
 		resp, err := client.HTTP.Do(req)
 		if err != nil {
-			http.Error(w, "proxy error", http.StatusBadGateway)
+			logHTTPError(w, r, "proxy error", http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()

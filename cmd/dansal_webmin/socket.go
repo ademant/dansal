@@ -26,6 +26,8 @@ type socketRequest struct {
 	TelegramBotName       string `json:"telegram_bot_name,omitempty"`
 	MatrixHomeserver      string `json:"matrix_homeserver,omitempty"`
 	MatrixAccessToken     string `json:"matrix_access_token,omitempty"`
+	MatrixUsername        string `json:"matrix_username,omitempty"`
+	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
 }
 

@@ -147,6 +147,18 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminMatrixSet(req)
 	case "matrix-login":
 		return adminMatrixLogin(req)
+	case "telegram-test":
+		cs := probeTelegram()
+		if !cs.OK {
+			return adminResponse{OK: false, Error: cs.Error}
+		}
+		return adminResponse{OK: true}
+	case "matrix-test":
+		cs := probeMatrix()
+		if !cs.OK {
+			return adminResponse{OK: false, Error: cs.Error}
+		}
+		return adminResponse{OK: true}
 	case "heartbeat-get":
 		return adminHeartbeatGet()
 	case "heartbeat-set":

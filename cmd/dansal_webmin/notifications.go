@@ -319,6 +319,110 @@ func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+// notificationsTelegramTestHandler saves then verifies the bot token via getMe.
+func notificationsTelegramTestHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			respondJSON(w, http.StatusBadRequest, false, "bad request")
+			return
+		}
+		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+			Cmd:              "telegram-set",
+			TelegramBotToken: r.FormValue("bot_token"),
+			TelegramBotName:  r.FormValue("bot_name"),
+		})
+		if err != nil || !resp.OK {
+			msg := "socket error"
+			if err == nil {
+				msg = resp.Error
+			}
+			respondJSON(w, http.StatusBadGateway, false, "save failed: "+msg)
+			return
+		}
+		test, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "telegram-test"})
+		if err2 != nil {
+			respondJSON(w, http.StatusBadGateway, false, err2.Error())
+			return
+		}
+		if !test.OK {
+			respondJSON(w, http.StatusOK, false, test.Error)
+			return
+		}
+		respondJSON(w, http.StatusOK, true, "")
+	}
+}
+
+// notificationsMatrixLoginHandler exchanges homeserver+username+password for an
+// access token via the matrix-login socket command.
+func notificationsMatrixLoginHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			respondJSON(w, http.StatusBadRequest, false, "bad request")
+			return
+		}
+		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+			Cmd:              "matrix-login",
+			MatrixHomeserver: r.FormValue("homeserver"),
+			MatrixUsername:   r.FormValue("username"),
+			MatrixPassword:   r.FormValue("password"),
+		})
+		if err != nil || !resp.OK {
+			msg := "socket error"
+			if err == nil {
+				msg = resp.Error
+			}
+			respondJSON(w, http.StatusOK, false, msg)
+			return
+		}
+		respondJSON(w, http.StatusOK, true, "")
+	}
+}
+
+// notificationsMatrixTestHandler saves a manual token then verifies it.
+func notificationsMatrixTestHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			respondJSON(w, http.StatusBadRequest, false, "bad request")
+			return
+		}
+		if token := r.FormValue("access_token"); token != "" {
+			resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+				Cmd:               "matrix-set",
+				MatrixHomeserver:  r.FormValue("homeserver"),
+				MatrixAccessToken: token,
+			})
+			if err != nil || !resp.OK {
+				msg := "socket error"
+				if err == nil {
+					msg = resp.Error
+				}
+				respondJSON(w, http.StatusBadGateway, false, "save failed: "+msg)
+				return
+			}
+		}
+		test, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "matrix-test"})
+		if err != nil {
+			respondJSON(w, http.StatusBadGateway, false, err.Error())
+			return
+		}
+		if !test.OK {
+			respondJSON(w, http.StatusOK, false, test.Error)
+			return
+		}
+		respondJSON(w, http.StatusOK, true, "")
+	}
+}
+
+func respondJSON(w http.ResponseWriter, status int, ok bool, errMsg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if ok {
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	} else {
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": errMsg})
+	}
+}
+
 func notificationsHeartbeatSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {

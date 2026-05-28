@@ -318,61 +318,334 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
 .rv-label { color:#6b7280; white-space:nowrap; padding-right:.75rem; width:6rem; }
 </style>
 
-{{/* Telegram */}}
+{{/* Telegram — wizard */}}
 <div class="card notif-card">
   <div class="notif-header">
     <span class="notif-dot notif-{{.TelegramStatus}}"></span>
     <span class="notif-title">Telegram bot</span>
     <span class="notif-summary">
-      {{if .Telegram}}
-        {{if .Telegram.BotName}}{{.Telegram.BotName}}{{else if .Telegram.BotToken}}Token set, bot name missing{{else}}Not configured{{end}}
-      {{else}}Not configured{{end}}
+      {{if .Telegram}}{{if .Telegram.BotName}}{{.Telegram.BotName}}{{else if .Telegram.BotToken}}Token set, bot name missing{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <details{{if index .Errors "telegram"}} open{{end}}>
-    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
-    {{if index .Errors "telegram"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "telegram"}}</div>{{end}}
-    <form method="POST" action="/notifications/telegram" style="margin-top:.75rem">
-      <div class="form-group">
-        <label>Bot token</label>
-        <input type="text" name="bot_token" value="{{if .Telegram}}{{.Telegram.BotToken}}{{end}}" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Bot username</label>
-        <input type="text" name="bot_name" value="{{if .Telegram}}{{.Telegram.BotName}}{{end}}" placeholder="@MyBot">
-      </div>
-      <button type="submit" class="btn">Save Telegram</button>
-    </form>
-  </details>
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="tgWizard.open()">Configure</button>
 </div>
 
-{{/* Matrix */}}
+<div id="tg-wizard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem">
+<div style="background:var(--bg-card,#fff);border-radius:10px;width:100%;max-width:480px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+  <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
+    <strong style="font-size:1rem">Telegram bot configuration</strong>
+    <button onclick="tgWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+  </div>
+  <div style="display:flex;padding:.75rem 1.25rem;gap:.5rem;border-bottom:1px solid var(--border,#e5e7eb)">
+    <div class="wz-step" id="tg-ind-1">1 Create bot</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="tg-ind-2">2 Credentials</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="tg-ind-3">3 Test &amp; Save</div>
+  </div>
+  <div style="padding:1.25rem">
+    <div id="tg-step-1">
+      <p style="margin:0 0 .6rem;font-size:.88rem;color:#444;font-weight:600">How to create a Telegram bot:</p>
+      <ol style="margin:0 0 .75rem;padding-left:1.3rem;font-size:.87rem;color:#555;line-height:1.8">
+        <li>Open Telegram and search for <strong>@BotFather</strong></li>
+        <li>Send the command <code>/newbot</code></li>
+        <li>Follow the prompts — choose a name and a username (must end in <code>bot</code>)</li>
+        <li>BotFather will give you an <strong>API token</strong> — copy it</li>
+      </ol>
+      <p style="font-size:.82rem;color:#6b7280;margin:0">The bot token looks like <code>123456789:AABBcc…</code></p>
+    </div>
+    <div id="tg-step-2" hidden>
+      <div class="form-group">
+        <label>Bot token</label>
+        <input id="tg-token" type="text" autocomplete="off" placeholder="123456789:AABBcc…">
+      </div>
+      <div class="form-group">
+        <label>Bot username <span class="hint">(without @)</span></label>
+        <input id="tg-name" type="text" placeholder="MyCalendarBot">
+      </div>
+    </div>
+    <div id="tg-step-3" hidden>
+      <p style="font-size:.88rem;color:#555;margin:0 0 .75rem">Save the settings and verify the bot token is valid.</p>
+      <div id="tg-test-result" style="display:none;margin-bottom:.75rem;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn" id="tg-test-btn" onclick="tgWizard.test()">Verify &amp; Save</button>
+        <button class="btn btn-secondary" id="tg-save-btn" onclick="tgWizard.save()">Save without testing</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
+      <button class="btn btn-secondary" id="tg-back" onclick="tgWizard.back()" style="visibility:hidden">← Back</button>
+      <button class="btn" id="tg-next" onclick="tgWizard.next()">Next →</button>
+    </div>
+  </div>
+</div>
+</div>
+
+{{/* Matrix — wizard */}}
 <div class="card notif-card">
   <div class="notif-header">
     <span class="notif-dot notif-{{.MatrixStatus}}"></span>
     <span class="notif-title">Matrix</span>
     <span class="notif-summary">
-      {{if .Matrix}}
-        {{if .Matrix.Homeserver}}{{.Matrix.Homeserver}}{{if .Matrix.HasToken}} · token set{{else}} · no token{{end}}{{else}}Not configured{{end}}
-      {{else}}Not configured{{end}}
+      {{if .Matrix}}{{if .Matrix.Homeserver}}{{.Matrix.Homeserver}}{{if .Matrix.HasToken}} · token set{{else}} · no token{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <details{{if index .Errors "matrix"}} open{{end}}>
-    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
-    {{if index .Errors "matrix"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "matrix"}}</div>{{end}}
-    <form method="POST" action="/notifications/matrix" style="margin-top:.75rem">
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="mxWizard.open()">Configure</button>
+</div>
+
+<div id="mx-wizard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem">
+<div style="background:var(--bg-card,#fff);border-radius:10px;width:100%;max-width:480px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+  <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
+    <strong style="font-size:1rem">Matrix configuration</strong>
+    <button onclick="mxWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+  </div>
+  <div style="display:flex;padding:.75rem 1.25rem;gap:.5rem;border-bottom:1px solid var(--border,#e5e7eb)">
+    <div class="wz-step" id="mx-ind-1">1 Homeserver</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="mx-ind-2">2 Login</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="mx-ind-3">3 Test &amp; Save</div>
+  </div>
+  <div style="padding:1.25rem">
+    <div id="mx-step-1">
       <div class="form-group">
         <label>Homeserver URL</label>
-        <input type="url" name="homeserver" value="{{if .Matrix}}{{.Matrix.Homeserver}}{{end}}" placeholder="https://matrix.example.com">
+        <input id="mx-hs" type="url" placeholder="https://matrix.example.com">
       </div>
-      <div class="form-group">
-        <label>Access token {{if .Matrix}}{{if .Matrix.HasToken}}<span class="hint">(set — leave blank to keep)</span>{{end}}{{end}}</label>
-        <input type="password" name="access_token" autocomplete="new-password" placeholder="{{if .Matrix}}{{if .Matrix.HasToken}}(unchanged){{else}}(not set){{end}}{{end}}">
+      <p style="font-size:.83rem;color:#6b7280;margin:.25rem 0 0">Enter the base URL of the Matrix homeserver where the bot account lives.</p>
+    </div>
+    <div id="mx-step-2" hidden>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+        <button type="button" class="btn btn-secondary" id="mx-tab-login" onclick="mxWizard.setTab('login')" style="font-size:.83rem">Login with credentials</button>
+        <button type="button" class="btn btn-secondary" id="mx-tab-token" onclick="mxWizard.setTab('token')" style="font-size:.83rem">Paste access token</button>
       </div>
-      <button type="submit" class="btn">Save Matrix</button>
-    </form>
-  </details>
+      <div id="mx-login-section">
+        <p style="font-size:.83rem;color:#555;margin:0 0 .6rem">The wizard will exchange your credentials for an access token automatically.</p>
+        <div class="form-group">
+          <label>Username or Matrix ID</label>
+          <input id="mx-username" type="text" placeholder="@bot:example.com" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input id="mx-password" type="password" autocomplete="new-password">
+        </div>
+      </div>
+      <div id="mx-token-section" hidden>
+        <p style="font-size:.83rem;color:#555;margin:0 0 .6rem">Paste a pre-existing access token obtained from the homeserver.</p>
+        <div class="form-group">
+          <label>Access token</label>
+          <input id="mx-token" type="password" autocomplete="off" placeholder="syt_…">
+        </div>
+      </div>
+      <div id="mx-login-result" style="display:none;margin-top:.5rem;padding:.5rem .75rem;border-radius:4px;font-size:.85rem"></div>
+    </div>
+    <div id="mx-step-3" hidden>
+      <p style="font-size:.88rem;color:#555;margin:0 0 .75rem">Verify the access token works against the homeserver.</p>
+      <div id="mx-test-result" style="display:none;margin-bottom:.75rem;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn" id="mx-test-btn" onclick="mxWizard.test()">Test connection</button>
+        <button class="btn btn-secondary" id="mx-save-btn" onclick="mxWizard.save()">Save without testing</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
+      <button class="btn btn-secondary" id="mx-back" onclick="mxWizard.back()" style="visibility:hidden">← Back</button>
+      <button class="btn" id="mx-next" onclick="mxWizard.next()">Next →</button>
+    </div>
+  </div>
 </div>
+</div>
+
+<script>
+// ── Telegram wizard ───────────────────────────────────────────────────────────
+(function(){
+var step = 1;
+var CURRENT = {
+  token: '{{if .Telegram}}{{.Telegram.BotToken}}{{end}}',
+  name:  '{{if .Telegram}}{{.Telegram.BotName}}{{end}}',
+};
+
+window.tgWizard = {
+  open: function(){
+    document.getElementById('tg-wizard-overlay').style.display = 'flex';
+    document.getElementById('tg-token').value = CURRENT.token;
+    document.getElementById('tg-name').value  = CURRENT.name;
+    step = 1; tgWizard._show();
+  },
+  close: function(){ document.getElementById('tg-wizard-overlay').style.display = 'none'; },
+  back: function(){ if(step>1){step--;tgWizard._show();} },
+  next: function(){
+    if(step===2){
+      if(!document.getElementById('tg-token').value.trim()){alert('Bot token is required.');return;}
+    }
+    if(step<3){step++;tgWizard._show();}
+  },
+  _show: function(){
+    [1,2,3].forEach(function(n){
+      document.getElementById('tg-step-'+n).hidden=(n!==step);
+      var ind=document.getElementById('tg-ind-'+n);
+      ind.classList.toggle('wz-step-active',n===step);
+      ind.classList.toggle('wz-step-done',n<step);
+    });
+    document.getElementById('tg-back').style.visibility=step>1?'visible':'hidden';
+    document.getElementById('tg-next').hidden=(step===3);
+    document.getElementById('tg-test-result').style.display='none';
+    document.getElementById('tg-test-btn').disabled=false;
+    document.getElementById('tg-save-btn').disabled=false;
+  },
+  _fields: function(){
+    return {bot_token:document.getElementById('tg-token').value.trim(), bot_name:document.getElementById('tg-name').value.trim()};
+  },
+  _post: function(url,fields,cb){
+    fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields).toString()})
+      .then(function(r){return r.json();}).then(cb).catch(function(e){cb({ok:false,error:e.message});});
+  },
+  _result: function(id,type,msg){
+    var el=document.getElementById(id);
+    el.style.display='block';
+    el.style.background=type==='ok'?'#dcfce7':type==='err'?'#fee2e2':'#f0f9ff';
+    el.style.color=type==='ok'?'#166534':type==='err'?'#991b1b':'#0c4a6e';
+    el.style.border='1px solid '+(type==='ok'?'#86efac':type==='err'?'#fca5a5':'#7dd3fc');
+    el.textContent=msg;
+  },
+  test: function(){
+    document.getElementById('tg-test-btn').disabled=true;
+    document.getElementById('tg-save-btn').disabled=true;
+    tgWizard._result('tg-test-result','info','Saving and verifying bot token…');
+    tgWizard._post('/notifications/telegram-test',tgWizard._fields(),function(d){
+      document.getElementById('tg-test-btn').disabled=false;
+      document.getElementById('tg-save-btn').disabled=false;
+      if(d.ok){tgWizard._result('tg-test-result','ok','✓ Bot token verified. Settings saved.');setTimeout(function(){location.reload();},1500);}
+      else{tgWizard._result('tg-test-result','err','✗ '+(d.error||'Verification failed'));}
+    });
+  },
+  save: function(){
+    document.getElementById('tg-save-btn').disabled=true;
+    tgWizard._post('/notifications/telegram',tgWizard._fields(),function(){tgWizard.close();location.reload();});
+  },
+};
+document.getElementById('tg-wizard-overlay').addEventListener('click',function(e){if(e.target===this)tgWizard.close();});
+})();
+
+// ── Matrix wizard ─────────────────────────────────────────────────────────────
+(function(){
+var step = 1;
+var tab = 'login';
+var tokenObtained = false;
+var CURRENT = {
+  hs:        '{{if .Matrix}}{{.Matrix.Homeserver}}{{end}}',
+  has_token: {{if .Matrix}}{{if .Matrix.HasToken}}true{{else}}false{{end}}{{else}}false{{end}},
+};
+
+window.mxWizard = {
+  open: function(){
+    document.getElementById('mx-wizard-overlay').style.display='flex';
+    document.getElementById('mx-hs').value=CURRENT.hs;
+    document.getElementById('mx-username').value='';
+    document.getElementById('mx-password').value='';
+    document.getElementById('mx-token').value='';
+    tokenObtained=false; step=1; tab='login';
+    mxWizard._show(); mxWizard.setTab('login');
+  },
+  close: function(){ document.getElementById('mx-wizard-overlay').style.display='none'; },
+  back: function(){ if(step>1){step--;mxWizard._show();} },
+  next: function(){
+    if(step===1){
+      var hs=document.getElementById('mx-hs').value.trim();
+      if(!hs){alert('Homeserver URL is required.');return;}
+    }
+    if(step===2){
+      if(tab==='login'){
+        // Fetch token via matrix-login before advancing
+        mxWizard._doLogin();
+        return;
+      } else {
+        var tok=document.getElementById('mx-token').value.trim();
+        if(!tok && !CURRENT.has_token){alert('Access token is required.');return;}
+      }
+    }
+    if(step<3){step++;mxWizard._show();}
+  },
+  setTab: function(t){
+    tab=t;
+    document.getElementById('mx-login-section').hidden=(t!=='login');
+    document.getElementById('mx-token-section').hidden=(t!=='token');
+    document.getElementById('mx-tab-login').style.borderColor=t==='login'?'#1a6eb5':'';
+    document.getElementById('mx-tab-token').style.borderColor=t==='token'?'#1a6eb5':'';
+    document.getElementById('mx-login-result').style.display='none';
+  },
+  _show: function(){
+    [1,2,3].forEach(function(n){
+      document.getElementById('mx-step-'+n).hidden=(n!==step);
+      var ind=document.getElementById('mx-ind-'+n);
+      ind.classList.toggle('wz-step-active',n===step);
+      ind.classList.toggle('wz-step-done',n<step);
+    });
+    document.getElementById('mx-back').style.visibility=step>1?'visible':'hidden';
+    document.getElementById('mx-next').hidden=(step===3);
+    document.getElementById('mx-test-result').style.display='none';
+    document.getElementById('mx-test-btn').disabled=false;
+    document.getElementById('mx-save-btn').disabled=false;
+    // Change Next label on step 2 login tab
+    var nxt=document.getElementById('mx-next');
+    nxt.textContent=(step===2&&tab==='login')?'Get token →':'Next →';
+  },
+  _result: function(id,type,msg){
+    var el=document.getElementById(id);
+    el.style.display='block';
+    el.style.background=type==='ok'?'#dcfce7':type==='err'?'#fee2e2':'#f0f9ff';
+    el.style.color=type==='ok'?'#166534':type==='err'?'#991b1b':'#0c4a6e';
+    el.style.border='1px solid '+(type==='ok'?'#86efac':type==='err'?'#fca5a5':'#7dd3fc');
+    el.textContent=msg;
+  },
+  _post: function(url,fields,cb){
+    fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields).toString()})
+      .then(function(r){return r.json();}).then(cb).catch(function(e){cb({ok:false,error:e.message});});
+  },
+  _doLogin: function(){
+    var hs=document.getElementById('mx-hs').value.trim();
+    var u=document.getElementById('mx-username').value.trim();
+    var pw=document.getElementById('mx-password').value;
+    if(!u||!pw){alert('Username and password are required.');return;}
+    document.getElementById('mx-next').disabled=true;
+    mxWizard._result('mx-login-result','info','Logging in to Matrix…');
+    mxWizard._post('/notifications/matrix-login',{homeserver:hs,username:u,password:pw},function(d){
+      document.getElementById('mx-next').disabled=false;
+      if(d.ok){
+        tokenObtained=true;
+        mxWizard._result('mx-login-result','ok','✓ Access token obtained and saved.');
+        step=3; mxWizard._show();
+      } else {
+        mxWizard._result('mx-login-result','err','✗ '+(d.error||'Login failed'));
+      }
+    });
+  },
+  test: function(){
+    document.getElementById('mx-test-btn').disabled=true;
+    document.getElementById('mx-save-btn').disabled=true;
+    mxWizard._result('mx-test-result','info','Testing Matrix connection…');
+    var fields={};
+    if(tab==='token'&&!tokenObtained){
+      fields.homeserver=document.getElementById('mx-hs').value.trim();
+      fields.access_token=document.getElementById('mx-token').value.trim();
+    }
+    mxWizard._post('/notifications/matrix-test',fields,function(d){
+      document.getElementById('mx-test-btn').disabled=false;
+      document.getElementById('mx-save-btn').disabled=false;
+      if(d.ok){mxWizard._result('mx-test-result','ok','✓ Connected. Settings saved.');setTimeout(function(){location.reload();},1500);}
+      else{mxWizard._result('mx-test-result','err','✗ '+(d.error||'Connection failed'));}
+    });
+  },
+  save: function(){
+    document.getElementById('mx-save-btn').disabled=true;
+    var fields={homeserver:document.getElementById('mx-hs').value.trim()};
+    if(tab==='token'&&!tokenObtained){
+      fields.access_token=document.getElementById('mx-token').value.trim();
+    }
+    mxWizard._post('/notifications/matrix',fields,function(){mxWizard.close();location.reload();});
+  },
+};
+document.getElementById('mx-wizard-overlay').addEventListener('click',function(e){if(e.target===this)mxWizard.close();});
+})();
+</script>
 
 {{/* Heartbeat */}}
 <div class="card notif-card">

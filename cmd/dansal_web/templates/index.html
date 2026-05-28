@@ -59,8 +59,7 @@
       <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_title"}}</th>
       <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_location"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
-      <th class="col-food">{{$.Strings.T "food_label"}}/{{$.Strings.T "drink_label"}}</th>
-      <th class="col-fee">{{$.Strings.T "col_fee"}}</th>
+      <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
     </tr>
   </thead>
   <tbody id="event-tbody">
@@ -113,15 +112,22 @@
       {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.Data.TagMap .}}</span>{{end}}
       {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
     </td>
-    <td class="col-food">
+    <td class="col-attr">
       {{if eq .Food "sold"}}<span class="food-icon" title="{{$.Strings.T "food_sold"}}">🍽️</span>{{end}}
       {{if eq .Food "potluck"}}<span class="food-icon" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{end}}
       {{if eq .Drink "alcohol"}}<span class="food-icon" title="{{$.Strings.T "drink_alcohol"}}">🍷</span>{{end}}
       {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
       {{if index $ea "wheelchair"}}<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
       {{if index $ea "hearing_loop"}}<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>{{end}}
+      {{$floor := .FloorCondition}}{{if not $floor}}{{$floor = .LocationFloorCondition}}{{end}}
+      {{if eq $floor "parquet"}}<span class="food-icon" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{end}}
+      {{if eq $floor "stone"}}<span class="food-icon" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{end}}
+      {{if eq $floor "tiles"}}<span class="food-icon" title="{{$.Strings.T "floor_tiles"}}">🔲</span>{{end}}
+      {{if eq $floor "grass"}}<span class="food-icon" title="{{$.Strings.T "floor_grass"}}">🌿</span>{{end}}
+      {{if eq $floor "sand"}}<span class="food-icon" title="{{$.Strings.T "floor_sand"}}">🏖</span>{{end}}
+      {{if eq $floor "pavement"}}<span class="food-icon" title="{{$.Strings.T "floor_pavement"}}">🛣</span>{{end}}
+      {{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$.Strings.T "filter_fee_free"}}">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$.Strings.T "filter_fee_donation"}}">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$.Strings.T "filter_fee_paid"}}">€</span>{{end}}{{end}}
     </td>
-    <td class="col-fee">{{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$.Strings.T "filter_fee_free"}}">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$.Strings.T "filter_fee_donation"}}">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$.Strings.T "filter_fee_paid"}}">€</span>{{end}}{{end}}</td>
   </tr>
   {{end}}
   {{range $.Data.FederatedEvents}}
@@ -146,8 +152,7 @@
     </td>
     <td class="col-venue">{{.LocationName}}</td>
     <td class="col-type"></td>
-    <td class="col-food"></td>
-    <td class="col-fee"></td>
+    <td class="col-attr"></td>
   </tr>
   {{end}}
   </tbody>
@@ -222,9 +227,8 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .col-venue .venue{display:block}
 .col-venue .town{display:block;color:var(--fg-muted);font-size:.85em}
 .col-type{min-width:90px}
-.col-food{text-align:center;white-space:nowrap}
+.col-attr{text-align:center;white-space:nowrap}
 .food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
-.col-fee{white-space:nowrap;text-align:center}
 .region-bar{display:flex;align-items:center;gap:.4rem;margin:.75rem 0 .5rem;flex-wrap:wrap}
 .region-bar select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
 .region-sep{color:var(--fg-faint);font-size:1.1rem;line-height:1}

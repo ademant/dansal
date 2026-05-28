@@ -45,6 +45,7 @@ type ServerConfig struct {
 	MetricsPort          int      `yaml:"metrics_port"`
 	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
 	PKIDir               string   `yaml:"pki_dir"`
+	WebAuthnRPName       string   `yaml:"webauthn_rp_name"`   // display name, default "Dansal"
 }
 
 type SMTPConfig struct {

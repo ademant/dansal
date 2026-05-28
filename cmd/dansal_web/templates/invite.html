@@ -1,0 +1,197 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "invite_page_title"}}</h1>
+
+{{with .Data}}
+<div class="invite-wrap">
+  <p class="invite-intro">{{$.Strings.T "invite_intro"}}</p>
+
+  <!-- Track selector -->
+  <div class="invite-tracks">
+    <button type="button" id="btn-passkey" class="track-btn track-active" onclick="showTrack('passkey')">
+      🔑 {{$.Strings.T "invite_use_passkey"}}
+    </button>
+    <button type="button" id="btn-password" class="track-btn" onclick="showTrack('password')">
+      🔒 {{$.Strings.T "invite_use_password"}}
+    </button>
+  </div>
+
+  <!-- Shared fields (username + email) -->
+  <div class="invite-form-wrap">
+    <div class="invite-field">
+      <label for="inv-username">{{$.Strings.T "invite_username"}}</label>
+      <input id="inv-username" type="text" autocomplete="username" required>
+    </div>
+    <div class="invite-field">
+      <label for="inv-email">{{$.Strings.T "invite_email"}}</label>
+      <input id="inv-email" type="email" autocomplete="email" required>
+    </div>
+
+    <!-- Passkey track -->
+    <div id="track-passkey">
+      <p class="track-hint">{{$.Strings.T "invite_passkey_hint"}}</p>
+      <button type="button" class="btn-primary" id="btn-register-passkey" onclick="registerPasskey()">
+        {{$.Strings.T "invite_create_passkey"}}
+      </button>
+    </div>
+
+    <!-- Password track -->
+    <div id="track-password" hidden>
+      <form id="inv-pw-form">
+        <div class="invite-field">
+          <label for="inv-password">{{$.Strings.T "invite_password"}}</label>
+          <input id="inv-password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <button type="submit" class="btn-primary">{{$.Strings.T "invite_submit_password"}}</button>
+      </form>
+    </div>
+
+    <div id="invite-msg" class="invite-msg" hidden></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var TOKEN = {{jsStr .Token}};
+
+  function showTrack(t){
+    document.getElementById('track-passkey').hidden  = (t !== 'passkey');
+    document.getElementById('track-password').hidden = (t !== 'password');
+    document.getElementById('btn-passkey').classList.toggle('track-active', t==='passkey');
+    document.getElementById('btn-password').classList.toggle('track-active', t==='password');
+  }
+
+  function msg(text, isErr){
+    var el = document.getElementById('invite-msg');
+    el.hidden = false;
+    el.className = 'invite-msg ' + (isErr ? 'invite-err' : 'invite-ok');
+    el.textContent = text;
+  }
+
+  function username(){ return document.getElementById('inv-username').value.trim(); }
+  function email()   { return document.getElementById('inv-email').value.trim(); }
+
+  // ── Passkey registration ────────────────────────────────────────────────────
+
+  function b64url(buf){
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function b64urlDecode(s){
+    s = s.replace(/-/g,'+').replace(/_/g,'/');
+    var bin = atob(s);
+    var out = new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+    return out.buffer;
+  }
+
+  window.registerPasskey = async function(){
+    var u = username(), e = email();
+    if(!u || !e){ msg('{{$.Strings.T "invite_username_email_required"}}', true); return; }
+
+    var btn = document.getElementById('btn-register-passkey');
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+      // 1. Begin
+      var beginResp = await fetch('/api/v1/invites/'+TOKEN+'/webauthn/begin', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username: u, email: e})
+      });
+      if(!beginResp.ok){
+        var e2 = await beginResp.json();
+        throw new Error(e2.error || beginResp.statusText);
+      }
+      var beginData = await beginResp.json();
+      var sessionID = beginData.session_id;
+      var opts = beginData.options.publicKey;
+
+      // Decode base64url fields required by the browser API
+      opts.challenge = b64urlDecode(opts.challenge);
+      opts.user.id   = b64urlDecode(opts.user.id);
+      if(opts.excludeCredentials){
+        opts.excludeCredentials = opts.excludeCredentials.map(function(c){
+          return Object.assign({},c,{id: b64urlDecode(c.id)});
+        });
+      }
+
+      // 2. Browser ceremony
+      var cred = await navigator.credentials.create({publicKey: opts});
+
+      // 3. Encode result
+      var credJSON = {
+        id:    cred.id,
+        rawId: b64url(cred.rawId),
+        type:  cred.type,
+        response: {
+          clientDataJSON:    b64url(cred.response.clientDataJSON),
+          attestationObject: b64url(cred.response.attestationObject)
+        }
+      };
+
+      // 4. Finish
+      var finishResp = await fetch('/api/v1/invites/'+TOKEN+'/webauthn/finish?session_id='+encodeURIComponent(sessionID), {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(credJSON)
+      });
+      var finishData = await finishResp.json();
+      if(!finishResp.ok) throw new Error(finishData.error || finishResp.statusText);
+
+      // Store session token and redirect
+      // Session cookie already set by the proxy — just redirect.
+      msg('{{$.Strings.T "invite_success"}}', false);
+      setTimeout(function(){ window.location.href = '/'; }, 1200);
+
+    } catch(err) {
+      msg(err.message || '{{$.Strings.T "invite_passkey_error"}}', true);
+      btn.disabled = false;
+      btn.textContent = '{{$.Strings.T "invite_create_passkey"}}';
+    }
+  };
+
+  // ── Password registration ───────────────────────────────────────────────────
+
+  document.getElementById('inv-pw-form').addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    var u = username(), e = email();
+    var pw = document.getElementById('inv-password').value;
+    if(!u || !e || !pw){ msg('{{$.Strings.T "invite_all_fields_required"}}', true); return; }
+
+    try {
+      var resp = await fetch('/api/v1/invites/'+TOKEN, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username: u, email: e, password: pw})
+      });
+      var data = await resp.json();
+      if(!resp.ok) throw new Error(data.error || resp.statusText);
+      msg('{{$.Strings.T "invite_success"}}', false);
+      setTimeout(function(){ window.location.href = '/login'; }, 1200);
+    } catch(err) {
+      msg(err.message, true);
+    }
+  });
+})();
+</script>
+
+<style>
+.invite-wrap{max-width:420px;margin:2rem auto}
+.invite-intro{margin-bottom:1.25rem;color:var(--fg-dim);font-size:.95rem}
+.invite-tracks{display:flex;gap:.5rem;margin-bottom:1.25rem}
+.track-btn{flex:1;padding:.5rem .75rem;border:2px solid var(--border-mid);border-radius:6px;background:var(--bg-card);cursor:pointer;font-size:.9rem;font-weight:600;color:var(--fg-dim)}
+.track-btn:hover{border-color:var(--fg-faint)}
+.track-btn.track-active{border-color:#1a6eb5;color:#1a6eb5;background:#eff6ff}
+.invite-form-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.5rem;display:flex;flex-direction:column;gap:.9rem}
+.invite-field{display:flex;flex-direction:column;gap:.25rem}
+.invite-field label{font-weight:600;font-size:.88rem;color:var(--fg-dim)}
+.invite-field input{padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:1rem;background:var(--bg-card);color:var(--fg)}
+.track-hint{font-size:.88rem;color:var(--fg-dim);margin:0}
+.invite-msg{padding:.55rem .75rem;border-radius:4px;font-size:.9rem;margin-top:.25rem}
+.invite-ok{background:#d1fae5;color:#065f46}
+.invite-err{background:#fee2e2;color:#991b1b}
+</style>
+{{end}}
+{{end}}

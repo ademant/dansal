@@ -1039,6 +1039,22 @@ func migrateDB() {
 	// #378: floor/ground condition for locations and events.
 	db.Exec("ALTER TABLE locations ADD COLUMN floor_condition TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN floor_condition TEXT")
+	// #380: WebAuthn passkey credentials and challenge sessions.
+	db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		credential_id BLOB NOT NULL UNIQUE,
+		public_key BLOB NOT NULL,
+		sign_count INTEGER NOT NULL DEFAULT 0,
+		aaguid BLOB,
+		name TEXT NOT NULL DEFAULT 'Passkey',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_sessions (
+		id TEXT PRIMARY KEY,
+		data TEXT NOT NULL,
+		expires_at INTEGER NOT NULL
+	)`)
 }
 
 func logUnmappedCountries() {
@@ -1394,6 +1410,21 @@ func createTables() error {
 		name     TEXT NOT NULL,
 		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
 	);
+	CREATE TABLE IF NOT EXISTS webauthn_credentials (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		credential_id BLOB NOT NULL UNIQUE,
+		public_key BLOB NOT NULL,
+		sign_count INTEGER NOT NULL DEFAULT 0,
+		aaguid BLOB,
+		name TEXT NOT NULL DEFAULT 'Passkey',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS webauthn_sessions (
+		id TEXT PRIMARY KEY,
+		data TEXT NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -1481,6 +1512,7 @@ func main() {
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
 	initRegisterRateLimiter()
+	initWebAuthn()
 
 	smux := http.NewServeMux()
 
@@ -1503,6 +1535,10 @@ func main() {
 	// Verification endpoints (public)
 	smux.HandleFunc("GET /api/v1/verify/{token}", consumeVerification)
 	smux.HandleFunc("POST /api/v1/invites/{token}", useInvite)
+	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin", webauthnInviteBegin)
+	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)
+	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)
+	smux.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnLoginFinish)
 
 	// Telegram bot webhook (public, called by Telegram servers)
 	smux.HandleFunc("POST /telegram/webhook", telegramWebhookHandler)

@@ -695,6 +695,7 @@ type Templates struct {
 	suggestEvent       *template.Template
 	suggestDone        *template.Template
 	suggestVerified    *template.Template
+	invite             *template.Template
 	register           *template.Template
 	registerDone       *template.Template
 	registerVerified   *template.Template
@@ -748,6 +749,7 @@ func loadTemplates() *Templates {
 		suggestEvent:      load("events_suggest"),
 		suggestDone:       load("events_suggest_done"),
 		suggestVerified:   load("events_suggest_verified"),
+		invite:            load("invite"),
 		register:          load("register"),
 		registerDone:      load("register_done"),
 		registerVerified:  load("register_verified"),

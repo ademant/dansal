@@ -1,0 +1,78 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"time"
+)
+
+// webauthnInviteProxy proxies invite-scoped WebAuthn calls, injecting the {token} path value.
+func webauthnInviteProxy(cfg *Config, client *DansalClient, step string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		apiPath := "/api/v1/invites/" + r.PathValue("token") + "/webauthn/" + step
+		webauthnProxyDo(cfg, client, apiPath, w, r)
+	}
+}
+
+// webauthnProxy forwards a request body to the dansal API and returns the JSON
+// response as-is. On a successful (2xx) response that carries a session token,
+// a web session cookie is set so the user is immediately logged in.
+func webauthnProxy(cfg *Config, client *DansalClient, apiPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		webauthnProxyDo(cfg, client, apiPath, w, r)
+	}
+}
+
+func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "read error", http.StatusBadRequest)
+		return
+	}
+
+	apiURL := client.BaseURL + apiPath
+	if q := r.URL.RawQuery; q != "" {
+		apiURL += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, apiURL, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "proxy error", http.StatusBadGateway)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		http.Error(w, "proxy error", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var result struct {
+			Token     string `json:"token"`
+			ExpiresAt string `json:"expires_at"`
+			UserID    int    `json:"user_id"`
+			Username  string `json:"username"`
+			Role      string `json:"role"`
+		}
+		if json.Unmarshal(respBody, &result) == nil && result.Token != "" {
+			expiresAt, errP := time.Parse(time.RFC3339, result.ExpiresAt)
+			if errP != nil {
+				expiresAt = time.Now().Add(24 * time.Hour)
+			}
+			setSession(w, result.Token, SessionUser{
+				ID:       result.UserID,
+				Username: result.Username,
+				Role:     result.Role,
+			}, expiresAt)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
+}

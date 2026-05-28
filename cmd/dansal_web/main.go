@@ -111,6 +111,11 @@ func main() {
 		r.HandleFunc("GET /events/suggest/done", suggestDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
 
+		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin",  webauthnInviteProxy(cfg, client, "begin"))
+		r.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
+		r.HandleFunc("POST /api/v1/auth/webauthn/login/begin",  webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
+		r.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/finish"))
 		r.HandleFunc("GET /register", registerPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /register/done", registerDoneHandler(cfg, tmpls, i18n))

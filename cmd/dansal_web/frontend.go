@@ -461,6 +461,14 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(pins)
 		return template.JS(b)
 	},
+	"orgMapJSON": func(orgMap map[int]Organization) template.JS {
+		out := make(map[string]string, len(orgMap))
+		for id, o := range orgMap {
+			out[strconv.Itoa(id)] = o.Name
+		}
+		b, _ := json.Marshal(out)
+		return template.JS(b)
+	},
 	"limitTags": func(hasBall, hasWorkshop, hasFestival bool, tags []string) []string {
 		typeCount := 0
 		if hasBall {

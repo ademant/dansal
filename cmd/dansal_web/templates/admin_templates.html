@@ -14,17 +14,21 @@
   </thead>
   <tbody>
     {{range .Templates}}
-    <tr>
+    <tr id="tpl-row-{{.ID}}">
       <td>{{.Name}}</td>
       <td>
         {{$org := orgName $.Data.OrgMap .OrgID}}
         {{if $org}}{{$org}}{{else}}{{$.Strings.T "admin_template_personal"}}{{end}}
       </td>
-      <td>
+      <td class="tpl-actions">
+        <button type="button" class="btn-preview" onclick="togglePreview({{.ID}})">&#9656; {{$.Strings.T "admin_template_preview"}}</button>
         <form method="post" action="/admin/templates/{{.ID}}/delete" style="display:inline">
           <button type="submit" class="btn-del-small" onclick="return confirm('{{$.Strings.T "admin_template_confirm_delete"}}')">{{$.Strings.T "admin_delete"}}</button>
         </form>
       </td>
+    </tr>
+    <tr id="tpl-preview-{{.ID}}" class="tpl-preview-row" hidden>
+      <td colspan="3"><div class="tpl-preview-body" id="tpl-preview-body-{{.ID}}"></div></td>
     </tr>
     {{end}}
   </tbody>
@@ -34,12 +38,96 @@
 {{end}}
 {{end}}
 
+<script>
+var ORG_MAP = {{orgMapJSON .Data.OrgMap}};
+var previewCache = {};
+
+function togglePreview(id) {
+  var row = document.getElementById('tpl-preview-'+id);
+  var btn = document.querySelector('#tpl-row-'+id+' .btn-preview');
+  if (!row.hidden) {
+    row.hidden = true;
+    btn.innerHTML = '&#9656; {{$.Strings.T "admin_template_preview"}}';
+    return;
+  }
+  btn.innerHTML = '&#9662; {{$.Strings.T "admin_template_preview"}}';
+  row.hidden = false;
+  var body = document.getElementById('tpl-preview-body-'+id);
+  if (previewCache[id]) { body.innerHTML = previewCache[id]; return; }
+  body.innerHTML = '<span class="tpl-loading">…</span>';
+  fetch('/admin/templates/'+id+'/data')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ var h = renderPreview(d); previewCache[id] = h; body.innerHTML = h; })
+    .catch(function(){ body.innerHTML = '<span class="tpl-error">Could not load preview</span>'; });
+}
+
+function renderPreview(d) {
+  var parts = [];
+
+  // Organisation
+  if (d.org_id && ORG_MAP[d.org_id]) {
+    parts.push(chip(ORG_MAP[d.org_id], 'tpl-chip-org'));
+  }
+
+  // Event type
+  if (d.has_ball)     parts.push(chip('{{$.Strings.T "filter_type_ball"}}',     'badge'));
+  if (d.has_workshop) parts.push(chip('{{$.Strings.T "filter_type_workshop"}}', 'badge workshop'));
+  if (d.has_festival) parts.push(chip('{{$.Strings.T "filter_type_festival"}}', 'badge festival'));
+  if (d.has_workshop && d.workshop_difficulty)
+    parts.push(chip(d.workshop_difficulty, 'badge badge-difficulty'));
+
+  // Pricing
+  if (d.pricing_type === 'free')
+    parts.push(chip('0€ {{$.Strings.T "filter_fee_free"}}', 'fee-sym fee-free'));
+  else if (d.pricing_type === 'donation')
+    parts.push(chip('♥ {{$.Strings.T "filter_fee_donation"}}', 'fee-sym fee-donation'));
+  else if (d.pricing_type === 'single' || d.pricing_type === 'multiple')
+    parts.push(chip('€ '+(d.pricing_amount||''), 'fee-sym fee-paid'));
+
+  // Food / drink
+  if (d.food === 'sold')    parts.push(chip('🍽️ {{$.Strings.T "food_sold"}}',   'tpl-chip'));
+  if (d.food === 'potluck') parts.push(chip('🥘 {{$.Strings.T "food_potluck"}}','tpl-chip'));
+  if (d.drink === 'alcohol')parts.push(chip('🍷 {{$.Strings.T "drink_alcohol"}}','tpl-chip'));
+  if (d.drink === 'soft')   parts.push(chip('🥤 {{$.Strings.T "drink_soft"}}',  'tpl-chip'));
+
+  // Tags
+  if (d.tags && d.tags.length)
+    d.tags.forEach(function(t){ parts.push(chip(t, 'tag')); });
+
+  // URL
+  if (d.url) parts.push('<a href="'+escHtml(d.url)+'" target="_blank" rel="noopener" class="tpl-url">'+escHtml(d.url)+'</a>');
+
+  // Timetable
+  if (d.timetable && d.timetable.length)
+    parts.push(chip('{{$.Strings.T "evt_timetable"}}: '+d.timetable.length, 'tpl-chip'));
+
+  return parts.length ? '<div class="tpl-preview-chips">'+parts.join('')+'</div>'
+                      : '<span class="tpl-empty">{{$.Strings.T "admin_template_preview_empty"}}</span>';
+}
+
+function chip(text, cls) {
+  return '<span class="'+escHtml(cls)+'">'+escHtml(String(text))+'</span>';
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
 <style>
 .admin-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .admin-table th{text-align:left;padding:.4rem .6rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:2px solid #ddd}
 .admin-table td{padding:.4rem .6rem;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+.tpl-actions{white-space:nowrap}
 .btn-del-small{background:none;border:1px solid #ddd;color:#999;cursor:pointer;font-size:.8rem;padding:.2rem .5rem;border-radius:3px}
 .btn-del-small:hover{color:#c0392b;border-color:#c0392b}
+.btn-preview{background:none;border:none;color:var(--fg-dim);cursor:pointer;font-size:.82rem;padding:.2rem .4rem;margin-right:.4rem}
+.btn-preview:hover{color:var(--fg)}
+.tpl-preview-row td{padding:.5rem .6rem 1rem;background:var(--bg-subtle)}
+.tpl-preview-chips{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
+.tpl-chip{display:inline-block;padding:.15rem .5rem;background:#e5e7eb;color:#374151;border-radius:3px;font-size:.82rem}
+.tpl-chip-org{display:inline-block;padding:.15rem .5rem;background:#dbeafe;color:#1e40af;border-radius:3px;font-size:.82rem;font-weight:600}
+.tpl-url{font-size:.82rem;color:var(--fg-dim);word-break:break-all}
+.tpl-empty,.tpl-loading,.tpl-error{font-size:.85rem;color:#999;font-style:italic}
 .muted{color:#888}
 </style>
 {{end}}

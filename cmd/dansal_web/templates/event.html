@@ -147,6 +147,17 @@
     </div>
     {{end}}
 
+    {{/* Floor condition: event override takes precedence over location */}}
+    {{$floor := .FloorCondition}}{{if not $floor}}{{$floor = .LocationFloorCondition}}{{end}}
+    {{if $floor}}
+    <div class="sidebar-block">
+      <div class="sidebar-food-row">
+        <span class="sidebar-food-icon">{{if eq $floor "parquet"}}🪵{{else if eq $floor "stone"}}🪨{{else if eq $floor "tiles"}}🔲{{else if eq $floor "grass"}}🌿{{else if eq $floor "sand"}}🏖{{else if eq $floor "pavement"}}🛣{{end}}</span>
+        <span class="sidebar-food-text">{{if eq $floor "parquet"}}{{$.Strings.T "floor_parquet"}}{{else if eq $floor "stone"}}{{$.Strings.T "floor_stone"}}{{else if eq $floor "tiles"}}{{$.Strings.T "floor_tiles"}}{{else if eq $floor "grass"}}{{$.Strings.T "floor_grass"}}{{else if eq $floor "sand"}}{{$.Strings.T "floor_sand"}}{{else if eq $floor "pavement"}}{{$.Strings.T "floor_pavement"}}{{end}}</span>
+      </div>
+    </div>
+    {{end}}
+
     {{/* Food & Drinks */}}
     {{if or .Food .Drink}}
     <div class="sidebar-block">

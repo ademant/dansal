@@ -29,9 +29,10 @@ type Location struct {
 	OsmType              string   `json:"osm_type,omitempty"`
 	CreatedAt            string   `json:"created_at"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd    string          `json:"notes_md,omitempty"`
-	Attributes map[string]bool `json:"attributes,omitempty"`
-	Parking    string          `json:"parking,omitempty"`
+	NotesMd        string          `json:"notes_md,omitempty"`
+	Attributes     map[string]bool `json:"attributes,omitempty"`
+	Parking        string          `json:"parking,omitempty"`
+	FloorCondition string          `json:"floor_condition,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -64,9 +65,10 @@ type LocationCreateRequest struct {
 	OsmID                *int64   `json:"osm_id,omitempty"`
 	OsmType              string   `json:"osm_type,omitempty"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd    string          `json:"notes_md"`
-	Attributes map[string]bool `json:"attributes,omitempty"`
-	Parking    string          `json:"parking,omitempty"`
+	NotesMd        string          `json:"notes_md"`
+	Attributes     map[string]bool `json:"attributes,omitempty"`
+	Parking        string          `json:"parking,omitempty"`
+	FloorCondition string          `json:"floor_condition,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -75,14 +77,14 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,'')`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,'')`
 
 func scanLocation(s scanner, loc *Location) error {
 	var orgIDsStr, attrsJSON string
 	if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
-		&loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking); err != nil {
+		&loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition); err != nil {
 		return err
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
@@ -210,10 +212,11 @@ type LocationUpdateRequest struct {
 	Region               string   `json:"region"`
 	Latitude             *float64 `json:"latitude,omitempty"`
 	Longitude            *float64 `json:"longitude,omitempty"`
-	Internetsite string          `json:"internetsite"`
-	NotesMd      string          `json:"notes_md"`
-	Attributes   map[string]bool `json:"attributes,omitempty"`
-	Parking      string          `json:"parking,omitempty"`
+	Internetsite   string          `json:"internetsite"`
+	NotesMd        string          `json:"notes_md"`
+	Attributes     map[string]bool `json:"attributes,omitempty"`
+	Parking        string          `json:"parking,omitempty"`
+	FloorCondition string          `json:"floor_condition,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -347,8 +350,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		similar := similarLocations(req.Location, street, town)
 
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, notes_md, attributes, parking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, req.NotesMd, attrsJSON(req.Attributes), req.Parking,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, notes_md, attributes, parking, floor_condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -372,9 +375,10 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			OsmID:                req.OsmID,
 			OsmType:              req.OsmType,
 			OrganizationIDs:      req.OrganizationIDs,
-			NotesMd:    req.NotesMd,
-			Attributes: req.Attributes,
-			Parking:    req.Parking,
+			NotesMd:        req.NotesMd,
+			Attributes:     req.Attributes,
+			Parking:        req.Parking,
+			FloorCondition: req.FloorCondition,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -445,9 +449,10 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		OsmID                *int64   `json:"osm_id"`
 		OsmType              string   `json:"osm_type"`
 		OrganizationIDs      []int    `json:"organization_ids"`
-		NotesMd    string          `json:"notes_md"`
-		Attributes map[string]bool `json:"attributes,omitempty"`
-		Parking    string          `json:"parking,omitempty"`
+		NotesMd        string          `json:"notes_md"`
+		Attributes     map[string]bool `json:"attributes,omitempty"`
+		Parking        string          `json:"parking,omitempty"`
+		FloorCondition string          `json:"floor_condition,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -492,10 +497,11 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	loc.NotesMd = req.NotesMd
 	loc.Attributes = req.Attributes
 	loc.Parking = req.Parking
+	loc.FloorCondition = req.FloorCondition
 
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, notes_md=?, attributes=?, parking=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, notes_md=?, attributes=?, parking=?, floor_condition=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

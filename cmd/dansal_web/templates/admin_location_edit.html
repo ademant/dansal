@@ -99,6 +99,16 @@
       <option value="free"{{if eq .Location.Parking "free"}} selected{{end}}>{{$.Strings.T "parking_free"}}</option>
       <option value="paid"{{if eq .Location.Parking "paid"}} selected{{end}}>{{$.Strings.T "parking_paid"}}</option>
     </select>
+    <label for="floor_condition">{{$.Strings.T "floor_label"}}</label>
+    <select id="floor_condition" name="floor_condition">
+      <option value="">{{$.Strings.T "floor_unknown"}}</option>
+      <option value="parquet"{{if eq .Location.FloorCondition "parquet"}} selected{{end}}>{{$.Strings.T "floor_parquet"}}</option>
+      <option value="stone"{{if eq .Location.FloorCondition "stone"}} selected{{end}}>{{$.Strings.T "floor_stone"}}</option>
+      <option value="tiles"{{if eq .Location.FloorCondition "tiles"}} selected{{end}}>{{$.Strings.T "floor_tiles"}}</option>
+      <option value="grass"{{if eq .Location.FloorCondition "grass"}} selected{{end}}>{{$.Strings.T "floor_grass"}}</option>
+      <option value="sand"{{if eq .Location.FloorCondition "sand"}} selected{{end}}>{{$.Strings.T "floor_sand"}}</option>
+      <option value="pavement"{{if eq .Location.FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
+    </select>
   </fieldset>
 
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>

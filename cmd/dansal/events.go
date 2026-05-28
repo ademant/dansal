@@ -58,9 +58,11 @@ type Event struct {
 	LocationCountry string           `json:"location_country,omitempty"`
 	LocationLat              *float64         `json:"location_lat,omitempty"`
 	LocationLng              *float64         `json:"location_lng,omitempty"`
-	LocationAttributes map[string]bool  `json:"location_attributes,omitempty"`
-	LocationParking    string           `json:"location_parking,omitempty"`
-	Attributes         map[string]bool  `json:"attributes,omitempty"`
+	LocationAttributes    map[string]bool  `json:"location_attributes,omitempty"`
+	LocationParking       string           `json:"location_parking,omitempty"`
+	LocationFloorCondition string          `json:"location_floor_condition,omitempty"`
+	Attributes            map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition        string           `json:"floor_condition,omitempty"`
 	OrgContactName  string           `json:"org_contact_name,omitempty"`
 	OrgContactEmail string           `json:"org_contact_email,omitempty"`
 	ContactName     string           `json:"contact_name,omitempty"`
@@ -101,6 +103,7 @@ type EventUpdateRequest struct {
 	BookingEnabled       bool                 `json:"booking_enabled,omitempty"`
 	Food                 string               `json:"food,omitempty"`
 	Drink                string               `json:"drink,omitempty"`
+	FloorCondition       string               `json:"floor_condition,omitempty"`
 	Attributes           map[string]bool      `json:"attributes,omitempty"`
 	ContactName          string               `json:"contact_name,omitempty"`
 	ContactEmail         string               `json:"contact_email,omitempty"`
@@ -128,6 +131,7 @@ type EventCreateRequest struct {
 	BookingURL           string               `json:"booking_url,omitempty"`
 	Food                 string               `json:"food,omitempty"`
 	Drink                string               `json:"drink,omitempty"`
+	FloorCondition       string               `json:"floor_condition,omitempty"`
 	Attributes           map[string]bool      `json:"attributes,omitempty"`
 	ContactName          string               `json:"contact_name,omitempty"`
 	ContactEmail         string               `json:"contact_email,omitempty"`
@@ -188,7 +192,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(o.contact_name,''), COALESCE(o.contact_email,''), COALESCE(e.contact_name,''), COALESCE(e.contact_email,''), COALESCE(l.parking,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(o.contact_name,''), COALESCE(o.contact_email,''), COALESCE(e.contact_name,''), COALESCE(e.contact_email,''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -254,7 +258,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink,
 		&locAttrsJSON, &evtAttrsJSON,
 		&event.OrgContactName, &event.OrgContactEmail, &event.ContactName, &event.ContactEmail,
-		&event.LocationParking); err != nil {
+		&event.LocationParking, &event.LocationFloorCondition, &event.FloorCondition); err != nil {
 		return Event{}, err
 	}
 	if locLat.Valid {
@@ -513,7 +517,7 @@ func urlVal(s string) any {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink string, attributes map[string]bool, contactName, contactEmail string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -672,8 +676,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, attributes, contact_name, contact_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, attrsJSON(attributes), contactName, contactEmail,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail,
 		)
 		if err == nil {
 			break
@@ -722,7 +726,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.Attributes, req.ContactName, req.ContactEmail)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1327,12 +1331,12 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, attributes=?,
+		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
 		 contact_name=?, contact_email=?, changed_at=?, changed_by=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
-		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, attrsJSON(req.Attributes),
+		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
 		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, id,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

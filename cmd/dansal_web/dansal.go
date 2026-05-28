@@ -173,9 +173,11 @@ type Event struct {
 	LocationCountry string     `json:"location_country,omitempty"`
 	LocationLat          *float64   `json:"location_lat,omitempty"`
 	LocationLng          *float64   `json:"location_lng,omitempty"`
-	LocationAttributes   map[string]bool `json:"location_attributes,omitempty"`
-	LocationParking      string          `json:"location_parking,omitempty"`
-	Attributes           map[string]bool `json:"attributes,omitempty"`
+	LocationAttributes     map[string]bool `json:"location_attributes,omitempty"`
+	LocationParking        string          `json:"location_parking,omitempty"`
+	LocationFloorCondition string          `json:"location_floor_condition,omitempty"`
+	Attributes             map[string]bool `json:"attributes,omitempty"`
+	FloorCondition         string          `json:"floor_condition,omitempty"`
 	OrgContactName  string     `json:"org_contact_name,omitempty"`
 	OrgContactEmail string     `json:"org_contact_email,omitempty"`
 	ContactName     string     `json:"contact_name,omitempty"`
@@ -293,9 +295,10 @@ type Location struct {
 	OsmType         string   `json:"osm_type,omitempty"`
 	CreatedAt            string   `json:"created_at"`
 	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd    string          `json:"notes_md,omitempty"`
-	Attributes map[string]bool `json:"attributes,omitempty"`
-	Parking    string          `json:"parking,omitempty"`
+	NotesMd        string          `json:"notes_md,omitempty"`
+	Attributes     map[string]bool `json:"attributes,omitempty"`
+	Parking        string          `json:"parking,omitempty"`
+	FloorCondition string          `json:"floor_condition,omitempty"`
 }
 
 type FetchSource struct {
@@ -1122,6 +1125,7 @@ type EventCreateReq struct {
 	BookingURL           string      `json:"booking_url,omitempty"`
 	Food                 string          `json:"food,omitempty"`
 	Drink                string          `json:"drink,omitempty"`
+	FloorCondition       string          `json:"floor_condition,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
 	ContactName          string          `json:"contact_name,omitempty"`
 	ContactEmail         string          `json:"contact_email,omitempty"`
@@ -1145,6 +1149,7 @@ type EventUpdateReq struct {
 	BookingURL           string      `json:"booking_url,omitempty"`
 	Food                 string          `json:"food,omitempty"`
 	Drink                string          `json:"drink,omitempty"`
+	FloorCondition       string          `json:"floor_condition,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
 	ContactName          string          `json:"contact_name,omitempty"`
 	ContactEmail         string          `json:"contact_email,omitempty"`

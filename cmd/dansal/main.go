@@ -1036,6 +1036,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN contact_email TEXT")
 	// #377: parking space tag for locations.
 	db.Exec("ALTER TABLE locations ADD COLUMN parking TEXT")
+	// #378: floor/ground condition for locations and events.
+	db.Exec("ALTER TABLE locations ADD COLUMN floor_condition TEXT")
+	db.Exec("ALTER TABLE events ADD COLUMN floor_condition TEXT")
 }
 
 func logUnmappedCountries() {
@@ -1105,6 +1108,7 @@ func createTables() error {
 		booking_enabled INTEGER DEFAULT 0,
 		food TEXT DEFAULT '',
 		drink TEXT DEFAULT '',
+		floor_condition TEXT DEFAULT '',
 		attributes TEXT,
 		contact_name TEXT,
 		contact_email TEXT,
@@ -1144,6 +1148,7 @@ func createTables() error {
 		notes_md TEXT,
 		attributes TEXT,
 		parking TEXT,
+		floor_condition TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (

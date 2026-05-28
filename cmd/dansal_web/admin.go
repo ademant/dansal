@@ -1521,9 +1521,10 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			OsmID:                parseOsmID(r.FormValue("osm_id")),
 			OsmType:              strings.TrimSpace(r.FormValue("osm_type")),
 			OrganizationIDs:      orgIDs,
-			NotesMd:    strings.TrimSpace(r.FormValue("notes_md")),
-			Attributes: locationAttrsFromForm(r),
-			Parking:    r.FormValue("parking"),
+			NotesMd:        strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes:     locationAttrsFromForm(r),
+			Parking:        r.FormValue("parking"),
+			FloorCondition: r.FormValue("floor_condition"),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
@@ -2794,6 +2795,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 			if fields["food_drink"] {
 				req.Food = td.Food
 				req.Drink = td.Drink
+				req.FloorCondition = td.FloorCondition
 			}
 			if fields["booking"] {
 				req.BookingEnabled = td.BookingEnabled
@@ -2843,6 +2845,7 @@ type templateEventData struct {
 	DanceIDs           []int            `json:"dance_ids"`
 	Food               string           `json:"food"`
 	Drink              string           `json:"drink"`
+	FloorCondition     string           `json:"floor_condition"`
 	Attributes         map[string]bool  `json:"attributes,omitempty"`
 	ContactName        string           `json:"contact_name,omitempty"`
 	ContactEmail       string           `json:"contact_email,omitempty"`
@@ -2864,6 +2867,7 @@ func templateDataFromEvent(ev Event) templateEventData {
 		Tags:               ev.Tags,
 		Food:               ev.Food,
 		Drink:              ev.Drink,
+		FloorCondition:     ev.FloorCondition,
 		Attributes:         ev.Attributes,
 		ContactName:        ev.ContactName,
 		ContactEmail:       ev.ContactEmail,
@@ -3248,6 +3252,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
+			FloorCondition: r.FormValue("floor_condition"),
 			Attributes:     eventAttrsFromForm(r),
 			ContactName:    strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail:   strings.TrimSpace(r.FormValue("contact_email")),
@@ -3664,6 +3669,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			BookingURL:     strings.TrimSpace(r.FormValue("booking_url")),
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
+			FloorCondition: r.FormValue("floor_condition"),
 			Attributes:     eventAttrsFromForm(r),
 			ContactName:    strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail:   strings.TrimSpace(r.FormValue("contact_email")),
@@ -3756,6 +3762,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			if tplFieldsSet["food_drink"] {
 				req.Food = tplOverride.Food
 				req.Drink = tplOverride.Drink
+				req.FloorCondition = tplOverride.FloorCondition
 			}
 			if tplFieldsSet["booking"] {
 				req.BookingEnabled = tplOverride.BookingEnabled

@@ -157,6 +157,7 @@ func orgFromForm(r *http.Request) Organization {
 		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
 		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
 		ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
+		NotesMd:      strings.TrimSpace(r.FormValue("notes_md")),
 	}
 }
 
@@ -1488,6 +1489,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			OsmID:           parseOsmID(r.FormValue("osm_id")),
 			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
 			OrganizationIDs: orgIDs,
+			NotesMd:         strings.TrimSpace(r.FormValue("notes_md")),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {

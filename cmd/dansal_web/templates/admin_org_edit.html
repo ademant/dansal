@@ -57,6 +57,9 @@
     <input id="facebook" type="text" name="facebook" value="{{.Org.Facebook}}" placeholder="myorg">
   </fieldset>
 
+  <label for="notes_md">{{$.Strings.T "org_notes"}}</label>
+  <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Org.NotesMd}}</textarea>
+
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/organizations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>

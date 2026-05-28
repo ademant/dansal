@@ -82,6 +82,9 @@
     {{end}}
   </div>
 
+  <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>
+  <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
+
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
       <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>

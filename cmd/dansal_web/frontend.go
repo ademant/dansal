@@ -659,6 +659,7 @@ type Templates struct {
 	registerVerified   *template.Template
 	adminRegistrations *template.Template
 	adminManagement    *template.Template
+	help               *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -711,6 +712,7 @@ func loadTemplates() *Templates {
 		registerVerified:  load("register_verified"),
 		adminRegistrations: load("admin_registrations"),
 		adminManagement:    load("admin_management"),
+		help:               load("help"),
 	}
 }
 

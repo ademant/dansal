@@ -8,6 +8,7 @@
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
+{{with .Org.NotesMd}}<div class="org-notes">{{markdownHTML .}}</div>{{end}}
 
 {{if or .Org.Website .Org.ContactEmail .Org.Mastodon .Org.Instagram .Org.Facebook}}
 <div class="org-links">

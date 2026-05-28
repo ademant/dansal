@@ -19,6 +19,7 @@ type Config struct {
 	PollSecs  int    `yaml:"poll_secs"`
 	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
 	PagesFile string `yaml:"pages_file"` // optional path to impressum/contact YAML
+	HelpDir   string `yaml:"help_dir"`   // optional path to per-language help markdown overrides, e.g. /etc/dansal/help
 
 	// NodeInfo metadata (served at /nodeinfo/2.1)
 	NodeInfoDescription     string `yaml:"nodeinfo_description"`

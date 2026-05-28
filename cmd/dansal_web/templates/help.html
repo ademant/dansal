@@ -1,0 +1,74 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="help-page">
+  <nav class="help-nav" aria-label="{{.Strings.T "nav_help"}}">
+    <div class="help-nav-group">{{.Strings.T "help_section_public"}}</div>
+    {{range .Data.PublicTopics}}
+    <a href="#{{.ID}}" class="help-nav-link">{{.Title}}</a>
+    {{end}}
+    {{if and $.User .Data.AdminTopics}}
+    <div class="help-nav-group">{{.Strings.T "help_section_admin"}}</div>
+    {{range .Data.AdminTopics}}
+    <a href="#{{.ID}}" class="help-nav-link">{{.Title}}</a>
+    {{end}}
+    {{end}}
+  </nav>
+
+  <div class="help-body">
+    {{range .Data.PublicTopics}}
+    <section id="{{.ID}}" class="help-section">
+      {{.Content}}
+    </section>
+    {{end}}
+    {{if $.User}}
+    {{range .Data.AdminTopics}}
+    <section id="{{.ID}}" class="help-section">
+      {{.Content}}
+    </section>
+    {{end}}
+    {{end}}
+  </div>
+</div>
+
+<style>
+.help-page{display:grid;grid-template-columns:220px 1fr;gap:2rem;align-items:start;max-width:900px}
+@media(max-width:640px){.help-page{grid-template-columns:1fr}}
+.help-nav{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.15rem}
+.help-nav-group{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted);margin-top:.75rem;margin-bottom:.2rem;padding:0 .5rem}
+.help-nav-group:first-child{margin-top:0}
+.help-nav-link{padding:.35rem .5rem;border-radius:4px;text-decoration:none;color:var(--fg-2);font-size:.88rem}
+.help-nav-link:hover{background:var(--bg-hover);color:var(--link)}
+@media(max-width:640px){.help-nav{position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem;margin-bottom:1rem}
+.help-nav-group{display:none}}
+.help-body{min-width:0}
+.help-section{margin-bottom:2.5rem;padding-bottom:2rem;border-bottom:1px solid var(--border-lite)}
+.help-section:last-child{border-bottom:none}
+.help-section h1{font-size:1.35rem;margin:0 0 1rem;color:var(--fg)}
+.help-section h2{font-size:1.05rem;margin:1.25rem 0 .5rem;color:var(--fg-2)}
+.help-section h3{font-size:.95rem;margin:1rem 0 .35rem;color:var(--fg-dim)}
+.help-section p{margin:.4rem 0 .75rem;line-height:1.6;color:var(--fg)}
+.help-section ul,.help-section ol{margin:.4rem 0 .75rem;padding-left:1.5rem;line-height:1.6;color:var(--fg)}
+.help-section li{margin-bottom:.25rem}
+.help-section code{background:var(--bg-subtle);padding:.15rem .35rem;border-radius:3px;font-size:.88em;color:var(--fg-2)}
+.help-section pre{background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:4px;padding:.75rem 1rem;overflow-x:auto;margin:.5rem 0 .75rem}
+.help-section pre code{background:none;padding:0;border-radius:0;font-size:.85em}
+.help-section strong{color:var(--fg)}
+</style>
+
+<script>
+(function(){
+  var links = document.querySelectorAll('.help-nav-link');
+  var sections = document.querySelectorAll('.help-section');
+  if (!links.length || !sections.length) return;
+  function setActive(id){
+    links.forEach(function(l){ l.classList.toggle('help-nav-active', l.getAttribute('href')==='#'+id); });
+  }
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting) setActive(e.target.id); });
+  },{rootMargin:'-20% 0px -60% 0px'});
+  sections.forEach(function(s){ obs.observe(s); });
+  if (location.hash) setActive(location.hash.slice(1));
+})();
+</script>
+<style>.help-nav-active{background:var(--bg-hover);color:var(--link);font-weight:600}</style>
+{{end}}

@@ -227,6 +227,7 @@ type Organization struct {
 	ContactEmail string `json:"contact_email,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	ImageURL     string `json:"image_url,omitempty"`
+	NotesMd      string `json:"notes_md,omitempty"`
 }
 
 type Pricing struct {
@@ -283,6 +284,7 @@ type Location struct {
 	OsmType         string   `json:"osm_type,omitempty"`
 	CreatedAt       string   `json:"created_at"`
 	OrganizationIDs []int    `json:"organization_ids,omitempty"`
+	NotesMd         string   `json:"notes_md,omitempty"`
 }
 
 type FetchSource struct {

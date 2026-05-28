@@ -44,7 +44,7 @@
 
   <!-- Basic info -->
   <section class="form-section">
-    <h2>{{$.Strings.T "evt_basic_info"}}</h2>
+    <h2>{{$.Strings.T "evt_basic_info"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
 
     <label for="title">{{$.Strings.T "evt_title"}} *</label>
     <input id="title" type="text" name="title" required placeholder="{{$.Strings.T "evt_title_placeholder"}}" value="{{if .Prefill}}{{.Prefill.Title}}{{end}}">
@@ -98,7 +98,7 @@
 
   <!-- Organisation -->
   <section class="form-section">
-    <h2>{{$.Strings.T "evt_organisation"}}</h2>
+    <h2>{{$.Strings.T "evt_organisation"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
     <label for="org_choice">{{$.Strings.T "evt_org_select"}}</label>
     <select id="org_choice" name="org_choice" onchange="toggleOrgNew()">
       <option value="">— {{$.Strings.T "evt_none"}} —</option>
@@ -122,7 +122,7 @@
 
   <!-- Location -->
   <section class="form-section">
-    <h2>{{$.Strings.T "evt_location"}}</h2>
+    <h2>{{$.Strings.T "evt_location"}} <a href="/help#location-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
     <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
     <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
       <option value="existing" {{if and .Prefill .Prefill.Location}}{{else}}selected{{end}}>{{$.Strings.T "evt_loc_existing"}}</option>
@@ -261,7 +261,9 @@
 <style>
 .evt-form{display:flex;flex-direction:column;gap:0}
 .form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem}
-.form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em}
+.form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:.4rem}
+.help-badge{display:inline-flex;align-items:center;justify-content:center;width:1.1em;height:1.1em;border-radius:50%;background:var(--bg-subtle,#eee);color:var(--fg-muted,#888);font-size:.72rem;font-weight:700;text-decoration:none;flex-shrink:0;line-height:1}
+.help-badge:hover{background:var(--link,#1a6eb5);color:#fff}
 .form-section label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-top:.6rem;margin-bottom:.2rem}
 .form-section input[type=text],.form-section input[type=url],.form-section input[type=email],
 .form-section input[type=date],.form-section input[type=time],.form-section input[type=number],

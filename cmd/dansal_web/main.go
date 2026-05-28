@@ -90,6 +90,7 @@ func main() {
 	// Called at startup and again on each SIGHUP reload.
 	buildHandler := func(cfg *Config, i18n *I18n) http.Handler {
 		r := http.NewServeMux()
+		help := newHelpSystem(cfg.HelpDir)
 
 		r.HandleFunc("GET /actors", actorsListHandler(cfg, db))
 		r.HandleFunc("GET /.well-known/webfinger", webfingerHandler(cfg, db, client))
@@ -139,6 +140,7 @@ func main() {
 		r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /organizations", orgsHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /impressum", impressumHandler(cfg, tmpls, i18n))
+		r.HandleFunc("GET /help", helpHandler(cfg, tmpls, i18n, help))
 
 		r.HandleFunc("GET /login", loginPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /login", loginHandler(cfg, tmpls, client, i18n))

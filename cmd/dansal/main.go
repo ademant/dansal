@@ -1018,6 +1018,9 @@ func migrateDB() {
 	// #342: template integration for fetch sources.
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL")
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_mode TEXT NOT NULL DEFAULT ''")
+	// #366: per-org and per-location markdown notes.
+	db.Exec("ALTER TABLE organizations ADD COLUMN notes_md TEXT")
+	db.Exec("ALTER TABLE locations ADD COLUMN notes_md TEXT")
 }
 
 func logUnmappedCountries() {
@@ -1120,6 +1123,7 @@ func createTables() error {
 		internetsite TEXT,
 		osm_id INTEGER,
 		osm_type TEXT,
+		notes_md TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (
@@ -1194,6 +1198,7 @@ func createTables() error {
 		mastodon TEXT,
 		facebook TEXT,
 		contact_email TEXT,
+		notes_md TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS organization_members (

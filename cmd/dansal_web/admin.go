@@ -1485,11 +1485,14 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Region:          strings.TrimSpace(r.FormValue("region")),
 			Latitude:        parseLatLng(r.FormValue("latitude")),
 			Longitude:       parseLatLng(r.FormValue("longitude")),
-			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:           parseOsmID(r.FormValue("osm_id")),
-			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
-			OrganizationIDs: orgIDs,
-			NotesMd:         strings.TrimSpace(r.FormValue("notes_md")),
+			Internetsite:         strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:                parseOsmID(r.FormValue("osm_id")),
+			OsmType:              strings.TrimSpace(r.FormValue("osm_type")),
+			OrganizationIDs:      orgIDs,
+			NotesMd:              strings.TrimSpace(r.FormValue("notes_md")),
+			WheelchairAccessible: r.FormValue("wheelchair_accessible") == "1",
+			HearingLoop:          r.FormValue("hearing_loop") == "1",
+			VisualSupport:        r.FormValue("visual_support") == "1",
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {

@@ -56,8 +56,11 @@ type Event struct {
 	LocationZipcode string           `json:"location_zipcode,omitempty"`
 	LocationTown    string           `json:"location_town,omitempty"`
 	LocationCountry string           `json:"location_country,omitempty"`
-	LocationLat     *float64         `json:"location_lat,omitempty"`
-	LocationLng     *float64         `json:"location_lng,omitempty"`
+	LocationLat              *float64         `json:"location_lat,omitempty"`
+	LocationLng              *float64         `json:"location_lng,omitempty"`
+	LocationWheelchair       bool             `json:"location_wheelchair,omitempty"`
+	LocationHearingLoop      bool             `json:"location_hearing_loop,omitempty"`
+	LocationVisualSupport    bool             `json:"location_visual_support,omitempty"`
 	BookingURL      string           `json:"booking_url,omitempty"`
 	Availability    string           `json:"availability,omitempty"`
 	TicketsTotal    int              `json:"tickets_total,omitempty"`
@@ -175,7 +178,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.wheelchair_accessible,0), COALESCE(l.hearing_loop,0), COALESCE(l.visual_support,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -224,7 +227,7 @@ type scanner interface {
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt, wheelchairInt, hearingLoopInt, visualSupportInt int
 	var startEpoch, endEpoch, changedAtEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
@@ -237,7 +240,8 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
 		&locLat, &locLng, &event.WorkshopDifficulty, &event.BookingURL,
 		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV,
-		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink); err != nil {
+		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink,
+		&wheelchairInt, &hearingLoopInt, &visualSupportInt); err != nil {
 		return Event{}, err
 	}
 	if locLat.Valid {
@@ -262,6 +266,9 @@ func scanEventRow(s scanner) (Event, error) {
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.BookingEnabled = bookingEnabledInt == 1
+	event.LocationWheelchair = wheelchairInt == 1
+	event.LocationHearingLoop = hearingLoopInt == 1
+	event.LocationVisualSupport = visualSupportInt == 1
 	event.ImageURL = eventImageURL(event.ID)
 	if orgID.Valid {
 		v := int(orgID.Int64)

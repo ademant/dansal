@@ -1021,6 +1021,10 @@ func migrateDB() {
 	// #366: per-org and per-location markdown notes.
 	db.Exec("ALTER TABLE organizations ADD COLUMN notes_md TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN notes_md TEXT")
+	// #367-370: location accessibility flags.
+	db.Exec("ALTER TABLE locations ADD COLUMN wheelchair_accessible INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE locations ADD COLUMN hearing_loop INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE locations ADD COLUMN visual_support INTEGER NOT NULL DEFAULT 0")
 }
 
 func logUnmappedCountries() {
@@ -1124,6 +1128,9 @@ func createTables() error {
 		osm_id INTEGER,
 		osm_type TEXT,
 		notes_md TEXT,
+		wheelchair_accessible INTEGER NOT NULL DEFAULT 0,
+		hearing_loop INTEGER NOT NULL DEFAULT 0,
+		visual_support INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (

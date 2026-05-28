@@ -130,6 +130,13 @@
       {{if and .LocationLat .LocationLng}}
       <div id="evt-map" data-lat="{{.LocationLat}}" data-lng="{{.LocationLng}}" class="evt-map"></div>
       {{end}}
+      {{if or .LocationWheelchair .LocationHearingLoop .LocationVisualSupport}}
+      <div class="evt-access">
+        {{if .LocationWheelchair}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
+        {{if .LocationHearingLoop}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
+        {{if .LocationVisualSupport}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
+      </div>
+      {{end}}
     </div>
     {{end}}
 
@@ -462,6 +469,8 @@
 .evt-loc-name{font-weight:600;font-size:.92rem;color:var(--heading);margin-bottom:.25rem}
 .evt-loc-addr{font-size:.88rem;color:var(--fg-dim);line-height:1.5;margin-bottom:.5rem}
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:var(--bg-subtle)}
+.evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+.access-badge{font-size:1.1rem;opacity:.85;cursor:default}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-booking:hover{background:#0d4a80;color:#fff}
 .booking-section{margin-top:2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem}

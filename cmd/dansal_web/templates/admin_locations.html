@@ -55,6 +55,9 @@
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
       <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
       <span class="ind {{if .Internetsite}}ind-ok{{else}}ind-no{{end}}" title="Website">🔗</span>
+      {{if .WheelchairAccessible}}<span class="ind ind-ok" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
+      {{if .HearingLoop}}<span class="ind ind-ok" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
+      {{if .VisualSupport}}<span class="ind ind-ok" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
     </td>
     <td class="col-actions">
       <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>

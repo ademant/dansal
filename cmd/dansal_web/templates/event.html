@@ -129,6 +129,7 @@
       {{end}}
       {{if and .LocationLat .LocationLng}}
       <div id="evt-map" data-lat="{{.LocationLat}}" data-lng="{{.LocationLng}}" class="evt-map"></div>
+      <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.LocationLat}},{{.LocationLng}}" target="_blank" rel="noopener" class="osm-directions">🗺 OpenStreetMap</a>
       {{end}}
       {{$attrs := mergeAttrs .LocationAttributes .Attributes}}
       {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .LocationParking}}
@@ -493,6 +494,8 @@
 .evt-loc-name{font-weight:600;font-size:.92rem;color:var(--heading);margin-bottom:.25rem}
 .evt-loc-addr{font-size:.88rem;color:var(--fg-dim);line-height:1.5;margin-bottom:.5rem}
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:var(--bg-subtle)}
+.osm-directions{display:inline-block;margin-top:.4rem;font-size:.82rem;color:var(--fg-dim);text-decoration:none}
+.osm-directions:hover{color:var(--fg)}
 .evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 .access-badge{font-size:1.1rem;opacity:.85;cursor:default}
 .evt-loc-notes{margin-top:.6rem;font-size:.86rem;color:var(--fg-dim);line-height:1.55}

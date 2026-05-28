@@ -40,7 +40,7 @@
 <table class="event-table" id="user-table" data-sortable>
   <thead>
     <tr>
-      {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all"></th>{{end}}
+      {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
       <th data-sort="str">{{$.Strings.T "settings_username"}}</th>
       {{if $.Data.IsAdmin}}<th data-sort="str">{{$.Strings.T "settings_email"}}</th>{{end}}
       <th data-sort="str">{{$.Strings.T "settings_role"}}</th>
@@ -73,7 +73,7 @@
         {{$oid := .}}
         {{$org := index $.Data.OrgMap $oid}}
         <span class="org-tag">{{$org.Name}}
-          {{if $.Data.IsAdmin}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})">×</button>{{end}}
+          {{if $.Data.IsAdmin}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
         </span>
       {{end}}
       {{if $.Data.IsAdmin}}

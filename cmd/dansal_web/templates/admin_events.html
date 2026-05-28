@@ -81,7 +81,7 @@
     <td>{{if and .LocationShortName .LocationTown}}{{.LocationShortName}}, {{.LocationTown}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
-      {{else if .IsPublished}}<span class="badge pub">✓</span>
+      {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
       {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
     </td>
     <td style="white-space:nowrap">

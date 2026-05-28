@@ -27,7 +27,7 @@
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
     <td>{{.VerificationChannel}}{{if .Telegram}} (@{{.Telegram}}){{end}}</td>
-    <td>{{if .Verified}}✓{{else}}<span class="unverified">pending</span>{{end}}</td>
+    <td>{{if .Verified}}<span title="{{$.Strings.T "settings_email_verified"}}">✓</span>{{else}}<span class="unverified">pending</span>{{end}}</td>
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td>
       <form method="post" action="/admin/registrations/{{.ID}}/approve" style="display:inline">

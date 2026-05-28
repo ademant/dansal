@@ -183,6 +183,7 @@ type Event struct {
 	Food            string     `json:"food,omitempty"`
 	Drink           string     `json:"drink,omitempty"`
 	Pricing         *Pricing         `json:"pricing,omitempty"`
+	Locations       []Location       `json:"locations,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	DanceNames      []string         `json:"dance_names,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`

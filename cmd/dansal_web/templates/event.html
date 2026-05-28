@@ -137,6 +137,7 @@
         {{if .LocationVisualSupport}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
       </div>
       {{end}}
+      {{range .Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}
     </div>
     {{end}}
 
@@ -471,6 +472,8 @@
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:var(--bg-subtle)}
 .evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 .access-badge{font-size:1.1rem;opacity:.85;cursor:default}
+.evt-loc-notes{margin-top:.6rem;font-size:.86rem;color:var(--fg-dim);line-height:1.55}
+.evt-loc-notes p{margin:.2rem 0}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-booking:hover{background:#0d4a80;color:#fff}
 .booking-section{margin-top:2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem}

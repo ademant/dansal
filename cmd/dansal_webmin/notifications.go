@@ -47,6 +47,15 @@ func getSocketData(socketPath, cmd string, out any) error {
 	return json.Unmarshal(resp.Data, out)
 }
 
+// notifStatus values drive the colour indicator: "ok" = green, "partial" = red, "missing" = grey.
+type notifStatus string
+
+const (
+	statusOK      notifStatus = "ok"
+	statusPartial notifStatus = "partial"
+	statusMissing notifStatus = "missing"
+)
+
 type notificationsData struct {
 	SMTP      *smtpConfig
 	Telegram  *telegramConfig
@@ -54,6 +63,57 @@ type notificationsData struct {
 	Heartbeat *heartbeatConfig
 	Errors    map[string]string
 	Flash     string
+
+	SMTPStatus      notifStatus
+	TelegramStatus  notifStatus
+	MatrixStatus    notifStatus
+	HeartbeatStatus notifStatus
+}
+
+func smtpNotifStatus(s *smtpConfig) notifStatus {
+	if s == nil {
+		return statusMissing
+	}
+	if s.Host != "" && s.From != "" && s.HasPassword && s.To != "" {
+		return statusOK
+	}
+	if s.Host != "" || s.From != "" || s.HasPassword {
+		return statusPartial
+	}
+	return statusMissing
+}
+
+func telegramNotifStatus(t *telegramConfig) notifStatus {
+	if t == nil {
+		return statusMissing
+	}
+	if t.BotToken != "" && t.BotName != "" {
+		return statusOK
+	}
+	if t.BotToken != "" || t.BotName != "" {
+		return statusPartial
+	}
+	return statusMissing
+}
+
+func matrixNotifStatus(m *matrixConfig) notifStatus {
+	if m == nil {
+		return statusMissing
+	}
+	if m.Homeserver != "" && m.HasToken {
+		return statusOK
+	}
+	if m.Homeserver != "" || m.HasToken {
+		return statusPartial
+	}
+	return statusMissing
+}
+
+func heartbeatNotifStatus(h *heartbeatConfig) notifStatus {
+	if h == nil || h.IntervalMins == 0 {
+		return statusMissing
+	}
+	return statusOK
 }
 
 func loadNotificationsData(socketPath string) notificationsData {
@@ -82,6 +142,10 @@ func loadNotificationsData(socketPath string) notificationsData {
 	} else {
 		d.Heartbeat = &hb
 	}
+	d.SMTPStatus      = smtpNotifStatus(d.SMTP)
+	d.TelegramStatus  = telegramNotifStatus(d.Telegram)
+	d.MatrixStatus    = matrixNotifStatus(d.Matrix)
+	d.HeartbeatStatus = heartbeatNotifStatus(d.Heartbeat)
 	return d
 }
 

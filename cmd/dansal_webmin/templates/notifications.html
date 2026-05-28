@@ -4,104 +4,161 @@
 {{with .Data}}
 {{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1rem">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
 
 {{/* SMTP */}}
-<div class="card">
-  <div class="card-title">SMTP (email)</div>
-  {{if index .Errors "smtp"}}<div class="alert alert-danger" style="margin-bottom:.75rem">{{index .Errors "smtp"}}</div>{{end}}
-  <form method="POST" action="/notifications/smtp">
-    <div class="form-group">
-      <label>Host</label>
-      <input type="text" name="host" value="{{if .SMTP}}{{.SMTP.Host}}{{end}}" placeholder="smtp.example.com">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+<div class="card notif-card">
+  <div class="notif-header">
+    <span class="notif-dot notif-{{.SMTPStatus}}"></span>
+    <span class="notif-title">SMTP (email)</span>
+    <span class="notif-summary">
+      {{if .SMTP}}
+        {{if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}
+      {{else}}Not configured{{end}}
+    </span>
+  </div>
+  <details{{if index .Errors "smtp"}} open{{end}}>
+    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
+    {{if index .Errors "smtp"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "smtp"}}</div>{{end}}
+    <form method="POST" action="/notifications/smtp" style="margin-top:.75rem">
       <div class="form-group">
-        <label>Port</label>
-        <input type="number" name="port" value="{{if .SMTP}}{{.SMTP.Port}}{{end}}" placeholder="587">
+        <label>Host</label>
+        <input type="text" name="host" value="{{if .SMTP}}{{.SMTP.Host}}{{end}}" placeholder="smtp.example.com">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="form-group">
+          <label>Port</label>
+          <input type="number" name="port" value="{{if .SMTP}}{{.SMTP.Port}}{{end}}" placeholder="587">
+        </div>
+        <div class="form-group">
+          <label>TLS mode</label>
+          <select name="tls">
+            <option value="">default (starttls)</option>
+            <option value="starttls"{{if .SMTP}}{{if eq .SMTP.TLS "starttls"}} selected{{end}}{{end}}>starttls</option>
+            <option value="tls"{{if .SMTP}}{{if eq .SMTP.TLS "tls"}} selected{{end}}{{end}}>tls (port 465)</option>
+            <option value="none"{{if .SMTP}}{{if eq .SMTP.TLS "none"}} selected{{end}}{{end}}>none</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
-        <label>TLS mode</label>
-        <select name="tls">
-          <option value="">default (starttls)</option>
-          <option value="starttls"{{if .SMTP}}{{if eq .SMTP.TLS "starttls"}} selected{{end}}{{end}}>starttls</option>
-          <option value="tls"{{if .SMTP}}{{if eq .SMTP.TLS "tls"}} selected{{end}}{{end}}>tls (port 465)</option>
-          <option value="none"{{if .SMTP}}{{if eq .SMTP.TLS "none"}} selected{{end}}{{end}}>none</option>
-        </select>
+        <label>Username</label>
+        <input type="text" name="username" value="{{if .SMTP}}{{.SMTP.Username}}{{end}}" autocomplete="off">
       </div>
-    </div>
-    <div class="form-group">
-      <label>Username</label>
-      <input type="text" name="username" value="{{if .SMTP}}{{.SMTP.Username}}{{end}}" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label>Password {{if .SMTP}}{{if .SMTP.HasPassword}}<span style="color:var(--fg-muted);font-size:.85rem">(set — leave blank to keep)</span>{{end}}{{end}}</label>
-      <input type="password" name="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}(not set){{end}}{{end}}">
-    </div>
-    <div class="form-group">
-      <label>From address</label>
-      <input type="text" name="from" value="{{if .SMTP}}{{.SMTP.From}}{{end}}">
-    </div>
-    <div class="form-group">
-      <label>From name</label>
-      <input type="text" name="from_name" value="{{if .SMTP}}{{.SMTP.FromName}}{{end}}">
-    </div>
-    <div class="form-group">
-      <label>Admin recipient (To)</label>
-      <input type="email" name="to" value="{{if .SMTP}}{{.SMTP.To}}{{end}}">
-    </div>
-    <button type="submit" class="btn">Save SMTP</button>
-  </form>
+      <div class="form-group">
+        <label>Password {{if .SMTP}}{{if .SMTP.HasPassword}}<span class="hint">(set — leave blank to keep)</span>{{end}}{{end}}</label>
+        <input type="password" name="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}(not set){{end}}{{end}}">
+      </div>
+      <div class="form-group">
+        <label>From address</label>
+        <input type="text" name="from" value="{{if .SMTP}}{{.SMTP.From}}{{end}}">
+      </div>
+      <div class="form-group">
+        <label>From name</label>
+        <input type="text" name="from_name" value="{{if .SMTP}}{{.SMTP.FromName}}{{end}}">
+      </div>
+      <div class="form-group">
+        <label>Admin recipient (To)</label>
+        <input type="email" name="to" value="{{if .SMTP}}{{.SMTP.To}}{{end}}">
+      </div>
+      <button type="submit" class="btn">Save SMTP</button>
+    </form>
+  </details>
 </div>
 
 {{/* Telegram */}}
-<div class="card">
-  <div class="card-title">Telegram bot</div>
-  {{if index .Errors "telegram"}}<div class="alert alert-danger" style="margin-bottom:.75rem">{{index .Errors "telegram"}}</div>{{end}}
-  <form method="POST" action="/notifications/telegram">
-    <div class="form-group">
-      <label>Bot token</label>
-      <input type="text" name="bot_token" value="{{if .Telegram}}{{.Telegram.BotToken}}{{end}}" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label>Bot username</label>
-      <input type="text" name="bot_name" value="{{if .Telegram}}{{.Telegram.BotName}}{{end}}" placeholder="@MyBot">
-    </div>
-    <button type="submit" class="btn">Save Telegram</button>
-  </form>
+<div class="card notif-card">
+  <div class="notif-header">
+    <span class="notif-dot notif-{{.TelegramStatus}}"></span>
+    <span class="notif-title">Telegram bot</span>
+    <span class="notif-summary">
+      {{if .Telegram}}
+        {{if .Telegram.BotName}}{{.Telegram.BotName}}{{else if .Telegram.BotToken}}Token set, bot name missing{{else}}Not configured{{end}}
+      {{else}}Not configured{{end}}
+    </span>
+  </div>
+  <details{{if index .Errors "telegram"}} open{{end}}>
+    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
+    {{if index .Errors "telegram"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "telegram"}}</div>{{end}}
+    <form method="POST" action="/notifications/telegram" style="margin-top:.75rem">
+      <div class="form-group">
+        <label>Bot token</label>
+        <input type="text" name="bot_token" value="{{if .Telegram}}{{.Telegram.BotToken}}{{end}}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Bot username</label>
+        <input type="text" name="bot_name" value="{{if .Telegram}}{{.Telegram.BotName}}{{end}}" placeholder="@MyBot">
+      </div>
+      <button type="submit" class="btn">Save Telegram</button>
+    </form>
+  </details>
 </div>
 
 {{/* Matrix */}}
-<div class="card">
-  <div class="card-title">Matrix</div>
-  {{if index .Errors "matrix"}}<div class="alert alert-danger" style="margin-bottom:.75rem">{{index .Errors "matrix"}}</div>{{end}}
-  <form method="POST" action="/notifications/matrix">
-    <div class="form-group">
-      <label>Homeserver URL</label>
-      <input type="url" name="homeserver" value="{{if .Matrix}}{{.Matrix.Homeserver}}{{end}}" placeholder="https://matrix.example.com">
-    </div>
-    <div class="form-group">
-      <label>Access token {{if .Matrix}}{{if .Matrix.HasToken}}<span style="color:var(--fg-muted);font-size:.85rem">(set — leave blank to keep)</span>{{end}}{{end}}</label>
-      <input type="password" name="access_token" autocomplete="new-password" placeholder="{{if .Matrix}}{{if .Matrix.HasToken}}(unchanged){{else}}(not set){{end}}{{end}}">
-    </div>
-    <button type="submit" class="btn">Save Matrix</button>
-  </form>
+<div class="card notif-card">
+  <div class="notif-header">
+    <span class="notif-dot notif-{{.MatrixStatus}}"></span>
+    <span class="notif-title">Matrix</span>
+    <span class="notif-summary">
+      {{if .Matrix}}
+        {{if .Matrix.Homeserver}}{{.Matrix.Homeserver}}{{if .Matrix.HasToken}} · token set{{else}} · no token{{end}}{{else}}Not configured{{end}}
+      {{else}}Not configured{{end}}
+    </span>
+  </div>
+  <details{{if index .Errors "matrix"}} open{{end}}>
+    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
+    {{if index .Errors "matrix"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "matrix"}}</div>{{end}}
+    <form method="POST" action="/notifications/matrix" style="margin-top:.75rem">
+      <div class="form-group">
+        <label>Homeserver URL</label>
+        <input type="url" name="homeserver" value="{{if .Matrix}}{{.Matrix.Homeserver}}{{end}}" placeholder="https://matrix.example.com">
+      </div>
+      <div class="form-group">
+        <label>Access token {{if .Matrix}}{{if .Matrix.HasToken}}<span class="hint">(set — leave blank to keep)</span>{{end}}{{end}}</label>
+        <input type="password" name="access_token" autocomplete="new-password" placeholder="{{if .Matrix}}{{if .Matrix.HasToken}}(unchanged){{else}}(not set){{end}}{{end}}">
+      </div>
+      <button type="submit" class="btn">Save Matrix</button>
+    </form>
+  </details>
 </div>
 
 {{/* Heartbeat */}}
-<div class="card">
-  <div class="card-title">Heartbeat check interval</div>
-  {{if index .Errors "heartbeat"}}<div class="alert alert-danger" style="margin-bottom:.75rem">{{index .Errors "heartbeat"}}</div>{{end}}
-  <form method="POST" action="/notifications/heartbeat">
-    <div class="form-group">
-      <label>Interval (minutes)</label>
-      <input type="number" name="interval_mins" value="{{if .Heartbeat}}{{.Heartbeat.IntervalMins}}{{end}}" min="1" style="width:120px">
-      <p style="font-size:.85rem;color:var(--fg-muted);margin-top:.3rem">How often dansal checks that notification channels are working. Set to 0 to disable.</p>
-    </div>
-    <button type="submit" class="btn">Save</button>
-  </form>
+<div class="card notif-card">
+  <div class="notif-header">
+    <span class="notif-dot notif-{{.HeartbeatStatus}}"></span>
+    <span class="notif-title">Heartbeat interval</span>
+    <span class="notif-summary">
+      {{if .Heartbeat}}{{if .Heartbeat.IntervalMins}}Every {{.Heartbeat.IntervalMins}} min{{else}}Disabled{{end}}{{else}}Disabled{{end}}
+    </span>
+  </div>
+  <details{{if index .Errors "heartbeat"}} open{{end}}>
+    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
+    {{if index .Errors "heartbeat"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "heartbeat"}}</div>{{end}}
+    <form method="POST" action="/notifications/heartbeat" style="margin-top:.75rem">
+      <div class="form-group">
+        <label>Interval (minutes, 0 = disabled)</label>
+        <input type="number" name="interval_mins" value="{{if .Heartbeat}}{{.Heartbeat.IntervalMins}}{{end}}" min="0" style="width:120px">
+      </div>
+      <button type="submit" class="btn">Save</button>
+    </form>
+  </details>
 </div>
 
 </div>
 {{end}}
+
+<style>
+.notif-card { padding: 1rem 1.25rem; }
+.notif-header { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.notif-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(0,0,0,.12);
+}
+.notif-ok      { background: #22c55e; border-color: #16a34a; }
+.notif-partial { background: #ef4444; border-color: #dc2626; }
+.notif-missing { background: #e5e7eb; border-color: #9ca3af; }
+.notif-title { font-weight: 600; font-size: .95rem; }
+.notif-summary { font-size: .83rem; color: var(--fg-muted); margin-left: .25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+details[open] summary { margin-bottom: .5rem; }
+.hint { color: var(--fg-muted); font-size: .85rem; font-weight: 400; }
+</style>
 {{end}}

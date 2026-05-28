@@ -206,10 +206,16 @@
 
     {{/* Organisation contact */}}
     {{with $.Data.Org}}
-    {{if or .ContactEmail .Website .Mastodon .Instagram .Facebook}}
+    {{if or $.Data.Event.ContactName $.Data.Event.ContactEmail .ContactName .ContactEmail .Website .Mastodon .Instagram .Facebook}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_org_contact"}}</div>
-      {{with .ContactEmail}}<div><a href="mailto:{{.}}" class="sidebar-link">{{.}}</a></div>{{end}}
+      {{if or $.Data.Event.ContactName $.Data.Event.ContactEmail}}
+        {{with $.Data.Event.ContactName}}<div>{{.}}</div>{{end}}
+        {{with $.Data.Event.ContactEmail}}<div><a href="mailto:{{.}}" class="sidebar-link">{{.}}</a></div>{{end}}
+      {{else}}
+        {{with .ContactName}}<div>{{.}}</div>{{end}}
+        {{with .ContactEmail}}<div><a href="mailto:{{.}}" class="sidebar-link">{{.}}</a></div>{{end}}
+      {{end}}
       {{with .Website}}<div><a href="{{.}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a></div>{{end}}
       {{with .Mastodon}}<div><a href="{{mastodonURL .}}" target="_blank" rel="noopener me" class="sidebar-link">Mastodon</a></div>{{end}}
       {{with .Instagram}}<div><a href="https://instagram.com/{{.}}" target="_blank" rel="noopener" class="sidebar-link">Instagram</a></div>{{end}}

@@ -1031,6 +1031,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE locations DROP COLUMN wheelchair_accessible")
 	db.Exec("ALTER TABLE locations DROP COLUMN hearing_loop")
 	db.Exec("ALTER TABLE locations DROP COLUMN visual_support")
+	db.Exec("ALTER TABLE organizations ADD COLUMN contact_name TEXT")
+	db.Exec("ALTER TABLE events ADD COLUMN contact_name TEXT")
+	db.Exec("ALTER TABLE events ADD COLUMN contact_email TEXT")
 }
 
 func logUnmappedCountries() {
@@ -1101,6 +1104,8 @@ func createTables() error {
 		food TEXT DEFAULT '',
 		drink TEXT DEFAULT '',
 		attributes TEXT,
+		contact_name TEXT,
+		contact_email TEXT,
 		suggester_email TEXT DEFAULT '',
 		suggestion_token TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1210,6 +1215,7 @@ func createTables() error {
 		mastodon TEXT,
 		facebook TEXT,
 		contact_email TEXT,
+		contact_name TEXT,
 		notes_md TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);

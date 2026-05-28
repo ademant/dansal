@@ -175,6 +175,10 @@ type Event struct {
 	LocationLng          *float64   `json:"location_lng,omitempty"`
 	LocationAttributes   map[string]bool `json:"location_attributes,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
+	OrgContactName  string     `json:"org_contact_name,omitempty"`
+	OrgContactEmail string     `json:"org_contact_email,omitempty"`
+	ContactName     string     `json:"contact_name,omitempty"`
+	ContactEmail    string     `json:"contact_email,omitempty"`
 	BookingURL      string     `json:"booking_url,omitempty"`
 	Availability    string     `json:"availability,omitempty"`
 	TicketsTotal    int        `json:"tickets_total,omitempty"`
@@ -228,6 +232,7 @@ type Organization struct {
 	Mastodon     string `json:"mastodon,omitempty"`
 	Facebook     string `json:"facebook,omitempty"`
 	ContactEmail string `json:"contact_email,omitempty"`
+	ContactName  string `json:"contact_name,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	ImageURL     string `json:"image_url,omitempty"`
 	NotesMd      string `json:"notes_md,omitempty"`
@@ -1116,6 +1121,8 @@ type EventCreateReq struct {
 	Food                 string          `json:"food,omitempty"`
 	Drink                string          `json:"drink,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
+	ContactName          string          `json:"contact_name,omitempty"`
+	ContactEmail         string          `json:"contact_email,omitempty"`
 	Tags                 []string        `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
@@ -1137,6 +1144,8 @@ type EventUpdateReq struct {
 	Food                 string          `json:"food,omitempty"`
 	Drink                string          `json:"drink,omitempty"`
 	Attributes           map[string]bool `json:"attributes,omitempty"`
+	ContactName          string          `json:"contact_name,omitempty"`
+	ContactEmail         string          `json:"contact_email,omitempty"`
 	IsCancelled          bool            `json:"is_cancelled"`
 	Availability         string      `json:"availability,omitempty"`
 	TicketsTotal         int         `json:"tickets_total,omitempty"`

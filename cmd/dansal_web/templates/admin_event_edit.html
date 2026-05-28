@@ -292,6 +292,16 @@
     </div>
   </section>
 
+  <!-- Contact override -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_contact_override"}}</h2>
+    <p class="field-hint">{{$.Strings.T "evt_contact_override_hint"}}{{with .Org}} {{with .ContactName}}<strong>{{.}}</strong>{{end}}{{if and .ContactName .ContactEmail}} · {{end}}{{with .ContactEmail}}<a href="mailto:{{.}}">{{.}}</a>{{end}}{{end}}</p>
+    <label for="evt_contact_name">{{$.Strings.T "evt_contact_name"}}</label>
+    <input id="evt_contact_name" type="text" name="contact_name" value="{{.Event.ContactName}}">
+    <label for="evt_contact_email">{{$.Strings.T "evt_contact_email"}}</label>
+    <input id="evt_contact_email" type="email" name="contact_email" value="{{.Event.ContactEmail}}">
+  </section>
+
   <!-- Food & Drinks -->
   <section class="form-section">
     <h2>{{$.Strings.T "evt_food_drink"}}</h2>

@@ -188,6 +188,7 @@ func orgFromForm(r *http.Request) Organization {
 		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
 		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
 		ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
+		ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
 		NotesMd:      strings.TrimSpace(r.FormValue("notes_md")),
 	}
 }
@@ -2323,6 +2324,8 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			Food:               base.Food,
 			Drink:              base.Drink,
 			Attributes:         base.Attributes,
+			ContactName:        base.ContactName,
+			ContactEmail:       base.ContactEmail,
 			Tags:               tags,
 			URL:                base.URL,
 			OrganizationID:     base.OrganizationID,
@@ -2726,6 +2729,8 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				Food:               ev.Food,
 				Drink:              ev.Drink,
 				Attributes:         ev.Attributes,
+				ContactName:        ev.ContactName,
+				ContactEmail:       ev.ContactEmail,
 				Tags:               ev.Tags,
 				URL:                ev.URL,
 				OrganizationID:     ev.OrganizationID,
@@ -2838,6 +2843,8 @@ type templateEventData struct {
 	Food               string           `json:"food"`
 	Drink              string           `json:"drink"`
 	Attributes         map[string]bool  `json:"attributes,omitempty"`
+	ContactName        string           `json:"contact_name,omitempty"`
+	ContactEmail       string           `json:"contact_email,omitempty"`
 	TicketsTotal       int              `json:"tickets_total"`
 	BookingEnabled     bool             `json:"booking_enabled"`
 	Timetable          []TimetableEntry `json:"timetable"`
@@ -2857,6 +2864,8 @@ func templateDataFromEvent(ev Event) templateEventData {
 		Food:               ev.Food,
 		Drink:              ev.Drink,
 		Attributes:         ev.Attributes,
+		ContactName:        ev.ContactName,
+		ContactEmail:       ev.ContactEmail,
 		TicketsTotal:       ev.TicketsTotal,
 		BookingEnabled:     ev.BookingEnabled,
 		Timetable:          ev.Timetable,
@@ -3239,6 +3248,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
 			Attributes:     eventAttrsFromForm(r),
+			ContactName:    strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail:   strings.TrimSpace(r.FormValue("contact_email")),
 			Tags:           tags,
 			URL:            strings.TrimSpace(r.FormValue("url")),
 			OrganizationID: orgID,
@@ -3350,6 +3361,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 
 type AdminEventEditData struct {
 	Event              Event
+	Org                *Organization
 	Organizations      []Organization
 	Locations          []Location   // all locations (used for timetable rows)
 	LocOrgFirst        []Location   // location dropdown: same-org locations first
@@ -3451,9 +3463,19 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 				editTemplates, _ = listTemplates(db, su.ID, orgIDs)
 			}
 		}
+		var eventOrg *Organization
+		if event.OrganizationID != nil {
+			for i := range bundle.Orgs {
+				if bundle.Orgs[i].ID == *event.OrganizationID {
+					eventOrg = &bundle.Orgs[i]
+					break
+				}
+			}
+		}
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
+			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
 			LocOrgFirst:        locOrgFirst,
@@ -3488,9 +3510,19 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		renderErr := func(errKey string) {
 			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
 			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+			var evtOrg *Organization
+			if event.OrganizationID != nil {
+				for i := range bundle.Orgs {
+					if bundle.Orgs[i].ID == *event.OrganizationID {
+						evtOrg = &bundle.Orgs[i]
+						break
+					}
+				}
+			}
 			title := i18n.T(r, "admin_event_edit_title")
 			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 				Event:              event,
+				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
 				Locations:          bundle.Locations,
 				LocOrgFirst:        locOrgFirst,
@@ -3632,6 +3664,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Food:           r.FormValue("food"),
 			Drink:          r.FormValue("drink"),
 			Attributes:     eventAttrsFromForm(r),
+			ContactName:    strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail:   strings.TrimSpace(r.FormValue("contact_email")),
 			IsCancelled:    r.FormValue("is_cancelled") == "on",
 			Availability:   r.FormValue("availability"),
 			TicketsTotal:   ticketsTotal,

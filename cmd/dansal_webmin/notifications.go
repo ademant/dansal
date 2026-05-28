@@ -251,6 +251,74 @@ func notificationsMatrixSaveHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+// notificationsSMTPTestHandler saves settings then sends a test email.
+// Accepts the same form fields as the SMTP save handler plus an optional
+// override recipient (defaults to the stored "to" address).
+func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad request"})
+			return
+		}
+		port, _ := strconv.Atoi(r.FormValue("port"))
+		timeoutSecs, _ := strconv.Atoi(r.FormValue("timeout_secs"))
+		saveReq := socketRequest{
+			Cmd:             "smtp-set",
+			SMTPHost:        r.FormValue("host"),
+			SMTPPort:        port,
+			SMTPUsername:    r.FormValue("username"),
+			SMTPFrom:        r.FormValue("from"),
+			SMTPFromName:    r.FormValue("from_name"),
+			SMTPTLS:         r.FormValue("tls"),
+			SMTPTimeoutSecs: timeoutSecs,
+			SMTPTo:          r.FormValue("to"),
+		}
+		resp, err := sendSocket(cfg.AdminSocket, saveReq)
+		if err != nil || !resp.OK {
+			msg := "socket error"
+			if err == nil {
+				msg = resp.Error
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "save failed: " + msg})
+			return
+		}
+		if pw := r.FormValue("password"); pw != "" {
+			resp2, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-set-password", Password: pw})
+			if err2 != nil || !resp2.OK {
+				msg := "socket error"
+				if err2 == nil {
+					msg = resp2.Error
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadGateway)
+				json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "password save failed: " + msg})
+				return
+			}
+		}
+		// Send test email to the configured recipient.
+		to := r.FormValue("to")
+		if to == "" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "No recipient address configured — fill in the Admin To field first."})
+			return
+		}
+		testResp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-test", SMTPTo: to})
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "socket error: " + err.Error()})
+			return
+		}
+		if !testResp.OK {
+			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": testResp.Error})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}
+}
+
 func notificationsHeartbeatSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {

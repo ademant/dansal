@@ -56,6 +56,7 @@ func main() {
 		mux.HandleFunc("POST /users/{username}/magic-link", requireLogin(cfg, userMagicLinkHandler(cfg)))
 		mux.HandleFunc("GET /notifications", requireLogin(cfg, notificationsPageHandler(cfg, tmpls)))
 		mux.HandleFunc("POST /notifications/smtp", requireLogin(cfg, notificationsSMTPSaveHandler(cfg)))
+		mux.HandleFunc("POST /notifications/smtp-test", requireLogin(cfg, notificationsSMTPTestHandler(cfg)))
 		mux.HandleFunc("POST /notifications/telegram", requireLogin(cfg, notificationsTelegramSaveHandler(cfg)))
 		mux.HandleFunc("POST /notifications/matrix", requireLogin(cfg, notificationsMatrixSaveHandler(cfg)))
 		mux.HandleFunc("POST /notifications/heartbeat", requireLogin(cfg, notificationsHeartbeatSaveHandler(cfg)))

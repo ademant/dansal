@@ -6,64 +6,317 @@
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
 
-{{/* SMTP */}}
-<div class="card notif-card">
+{{/* SMTP — wizard */}}
+<div class="card notif-card" id="smtp-card">
   <div class="notif-header">
     <span class="notif-dot notif-{{.SMTPStatus}}"></span>
     <span class="notif-title">SMTP (email)</span>
     <span class="notif-summary">
-      {{if .SMTP}}
-        {{if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}
-      {{else}}Not configured{{end}}
+      {{if .SMTP}}{{if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <details{{if index .Errors "smtp"}} open{{end}}>
-    <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
-    {{if index .Errors "smtp"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "smtp"}}</div>{{end}}
-    <form method="POST" action="/notifications/smtp" style="margin-top:.75rem">
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="smtpWizard.open()">Configure</button>
+</div>
+
+<!-- SMTP wizard modal -->
+<div id="smtp-wizard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem">
+<div id="smtp-wizard" style="background:var(--bg-card,#fff);border-radius:10px;width:100%;max-width:520px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+
+  <!-- Header -->
+  <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
+    <strong style="font-size:1rem">SMTP configuration</strong>
+    <button onclick="smtpWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+  </div>
+
+  <!-- Step indicator -->
+  <div style="display:flex;padding:.75rem 1.25rem;gap:.5rem;border-bottom:1px solid var(--border,#e5e7eb)">
+    <div class="wz-step" id="wz-ind-1">1 Provider</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="wz-ind-2">2 Server</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="wz-ind-3">3 Account</div>
+    <div class="wz-sep">›</div>
+    <div class="wz-step" id="wz-ind-4">4 Test</div>
+  </div>
+
+  <div style="padding:1.25rem">
+
+    <!-- Step 1: Provider -->
+    <div id="wz-step-1">
+      <p style="margin:0 0 .75rem;font-size:.88rem;color:#555">Choose your email provider — settings will be pre-filled.</p>
+      <div class="provider-grid" id="provider-grid"></div>
+    </div>
+
+    <!-- Step 2: Server -->
+    <div id="wz-step-2" hidden>
+      <div id="wz-provider-note" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:4px;padding:.5rem .75rem;font-size:.84rem;margin-bottom:.75rem;color:#713f12"></div>
       <div class="form-group">
         <label>Host</label>
-        <input type="text" name="host" value="{{if .SMTP}}{{.SMTP.Host}}{{end}}" placeholder="smtp.example.com">
+        <input id="wz-host" type="text" placeholder="smtp.example.com">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
         <div class="form-group">
           <label>Port</label>
-          <input type="number" name="port" value="{{if .SMTP}}{{.SMTP.Port}}{{end}}" placeholder="587">
+          <input id="wz-port" type="number" value="587">
         </div>
         <div class="form-group">
-          <label>TLS mode</label>
-          <select name="tls">
-            <option value="">default (starttls)</option>
-            <option value="starttls"{{if .SMTP}}{{if eq .SMTP.TLS "starttls"}} selected{{end}}{{end}}>starttls</option>
-            <option value="tls"{{if .SMTP}}{{if eq .SMTP.TLS "tls"}} selected{{end}}{{end}}>tls (port 465)</option>
-            <option value="none"{{if .SMTP}}{{if eq .SMTP.TLS "none"}} selected{{end}}{{end}}>none</option>
+          <label>TLS</label>
+          <select id="wz-tls">
+            <option value="starttls">starttls</option>
+            <option value="tls">tls (port 465)</option>
+            <option value="none">none</option>
           </select>
         </div>
       </div>
+    </div>
+
+    <!-- Step 3: Account -->
+    <div id="wz-step-3" hidden>
       <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="username" value="{{if .SMTP}}{{.SMTP.Username}}{{end}}" autocomplete="off">
+        <label>Username (login email)</label>
+        <input id="wz-username" type="text" autocomplete="off" oninput="smtpWizard.suggestFrom()">
       </div>
       <div class="form-group">
-        <label>Password {{if .SMTP}}{{if .SMTP.HasPassword}}<span class="hint">(set — leave blank to keep)</span>{{end}}{{end}}</label>
-        <input type="password" name="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}(not set){{end}}{{end}}">
+        <label>Password{{if .SMTP}}{{if .SMTP.HasPassword}} <span class="hint">(currently set — leave blank to keep)</span>{{end}}{{end}}</label>
+        <input id="wz-password" type="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}required{{end}}{{else}}required{{end}}">
       </div>
       <div class="form-group">
         <label>From address</label>
-        <input type="text" name="from" value="{{if .SMTP}}{{.SMTP.From}}{{end}}">
+        <input id="wz-from" type="email">
       </div>
       <div class="form-group">
-        <label>From name</label>
-        <input type="text" name="from_name" value="{{if .SMTP}}{{.SMTP.FromName}}{{end}}">
+        <label>From name <span class="hint">(optional display name)</span></label>
+        <input id="wz-from-name" type="text" placeholder="My Calendar">
       </div>
       <div class="form-group">
-        <label>Admin recipient (To)</label>
-        <input type="email" name="to" value="{{if .SMTP}}{{.SMTP.To}}{{end}}">
+        <label>Admin recipient — test emails sent here</label>
+        <input id="wz-to" type="email">
       </div>
-      <button type="submit" class="btn">Save SMTP</button>
-    </form>
-  </details>
-</div>
+    </div>
+
+    <!-- Step 4: Test & Save -->
+    <div id="wz-step-4" hidden>
+      <p style="font-size:.88rem;color:#555;margin:0 0 .9rem">Review your settings, then test the connection and save.</p>
+      <table class="wz-review" id="wz-review"></table>
+      <div id="wz-test-result" style="display:none;margin:.9rem 0;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+        <button class="btn" onclick="smtpWizard.test()" id="wz-test-btn">Test connection</button>
+        <button class="btn btn-secondary" onclick="smtpWizard.save(false)" id="wz-save-btn">Save without testing</button>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
+      <button class="btn btn-secondary" id="wz-back" onclick="smtpWizard.back()" style="visibility:hidden">← Back</button>
+      <button class="btn" id="wz-next" onclick="smtpWizard.next()">Next →</button>
+    </div>
+
+  </div><!-- /padding -->
+</div><!-- /wizard -->
+</div><!-- /overlay -->
+
+<script>
+(function(){
+var PROVIDERS = [
+  {id:'gmail',    label:'Gmail',      host:'smtp.gmail.com',        port:587, tls:'starttls', note:'Use an App Password, not your Google account password.'},
+  {id:'outlook',  label:'Outlook',    host:'smtp.office365.com',    port:587, tls:'starttls', note:''},
+  {id:'yahoo',    label:'Yahoo Mail', host:'smtp.mail.yahoo.com',   port:587, tls:'starttls', note:'Use an App Password.'},
+  {id:'gmx',      label:'GMX',        host:'mail.gmx.net',          port:587, tls:'starttls', note:''},
+  {id:'webde',    label:'web.de',     host:'smtp.web.de',           port:587, tls:'starttls', note:''},
+  {id:'posteo',   label:'Posteo',     host:'posteo.de',             port:587, tls:'starttls', note:''},
+  {id:'custom',   label:'Custom',     host:'',                      port:587, tls:'starttls', note:''},
+];
+
+// Pre-load current values from server
+var CURRENT = {
+  host:      '{{if .SMTP}}{{.SMTP.Host}}{{end}}',
+  port:      {{if .SMTP}}{{if .SMTP.Port}}{{.SMTP.Port}}{{else}}587{{end}}{{else}}587{{end}},
+  tls:       '{{if .SMTP}}{{.SMTP.TLS}}{{end}}',
+  username:  '{{if .SMTP}}{{.SMTP.Username}}{{end}}',
+  from:      '{{if .SMTP}}{{.SMTP.From}}{{end}}',
+  from_name: '{{if .SMTP}}{{.SMTP.FromName}}{{end}}',
+  to:        '{{if .SMTP}}{{.SMTP.To}}{{end}}',
+  has_pw:    {{if .SMTP}}{{if .SMTP.HasPassword}}true{{else}}false{{end}}{{else}}false{{end}},
+};
+
+var step = 1;
+var selectedProvider = null;
+
+// Build provider grid
+var grid = document.getElementById('provider-grid');
+PROVIDERS.forEach(function(p){
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'provider-btn';
+  btn.textContent = p.label;
+  btn.dataset.id = p.id;
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.provider-btn').forEach(function(b){ b.classList.remove('selected'); });
+    btn.classList.add('selected');
+    selectedProvider = p;
+    // pre-fill server fields
+    document.getElementById('wz-host').value = p.host || CURRENT.host;
+    document.getElementById('wz-port').value = p.port || CURRENT.port;
+    document.getElementById('wz-tls').value  = p.tls  || CURRENT.tls || 'starttls';
+    var note = document.getElementById('wz-provider-note');
+    if (p.note) { note.textContent = p.note; note.style.display='block'; }
+    else        { note.style.display='none'; }
+  });
+  grid.appendChild(btn);
+});
+
+// Pre-select provider matching current host, or Custom
+var match = PROVIDERS.find(function(p){ return p.host && p.host === CURRENT.host; });
+if (!match) match = PROVIDERS.find(function(p){ return p.id === 'custom'; });
+if (match) {
+  var btn = grid.querySelector('[data-id="'+match.id+'"]');
+  if (btn) btn.click();
+}
+// Pre-fill account fields
+document.getElementById('wz-username').value  = CURRENT.username;
+document.getElementById('wz-from').value      = CURRENT.from;
+document.getElementById('wz-from-name').value = CURRENT.from_name;
+document.getElementById('wz-to').value        = CURRENT.to;
+
+window.smtpWizard = {
+  open: function(){
+    var ov = document.getElementById('smtp-wizard-overlay');
+    ov.style.display = 'flex';
+    step = 1;
+    smtpWizard._show();
+  },
+  close: function(){
+    document.getElementById('smtp-wizard-overlay').style.display = 'none';
+  },
+  back: function(){
+    if (step > 1) { step--; smtpWizard._show(); }
+  },
+  next: function(){
+    if (!smtpWizard._validate()) return;
+    if (step < 4) { step++; smtpWizard._show(); }
+  },
+  suggestFrom: function(){
+    var u = document.getElementById('wz-username').value.trim();
+    var f = document.getElementById('wz-from');
+    if (f.value === '' && u.indexOf('@') > 0) f.value = u;
+  },
+  _validate: function(){
+    if (step === 1 && !selectedProvider) { alert('Please select a provider.'); return false; }
+    if (step === 2 && !document.getElementById('wz-host').value.trim()) {
+      alert('Host is required.'); return false;
+    }
+    if (step === 3) {
+      if (!document.getElementById('wz-username').value.trim()) { alert('Username is required.'); return false; }
+      if (!document.getElementById('wz-to').value.trim()) { alert('Admin recipient address is required.'); return false; }
+      if (!CURRENT.has_pw && !document.getElementById('wz-password').value) {
+        alert('Password is required.'); return false;
+      }
+    }
+    return true;
+  },
+  _show: function(){
+    [1,2,3,4].forEach(function(n){
+      document.getElementById('wz-step-'+n).hidden = (n !== step);
+      var ind = document.getElementById('wz-ind-'+n);
+      ind.classList.toggle('wz-step-active', n === step);
+      ind.classList.toggle('wz-step-done',   n < step);
+    });
+    document.getElementById('wz-back').style.visibility = step > 1 ? 'visible' : 'hidden';
+    document.getElementById('wz-next').hidden = (step === 4);
+    if (step === 4) smtpWizard._buildReview();
+    // Reset test result when navigating
+    var tr = document.getElementById('wz-test-result');
+    tr.style.display = 'none';
+    document.getElementById('wz-test-btn').disabled = false;
+    document.getElementById('wz-save-btn').disabled = false;
+  },
+  _fields: function(){
+    return {
+      host:      document.getElementById('wz-host').value.trim(),
+      port:      document.getElementById('wz-port').value,
+      tls:       document.getElementById('wz-tls').value,
+      username:  document.getElementById('wz-username').value.trim(),
+      password:  document.getElementById('wz-password').value,
+      from:      document.getElementById('wz-from').value.trim(),
+      from_name: document.getElementById('wz-from-name').value.trim(),
+      to:        document.getElementById('wz-to').value.trim(),
+    };
+  },
+  _buildReview: function(){
+    var f = smtpWizard._fields();
+    var rows = [
+      ['Host',      f.host + ':' + f.port + ' (' + (f.tls||'starttls') + ')'],
+      ['Username',  f.username],
+      ['Password',  f.password ? '(new password entered)' : CURRENT.has_pw ? '(unchanged)' : '(not set)'],
+      ['From',      f.from + (f.from_name ? ' — ' + f.from_name : '')],
+      ['Test / To', f.to],
+    ];
+    var t = document.getElementById('wz-review');
+    t.innerHTML = rows.map(function(r){
+      return '<tr><td class="rv-label">'+r[0]+'</td><td>'+r[1]+'</td></tr>';
+    }).join('');
+  },
+  _post: function(endpoint, callback){
+    var f = smtpWizard._fields();
+    var body = new URLSearchParams(f);
+    fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString()})
+      .then(function(r){ return r.json(); })
+      .then(callback)
+      .catch(function(e){ callback({ok:false,error:e.message}); });
+  },
+  test: function(){
+    document.getElementById('wz-test-btn').disabled = true;
+    document.getElementById('wz-save-btn').disabled = true;
+    smtpWizard._showResult('info', 'Sending test email…');
+    smtpWizard._post('/notifications/smtp-test', function(d){
+      document.getElementById('wz-test-btn').disabled = false;
+      document.getElementById('wz-save-btn').disabled = false;
+      if (d.ok) {
+        smtpWizard._showResult('ok', '✓ Test email sent successfully. Settings saved.');
+        // Refresh page status dot after short delay
+        setTimeout(function(){ location.reload(); }, 1800);
+      } else {
+        smtpWizard._showResult('err', '✗ ' + (d.error || 'Unknown error'));
+      }
+    });
+  },
+  save: function(){
+    document.getElementById('wz-save-btn').disabled = true;
+    smtpWizard._post('/notifications/smtp', function(d){
+      smtpWizard.close();
+      location.reload();
+    });
+  },
+  _showResult: function(type, msg){
+    var el = document.getElementById('wz-test-result');
+    el.style.display = 'block';
+    el.style.background = type==='ok' ? '#dcfce7' : type==='err' ? '#fee2e2' : '#f0f9ff';
+    el.style.color      = type==='ok' ? '#166534' : type==='err' ? '#991b1b' : '#0c4a6e';
+    el.style.border     = '1px solid '+(type==='ok' ? '#86efac' : type==='err' ? '#fca5a5' : '#7dd3fc');
+    el.textContent = msg;
+  },
+};
+
+document.getElementById('smtp-wizard-overlay').addEventListener('click', function(e){
+  if (e.target === this) smtpWizard.close();
+});
+})();
+</script>
+
+<style>
+.provider-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:.5rem; margin-bottom:.25rem; }
+.provider-btn  { padding:.55rem .5rem; border:2px solid var(--border,#e5e7eb); border-radius:6px; background:var(--bg-card,#fff); cursor:pointer; font-size:.88rem; text-align:center; color:var(--fg,#111); }
+.provider-btn:hover { border-color:#6b7280; }
+.provider-btn.selected { border-color:#1a6eb5; background:#eff6ff; color:#1a6eb5; font-weight:600; }
+.wz-step { font-size:.8rem; color:#9ca3af; white-space:nowrap; }
+.wz-step.wz-step-active { color:#1a6eb5; font-weight:700; }
+.wz-step.wz-step-done   { color:#22c55e; }
+.wz-sep  { font-size:.8rem; color:#d1d5db; }
+.wz-review { width:100%; border-collapse:collapse; font-size:.87rem; }
+.wz-review tr+tr td { border-top:1px solid var(--border,#e5e7eb); }
+.wz-review td { padding:.35rem .4rem; vertical-align:top; }
+.rv-label { color:#6b7280; white-space:nowrap; padding-right:.75rem; width:6rem; }
+</style>
 
 {{/* Telegram */}}
 <div class="card notif-card">

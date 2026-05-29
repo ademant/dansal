@@ -13,14 +13,16 @@
   </label>
   <select name="bulk_action" id="bulk-action">
     <option value="run">{{$.Strings.T "fetch_run"}}</option>
-    <option value="delete">{{$.Strings.T "admin_delete"}}</option>
-    <option value="assign-org">{{$.Strings.T "fetch_assign_org"}}</option>
+    {{if .IsAdmin}}<option value="delete">{{$.Strings.T "admin_delete"}}</option>{{end}}
+    {{if .IsAdmin}}<option value="assign-org">{{$.Strings.T "fetch_assign_org"}}</option>{{end}}
     <option value="add-tag">{{$.Strings.T "fetch_add_tag"}}</option>
   </select>
+  {{if .IsAdmin}}
   <select name="organization_id" id="bulk-org" class="bulk-org-select" style="display:none">
     <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
+  {{end}}
   <input type="text" name="new_tag" id="bulk-tag" placeholder="tag" style="display:none;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem">
   <button type="submit" class="btn-sm">{{$.Strings.T "admin_apply"}}</button>
 </div>

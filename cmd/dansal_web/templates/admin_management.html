@@ -2,18 +2,27 @@
 {{define "content"}}
 <h1>{{.Strings.T "admin_management_title"}}</h1>
 
+{{$isAdmin := eq .User.Role "admin"}}
 <nav class="mgmt-tabs" aria-label="Management">
-  <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
   <a href="/admin/fetchurls" class="mgmt-tab">{{.Strings.T "nav_admin_fetchurls"}}</a>
-  <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
   <a href="/admin/users" class="mgmt-tab">{{.Strings.T "nav_admin_users"}}</a>
+  {{if $isAdmin}}
+  <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
+  <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
   {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}</a>{{end}}
   <a href="/admin/site-config" class="mgmt-tab">{{.Strings.T "admin_site_config_title"}}</a>
+  {{else}}
+  <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_dances"}}</span>
+  <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_templates"}}</span>
+  {{if .RegistrationEnabled}}<span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_registrations"}}</span>{{end}}
+  <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "admin_site_config_title"}}</span>
+  {{end}}
 </nav>
 
 <style>
 .mgmt-tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem}
 .mgmt-tab{display:flex;align-items:center;padding:.7rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--fg-2);font-size:.95rem;font-weight:500;transition:background .15s,border-color .15s}
 .mgmt-tab:hover{background:var(--bg-hover);border-color:var(--link);color:var(--link)}
+.mgmt-tab--off{opacity:.35;cursor:not-allowed;pointer-events:none}
 </style>
 {{end}}

@@ -8,8 +8,8 @@
     <form method="POST" action="/login">
       <input type="hidden" name="next" value="{{.Next}}">
       <div class="form-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" value="{{.Username}}" autocomplete="username" autofocus required>
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" value="{{.Email}}" autocomplete="email" autofocus required>
       </div>
       <div class="form-group">
         <label for="password">Password</label>

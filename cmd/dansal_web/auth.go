@@ -10,7 +10,7 @@ import (
 
 type LoginPageData struct {
 	ErrorKey  string
-	Username  string
+	Email     string
 	MagicSent string // "email" or "telegram" when a link was just sent
 	Next      string
 	FormToken string
@@ -66,7 +66,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		username := r.FormValue("username")
+		email := r.FormValue("email")
 		password := r.FormValue("password")
 		next := safeNext(r.FormValue("next"))
 		ip := getClientIP(r)
@@ -81,16 +81,16 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey: "login_error_throttled",
-				Username: username,
+				Email:    email,
 				Next:     r.FormValue("next"),
 			}))
 			return
 		}
 
-		lr, err := client.Login(r.Context(), username, password, ip, r.UserAgent())
+		lr, err := client.Login(r.Context(), email, password, ip, r.UserAgent())
 		if err != nil {
 			delay := throttle.recordFailure(ip)
-			log.Printf("login failed from %s: invalid credentials for %q", ip, username)
+			log.Printf("login failed from %s: invalid credentials for %q", ip, email)
 			timer := time.NewTimer(delay)
 			select {
 			case <-timer.C:
@@ -105,7 +105,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey: errorKey,
-				Username: username,
+				Email:    email,
 				Next:     r.FormValue("next"),
 			}))
 			return
@@ -118,9 +118,10 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		setSession(w, lr.Token, SessionUser{
-			ID:       lr.User.ID,
-			Username: lr.User.Username,
-			Role:     lr.User.Role,
+			ID:          lr.User.ID,
+			Email:       lr.User.Email,
+			DisplayName: lr.User.DisplayName,
+			Role:        lr.User.Role,
 		}, expiresAt)
 
 		http.Redirect(w, r, next, http.StatusSeeOther)
@@ -186,9 +187,10 @@ func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			expiresAt = time.Now().Add(24 * time.Hour)
 		}
 		setSession(w, lr.Token, SessionUser{
-			ID:       lr.User.ID,
-			Username: lr.User.Username,
-			Role:     lr.User.Role,
+			ID:          lr.User.ID,
+			Email:       lr.User.Email,
+			DisplayName: lr.User.DisplayName,
+			Role:        lr.User.Role,
 		}, expiresAt)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}

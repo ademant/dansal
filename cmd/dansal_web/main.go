@@ -112,10 +112,8 @@ func main() {
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin",  webauthnInviteProxy(cfg, client, "begin"))
-		r.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
-		r.HandleFunc("POST /api/v1/auth/webauthn/login/begin",  webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
-		r.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/finish"))
+		r.HandleFunc("POST /auth/webauthn/login/begin",  webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
+		r.HandleFunc("POST /auth/webauthn/login/finish", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/finish"))
 		r.HandleFunc("GET /register", registerPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /register/done", registerDoneHandler(cfg, tmpls, i18n))
@@ -123,6 +121,7 @@ func main() {
 		r.HandleFunc("GET /admin/registrations", adminRegistrationsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/registrations/{id}/approve", adminRateLimit(adminRegistrationApproveHandler(cfg, client)))
 		r.HandleFunc("POST /admin/registrations/{id}/reject", adminRateLimit(adminRegistrationRejectHandler(cfg, client)))
+		r.HandleFunc("POST /admin/registrations/{id}/resend-invite", adminRateLimit(adminRegistrationResendInviteHandler(cfg, client)))
 
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
@@ -162,9 +161,10 @@ func main() {
 		r.HandleFunc("POST /settings/sessions/{id}/revoke", settingsSessionRevokeHandler(cfg, client))
 		r.HandleFunc("POST /settings/apikeys/new", settingsCreateAPIKeyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/apikeys/{id}/delete", settingsDeleteAPIKeyHandler(cfg, client))
+		r.HandleFunc("POST /settings/delete", settingsDeleteAccountHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /magic", magicRequestHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("GET /api/v1/login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("GET /api/v1/verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /admin/users", adminUsersHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/users/bulk", adminRateLimit(adminUsersBulkHandler(cfg, client)))
@@ -251,10 +251,6 @@ func main() {
 		r.HandleFunc("GET /admin/locations/{id}/edit", adminLocationEditPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/{id}/edit", adminRateLimit(adminLocationSaveHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))
-
-		r.HandleFunc("GET /api/v1/images/{id}", imageProxyHandler(client, "/api/v1/images/"))
-		r.HandleFunc("GET /api/v1/musician-images/{id}", imageProxyHandler(client, "/api/v1/musician-images/"))
-		r.HandleFunc("GET /api/v1/org-images/{id}", imageProxyHandler(client, "/api/v1/org-images/"))
 
 		return certAuthMiddleware(client)(feedRouter(cfg, db, client)(r))
 	}

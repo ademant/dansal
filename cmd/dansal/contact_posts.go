@@ -181,7 +181,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	if callerID > 0 {
 		// Fetch verified email and nickname from account.
 		var userEmail, userNick string
-		db.QueryRow("SELECT email, username FROM users WHERE id=?", callerID).Scan(&userEmail, &userNick)
+		db.QueryRow("SELECT email, COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id=?", callerID).Scan(&userEmail, &userNick)
 		if req.Nickname == "" {
 			req.Nickname = userNick
 		}

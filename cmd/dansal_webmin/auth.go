@@ -22,10 +22,11 @@ const (
 )
 
 type SessionUser struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	CertAuth bool   `json:"cert_auth,omitempty"`
+	ID          int    `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,omitempty"`
+	Role        string `json:"role"`
+	CertAuth    bool   `json:"cert_auth,omitempty"`
 }
 
 func getSessionUser(r *http.Request) *SessionUser {
@@ -68,8 +69,8 @@ func certAuthUser(cfg *Config, cn string) *SessionUser {
 		return nil
 	}
 	for _, u := range users {
-		if u.Username == cn && u.Role == "admin" {
-			return &SessionUser{ID: u.ID, Username: u.Username, Role: u.Role, CertAuth: true}
+		if u.Email == cn && u.Role == "admin" {
+			return &SessionUser{ID: u.ID, Email: u.Email, Role: u.Role, CertAuth: true}
 		}
 	}
 	return nil
@@ -148,14 +149,15 @@ type loginResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
 	User      struct {
-		ID       int    `json:"id"`
-		Username string `json:"username"`
-		Role     string `json:"role"`
+		ID          int    `json:"id"`
+		Email       string `json:"email"`
+		DisplayName string `json:"display_name"`
+		Role        string `json:"role"`
 	} `json:"user"`
 }
 
-func apiLogin(ctx *http.Request, dansalURL, username, password string) (*loginResponse, error) {
-	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+func apiLogin(ctx *http.Request, dansalURL, email, password string) (*loginResponse, error) {
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
 	req, err := http.NewRequestWithContext(ctx.Context(), http.MethodPost, dansalURL+"/api/v1/login", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -213,30 +215,30 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		username := r.FormValue("username")
+		email := r.FormValue("email")
 		password := r.FormValue("password")
 		next := r.FormValue("next")
 		if next == "" {
 			next = "/"
 		}
 
-		lr, err := apiLogin(r, cfg.DansalURL, username, password)
+		lr, err := apiLogin(r, cfg.DansalURL, email, password)
 		if err != nil {
-			log.Printf("webmin login failed for %q: %v", username, err)
+			log.Printf("webmin login failed for %q: %v", email, err)
 			renderTemplate(w, tmpls.login, tmplData(cfg, "Login", map[string]string{
-				"Error":    "Invalid username or password.",
-				"Username": username,
-				"Next":     next,
+				"Error": "Invalid email or password.",
+				"Email": email,
+				"Next":  next,
 			}))
 			return
 		}
 
 		if lr.User.Role != "admin" {
-			log.Printf("webmin login rejected: %q has role %q", username, lr.User.Role)
+			log.Printf("webmin login rejected: %q has role %q", email, lr.User.Role)
 			renderTemplate(w, tmpls.login, tmplData(cfg, "Login", map[string]string{
-				"Error":    "Admin access required.",
-				"Username": username,
-				"Next":     next,
+				"Error": "Admin access required.",
+				"Email": email,
+				"Next":  next,
 			}))
 			return
 		}
@@ -246,8 +248,9 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			expiresAt = time.Now().Add(24 * time.Hour)
 		}
 		setSession(w, lr.Token, SessionUser{
-			ID:       lr.User.ID,
-			Username: lr.User.Username,
+			ID:          lr.User.ID,
+			Email:       lr.User.Email,
+			DisplayName: lr.User.DisplayName,
 			Role:     lr.User.Role,
 		}, expiresAt)
 		http.Redirect(w, r, next, http.StatusSeeOther)

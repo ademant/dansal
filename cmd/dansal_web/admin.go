@@ -1855,7 +1855,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 				for _, m := range members {
 					if !seen[m.UserID] {
 						seen[m.UserID] = true
-						users = append(users, UserInfo{ID: m.UserID, Username: m.Username})
+						users = append(users, UserInfo{ID: m.UserID, Email: m.Email, DisplayName: m.DisplayName})
 					}
 				}
 			}
@@ -2061,14 +2061,13 @@ func adminUserCreateDirectHandler(cfg *Config, client *DansalClient) http.Handle
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		username := r.FormValue("username")
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 		role := r.FormValue("role")
 		if role == "" {
 			role = "user"
 		}
-		_, _ = client.CreateUserDirect(r.Context(), username, email, password, role, getSessionToken(r))
+		_, _ = client.CreateUserDirect(r.Context(), email, password, role, getSessionToken(r))
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
 }

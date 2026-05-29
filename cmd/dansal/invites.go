@@ -39,11 +39,11 @@ type CreateInviteRequest struct {
 }
 
 type UseInviteRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Telegram string `json:"telegram,omitempty"`
-	Matrix   string `json:"matrix,omitempty"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Password    string `json:"password"`
+	Telegram    string `json:"telegram,omitempty"`
+	Matrix      string `json:"matrix,omitempty"`
 }
 
 func generateInviteToken() (string, error) {
@@ -208,11 +208,11 @@ func getInviteInfo(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var id int
-	var role, expiresAt, usedAt, presetUsername, presetEmail sql.NullString
+	var role, expiresAt, usedAt, presetEmail sql.NullString
 	err := db.QueryRow(
-		`SELECT id, role, expires_at, COALESCE(used_at,''), COALESCE(preset_username,''), COALESCE(preset_email,'')
+		`SELECT id, role, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
 		 FROM invite_links WHERE token=?`, token,
-	).Scan(&id, &role, &expiresAt, &usedAt, &presetUsername, &presetEmail)
+	).Scan(&id, &role, &expiresAt, &usedAt, &presetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid invite link", http.StatusNotFound)
 		return
@@ -228,11 +228,10 @@ func getInviteInfo(w http.ResponseWriter, r *http.Request) {
 		expired = true
 	}
 	json.NewEncoder(w).Encode(map[string]any{
-		"id":               id,
-		"role":             role.String,
-		"expired":          expired,
-		"preset_username":  presetUsername.String,
-		"preset_email":     presetEmail.String,
+		"id":           id,
+		"role":         role.String,
+		"expired":      expired,
+		"preset_email": presetEmail.String,
 	})
 }
 
@@ -243,21 +242,18 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var invite struct {
-		ID              int
-		Role            string
-		OrgID           sql.NullInt64
-		ExpiresAt       string
-		UsedAt          string
-		PresetUsername  string
-		PresetEmail     string
+		ID          int
+		Role        string
+		OrgID       sql.NullInt64
+		ExpiresAt   string
+		UsedAt      string
+		PresetEmail string
 	}
 	err := db.QueryRow(
-		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''),
-		        COALESCE(preset_username,''), COALESCE(preset_email,'')
+		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
 		 FROM invite_links WHERE token=?`,
 		token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt,
-		&invite.PresetUsername, &invite.PresetEmail)
+	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
@@ -281,19 +277,12 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	// Preset values from registration override whatever the client sends.
-	if invite.PresetUsername != "" {
-		req.Username = invite.PresetUsername
-	}
+	// Preset email from registration overrides whatever the client sends.
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		writeError(w, "username, email and password are required", http.StatusBadRequest)
-		return
-	}
-	if isReservedUsername(req.Username) {
-		writeError(w, "Username is reserved", http.StatusBadRequest)
+	if req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 
@@ -305,8 +294,8 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO users (username, email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
-		req.Username, req.Email, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix,
+		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Email, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
 		writeError(w, "Username or email already exists", http.StatusConflict)
@@ -328,15 +317,15 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("invite: new user %q (role=%s) registered via invite link id=%d", req.Username, invite.Role, invite.ID)
+	log.Printf("invite: new user %q (role=%s) registered via invite link id=%d", req.Email, invite.Role, invite.ID)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(User{
-		ID:       int(userID),
-		Username: req.Username,
-		Email:    req.Email,
-		Role:     invite.Role,
-		Telegram: req.Telegram,
-		Matrix:   req.Matrix,
+		ID:          int(userID),
+		Email:       req.Email,
+		DisplayName: req.DisplayName,
+		Role:        invite.Role,
+		Telegram:    req.Telegram,
+		Matrix:      req.Matrix,
 	})
 }

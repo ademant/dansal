@@ -190,7 +190,7 @@ footer.footer-visible{transform:translateY(0)}
     </div>
     <button class="nav-theme" id="theme-btn" onclick="cycleTheme()" title="Toggle colour scheme">◑</button>
     {{if .User}}
-      <a href="/settings" class="nav-user-name">{{.User.Username}}</a>
+      <a href="/settings" class="nav-user-name">{{displayNameOrEmail .User}}</a>
       <form method="post" action="/logout" style="margin:0">
         <button type="submit" class="nav-btn">{{.Strings.T "nav_logout"}}</button>
       </form>

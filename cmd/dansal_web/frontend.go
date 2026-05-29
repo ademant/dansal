@@ -267,6 +267,22 @@ func validMatrixID(s string) bool {
 	return colon > 1 && colon < len(s)-1
 }
 
+// emailLocal returns the local part of an email address (before @).
+func emailLocal(email string) string {
+	if idx := strings.Index(email, "@"); idx > 0 {
+		return email[:idx]
+	}
+	return email
+}
+
+// displayNameOrEmail returns u.DisplayName if non-empty, else the email local part.
+func displayNameOrEmail(u UserInfo) string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return emailLocal(u.Email)
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, s string) string {
 		t, ok := parseTime(s)
@@ -320,6 +336,8 @@ var tmplFuncMap = template.FuncMap{
 	"join": func(ss []string) string {
 		return strings.Join(ss, ", ")
 	},
+	"emailLocal":        emailLocal,
+	"displayNameOrEmail": displayNameOrEmail,
 	"jsStr": func(s string) template.JS {
 		b, _ := json.Marshal(s)
 		return template.JS(b)

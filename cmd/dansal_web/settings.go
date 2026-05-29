@@ -56,12 +56,13 @@ func settingsUpdateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 		token := getSessionToken(r)
 		fields := map[string]string{
-			"email":       r.FormValue("email"),
-			"description": r.FormValue("description"),
-			"telegram":    r.FormValue("telegram"),
-			"matrix":      r.FormValue("matrix"),
-			"mastodon":    r.FormValue("mastodon"),
-			"website":     r.FormValue("website"),
+			"email":        r.FormValue("email"),
+			"display_name": r.FormValue("display_name"),
+			"description":  r.FormValue("description"),
+			"telegram":     r.FormValue("telegram"),
+			"matrix":       r.FormValue("matrix"),
+			"mastodon":     r.FormValue("mastodon"),
+			"website":      r.FormValue("website"),
 		}
 
 		if err := client.UpdateUser(r.Context(), su.ID, fields, token); err != nil {
@@ -226,6 +227,41 @@ func settingsDeleteAPIKeyHandler(cfg *Config, client *DansalClient) http.Handler
 		}
 		_ = client.DeleteAPIKey(r.Context(), token, id)
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	}
+}
+
+func settingsDeleteAccountHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		u, err := client.GetUser(r.Context(), su.ID, token)
+		if err != nil {
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		confirmEmail := r.FormValue("confirm_email")
+		if confirmEmail != u.Email {
+			title := i18n.T(r, "settings_title")
+			keys, _ := client.ListAPIKeys(r.Context(), token)
+			sessions, _ := client.GetSessions(r.Context(), token)
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_delete_confirm_error",
+				APIKeys:  keys,
+				Sessions: sessions,
+			}))
+			return
+		}
+		_ = client.DeleteOwnAccount(r.Context(), token)
+		clearSession(w)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }
 

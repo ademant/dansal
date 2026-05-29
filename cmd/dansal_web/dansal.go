@@ -319,16 +319,17 @@ type LoginResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
 	User      struct {
-		ID       int    `json:"id"`
-		Username string `json:"username"`
-		Role     string `json:"role"`
+		ID          int    `json:"id"`
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+		Role        string `json:"role"`
 	} `json:"user"`
 }
 
 type UserInfo struct {
 	ID               int    `json:"id"`
-	Username         string `json:"username"`
 	Email            string `json:"email"`
+	DisplayName      string `json:"display_name"`
 	Role             string `json:"role"`
 	Description      string `json:"description"`
 	Telegram         string `json:"telegram"`
@@ -362,8 +363,8 @@ func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func (c *DansalClient) Login(ctx context.Context, username, password, clientIP, userAgent string) (*LoginResponse, error) {
-	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+func (c *DansalClient) Login(ctx context.Context, email, password, clientIP, userAgent string) (*LoginResponse, error) {
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login",
 		bytes.NewReader(body))
 	if err != nil {
@@ -394,8 +395,8 @@ func (c *DansalClient) Login(ctx context.Context, username, password, clientIP, 
 	return &lr, nil
 }
 
-func (c *DansalClient) CertLogin(ctx context.Context, username string) (*LoginResponse, error) {
-	body, _ := json.Marshal(map[string]string{"username": username})
+func (c *DansalClient) CertLogin(ctx context.Context, email string) (*LoginResponse, error) {
+	body, _ := json.Marshal(map[string]string{"email": email})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/cert-login", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -1056,13 +1057,8 @@ func (c *DansalClient) GetTelegramVerifyLink(ctx context.Context, id int, baseUR
 	return result.DeepLink, nil
 }
 
-func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channel, baseURL string) error {
-	var payload map[string]string
-	if strings.Contains(identifier, "@") {
-		payload = map[string]string{"email": identifier}
-	} else {
-		payload = map[string]string{"username": identifier}
-	}
+func (c *DansalClient) RequestMagicLogin(ctx context.Context, email, channel, baseURL string) error {
+	payload := map[string]string{"email": email}
 	if channel != "" && channel != "email" {
 		payload["channel"] = channel
 	}
@@ -1377,7 +1373,8 @@ func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (s
 type OrgMember struct {
 	OrganizationID int    `json:"organization_id"`
 	UserID         int    `json:"user_id"`
-	Username       string `json:"username,omitempty"`
+	Email          string `json:"email,omitempty"`
+	DisplayName    string `json:"display_name,omitempty"`
 	Role           string `json:"role,omitempty"`
 }
 
@@ -1730,10 +1727,9 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegra
 
 // InviteInfo holds the public fields returned by GET /api/v1/invites/{token}.
 type InviteInfo struct {
-	Role           string `json:"role"`
-	Expired        bool   `json:"expired"`
-	PresetUsername string `json:"preset_username"`
-	PresetEmail    string `json:"preset_email"`
+	Role        string `json:"role"`
+	Expired     bool   `json:"expired"`
+	PresetEmail string `json:"preset_email"`
 }
 
 func (c *DansalClient) GetInviteInfo(ctx context.Context, token string) (InviteInfo, error) {
@@ -1867,9 +1863,20 @@ func (c *DansalClient) SetUserPassword(ctx context.Context, id int, password, to
 	return nil
 }
 
-func (c *DansalClient) CreateUserDirect(ctx context.Context, username, email, password, role, token string) (UserInfo, error) {
+func (c *DansalClient) DeleteOwnAccount(ctx context.Context, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, "/api/v1/users/me", token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) CreateUserDirect(ctx context.Context, email, password, role, token string) (UserInfo, error) {
 	body, _ := json.Marshal(map[string]string{
-		"username": username,
 		"email":    email,
 		"password": password,
 		"role":     role,
@@ -2116,7 +2123,6 @@ type DansalInfo struct {
 
 type PendingRegistration struct {
 	ID                  int    `json:"id"`
-	Username            string `json:"username"`
 	Email               string `json:"email"`
 	RegType             string `json:"reg_type"`
 	OrgID               *int   `json:"org_id,omitempty"`
@@ -2133,9 +2139,7 @@ type PendingRegistration struct {
 }
 
 type RegisterReq struct {
-	Username        string `json:"username"`
 	Email           string `json:"email"`
-	Password        string `json:"password"`
 	RegType         string `json:"reg_type"`
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`
@@ -2408,6 +2412,53 @@ func (c *DansalClient) ListPendingRegistrations(ctx context.Context, token strin
 		return nil, err
 	}
 	return regs, nil
+}
+
+// PendingInvite represents an unused invite link with preset_email (awaiting account setup).
+type PendingInvite struct {
+	ID          int    `json:"id"`
+	Token       string `json:"token"`
+	Role        string `json:"role"`
+	OrgID       *int   `json:"org_id,omitempty"`
+	ExpiresAt   string `json:"expires_at"`
+	CreatedAt   string `json:"created_at"`
+	PresetEmail string `json:"preset_email"`
+}
+
+// ListPendingInvites calls GET /api/v1/pending-invites.
+func (c *DansalClient) ListPendingInvites(ctx context.Context, token string) ([]PendingInvite, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/pending-invites", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var invites []PendingInvite
+	if err := json.NewDecoder(resp.Body).Decode(&invites); err != nil {
+		return nil, err
+	}
+	return invites, nil
+}
+
+// ResendInvite generates a fresh invite for an existing pending-invite (unused invite with preset_email).
+func (c *DansalClient) ResendInvite(ctx context.Context, token string, inviteID int, baseURL string) error {
+	path := fmt.Sprintf("/api/v1/pending-invites/%d/resend", inviteID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
 }
 
 // ApproveRegistration calls POST /api/v1/pending-registrations/{id}/approve.

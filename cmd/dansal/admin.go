@@ -15,7 +15,6 @@ import (
 
 type adminRequest struct {
 	Cmd          string `json:"cmd"`
-	Username     string `json:"username,omitempty"`
 	Email        string `json:"email,omitempty"`
 	Password     string `json:"password,omitempty"`
 	Role         string `json:"role,omitempty"`
@@ -211,7 +210,7 @@ func adminFetchAll() adminResponse {
 }
 
 func adminListUsers() adminResponse {
-	rows, err := db.Query("SELECT id, username, email, role, COALESCE(disabled,0), created_at FROM users ORDER BY id")
+	rows, err := db.Query("SELECT id, email, COALESCE(display_name,''), role, COALESCE(disabled,0), created_at FROM users ORDER BY id")
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -220,7 +219,7 @@ func adminListUsers() adminResponse {
 	for rows.Next() {
 		var u User
 		var disabled int
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &disabled, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &disabled, &u.CreatedAt); err != nil {
 			return adminResponse{OK: false, Error: err.Error()}
 		}
 		u.Disabled = disabled == 1
@@ -232,18 +231,18 @@ func adminListUsers() adminResponse {
 func adminListInvites(req adminRequest) adminResponse {
 	var rows *sql.Rows
 	var err error
-	if req.Username == "" {
+	if req.Email == "" {
 		rows, err = db.Query(
 			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
 		)
 	} else {
-		userID, lookupErr := userIDByUsername(req.Username)
+		u, lookupErr := getUserByEmail(req.Email)
 		if lookupErr != nil {
 			return adminResponse{OK: false, Error: "user not found"}
 		}
 		rows, err = db.Query(
 			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
-			userID,
+			u.ID,
 		)
 	}
 	if err != nil {
@@ -282,13 +281,14 @@ func adminRevokeInvite(req adminRequest) adminResponse {
 }
 
 func adminMagicLink(req adminRequest) adminResponse {
-	if req.Username == "" {
-		return adminResponse{OK: false, Error: "username is required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
-	userID, err := userIDByUsername(req.Username)
+	u, err := getUserByEmail(req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
+	userID := u.ID
 	token, _, err := createMagicToken(userID)
 	if err != nil {
 		return adminResponse{OK: false, Error: "failed to create token: " + err.Error()}
@@ -303,13 +303,14 @@ func adminMagicLink(req adminRequest) adminResponse {
 }
 
 func adminListSessions(req adminRequest) adminResponse {
-	if req.Username == "" {
-		return adminResponse{OK: false, Error: "username is required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
-	userID, err := userIDByUsername(req.Username)
+	u, err := getUserByEmail(req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
+	userID := u.ID
 	rows, err := db.Query(`
 		SELECT id,
 		       COALESCE(user_agent,''),
@@ -353,12 +354,12 @@ func adminRevokeSession(req adminRequest) adminResponse {
 }
 
 func adminEnableUser(req adminRequest) adminResponse {
-	if req.Username == "" {
-		return adminResponse{OK: false, Error: "username is required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
 	result, err := db.Exec(
-		"UPDATE users SET disabled=0, failed_login_count=0, failed_login_since=NULL WHERE username=?",
-		req.Username,
+		"UPDATE users SET disabled=0, failed_login_count=0, failed_login_since=NULL WHERE email=?",
+		req.Email,
 	)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
@@ -370,12 +371,12 @@ func adminEnableUser(req adminRequest) adminResponse {
 }
 
 func adminDisableUser(req adminRequest) adminResponse {
-	if req.Username == "" {
-		return adminResponse{OK: false, Error: "username is required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
 	var userID int
 	var role string
-	if err := db.QueryRow("SELECT id, role FROM users WHERE username=?", req.Username).Scan(&userID, &role); err != nil {
+	if err := db.QueryRow("SELECT id, role FROM users WHERE email=?", req.Email).Scan(&userID, &role); err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
 	if role == RoleAdmin {
@@ -388,8 +389,8 @@ func adminDisableUser(req adminRequest) adminResponse {
 }
 
 func adminCreateUser(req adminRequest) adminResponse {
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		return adminResponse{OK: false, Error: "username, email and password are required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
 	role := req.Role
 	if role == "" {
@@ -399,23 +400,23 @@ func adminCreateUser(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "invalid role: use admin, user, publisher or viewer"}
 	}
 	result, err := db.Exec(
-		"INSERT INTO users (username, email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
-		req.Username, req.Email, hashPassword(req.Password), role, req.Telegram, req.Matrix,
+		"INSERT INTO users (email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?)",
+		req.Email, hashPassword(req.Password), role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
-		return adminResponse{OK: false, Error: "username or email already exists"}
+		return adminResponse{OK: false, Error: "email already exists"}
 	}
 	id, _ := result.LastInsertId()
-	return adminResponse{OK: true, Data: User{ID: int(id), Username: req.Username, Email: req.Email, Role: role, Telegram: req.Telegram, Matrix: req.Matrix}}
+	return adminResponse{OK: true, Data: User{ID: int(id), Email: req.Email, Role: role, Telegram: req.Telegram, Matrix: req.Matrix}}
 }
 
 func adminDeleteUser(req adminRequest) adminResponse {
-	if req.Username == "" {
-		return adminResponse{OK: false, Error: "username is required"}
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required"}
 	}
 	var userID int
 	var role string
-	if err := db.QueryRow("SELECT id, role FROM users WHERE username = ?", req.Username).Scan(&userID, &role); err != nil {
+	if err := db.QueryRow("SELECT id, role FROM users WHERE email = ?", req.Email).Scan(&userID, &role); err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
 	if role == RoleAdmin {
@@ -426,11 +427,11 @@ func adminDeleteUser(req adminRequest) adminResponse {
 }
 
 func adminSetPassword(req adminRequest) adminResponse {
-	if req.Username == "" || req.Password == "" {
-		return adminResponse{OK: false, Error: "username and password are required"}
+	if req.Email == "" || req.Password == "" {
+		return adminResponse{OK: false, Error: "email and password are required"}
 	}
-	result, err := db.Exec("UPDATE users SET password_hash = ? WHERE username = ?",
-		hashPassword(req.Password), req.Username)
+	result, err := db.Exec("UPDATE users SET password_hash = ? WHERE email = ?",
+		hashPassword(req.Password), req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -441,13 +442,13 @@ func adminSetPassword(req adminRequest) adminResponse {
 }
 
 func adminSetRole(req adminRequest) adminResponse {
-	if req.Username == "" || req.Role == "" {
-		return adminResponse{OK: false, Error: "username and role are required"}
+	if req.Email == "" || req.Role == "" {
+		return adminResponse{OK: false, Error: "email and role are required"}
 	}
 	if !validateRole(req.Role) {
 		return adminResponse{OK: false, Error: "invalid role: use admin, user, publisher or viewer"}
 	}
-	result, err := db.Exec("UPDATE users SET role = ? WHERE username = ?", req.Role, req.Username)
+	result, err := db.Exec("UPDATE users SET role = ? WHERE email = ?", req.Role, req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -479,7 +480,7 @@ func adminListMembers(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "org_id is required"}
 	}
 	rows, err := db.Query(`
-		SELECT om.organization_id, om.user_id, u.username, om.created_at
+		SELECT om.organization_id, om.user_id, u.email, COALESCE(u.display_name,''), om.created_at
 		FROM organization_members om
 		JOIN users u ON om.user_id = u.id
 		WHERE om.organization_id = ?
@@ -491,7 +492,7 @@ func adminListMembers(req adminRequest) adminResponse {
 	members := []OrganizationMember{}
 	for rows.Next() {
 		var m OrganizationMember
-		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Username, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Email, &m.DisplayName, &m.CreatedAt); err != nil {
 			return adminResponse{OK: false, Error: err.Error()}
 		}
 		members = append(members, m)
@@ -500,10 +501,10 @@ func adminListMembers(req adminRequest) adminResponse {
 }
 
 func adminAddMember(req adminRequest) adminResponse {
-	if req.OrgID == 0 || req.Username == "" {
-		return adminResponse{OK: false, Error: "org_id and username are required"}
+	if req.OrgID == 0 || req.Email == "" {
+		return adminResponse{OK: false, Error: "org_id and email are required"}
 	}
-	userID, err := userIDByUsername(req.Username)
+	userID, err := userIDByEmail(req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
@@ -660,10 +661,10 @@ func smtpPublicConfig() map[string]any {
 }
 
 func adminRemoveMember(req adminRequest) adminResponse {
-	if req.OrgID == 0 || req.Username == "" {
-		return adminResponse{OK: false, Error: "org_id and username are required"}
+	if req.OrgID == 0 || req.Email == "" {
+		return adminResponse{OK: false, Error: "org_id and email are required"}
 	}
-	userID, err := userIDByUsername(req.Username)
+	userID, err := userIDByEmail(req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}

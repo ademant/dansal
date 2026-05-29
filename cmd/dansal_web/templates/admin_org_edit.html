@@ -75,11 +75,11 @@
   <legend>Members</legend>
   {{if .Members}}
   <table class="members-table">
-    <thead><tr><th>Username</th><th>Role</th><th></th></tr></thead>
+    <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
     <tbody>
     {{range .Members}}
     <tr>
-      <td>{{.Username}}</td>
+      <td>{{.Email}}{{if .DisplayName}} <span style="color:var(--fg-3);font-size:.85rem">({{.DisplayName}})</span>{{end}}</td>
       <td><span class="role-badge role-{{.Role}}">{{.Role}}</span></td>
       <td>
         <form method="post" action="/admin/organizations/{{$orgID}}/members" style="margin:0">

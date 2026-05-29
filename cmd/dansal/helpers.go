@@ -26,19 +26,19 @@ func notifyUser(chatID, email, subject, body string) {
 		if err := sendTelegramMessage(chatID, body); err != nil {
 			log.Printf("notify: telegram to %s: %v", chatID, err)
 		}
-	} else if email != "" && config.SMTP.Host != "" {
+	} else if email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
 		if err := SendEmail(email, subject, body); err != nil {
 			log.Printf("notify: email to %s: %v", email, err)
 		}
 	}
 }
 
-// userIDByUsername returns the database ID for the given username, or an error
+// userIDByEmail returns the database ID for the given email, or an error
 // when no such user exists.
-func userIDByUsername(username string) (int, error) {
+func userIDByEmail(email string) (int, error) {
 	var id int
-	if err := db.QueryRow("SELECT id FROM users WHERE username=?", username).Scan(&id); err != nil {
-		return 0, fmt.Errorf("user not found: %s", username)
+	if err := db.QueryRow("SELECT id FROM users WHERE email=?", email).Scan(&id); err != nil {
+		return 0, fmt.Errorf("user not found: %s", email)
 	}
 	return id, nil
 }

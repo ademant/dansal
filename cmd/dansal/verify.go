@@ -30,8 +30,10 @@ func buildBaseURL(r *http.Request) string {
 }
 
 // buildVerifyURL constructs the verification link using buildBaseURL.
+// Uses /verify/{token} (served by dansal-web as an HTML page) rather than
+// the /api/ path, which nginx routes directly to the API returning raw JSON.
 func buildVerifyURL(r *http.Request, token string) string {
-	return buildBaseURL(r) + "/api/v1/verify/" + token
+	return buildBaseURL(r) + "/verify/" + token
 }
 
 func generateVerificationToken() (string, error) {
@@ -118,7 +120,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 
 	var vURL string
 	if req.BaseURL != "" {
-		vURL = strings.TrimRight(req.BaseURL, "/") + "/api/v1/verify/" + token
+		vURL = strings.TrimRight(req.BaseURL, "/") + "/verify/" + token
 	} else {
 		vURL = buildVerifyURL(r, token)
 	}
@@ -133,7 +135,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		deepLink := "https://t.me/" + botName + "?start=" + token
-		log.Printf("verify: generated telegram deep link for user %d (%s)", targetID, user.Username)
+		log.Printf("verify: generated telegram deep link for user %d (%s)", targetID, user.Email)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"deep_link": deepLink})
 		return
@@ -153,7 +155,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Username)
+	log.Printf("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Email)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -203,7 +205,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 func sendEmailVerification(user User, verifyURL string) error {
 	body := fmt.Sprintf(
 		"Hello %s,\n\nplease verify your email address:\n\n%s\n\nThis link expires in %d hours.\n",
-		user.Username, verifyURL, config.Server.VerificationExpiryHours,
+		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,
 	)
 	return SendEmail(user.Email, "Verify your email address", body)
 }
@@ -215,7 +217,7 @@ func sendTelegramVerification(user User, verifyURL string) error {
 	}
 	text := fmt.Sprintf(
 		"Hello %s, please verify your Telegram account:\n\n%s\n\nThis link expires in %d hours.",
-		user.Username, verifyURL, config.Server.VerificationExpiryHours,
+		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,
 	)
 	payload, _ := json.Marshal(map[string]any{
 		"chat_id": user.Telegram,
@@ -318,6 +320,6 @@ func sendMatrixMessage(matrixID, text string) error {
 func sendMatrixVerification(user User, verifyURL string) error {
 	return sendMatrixMessage(user.Matrix, fmt.Sprintf(
 		"Hello %s, please verify your Matrix account:\n\n%s\n\nThis link expires in %d hours.",
-		user.Username, verifyURL, config.Server.VerificationExpiryHours,
+		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,
 	))
 }

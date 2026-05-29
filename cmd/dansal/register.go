@@ -31,9 +31,7 @@ func randomHex32() (string, error) {
 }
 
 type RegisterRequest struct {
-	Username        string `json:"username"`
 	Email           string `json:"email"`
-	Password        string `json:"password"`
 	RegType         string `json:"reg_type"` // "join_org" | "new_org"
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`
@@ -47,7 +45,6 @@ type RegisterRequest struct {
 
 type PendingRegistration struct {
 	ID                  int    `json:"id"`
-	Username            string `json:"username"`
 	Email               string `json:"email"`
 	RegType             string `json:"reg_type"`
 	OrgID               *int   `json:"org_id,omitempty"`
@@ -93,12 +90,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.Email == "" {
-		writeError(w, "username and email are required", http.StatusBadRequest)
-		return
-	}
-	if isReservedUsername(req.Username) {
-		writeError(w, "Username is reserved", http.StatusBadRequest)
+	if req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 	if req.RegType != "join_org" && req.RegType != "new_org" {
@@ -134,15 +127,15 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check uniqueness in users table.
 	var c int
-	db.QueryRow("SELECT COUNT(*) FROM users WHERE username=? OR email=?", req.Username, req.Email).Scan(&c)
+	db.QueryRow("SELECT COUNT(*) FROM users WHERE email=?", req.Email).Scan(&c)
 	if c > 0 {
-		writeError(w, "Username or email already registered", http.StatusConflict)
+		writeError(w, "Email already registered", http.StatusConflict)
 		return
 	}
 	// Check uniqueness in pending_registrations.
-	db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE username=? OR email=?", req.Username, req.Email).Scan(&c)
+	db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE email=?", req.Email).Scan(&c)
 	if c > 0 {
-		writeError(w, "A registration with this username or email is already pending", http.StatusConflict)
+		writeError(w, "A registration with this email is already pending", http.StatusConflict)
 		return
 	}
 
@@ -196,22 +189,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrgID
 	}
 
-	pass := req.Password
-	if pass == "" {
-		pass, err = randomHex32()
-		if err != nil {
-			writeError(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-	}
-
 	_, dbErr := db.Exec(
 		`INSERT INTO pending_registrations
-		 (verification_token, approval_token, username, email, password_hash,
+		 (verification_token, approval_token, email,
 		  reg_type, org_id, org_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		verificationToken, approvalToken, req.Username, req.Email, hashPassword(pass),
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		verificationToken, approvalToken, req.Email,
 		req.RegType, orgIDArg, req.OrgName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, expiresAt,
 	)
@@ -285,15 +269,15 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if callerRole == RoleAdmin {
 		rows, err = db.Query(
-			`SELECT id, username, email, reg_type, org_id, org_name, org_description, org_website,
-			 org_contact_email, verification_channel, telegram, telegram_chat_id, verified, created_at, expires_at
+			`SELECT id, email, reg_type, org_id, org_name, org_description, org_website,
+			 org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified, created_at, expires_at
 			 FROM pending_registrations ORDER BY created_at ASC`,
 		)
 	} else {
 		rows, err = db.Query(
-			`SELECT pr.id, pr.username, pr.email, pr.reg_type, pr.org_id, pr.org_name, pr.org_description,
-			 pr.org_website, pr.org_contact_email, pr.verification_channel, pr.telegram, pr.telegram_chat_id,
-			 pr.verified, pr.created_at, pr.expires_at
+			`SELECT pr.id, pr.email, pr.reg_type, pr.org_id, pr.org_name, pr.org_description,
+			 pr.org_website, pr.org_contact_email, pr.verification_channel, pr.telegram,
+			 COALESCE(pr.telegram_chat_id,''), pr.verified, pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
 			 JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
 			 WHERE pr.reg_type='join_org' ORDER BY pr.created_at ASC`,
@@ -311,7 +295,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 		var pr PendingRegistration
 		var orgID sql.NullInt64
 		if err := rows.Scan(
-			&pr.ID, &pr.Username, &pr.Email, &pr.RegType, &orgID,
+			&pr.ID, &pr.Email, &pr.RegType, &orgID,
 			&pr.OrgName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
 			&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID,
 			&pr.Verified, &pr.CreatedAt, &pr.ExpiresAt,
@@ -343,7 +327,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	var pr struct {
 		ID                  int
-		Username, Email, PasswordHash string
+		Email               string
 		RegType             string
 		OrgID               sql.NullInt64
 		OrgName, OrgDescription, OrgWebsite, OrgContactEmail string
@@ -351,11 +335,11 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		Verified            int
 	}
 	err = db.QueryRow(
-		`SELECT id, username, email, password_hash, reg_type, org_id, org_name, org_description,
-		 org_website, org_contact_email, verification_channel, telegram, telegram_chat_id, verified
+		`SELECT id, email, reg_type, org_id, org_name, org_description,
+		 org_website, org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified
 		 FROM pending_registrations WHERE id=?`, id,
 	).Scan(
-		&pr.ID, &pr.Username, &pr.Email, &pr.PasswordHash, &pr.RegType,
+		&pr.ID, &pr.Email, &pr.RegType,
 		&pr.OrgID, &pr.OrgName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
 		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified,
 	)
@@ -419,9 +403,9 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		orgVal = orgID
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO invite_links (token, created_by, role, org_id, expires_at, preset_username, preset_email)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		inviteToken, callerID, role, orgVal, expiresAt, pr.Username, pr.Email,
+		`INSERT INTO invite_links (token, created_by, role, org_id, expires_at, preset_email)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		inviteToken, callerID, role, orgVal, expiresAt, pr.Email,
 	); err != nil {
 		writeError(w, "failed to create invite link", http.StatusInternalServerError)
 		return
@@ -434,18 +418,18 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Username, role)
+	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
 	base := buildBaseURL(r)
 	setupURL := base + "/invites/" + inviteToken
 	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
-		fmt.Sprintf("Your registration has been approved!\n\nComplete your account setup here:\n%s\n\nThis link is valid for 72 hours.", setupURL))
+		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for 72 hours.", setupURL))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":     "invite_sent",
-		"username":   pr.Username,
+		"email":      pr.Email,
 		"invite_url": setupURL,
 	})
 }

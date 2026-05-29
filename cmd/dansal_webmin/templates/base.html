@@ -68,7 +68,7 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
     <a href="/notifications">Notifications</a>
   </div>
   <div class="nav-user">
-    <span class="nav-user-name">{{.User.Username}}{{if .User.CertAuth}} <span title="Authenticated via client certificate" style="font-size:.75rem;opacity:.8">🔐</span>{{end}}</span>
+    <span class="nav-user-name">{{if .User.DisplayName}}{{.User.DisplayName}}{{else}}{{.User.Email}}{{end}}{{if .User.CertAuth}} <span title="Authenticated via client certificate" style="font-size:.75rem;opacity:.8">🔐</span>{{end}}</span>
     {{if not .User.CertAuth}}
     <form method="POST" action="/logout" style="display:inline">
       <button type="submit" class="nav-btn">Logout</button>

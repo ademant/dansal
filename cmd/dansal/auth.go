@@ -24,7 +24,8 @@ type Token struct {
 }
 
 type LoginRequest struct {
-	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Username    string `json:"username"` // legacy field — treated as email for backward compat
 	Password    string `json:"password"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
@@ -41,7 +42,7 @@ type TokenError struct {
 
 // recordFailedLogin increments the per-user failure counter and disables the
 // account when the configured threshold is reached within the window.
-func recordFailedLogin(userID int, username, clientIP string, storedCount int, failedSince string) {
+func recordFailedLogin(userID int, email, clientIP string, storedCount int, failedSince string) {
 	maxFailures := config.Server.LoginMaxFailures
 	windowSecs := config.Server.LoginFailureWindowSecs
 
@@ -68,7 +69,7 @@ func recordFailedLogin(userID int, username, clientIP string, storedCount int, f
 		} else {
 			db.Exec("UPDATE users SET disabled=1, failed_login_count=? WHERE id=?", newCount, userID)
 		}
-		log.Printf("auth: user %q disabled after %d failed logins within window (last from %s)", username, newCount, clientIP)
+		log.Printf("auth: user %q disabled after %d failed logins within window (last from %s)", email, newCount, clientIP)
 		credentials.pruneByUserID(userID)
 		db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
 	} else if newSince != nil {
@@ -211,7 +212,10 @@ func login(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(TokenError{Error: "Invalid form data"})
 			return
 		}
-		req.Username = r.FormValue("username")
+		req.Email = r.FormValue("email")
+		if req.Email == "" {
+			req.Email = r.FormValue("username") // legacy webmin compat
+		}
 		req.Password = r.FormValue("password")
 	} else {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -225,10 +229,15 @@ func login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Accept email field; fall back to username field for backward compat.
+	if req.Email == "" {
+		req.Email = req.Username
+	}
+
 	// Validate input
-	if req.Username == "" || req.Password == "" {
+	if req.Email == "" || req.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(TokenError{Error: "Username and password are required"})
+		json.NewEncoder(w).Encode(TokenError{Error: "Email and password are required"})
 		return
 	}
 
@@ -240,14 +249,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isReservedUsername(req.Username) {
-		log.Printf("auth failed from %s: reserved username %q", clientIP, req.Username)
-		time.Sleep(time.Duration(config.Server.LoginTarpitSecs) * time.Second)
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
-		return
-	}
-
 	// Verify user credentials
 	var user User
 	var passwordHash string
@@ -255,14 +256,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	var failedSince string
 
 	err := db.QueryRow(
-		"SELECT id, username, email, role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE username = ?",
-		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
+		"SELECT id, email, COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE email = ?",
+		req.Email,
+	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
 
 	if err == sql.ErrNoRows {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
 		return
 	}
 	if err != nil {
@@ -272,9 +273,17 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userDisabled != 0 {
-		log.Printf("auth failed from %s: user %q is disabled", clientIP, req.Username)
+		log.Printf("auth failed from %s: user %q is disabled", clientIP, user.Email)
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
+		return
+	}
+
+	// Reject empty password logins — user must use passkey or magic link.
+	if passwordHash == "" {
+		log.Printf("auth failed from %s: no password set for user %q", clientIP, user.Email)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "No password set — use a passkey or magic link"})
 		return
 	}
 
@@ -282,9 +291,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 	ok, migrate := checkPassword(req.Password, passwordHash)
 	if !ok {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
-		recordFailedLogin(user.ID, req.Username, clientIP, failedCount, failedSince)
+		recordFailedLogin(user.ID, user.Email, clientIP, failedCount, failedSince)
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
 		return
 	}
 	if migrate {
@@ -323,18 +332,18 @@ func certLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Username string `json:"username"`
+		Email string `json:"email"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" {
-		writeError(w, "username is required", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 
 	var user User
 	err := db.QueryRow(
-		"SELECT id, username, email, role, created_at, COALESCE(disabled,0) FROM users WHERE username=?",
-		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, new(int))
+		"SELECT id, email, COALESCE(display_name,''), role, created_at, COALESCE(disabled,0) FROM users WHERE email=?",
+		req.Email,
+	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, new(int))
 	if err == sql.ErrNoRows {
 		writeError(w, "user not found", http.StatusNotFound)
 		return

@@ -18,9 +18,10 @@ const (
 )
 
 type SessionUser struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	ID          int    `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,omitempty"`
+	Role        string `json:"role"`
 }
 
 func withSessionUser(r *http.Request, u *SessionUser) *http.Request {

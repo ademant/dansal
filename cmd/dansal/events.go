@@ -1323,21 +1323,27 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var changedByUser string
-	if err := db.QueryRow("SELECT username FROM users WHERE id = ?", callerID).Scan(&changedByUser); err != nil || changedByUser == "" {
+	if err := db.QueryRow(
+		"SELECT COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id = ?", callerID,
+	).Scan(&changedByUser); err != nil || changedByUser == "" {
 		changedByUser = strconv.Itoa(callerID)
 	}
 
+	var callerIDArg any
+	if callerID > 0 {
+		callerIDArg = callerID
+	}
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
-		 contact_name=?, contact_email=?, changed_at=?, changed_by=? WHERE id=?`,
+		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
-		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, id,
+		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

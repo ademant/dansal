@@ -20,8 +20,8 @@
   <div class="settings-card">
     <h2>{{$.Strings.T "settings_account"}}</h2>
     <div class="settings-row">
-      <span class="settings-label">{{$.Strings.T "settings_username"}}</span>
-      <span>{{.User.Username}}</span>
+      <span class="settings-label">{{$.Strings.T "settings_email"}}</span>
+      <span>{{.User.Email}}</span>
     </div>
     <div class="settings-row">
       <span class="settings-label">{{$.Strings.T "settings_role"}}</span>
@@ -31,6 +31,10 @@
 
   <form method="post" action="/settings" class="settings-card settings-form">
     <h2>{{$.Strings.T "settings_profile"}}</h2>
+
+    <label for="display_name">{{$.Strings.T "settings_display_name"}}</label>
+    <input id="display_name" type="text" name="display_name" value="{{.User.DisplayName}}" placeholder="{{emailLocal .User.Email}}">
+    <p class="field-hint">{{$.Strings.T "settings_display_name_hint"}}</p>
 
     <label for="description">{{$.Strings.T "settings_description"}}</label>
     <textarea id="description" name="description" rows="3">{{.User.Description}}</textarea>
@@ -190,6 +194,18 @@
       <input type="text" name="name" required placeholder="{{$.Strings.T "settings_apikeys_name"}}" style="flex:1">
       <input type="date" name="expires_at" title="{{$.Strings.T "settings_apikeys_expires"}}" style="width:140px">
       <button type="submit" class="btn-secondary">{{$.Strings.T "settings_apikeys_new_btn"}}</button>
+    </form>
+  </div>
+  {{end}}
+
+  {{/* Delete account */}}
+  {{with .Data}}
+  <div class="settings-card" style="border-color:#dc3545">
+    <h2 style="color:#dc3545">{{$.Strings.T "settings_delete_account"}}</h2>
+    <form method="post" action="/settings/delete" style="display:flex;flex-direction:column;gap:.5rem">
+      <p class="hint" style="margin:0">{{$.Strings.T "settings_delete_confirm_hint"}}</p>
+      <input type="email" name="confirm_email" required autocomplete="email" placeholder="{{.User.Email}}" style="padding:.4rem .6rem;border:1px solid #dc3545;border-radius:4px;font-size:.9rem">
+      <button type="submit" style="padding:.4rem .9rem;background:#dc3545;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.9rem">{{$.Strings.T "settings_delete_btn"}}</button>
     </form>
   </div>
   {{end}}

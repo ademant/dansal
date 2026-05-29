@@ -48,9 +48,10 @@ func certAuthMiddleware(client *DansalClient) func(http.Handler) http.Handler {
 			}
 
 			su := &SessionUser{
-				ID:       lr.User.ID,
-				Username: lr.User.Username,
-				Role:     lr.User.Role,
+				ID:          lr.User.ID,
+				Email:       lr.User.Email,
+				DisplayName: lr.User.DisplayName,
+				Role:        lr.User.Role,
 			}
 			setSession(w, lr.Token, *su, expiresAt)
 			next.ServeHTTP(w, withSessionUser(r, su))

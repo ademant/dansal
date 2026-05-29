@@ -8,7 +8,6 @@ import (
 
 type socketRequest struct {
 	Cmd                   string `json:"cmd"`
-	Username              string `json:"username,omitempty"`
 	Email                 string `json:"email,omitempty"`
 	Password              string `json:"password,omitempty"`
 	Role                  string `json:"role,omitempty"`

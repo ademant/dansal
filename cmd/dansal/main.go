@@ -569,6 +569,81 @@ func migrateContactPostsLostFound() {
 	log.Printf("migrateContactPostsLostFound: added lost_item/found_item types")
 }
 
+// migrateUsersDropUsername rebuilds the users table to replace username with display_name.
+// Existing usernames are copied into display_name. Returns immediately if username column
+// is already gone.
+func migrateUsersDropUsername() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='users'",
+	).Scan(&schema); err != nil || !strings.Contains(schema, "username") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateUsersDropUsername: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateUsersDropUsername: pragma off: %v", err)
+		return
+	}
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateUsersDropUsername: begin: %v", err)
+		return
+	}
+	stmts := []string{
+		`CREATE TABLE users_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			email TEXT UNIQUE NOT NULL,
+			display_name TEXT,
+			password_hash TEXT NOT NULL DEFAULT '',
+			role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+			telegram TEXT,
+			matrix TEXT,
+			email_verified INTEGER DEFAULT 0,
+			telegram_verified INTEGER DEFAULT 0,
+			matrix_verified INTEGER DEFAULT 0,
+			disabled INTEGER DEFAULT 0,
+			failed_login_count INTEGER DEFAULT 0,
+			failed_login_since INTEGER,
+			last_magic_sent_at INTEGER,
+			description TEXT,
+			mastodon TEXT,
+			website TEXT,
+			telegram_chat_id TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO users_v2 (id, email, display_name, password_hash, role, telegram, matrix,
+		  email_verified, telegram_verified, matrix_verified, disabled, failed_login_count,
+		  failed_login_since, last_magic_sent_at, description, mastodon, website, telegram_chat_id, created_at)
+		 SELECT id, email, username, password_hash, role, telegram, matrix,
+		  COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0),
+		  COALESCE(disabled,0), COALESCE(failed_login_count,0),
+		  failed_login_since, last_magic_sent_at, description, mastodon, website, telegram_chat_id, created_at
+		 FROM users`,
+		`DROP TABLE users`,
+		`ALTER TABLE users_v2 RENAME TO users`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateUsersDropUsername: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateUsersDropUsername: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateUsersDropUsername: replaced username with display_name (backfilled from existing usernames)")
+}
+
 // migrateInviteLinksRole rebuilds invite_links to add a CHECK constraint on
 // the role column, matching the constraint already present on users.role.
 func migrateInviteLinksRole() {
@@ -1135,6 +1210,13 @@ func migrateDB() {
 	// #392: preset username/email on invite_links for registration-via-invite flow.
 	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_username TEXT")
 	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
+	// #393: replace username with email identity + display_name.
+	migrateUsersDropUsername()
+	db.Exec("ALTER TABLE invite_links DROP COLUMN preset_username")
+	db.Exec("ALTER TABLE pending_registrations DROP COLUMN username")
+	// #394: changed_by_id FK on events.
+	db.Exec("ALTER TABLE events ADD COLUMN changed_by_id INTEGER REFERENCES users(id)")
+	db.Exec("UPDATE events SET changed_by_id = (SELECT id FROM users WHERE username = events.changed_by) WHERE changed_by IS NOT NULL AND changed_by != '' AND changed_by != 'fetch'")
 }
 
 func logUnmappedCountries() {
@@ -1159,9 +1241,9 @@ func createTables() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT UNIQUE NOT NULL,
 		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
+		display_name TEXT,
+		password_hash TEXT NOT NULL DEFAULT '',
 		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
 		telegram TEXT,
 		matrix TEXT,
@@ -1210,6 +1292,12 @@ func createTables() error {
 		contact_email TEXT,
 		suggester_email TEXT DEFAULT '',
 		suggestion_token TEXT,
+		changed_at INTEGER,
+		changed_by TEXT DEFAULT '',
+		changed_by_id INTEGER REFERENCES users(id),
+		fetch_source_id INTEGER,
+		has_lost_found INTEGER NOT NULL DEFAULT 0,
+		expires_at INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
@@ -1339,7 +1427,6 @@ func createTables() error {
 		org_id INTEGER,
 		expires_at INTEGER NOT NULL,
 		used_at INTEGER,
-		preset_username TEXT,
 		preset_email TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
@@ -1469,9 +1556,7 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		verification_token TEXT UNIQUE NOT NULL,
 		approval_token     TEXT UNIQUE NOT NULL,
-		username           TEXT NOT NULL,
 		email              TEXT NOT NULL,
-		password_hash      TEXT NOT NULL,
 		reg_type           TEXT NOT NULL CHECK(reg_type IN ('join_org','new_org')),
 		org_id             INTEGER,
 		org_name           TEXT DEFAULT '',
@@ -1707,9 +1792,12 @@ func main() {
 	// User endpoints (protected)
 	smux.Handle("GET /api/v1/users", auth(getUsers))
 	smux.Handle("POST /api/v1/users", auth(createUser))
+	smux.Handle("DELETE /api/v1/users/me", auth(deleteOwnAccount))
 	smux.Handle("GET /api/v1/users/{id}", auth(getUser))
 	smux.Handle("PUT /api/v1/users/{id}", auth(updateUser))
 	smux.Handle("DELETE /api/v1/users/{id}", auth(deleteUser))
+	smux.Handle("GET /api/v1/pending-invites", auth(listPendingInvites))
+	smux.Handle("POST /api/v1/pending-invites/{id}/resend", auth(resendInvite))
 	smux.Handle("POST /api/v1/users/{id}/verify", auth(sendVerification))
 	smux.Handle("POST /api/v1/users/{id}/magic-link", auth(generateAdminMagicLink))
 	smux.Handle("POST /api/v1/users/{id}/password", auth(setUserPassword))

@@ -56,7 +56,7 @@ func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.R
 			Token     string `json:"token"`
 			ExpiresAt string `json:"expires_at"`
 			UserID    int    `json:"user_id"`
-			Username  string `json:"username"`
+			Email     string `json:"email"`
 			Role      string `json:"role"`
 		}
 		if json.Unmarshal(respBody, &result) == nil && result.Token != "" {
@@ -65,9 +65,9 @@ func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.R
 				expiresAt = time.Now().Add(24 * time.Hour)
 			}
 			setSession(w, result.Token, SessionUser{
-				ID:       result.UserID,
-				Username: result.Username,
-				Role:     result.Role,
+				ID:    result.UserID,
+				Email: result.Email,
+				Role:  result.Role,
 			}, expiresAt)
 		}
 	}

@@ -43,8 +43,8 @@
   <thead>
     <tr>
       {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
-      <th data-sort="str">{{$.Strings.T "settings_username"}}</th>
-      {{if $.Data.IsAdmin}}<th data-sort="str">{{$.Strings.T "settings_email"}}</th>{{end}}
+      <th data-sort="str">Email</th>
+      {{if $.Data.IsAdmin}}<th data-sort="str">Display name</th>{{end}}
       <th data-sort="str">{{$.Strings.T "settings_role"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       {{if $.Data.IsAdmin}}<th></th>{{end}}
@@ -55,8 +55,8 @@
   {{$uid := .ID}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td>{{.Username}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
-    {{if $.Data.IsAdmin}}<td class="email-cell">{{.Email}}</td>{{end}}
+    <td>{{.Email}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
+    {{if $.Data.IsAdmin}}<td>{{.DisplayName}}</td>{{end}}
     <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
       <form method="post" action="/admin/users/{{$uid}}/role" style="display:inline">
@@ -100,7 +100,7 @@
       <button type="button" class="btn-sm" onclick="openPasswordModal({{$uid}})">{{$.Strings.T "admin_user_password_reset"}}</button>
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
-              onclick="return confirmTypedDelete('{{js .Username}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
+              onclick="return confirmTypedDelete('{{js .Email}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
     </td>
     {{end}}
   </tr>
@@ -114,7 +114,6 @@
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_user_create_title"}}</h2>
   <form method="post" action="/admin/users/new" class="create-user-form">
-    <input type="text" name="username" placeholder="{{$.Strings.T "settings_username"}}" required>
     <input type="email" name="email" placeholder="{{$.Strings.T "settings_email"}}" required>
     <input type="password" name="password" placeholder="{{$.Strings.T "admin_user_new_password"}}" required>
     <select name="role">

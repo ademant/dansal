@@ -123,10 +123,10 @@ func loadWASession(sessionID string) ([]byte, error) {
 // ── Registration (invite flow) ────────────────────────────────────────────────
 
 type waRegSession struct {
-	Session  webauthn.SessionData `json:"session"`
-	Username string               `json:"username"`
-	Email    string               `json:"email"`
-	InviteID int                  `json:"invite_id"`
+	Session     webauthn.SessionData `json:"session"`
+	Email       string               `json:"email"`
+	DisplayName string               `json:"display_name"`
+	InviteID    int                  `json:"invite_id"`
 }
 
 // POST /api/v1/invites/{token}/webauthn/begin
@@ -164,34 +164,27 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
+		Email       string `json:"email"`
+		DisplayName string `json:"display_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	// Preset values from registration override whatever the client sends.
-	if invite.PresetUsername != "" {
-		req.Username = invite.PresetUsername
-	}
+	// Preset email from registration overrides whatever the client sends.
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
-	if req.Username == "" || req.Email == "" {
-		writeError(w, "username and email are required", http.StatusBadRequest)
-		return
-	}
-	if isReservedUsername(req.Username) {
-		writeError(w, "Username is reserved", http.StatusBadRequest)
+	if req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 
-	// Use a stable handle scoped to this invite+username so the ceremony can be
+	// Use a stable handle scoped to this invite+email so the ceremony can be
 	// completed without the user existing in the DB yet.
 	tempUser := &waUser{
-		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, req.Username)),
-		username: req.Username,
+		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, req.Email)),
+		username: req.Email,
 	}
 
 	options, sessionData, err := wauthn.BeginRegistration(tempUser)
@@ -201,10 +194,10 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blob, _ := json.Marshal(waRegSession{
-		Session:  *sessionData,
-		Username: req.Username,
-		Email:    req.Email,
-		InviteID: invite.ID,
+		Session:     *sessionData,
+		Email:       req.Email,
+		DisplayName: req.DisplayName,
+		InviteID:    invite.ID,
 	})
 	sessionID, err := generateSessionToken()
 	if err != nil {
@@ -274,8 +267,8 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tempUser := &waUser{
-		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, stored.Username)),
-		username: stored.Username,
+		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, stored.Email)),
+		username: stored.Email,
 	}
 
 	credential, err := wauthn.FinishRegistration(tempUser, stored.Session, r)
@@ -293,8 +286,8 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 
 	// password_hash is empty string — password login will not work until set.
 	result, err := tx.Exec(
-		"INSERT INTO users (username, email, password_hash, role, email_verified) VALUES (?, ?, '', ?, 1)",
-		stored.Username, stored.Email, invite.Role,
+		"INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES (?, ?, '', ?, 1)",
+		stored.Email, stored.DisplayName, invite.Role,
 	)
 	if err != nil {
 		writeError(w, "Username or email already exists", http.StatusConflict)
@@ -323,12 +316,12 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", stored.Username, invite.Role, invite.ID)
+	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", stored.Email, invite.Role, invite.ID)
 
 	sessionToken, expiresAt, err := createTokenInDB(int(userID), r.UserAgent(), getClientIP(r), "")
 	if err != nil {
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"status": "created", "username": stored.Username})
+		json.NewEncoder(w).Encode(map[string]any{"status": "created", "email": stored.Email})
 		return
 	}
 
@@ -338,7 +331,7 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		"token":      sessionToken,
 		"expires_at": expiresAt.Format(time.RFC3339),
 		"user_id":    int(userID),
-		"username":   stored.Username,
+		"email":      stored.Email,
 		"role":       invite.Role,
 	})
 }
@@ -351,7 +344,7 @@ type waLoginSession struct {
 }
 
 // POST /api/v1/auth/webauthn/login/begin
-// Body: {"username":"…"}
+// Body: {"email":"…"}
 // Returns: {"session_id":"…","options":{…}}
 func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 	if wauthn == nil {
@@ -359,25 +352,25 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Username string `json:"username"`
+		Email string `json:"email"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	if req.Username == "" {
-		writeError(w, "username is required", http.StatusBadRequest)
+	if req.Email == "" {
+		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
 
 	var userID int
-	var username string
+	var userEmail string
 	if err := db.QueryRow(
-		"SELECT id, username FROM users WHERE username=? AND disabled=0", req.Username,
-	).Scan(&userID, &username); err != nil {
+		"SELECT id, email FROM users WHERE email=? AND disabled=0", req.Email,
+	).Scan(&userID, &userEmail); err != nil {
 		// Don't reveal whether user exists; use generic error.
 		writeError(w, "No passkeys found for this user", http.StatusNotFound)
 		return
 	}
 
-	user := loadWebAuthnUser(userID, username)
+	user := loadWebAuthnUser(userID, userEmail)
 	if len(user.credentials) == 0 {
 		writeError(w, "No passkeys registered for this user", http.StatusBadRequest)
 		return
@@ -432,15 +425,15 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var username, role string
+	var userEmail, role string
 	if err := db.QueryRow(
-		"SELECT username, role FROM users WHERE id=? AND disabled=0", stored.UserID,
-	).Scan(&username, &role); err != nil {
+		"SELECT email, role FROM users WHERE id=? AND disabled=0", stored.UserID,
+	).Scan(&userEmail, &role); err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	user := loadWebAuthnUser(stored.UserID, username)
+	user := loadWebAuthnUser(stored.UserID, userEmail)
 	credential, err := wauthn.FinishLogin(user, stored.Session, r)
 	if err != nil {
 		writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
@@ -463,7 +456,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"token":      sessionToken,
 		"expires_at": expiresAt.Format(time.RFC3339),
-		"username":   username,
+		"email":      userEmail,
 		"role":       role,
 	})
 }

@@ -2,14 +2,14 @@
 {{define "content"}}
 <h1>{{.Strings.T "admin_registrations_title"}}</h1>
 {{with .Data}}
-{{if not .Regs}}
-<p class="hint">{{$.Strings.T "admin_reg_none"}}</p>
-{{else}}
+{{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
+
+{{if .Regs}}
+<h2 style="margin:0 0 .5rem;font-size:1rem">Pending verification / admin approval</h2>
 <div class="table-wrap">
 <table class="event-table">
   <thead>
     <tr>
-      <th>{{$.Strings.T "register_username"}}</th>
       <th>{{$.Strings.T "register_email"}}</th>
       <th>Type</th>
       <th>Org</th>
@@ -22,7 +22,6 @@
   <tbody>
   {{range .Regs}}
   <tr>
-    <td>{{.Username}}</td>
     <td>{{.Email}}</td>
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
@@ -51,7 +50,40 @@
   </tbody>
 </table>
 </div>
+{{else}}
+<p class="hint">{{$.Strings.T "admin_reg_none"}}</p>
 {{end}}
+
+{{if .PendingInvites}}
+<h2 style="margin:1.5rem 0 .5rem;font-size:1rem">Awaiting account setup</h2>
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Expires</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .PendingInvites}}
+  <tr>
+    <td>{{.PresetEmail}}</td>
+    <td>{{.Role}}</td>
+    <td>{{.ExpiresAt}}</td>
+    <td>
+      <form method="post" action="/admin/registrations/{{.ID}}/resend-invite" style="display:inline">
+        <button type="submit" class="btn-sm btn-ok">Resend invite</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
 {{end}}
 <style>
 .table-wrap{overflow-x:auto}

@@ -14,9 +14,9 @@
     {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
     <input type="hidden" name="_form_ts" value="{{.FormToken}}">
     <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
-    <label for="username">{{$.Strings.T "login_username"}}</label>
-    <input id="username" type="text" name="username" value="{{.Username}}"
-           required autofocus autocomplete="username">
+    <label for="email">{{$.Strings.T "login_email"}}</label>
+    <input id="email" type="email" name="email" value="{{.Email}}"
+           required autofocus autocomplete="email">
     <label for="password">{{$.Strings.T "login_password"}}</label>
     <input id="password" type="password" name="password"
            required autocomplete="current-password">
@@ -26,8 +26,8 @@
   <details class="magic-section" id="passkey-section">
     <summary>{{$.Strings.T "login_passkey_title"}}</summary>
     <div class="login-form" style="margin-top:.75rem;gap:.5rem">
-      <label for="passkey-username">{{$.Strings.T "login_username"}}</label>
-      <input id="passkey-username" type="text" autocomplete="username" placeholder="{{$.Strings.T "login_username"}}">
+      <label for="passkey-email">{{$.Strings.T "login_email"}}</label>
+      <input id="passkey-email" type="email" autocomplete="email" placeholder="you@example.com">
       <button type="button" id="btn-passkey-login" onclick="passkeyLogin()">{{$.Strings.T "login_passkey_submit"}}</button>
       <div id="passkey-msg" hidden class="login-error"></div>
     </div>
@@ -64,16 +64,16 @@
   }
 
   window.passkeyLogin = async function(){
-    var u = document.getElementById('passkey-username').value.trim();
+    var u = document.getElementById('passkey-email').value.trim();
     var msgEl = document.getElementById('passkey-msg');
     msgEl.hidden = true;
     var btn = document.getElementById('btn-passkey-login');
     btn.disabled = true;
 
     try {
-      var beginResp = await fetch('/api/v1/auth/webauthn/login/begin', {
+      var beginResp = await fetch('/auth/webauthn/login/begin', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({username: u})
+        body: JSON.stringify({email: u})
       });
       var beginData = await beginResp.json();
       if(!beginResp.ok) throw new Error(beginData.error || beginResp.statusText);
@@ -97,7 +97,7 @@
         }
       };
 
-      var finishResp = await fetch('/api/v1/auth/webauthn/login/finish?session_id='+encodeURIComponent(beginData.session_id), {
+      var finishResp = await fetch('/auth/webauthn/login/finish?session_id='+encodeURIComponent(beginData.session_id), {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(credJSON)
       });

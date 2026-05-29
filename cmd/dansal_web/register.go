@@ -20,7 +20,9 @@ type RegisterDoneData struct {
 }
 
 type AdminRegistrationsData struct {
-	Regs []PendingRegistration
+	Regs           []PendingRegistration
+	PendingInvites []PendingInvite
+	Flash          string
 }
 
 func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -56,7 +58,6 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		regType := r.FormValue("reg_type")
-		username := strings.TrimSpace(r.FormValue("username"))
 		email := strings.TrimSpace(r.FormValue("email"))
 		channel := r.FormValue("channel")
 		telegram := strings.TrimSpace(r.FormValue("telegram"))
@@ -81,7 +82,6 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		req := RegisterReq{
-			Username:        username,
 			Email:           email,
 			RegType:         regType,
 			OrgID:           orgID,
@@ -113,7 +113,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 
-		log.Printf("register: new registration for %s (status=%s)", username, result["status"])
+		log.Printf("register: new registration for %s (status=%s)", email, result["status"])
 
 		redirectURL := "/register/done?ch=email"
 		if result["status"] == "telegram_verification_required" {
@@ -160,8 +160,13 @@ func adminRegistrationsHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			log.Printf("admin registrations list: %v", err)
 			regs = nil
 		}
+		pendingInvites, _ := client.ListPendingInvites(r.Context(), token)
 		title := i18n.T(r, "admin_registrations_title")
-		renderTemplate(w, tmpls.adminRegistrations, tmplData(r, cfg, i18n, title, AdminRegistrationsData{Regs: regs}))
+		renderTemplate(w, tmpls.adminRegistrations, tmplData(r, cfg, i18n, title, AdminRegistrationsData{
+			Regs:           regs,
+			PendingInvites: pendingInvites,
+			Flash:          r.URL.Query().Get("flash"),
+		}))
 	}
 }
 
@@ -185,6 +190,26 @@ func adminRegistrationApproveHandler(cfg *Config, client *DansalClient) http.Han
 		token := getSessionToken(r)
 		if err := client.ApproveRegistration(r.Context(), token, id, role); err != nil {
 			log.Printf("approve registration %d: %v", id, err)
+		}
+		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
+	}
+}
+
+func adminRegistrationResendInviteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su := getSessionUser(r)
+		if su == nil || su.Role != "admin" {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.ResendInvite(r.Context(), token, id, cfg.publicBaseURL()); err != nil {
+			log.Printf("resend invite %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
 	}

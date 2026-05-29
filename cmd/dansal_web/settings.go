@@ -259,7 +259,19 @@ func settingsDeleteAccountHandler(cfg *Config, tmpls *Templates, client *DansalC
 			}))
 			return
 		}
-		_ = client.DeleteOwnAccount(r.Context(), token)
+		if err := client.DeleteOwnAccount(r.Context(), token); err != nil {
+			log.Printf("delete account user %d: %v", su.ID, err)
+			title := i18n.T(r, "settings_title")
+			keys, _ := client.ListAPIKeys(r.Context(), token)
+			sessions, _ := client.GetSessions(r.Context(), token)
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_save_error",
+				APIKeys:  keys,
+				Sessions: sessions,
+			}))
+			return
+		}
 		clearSession(w)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}

@@ -1923,7 +1923,11 @@ func adminUserDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteUser(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteUser(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("admin delete user %d: %v", id, err)
+			http.Error(w, "delete failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
 }

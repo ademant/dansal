@@ -226,7 +226,6 @@ func main() {
 
 		r.HandleFunc("GET /admin/site-config", adminSiteConfigHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/site-config", adminRateLimit(adminSiteConfigSaveHandler(cfg, db, client)))
-		r.HandleFunc("POST /admin/site-config/matrix-login", adminRateLimit(adminSiteConfigMatrixLoginHandler(cfg, tmpls, db, client, i18n)))
 
 		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))

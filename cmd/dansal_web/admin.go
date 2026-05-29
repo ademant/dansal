@@ -4059,23 +4059,17 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 // ── Admin Site Config ─────────────────────────────────────────────────────────
 
 type AdminSiteConfigData struct {
-	SiteName              string
-	Contact               string
-	TelegramBotToken      string
-	TelegramBotName       string
-	MatrixHomeserver      string
-	MatrixAccessToken     string
-	HeartbeatIntervalMins int
-	HasLogo               bool
-	HasBanner             bool
-	HasFavicon            bool
-	Dances                []Dance
-	DefaultDanceNames     map[string]bool
-	ImpressumTexts        map[string]string
-	ImpressumLangs        []string
-	HolidayCountry        string
-	ErrorMsg              string
-	Success               bool
+	SiteName          string
+	Contact           string
+	HasLogo           bool
+	HasBanner         bool
+	HasFavicon        bool
+	Dances            []Dance
+	DefaultDanceNames map[string]bool
+	ImpressumTexts    map[string]string
+	ImpressumLangs    []string
+	HolidayCountry    string
+	Success           bool
 }
 
 func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -4088,8 +4082,6 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		token := getSessionToken(r)
-		ac, _ := client.GetAdminConfig(r.Context(), token)
 		dances, _ := client.GetDances(r.Context())
 		defaultDanceIDs := loadDefaultDanceIDs(db)
 		defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
@@ -4102,22 +4094,17 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			}
 		}
 		data := AdminSiteConfigData{
-			SiteName:              getSiteSetting(db, "site_name"),
-			Contact:               getSiteSetting(db, "contact"),
-			TelegramBotToken:      ac.TelegramBotToken,
-			TelegramBotName:       ac.TelegramBotName,
-			MatrixHomeserver:      ac.MatrixHomeserver,
-			MatrixAccessToken:     ac.MatrixAccessToken,
-			HeartbeatIntervalMins: ac.HeartbeatIntervalMins,
-			HasLogo:               len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
-			HasBanner:             len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
-			HasFavicon:            len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
-			Dances:                dances,
-			DefaultDanceNames:     defaultDanceNames,
-			ImpressumTexts:        impTexts,
-			ImpressumLangs:        impressumLangs,
-			HolidayCountry:        getSiteSetting(db, "holiday_country"),
-			Success:               r.URL.Query().Get("saved") == "1",
+			SiteName:          getSiteSetting(db, "site_name"),
+			Contact:           getSiteSetting(db, "contact"),
+			HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
+			HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
+			HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
+			Dances:            dances,
+			DefaultDanceNames: defaultDanceNames,
+			ImpressumTexts:    impTexts,
+			ImpressumLangs:    impressumLangs,
+			HolidayCountry:    getSiteSetting(db, "holiday_country"),
+			Success:           r.URL.Query().Get("saved") == "1",
 		}
 		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
 	}
@@ -4137,8 +4124,6 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		token := getSessionToken(r)
-
 		// Text settings
 		siteName := strings.TrimSpace(r.FormValue("site_name"))
 		contact := strings.TrimSpace(r.FormValue("contact"))
@@ -4169,20 +4154,6 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		j, _ := json.Marshal(defaultDanceIDs)
 		_ = setSiteSetting(db, "default_dance_ids", string(j))
 
-		// Telegram / Matrix / heartbeat via dansal API
-		heartbeatMins, _ := strconv.Atoi(r.FormValue("heartbeat_interval_mins"))
-		if heartbeatMins <= 0 {
-			heartbeatMins = 5
-		}
-		ac := AdminConfig{
-			TelegramBotToken:      strings.TrimSpace(r.FormValue("telegram_bot_token")),
-			TelegramBotName:       strings.TrimSpace(r.FormValue("telegram_bot_name")),
-			MatrixHomeserver:      strings.TrimSpace(r.FormValue("matrix_homeserver")),
-			MatrixAccessToken:     strings.TrimSpace(r.FormValue("matrix_access_token")),
-			HeartbeatIntervalMins: heartbeatMins,
-		}
-		_ = client.PatchAdminConfig(r.Context(), token, ac)
-
 		// Image uploads: logo/banner accept SVG/AVIF/JPG; favicon also accepts GIF
 		for _, key := range []string{"logo", "banner", "favicon"} {
 			f, _, err := r.FormFile(key)
@@ -4210,61 +4181,6 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 	}
 }
 
-func adminSiteConfigMatrixLoginHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		token := getSessionToken(r)
-		homeserver := strings.TrimSpace(r.FormValue("matrix_homeserver"))
-		username := strings.TrimSpace(r.FormValue("matrix_username"))
-		password := r.FormValue("matrix_password")
-
-		if err := client.MatrixLogin(r.Context(), token, homeserver, username, password); err != nil {
-			ac, _ := client.GetAdminConfig(r.Context(), token)
-			dances, _ := client.GetDances(r.Context())
-			defaultDanceIDs := loadDefaultDanceIDs(db)
-			defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
-			impTexts := make(map[string]string)
-			for _, lang := range impressumLangs {
-				if v := getSiteSetting(db, "impressum_"+lang); v != "" {
-					impTexts[lang] = v
-				} else {
-					impTexts[lang] = cfg.pagesContent.ImpressumText(lang)
-				}
-			}
-			data := AdminSiteConfigData{
-				SiteName:              getSiteSetting(db, "site_name"),
-				Contact:               getSiteSetting(db, "contact"),
-				TelegramBotToken:      ac.TelegramBotToken,
-				TelegramBotName:       ac.TelegramBotName,
-				MatrixHomeserver:      ac.MatrixHomeserver,
-				MatrixAccessToken:     ac.MatrixAccessToken,
-				HeartbeatIntervalMins: ac.HeartbeatIntervalMins,
-				HasLogo:               len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
-				HasBanner:             len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
-				HasFavicon:            len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
-				Dances:                dances,
-				DefaultDanceNames:     defaultDanceNames,
-				ImpressumTexts:        impTexts,
-				ImpressumLangs:        impressumLangs,
-				ErrorMsg:              err.Error(),
-			}
-			renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
-			return
-		}
-		http.Redirect(w, r, "/admin/site-config?saved=1", http.StatusSeeOther)
-	}
-}
 
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 

@@ -77,59 +77,6 @@
     </div>
   </section>
 
-  <section class="cfg-section">
-    <h2>{{$.Strings.T "admin_site_config_heartbeat"}}</h2>
-    <div class="field">
-      <label>{{$.Strings.T "admin_site_config_heartbeat_interval"}}</label>
-      <input type="number" name="heartbeat_interval_mins" value="{{.HeartbeatIntervalMins}}" min="1" max="1440" style="width:100px">
-      <p class="hint">{{$.Strings.T "admin_site_config_heartbeat_hint"}}</p>
-    </div>
-  </section>
-
-  <section class="cfg-section">
-    <h2>{{$.Strings.T "admin_site_config_telegram"}}</h2>
-    <div class="field">
-      <label>{{$.Strings.T "admin_site_config_telegram_token"}}</label>
-      <input type="text" name="telegram_bot_token" value="{{.TelegramBotToken}}" autocomplete="off" spellcheck="false">
-    </div>
-    <div class="field">
-      <label>{{$.Strings.T "admin_site_config_telegram_name"}}</label>
-      <input type="text" name="telegram_bot_name" value="{{.TelegramBotName}}" autocomplete="off">
-      <p class="hint">{{$.Strings.T "admin_site_config_telegram_hint"}}</p>
-    </div>
-  </section>
-
-  <section class="cfg-section">
-    <h2>{{$.Strings.T "admin_site_config_matrix"}}</h2>
-    <div class="field">
-      <label>{{$.Strings.T "admin_site_config_matrix_homeserver"}}</label>
-      <input type="url" name="matrix_homeserver" value="{{.MatrixHomeserver}}" placeholder="https://matrix.example.org">
-    </div>
-    <div class="field">
-      <label>{{$.Strings.T "admin_site_config_matrix_token"}}</label>
-      <input type="text" name="matrix_access_token" value="{{.MatrixAccessToken}}" autocomplete="off" spellcheck="false">
-    </div>
-    <details class="matrix-login-details">
-      <summary>{{$.Strings.T "admin_site_config_matrix_login_title"}}</summary>
-      <form method="post" action="/admin/site-config/matrix-login" class="matrix-login-form">
-        <div class="field">
-          <label>{{$.Strings.T "admin_site_config_matrix_homeserver"}}</label>
-          <input type="url" name="matrix_homeserver" placeholder="https://matrix.example.org">
-        </div>
-        <div class="field">
-          <label>{{$.Strings.T "admin_site_config_matrix_username"}}</label>
-          <input type="text" name="matrix_username" autocomplete="username">
-        </div>
-        <div class="field">
-          <label>{{$.Strings.T "admin_site_config_matrix_password"}}</label>
-          <input type="password" name="matrix_password" autocomplete="current-password">
-        </div>
-        <p class="hint">{{$.Strings.T "admin_site_config_matrix_login_hint"}}</p>
-        <button type="submit" class="btn-secondary">{{$.Strings.T "admin_site_config_matrix_login_btn"}}</button>
-      </form>
-    </details>
-  </section>
-
   <div class="cfg-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
   </div>

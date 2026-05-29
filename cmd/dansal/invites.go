@@ -293,9 +293,15 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// Email is pre-verified when the invite came from the registration flow
+	// (preset_email set); plain admin invites leave it unverified.
+	emailVerified := 0
+	if invite.PresetEmail != "" {
+		emailVerified = 1
+	}
 	result, err := tx.Exec(
-		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
-		req.Email, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix,
+		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		req.Email, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix, emailVerified,
 	)
 	if err != nil {
 		writeError(w, "Username or email already exists", http.StatusConflict)

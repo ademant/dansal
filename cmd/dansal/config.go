@@ -47,6 +47,7 @@ type ServerConfig struct {
 	PKIDir               string   `yaml:"pki_dir"`
 	WebAuthnRPName       string   `yaml:"webauthn_rp_name"`   // display name, default "Dansal"
 	ImageFormat          string   `yaml:"image_format"`        // "avif" | "jpeg", default "avif"
+	BoardOpenPosting     bool     `yaml:"board_open_posting"`  // true = posts visible immediately; false (default) = verify contact first
 }
 
 type SMTPConfig struct {

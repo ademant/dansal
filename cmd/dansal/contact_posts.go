@@ -232,12 +232,19 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Anonymous: insert unverified.
+	// In open-posting mode posts are immediately visible; otherwise email/Telegram
+	// verification is required before the post appears.
+	openPosting := config.Server.BoardOpenPosting
+	initialVerified := 0
+	if openPosting {
+		initialVerified = 1
+	}
+
 	result, err := db.Exec(
-		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, email_verified, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
-		manageToken, expiresAt.Unix(),
+		manageToken, initialVerified, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "failed to create post", http.StatusInternalServerError)
@@ -249,32 +256,60 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	manageURL := base + "/contact-posts/manage/" + manageToken
 
 	if useTelegram {
-		// Telegram bot verifies via /start manage_token.
-		botURL := "https://t.me/" + config.Server.TelegramBotName + "?start=" + manageToken
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
-			"id":                  id,
-			"message":             "Open the Telegram bot to confirm your post.",
-			"telegram_verify_url": botURL,
-		})
+		if openPosting {
+			// Post is already live; send manage link only.
+			log.Printf("contact_posts: anonymous open-posting created post %d", id)
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]any{
+				"id":         id,
+				"message":    "Post created.",
+				"manage_url": manageURL,
+			})
+		} else {
+			// Telegram bot verifies via /start manage_token.
+			botURL := "https://t.me/" + config.Server.TelegramBotName + "?start=" + manageToken
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]any{
+				"id":                  id,
+				"message":             "Open the Telegram bot to confirm your post.",
+				"telegram_verify_url": botURL,
+			})
+		}
 		return
 	}
 
-	emailBody := fmt.Sprintf(
-		"Hello %s,\n\nYour board post is live once confirmed. Use this link to verify, edit, or remove it at any time:\n\n%s\n\nThe link is valid until %s.\n",
-		req.Nickname, manageURL, expiresAt.Format("2006-01-02"),
-	)
+	var emailSubject, emailBody string
+	if openPosting {
+		emailSubject = "Your contact board post is live"
+		emailBody = fmt.Sprintf(
+			"Hello %s,\n\nYour board post is live. Use this link to edit or remove it at any time:\n\n%s\n\nThe link is valid until %s.\n",
+			req.Nickname, manageURL, expiresAt.Format("2006-01-02"),
+		)
+	} else {
+		emailSubject = "Your contact board post"
+		emailBody = fmt.Sprintf(
+			"Hello %s,\n\nYour board post is live once confirmed. Use this link to verify, edit, or remove it at any time:\n\n%s\n\nThe link is valid until %s.\n",
+			req.Nickname, manageURL, expiresAt.Format("2006-01-02"),
+		)
+	}
 	go func() {
-		if err := SendEmail(req.Email, "Your contact board post", emailBody); err != nil {
+		if err := SendEmail(req.Email, emailSubject, emailBody); err != nil {
 			log.Printf("contact_posts: manage email failed for post %d: %v", id, err)
 		}
 	}()
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
-		"id":      id,
-		"message": "A confirmation email has been sent. Your post will appear once verified.",
-	})
+	if openPosting {
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":      id,
+			"message": "Post created.",
+		})
+	} else {
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":      id,
+			"message": "A confirmation email has been sent. Your post will appear once verified.",
+		})
+	}
 }
 
 // GET /api/v1/contact-posts/manage/{token}

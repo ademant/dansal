@@ -1416,7 +1416,7 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 // CreateContactPost submits a board post and returns (telegramVerifyURL, error).
 // telegramVerifyURL is non-empty only when the post was submitted with a Telegram username.
 // baseURL is forwarded so the API can generate correct public links in emails.
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL string) (string, error) {
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL, sessionToken string) (string, error) {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
@@ -1427,6 +1427,9 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 	req.Header.Set("Content-Type", "application/json")
 	if baseURL != "" {
 		req.Header.Set("X-Base-URL", baseURL)
+	}
+	if sessionToken != "" {
+		req.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -1671,7 +1674,7 @@ func (c *DansalClient) VerifyBooking(ctx context.Context, token string) (Booking
 }
 
 // ContactPoster creates a pending contact request and returns (telegramVerifyURL, error).
-func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegram, message, baseURL string) (string, error) {
+func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegram, message, baseURL, sessionToken string) (string, error) {
 	body, _ := json.Marshal(map[string]string{"email": email, "telegram": telegram, "message": message})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/contact-posts/%d/contact", id),
@@ -1682,6 +1685,9 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegra
 	req.Header.Set("Content-Type", "application/json")
 	if baseURL != "" {
 		req.Header.Set("X-Base-URL", baseURL)
+	}
+	if sessionToken != "" {
+		req.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

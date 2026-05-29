@@ -1553,11 +1553,11 @@ func main() {
 
 	// Contact board — public reads and post actions
 	smux.HandleFunc("GET /api/v1/events/{id}/contact-posts", listContactPosts)
-	smux.HandleFunc("POST /api/v1/events/{id}/contact-posts", createContactPost)
+	smux.Handle("POST /api/v1/events/{id}/contact-posts", optAuth(http.HandlerFunc(createContactPost)))
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
 	smux.HandleFunc("PATCH /api/v1/contact-posts/{id}", updateContactPost)
 	smux.HandleFunc("DELETE /api/v1/contact-posts/token/{token}", deleteContactPostByManageToken)
-	smux.HandleFunc("POST /api/v1/contact-posts/{id}/contact", contactPoster)
+	smux.Handle("POST /api/v1/contact-posts/{id}/contact", optAuth(http.HandlerFunc(contactPoster)))
 	smux.HandleFunc("GET /api/v1/contact-requests/verify/{token}", verifyContactRequest)
 
 	// Bookings — public create + verify

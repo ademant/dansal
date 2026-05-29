@@ -61,12 +61,12 @@
 (function(){
   var TOKEN = {{jsStr .Token}};
 
-  function showTrack(t){
+  window.showTrack = function(t){
     document.getElementById('track-passkey').hidden  = (t !== 'passkey');
     document.getElementById('track-password').hidden = (t !== 'password');
     document.getElementById('btn-passkey').classList.toggle('track-active', t==='passkey');
     document.getElementById('btn-password').classList.toggle('track-active', t==='password');
-  }
+  };
 
   function msg(text, isErr){
     var el = document.getElementById('invite-msg');

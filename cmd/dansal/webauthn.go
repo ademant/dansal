@@ -140,16 +140,15 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var invite struct {
-		ID             int
-		ExpiresAt      string
-		UsedAt         string
-		PresetUsername string
-		PresetEmail    string
+		ID          int
+		ExpiresAt   string
+		UsedAt      string
+		PresetEmail string
 	}
 	err := db.QueryRow(
-		`SELECT id, expires_at, COALESCE(used_at,''), COALESCE(preset_username,''), COALESCE(preset_email,'')
+		`SELECT id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
 		 FROM invite_links WHERE token=?`, token,
-	).Scan(&invite.ID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetUsername, &invite.PresetEmail)
+	).Scan(&invite.ID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return

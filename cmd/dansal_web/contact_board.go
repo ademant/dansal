@@ -160,30 +160,97 @@ func contactRequestVerifyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 	}
 }
 
+// GET /contact-posts/verify/{token}
+// Backward-compat redirect — old verification emails pointed here; now folds into manage page.
+func contactBoardVerifyRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/contact-posts/manage/"+r.PathValue("token"), http.StatusMovedPermanently)
+}
+
 // GET /contact-posts/delete/{token}
-func contactBoardDeleteByTokenHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+// Backward-compat redirect — old delete emails pointed here; manage_token was backfilled from delete_token.
+func contactBoardDeleteRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/contact-posts/manage/"+r.PathValue("token"), http.StatusMovedPermanently)
+}
+
+// ContactManageData is passed to the contact_manage template.
+type ContactManageData struct {
+	Token        string
+	Post         ContactManageResult
+	FormToken    string
+	Updated      bool
+	Deleted      bool
+	NotFound     bool
+}
+
+// GET /contact-posts/manage/{token}
+func contactManageGetHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		if err := client.DeleteContactPostByToken(r.Context(), token); err != nil {
-			title := i18n.T(r, "board_delete_title")
-			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "board_delete_link_error"}))
+		title := i18n.T(r, "board_manage_title")
+
+		post, err := client.GetContactPostByToken(r.Context(), token)
+		if err != nil {
+			renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title,
+				ContactManageData{Token: token, NotFound: true}))
 			return
 		}
-		title := i18n.T(r, "board_delete_title")
-		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true, BoardDelete: true}))
+
+		ip := getClientIP(r)
+		data := ContactManageData{
+			Token:     token,
+			Post:      post,
+			FormToken: issueFormToken(ip),
+			Updated:   r.URL.Query().Get("updated") == "1",
+			Deleted:   r.URL.Query().Get("deleted") == "1",
+		}
+		renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title, data))
 	}
 }
 
-// GET /contact-posts/verify/{token}
-func contactBoardVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+// POST /contact-posts/manage/{token}
+func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		if err := client.VerifyContactPost(r.Context(), token); err != nil {
-			title := i18n.T(r, "verify_title")
-			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "verify_error_invalid"}))
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
-		title := i18n.T(r, "board_verify_title")
-		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true, BoardVerify: true}))
+		ip := getClientIP(r)
+		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+
+		if r.FormValue("_action") == "delete" {
+			if err := client.DeleteContactPostByManageToken(r.Context(), token); err != nil {
+				http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+				return
+			}
+			http.Redirect(w, r, "/contact-posts/manage/"+token+"?deleted=1", http.StatusSeeOther)
+			return
+		}
+
+		// Edit action: read post ID from hidden field, then PATCH.
+		postID, err := strconv.Atoi(r.FormValue("post_id"))
+		if err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		persons, _ := strconv.Atoi(r.FormValue("persons"))
+		if persons < 1 {
+			persons = 1
+		}
+		fields := map[string]any{
+			"type":     r.FormValue("type"),
+			"city":     r.FormValue("city"),
+			"persons":  persons,
+			"message":  r.FormValue("message"),
+			"nickname": r.FormValue("nickname"),
+		}
+		if err := client.UpdateContactPost(r.Context(), postID, token, fields); err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/contact-posts/manage/"+token+"?updated=1", http.StatusSeeOther)
 	}
 }

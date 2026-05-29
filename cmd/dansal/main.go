@@ -1055,6 +1055,14 @@ func migrateDB() {
 		data TEXT NOT NULL,
 		expires_at INTEGER NOT NULL
 	)`)
+	// #385: user_id on contact_posts for logged-in poster association.
+	db.Exec("ALTER TABLE contact_posts ADD COLUMN user_id INTEGER REFERENCES users(id)")
+	// #386: replace verify_token + delete_token with a single manage_token.
+	db.Exec("ALTER TABLE contact_posts ADD COLUMN manage_token TEXT")
+	db.Exec("UPDATE contact_posts SET manage_token = COALESCE(delete_token, lower(hex(randomblob(16)))) WHERE manage_token IS NULL")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_posts_manage_token ON contact_posts(manage_token)")
+	db.Exec("ALTER TABLE contact_posts DROP COLUMN verify_token")
+	db.Exec("ALTER TABLE contact_posts DROP COLUMN delete_token")
 }
 
 func logUnmappedCountries() {
@@ -1337,8 +1345,8 @@ func createTables() error {
 		telegram_username TEXT,
 		poster_telegram_chat_id TEXT,
 		email_verified INTEGER DEFAULT 0,
-		verify_token TEXT UNIQUE,
-		delete_token TEXT UNIQUE,
+		manage_token TEXT UNIQUE,
+		user_id INTEGER REFERENCES users(id),
 		expires_at INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
@@ -1546,8 +1554,9 @@ func main() {
 	// Contact board — public reads and post actions
 	smux.HandleFunc("GET /api/v1/events/{id}/contact-posts", listContactPosts)
 	smux.HandleFunc("POST /api/v1/events/{id}/contact-posts", createContactPost)
-	smux.HandleFunc("GET /api/v1/contact-posts/verify/{token}", verifyContactPost)
-	smux.HandleFunc("GET /api/v1/contact-posts/delete/{token}", deleteContactPostByToken)
+	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
+	smux.HandleFunc("PATCH /api/v1/contact-posts/{id}", updateContactPost)
+	smux.HandleFunc("DELETE /api/v1/contact-posts/token/{token}", deleteContactPostByManageToken)
 	smux.HandleFunc("POST /api/v1/contact-posts/{id}/contact", contactPoster)
 	smux.HandleFunc("GET /api/v1/contact-requests/verify/{token}", verifyContactRequest)
 

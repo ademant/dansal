@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 type ContactPost struct {
@@ -36,7 +35,6 @@ func computeContactPostExpiry(eventID int) time.Time {
 	ceiling := time.Now().UTC().Add(30 * 24 * time.Hour)
 	var endTimeStr string
 	if err := db.QueryRow("SELECT end_time FROM events WHERE id=?", eventID).Scan(&endTimeStr); err == nil {
-		// end_time is stored as a Unix timestamp integer in the events table.
 		if ts, err := strconv.ParseInt(strings.TrimSpace(endTimeStr), 10, 64); err == nil {
 			candidate := time.Unix(ts, 0).UTC().Add(3 * 24 * time.Hour)
 			if candidate.Before(ceiling) {
@@ -58,6 +56,13 @@ func isOrgMemberOfEvent(userID, eventID int) bool {
 	var count int
 	db.QueryRow("SELECT COUNT(*) FROM organization_members WHERE organization_id=? AND user_id=?", orgID, userID).Scan(&count)
 	return count > 0
+}
+
+// validContactPostTypes is the set of allowed contact post type values.
+var validContactPostTypes = map[string]bool{
+	"ride_offer": true, "ride_request": true,
+	"sleep_offer": true, "sleep_request": true,
+	"ticket_offer": true, "ticket_request": true,
 }
 
 // GET /api/v1/events/{id}/contact-posts
@@ -98,7 +103,9 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/events/{id}/contact-posts
-// Public. Creates an unverified post and sends a verification email.
+// Public. Creates a board post.
+// Logged-in users: post is immediately verified, no email sent.
+// Anonymous users: post is unverified; a confirmation email with the manage link is sent.
 func createContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	eventID, err := strconv.Atoi(r.PathValue("id"))
@@ -128,31 +135,54 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields.
 	req.Type = strings.TrimSpace(req.Type)
 	req.City = strings.TrimSpace(req.City)
 	req.Nickname = strings.TrimSpace(req.Nickname)
 	req.Email = strings.TrimSpace(req.Email)
 	req.Telegram = strings.TrimPrefix(strings.TrimSpace(req.Telegram), "@")
-	if req.Type == "" || req.City == "" || req.Nickname == "" {
-		writeError(w, "type, city and nickname are required", http.StatusBadRequest)
+
+	if req.Type == "" || req.City == "" {
+		writeError(w, "type and city are required", http.StatusBadRequest)
 		return
 	}
-	if req.Email == "" && req.Telegram == "" {
-		writeError(w, "email or telegram username is required", http.StatusBadRequest)
-		return
-	}
-	validTypes := map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true, "ticket_offer": true, "ticket_request": true}
-	if !validTypes[req.Type] {
-		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request, ticket_offer, ticket_request", http.StatusBadRequest)
-		return
-	}
-	if req.Email != "" && !isValidEmail(req.Email) {
-		writeError(w, "invalid email address", http.StatusBadRequest)
+	if !validContactPostTypes[req.Type] {
+		writeError(w, "invalid type", http.StatusBadRequest)
 		return
 	}
 	if containsLink(req.Message) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
+		return
+	}
+	if req.Persons < 1 {
+		req.Persons = 1
+	}
+
+	// Check whether the caller is a logged-in user (#385).
+	callerID, _ := callerFromRequest(r)
+	if callerID > 0 {
+		// Fetch verified email and nickname from account.
+		var userEmail, userNick string
+		db.QueryRow("SELECT email, username FROM users WHERE id=?", callerID).Scan(&userEmail, &userNick)
+		if req.Nickname == "" {
+			req.Nickname = userNick
+		}
+		if req.Email == "" {
+			req.Email = userEmail
+		}
+	}
+
+	if req.Nickname == "" {
+		writeError(w, "nickname is required", http.StatusBadRequest)
+		return
+	}
+
+	// Anonymous path requires contact info.
+	if callerID == 0 && req.Email == "" && req.Telegram == "" {
+		writeError(w, "email or telegram username is required", http.StatusBadRequest)
+		return
+	}
+	if req.Email != "" && !isValidEmail(req.Email) {
+		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
 	useTelegram := req.Telegram != ""
@@ -160,16 +190,8 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "telegram not configured on this server", http.StatusBadRequest)
 		return
 	}
-	if req.Persons < 1 {
-		req.Persons = 1
-	}
 
-	verifyToken, err := generateVerificationToken()
-	if err != nil {
-		writeError(w, "failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	deleteToken, err := generateVerificationToken()
+	manageToken, err := generateVerificationToken()
 	if err != nil {
 		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
@@ -177,11 +199,41 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 
 	expiresAt := computeContactPostExpiry(eventID)
 
+	var userIDArg any
+	if callerID > 0 {
+		userIDArg = callerID
+	}
+
+	if callerID > 0 {
+		// Logged-in: immediately verified, no email.
+		result, err := db.Exec(
+			`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, email_verified, user_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+			manageToken, userIDArg, expiresAt.Unix(),
+		)
+		if err != nil {
+			writeError(w, "failed to create post", http.StatusInternalServerError)
+			return
+		}
+		id, _ := result.LastInsertId()
+		log.Printf("contact_posts: logged-in user %d created verified post %d", callerID, id)
+		base := buildBaseURL(r)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":         id,
+			"message":    "Post created.",
+			"manage_url": base + "/contact-posts/manage/" + manageToken,
+		})
+		return
+	}
+
+	// Anonymous: insert unverified.
 	result, err := db.Exec(
-		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, verify_token, delete_token, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
-		verifyToken, deleteToken, expiresAt.Unix(),
+		manageToken, expiresAt.Unix(),
 	)
 	if err != nil {
 		writeError(w, "failed to create post", http.StatusInternalServerError)
@@ -190,30 +242,27 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 
 	base := buildBaseURL(r)
-	deleteURL := base + "/contact-posts/delete/" + deleteToken
+	manageURL := base + "/contact-posts/manage/" + manageToken
 
 	if useTelegram {
-		// Return a t.me link; the user opens the bot which sends /start TOKEN to verify.
-		botURL := "https://t.me/" + config.Server.TelegramBotName + "?start=" + verifyToken
+		// Telegram bot verifies via /start manage_token.
+		botURL := "https://t.me/" + config.Server.TelegramBotName + "?start=" + manageToken
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{
 			"id":                  id,
 			"message":             "Open the Telegram bot to confirm your post.",
 			"telegram_verify_url": botURL,
-			"delete_url":          deleteURL,
 		})
 		return
 	}
 
-	// Email verification path — link to the web frontend so users see a proper page.
-	verifyURL := base + "/contact-posts/verify/" + verifyToken
 	emailBody := fmt.Sprintf(
-		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n%s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n%s\n\nThis post expires on %s.\n",
-		req.Nickname, verifyURL, deleteURL, expiresAt.Format("2006-01-02"),
+		"Hello %s,\n\nYour board post is live once confirmed. Use this link to verify, edit, or remove it at any time:\n\n%s\n\nThe link is valid until %s.\n",
+		req.Nickname, manageURL, expiresAt.Format("2006-01-02"),
 	)
 	go func() {
-		if err := SendEmail(req.Email, "Confirm your contact board post", emailBody); err != nil {
-			log.Printf("contact_posts: verify email failed for post %d: %v", id, err)
+		if err := SendEmail(req.Email, "Your contact board post", emailBody); err != nil {
+			log.Printf("contact_posts: manage email failed for post %d: %v", id, err)
 		}
 	}()
 
@@ -224,19 +273,22 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/v1/contact-posts/verify/{token}
-// Public. Marks the post as verified.
-func verifyContactPost(w http.ResponseWriter, r *http.Request) {
+// GET /api/v1/contact-posts/manage/{token}
+// Public. Looks up a post by manage_token. Auto-verifies if email_verified=0.
+// Returns the post fields plus expired bool; used by the manage page.
+func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	token := r.PathValue("token")
 
-	var id int
-	var expiresAt string
+	var id, eventID, persons, emailVerified int
+	var postType, city, message, nickname, tgUsername, expiresAtStr string
 	err := db.QueryRow(
-		"SELECT id, expires_at FROM contact_posts WHERE verify_token=?", token,
-	).Scan(&id, &expiresAt)
+		`SELECT id, event_id, type, city, persons, COALESCE(message,''), nickname,
+		        COALESCE(telegram_username,''), email_verified, expires_at
+		 FROM contact_posts WHERE manage_token=?`, token,
+	).Scan(&id, &eventID, &postType, &city, &persons, &message, &nickname, &tgUsername, &emailVerified, &expiresAtStr)
 	if err == sql.ErrNoRows {
-		writeError(w, "invalid or already used verification link", http.StatusNotFound)
+		writeError(w, "post not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -244,36 +296,139 @@ func verifyContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exp, err := parseTokenExpiration(expiresAt)
-	if err != nil || time.Now().After(exp) {
-		db.Exec("DELETE FROM contact_posts WHERE id=?", id)
-		writeError(w, "verification link has expired", http.StatusGone)
+	exp, err := parseTokenExpiration(expiresAtStr)
+	expired := err != nil || time.Now().After(exp)
+
+	justVerified := false
+	if !expired && emailVerified == 0 {
+		db.Exec("UPDATE contact_posts SET email_verified=1 WHERE id=?", id)
+		emailVerified = 1
+		justVerified = true
+		log.Printf("contact_posts: manage-page verified post %d", id)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":               id,
+		"event_id":         eventID,
+		"type":             postType,
+		"city":             city,
+		"persons":          persons,
+		"message":          message,
+		"nickname":         nickname,
+		"telegram_username": tgUsername,
+		"email_verified":   emailVerified == 1,
+		"expires_at":       expiresAtStr,
+		"expired":          expired,
+		"just_verified":    justVerified,
+	})
+}
+
+// PATCH /api/v1/contact-posts/{id}?token={manage_token}
+// Public. Edits type, city, persons, message, nickname. Token must match and post must not be expired.
+func updateContactPost(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	postID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		writeError(w, "token required", http.StatusBadRequest)
 		return
 	}
 
-	db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL WHERE id=?", id)
-	log.Printf("contact_posts: verified post %d", id)
-	json.NewEncoder(w).Encode(map[string]string{"status": "verified"})
+	var storedToken, expiresAtStr string
+	err = db.QueryRow("SELECT manage_token, expires_at FROM contact_posts WHERE id=?", postID).
+		Scan(&storedToken, &expiresAtStr)
+	if err == sql.ErrNoRows {
+		writeError(w, "post not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if storedToken != token {
+		writeError(w, "invalid token", http.StatusForbidden)
+		return
+	}
+	exp, err := parseTokenExpiration(expiresAtStr)
+	if err != nil || time.Now().After(exp) {
+		writeError(w, "post has expired", http.StatusGone)
+		return
+	}
+
+	var req struct {
+		Type     string `json:"type"`
+		City     string `json:"city"`
+		Persons  int    `json:"persons"`
+		Message  string `json:"message"`
+		Nickname string `json:"nickname"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Type = strings.TrimSpace(req.Type)
+	req.City = strings.TrimSpace(req.City)
+	req.Nickname = strings.TrimSpace(req.Nickname)
+	if req.Type != "" && !validContactPostTypes[req.Type] {
+		writeError(w, "invalid type", http.StatusBadRequest)
+		return
+	}
+	if containsLink(req.Message) {
+		writeError(w, "message must not contain links", http.StatusBadRequest)
+		return
+	}
+	if req.Persons < 1 {
+		req.Persons = 1
+	}
+
+	_, err = db.Exec(
+		`UPDATE contact_posts SET
+		   type    = CASE WHEN ?1 != '' THEN ?1 ELSE type END,
+		   city    = CASE WHEN ?2 != '' THEN ?2 ELSE city END,
+		   persons = ?3,
+		   message = ?4,
+		   nickname = CASE WHEN ?5 != '' THEN ?5 ELSE nickname END
+		 WHERE id = ?6`,
+		req.Type, req.City, req.Persons, req.Message, req.Nickname, postID,
+	)
+	if err != nil {
+		writeError(w, "failed to update post", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("contact_posts: updated post %d via manage token", postID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/v1/contact-posts/delete/{token}
-// Public. Lets the original poster delete their own post via the link in the email.
-func deleteContactPostByToken(w http.ResponseWriter, r *http.Request) {
+// DELETE /api/v1/contact-posts/token/{token}
+// Public. Deletes a post by manage_token, with expiry check.
+func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var id int
-	err := db.QueryRow("SELECT id FROM contact_posts WHERE delete_token=?", token).Scan(&id)
+	var expiresAtStr string
+	err := db.QueryRow("SELECT id, expires_at FROM contact_posts WHERE manage_token=?", token).
+		Scan(&id, &expiresAtStr)
 	if err == sql.ErrNoRows {
-		writeError(w, "invalid delete link", http.StatusNotFound)
+		writeError(w, "invalid manage link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		writeError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	exp, err := parseTokenExpiration(expiresAtStr)
+	if err != nil || time.Now().After(exp) {
+		writeError(w, "post has expired", http.StatusGone)
 		return
 	}
 
 	db.Exec("DELETE FROM contact_posts WHERE id=?", id)
-	log.Printf("contact_posts: self-deleted post %d", id)
+	log.Printf("contact_posts: self-deleted post %d via manage token", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -310,7 +465,9 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/contact-posts/{id}/contact
-// Public. Creates a pending contact request; sends a verification email or Telegram link to sender.
+// Public. Contacts the poster.
+// Logged-in users: message forwarded immediately, no contact_request row created.
+// Anonymous users: creates a pending contact_request and sends a verification email/Telegram link.
 func contactPoster(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	postID, err := strconv.Atoi(r.PathValue("id"))
@@ -336,21 +493,8 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "message is required", http.StatusBadRequest)
 		return
 	}
-	if req.Email == "" && req.Telegram == "" {
-		writeError(w, "email or telegram is required", http.StatusBadRequest)
-		return
-	}
-	if req.Email != "" && !isValidEmail(req.Email) {
-		writeError(w, "invalid email address", http.StatusBadRequest)
-		return
-	}
 	if containsLink(req.Message) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
-		return
-	}
-	useTelegram := req.Telegram != ""
-	if useTelegram && config.Server.TelegramBotName == "" {
-		writeError(w, "telegram not configured on this server", http.StatusBadRequest)
 		return
 	}
 
@@ -375,6 +519,54 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		writeError(w, "post has expired", http.StatusGone)
+		return
+	}
+
+	// Logged-in user: forward immediately without creating a contact_request (#385).
+	callerID, _ := callerFromRequest(r)
+	if callerID > 0 {
+		var senderEmail, senderTelegram string
+		db.QueryRow("SELECT email, COALESCE(telegram,'') FROM users WHERE id=?", callerID).
+			Scan(&senderEmail, &senderTelegram)
+		senderContact := senderEmail
+		if senderTelegram != "" {
+			senderContact = "@" + senderTelegram
+		}
+		if posterChatID != "" {
+			msg := fmt.Sprintf("Someone replied to your board post!\n\nMessage:\n%s\n\nContact them at: %s", req.Message, senderContact)
+			go func() {
+				if err := sendTelegramMessage(posterChatID, msg); err != nil {
+					log.Printf("contact_posts: telegram forward (logged-in) failed for post %d: %v", postID, err)
+				}
+			}()
+		} else if posterEmail != "" {
+			body := fmt.Sprintf(
+				"Hello %s,\n\nSomeone saw your contact board post on dansal and wants to get in touch:\n\n---\n%s\n---\n\nYou can reach them at: %s\n\nThis message was forwarded by dansal.\n",
+				posterNick, req.Message, senderContact,
+			)
+			go func() {
+				if err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
+					log.Printf("contact_posts: email forward (logged-in) failed for post %d: %v", postID, err)
+				}
+			}()
+		}
+		log.Printf("contact_posts: logged-in user %d directly contacted poster of post %d", callerID, postID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Anonymous path: require contact info and create a pending contact_request.
+	if req.Email == "" && req.Telegram == "" {
+		writeError(w, "email or telegram is required", http.StatusBadRequest)
+		return
+	}
+	if req.Email != "" && !isValidEmail(req.Email) {
+		writeError(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
+	useTelegram := req.Telegram != ""
+	if useTelegram && config.Server.TelegramBotName == "" {
+		writeError(w, "telegram not configured on this server", http.StatusBadRequest)
 		return
 	}
 

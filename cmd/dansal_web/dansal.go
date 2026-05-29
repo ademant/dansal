@@ -1458,8 +1458,8 @@ func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token stri
 	return nil
 }
 
-func (c *DansalClient) DeleteContactPostByToken(ctx context.Context, token string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/delete/"+token, nil)
+func (c *DansalClient) DeleteContactPostByManageToken(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/contact-posts/token/"+token, nil)
 	if err != nil {
 		return err
 	}
@@ -1471,6 +1471,64 @@ func (c *DansalClient) DeleteContactPostByToken(ctx context.Context, token strin
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("not found")
 	}
+	if resp.StatusCode == http.StatusGone {
+		return fmt.Errorf("expired")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// ContactManageResult holds the state of a contact post fetched by manage token.
+type ContactManageResult struct {
+	ID            int    `json:"id"`
+	EventID       int    `json:"event_id"`
+	Type          string `json:"type"`
+	City          string `json:"city"`
+	Persons       int    `json:"persons"`
+	Message       string `json:"message"`
+	Nickname      string `json:"nickname"`
+	EmailVerified bool   `json:"email_verified"`
+	ExpiresAt     string `json:"expires_at"`
+	Expired       bool   `json:"expired"`
+	JustVerified  bool   `json:"just_verified"`
+}
+
+func (c *DansalClient) GetContactPostByToken(ctx context.Context, token string) (ContactManageResult, error) {
+	var result ContactManageResult
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/manage/"+token, nil)
+	if err != nil {
+		return result, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return result, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return result, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return result, apiErr(resp)
+	}
+	return result, json.NewDecoder(resp.Body).Decode(&result)
+}
+
+func (c *DansalClient) UpdateContactPost(ctx context.Context, id int, token string, fields map[string]any) error {
+	body, _ := json.Marshal(fields)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/contact-posts/%d?token=%s", c.BaseURL, id, token),
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
@@ -1902,22 +1960,6 @@ func (c *DansalClient) RevokeInvite(ctx context.Context, inviteToken, authToken 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return apiErr(resp)
-	}
-	return nil
-}
-
-func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/verify/"+token, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}
 	return nil

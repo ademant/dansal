@@ -1,0 +1,95 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="manage-wrap">
+  {{with .Data}}
+  {{if .NotFound}}
+  <div class="manage-box manage-error">
+    <p>{{$.Strings.T "board_manage_not_found"}}</p>
+  </div>
+  {{else if .Post.Expired}}
+  <div class="manage-box manage-info">
+    <p>{{$.Strings.T "board_manage_expired"}}</p>
+  </div>
+  {{else if .Deleted}}
+  <div class="manage-box manage-ok">
+    <p>{{$.Strings.T "board_delete_success"}}</p>
+  </div>
+  {{else}}
+  {{if .Updated}}
+  <p class="msg msg-ok">{{$.Strings.T "board_manage_updated"}}</p>
+  {{end}}
+  {{if .Post.JustVerified}}
+  <p class="msg msg-ok">{{$.Strings.T "board_verify_success"}}</p>
+  {{end}}
+
+  <h1>{{$.Strings.T "board_manage_title"}}</h1>
+
+  <form class="manage-form" method="post" action="/contact-posts/manage/{{.Token}}">
+    <input type="hidden" name="_form_token" value="{{.FormToken}}">
+    <input type="hidden" name="post_id" value="{{.Post.ID}}">
+
+    <div class="form-row">
+      <label>{{$.Strings.T "board_type_label"}}</label>
+      <select name="type">
+        <option value="ride_offer"{{if eq .Post.Type "ride_offer"}} selected{{end}}>{{$.Strings.T "board_ride_offer"}}</option>
+        <option value="ride_request"{{if eq .Post.Type "ride_request"}} selected{{end}}>{{$.Strings.T "board_ride_request"}}</option>
+        <option value="sleep_offer"{{if eq .Post.Type "sleep_offer"}} selected{{end}}>{{$.Strings.T "board_sleep_offer"}}</option>
+        <option value="sleep_request"{{if eq .Post.Type "sleep_request"}} selected{{end}}>{{$.Strings.T "board_sleep_request"}}</option>
+        <option value="ticket_offer"{{if eq .Post.Type "ticket_offer"}} selected{{end}}>{{$.Strings.T "board_ticket_offer"}}</option>
+        <option value="ticket_request"{{if eq .Post.Type "ticket_request"}} selected{{end}}>{{$.Strings.T "board_ticket_request"}}</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>{{$.Strings.T "board_city_label"}}</label>
+      <input type="text" name="city" value="{{.Post.City}}" required>
+    </div>
+
+    <div class="form-row">
+      <label>{{$.Strings.T "board_persons_label"}}</label>
+      <input type="number" name="persons" value="{{.Post.Persons}}" min="1" style="width:5rem">
+    </div>
+
+    <div class="form-row">
+      <label>{{$.Strings.T "board_message_label"}}</label>
+      <textarea name="message" rows="3">{{.Post.Message}}</textarea>
+    </div>
+
+    <div class="form-row">
+      <label>{{$.Strings.T "board_nickname_label"}}</label>
+      <input type="text" name="nickname" value="{{.Post.Nickname}}" required>
+    </div>
+
+    <div class="manage-actions">
+      <button type="submit" class="btn-primary">{{$.Strings.T "board_manage_save"}}</button>
+    </div>
+  </form>
+
+  <form class="manage-delete-form" method="post" action="/contact-posts/manage/{{.Token}}"
+        onsubmit="return confirm('{{$.Strings.T "board_manage_delete_confirm"}}')">
+    <input type="hidden" name="_form_token" value="{{.FormToken}}">
+    <input type="hidden" name="_action" value="delete">
+    <button type="submit" class="btn-danger">{{$.Strings.T "board_manage_delete"}}</button>
+  </form>
+  {{end}}
+  {{end}}
+</div>
+
+<style>
+.manage-wrap{max-width:520px;margin:2rem auto;padding:0 1rem}
+.manage-box{border-radius:6px;padding:1.5rem;margin-bottom:1rem;font-size:1rem}
+.manage-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.manage-info{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.manage-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.manage-form .form-row{margin-bottom:.75rem}
+.manage-form label{display:block;margin-bottom:.25rem;font-size:.9rem;color:var(--fg-2)}
+.manage-form input,.manage-form textarea,.manage-form select{width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.95rem;background:var(--bg-card);color:var(--fg)}
+.manage-form textarea{resize:vertical}
+.manage-actions{margin-top:1rem}
+.manage-delete-form{margin-top:1.5rem}
+.btn-primary{padding:.5rem 1.2rem;background:var(--heading);color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{opacity:.85}
+.btn-danger{padding:.4rem 1rem;background:#dc3545;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+.btn-danger:hover{opacity:.85}
+</style>
+{{end}}

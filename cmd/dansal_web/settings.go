@@ -235,6 +235,8 @@ type VerifyData struct {
 	ContactRequestVerify bool
 	BoardDelete          bool
 	ErrorKey             string
+	BoardManageUpdated   bool
+	BoardManageDeleted   bool
 }
 
 func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

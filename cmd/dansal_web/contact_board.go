@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // POST /events/{id}/board
-func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
@@ -52,12 +55,15 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			"telegram": r.FormValue("telegram"),
 		}
 
-		tgURL, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
+		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
 		}
 		publicThrottle.record(ip + "|" + r.UserAgent())
+		if firstPost {
+			go triggerBoardOpenNote(cfg, db, client, eventID)
+		}
 		if tgURL != "" {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1&board_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
 			return
@@ -183,7 +189,7 @@ type ContactManageData struct {
 }
 
 // GET /contact-posts/manage/{token}
-func contactManageGetHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func contactManageGetHandler(cfg *Config, db *sql.DB, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
 		title := i18n.T(r, "board_manage_title")
@@ -193,6 +199,9 @@ func contactManageGetHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title,
 				ContactManageData{Token: token, NotFound: true}))
 			return
+		}
+		if post.JustVerified && post.FirstPost {
+			go triggerBoardOpenNote(cfg, db, client, post.EventID)
 		}
 
 		ip := getClientIP(r)
@@ -253,4 +262,16 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 		}
 		http.Redirect(w, r, "/contact-posts/manage/"+token+"?updated=1", http.StatusSeeOther)
 	}
+}
+
+// triggerBoardOpenNote fetches the event from the API and delivers the AP Note
+// to the org's followers. Runs in a goroutine; logs and returns silently on error.
+func triggerBoardOpenNote(cfg *Config, db *sql.DB, client *DansalClient, eventID int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	event, err := client.GetEvent(ctx, eventID)
+	if err != nil || event.OrganizationID == nil {
+		return
+	}
+	deliverBoardOpenNote(cfg, db, *event.OrganizationID, eventID, event.Title)
 }

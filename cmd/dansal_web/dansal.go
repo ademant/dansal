@@ -1416,13 +1416,15 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 // CreateContactPost submits a board post and returns (telegramVerifyURL, error).
 // telegramVerifyURL is non-empty only when the post was submitted with a Telegram username.
 // baseURL is forwarded so the API can generate correct public links in emails.
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL, sessionToken string) (string, error) {
+// CreateContactPost submits a board post and returns (telegramVerifyURL, firstPost, error).
+// firstPost is true when this was the first live post for the event (AP notification needed).
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL, sessionToken string) (string, bool, error) {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
 		bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if baseURL != "" {
@@ -1433,17 +1435,18 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return "", apiErr(resp)
+		return "", false, apiErr(resp)
 	}
 	var result struct {
 		TelegramVerifyURL string `json:"telegram_verify_url"`
+		FirstPost         bool   `json:"first_post"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
-	return result.TelegramVerifyURL, nil
+	return result.TelegramVerifyURL, result.FirstPost, nil
 }
 
 func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token string) error {
@@ -1496,6 +1499,7 @@ type ContactManageResult struct {
 	ExpiresAt     string `json:"expires_at"`
 	Expired       bool   `json:"expired"`
 	JustVerified  bool   `json:"just_verified"`
+	FirstPost     bool   `json:"first_post"`
 }
 
 func (c *DansalClient) GetContactPostByToken(ctx context.Context, token string) (ContactManageResult, error) {

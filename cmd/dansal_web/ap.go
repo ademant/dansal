@@ -109,6 +109,18 @@ type APEvent struct {
 	Attachment   []APDocument `json:"attachment,omitempty"`
 }
 
+type APNote struct {
+	Context      any      `json:"@context,omitempty"`
+	Type         string   `json:"type"`
+	ID           string   `json:"id"`
+	AttributedTo string   `json:"attributedTo"`
+	Content      string   `json:"content"`
+	Published    string   `json:"published"`
+	To           []string `json:"to"`
+	CC           []string `json:"cc"`
+	URL          string   `json:"url,omitempty"`
+}
+
 type OrderedCollection struct {
 	Context    any `json:"@context"`
 	Type       string      `json:"type"`

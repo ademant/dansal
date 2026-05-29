@@ -222,6 +222,43 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 	}
 }
 
+// deliverBoardOpenNote sends a single Note to the org's followers when the first
+// contact board post for an event goes live. Called in a goroutine.
+func deliverBoardOpenNote(cfg *Config, db *sql.DB, orgID, eventID int, eventTitle string) {
+	actor, err := getActorByOrgID(db, orgID)
+	if err != nil {
+		return // org has no AP actor — nothing to do
+	}
+	activity := buildBoardOpenActivity(cfg, actor.OrgSlug, eventID, eventTitle)
+	if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+		log.Printf("board open note delivery event %d org %d: %v", eventID, orgID, err)
+	}
+}
+
+func buildBoardOpenActivity(cfg *Config, slug string, eventID int, eventTitle string) Activity {
+	base := actorURL(cfg, slug)
+	eventURL := fmt.Sprintf("https://%s/events/%d", cfg.Domain, eventID)
+	noteID := fmt.Sprintf("%s/activities/board-open-%d", eventURL, time.Now().UnixNano())
+	note := APNote{
+		Type:         "Note",
+		ID:           noteID,
+		AttributedTo: base,
+		Content:      fmt.Sprintf("The board for <strong>%s</strong> is now open — coordinate rides, accommodation and tickets: %s", eventTitle, eventURL),
+		Published:    time.Now().UTC().Format(time.RFC3339),
+		To:           []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:           []string{base + "/followers"},
+		URL:          eventURL,
+	}
+	return Activity{
+		Type:   "Create",
+		ID:     noteID + "/activity",
+		Actor:  base,
+		Object: note,
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
+	}
+}
+
 func deliverDeleteToFollowers(cfg *Config, db *sql.DB, eventID, orgID int) {
 	actor, err := getActorByOrgID(db, orgID)
 	if err != nil {

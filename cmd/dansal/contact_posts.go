@@ -45,6 +45,16 @@ func computeContactPostExpiry(eventID int) time.Time {
 	return ceiling
 }
 
+// isFirstLiveBoardPost returns true when postID is the only live, verified post for eventID.
+func isFirstLiveBoardPost(eventID, postID int) bool {
+	var count int
+	db.QueryRow(
+		"SELECT COUNT(*) FROM contact_posts WHERE event_id=? AND email_verified=1 AND expires_at>? AND id!=?",
+		eventID, time.Now().UTC().Unix(), postID,
+	).Scan(&count)
+	return count == 0
+}
+
 // isOrgMemberOfEvent returns true when userID is a member of the organisation
 // that owns the given event.
 func isOrgMemberOfEvent(userID, eventID int) bool {
@@ -228,6 +238,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 			"id":         id,
 			"message":    "Post created.",
 			"manage_url": base + "/contact-posts/manage/" + manageToken,
+			"first_post": isFirstLiveBoardPost(eventID, int(id)),
 		})
 		return
 	}
@@ -264,6 +275,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 				"id":         id,
 				"message":    "Post created.",
 				"manage_url": manageURL,
+				"first_post": isFirstLiveBoardPost(eventID, int(id)),
 			})
 		} else {
 			// Telegram bot verifies via /start manage_token.
@@ -339,27 +351,30 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 	expired := err != nil || time.Now().After(exp)
 
 	justVerified := false
+	firstPost := false
 	if !expired && emailVerified == 0 {
 		db.Exec("UPDATE contact_posts SET email_verified=1 WHERE id=?", id)
 		emailVerified = 1
 		justVerified = true
-		log.Printf("contact_posts: manage-page verified post %d", id)
+		firstPost = isFirstLiveBoardPost(eventID, id)
+		log.Printf("contact_posts: manage-page verified post %d (first=%v)", id, firstPost)
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
-		"id":               id,
-		"event_id":         eventID,
-		"type":             postType,
-		"city":             city,
-		"persons":          persons,
-		"message":          message,
-		"nickname":         nickname,
+		"id":                id,
+		"event_id":          eventID,
+		"type":              postType,
+		"city":              city,
+		"persons":           persons,
+		"message":           message,
+		"nickname":          nickname,
 		"telegram_username": tgUsername,
-		"email_verified":   emailVerified == 1,
-		"expires_at":       expiresAtStr,
-		"expired":          expired,
-		"just_verified":    justVerified,
+		"email_verified":    emailVerified == 1,
+		"expires_at":        expiresAtStr,
+		"expired":           expired,
+		"just_verified":     justVerified,
+		"first_post":        firstPost,
 	})
 }
 

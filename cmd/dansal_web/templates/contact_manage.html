@@ -37,6 +37,8 @@
         <option value="sleep_request"{{if eq .Post.Type "sleep_request"}} selected{{end}}>{{$.Strings.T "board_sleep_request"}}</option>
         <option value="ticket_offer"{{if eq .Post.Type "ticket_offer"}} selected{{end}}>{{$.Strings.T "board_ticket_offer"}}</option>
         <option value="ticket_request"{{if eq .Post.Type "ticket_request"}} selected{{end}}>{{$.Strings.T "board_ticket_request"}}</option>
+        <option value="lost_item"{{if eq .Post.Type "lost_item"}} selected{{end}}>{{$.Strings.T "board_lost_item"}}</option>
+        <option value="found_item"{{if eq .Post.Type "found_item"}} selected{{end}}>{{$.Strings.T "board_found_item"}}</option>
       </select>
     </div>
 

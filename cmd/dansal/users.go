@@ -35,6 +35,7 @@ type User struct {
 	TelegramVerified bool   `json:"telegram_verified"`
 	MatrixVerified   bool   `json:"matrix_verified"`
 	Disabled         bool   `json:"disabled"`
+	HasPassword      bool   `json:"has_password"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -120,16 +121,17 @@ func validateRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
 }
 
-const userSelectCols = "id, email, COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at"
+const userSelectCols = "id, email, COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, created_at"
 
 type userScanner interface{ Scan(...any) error }
 
 func scanUser(s userScanner) (User, error) {
 	var u User
-	var emailVer, telegramVer, matrixVer, disabled int
-	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &u.CreatedAt); err != nil {
+	var emailVer, telegramVer, matrixVer, disabled, hasPw int
+	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &hasPw, &u.CreatedAt); err != nil {
 		return User{}, err
 	}
+	u.HasPassword = hasPw != 0
 	u.EmailVerified = emailVer == 1
 	u.TelegramVerified = telegramVer == 1
 	u.MatrixVerified = matrixVer == 1
@@ -282,6 +284,14 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Email != "" && req.Email != user.Email {
+		if !isValidEmail(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+		if err := validateEmailDomain(r.Context(), req.Email); err != nil {
+			writeError(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
 		user.Email = req.Email
 		user.EmailVerified = false
 	}
@@ -546,4 +556,51 @@ func listPendingInvites(w http.ResponseWriter, r *http.Request) {
 		result = append(result, p)
 	}
 	json.NewEncoder(w).Encode(result)
+}
+
+// POST /api/v1/user/password — authenticated user sets or changes their own password.
+// If the user already has a password, old_password is required for verification.
+func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userIDStr := r.Header.Get("X-User-ID")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil || userID == 0 {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		writeError(w, "Password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+
+	var existingHash string
+	db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", userID).Scan(&existingHash)
+
+	if existingHash != "" {
+		if req.OldPassword == "" {
+			writeError(w, "Current password is required", http.StatusBadRequest)
+			return
+		}
+		ok, _ := checkPassword(req.OldPassword, existingHash)
+		if !ok {
+			writeError(w, "Current password is incorrect", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	if _, err := db.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(req.NewPassword), userID); err != nil {
+		writeError(w, "Failed to update password", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

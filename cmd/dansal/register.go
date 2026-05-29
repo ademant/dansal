@@ -96,6 +96,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
+	if !isValidEmail(req.Email) {
+		writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+		return
+	}
+	if err := validateEmailDomain(r.Context(), req.Email); err != nil {
+		writeError(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
 	if req.RegType != "join_org" && req.RegType != "new_org" {
 		writeError(w, "reg_type must be 'join_org' or 'new_org'", http.StatusBadRequest)
 		return

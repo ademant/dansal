@@ -285,6 +285,17 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
+	if invite.PresetEmail == "" {
+		// Plain admin invite — user supplies their own email; validate it.
+		if !isValidEmail(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+		if err := validateEmailDomain(r.Context(), req.Email); err != nil {
+			writeError(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
 
 	tx, err := db.Begin()
 	if err != nil {

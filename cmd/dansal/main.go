@@ -1212,6 +1212,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
 	// pending_registrations.description — motivation text shown to admin during approval.
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN description TEXT DEFAULT ''")
+	// Drop password_hash — no longer stored at registration time; credential setup
+	// happens via the invite link after admin approval.
+	db.Exec("ALTER TABLE pending_registrations DROP COLUMN password_hash")
 	// #393: replace username with email identity + display_name.
 	migrateUsersDropUsername()
 	db.Exec("ALTER TABLE invite_links DROP COLUMN preset_username")

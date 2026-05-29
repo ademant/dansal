@@ -502,6 +502,73 @@ func migrateContactPostsCheckConstraint() {
 	log.Printf("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
 }
 
+// migrateContactPostsLostFound extends the CHECK constraint to include lost_item / found_item.
+func migrateContactPostsLostFound() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='contact_posts'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "lost_item") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateContactPostsLostFound: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateContactPostsLostFound: pragma off: %v", err)
+		return
+	}
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateContactPostsLostFound: begin: %v", err)
+		return
+	}
+	stmts := []string{
+		`CREATE TABLE contact_posts_v3 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request','lost_item','found_item')),
+			city TEXT NOT NULL,
+			persons INTEGER NOT NULL DEFAULT 1,
+			message TEXT DEFAULT '',
+			nickname TEXT NOT NULL,
+			email TEXT NOT NULL DEFAULT '',
+			telegram_username TEXT,
+			poster_telegram_chat_id TEXT,
+			email_verified INTEGER DEFAULT 0,
+			manage_token TEXT UNIQUE,
+			user_id INTEGER REFERENCES users(id),
+			expires_at INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+		)`,
+		`INSERT INTO contact_posts_v3 SELECT id,event_id,type,city,persons,message,nickname,email,
+			COALESCE(telegram_username,NULL),COALESCE(poster_telegram_chat_id,NULL),
+			email_verified,manage_token,user_id,expires_at,created_at FROM contact_posts`,
+		`DROP TABLE contact_posts`,
+		`ALTER TABLE contact_posts_v3 RENAME TO contact_posts`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_posts_manage_token ON contact_posts(manage_token)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateContactPostsLostFound: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateContactPostsLostFound: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateContactPostsLostFound: added lost_item/found_item types")
+}
+
 // migrateInviteLinksRole rebuilds invite_links to add a CHECK constraint on
 // the role column, matching the constraint already present on users.role.
 func migrateInviteLinksRole() {
@@ -1063,6 +1130,8 @@ func migrateDB() {
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_posts_manage_token ON contact_posts(manage_token)")
 	db.Exec("ALTER TABLE contact_posts DROP COLUMN verify_token")
 	db.Exec("ALTER TABLE contact_posts DROP COLUMN delete_token")
+	// #391: add lost_item / found_item post types; rebuild CHECK constraint if needed.
+	migrateContactPostsLostFound()
 }
 
 func logUnmappedCountries() {
@@ -1336,7 +1405,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request')),
+		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request','lost_item','found_item')),
 		city TEXT NOT NULL,
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
@@ -1552,6 +1621,7 @@ func main() {
 	smux.HandleFunc("POST /telegram/webhook", telegramWebhookHandler)
 
 	// Contact board — public reads and post actions
+	smux.HandleFunc("GET /api/v1/contact-posts", listAllContactPosts)
 	smux.HandleFunc("GET /api/v1/events/{id}/contact-posts", listContactPosts)
 	smux.Handle("POST /api/v1/events/{id}/contact-posts", optAuth(http.HandlerFunc(createContactPost)))
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)

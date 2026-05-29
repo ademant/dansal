@@ -30,9 +30,14 @@ func containsLink(s string) bool {
 	return strings.Contains(lower, "http://") || strings.Contains(lower, "https://") || strings.Contains(lower, "mailto:")
 }
 
-// computeContactPostExpiry returns the earlier of (now+30 days) and (event end_time+3 days).
-func computeContactPostExpiry(eventID int) time.Time {
+// computeContactPostExpiry returns the post expiry based on type.
+// lost_item / found_item: flat 30 days from now.
+// All other types: min(now+30d, event end_time+3d).
+func computeContactPostExpiry(eventID int, postType string) time.Time {
 	ceiling := time.Now().UTC().Add(30 * 24 * time.Hour)
+	if lostFoundTypes[postType] {
+		return ceiling
+	}
 	var endTimeStr string
 	if err := db.QueryRow("SELECT end_time FROM events WHERE id=?", eventID).Scan(&endTimeStr); err == nil {
 		if ts, err := strconv.ParseInt(strings.TrimSpace(endTimeStr), 10, 64); err == nil {
@@ -73,7 +78,11 @@ var validContactPostTypes = map[string]bool{
 	"ride_offer": true, "ride_request": true,
 	"sleep_offer": true, "sleep_request": true,
 	"ticket_offer": true, "ticket_request": true,
+	"lost_item": true, "found_item": true,
 }
+
+// lostFoundTypes holds the types that use a flat 30-day expiry regardless of event end.
+var lostFoundTypes = map[string]bool{"lost_item": true, "found_item": true}
 
 // GET /api/v1/events/{id}/contact-posts
 // Public. Returns only email-verified posts; email field is never returned.
@@ -201,7 +210,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := computeContactPostExpiry(eventID)
+	expiresAt := computeContactPostExpiry(eventID, req.Type)
 	if !time.Now().Before(expiresAt) {
 		writeError(w, "this event has ended — board posts are no longer accepted", http.StatusGone)
 		return
@@ -731,4 +740,95 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"status": "verified"})
+}
+
+// GlobalContactPost extends ContactPost with event context for the global board.
+type GlobalContactPost struct {
+	ContactPost
+	EventTitle   string `json:"event_title"`
+	EventStart   string `json:"event_start"`
+	EventTown    string `json:"event_town"`
+	EventCountry string `json:"event_country"`
+}
+
+// GET /api/v1/contact-posts
+// Public. Returns all live verified posts across all published events.
+// Query params: type (comma-separated), town, q (free-text), limit, offset.
+func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	q := r.URL.Query()
+
+	limit := 50
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n <= 200 {
+		limit = n
+	}
+	offset := 0
+	if n, err := strconv.Atoi(q.Get("offset")); err == nil && n >= 0 {
+		offset = n
+	}
+
+	now := time.Now().UTC().Unix()
+	query := `SELECT cp.id, cp.event_id, cp.type, cp.city, cp.persons,
+	                 COALESCE(cp.message,''), cp.nickname, COALESCE(cp.telegram_username,''),
+	                 cp.email_verified, cp.created_at,
+	                 e.title, e.start_time, COALESCE(l.town,''), COALESCE(l.country,'')
+	          FROM contact_posts cp
+	          JOIN events e ON e.id = cp.event_id
+	          LEFT JOIN locations l ON l.id = e.location_id
+	          WHERE cp.email_verified=1 AND cp.expires_at > ? AND e.is_published=1`
+	args := []any{now}
+
+	if types := q.Get("type"); types != "" {
+		parts := strings.Split(types, ",")
+		placeholders := make([]string, 0, len(parts))
+		for _, t := range parts {
+			t = strings.TrimSpace(t)
+			if validContactPostTypes[t] {
+				placeholders = append(placeholders, "?")
+				args = append(args, t)
+			}
+		}
+		if len(placeholders) > 0 {
+			query += " AND cp.type IN (" + strings.Join(placeholders, ",") + ")"
+		}
+	}
+	if town := strings.TrimSpace(q.Get("town")); town != "" {
+		query += " AND lower(l.town)=lower(?)"
+		args = append(args, town)
+	}
+	if search := strings.TrimSpace(q.Get("q")); search != "" {
+		query += " AND (lower(cp.message) LIKE lower(?) OR lower(cp.nickname) LIKE lower(?))"
+		like := "%" + search + "%"
+		args = append(args, like, like)
+	}
+
+	query += " ORDER BY cp.created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	posts := []GlobalContactPost{}
+	for rows.Next() {
+		var gp GlobalContactPost
+		var ev int
+		var startEpoch int64
+		if err := rows.Scan(
+			&gp.ID, &gp.EventID, &gp.Type, &gp.City, &gp.Persons,
+			&gp.Message, &gp.Nickname, &gp.TelegramUsername,
+			&ev, &gp.CreatedAt,
+			&gp.EventTitle, &startEpoch, &gp.EventTown, &gp.EventCountry,
+		); err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		gp.EmailVerified = ev == 1
+		gp.EventStart = time.Unix(startEpoch, 0).UTC().Format(time.RFC3339)
+		posts = append(posts, gp)
+	}
+	json.NewEncoder(w).Encode(posts)
 }

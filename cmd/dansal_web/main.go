@@ -143,6 +143,7 @@ func main() {
 		r.HandleFunc("POST /checkin/{qr_token}", checkinPostHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/book", bookingPostHandler(cfg, client, i18n))
 		r.HandleFunc("GET /bookings/verify/{token}", bookingVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /board", boardHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians", musiciansHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /organizations", orgsHandler(cfg, tmpls, db, client, i18n))

@@ -703,6 +703,7 @@ type Templates struct {
 	adminManagement    *template.Template
 	help               *template.Template
 	contactManage      *template.Template
+	board              *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -758,6 +759,7 @@ func loadTemplates() *Templates {
 		adminManagement:    load("admin_management"),
 		help:               load("help"),
 		contactManage:      load("contact_manage"),
+		board:              load("board"),
 	}
 }
 
@@ -1282,6 +1284,73 @@ func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
 		}
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body) //nolint:errcheck
+	}
+}
+
+type BoardData struct {
+	Posts          []GlobalContactPost
+	TownFilter     string
+	Query          string
+	Towns          []string
+	ShowRides      bool
+	ShowSleep      bool
+	ShowTickets    bool
+	ShowLostFound  bool
+	FormToken      string
+}
+
+func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+
+		// Type group toggles: default all on; individual group off only if explicitly excluded.
+		showRides     := q.Get("rides")     != "0"
+		showSleep     := q.Get("sleep")     != "0"
+		showTickets   := q.Get("tickets")   != "0"
+		showLostFound := q.Get("lostfound") != "0"
+
+		var typeList []string
+		if showRides     { typeList = append(typeList, "ride_offer", "ride_request") }
+		if showSleep     { typeList = append(typeList, "sleep_offer", "sleep_request") }
+		if showTickets   { typeList = append(typeList, "ticket_offer", "ticket_request") }
+		if showLostFound { typeList = append(typeList, "lost_item", "found_item") }
+
+		params := url.Values{}
+		if len(typeList) < 8 { // if not all types, pass the filter
+			params.Set("type", strings.Join(typeList, ","))
+		}
+		townFilter := q.Get("town")
+		search := q.Get("q")
+		if townFilter != "" { params.Set("town", townFilter) }
+		if search != ""     { params.Set("q", search) }
+
+		posts, _ := client.GetAllContactPosts(r.Context(), params)
+
+		// Always fetch the unfiltered list once to populate the town dropdown.
+		allPosts, _ := client.GetAllContactPosts(r.Context(), url.Values{})
+		townSet := map[string]struct{}{}
+		for _, p := range allPosts {
+			if p.EventTown != "" {
+				townSet[p.EventTown] = struct{}{}
+			}
+		}
+		towns := make([]string, 0, len(townSet))
+		for t := range townSet { towns = append(towns, t) }
+		sort.Strings(towns)
+
+		title := i18n.T(r, "nav_board")
+		data := BoardData{
+			Posts:         posts,
+			TownFilter:    townFilter,
+			Query:         search,
+			Towns:         towns,
+			ShowRides:     showRides,
+			ShowSleep:     showSleep,
+			ShowTickets:   showTickets,
+			ShowLostFound: showLostFound,
+			FormToken:     issueFormToken(getClientIP(r)),
+		}
+		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
 	}
 }
 

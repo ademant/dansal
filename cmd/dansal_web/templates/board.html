@@ -1,0 +1,126 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "nav_board"}}</h1>
+
+{{with .Data}}
+<form class="board-filter-form" method="get" action="/board">
+  <div class="board-filter-bar">
+    <div class="board-type-toggles">
+      <label class="btog{{if .ShowRides}} btog-active{{end}}">
+        <input type="checkbox" name="_ui_rides" {{if .ShowRides}}checked{{end}} onchange="syncBoardFilter()">
+        🚗 {{$.Strings.T "board_type_group_rides"}}
+      </label>
+      <label class="btog{{if .ShowSleep}} btog-active{{end}}">
+        <input type="checkbox" name="_ui_sleep" {{if .ShowSleep}}checked{{end}} onchange="syncBoardFilter()">
+        🏠 {{$.Strings.T "board_type_group_accommodation"}}
+      </label>
+      <label class="btog{{if .ShowTickets}} btog-active{{end}}">
+        <input type="checkbox" name="_ui_tickets" {{if .ShowTickets}}checked{{end}} onchange="syncBoardFilter()">
+        🎟️ {{$.Strings.T "board_type_group_tickets"}}
+      </label>
+      <label class="btog{{if .ShowLostFound}} btog-active{{end}}">
+        <input type="checkbox" name="_ui_lostfound" {{if .ShowLostFound}}checked{{end}} onchange="syncBoardFilter()">
+        🔍 {{$.Strings.T "board_type_group_lost_found"}}
+      </label>
+    </div>
+    <input type="hidden" name="rides"     id="f-rides"     value="{{if .ShowRides}}1{{else}}0{{end}}">
+    <input type="hidden" name="sleep"     id="f-sleep"     value="{{if .ShowSleep}}1{{else}}0{{end}}">
+    <input type="hidden" name="tickets"   id="f-tickets"   value="{{if .ShowTickets}}1{{else}}0{{end}}">
+    <input type="hidden" name="lostfound" id="f-lostfound" value="{{if .ShowLostFound}}1{{else}}0{{end}}">
+    <select name="town" class="board-filter-town" onchange="this.form.submit()">
+      <option value="">{{$.Strings.T "filter_all_towns"}}</option>
+      {{range .Towns}}<option value="{{.}}"{{if eq . $.Data.TownFilter}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <input type="search" name="q" value="{{.Query}}" placeholder="{{$.Strings.T "board_search_placeholder"}}" class="board-filter-q">
+    <button type="submit">{{$.Strings.T "board_search_btn"}}</button>
+    <a href="/board" class="btn-sm-secondary">{{$.Strings.T "filter_clear"}}</a>
+  </div>
+</form>
+
+{{if .Posts}}
+<div class="board-global-list">
+  {{range .Posts}}
+  <div class="board-global-card">
+    <div class="bgc-header">
+      <span class="bgc-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
+      <span class="bgc-type">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
+      <span class="bgc-sep">·</span><span class="bgc-persons">{{.Persons}} {{$.Strings.T "board_persons"}}</span>
+      <span class="bgc-sep">·</span><span class="bgc-nick">{{.Nickname}}{{if .City}}, {{.City}}{{end}}</span>
+    </div>
+    {{if .Message}}<p class="bgc-message">{{.Message}}</p>{{end}}
+    <div class="bgc-event">
+      <a href="/events/{{.EventID}}" class="bgc-event-link">{{.EventTitle}}</a>
+      {{if .EventTown}}<span class="bgc-meta">· {{.EventTown}}</span>{{end}}
+      {{with isoDate .EventStart}}<span class="bgc-meta">· {{.}}</span>{{end}}
+    </div>
+    {{if not .TelegramUsername}}
+    <div class="bgc-actions">
+      <button type="button" class="btn-contact-toggle" data-id="{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>
+    </div>
+    <form id="bgc-cf-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{.EventID}}/board/{{.ID}}/contact">
+      <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
+      <div class="board-contact-method">
+        <label><input type="radio" name="contact_method" value="email" checked onchange="bgcToggle('{{.ID}}','email')"> Email</label>
+        <label><input type="radio" name="contact_method" value="telegram" onchange="bgcToggle('{{.ID}}','telegram')"> Telegram</label>
+      </div>
+      <div id="bgc-em-{{.ID}}"><input type="email" name="email" placeholder="{{$.Strings.T "board_email_placeholder"}}"></div>
+      <div id="bgc-tg-{{.ID}}" style="display:none"><input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}"></div>
+      <textarea name="message" required rows="3" placeholder="{{$.Strings.T "board_your_message"}}"></textarea>
+      <p class="board-hint">{{$.Strings.T "board_contact_verify_hint"}}</p>
+      <button type="submit">{{$.Strings.T "board_send_btn"}}</button>
+    </form>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{else}}
+<p class="board-empty">{{$.Strings.T "board_global_empty"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.board-filter-form{margin-bottom:1.2rem}
+.board-filter-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.board-type-toggles{display:flex;flex-wrap:wrap;gap:.35rem}
+.btog{display:inline-flex;align-items:center;gap:.25rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:20px;cursor:pointer;font-size:.87rem;color:var(--fg-2);background:var(--btn-bg);user-select:none}
+.btog input{display:none}
+.btog-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+.board-filter-town,.board-filter-q{padding:.3rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
+.board-filter-q{min-width:160px}
+.board-global-list{display:flex;flex-direction:column;gap:.75rem}
+.board-global-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:.9rem 1rem}
+.bgc-header{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;margin-bottom:.3rem}
+.bgc-icon{font-size:1.1rem}
+.bgc-type{font-weight:600;color:var(--heading);font-size:.92rem}
+.bgc-sep{color:var(--fg-3)}
+.bgc-persons,.bgc-nick{font-size:.88rem;color:var(--fg-2)}
+.bgc-message{margin:.3rem 0 .4rem;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
+.bgc-event{font-size:.85rem;color:var(--fg-2);margin-top:.35rem}
+.bgc-event-link{color:var(--link);font-weight:500}
+.bgc-meta{color:var(--fg-3)}
+.bgc-actions{margin-top:.5rem}
+</style>
+
+<script>
+function syncBoardFilter(){
+  ['rides','sleep','tickets','lostfound'].forEach(function(k){
+    var cb = document.querySelector('[name="_ui_'+k+'"]');
+    var hf = document.getElementById('f-'+k);
+    if(cb && hf){ hf.value = cb.checked ? '1' : '0'; }
+    if(cb){
+      cb.closest('.btog').classList.toggle('btog-active', cb.checked);
+    }
+  });
+}
+document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var f = document.getElementById('bgc-cf-'+this.dataset.id);
+    if(f) f.classList.toggle('hidden');
+  });
+});
+function bgcToggle(id, method){
+  document.getElementById('bgc-em-'+id).style.display = method==='email' ? '' : 'none';
+  document.getElementById('bgc-tg-'+id).style.display = method==='telegram' ? '' : 'none';
+}
+</script>
+{{end}}

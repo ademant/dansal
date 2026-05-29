@@ -1413,6 +1413,24 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 	return posts, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID), &posts)
 }
 
+// GlobalContactPost mirrors the API's GlobalContactPost with event context.
+type GlobalContactPost struct {
+	ContactPost
+	EventTitle   string `json:"event_title"`
+	EventStart   string `json:"event_start"`
+	EventTown    string `json:"event_town"`
+	EventCountry string `json:"event_country"`
+}
+
+func (c *DansalClient) GetAllContactPosts(ctx context.Context, params url.Values) ([]GlobalContactPost, error) {
+	path := "/api/v1/contact-posts"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	var posts []GlobalContactPost
+	return posts, c.get(ctx, path, &posts)
+}
+
 // CreateContactPost submits a board post and returns (telegramVerifyURL, error).
 // telegramVerifyURL is non-empty only when the post was submitted with a Telegram username.
 // baseURL is forwarded so the API can generate correct public links in emails.

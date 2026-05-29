@@ -2168,6 +2168,19 @@ type APIKey struct {
 	CreatedAt string `json:"created_at"`
 }
 
+func (c *DansalClient) ListPasskeys(ctx context.Context, token string) ([]PasskeyInfo, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/user/webauthn/credentials", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var items []PasskeyInfo
+	return items, json.NewDecoder(resp.Body).Decode(&items)
+}
+
 func (c *DansalClient) ListAPIKeys(ctx context.Context, token string) ([]APIKey, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/apikeys", token, nil)
 	if err != nil {

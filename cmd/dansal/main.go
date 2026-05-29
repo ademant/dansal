@@ -1222,6 +1222,8 @@ func migrateDB() {
 	// #394: changed_by_id FK on events.
 	db.Exec("ALTER TABLE events ADD COLUMN changed_by_id INTEGER REFERENCES users(id)")
 	db.Exec("UPDATE events SET changed_by_id = (SELECT id FROM users WHERE username = events.changed_by) WHERE changed_by IS NOT NULL AND changed_by != '' AND changed_by != 'fetch'")
+	// Store authenticator flags (BackupEligible/BackupState) so FinishLogin can verify flag consistency.
+	db.Exec("ALTER TABLE webauthn_credentials ADD COLUMN flags INTEGER NOT NULL DEFAULT 0")
 }
 
 func logUnmappedCountries() {
@@ -1590,6 +1592,7 @@ func createTables() error {
 		public_key BLOB NOT NULL,
 		sign_count INTEGER NOT NULL DEFAULT 0,
 		aaguid BLOB,
+		flags INTEGER NOT NULL DEFAULT 0,
 		name TEXT NOT NULL DEFAULT 'Passkey',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -1713,6 +1716,10 @@ func main() {
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnLoginFinish)
+	smux.Handle("GET /api/v1/user/webauthn/credentials", auth(webauthnUserCredentialsList))
+	smux.Handle("POST /api/v1/user/webauthn/register/begin", auth(webauthnUserRegisterBegin))
+	smux.Handle("POST /api/v1/user/webauthn/register/finish", auth(webauthnUserRegisterFinish))
+	smux.Handle("DELETE /api/v1/user/webauthn/credentials/{id}", auth(webauthnUserCredentialDelete))
 
 	// Telegram bot webhook (public, called by Telegram servers)
 	smux.HandleFunc("POST /telegram/webhook", telegramWebhookHandler)

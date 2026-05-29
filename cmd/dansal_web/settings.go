@@ -1,10 +1,17 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 )
+
+type PasskeyInfo struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
 
 type SettingsData struct {
 	User             UserInfo
@@ -16,6 +23,7 @@ type SettingsData struct {
 	APIKeys          []APIKey
 	NewAPIKey        *APIKey
 	Sessions         []SessionInfo
+	Passkeys         []PasskeyInfo
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -32,6 +40,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		}
 		keys, _ := client.ListAPIKeys(r.Context(), token)
 		sessions, _ := client.GetSessions(r.Context(), token)
+		passkeys, _ := client.ListPasskeys(r.Context(), token)
 		title := i18n.T(r, "settings_title")
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
@@ -40,6 +49,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			VerifiedChannel: r.URL.Query().Get("verified"),
 			APIKeys:         keys,
 			Sessions:        sessions,
+			Passkeys:        passkeys,
 		}))
 	}
 }
@@ -308,5 +318,44 @@ func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			data = VerifyData{ErrorKey: "verify_error_invalid"}
 		}
 		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, data))
+	}
+}
+
+func settingsPasskeyRegisterBeginHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		webauthnAuthedProxyDo(cfg, client, "/api/v1/user/webauthn/register/begin", token, w, r)
+	}
+}
+
+func settingsPasskeyRegisterFinishHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		webauthnAuthedProxyDo(cfg, client, "/api/v1/user/webauthn/register/finish", token, w, r)
+	}
+}
+
+func settingsPasskeyDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("id")
+		token := getSessionToken(r)
+		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/user/webauthn/credentials/"+id, token, nil)
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}
 }

@@ -8,9 +8,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
@@ -64,7 +66,7 @@ func userHandle(id int) []byte {
 // loadWebAuthnUser fetches stored passkey credentials for a user.
 func loadWebAuthnUser(userID int, username string) *waUser {
 	rows, err := db.Query(
-		"SELECT credential_id, public_key, sign_count, aaguid FROM webauthn_credentials WHERE user_id=?", userID,
+		"SELECT credential_id, public_key, sign_count, aaguid, flags FROM webauthn_credentials WHERE user_id=?", userID,
 	)
 	if err != nil {
 		return &waUser{id: userHandle(userID), username: username}
@@ -75,12 +77,14 @@ func loadWebAuthnUser(userID int, username string) *waUser {
 		var credID, pubKey []byte
 		var aaguid []byte
 		var signCount uint32
-		if err := rows.Scan(&credID, &pubKey, &signCount, &aaguid); err != nil {
+		var flags byte
+		if err := rows.Scan(&credID, &pubKey, &signCount, &aaguid, &flags); err != nil {
 			continue
 		}
 		creds = append(creds, webauthn.Credential{
 			ID:        credID,
 			PublicKey: pubKey,
+			Flags:     webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(flags)),
 			Authenticator: webauthn.Authenticator{
 				AAGUID:    aaguid,
 				SignCount: signCount,
@@ -295,8 +299,8 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	userID, _ := result.LastInsertId()
 
 	if _, err := tx.Exec(
-		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid) VALUES (?, ?, ?, ?, ?)",
-		userID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID,
+		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
+		userID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
 	); err != nil {
 		writeError(w, "Could not store credential", http.StatusInternalServerError)
 		return
@@ -458,4 +462,143 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		"email":      userEmail,
 		"role":       role,
 	})
+}
+
+// ── User passkey management (authenticated) ───────────────────────────────────
+
+// GET /api/v1/user/webauthn/credentials
+func webauthnUserCredentialsList(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := callerFromRequest(r)
+	rows, err := db.Query(
+		"SELECT id, name, created_at FROM webauthn_credentials WHERE user_id=? ORDER BY created_at",
+		callerID,
+	)
+	if err != nil {
+		writeError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type credItem struct {
+		ID        int    `json:"id"`
+		Name      string `json:"name"`
+		CreatedAt string `json:"created_at"`
+	}
+	items := []credItem{}
+	for rows.Next() {
+		var item credItem
+		if rows.Scan(&item.ID, &item.Name, &item.CreatedAt) == nil {
+			items = append(items, item)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
+// POST /api/v1/user/webauthn/register/begin
+func webauthnUserRegisterBegin(w http.ResponseWriter, r *http.Request) {
+	if wauthn == nil {
+		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
+		return
+	}
+	callerID, _ := callerFromRequest(r)
+	var userEmail string
+	if err := db.QueryRow("SELECT email FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+	user := loadWebAuthnUser(callerID, userEmail)
+	options, sessionData, err := wauthn.BeginRegistration(user)
+	if err != nil {
+		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
+		return
+	}
+	blob, _ := json.Marshal(waLoginSession{Session: *sessionData, UserID: callerID})
+	sessionID, err := generateSessionToken()
+	if err != nil {
+		writeError(w, "Could not generate session", http.StatusInternalServerError)
+		return
+	}
+	if err := saveWASession(sessionID, blob); err != nil {
+		writeError(w, "Could not store session", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"session_id": sessionID, "options": options})
+}
+
+// POST /api/v1/user/webauthn/register/finish?session_id=…
+func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
+	if wauthn == nil {
+		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
+		return
+	}
+	callerID, _ := callerFromRequest(r)
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		writeError(w, "session_id query parameter required", http.StatusBadRequest)
+		return
+	}
+	blob, err := loadWASession(sessionID)
+	if err != nil {
+		writeError(w, "Session expired or not found", http.StatusBadRequest)
+		return
+	}
+	var stored waLoginSession
+	if err := json.Unmarshal(blob, &stored); err != nil || stored.UserID != callerID {
+		writeError(w, "Session mismatch", http.StatusBadRequest)
+		return
+	}
+	var userEmail string
+	if err := db.QueryRow("SELECT email FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+	user := loadWebAuthnUser(callerID, userEmail)
+	credential, err := wauthn.FinishRegistration(user, stored.Session, r)
+	if err != nil {
+		writeError(w, "WebAuthn verification failed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := db.Exec(
+		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
+		callerID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
+	); err != nil {
+		writeError(w, "Could not store credential", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("webauthn: user %d added a new passkey", callerID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]any{"status": "created"})
+}
+
+// DELETE /api/v1/user/webauthn/credentials/{id}
+func webauthnUserCredentialDelete(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := callerFromRequest(r)
+	credID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	// Prevent locking out a user who has no password and this is their last passkey.
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=?", callerID).Scan(&count)
+	if count <= 1 {
+		var passwordHash string
+		db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", callerID).Scan(&passwordHash)
+		if passwordHash == "" {
+			writeError(w, "Cannot delete last passkey when no password is set", http.StatusConflict)
+			return
+		}
+	}
+	res, err := db.Exec("DELETE FROM webauthn_credentials WHERE id=? AND user_id=?", credID, callerID)
+	if err != nil {
+		writeError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, "Not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

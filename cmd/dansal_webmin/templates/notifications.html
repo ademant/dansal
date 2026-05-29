@@ -63,7 +63,7 @@
           </div>
           <div class="form-group">
             <label>TLS</label>
-            <select id="wz-tls">
+            <select id="wz-tls" onchange="smtpWizard.onTLSChange(this)">
               <option value="starttls">starttls</option>
               <option value="tls">tls (port 465)</option>
               <option value="none">none</option>
@@ -230,6 +230,13 @@ window.smtpWizard = {
     if (f.value === '' && u.indexOf('@') > 0) f.value = u;
   },
   _isLocalMTA: function(){ return !!(selectedProvider && selectedProvider.localMTA); },
+  onTLSChange: function(sel){
+    var portEl = document.getElementById('wz-port');
+    var port = parseInt(portEl.value, 10);
+    if (port === 465 || port === 587) {
+      portEl.value = sel.value === 'tls' ? 465 : 587;
+    }
+  },
   _validate: function(){
     if (step === 1 && !selectedProvider) { alert('Please select a provider.'); return false; }
     if (step === 2) {

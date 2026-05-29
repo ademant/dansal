@@ -30,12 +30,12 @@ func newErrorID() string {
 }
 
 // shouldCaptureError returns true for status codes that warrant an error_id:
-// anything that is not 2xx, 3xx, 401, or 403.
+// anything that is not 2xx, 3xx, 401, 403, or 404.
 func shouldCaptureError(code int) bool {
 	if code < 400 {
 		return false
 	}
-	return code != 401 && code != 403
+	return code != 401 && code != 403 && code != 404
 }
 
 // errorIDWriter buffers the response body for qualifying status codes so that
@@ -100,7 +100,7 @@ func (e *errorIDWriter) flush() {
 	e.ResponseWriter.Write(body)
 }
 
-// ErrorIDMiddleware intercepts error responses (non-2xx/3xx/401/403), assigns
+// ErrorIDMiddleware intercepts error responses (non-2xx/3xx/401/403/404), assigns
 // each a unique error_id, logs it anonymised, and injects the error_id into
 // the JSON body. It must sit inside GzipMiddleware so it sees uncompressed JSON.
 func ErrorIDMiddleware(next http.Handler) http.Handler {

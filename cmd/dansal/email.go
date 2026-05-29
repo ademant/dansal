@@ -11,7 +11,9 @@ import (
 	"mime"
 	"net"
 	"net/smtp"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -77,9 +79,37 @@ func smtpReveal(encBase64, keyHex string) (string, error) {
 	return string(plain), nil
 }
 
-// SendEmail sends a plain-text email using the configured SMTP server.
+// sendMailLocal delivers a message by piping it to the configured sendmail binary.
+func sendMailLocal(cfg SMTPConfig, to, subject, body string) error {
+	from := cfg.From
+	if from == "" {
+		return fmt.Errorf("smtp.from is required when using sendmail")
+	}
+	fromHeader := from
+	if cfg.FromName != "" {
+		fromHeader = mime.QEncoding.Encode("utf-8", cfg.FromName) + " <" + from + ">"
+	}
+	msg := "MIME-Version: 1.0\r\n" +
+		"From: " + stripCRLF(fromHeader) + "\r\n" +
+		"To: " + stripCRLF(to) + "\r\n" +
+		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
+		body
+	cmd := exec.Command(cfg.Sendmail, "-t", "-i")
+	cmd.Stdin = strings.NewReader(msg)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sendmail: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// SendEmail sends a plain-text email.
+// If smtp.sendmail is set, the local MTA is used; otherwise the configured SMTP server is used.
 func SendEmail(to, subject, body string) error {
 	cfg := config.SMTP
+	if cfg.Sendmail != "" {
+		return sendMailLocal(cfg, to, subject, body)
+	}
 	if cfg.Host == "" {
 		return fmt.Errorf("SMTP not configured")
 	}

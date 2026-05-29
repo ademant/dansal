@@ -60,6 +60,7 @@ type SMTPConfig struct {
 	FromName    string `yaml:"from_name,omitempty"`
 	TLS         string `yaml:"tls,omitempty"`          // starttls | tls | none
 	TimeoutSecs int    `yaml:"timeout_secs,omitempty"` // dial+send timeout; default 30
+	Sendmail    string `yaml:"sendmail,omitempty"`     // path to sendmail binary; if set, used instead of SMTP
 }
 
 type Config struct {

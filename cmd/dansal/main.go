@@ -1210,6 +1210,8 @@ func migrateDB() {
 	// #392: preset username/email on invite_links for registration-via-invite flow.
 	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_username TEXT")
 	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
+	// pending_registrations.description — motivation text shown to admin during approval.
+	db.Exec("ALTER TABLE pending_registrations ADD COLUMN description TEXT DEFAULT ''")
 	// #393: replace username with email identity + display_name.
 	migrateUsersDropUsername()
 	db.Exec("ALTER TABLE invite_links DROP COLUMN preset_username")
@@ -1557,6 +1559,7 @@ func createTables() error {
 		verification_token TEXT UNIQUE NOT NULL,
 		approval_token     TEXT UNIQUE NOT NULL,
 		email              TEXT NOT NULL,
+		description        TEXT DEFAULT '',
 		reg_type           TEXT NOT NULL CHECK(reg_type IN ('join_org','new_org')),
 		org_id             INTEGER,
 		org_name           TEXT DEFAULT '',

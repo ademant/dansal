@@ -32,7 +32,8 @@ func randomHex32() (string, error) {
 
 type RegisterRequest struct {
 	Email           string `json:"email"`
-	RegType         string `json:"reg_type"` // "join_org" | "new_org"
+	Description     string `json:"description"` // motivation shown to admin; not stored on user account
+	RegType         string `json:"reg_type"`    // "join_org" | "new_org"
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`
 	OrgDescription  string `json:"org_description,omitempty"`
@@ -46,6 +47,7 @@ type RegisterRequest struct {
 type PendingRegistration struct {
 	ID                  int    `json:"id"`
 	Email               string `json:"email"`
+	Description         string `json:"description,omitempty"`
 	RegType             string `json:"reg_type"`
 	OrgID               *int   `json:"org_id,omitempty"`
 	OrgName             string `json:"org_name,omitempty"`
@@ -191,11 +193,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, dbErr := db.Exec(
 		`INSERT INTO pending_registrations
-		 (verification_token, approval_token, email,
+		 (verification_token, approval_token, email, description,
 		  reg_type, org_id, org_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		verificationToken, approvalToken, req.Email,
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		verificationToken, approvalToken, req.Email, req.Description,
 		req.RegType, orgIDArg, req.OrgName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, expiresAt,
 	)
@@ -269,13 +271,13 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if callerRole == RoleAdmin {
 		rows, err = db.Query(
-			`SELECT id, email, reg_type, org_id, org_name, org_description, org_website,
+			`SELECT id, email, COALESCE(description,''), reg_type, org_id, org_name, org_description, org_website,
 			 org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified, created_at, expires_at
 			 FROM pending_registrations ORDER BY created_at ASC`,
 		)
 	} else {
 		rows, err = db.Query(
-			`SELECT pr.id, pr.email, pr.reg_type, pr.org_id, pr.org_name, pr.org_description,
+			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id, pr.org_name, pr.org_description,
 			 pr.org_website, pr.org_contact_email, pr.verification_channel, pr.telegram,
 			 COALESCE(pr.telegram_chat_id,''), pr.verified, pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
@@ -295,7 +297,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 		var pr PendingRegistration
 		var orgID sql.NullInt64
 		if err := rows.Scan(
-			&pr.ID, &pr.Email, &pr.RegType, &orgID,
+			&pr.ID, &pr.Email, &pr.Description, &pr.RegType, &orgID,
 			&pr.OrgName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
 			&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID,
 			&pr.Verified, &pr.CreatedAt, &pr.ExpiresAt,

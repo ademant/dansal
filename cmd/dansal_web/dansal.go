@@ -2124,6 +2124,7 @@ type DansalInfo struct {
 type PendingRegistration struct {
 	ID                  int    `json:"id"`
 	Email               string `json:"email"`
+	Description         string `json:"description,omitempty"`
 	RegType             string `json:"reg_type"`
 	OrgID               *int   `json:"org_id,omitempty"`
 	OrgName             string `json:"org_name,omitempty"`
@@ -2140,6 +2141,7 @@ type PendingRegistration struct {
 
 type RegisterReq struct {
 	Email           string `json:"email"`
+	Description     string `json:"description,omitempty"`
 	RegType         string `json:"reg_type"`
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`

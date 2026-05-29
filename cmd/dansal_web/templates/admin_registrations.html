@@ -11,6 +11,7 @@
   <thead>
     <tr>
       <th>{{$.Strings.T "register_email"}}</th>
+      <th>{{$.Strings.T "register_description_label"}}</th>
       <th>Type</th>
       <th>Org</th>
       <th>Channel</th>
@@ -23,6 +24,7 @@
   {{range .Regs}}
   <tr>
     <td>{{.Email}}</td>
+    <td class="reg-desc">{{.Description}}</td>
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
     <td>{{.VerificationChannel}}{{if .Telegram}} (@{{.Telegram}}){{end}}</td>
@@ -97,5 +99,6 @@
 .btn-danger:hover{background:#7a1818}
 .hint{color:var(--fg-muted);font-style:italic}
 .unverified{color:#a06000;font-size:.8rem;font-style:italic}
+.reg-desc{max-width:220px;font-size:.85rem;color:var(--fg-2);white-space:pre-wrap;word-break:break-word}
 </style>
 {{end}}

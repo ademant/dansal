@@ -29,6 +29,11 @@
       <input type="email" id="field-email" name="email" required autocomplete="email" class="form-input">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
+    <div class="form-group">
+      <label for="field-description">{{$.Strings.T "register_description_label"}}</label>
+      <textarea id="field-description" name="description" rows="3" class="form-input" maxlength="500" placeholder="{{$.Strings.T "register_description_placeholder"}}"></textarea>
+      <p class="form-hint">{{$.Strings.T "register_description_hint"}}</p>
+    </div>
 
     {{/* join_org fields */}}
     <div id="join-fields">

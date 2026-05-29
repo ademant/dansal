@@ -1728,6 +1728,19 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegra
 	return "", nil
 }
 
+// InviteInfo holds the public fields returned by GET /api/v1/invites/{token}.
+type InviteInfo struct {
+	Role           string `json:"role"`
+	Expired        bool   `json:"expired"`
+	PresetUsername string `json:"preset_username"`
+	PresetEmail    string `json:"preset_email"`
+}
+
+func (c *DansalClient) GetInviteInfo(ctx context.Context, token string) (InviteInfo, error) {
+	var info InviteInfo
+	return info, c.get(ctx, "/api/v1/invites/"+token, &info)
+}
+
 // ── users & invites ───────────────────────────────────────────────────────────
 
 type InviteLink struct {

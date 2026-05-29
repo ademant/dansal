@@ -20,11 +20,20 @@
   <div class="invite-form-wrap">
     <div class="invite-field">
       <label for="inv-username">{{$.Strings.T "invite_username"}}</label>
+      {{if .PresetUsername}}
+      <input id="inv-username" type="text" value="{{.PresetUsername}}" readonly class="invite-input-preset" autocomplete="username">
+      <p class="form-hint">{{$.Strings.T "invite_preset_hint"}}</p>
+      {{else}}
       <input id="inv-username" type="text" autocomplete="username" required>
+      {{end}}
     </div>
     <div class="invite-field">
       <label for="inv-email">{{$.Strings.T "invite_email"}}</label>
+      {{if .PresetEmail}}
+      <input id="inv-email" type="email" value="{{.PresetEmail}}" readonly class="invite-input-preset" autocomplete="email">
+      {{else}}
       <input id="inv-email" type="email" autocomplete="email" required>
+      {{end}}
     </div>
 
     <!-- Passkey track -->
@@ -188,6 +197,7 @@
 .invite-field{display:flex;flex-direction:column;gap:.25rem}
 .invite-field label{font-weight:600;font-size:.88rem;color:var(--fg-dim)}
 .invite-field input{padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:1rem;background:var(--bg-card);color:var(--fg)}
+.invite-input-preset{background:var(--bg-subtle,#f8f9fa)!important;color:var(--fg-dim)!important;cursor:default}
 .track-hint{font-size:.88rem;color:var(--fg-dim);margin:0}
 .invite-msg{padding:.55rem .75rem;border-radius:4px;font-size:.9rem;margin-top:.25rem}
 .invite-ok{background:#d1fae5;color:#065f46}

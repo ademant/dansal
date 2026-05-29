@@ -1132,6 +1132,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE contact_posts DROP COLUMN delete_token")
 	// #391: add lost_item / found_item post types; rebuild CHECK constraint if needed.
 	migrateContactPostsLostFound()
+	// #392: preset username/email on invite_links for registration-via-invite flow.
+	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_username TEXT")
+	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
 }
 
 func logUnmappedCountries() {
@@ -1336,6 +1339,8 @@ func createTables() error {
 		org_id INTEGER,
 		expires_at INTEGER NOT NULL,
 		used_at INTEGER,
+		preset_username TEXT,
+		preset_email TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
@@ -1611,6 +1616,7 @@ func main() {
 
 	// Verification endpoints (public)
 	smux.HandleFunc("GET /api/v1/verify/{token}", consumeVerification)
+	smux.HandleFunc("GET /api/v1/invites/{token}", getInviteInfo)
 	smux.HandleFunc("POST /api/v1/invites/{token}", useInvite)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin", webauthnInviteBegin)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)

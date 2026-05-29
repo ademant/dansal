@@ -140,13 +140,16 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var invite struct {
-		ID        int
-		ExpiresAt string
-		UsedAt    string
+		ID             int
+		ExpiresAt      string
+		UsedAt         string
+		PresetUsername string
+		PresetEmail    string
 	}
 	err := db.QueryRow(
-		"SELECT id, expires_at, COALESCE(used_at,'') FROM invite_links WHERE token=?", token,
-	).Scan(&invite.ID, &invite.ExpiresAt, &invite.UsedAt)
+		`SELECT id, expires_at, COALESCE(used_at,''), COALESCE(preset_username,''), COALESCE(preset_email,'')
+		 FROM invite_links WHERE token=?`, token,
+	).Scan(&invite.ID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetUsername, &invite.PresetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
@@ -164,7 +167,18 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" || req.Email == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	// Preset values from registration override whatever the client sends.
+	if invite.PresetUsername != "" {
+		req.Username = invite.PresetUsername
+	}
+	if invite.PresetEmail != "" {
+		req.Email = invite.PresetEmail
+	}
+	if req.Username == "" || req.Email == "" {
 		writeError(w, "username and email are required", http.StatusBadRequest)
 		return
 	}

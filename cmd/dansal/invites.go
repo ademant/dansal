@@ -202,6 +202,40 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /api/v1/invites/{token} — public; returns non-sensitive invite info for the setup page.
+func getInviteInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	token := r.PathValue("token")
+
+	var id int
+	var role, expiresAt, usedAt, presetUsername, presetEmail sql.NullString
+	err := db.QueryRow(
+		`SELECT id, role, expires_at, COALESCE(used_at,''), COALESCE(preset_username,''), COALESCE(preset_email,'')
+		 FROM invite_links WHERE token=?`, token,
+	).Scan(&id, &role, &expiresAt, &usedAt, &presetUsername, &presetEmail)
+	if err == sql.ErrNoRows {
+		writeError(w, "Invalid invite link", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	expired := false
+	if usedAt.String != "" {
+		expired = true
+	} else if exp, err2 := parseTokenExpiration(expiresAt.String); err2 != nil || time.Now().After(exp) {
+		expired = true
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":               id,
+		"role":             role.String,
+		"expired":          expired,
+		"preset_username":  presetUsername.String,
+		"preset_email":     presetEmail.String,
+	})
+}
+
 // POST /api/v1/invites/{token} — public endpoint; register a new user via invite.
 func useInvite(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -209,16 +243,21 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 
 	var invite struct {
-		ID        int
-		Role      string
-		OrgID     sql.NullInt64
-		ExpiresAt string
-		UsedAt    string
+		ID              int
+		Role            string
+		OrgID           sql.NullInt64
+		ExpiresAt       string
+		UsedAt          string
+		PresetUsername  string
+		PresetEmail     string
 	}
 	err := db.QueryRow(
-		"SELECT id, role, org_id, expires_at, COALESCE(used_at,'') FROM invite_links WHERE token=?",
+		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''),
+		        COALESCE(preset_username,''), COALESCE(preset_email,'')
+		 FROM invite_links WHERE token=?`,
 		token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt)
+	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt,
+		&invite.PresetUsername, &invite.PresetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
@@ -241,6 +280,13 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+	// Preset values from registration override whatever the client sends.
+	if invite.PresetUsername != "" {
+		req.Username = invite.PresetUsername
+	}
+	if invite.PresetEmail != "" {
+		req.Email = invite.PresetEmail
 	}
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		writeError(w, "username, email and password are required", http.StatusBadRequest)

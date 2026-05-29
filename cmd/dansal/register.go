@@ -392,20 +392,10 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Insert user.
-	result, err := tx.Exec(
-		"INSERT INTO users (username, email, password_hash, role, telegram, email_verified) VALUES (?, ?, ?, ?, ?, 1)",
-		pr.Username, pr.Email, pr.PasswordHash, role, pr.Telegram,
-	)
-	if err != nil {
-		writeError(w, "username or email already exists", http.StatusConflict)
-		return
-	}
-	userID, _ := result.LastInsertId()
-
+	// For new_org registrations: create the organisation now so it exists when
+	// the user completes the invite. For join_org the org already exists.
 	var orgID int64
 	if pr.RegType == "new_org" {
-		// Create organization.
 		if err := tx.QueryRow(
 			"INSERT INTO organizations (name, description, website, contact_email) VALUES (?,?,?,?) RETURNING id",
 			pr.OrgName, pr.OrgDescription, pr.OrgWebsite, pr.OrgContactEmail,
@@ -417,8 +407,24 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		orgID = pr.OrgID.Int64
 	}
 
+	// Generate a 72-hour invite link pre-seeded with the approved username/email.
+	inviteToken, err := generateInviteToken()
+	if err != nil {
+		writeError(w, "failed to generate invite token", http.StatusInternalServerError)
+		return
+	}
+	expiresAt := time.Now().UTC().Add(72 * time.Hour).Unix()
+	var orgVal any
 	if orgID != 0 {
-		tx.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", orgID, userID)
+		orgVal = orgID
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO invite_links (token, created_by, role, org_id, expires_at, preset_username, preset_email)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		inviteToken, callerID, role, orgVal, expiresAt, pr.Username, pr.Email,
+	); err != nil {
+		writeError(w, "failed to create invite link", http.StatusInternalServerError)
+		return
 	}
 
 	tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
@@ -428,20 +434,20 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("register: approved pending registration %d — new user %q (role=%s)", id, pr.Username, role)
+	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Username, role)
 
+	base := buildBaseURL(r)
+	setupURL := base + "/invites/" + inviteToken
 	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
-		fmt.Sprintf("Your registration has been approved! You can now log in as %q.", pr.Username))
+		fmt.Sprintf("Your registration has been approved!\n\nComplete your account setup here:\n%s\n\nThis link is valid for 72 hours.", setupURL))
 
-	user := User{
-		ID:       int(userID),
-		Username: pr.Username,
-		Email:    pr.Email,
-		Role:     role,
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":     "invite_sent",
+		"username":   pr.Username,
+		"invite_url": setupURL,
+	})
 }
 
 // DELETE /api/v1/pending-registrations/{id}

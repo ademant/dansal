@@ -100,6 +100,7 @@ var monitoredUnits = []string{
 	"dansal-backup.timer",
 	"dansal-vacuum.timer",
 	"dansal-prune-images.timer",
+	"dansal-mailcheck.timer",
 }
 
 func getServiceStatus(name string) ServiceStatus {

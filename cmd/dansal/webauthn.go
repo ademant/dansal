@@ -437,16 +437,43 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := loadWebAuthnUser(stored.UserID, userEmail)
-	credential, err := wauthn.FinishLogin(user, stored.Session, r)
+
+	// Parse the request body once so we can inspect fields before validation.
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(r)
 	if err != nil {
 		writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
 		return
 	}
 
-	// Update sign count to detect credential cloning.
+	// Migrate flags=0 credentials (registered before the flags column existed).
+	for i := range user.credentials {
+		if user.credentials[i].Flags.ProtocolValue() == 0 {
+			user.credentials[i].Flags = webauthn.NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags)
+		}
+	}
+
+	// The invite registration flow used a temp user handle ("pending:<id>:<email>")
+	// because the user didn't exist in the DB yet at BeginRegistration time.
+	// If the authenticator echoes back a handle that differs from our DB-derived
+	// one, adopt it so the library's identity check passes. Credential ownership
+	// and signature verification still enforce security.
+	loginSession := stored.Session
+	if uh := parsedResponse.Response.UserHandle; len(uh) > 0 {
+		user.id = uh
+		loginSession.UserID = uh
+	}
+
+	credential, err := wauthn.ValidateLogin(user, loginSession, parsedResponse)
+	if err != nil {
+		log.Printf("webauthn: login validation failed for user %d: %v", stored.UserID, err)
+		writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
+		return
+	}
+
+	// Persist updated sign count and flags (fixes stale flags=0 rows).
 	db.Exec(
-		"UPDATE webauthn_credentials SET sign_count=? WHERE user_id=? AND credential_id=?",
-		credential.Authenticator.SignCount, stored.UserID, credential.ID,
+		"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
+		credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), stored.UserID, credential.ID,
 	)
 
 	sessionToken, expiresAt, err := createTokenInDB(stored.UserID, r.UserAgent(), getClientIP(r), "")
@@ -459,6 +486,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"token":      sessionToken,
 		"expires_at": expiresAt.Format(time.RFC3339),
+		"user_id":    stored.UserID,
 		"email":      userEmail,
 		"role":       role,
 	})

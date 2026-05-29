@@ -1,10 +1,11 @@
 #!/bin/sh
 # Pre-flight checks run by systemd as ExecStartPre before dansal starts.
-# Verifies that all files and directories the service needs are accessible.
-# Each failed check emits a specific error line; exits non-zero to block startup.
+# Usage: dansal_preflight [CONFIG_PATH]
+# Reads db_path and images_dir from the config; falls back to legacy defaults.
 
 set -u
 
+CONFIG="${1:-/etc/dansal/config.yaml}"
 ERRORS=0
 ME=$(id -un)
 
@@ -47,10 +48,22 @@ check_file_writable() {
     fi
 }
 
-check_dir_writable  /var/lib/dansal
-check_dir_writable  /var/lib/dansal/images
-check_file_writable /var/lib/dansal/calendar.db
-check_file_readable /etc/dansal/config.yaml
+# Extract a value from the YAML config by key name.
+get_conf() {
+    grep -E "^[[:space:]]*${1}:" "$CONFIG" 2>/dev/null | \
+        sed 's/.*:[[:space:]]*//' | tr -d '"' | head -1
+}
+
+DB_PATH=$(get_conf "db_path")
+DB_PATH="${DB_PATH:-/var/lib/dansal/calendar.db}"
+IMAGES_DIR=$(get_conf "images_dir")
+IMAGES_DIR="${IMAGES_DIR:-/var/lib/dansal/images}"
+STATE_DIR=$(dirname "$DB_PATH")
+
+check_dir_writable  "$STATE_DIR"
+check_dir_writable  "$IMAGES_DIR"
+check_file_writable "$DB_PATH"
+check_file_readable "$CONFIG"
 
 [ "$ERRORS" -eq 0 ] && exit 0
 

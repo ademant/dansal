@@ -19,6 +19,7 @@ type smtpConfig struct {
 	TimeoutSecs int    `json:"timeout_secs"`
 	HasPassword bool   `json:"has_password"`
 	To          string `json:"to"`
+	Sendmail    string `json:"sendmail"`
 }
 
 type telegramConfig struct {
@@ -73,6 +74,12 @@ type notificationsData struct {
 func smtpNotifStatus(s *smtpConfig) notifStatus {
 	if s == nil {
 		return statusMissing
+	}
+	if s.Sendmail != "" {
+		if s.From != "" && s.To != "" {
+			return statusOK
+		}
+		return statusPartial
 	}
 	if s.Host != "" && s.From != "" && s.HasPassword && s.To != "" {
 		return statusOK
@@ -177,6 +184,7 @@ func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 			SMTPTLS:         r.FormValue("tls"),
 			SMTPTimeoutSecs: timeoutSecs,
 			SMTPTo:          r.FormValue("to"),
+			SMTPSendmail:    r.FormValue("sendmail"),
 		}
 		resp, err := sendSocket(cfg.AdminSocket, req)
 		if err != nil || !resp.OK {
@@ -273,6 +281,7 @@ func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
 			SMTPTLS:         r.FormValue("tls"),
 			SMTPTimeoutSecs: timeoutSecs,
 			SMTPTo:          r.FormValue("to"),
+			SMTPSendmail:    r.FormValue("sendmail"),
 		}
 		resp, err := sendSocket(cfg.AdminSocket, saveReq)
 		if err != nil || !resp.OK {

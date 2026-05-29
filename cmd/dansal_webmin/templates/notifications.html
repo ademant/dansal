@@ -12,7 +12,7 @@
     <span class="notif-dot notif-{{.SMTPStatus}}"></span>
     <span class="notif-title">SMTP (email)</span>
     <span class="notif-summary">
-      {{if .SMTP}}{{if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
+      {{if .SMTP}}{{if .SMTP.Sendmail}}sendmail · {{.SMTP.From}}{{else if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
   <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="smtpWizard.open()">Configure</button>
@@ -47,39 +47,54 @@
       <div class="provider-grid" id="provider-grid"></div>
     </div>
 
-    <!-- Step 2: Server -->
+    <!-- Step 2: Server (SMTP) or sendmail path (Local MTA) -->
     <div id="wz-step-2" hidden>
       <div id="wz-provider-note" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:4px;padding:.5rem .75rem;font-size:.84rem;margin-bottom:.75rem;color:#713f12"></div>
-      <div class="form-group">
-        <label>Host</label>
-        <input id="wz-host" type="text" placeholder="smtp.example.com">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+      <!-- SMTP fields -->
+      <div id="wz-smtp-server-fields">
         <div class="form-group">
-          <label>Port</label>
-          <input id="wz-port" type="number" value="587">
+          <label>Host</label>
+          <input id="wz-host" type="text" placeholder="smtp.example.com">
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <div class="form-group">
+            <label>Port</label>
+            <input id="wz-port" type="number" value="587">
+          </div>
+          <div class="form-group">
+            <label>TLS</label>
+            <select id="wz-tls">
+              <option value="starttls">starttls</option>
+              <option value="tls">tls (port 465)</option>
+              <option value="none">none</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <!-- Local MTA field -->
+      <div id="wz-localmta-fields" style="display:none">
         <div class="form-group">
-          <label>TLS</label>
-          <select id="wz-tls">
-            <option value="starttls">starttls</option>
-            <option value="tls">tls (port 465)</option>
-            <option value="none">none</option>
-          </select>
+          <label>Sendmail binary path</label>
+          <input id="wz-sendmail" type="text" placeholder="/usr/sbin/sendmail">
+          <div class="hint" style="margin-top:.25rem">Any sendmail-compatible MTA: postfix, exim, msmtp, …</div>
         </div>
       </div>
     </div>
 
-    <!-- Step 3: Account -->
+    <!-- Step 3: Account (SMTP) or sender details (Local MTA) -->
     <div id="wz-step-3" hidden>
-      <div class="form-group">
-        <label>Username (login email)</label>
-        <input id="wz-username" type="text" autocomplete="off" oninput="smtpWizard.suggestFrom()">
+      <!-- SMTP-only fields -->
+      <div id="wz-smtp-account-fields">
+        <div class="form-group">
+          <label>Username (login email)</label>
+          <input id="wz-username" type="text" autocomplete="off" oninput="smtpWizard.suggestFrom()">
+        </div>
+        <div class="form-group">
+          <label>Password{{if .SMTP}}{{if .SMTP.HasPassword}} <span class="hint">(currently set — leave blank to keep)</span>{{end}}{{end}}</label>
+          <input id="wz-password" type="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}required{{end}}{{else}}required{{end}}">
+        </div>
       </div>
-      <div class="form-group">
-        <label>Password{{if .SMTP}}{{if .SMTP.HasPassword}} <span class="hint">(currently set — leave blank to keep)</span>{{end}}{{end}}</label>
-        <input id="wz-password" type="password" autocomplete="new-password" placeholder="{{if .SMTP}}{{if .SMTP.HasPassword}}(unchanged){{else}}required{{end}}{{else}}required{{end}}">
-      </div>
+      <!-- Shared fields -->
       <div class="form-group">
         <label>From address</label>
         <input id="wz-from" type="email">
@@ -118,13 +133,14 @@
 <script>
 (function(){
 var PROVIDERS = [
-  {id:'gmail',    label:'Gmail',      host:'smtp.gmail.com',        port:587, tls:'starttls', note:'Use an App Password, not your Google account password.'},
-  {id:'outlook',  label:'Outlook',    host:'smtp.office365.com',    port:587, tls:'starttls', note:''},
-  {id:'yahoo',    label:'Yahoo Mail', host:'smtp.mail.yahoo.com',   port:587, tls:'starttls', note:'Use an App Password.'},
-  {id:'gmx',      label:'GMX',        host:'mail.gmx.net',          port:587, tls:'starttls', note:''},
-  {id:'webde',    label:'web.de',     host:'smtp.web.de',           port:587, tls:'starttls', note:''},
-  {id:'posteo',   label:'Posteo',     host:'posteo.de',             port:587, tls:'starttls', note:''},
-  {id:'custom',   label:'Custom',     host:'',                      port:587, tls:'starttls', note:''},
+  {id:'gmail',     label:'Gmail',      host:'smtp.gmail.com',        port:587, tls:'starttls', note:'Use an App Password, not your Google account password.'},
+  {id:'outlook',   label:'Outlook',    host:'smtp.office365.com',    port:587, tls:'starttls', note:''},
+  {id:'yahoo',     label:'Yahoo Mail', host:'smtp.mail.yahoo.com',   port:587, tls:'starttls', note:'Use an App Password.'},
+  {id:'gmx',       label:'GMX',        host:'mail.gmx.net',          port:587, tls:'starttls', note:''},
+  {id:'webde',     label:'web.de',     host:'smtp.web.de',           port:587, tls:'starttls', note:''},
+  {id:'posteo',    label:'Posteo',     host:'posteo.de',             port:587, tls:'starttls', note:''},
+  {id:'custom',    label:'Custom',     host:'',                      port:587, tls:'starttls', note:''},
+  {id:'localMTA',  label:'Local MTA',  host:'',                      port:0,   tls:'',         note:'Uses a local sendmail-compatible binary (postfix, exim, msmtp…). No credentials needed.', localMTA:true},
 ];
 
 // Pre-load current values from server
@@ -137,6 +153,7 @@ var CURRENT = {
   from_name: '{{if .SMTP}}{{.SMTP.FromName}}{{end}}',
   to:        '{{if .SMTP}}{{.SMTP.To}}{{end}}',
   has_pw:    {{if .SMTP}}{{if .SMTP.HasPassword}}true{{else}}false{{end}}{{else}}false{{end}},
+  sendmail:  '{{if .SMTP}}{{.SMTP.Sendmail}}{{end}}',
 };
 
 var step = 1;
@@ -154,10 +171,17 @@ PROVIDERS.forEach(function(p){
     document.querySelectorAll('.provider-btn').forEach(function(b){ b.classList.remove('selected'); });
     btn.classList.add('selected');
     selectedProvider = p;
-    // pre-fill server fields
-    document.getElementById('wz-host').value = p.host || CURRENT.host;
-    document.getElementById('wz-port').value = p.port || CURRENT.port;
-    document.getElementById('wz-tls').value  = p.tls  || CURRENT.tls || 'starttls';
+    var isLocal = !!p.localMTA;
+    document.getElementById('wz-smtp-server-fields').style.display = isLocal ? 'none' : '';
+    document.getElementById('wz-localmta-fields').style.display    = isLocal ? '' : 'none';
+    document.getElementById('wz-smtp-account-fields').style.display = isLocal ? 'none' : '';
+    if (!isLocal) {
+      document.getElementById('wz-host').value = p.host || CURRENT.host;
+      document.getElementById('wz-port').value = p.port || CURRENT.port;
+      document.getElementById('wz-tls').value  = p.tls  || CURRENT.tls || 'starttls';
+    } else {
+      document.getElementById('wz-sendmail').value = CURRENT.sendmail || '/usr/sbin/sendmail';
+    }
     var note = document.getElementById('wz-provider-note');
     if (p.note) { note.textContent = p.note; note.style.display='block'; }
     else        { note.style.display='none'; }
@@ -165,9 +189,14 @@ PROVIDERS.forEach(function(p){
   grid.appendChild(btn);
 });
 
-// Pre-select provider matching current host, or Custom
-var match = PROVIDERS.find(function(p){ return p.host && p.host === CURRENT.host; });
-if (!match) match = PROVIDERS.find(function(p){ return p.id === 'custom'; });
+// Pre-select provider matching current config
+var match;
+if (CURRENT.sendmail) {
+  match = PROVIDERS.find(function(p){ return p.localMTA; });
+} else {
+  match = PROVIDERS.find(function(p){ return p.host && p.host === CURRENT.host; });
+  if (!match) match = PROVIDERS.find(function(p){ return p.id === 'custom'; });
+}
 if (match) {
   var btn = grid.querySelector('[data-id="'+match.id+'"]');
   if (btn) btn.click();
@@ -200,17 +229,24 @@ window.smtpWizard = {
     var f = document.getElementById('wz-from');
     if (f.value === '' && u.indexOf('@') > 0) f.value = u;
   },
+  _isLocalMTA: function(){ return !!(selectedProvider && selectedProvider.localMTA); },
   _validate: function(){
     if (step === 1 && !selectedProvider) { alert('Please select a provider.'); return false; }
-    if (step === 2 && !document.getElementById('wz-host').value.trim()) {
-      alert('Host is required.'); return false;
+    if (step === 2) {
+      if (smtpWizard._isLocalMTA()) {
+        if (!document.getElementById('wz-sendmail').value.trim()) { alert('Sendmail path is required.'); return false; }
+      } else {
+        if (!document.getElementById('wz-host').value.trim()) { alert('Host is required.'); return false; }
+      }
     }
     if (step === 3) {
-      if (!document.getElementById('wz-username').value.trim()) { alert('Username is required.'); return false; }
-      if (!document.getElementById('wz-to').value.trim()) { alert('Admin recipient address is required.'); return false; }
-      if (!CURRENT.has_pw && !document.getElementById('wz-password').value) {
-        alert('Password is required.'); return false;
+      if (!smtpWizard._isLocalMTA()) {
+        if (!document.getElementById('wz-username').value.trim()) { alert('Username is required.'); return false; }
+        if (!CURRENT.has_pw && !document.getElementById('wz-password').value) {
+          alert('Password is required.'); return false;
+        }
       }
+      if (!document.getElementById('wz-to').value.trim()) { alert('Admin recipient address is required.'); return false; }
     }
     return true;
   },
@@ -231,26 +267,38 @@ window.smtpWizard = {
     document.getElementById('wz-save-btn').disabled = false;
   },
   _fields: function(){
+    var isLocal = smtpWizard._isLocalMTA();
     return {
-      host:      document.getElementById('wz-host').value.trim(),
-      port:      document.getElementById('wz-port').value,
-      tls:       document.getElementById('wz-tls').value,
-      username:  document.getElementById('wz-username').value.trim(),
-      password:  document.getElementById('wz-password').value,
+      host:      isLocal ? '' : document.getElementById('wz-host').value.trim(),
+      port:      isLocal ? '' : document.getElementById('wz-port').value,
+      tls:       isLocal ? '' : document.getElementById('wz-tls').value,
+      username:  isLocal ? '' : document.getElementById('wz-username').value.trim(),
+      password:  isLocal ? '' : document.getElementById('wz-password').value,
       from:      document.getElementById('wz-from').value.trim(),
       from_name: document.getElementById('wz-from-name').value.trim(),
       to:        document.getElementById('wz-to').value.trim(),
+      sendmail:  isLocal ? document.getElementById('wz-sendmail').value.trim() : '',
     };
   },
   _buildReview: function(){
     var f = smtpWizard._fields();
-    var rows = [
-      ['Host',      f.host + ':' + f.port + ' (' + (f.tls||'starttls') + ')'],
-      ['Username',  f.username],
-      ['Password',  f.password ? '(new password entered)' : CURRENT.has_pw ? '(unchanged)' : '(not set)'],
-      ['From',      f.from + (f.from_name ? ' — ' + f.from_name : '')],
-      ['Test / To', f.to],
-    ];
+    var rows;
+    if (smtpWizard._isLocalMTA()) {
+      rows = [
+        ['Mode',      'Local MTA'],
+        ['Sendmail',  f.sendmail],
+        ['From',      f.from + (f.from_name ? ' — ' + f.from_name : '')],
+        ['Test / To', f.to],
+      ];
+    } else {
+      rows = [
+        ['Host',      f.host + ':' + f.port + ' (' + (f.tls||'starttls') + ')'],
+        ['Username',  f.username],
+        ['Password',  f.password ? '(new password entered)' : CURRENT.has_pw ? '(unchanged)' : '(not set)'],
+        ['From',      f.from + (f.from_name ? ' — ' + f.from_name : '')],
+        ['Test / To', f.to],
+      ];
+    }
     var t = document.getElementById('wz-review');
     t.innerHTML = rows.map(function(r){
       return '<tr><td class="rv-label">'+r[0]+'</td><td>'+r[1]+'</td></tr>';

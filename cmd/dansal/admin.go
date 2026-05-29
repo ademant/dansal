@@ -33,7 +33,8 @@ type adminRequest struct {
 	SMTPFromName    string `json:"smtp_from_name,omitempty"`
 	SMTPTLS         string `json:"smtp_tls,omitempty"`
 	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
-	SMTPTo               string `json:"smtp_to,omitempty"`
+	SMTPTo          string `json:"smtp_to,omitempty"`
+	SMTPSendmail    string `json:"smtp_sendmail,omitempty"`
 	TelegramBotToken     string `json:"telegram_bot_token,omitempty"`
 	TelegramBotName      string `json:"telegram_bot_name,omitempty"`
 	MatrixHomeserver     string `json:"matrix_homeserver,omitempty"`
@@ -578,26 +579,35 @@ func adminSMTPGet() adminResponse {
 }
 
 func adminSMTPSet(req adminRequest) adminResponse {
-	if req.SMTPHost != "" {
+	if req.SMTPSendmail != "" {
+		// Local MTA mode: store sendmail path, clear SMTP server fields.
+		config.SMTP.Sendmail = req.SMTPSendmail
+		config.SMTP.Host = ""
+		config.SMTP.Port = 0
+		config.SMTP.Username = ""
+		config.SMTP.TLS = ""
+	} else if req.SMTPHost != "" {
+		// Remote SMTP mode: store host, clear sendmail path.
+		config.SMTP.Sendmail = ""
 		config.SMTP.Host = req.SMTPHost
-	}
-	if req.SMTPPort != 0 {
-		config.SMTP.Port = req.SMTPPort
-	}
-	if req.SMTPUsername != "" {
-		config.SMTP.Username = req.SMTPUsername
+		if req.SMTPPort != 0 {
+			config.SMTP.Port = req.SMTPPort
+		}
+		if req.SMTPUsername != "" {
+			config.SMTP.Username = req.SMTPUsername
+		}
+		if req.SMTPTLS != "" {
+			config.SMTP.TLS = req.SMTPTLS
+		}
+		if req.SMTPTimeoutSecs != 0 {
+			config.SMTP.TimeoutSecs = req.SMTPTimeoutSecs
+		}
 	}
 	if req.SMTPFrom != "" {
 		config.SMTP.From = req.SMTPFrom
 	}
 	if req.SMTPFromName != "" {
 		config.SMTP.FromName = req.SMTPFromName
-	}
-	if req.SMTPTLS != "" {
-		config.SMTP.TLS = req.SMTPTLS
-	}
-	if req.SMTPTimeoutSecs != 0 {
-		config.SMTP.TimeoutSecs = req.SMTPTimeoutSecs
 	}
 	if err := saveConfig(configFilePath); err != nil {
 		return adminResponse{OK: false, Error: "save config: " + err.Error()}
@@ -645,6 +655,7 @@ func smtpPublicConfig() map[string]any {
 		"tls":          config.SMTP.TLS,
 		"timeout_secs": timeout,
 		"password_set": config.SMTP.Password != "",
+		"sendmail":     config.SMTP.Sendmail,
 	}
 }
 

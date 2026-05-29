@@ -22,6 +22,7 @@ type socketRequest struct {
 	SMTPTLS               string `json:"smtp_tls,omitempty"`
 	SMTPTimeoutSecs       int    `json:"smtp_timeout_secs,omitempty"`
 	SMTPTo                string `json:"smtp_to,omitempty"`
+	SMTPSendmail          string `json:"smtp_sendmail,omitempty"`
 	TelegramBotToken      string `json:"telegram_bot_token,omitempty"`
 	TelegramBotName       string `json:"telegram_bot_name,omitempty"`
 	MatrixHomeserver      string `json:"matrix_homeserver,omitempty"`

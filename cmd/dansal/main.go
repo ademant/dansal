@@ -1224,6 +1224,10 @@ func migrateDB() {
 	db.Exec("UPDATE events SET changed_by_id = (SELECT id FROM users WHERE username = events.changed_by) WHERE changed_by IS NOT NULL AND changed_by != '' AND changed_by != 'fetch'")
 	// Store authenticator flags (BackupEligible/BackupState) so FinishLogin can verify flag consistency.
 	db.Exec("ALTER TABLE webauthn_credentials ADD COLUMN flags INTEGER NOT NULL DEFAULT 0")
+	// #395: email Message-ID for bounce correlation; delivery_failed flag on verification tokens.
+	db.Exec("ALTER TABLE verification_tokens ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE verification_tokens ADD COLUMN delivery_failed INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE pending_registrations ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
 }
 
 func logUnmappedCountries() {
@@ -1445,6 +1449,8 @@ func createTables() error {
 		user_id INTEGER NOT NULL,
 		channel TEXT NOT NULL CHECK(channel IN ('email','telegram','matrix')),
 		expires_at INTEGER NOT NULL,
+		message_id TEXT NOT NULL DEFAULT '',
+		delivery_failed INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -1575,6 +1581,7 @@ func createTables() error {
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
+		message_id         TEXT NOT NULL DEFAULT '',
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
 		expires_at         INTEGER NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE

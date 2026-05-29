@@ -314,7 +314,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	go func() {
-		if err := SendEmail(req.Email, emailSubject, emailBody); err != nil {
+		if _, err := SendEmail(req.Email, emailSubject, emailBody); err != nil {
 			log.Printf("contact_posts: manage email failed for post %d: %v", id, err)
 		}
 	}()
@@ -608,7 +608,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 				posterNick, req.Message, senderContact,
 			)
 			go func() {
-				if err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
+				if _, err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
 					log.Printf("contact_posts: email forward (logged-in) failed for post %d: %v", postID, err)
 				}
 			}()
@@ -667,7 +667,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		posterNick, verifyURL,
 	)
 	go func() {
-		if err := SendEmail(req.Email, "Confirm your message (dansal board)", emailBody); err != nil {
+		if _, err := SendEmail(req.Email, "Confirm your message (dansal board)", emailBody); err != nil {
 			log.Printf("contact_posts: contact request verify email failed for post %d: %v", postID, err)
 		}
 	}()
@@ -733,7 +733,7 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 			posterNick, message, senderContact,
 		)
 		go func() {
-			if err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
+			if _, err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
 				log.Printf("contact_requests: email forward failed for post %d: %v", postID, err)
 			}
 		}()

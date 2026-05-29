@@ -201,7 +201,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	base := buildBaseURL(r)
 	verifyURL := base + "/api/v1/bookings/verify/" + verifyToken
 	verifyBody := fmt.Sprintf(s.VerifyBody, req.Name, verifyURL, config.Server.VerificationExpiryHours)
-	if err := SendEmail(req.Email, s.VerifySubject, verifyBody); err != nil {
+	if _, err := SendEmail(req.Email, s.VerifySubject, verifyBody); err != nil {
 		log.Printf("bookings: verify email failed for booking %d: %v", id, err)
 	}
 

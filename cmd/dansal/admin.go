@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -167,6 +168,8 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminFetchAll()
 	case "prune-images":
 		return adminPruneImages()
+	case "mail-bounces":
+		return adminMailBounces()
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -636,7 +639,7 @@ func adminSMTPTest(req adminRequest) adminResponse {
 	if req.SMTPTo == "" {
 		return adminResponse{OK: false, Error: "smtp_to is required"}
 	}
-	if err := SendEmail(req.SMTPTo, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration."); err != nil {
+	if _, err := SendEmail(req.SMTPTo, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration."); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}
@@ -658,6 +661,86 @@ func smtpPublicConfig() map[string]any {
 		"password_set": config.SMTP.Password != "",
 		"sendmail":     config.SMTP.Sendmail,
 	}
+}
+
+func adminMailBounces() adminResponse {
+	const logPath = "/var/log/mail.log"
+	f, err := os.Open(logPath)
+	if err != nil {
+		return adminResponse{OK: false, Error: "open mail log: " + err.Error()}
+	}
+	defer f.Close()
+
+	// queueID → messageID (from cleanup lines)
+	queueToMsgID := map[string]string{}
+	// queueID → bounce reason (from smtp/lmtp lines with status=bounced/expired)
+	queueBounced := map[string]string{}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Format: "<timestamp> <host> postfix/SERVICE[PID]: QUEUEID: message"
+		pidEnd := strings.Index(line, "]: ")
+		if pidEnd < 0 {
+			continue
+		}
+		rest := line[pidEnd+3:]
+		colonIdx := strings.Index(rest, ": ")
+		if colonIdx < 0 {
+			continue
+		}
+		queueID := rest[:colonIdx]
+		msg := rest[colonIdx+2:]
+
+		if strings.HasPrefix(msg, "message-id=") {
+			queueToMsgID[queueID] = strings.TrimSpace(strings.TrimPrefix(msg, "message-id="))
+			continue
+		}
+		if strings.Contains(msg, "status=bounced") || strings.Contains(msg, "status=expired") {
+			reason := ""
+			if idx := strings.Index(msg, " ("); idx >= 0 {
+				reason = msg[idx+2:]
+				if end := strings.LastIndex(reason, ")"); end >= 0 {
+					reason = reason[:end]
+				}
+			}
+			queueBounced[queueID] = reason
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return adminResponse{OK: false, Error: "scan mail log: " + err.Error()}
+	}
+
+	type bounceResult struct {
+		MessageID string `json:"message_id"`
+		Reason    string `json:"reason"`
+		Marked    bool   `json:"marked"`
+	}
+	var results []bounceResult
+	for queueID, msgID := range queueToMsgID {
+		reason, bounced := queueBounced[queueID]
+		if !bounced {
+			continue
+		}
+		res, err := db.Exec(
+			"UPDATE verification_tokens SET delivery_failed=1 WHERE message_id=? AND delivery_failed=0",
+			msgID,
+		)
+		marked := err == nil
+		if marked {
+			if n, _ := res.RowsAffected(); n == 0 {
+				marked = false
+			}
+		}
+		results = append(results, bounceResult{MessageID: msgID, Reason: reason, Marked: marked})
+		if marked {
+			log.Printf("mail-bounces: marked delivery_failed for message_id=%s", msgID)
+		}
+	}
+	if results == nil {
+		results = []bounceResult{}
+	}
+	return adminResponse{OK: true, Data: results}
 }
 
 func adminRemoveMember(req adminRequest) adminResponse {

@@ -225,8 +225,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
 				verifyURL,
 			)
-			if err := SendEmail(req.Email, "Confirm your registration", msg); err != nil {
+			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg); err != nil {
 				log.Printf("register: send verify email: %v", err)
+			} else {
+				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, verificationToken)
 			}
 		}()
 		json.NewEncoder(w).Encode(map[string]string{"status": "verification_email_sent"})

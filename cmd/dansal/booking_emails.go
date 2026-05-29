@@ -122,7 +122,7 @@ func sendBookingConfirmedEmail(name, email, lang string, eventID int, qrToken st
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	checkinURL := base + "/checkin/" + qrToken
 	body := fmt.Sprintf(s.ConfirmedBody, name, eventTitle(eventID), checkinURL)
-	if err := SendEmail(email, s.ConfirmedSubject, body); err != nil {
+	if _, err := SendEmail(email, s.ConfirmedSubject, body); err != nil {
 		log.Printf("bookings: confirmed email failed for %s: %v", email, err)
 	}
 }
@@ -133,7 +133,7 @@ func sendBookingApprovedEmail(name, email, lang string, eventID int, qrToken str
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	checkinURL := base + "/checkin/" + qrToken
 	body := fmt.Sprintf(s.ApprovedBody, name, eventTitle(eventID), checkinURL)
-	if err := SendEmail(email, s.ApprovedSubject, body); err != nil {
+	if _, err := SendEmail(email, s.ApprovedSubject, body); err != nil {
 		log.Printf("bookings: approved email failed for %s: %v", email, err)
 	}
 }

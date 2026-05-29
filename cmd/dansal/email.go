@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net"
 	"net/smtp"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -79,39 +80,62 @@ func smtpReveal(encBase64, keyHex string) (string, error) {
 	return string(plain), nil
 }
 
+// generateMessageID returns a unique RFC 5322 Message-ID using the From domain.
+func generateMessageID() string {
+	domain := "localhost"
+	if from := config.SMTP.From; strings.Contains(from, "@") {
+		domain = from[strings.Index(from, "@")+1:]
+	} else if h, err := os.Hostname(); err == nil {
+		domain = h
+	}
+	b := make([]byte, 8)
+	rand.Read(b)
+	return fmt.Sprintf("<%d.%x@%s>", time.Now().UnixNano(), b, domain)
+}
+
+// securityHeaders returns the common security/RFC-compliance headers for automated mail.
+func securityHeaders(msgID, fromHeader, to, subject string) string {
+	return "MIME-Version: 1.0\r\n" +
+		"Date: " + time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 +0000") + "\r\n" +
+		"Message-ID: " + msgID + "\r\n" +
+		"From: " + fromHeader + "\r\n" +
+		"To: " + to + "\r\n" +
+		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
+		"Auto-Submitted: auto-generated\r\n" +
+		"Precedence: bulk\r\n" +
+		"X-Auto-Response-Suppress: All\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n\r\n"
+}
+
 // sendMailLocal delivers a message by piping it to the configured sendmail binary.
-func sendMailLocal(cfg SMTPConfig, to, subject, body string) error {
+func sendMailLocal(cfg SMTPConfig, to, subject, body string) (string, error) {
 	from := cfg.From
 	if from == "" {
-		return fmt.Errorf("smtp.from is required when using sendmail")
+		return "", fmt.Errorf("smtp.from is required when using sendmail")
 	}
 	fromHeader := from
 	if cfg.FromName != "" {
 		fromHeader = mime.QEncoding.Encode("utf-8", cfg.FromName) + " <" + from + ">"
 	}
-	msg := "MIME-Version: 1.0\r\n" +
-		"From: " + stripCRLF(fromHeader) + "\r\n" +
-		"To: " + stripCRLF(to) + "\r\n" +
-		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
-		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
-		body
+	msgID := generateMessageID()
+	msg := securityHeaders(msgID, stripCRLF(fromHeader), stripCRLF(to), subject) + body
 	cmd := exec.Command(cfg.Sendmail, "-t", "-i")
 	cmd.Stdin = strings.NewReader(msg)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("sendmail: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("sendmail: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	return nil
+	return msgID, nil
 }
 
-// SendEmail sends a plain-text email.
+// SendEmail sends a plain-text email and returns the generated Message-ID.
 // If smtp.sendmail is set, the local MTA is used; otherwise the configured SMTP server is used.
-func SendEmail(to, subject, body string) error {
+func SendEmail(to, subject, body string) (string, error) {
 	cfg := config.SMTP
 	if cfg.Sendmail != "" {
 		return sendMailLocal(cfg, to, subject, body)
 	}
 	if cfg.Host == "" {
-		return fmt.Errorf("SMTP not configured")
+		return "", fmt.Errorf("SMTP not configured")
 	}
 
 	port := cfg.Port
@@ -129,7 +153,7 @@ func SendEmail(to, subject, body string) error {
 		var err error
 		password, err = smtpReveal(cfg.Password, cfg.PasswordKey)
 		if err != nil {
-			return fmt.Errorf("SMTP password: %w", err)
+			return "", fmt.Errorf("SMTP password: %w", err)
 		}
 	}
 
@@ -146,57 +170,53 @@ func SendEmail(to, subject, body string) error {
 	to = stripCRLF(to)
 	fromHeader = stripCRLF(fromHeader)
 
-	msg := []byte("MIME-Version: 1.0\r\n" +
-		"From: " + fromHeader + "\r\n" +
-		"To: " + to + "\r\n" +
-		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
-		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
-		body)
+	msgID := generateMessageID()
+	msg := []byte(securityHeaders(msgID, fromHeader, to, subject) + body)
 
 	portStr := strconv.Itoa(port)
 
 	if cfg.TLS == "tls" {
 		raw, err := dialSMTPConn(cfg.Host, portStr, timeout)
 		if err != nil {
-			return fmt.Errorf("TLS dial %s:%s: %w", cfg.Host, portStr, err)
+			return "", fmt.Errorf("TLS dial %s:%s: %w", cfg.Host, portStr, err)
 		}
 		raw.SetDeadline(time.Now().Add(timeout))
 		tlsConn := tls.Client(raw, &tls.Config{ServerName: cfg.Host})
 		if err := tlsConn.Handshake(); err != nil {
 			raw.Close()
-			return fmt.Errorf("TLS handshake %s: %w", cfg.Host, err)
+			return "", fmt.Errorf("TLS handshake %s: %w", cfg.Host, err)
 		}
 		defer tlsConn.Close()
-		return smtpSend(tlsConn, cfg.Host, cfg.Username, password, from, to, msg)
+		return msgID, smtpSend(tlsConn, cfg.Host, cfg.Username, password, from, to, msg)
 	}
 
 	conn, err := dialSMTPConn(cfg.Host, portStr, timeout)
 	if err != nil {
-		return fmt.Errorf("dial %s:%s: %w", cfg.Host, portStr, err)
+		return "", fmt.Errorf("dial %s:%s: %w", cfg.Host, portStr, err)
 	}
 	conn.SetDeadline(time.Now().Add(timeout))
 	defer conn.Close()
 
 	c, err := smtp.NewClient(conn, cfg.Host)
 	if err != nil {
-		return fmt.Errorf("SMTP client: %w", err)
+		return "", fmt.Errorf("SMTP client: %w", err)
 	}
 	defer c.Quit()
 
 	if cfg.TLS != "none" {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			if err := c.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
-				return fmt.Errorf("STARTTLS: %w", err)
+				return "", fmt.Errorf("STARTTLS: %w", err)
 			}
 		}
 	}
 
 	if cfg.Username != "" {
 		if err := c.Auth(smtp.PlainAuth("", cfg.Username, password, cfg.Host)); err != nil {
-			return fmt.Errorf("SMTP auth: %w", err)
+			return "", fmt.Errorf("SMTP auth: %w", err)
 		}
 	}
-	return smtpDeliver(c, from, to, msg)
+	return msgID, smtpDeliver(c, from, to, msg)
 }
 
 // dialSMTPConn resolves host to all its IP addresses and tries each in order,

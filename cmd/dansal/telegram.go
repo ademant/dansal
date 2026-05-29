@@ -208,7 +208,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 				"Hello %s,\n\nSomeone saw your contact board post on dansal and wants to get in touch:\n\n---\n%s\n---\n\nYou can reach them at: %s\n\nThis message was forwarded by dansal.\n",
 				posterNick, crMessage, senderContact,
 			)
-			go func() { _ = SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body) }()
+			go func() { _, _ = SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body) }()
 		}
 		_ = sendTelegramMessage(chatIDStr, "✓ Your message has been confirmed and forwarded to the poster!")
 		w.WriteHeader(http.StatusOK)

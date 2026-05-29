@@ -27,7 +27,7 @@ func notifyUser(chatID, email, subject, body string) {
 			log.Printf("notify: telegram to %s: %v", chatID, err)
 		}
 	} else if email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
-		if err := SendEmail(email, subject, body); err != nil {
+		if _, err := SendEmail(email, subject, body); err != nil {
 			log.Printf("notify: email to %s: %v", email, err)
 		}
 	}

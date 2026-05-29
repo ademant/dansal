@@ -144,7 +144,11 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	var sendErr error
 	switch req.Channel {
 	case "email":
-		sendErr = sendEmailVerification(user, vURL)
+		var msgID string
+		msgID, sendErr = sendEmailVerification(user, vURL)
+		if sendErr == nil {
+			db.Exec("UPDATE verification_tokens SET message_id=? WHERE token=?", msgID, token)
+		}
 	case "matrix":
 		sendErr = sendMatrixVerification(user, vURL)
 	}
@@ -202,7 +206,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"channel": channel, "status": "verified"})
 }
 
-func sendEmailVerification(user User, verifyURL string) error {
+func sendEmailVerification(user User, verifyURL string) (string, error) {
 	body := fmt.Sprintf(
 		"Hello %s,\n\nplease verify your email address:\n\n%s\n\nThis link expires in %d hours.\n",
 		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,

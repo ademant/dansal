@@ -261,6 +261,27 @@ func login(w http.ResponseWriter, r *http.Request) {
 	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
 
 	if err == sql.ErrNoRows {
+		// Fallback: try display_name (case-insensitive, only when exactly one user has it and has a password)
+		rows, qerr := db.Query(
+			"SELECT id, email, COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE display_name = ? COLLATE NOCASE AND password_hash IS NOT NULL AND password_hash != '' LIMIT 2",
+			req.Email,
+		)
+		if qerr == nil {
+			var count int
+			for rows.Next() {
+				count++
+				if count == 1 {
+					rows.Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
+				}
+			}
+			rows.Close()
+			if count == 1 {
+				err = nil
+			}
+		}
+	}
+
+	if err == sql.ErrNoRows {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})

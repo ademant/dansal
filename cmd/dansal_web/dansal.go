@@ -341,6 +341,7 @@ type UserInfo struct {
 	TelegramVerified bool   `json:"telegram_verified"`
 	MatrixVerified   bool   `json:"matrix_verified"`
 	Disabled         bool   `json:"disabled"`
+	HasPassword      bool   `json:"has_password"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -2222,6 +2223,19 @@ func (c *DansalClient) DeleteAPIKey(ctx context.Context, token string, id int) e
 		return apiErr(resp)
 	}
 	return nil
+}
+
+func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, token string) error {
+	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/user/password", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	return apiErr(resp)
 }
 
 // PreviewEvent mirrors the EventCreateRequest JSON returned by POST /api/v1/events/preview.

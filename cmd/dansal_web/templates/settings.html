@@ -184,6 +184,22 @@
   </div>
 
   <div class="settings-card">
+    <h2>{{$.Strings.T "settings_password_title"}}</h2>
+    <form method="post" action="/settings/password" class="settings-form">
+      {{if .User.HasPassword}}
+      <label for="old_password">{{$.Strings.T "settings_password_current"}}</label>
+      <input id="old_password" type="password" name="old_password" required autocomplete="current-password">
+      {{end}}
+      <label for="new_password">{{$.Strings.T "settings_password_new"}}</label>
+      <input id="new_password" type="password" name="new_password" required autocomplete="new-password" minlength="8">
+      {{if not .User.HasPassword}}<p class="hint">{{$.Strings.T "settings_password_set_hint"}}</p>{{end}}
+      <div class="form-actions">
+        <button type="submit">{{$.Strings.T "settings_password_save_btn"}}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="settings-card">
     <h2>{{$.Strings.T "settings_apikeys_title"}}</h2>
     {{if .NewAPIKey}}
     <div class="msg msg-ok" style="margin-bottom:.75rem">

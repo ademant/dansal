@@ -1811,6 +1811,7 @@ func main() {
 	smux.Handle("DELETE /api/v1/users/{id}", auth(deleteUser))
 	smux.Handle("GET /api/v1/pending-invites", auth(listPendingInvites))
 	smux.Handle("POST /api/v1/pending-invites/{id}/resend", auth(resendInvite))
+	smux.Handle("POST /api/v1/user/password", auth(changeOwnPassword))
 	smux.Handle("POST /api/v1/users/{id}/verify", auth(sendVerification))
 	smux.Handle("POST /api/v1/users/{id}/magic-link", auth(generateAdminMagicLink))
 	smux.Handle("POST /api/v1/users/{id}/password", auth(setUserPassword))

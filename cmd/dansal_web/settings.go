@@ -321,6 +321,38 @@ func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 	}
 }
 
+func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		oldPw := r.FormValue("old_password")
+		newPw := r.FormValue("new_password")
+		if err := client.ChangePassword(r.Context(), oldPw, newPw, token); err != nil {
+			u, _ := client.GetUser(r.Context(), su.ID, token)
+			keys, _ := client.ListAPIKeys(r.Context(), token)
+			sessions, _ := client.GetSessions(r.Context(), token)
+			passkeys, _ := client.ListPasskeys(r.Context(), token)
+			title := i18n.T(r, "settings_title")
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_password_error",
+				APIKeys:  keys,
+				Sessions: sessions,
+				Passkeys: passkeys,
+			}))
+			return
+		}
+		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+	}
+}
+
 func settingsPasskeyRegisterBeginHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

@@ -10,7 +10,7 @@ import (
 	"image"
 	"image/draw"
 	_ "image/gif"
-	_ "image/jpeg"
+	"image/jpeg"
 	_ "image/png"
 	"io"
 	"log"
@@ -25,6 +25,34 @@ import (
 	"github.com/gen2brain/avif"
 	xdraw "golang.org/x/image/draw"
 )
+
+// imageExtFromConfig returns the configured output file extension and MIME type.
+func imageExtFromConfig() (ext, contentType string) {
+	if config.Server.ImageFormat == "jpeg" {
+		return ".jpeg", "image/jpeg"
+	}
+	return ".avif", "image/avif"
+}
+
+// imagePathForID finds the image file for a given ID in dir, trying the
+// configured format first then the other, for backwards-compatibility.
+func imagePathForID(dir, idStr string) (path, contentType string, found bool) {
+	ext, ct := imageExtFromConfig()
+	p := filepath.Join(dir, idStr+ext)
+	if _, err := os.Stat(p); err == nil {
+		return p, ct, true
+	}
+	if ext == ".avif" {
+		ext, ct = ".jpeg", "image/jpeg"
+	} else {
+		ext, ct = ".avif", "image/avif"
+	}
+	p = filepath.Join(dir, idStr+ext)
+	if _, err := os.Stat(p); err == nil {
+		return p, ct, true
+	}
+	return "", "", false
+}
 
 // imageCache is an in-memory set of event IDs that have an image on disk.
 // It avoids an os.Stat syscall per event row when building list responses.
@@ -49,10 +77,15 @@ func initImageCache(dir string) {
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".avif") {
+		var base string
+		if strings.HasSuffix(name, ".avif") {
+			base = strings.TrimSuffix(name, ".avif")
+		} else if strings.HasSuffix(name, ".jpeg") {
+			base = strings.TrimSuffix(name, ".jpeg")
+		} else {
 			continue
 		}
-		if id, err := strconv.Atoi(strings.TrimSuffix(name, ".avif")); err == nil {
+		if id, err := strconv.Atoi(base); err == nil {
 			imgCache.ids[id] = struct{}{}
 		}
 	}
@@ -127,14 +160,21 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	outPath := filepath.Join(dir, fmt.Sprintf("%d.avif", id))
+	ext, _ := imageExtFromConfig()
+	outPath := filepath.Join(dir, fmt.Sprintf("%d%s", id, ext))
 	f, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
 	}
 	defer f.Close()
-	if err := avif.Encode(f, img); err != nil {
-		return fmt.Errorf("encode avif: %w", err)
+	if ext == ".jpeg" {
+		if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
+			return fmt.Errorf("encode jpeg: %w", err)
+		}
+	} else {
+		if err := avif.Encode(f, img); err != nil {
+			return fmt.Errorf("encode avif: %w", err)
+		}
 	}
 	return nil
 }
@@ -221,13 +261,13 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	imgPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+	imgPath, contentType, found := imagePathForID(config.Server.ImagesDir, eventID)
+	if !found {
 		writeError(w, "Image not found", http.StatusNotFound)
 		return
 	}
 
-	w.Header().Set("Content-Type", "image/avif")
+	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, imgPath)
 }
 
@@ -284,12 +324,12 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	imgPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
+	imgPath, _, found := imagePathForID(config.Server.ImagesDir, eventID)
+	if !found {
+		writeError(w, "Image not found", http.StatusNotFound)
+		return
+	}
 	if err := os.Remove(imgPath); err != nil {
-		if os.IsNotExist(err) {
-			writeError(w, "Image not found", http.StatusNotFound)
-			return
-		}
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -347,7 +387,8 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
+	ext, _ := imageExtFromConfig()
+	outPath := filepath.Join(config.Server.ImagesDir, eventID+ext)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"path": outPath})

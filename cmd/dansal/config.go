@@ -46,6 +46,7 @@ type ServerConfig struct {
 	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
 	PKIDir               string   `yaml:"pki_dir"`
 	WebAuthnRPName       string   `yaml:"webauthn_rp_name"`   // display name, default "Dansal"
+	ImageFormat          string   `yaml:"image_format"`        // "avif" | "jpeg", default "avif"
 }
 
 type SMTPConfig struct {
@@ -109,6 +110,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.ImageYMax == 0 {
 		cfg.Server.ImageYMax = 1024
+	}
+	if cfg.Server.ImageFormat == "" {
+		cfg.Server.ImageFormat = "avif"
 	}
 	if cfg.Server.AdminSocket == "" {
 		cfg.Server.AdminSocket = "./dansal.sock"

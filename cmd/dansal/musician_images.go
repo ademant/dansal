@@ -4,11 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-
 )
 
 var musicianImagesDir string
@@ -33,10 +31,15 @@ func initMusicianImageCache(dir string) {
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".avif") {
+		var base string
+		if strings.HasSuffix(name, ".avif") {
+			base = strings.TrimSuffix(name, ".avif")
+		} else if strings.HasSuffix(name, ".jpeg") {
+			base = strings.TrimSuffix(name, ".jpeg")
+		} else {
 			continue
 		}
-		if id, err := strconv.Atoi(strings.TrimSuffix(name, ".avif")); err == nil {
+		if id, err := strconv.Atoi(base); err == nil {
 			musicianImgCache.ids[id] = struct{}{}
 		}
 	}
@@ -77,12 +80,12 @@ func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	imgPath := filepath.Join(musicianImagesDir, idStr+".avif")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+	imgPath, contentType, found := imagePathForID(musicianImagesDir, idStr)
+	if !found {
 		writeError(w, "Image not found", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "image/avif")
+	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, imgPath)
 }
 
@@ -141,12 +144,12 @@ func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	id, _ := strconv.Atoi(idStr)
-	imgPath := filepath.Join(musicianImagesDir, idStr+".avif")
+	imgPath, _, found := imagePathForID(musicianImagesDir, idStr)
+	if !found {
+		writeError(w, "Image not found", http.StatusNotFound)
+		return
+	}
 	if err := os.Remove(imgPath); err != nil {
-		if os.IsNotExist(err) {
-			writeError(w, "Image not found", http.StatusNotFound)
-			return
-		}
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

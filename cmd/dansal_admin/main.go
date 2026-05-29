@@ -216,6 +216,8 @@ func main() {
 		cmdFetchAll()
 	case "prune-images":
 		cmdPruneImages()
+	case "mail-bounces":
+		cmdMailBounces()
 	case "mtls-init":
 		cmdMTLSInit(rest)
 	case "mtls-issue":
@@ -1169,4 +1171,25 @@ func cmdPruneImages() {
 	}
 	json.Unmarshal(resp.Data, &result)
 	fmt.Printf("removed %d orphaned image(s), freed %s\n", result.Removed, formatSize(result.FreedBytes))
+}
+
+func cmdMailBounces() {
+	resp := send(socketPath, request{Cmd: "mail-bounces"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var results []struct {
+		MessageID string `json:"message_id"`
+		Reason    string `json:"reason"`
+		Marked    bool   `json:"marked"`
+	}
+	json.Unmarshal(resp.Data, &results)
+	marked := 0
+	for _, r := range results {
+		if r.Marked {
+			marked++
+			fmt.Printf("marked failed: %s (%s)\n", r.MessageID, r.Reason)
+		}
+	}
+	fmt.Printf("bounces checked: %d total, %d newly marked\n", len(results), marked)
 }

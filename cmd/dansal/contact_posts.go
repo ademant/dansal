@@ -191,13 +191,17 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expiresAt := computeContactPostExpiry(eventID)
+	if !time.Now().Before(expiresAt) {
+		writeError(w, "this event has ended — board posts are no longer accepted", http.StatusGone)
+		return
+	}
+
 	manageToken, err := generateVerificationToken()
 	if err != nil {
 		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
-
-	expiresAt := computeContactPostExpiry(eventID)
 
 	var userIDArg any
 	if callerID > 0 {

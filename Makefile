@@ -12,7 +12,8 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
-        run fmt vet clean install install-web install-webmin install-units update check-config deb deploy-nginx
+        run fmt vet clean install install-web install-webmin install-units setup-instance \
+        update check-config deb deploy-nginx
 
 build:
 	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
@@ -110,6 +111,7 @@ install-webmin: build-dansal_webmin
 
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
+	# Fixed (legacy) units
 	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
 	install -m 644 dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
 	install -m 644 dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
@@ -120,6 +122,18 @@ install-units:
 	install -m 644 dansal-vacuum.timer      $(SYSTEMDDIR)/dansal-vacuum.timer
 	install -m 644 dansal-prune-images.service  $(SYSTEMDDIR)/dansal-prune-images.service
 	install -m 644 dansal-prune-images.timer    $(SYSTEMDDIR)/dansal-prune-images.timer
+	# Instance template units
+	install -m 644 dansal@.service              $(SYSTEMDDIR)/dansal@.service
+	install -m 644 dansal-web@.service          $(SYSTEMDDIR)/dansal-web@.service
+	install -m 644 dansal-webmin@.service       $(SYSTEMDDIR)/dansal-webmin@.service
+	install -m 644 dansal-fetch@.service        $(SYSTEMDDIR)/dansal-fetch@.service
+	install -m 644 dansal-fetch@.timer          $(SYSTEMDDIR)/dansal-fetch@.timer
+	install -m 644 dansal-backup@.service       $(SYSTEMDDIR)/dansal-backup@.service
+	install -m 644 dansal-backup@.timer         $(SYSTEMDDIR)/dansal-backup@.timer
+	install -m 644 dansal-vacuum@.service       $(SYSTEMDDIR)/dansal-vacuum@.service
+	install -m 644 dansal-vacuum@.timer         $(SYSTEMDDIR)/dansal-vacuum@.timer
+	install -m 644 dansal-prune-images@.service $(SYSTEMDDIR)/dansal-prune-images@.service
+	install -m 644 dansal-prune-images@.timer   $(SYSTEMDDIR)/dansal-prune-images@.timer
 	systemctl daemon-reload
 	systemctl enable --now dansal-fetch.timer dansal-backup.timer dansal-vacuum.timer dansal-prune-images.timer
 
@@ -136,18 +150,76 @@ check-config:
 	@packaging/check-config packaging/config.yaml $(SYSCONFDIR)/config.yaml
 	@packaging/check-config packaging/web.yaml    $(SYSCONFDIR)/web.yaml
 
-# deploy: install pre-built binaries and restart services (no build step;
-# run as root after 'make build' as a regular user).
+# deploy: install pre-built binaries and restart a specific instance.
+# Usage: sudo make deploy INSTANCE=dev   (or prod, nl, ...)
+# Run as root after 'make build' as a regular user.
 deploy: install-units
 	@[ "$(shell id -u)" = "0" ] || { echo "deploy requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy INSTANCE=dev)
+endif
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
 	install -m 755 dansal_web    $(BINDIR)/dansal-web
 	install -m 755 dansal_webmin $(BINDIR)/dansal-webmin
-	systemctl restart $(SERVICE)
-	systemctl try-restart dansal-web.service || true
-	systemctl try-restart dansal-webmin.service || true
-	@echo "deployed"
+	systemctl restart dansal@$(INSTANCE)
+	systemctl try-restart dansal-web@$(INSTANCE).service || true
+	systemctl try-restart dansal-webmin@$(INSTANCE).service || true
+	@echo "deployed $(INSTANCE)"
+
+# setup-instance: create directories, install template configs, enable units for a new instance.
+# Idempotent — safe to re-run.  Does NOT start services (edit configs first).
+# Usage: sudo make setup-instance INSTANCE=prod
+setup-instance:
+	@[ "$(shell id -u)" = "0" ] || { echo "setup-instance requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make setup-instance INSTANCE=prod)
+endif
+	$(MAKE) install-units
+	# Config directory
+	install -d -m 750 -o root -g $(SERVICE) $(SYSCONFDIR)/$(INSTANCE)
+	# State directories
+	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)
+	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/images
+	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
+	# Template configs — installed only if not already present
+	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
+		sed 's|/run/dansal/dansal.sock|/run/dansal/$(INSTANCE)/dansal.sock|; \
+		     s|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|; \
+		     s|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
+		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
+		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
+		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
+		echo "Created $(SYSCONFDIR)/$(INSTANCE)/config.yaml — set port, base_url, smtp, etc."; \
+	else \
+		echo "$(SYSCONFDIR)/$(INSTANCE)/config.yaml already exists — not overwriting"; \
+	fi
+	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/web.yaml ]; then \
+		sed 's|/var/lib/dansal-web/web.db|/var/lib/dansal-web/$(INSTANCE)/web.db|' \
+		    packaging/web.yaml > $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
+		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
+		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
+		echo "Created $(SYSCONFDIR)/$(INSTANCE)/web.yaml — set listen, domain, dansal_url."; \
+	else \
+		echo "$(SYSCONFDIR)/$(INSTANCE)/web.yaml already exists — not overwriting"; \
+	fi
+	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml ]; then \
+		install -m 640 -o root -g $(SERVICE) packaging/webmin.yaml $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
+		echo "Created $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml — set listen, admin_socket, session_secret."; \
+	else \
+		echo "$(SYSCONFDIR)/$(INSTANCE)/webmin.yaml already exists — not overwriting"; \
+	fi
+	# Enable units (not started — configure first)
+	systemctl enable dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE)
+	systemctl enable dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer \
+	                 dansal-vacuum@$(INSTANCE).timer dansal-prune-images@$(INSTANCE).timer
+	@echo ""
+	@echo "Instance '$(INSTANCE)' is set up.  Next steps:"
+	@echo "  1. Edit $(SYSCONFDIR)/$(INSTANCE)/config.yaml  (port, base_url, smtp, …)"
+	@echo "  2. Edit $(SYSCONFDIR)/$(INSTANCE)/web.yaml     (listen, domain, dansal_url)"
+	@echo "  3. Edit $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml  (listen, admin_socket, session_secret)"
+	@echo "  4. sudo systemctl start dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE)"
+	@echo "  5. sudo systemctl start dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer"
 
 # Build a .deb package. VERSION may be overridden by the CI pipeline
 # (e.g.  make deb DEB_VERSION=0.1.0).

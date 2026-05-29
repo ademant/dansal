@@ -1,0 +1,20 @@
+[Unit]
+Description=Dansal sysadmin web panel (%i)
+After=dansal@%i.service
+Requires=dansal@%i.service
+
+[Service]
+Type=simple
+User=dansal
+Group=dansal
+ExecStart=/usr/bin/dansal-webmin --config /etc/dansal/%i/webmin.yaml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dansal/%i
+
+[Install]
+WantedBy=multi-user.target

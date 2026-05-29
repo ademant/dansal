@@ -5,16 +5,25 @@
 Always rebuild and redeploy **all** binaries together, regardless of which files changed. A selective deploy risks shipping stale binaries (see issue #147).
 
 ```bash
-# Build all three binaries in parallel (as regular user)
+# Build all four binaries in parallel (as regular user)
 make build
 
-# Install binaries and restart services (requires sudo, no build step)
-sudo make deploy
+# Install binaries and restart a specific instance (requires sudo, no build step)
+sudo make deploy INSTANCE=dev
+sudo make deploy INSTANCE=prod
 ```
 
-`make deploy` installs `dansal`, `dansal_web`, and `dansal_admin` to `/usr/bin/` and restarts both `dansal` and `dansal-web` systemd services. It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
+`make deploy INSTANCE=<name>` installs binaries to `/usr/bin/`, updates systemd template units, and restarts the named instance (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`). It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
 
-Do **not** run `go build ./cmd/...` and install manually — always use `make build && sudo make deploy` to ensure all binaries are updated together.
+**Setting up a new instance** (idempotent — safe to re-run):
+```bash
+sudo make setup-instance INSTANCE=prod
+# then edit /etc/dansal/prod/config.yaml, web.yaml, webmin.yaml
+sudo systemctl start dansal@prod dansal-web@prod dansal-webmin@prod
+sudo systemctl start dansal-fetch@prod.timer dansal-backup@prod.timer
+```
+
+Do **not** run `go build ./cmd/...` and install manually — always use `make build && sudo make deploy INSTANCE=<name>` to ensure all binaries are updated together.
 
 ## Project layout
 

@@ -102,7 +102,7 @@
 
     try {
       // 1. Begin
-      var beginResp = await fetch('/api/v1/invites/'+TOKEN+'/webauthn/begin', {
+      var beginResp = await fetch('/invites/'+TOKEN+'/webauthn/begin', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({email: e, display_name: dn})
@@ -139,7 +139,7 @@
       };
 
       // 4. Finish
-      var finishResp = await fetch('/api/v1/invites/'+TOKEN+'/webauthn/finish?session_id='+encodeURIComponent(sessionID), {
+      var finishResp = await fetch('/invites/'+TOKEN+'/webauthn/finish?session_id='+encodeURIComponent(sessionID), {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(credJSON)
@@ -147,8 +147,7 @@
       var finishData = await finishResp.json();
       if(!finishResp.ok) throw new Error(finishData.error || finishResp.statusText);
 
-      // Store session token and redirect
-      // Session cookie already set by the proxy — just redirect.
+      // Session cookie set by the dansal_web proxy — redirect logged in.
       msg('{{$.Strings.T "invite_success"}}', false);
       setTimeout(function(){ window.location.href = '/'; }, 1200);
 

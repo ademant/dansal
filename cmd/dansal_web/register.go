@@ -175,7 +175,7 @@ func adminRegistrationsHandler(cfg *Config, tmpls *Templates, client *DansalClie
 func adminRegistrationApproveHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su := getSessionUser(r)
-		if su == nil || (su.Role != "admin" && su.Role != "publisher") {
+		if su == nil || (su.Role != "admin" && su.Role != "user") {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -220,7 +220,7 @@ func adminRegistrationResendInviteHandler(cfg *Config, client *DansalClient) htt
 func adminRegistrationRejectHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su := getSessionUser(r)
-		if su == nil || (su.Role != "admin" && su.Role != "publisher") {
+		if su == nil || (su.Role != "admin" && su.Role != "user") {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}

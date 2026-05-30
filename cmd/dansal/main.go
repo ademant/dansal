@@ -1228,6 +1228,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE verification_tokens ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE verification_tokens ADD COLUMN delivery_failed INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
+	// #398: created_by_id tracks which user created an event or musician.
+	db.Exec("ALTER TABLE events ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+	db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
 }
 
 func logUnmappedCountries() {
@@ -1255,7 +1258,7 @@ func createTables() error {
 		email TEXT UNIQUE NOT NULL,
 		display_name TEXT,
 		password_hash TEXT NOT NULL DEFAULT '',
-		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher')),
 		telegram TEXT,
 		matrix TEXT,
 		email_verified INTEGER DEFAULT 0,
@@ -1306,6 +1309,7 @@ func createTables() error {
 		changed_at INTEGER,
 		changed_by TEXT DEFAULT '',
 		changed_by_id INTEGER REFERENCES users(id),
+		created_by_id INTEGER REFERENCES users(id),
 		fetch_source_id INTEGER,
 		has_lost_found INTEGER NOT NULL DEFAULT 0,
 		expires_at INTEGER,
@@ -1434,7 +1438,7 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
 		created_by INTEGER NOT NULL,
-		role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+		role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher')),
 		org_id INTEGER,
 		expires_at INTEGER NOT NULL,
 		used_at INTEGER,
@@ -1779,6 +1783,8 @@ func main() {
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))
+	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
+	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
 	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
@@ -1787,9 +1793,11 @@ func main() {
 
 	// Protected location writes
 	smux.Handle("POST /api/v1/locations", auth(createLocation))
+	smux.Handle("POST /api/v1/locations/merge", auth(mergeLocations))
 	smux.Handle("POST /api/v1/locations/bulk-assign-org", auth(bulkAssignLocationOrg))
 	smux.Handle("POST /api/v1/locations/unassign-org", auth(unassignLocationOrg))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(patchLocation))
+	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 
 	// Dance endpoints (protected writes)

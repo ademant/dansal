@@ -461,7 +461,22 @@ func setFetchSourceDances(id int, danceIDs []int) error {
 
 // GET /api/v1/fetchurl
 func getFetchSources(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT " + fetchSourceCols + " FROM fetch_sources ORDER BY id ASC")
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not access fetch sources", http.StatusForbidden)
+		return
+	}
+
+	var rows *sql.Rows
+	var err error
+	if callerRole == RoleAdmin {
+		rows, err = db.Query("SELECT " + fetchSourceCols + " FROM fetch_sources ORDER BY id ASC")
+	} else {
+		rows, err = db.Query(`
+			SELECT `+fetchSourceCols+` FROM fetch_sources
+			WHERE organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)
+			ORDER BY id ASC`, callerID)
+	}
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -484,6 +499,11 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/fetchurl/{id}
 func getFetchSource(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not access fetch sources", http.StatusForbidden)
+		return
+	}
 	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
@@ -495,6 +515,12 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if callerRole != RoleAdmin {
+		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
+			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(src)
@@ -502,6 +528,11 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/fetchurl/{id}
 func patchFetchSource(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not modify fetch sources", http.StatusForbidden)
+		return
+	}
 	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
@@ -512,6 +543,12 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if callerRole != RoleAdmin {
+		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
+			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+			return
+		}
 	}
 
 	var req struct {
@@ -913,7 +950,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				return nil, false, err
 			}
 
-			events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
+			events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
 			if err != nil {
 				return nil, false, err
 			}
@@ -935,8 +972,12 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 
 // POST /api/v1/fetchurl
 func fetchURL(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not create fetch sources", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -966,6 +1007,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 
 	if req.OrganizationID == nil && req.Organization != "" {
 		req.OrganizationID = ensureOrgByName(req.Organization)
+	}
+	if callerRole != RoleAdmin {
+		if req.OrganizationID == nil || !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: organization_id must be one you belong to", http.StatusForbidden)
+			return
+		}
 	}
 
 	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID)
@@ -1000,12 +1047,30 @@ type BulkSourceResult struct {
 
 // DELETE /api/v1/fetchurl/{id}
 func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not delete fetch sources", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id := r.PathValue("id")
+	if callerRole != RoleAdmin {
+		src, err := scanFetchSource(db.QueryRow("SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id))
+		if err == sql.ErrNoRows {
+			writeError(w, "Fetch source not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
+			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+			return
+		}
+	}
 	result, err := db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1020,8 +1085,12 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/fetchurl/bulk-delete
 func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not delete fetch sources", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1032,7 +1101,14 @@ func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
+	memberOrgs := userOrgSet(callerID)
 	for _, id := range req.IDs {
+		if callerRole != RoleAdmin {
+			src, err := scanFetchSource(db.QueryRow("SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id))
+			if err != nil || src.OrganizationID == nil || !memberOrgs[*src.OrganizationID] {
+				continue
+			}
+		}
 		db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1040,8 +1116,12 @@ func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/fetchurl/bulk-fetch
 func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not access fetch sources", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1066,11 +1146,17 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
+	memberOrgs := userOrgSet(callerID)
 	var sources []FetchSource
 	for rows.Next() {
 		src, err := scanFetchSource(rows)
 		if err != nil {
 			continue
+		}
+		if callerRole != RoleAdmin {
+			if src.OrganizationID == nil || !memberOrgs[*src.OrganizationID] {
+				continue
+			}
 		}
 		sources = append(sources, src)
 	}
@@ -1118,8 +1204,12 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/fetchurl/{id}/fetch
 func fetchURLByID(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not trigger fetch sources", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1134,6 +1224,12 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if callerRole != RoleAdmin {
+		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
+			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+			return
+		}
 	}
 
 	if !validFetchType(src.Type) {

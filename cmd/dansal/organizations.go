@@ -208,8 +208,9 @@ func checkActorName(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/organizations
 func createOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may create organizations", http.StatusForbidden)
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden: only admins and users may create organizations", http.StatusForbidden)
 		return
 	}
 	var req CreateOrganizationRequest
@@ -241,6 +242,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to create organization", http.StatusInternalServerError)
 		return
 	}
+	db.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)", o.ID, callerID)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(o)
 }
@@ -401,10 +403,18 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
-	db.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", req.UserID).Scan(&n)
-	if n == 0 {
+	var targetRole string
+	db.QueryRow("SELECT role FROM users WHERE id = ?", req.UserID).Scan(&targetRole)
+	if targetRole == "" {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
+	}
+	if targetRole == RolePublisher {
+		db.QueryRow("SELECT COUNT(*) FROM organization_members WHERE user_id = ?", req.UserID).Scan(&n)
+		if n > 0 {
+			writeError(w, "Publisher may only belong to one organization", http.StatusConflict)
+			return
+		}
 	}
 
 	if _, err := db.Exec(

@@ -199,6 +199,9 @@ type Event struct {
 	ChangedAt       string           `json:"changed_at,omitempty"`
 	ChangedBy       string           `json:"changed_by,omitempty"`
 	FetchSourceID   int              `json:"fetch_source_id,omitempty"`
+	Editable        bool             `json:"editable,omitempty"`
+	Cancelable      bool             `json:"cancelable,omitempty"`
+	CreatedByID     *int             `json:"created_by_id,omitempty"`
 }
 
 type Dance struct {
@@ -470,6 +473,18 @@ func (c *DansalClient) GetEventAuthed(ctx context.Context, id int, token string)
 
 func (c *DansalClient) PublishEvent(ctx context.Context, id int, token string) error {
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/publish", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) CancelEvent(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/cancel", id), token, nil)
 	if err != nil {
 		return err
 	}

@@ -99,6 +99,7 @@ var routeEndpoint = map[string]string{
 	"POST /admin/bookings/{id}/cancel":            "admin_bookings_cancel",
 	"POST /admin/bookings/{id}/delete":            "admin_bookings_delete",
 	"POST /admin/events/{id}/publish":             "admin_events_publish",
+		"POST /admin/events/{id}/cancel":              "admin_events_cancel",
 	"POST /admin/events/{id}/delete":              "admin_events_delete",
 	"POST /admin/events/{id}/image/delete":        "admin_events_image_delete",
 	"POST /admin/musicians/{id}/image/delete":     "admin_musicians_image_delete",

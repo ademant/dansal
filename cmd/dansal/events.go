@@ -45,6 +45,8 @@ type Event struct {
 	ImageURL       string   `json:"image_url,omitempty"`
 	OrganizationID *int             `json:"organization_id,omitempty"`
 	Editable       *bool            `json:"editable,omitempty"`
+	Cancelable     *bool            `json:"cancelable,omitempty"`
+	CreatedByID    *int             `json:"created_by_id,omitempty"`
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
 	Pricing        *Pricing         `json:"pricing,omitempty"`
 	Locations       []Location       `json:"locations,omitempty"`
@@ -192,7 +194,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(o.contact_name,''), COALESCE(o.contact_email,''), COALESCE(e.contact_name,''), COALESCE(e.contact_email,''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(o.contact_name,''), COALESCE(o.contact_email,''), COALESCE(e.contact_name,''), COALESCE(e.contact_email,''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -248,6 +250,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	var danceNamesCSV string
 	var locLat, locLng sql.NullFloat64
+	var createdByID sql.NullInt64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
@@ -258,8 +261,13 @@ func scanEventRow(s scanner) (Event, error) {
 		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink,
 		&locAttrsJSON, &evtAttrsJSON,
 		&event.OrgContactName, &event.OrgContactEmail, &event.ContactName, &event.ContactEmail,
-		&event.LocationParking, &event.LocationFloorCondition, &event.FloorCondition); err != nil {
+		&event.LocationParking, &event.LocationFloorCondition, &event.FloorCondition,
+		&createdByID); err != nil {
 		return Event{}, err
+	}
+	if createdByID.Valid {
+		v := int(createdByID.Int64)
+		event.CreatedByID = &v
 	}
 	if locLat.Valid {
 		v := locLat.Float64
@@ -517,7 +525,7 @@ func urlVal(s string) any {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string, createdByID *int) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -675,9 +683,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		if source != "" {
 			sourceArg = source
 		}
+		var createdByArg any
+		if createdByID != nil {
+			createdByArg = *createdByID
+		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg,
 		)
 		if err == nil {
 			break
@@ -695,7 +707,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 // createEventFromRequest inserts or updates all events described by req.
 // Returns (events, allCreated, error); allCreated=false if any event was updated.
-func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool) ([]Event, bool, error) {
+func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, bool, error) {
 	var createdEvents []Event
 	allCreated := true
 
@@ -726,7 +738,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail, createdByID)
 		if err != nil {
 			return nil, false, err
 		}
@@ -775,18 +787,23 @@ func userOrgSet(userID int) map[int]bool {
 	return orgs
 }
 
-// annotateEditable sets Editable on each event based on the caller's role.
-// Admins can edit everything; users can edit events belonging to their orgs.
+// annotateEditable sets Editable and Cancelable on each event based on the caller's role.
+// editable:   admin=any; user=own orgs; publisher=false
+// cancelable: admin=any; user=own orgs; publisher=own created events only
 // The org membership set is fetched once to avoid N+1 queries.
 func annotateEditable(events []Event, userRole string, userID int) {
 	isAdmin := userRole == RoleAdmin
 	var memberOrgs map[int]bool
-	if !isAdmin && userRole == RoleUser {
+	if userRole == RoleUser {
 		memberOrgs = userOrgSet(userID)
 	}
 	for i := range events {
-		editable := isAdmin || (memberOrgs != nil && events[i].OrganizationID != nil && memberOrgs[*events[i].OrganizationID])
+		inOrg := memberOrgs != nil && events[i].OrganizationID != nil && memberOrgs[*events[i].OrganizationID]
+		editable := isAdmin || inOrg
+		cancelable := isAdmin || inOrg ||
+			(userRole == RolePublisher && events[i].CreatedByID != nil && *events[i].CreatedByID == userID)
 		events[i].Editable = &editable
+		events[i].Cancelable = &cancelable
 	}
 }
 
@@ -900,6 +917,15 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	} else if v := r.URL.Query().Get("is_published"); v != "" {
 		query += " AND e.is_published = ?"
 		args = append(args, boolParam(v))
+		// Publisher may only see unpublished events belonging to their own org.
+		if userRole == RolePublisher && boolParam(v) == 0 {
+			query += " AND e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)"
+			args = append(args, callerID)
+		}
+	} else if userRole == RolePublisher {
+		// No is_published filter supplied: restrict publisher's view of unpublished events to their org.
+		query += " AND (e.is_published = 1 OR e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?))"
+		args = append(args, callerID)
 	}
 
 	// Exclude past events by default; authorized users can opt in with include_past=true.
@@ -1159,7 +1185,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		createdEvents, created, err := createEventFromRequest(tx, req, locationID, isPublished)
+		createdEvents, created, err := createEventFromRequest(tx, req, locationID, isPublished, &callerID)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -1210,8 +1236,11 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	editable := userRole == RoleAdmin || (userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID))
+	inOrg := userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID)
+	editable := userRole == RoleAdmin || inOrg
+	cancelable := editable || (userRole == RolePublisher && event.CreatedByID != nil && *event.CreatedByID == callerID)
 	event.Editable = &editable
+	event.Cancelable = &cancelable
 
 	var (
 		timetable []TimetableEntry
@@ -1386,7 +1415,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
 	id := r.PathValue("id")
 
-	if userRole == RoleAdmin || userRole == RolePublisher {
+	if userRole == RoleAdmin {
 		result, err := db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1400,7 +1429,8 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userRole == RoleUser {
+	// User and publisher: must belong to the event's org.
+	if userRole == RoleUser || userRole == RolePublisher {
 		var orgID sql.NullInt64
 		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=? AND is_published=0", id).Scan(&orgID); err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
@@ -1422,7 +1452,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/events/{id}/assign-org — assign an organisation to an unpublished event.
-// Admin/publisher: any org. Regular user: only orgs they are a member of.
+// Admin: any org. User and publisher: only orgs they are a member of.
 func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RolePublisher && userRole != RoleUser {
@@ -1439,7 +1469,7 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userRole == RoleUser && !isOrgMember(callerID, req.OrgID) {
+	if userRole != RoleAdmin && !isOrgMember(callerID, req.OrgID) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -1456,36 +1486,229 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/v1/events/{id}
+// DELETE /api/v1/events/{id} — admin only.
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		writeError(w, "Forbidden: only admins may delete events", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/events/{id}/cancel — set is_cancelled=1.
+// admin: any event. user: own orgs. publisher: own created events only.
+func cancelEvent(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	switch userRole {
+	case RoleAdmin:
+		// unrestricted
+	case RoleUser:
+		var orgID sql.NullInt64
+		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&orgID); err == sql.ErrNoRows {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	case RolePublisher:
+		var createdBy sql.NullInt64
+		if err := db.QueryRow("SELECT created_by_id FROM events WHERE id=?", id).Scan(&createdBy); err == sql.ErrNoRows {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !createdBy.Valid || int(createdBy.Int64) != callerID {
+			writeError(w, "Forbidden: publishers may only cancel events they created", http.StatusForbidden)
+			return
+		}
+	default:
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	result, err := db.Exec("UPDATE events SET is_cancelled=1 WHERE id=?", id)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/events/{id}/clone — create an unpublished pre-filled draft from an existing event.
+// Timetable times are copied; description and musician links are not.
+// start_time and end_time are cleared (user fills before publishing).
+func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	id := r.PathValue("id")
+	srcID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
 
-	if userRole != RoleAdmin {
-		var orgID sql.NullInt64
-		db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
-			return
+	var req struct {
+		TargetOrgID *int `json:"target_org_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// Fetch the source event.
+	src, err := fetchEventByID(db, srcID)
+	if err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Determine target org.
+	var targetOrgID *int
+	if userRole == RoleAdmin {
+		targetOrgID = src.OrganizationID
+	} else {
+		if src.OrganizationID != nil && isOrgMember(callerID, *src.OrganizationID) {
+			targetOrgID = src.OrganizationID
+		} else {
+			// Source org is foreign — resolve from caller's memberships.
+			if req.TargetOrgID != nil {
+				if !isOrgMember(callerID, *req.TargetOrgID) {
+					writeError(w, "Forbidden: not a member of the specified target organization", http.StatusForbidden)
+					return
+				}
+				targetOrgID = req.TargetOrgID
+			} else {
+				// Auto-assign if caller has exactly one org.
+				orgs := userOrgSet(callerID)
+				if len(orgs) == 1 {
+					for id := range orgs {
+						id := id
+						targetOrgID = &id
+					}
+				} else if len(orgs) > 1 {
+					writeError(w, "target_org_id is required when you belong to multiple organizations", http.StatusBadRequest)
+					return
+				}
+			}
 		}
 	}
 
-	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
+	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		writeError(w, "Event not found", http.StatusNotFound)
+	defer tx.Rollback()
+
+	// Build create request from source, clearing time and publish state.
+	cloneReq := EventCreateRequest{
+		Title:              src.Title,
+		Description:        src.Description,
+		HasBall:            src.HasBall,
+		HasWorkshop:        src.HasWorkshop,
+		HasFestival:        src.HasFestival,
+		WorkshopDifficulty: src.WorkshopDifficulty,
+		BookingURL:         src.BookingURL,
+		Food:               src.Food,
+		Drink:              src.Drink,
+		FloorCondition:     src.FloorCondition,
+		Attributes:         src.Attributes,
+		ContactName:        src.ContactName,
+		ContactEmail:       src.ContactEmail,
+		OrganizationID:     targetOrgID,
+	}
+	if src.Pricing != nil {
+		cloneReq.Pricing = src.Pricing
+	}
+	// Tags.
+	cloneReq.Tags = append([]string(nil), src.Tags...)
+
+	// Location: re-use existing location_id directly without creating a new one.
+	var locationID int64
+	if src.LocationID != nil {
+		locationID = int64(*src.LocationID)
+	}
+
+	// Insert the clone with no start/end time (zero = not set).
+	cloneID, shortCode, _, err := insertEvent(tx,
+		cloneReq.Title, cloneReq.Description,
+		0, 0, // start_time, end_time cleared
+		locationID,
+		cloneReq.HasBall, cloneReq.HasWorkshop, cloneReq.HasFestival, false,
+		cloneReq.WorkshopDifficulty, cloneReq.BookingURL,
+		false, // is_published = 0
+		targetOrgID,
+		"", cloneReq.URL, "", 0, // uid, url, source, source_last_modified cleared
+		cloneReq.Pricing, 0,
+		cloneReq.Food, cloneReq.Drink, cloneReq.FloorCondition,
+		cloneReq.Attributes, cloneReq.ContactName, cloneReq.ContactEmail,
+		&callerID,
+	)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+
+	// Copy tags.
+	syncEventTags(tx, cloneID, cloneReq.Tags)
+
+	// Copy timetable times only (no description, no musicians).
+	rows, err := tx.Query("SELECT start_time, end_time FROM timetable WHERE event_id=? ORDER BY start_time", srcID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var st, et int64
+			if rows.Scan(&st, &et) == nil {
+				tx.Exec("INSERT INTO timetable (event_id, start_time, end_time) VALUES (?, ?, ?)", cloneID, st, et)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	event, err := fetchEventByID(db, cloneID)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	event.ShortCode = shortCode
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(event)
 }
 
 // GET /api/v1/events.ics — public iCal feed of future published events, filterable by tag and location

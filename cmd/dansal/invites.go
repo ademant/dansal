@@ -12,12 +12,10 @@ import (
 func roleRank(role string) int {
 	switch role {
 	case RoleAdmin:
-		return 4
-	case RoleUser:
 		return 3
-	case RolePublisher:
+	case RoleUser:
 		return 2
-	case RoleViewer:
+	case RolePublisher:
 		return 1
 	}
 	return 0
@@ -79,21 +77,22 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If no org_id supplied, inherit the caller's first org membership.
+	// org_id is always required for all invite creation.
 	orgID := req.OrgID
 	if orgID == nil {
-		var id int
-		if err := db.QueryRow("SELECT organization_id FROM organization_members WHERE user_id=? LIMIT 1", callerID).Scan(&id); err == nil {
-			orgID = &id
-		}
+		writeError(w, "org_id is required", http.StatusBadRequest)
+		return
 	}
-	// Verify the org exists if specified.
-	if orgID != nil {
-		var exists int
-		if err := db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *orgID).Scan(&exists); err != nil || exists == 0 {
-			writeError(w, "Organization not found", http.StatusBadRequest)
-			return
-		}
+	// Verify the org exists.
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *orgID).Scan(&exists); err != nil || exists == 0 {
+		writeError(w, "Organization not found", http.StatusBadRequest)
+		return
+	}
+	// Non-admin callers must belong to the specified org.
+	if callerRole != RoleAdmin && !isOrgMember(callerID, *orgID) {
+		writeError(w, "Forbidden: you must be a member of the specified organization", http.StatusForbidden)
+		return
 	}
 
 	token, err := generateInviteToken()

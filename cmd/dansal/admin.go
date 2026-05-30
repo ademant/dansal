@@ -400,7 +400,7 @@ func adminCreateUser(req adminRequest) adminResponse {
 		role = RoleUser
 	}
 	if !validateRole(role) {
-		return adminResponse{OK: false, Error: "invalid role: use admin, user, publisher or viewer"}
+		return adminResponse{OK: false, Error: "invalid role: use admin, user, or publisher"}
 	}
 	result, err := db.Exec(
 		"INSERT INTO users (email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?)",
@@ -449,7 +449,7 @@ func adminSetRole(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "email and role are required"}
 	}
 	if !validateRole(req.Role) {
-		return adminResponse{OK: false, Error: "invalid role: use admin, user, publisher or viewer"}
+		return adminResponse{OK: false, Error: "invalid role: use admin, user, or publisher"}
 	}
 	result, err := db.Exec("UPDATE users SET role = ? WHERE email = ?", req.Role, req.Email)
 	if err != nil {

@@ -130,8 +130,8 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 func createMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	requesterRole := r.Header.Get("X-User-Role")
-	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -159,12 +159,12 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
-			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre, created_by_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 			req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
-			req.Spotify, req.Deezer, req.Genre,
+			req.Spotify, req.Deezer, req.Genre, callerID,
 		))
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
@@ -226,13 +226,28 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/musicians/{id} - Delete musician
 func deleteMusician(w http.ResponseWriter, r *http.Request) {
-	requesterRole := r.Header.Get("X-User-Role")
-	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	id := r.PathValue("id")
+
+	if callerRole != RoleAdmin {
+		var createdBy sql.NullInt64
+		if err := db.QueryRow("SELECT created_by_id FROM musicians WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
+			writeError(w, "Musician not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !createdBy.Valid || int(createdBy.Int64) != callerID {
+			writeError(w, "Forbidden: you can only delete musicians you created", http.StatusForbidden)
+			return
+		}
+	}
 
 	result, err := db.Exec("DELETE FROM musicians WHERE id = ?", id)
 	if err != nil {

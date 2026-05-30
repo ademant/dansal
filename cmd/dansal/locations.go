@@ -575,9 +575,15 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden: not a member of the location's organization", http.StatusForbidden)
 			return
 		}
+		// Users may not delete a location that still has events assigned.
+		var eventCount int
+		db.QueryRow("SELECT COUNT(*) FROM events WHERE location_id=?", id).Scan(&eventCount)
+		if eventCount > 0 {
+			writeError(w, "Cannot delete: location has events assigned", http.StatusConflict)
+			return
+		}
 	}
 
-	// Check if location exists
 	var locationID int
 	err := db.QueryRow("SELECT id FROM locations WHERE id = ?", id).Scan(&locationID)
 	if err == sql.ErrNoRows {
@@ -589,7 +595,6 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete location
 	result, err := db.Exec("DELETE FROM locations WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -603,4 +608,179 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/locations/{id}/assign-org — add a location to an organization.
+// admin: any org. user: own orgs only.
+func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
+	callerID, requesterRole := callerFromRequest(r)
+	locID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		OrganizationID int `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrganizationID == 0 {
+		writeError(w, "organization_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !isOrgMember(callerID, req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+			return
+		}
+	}
+
+	var exists int
+	if db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", locID).Scan(&exists); exists == 0 {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", req.OrganizationID).Scan(&exists); exists == 0 {
+		writeError(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+
+	if _, err := db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locID, req.OrganizationID); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/locations/merge — merge two similar locations into one.
+// keep_id survives; merge_id is deleted. Events and org links are migrated.
+// user: must be member of an org that owns either location.
+func mergeLocations(w http.ResponseWriter, r *http.Request) {
+	callerID, requesterRole := callerFromRequest(r)
+	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		KeepID  int `json:"keep_id"`
+		MergeID int `json:"merge_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.KeepID == 0 || req.MergeID == 0 {
+		writeError(w, "keep_id and merge_id are required", http.StatusBadRequest)
+		return
+	}
+	if req.KeepID == req.MergeID {
+		writeError(w, "keep_id and merge_id must differ", http.StatusBadRequest)
+		return
+	}
+
+	var keep, merge Location
+	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.KeepID), &keep); err != nil {
+		writeError(w, "keep location not found", http.StatusNotFound)
+		return
+	}
+	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.MergeID), &merge); err != nil {
+		writeError(w, "merge location not found", http.StatusNotFound)
+		return
+	}
+
+	// Permission: user must be member of an org owning either location.
+	if requesterRole == RoleUser {
+		memberOfKeep := locationHasOrgMember(keep.ID, callerID)
+		memberOfMerge := locationHasOrgMember(merge.ID, callerID)
+		if !memberOfKeep && !memberOfMerge {
+			writeError(w, "Forbidden: not a member of either location's organization", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Similarity gate: at least one condition must hold.
+	similar := false
+	if keep.Latitude != nil && keep.Longitude != nil && merge.Latitude != nil && merge.Longitude != nil {
+		if haversineKm(*keep.Latitude, *keep.Longitude, *merge.Latitude, *merge.Longitude) < 0.1 {
+			similar = true
+		}
+	}
+	if keep.Latitude == nil || keep.Longitude == nil || merge.Latitude == nil || merge.Longitude == nil {
+		similar = true
+	}
+	if !similar {
+		keepBase := streetBase(keep.Address)
+		mergeBase := streetBase(merge.Address)
+		if keepBase != "" && keepBase == mergeBase {
+			similar = true
+		}
+	}
+	if !similar {
+		kn := strings.ToLower(keep.Location)
+		mn := strings.ToLower(merge.Location)
+		if strings.Contains(kn, mn) || strings.Contains(mn, kn) {
+			similar = true
+		}
+	}
+	if !similar {
+		writeError(w, "Locations are not similar enough to merge", http.StatusUnprocessableEntity)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Fill missing fields on keep from merge.
+	if keep.Address == "" && merge.Address != "" {
+		tx.Exec("UPDATE locations SET address=? WHERE id=?", merge.Address, keep.ID)
+	}
+	if keep.Zipcode == "" && merge.Zipcode != "" {
+		tx.Exec("UPDATE locations SET zipcode=? WHERE id=?", merge.Zipcode, keep.ID)
+	}
+	if keep.Town == "" && merge.Town != "" {
+		tx.Exec("UPDATE locations SET town=? WHERE id=?", merge.Town, keep.ID)
+	}
+	if keep.Country == "" && merge.Country != "" {
+		tx.Exec("UPDATE locations SET country=? WHERE id=?", merge.Country, keep.ID)
+	}
+	if keep.Latitude == nil && merge.Latitude != nil {
+		tx.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=?", merge.Latitude, merge.Longitude, keep.ID)
+	}
+	if keep.Internetsite == "" && merge.Internetsite != "" {
+		tx.Exec("UPDATE locations SET internetsite=? WHERE id=?", merge.Internetsite, keep.ID)
+	}
+
+	// Migrate events.
+	tx.Exec("UPDATE events SET location_id=? WHERE location_id=?", keep.ID, merge.ID)
+
+	// Copy org links from merge to keep.
+	rows, err := tx.Query("SELECT organization_id FROM location_organizations WHERE location_id=?", merge.ID)
+	if err == nil {
+		var orgIDs []int
+		for rows.Next() {
+			var oid int
+			rows.Scan(&oid)
+			orgIDs = append(orgIDs, oid)
+		}
+		rows.Close()
+		for _, oid := range orgIDs {
+			tx.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", keep.ID, oid)
+		}
+	}
+
+	// Delete the merged location.
+	tx.Exec("DELETE FROM locations WHERE id=?", merge.ID)
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	result := keep
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }

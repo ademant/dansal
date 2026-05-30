@@ -33,7 +33,7 @@
     <td>
       <form method="post" action="/admin/registrations/{{.ID}}/approve" style="display:inline">
         {{if eq .RegType "new_org"}}
-        <input type="hidden" name="role" value="publisher">
+        <input type="hidden" name="role" value="user">
         {{else}}
         <select name="role" style="font-size:.85rem;padding:.15rem .3rem;margin-right:.3rem">
           <option value="user">user</option>

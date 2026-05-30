@@ -17,7 +17,6 @@ const (
 	RoleAdmin     = "admin"
 	RoleUser      = "user"
 	RolePublisher = "publisher"
-	RoleViewer    = "viewer"
 )
 
 type User struct {
@@ -118,7 +117,7 @@ func checkPassword(password, stored string) (ok, migrate bool) {
 
 // validateRole checks if the role is valid
 func validateRole(role string) bool {
-	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
+	return role == RoleAdmin || role == RoleUser || role == RolePublisher
 }
 
 const userSelectCols = "id, email, COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, created_at"
@@ -195,7 +194,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		req.Role = RoleUser
 	}
 	if !validateRole(req.Role) {
-		writeError(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
+		writeError(w, "Invalid role. Allowed values: admin, user, publisher", http.StatusBadRequest)
 		return
 	}
 
@@ -259,7 +258,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Role != "" && !validateRole(req.Role) {
-		writeError(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
+		writeError(w, "Invalid role. Allowed values: admin, user, publisher", http.StatusBadRequest)
 		return
 	}
 
@@ -368,15 +367,16 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may delete users", http.StatusForbidden)
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden: only admins or users may delete users", http.StatusForbidden)
 		return
 	}
 
 	id := r.PathValue("id")
-	var userID int
-	var userRole string
-	err := db.QueryRow("SELECT id, role FROM users WHERE id = ?", id).Scan(&userID, &userRole)
+	var targetID int
+	var targetRole string
+	err := db.QueryRow("SELECT id, role FROM users WHERE id = ?", id).Scan(&targetID, &targetRole)
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -385,9 +385,26 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if userRole == RoleAdmin {
+	if targetRole == RoleAdmin {
 		writeError(w, "Forbidden: admin users may not be deleted", http.StatusForbidden)
 		return
+	}
+
+	if callerRole != RoleAdmin {
+		// User may only delete publishers in their own organization.
+		if targetRole != RolePublisher {
+			writeError(w, "Forbidden: users may only delete publishers", http.StatusForbidden)
+			return
+		}
+		var shared int
+		db.QueryRow(`
+			SELECT COUNT(*) FROM organization_members om1
+			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
+			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
+		if shared == 0 {
+			writeError(w, "Forbidden: publisher does not share an organization with you", http.StatusForbidden)
+			return
+		}
 	}
 
 	result, err := db.Exec("DELETE FROM users WHERE id = ?", id)

@@ -275,7 +275,7 @@ func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
 			return nil, false, err
 		}
 
-		evs, created, err := createEventFromRequest(tx, req, locationID, true)
+		evs, created, err := createEventFromRequest(tx, req, locationID, true, nil)
 		if err != nil {
 			return nil, false, err
 		}

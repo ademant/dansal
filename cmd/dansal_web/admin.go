@@ -2255,6 +2255,30 @@ func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
+func adminEventCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.CancelEvent(r.Context(), id, token); err != nil {
+			http.Error(w, "cancel failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = fmt.Sprintf("/events/%d", id)
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
 func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

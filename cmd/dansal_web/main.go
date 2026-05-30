@@ -189,6 +189,7 @@ func main() {
 		r.HandleFunc("POST /admin/bookings/{id}/cancel", adminRateLimit(adminBookingCancelHandler(cfg, client)))
 		r.HandleFunc("POST /admin/bookings/{id}/delete", adminRateLimit(adminBookingDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/publish", adminRateLimit(adminEventPublishHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/{id}/cancel", adminRateLimit(adminEventCancelHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/delete", adminRateLimit(adminEventDeleteHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/merge", adminRateLimit(adminEventMergeHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminRateLimit(adminEventImageDeleteHandler(cfg, client)))

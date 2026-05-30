@@ -309,7 +309,7 @@ mTLS PKI:
   mtls-list                                          List issued certificates and their status
   mtls-ca-cert                                       Print the CA certificate (PEM)
 
-Roles: admin, user, publisher, viewer
+Roles: admin, user, publisher
 
 Run 'dansal_admin help <command>' for details on a specific command.`)
 }
@@ -327,7 +327,7 @@ Flags:
   --username  Username (required)
   --email     Email address (required)
   --password  Password (required)
-  --role      Role: admin, user, publisher, viewer (default: user)
+  --role      Role: admin, user, publisher (default: user)
   --telegram  Telegram handle (optional)
   --matrix    Matrix ID (optional)`,
 
@@ -352,7 +352,7 @@ Change the role of a user account.
 
 Flags:
   --username  Username of the target account (required)
-  --role      New role: admin, user, publisher, viewer (required)`,
+  --role      New role: admin, user, publisher (required)`,
 
 	"list-invites": `Usage: dansal_admin list-invites [--username STR]
 
@@ -669,7 +669,7 @@ func cmdCreateUser(args []string) {
 	username := fs.String("username", "", "username")
 	email := fs.String("email", "", "email address")
 	password := fs.String("password", "", "password")
-	role := fs.String("role", "user", "role (admin|user|publisher|viewer)")
+	role := fs.String("role", "user", "role (admin|user|publisher)")
 	telegram := fs.String("telegram", "", "Telegram handle")
 	matrix := fs.String("matrix", "", "Matrix ID")
 	fs.Parse(args)
@@ -728,7 +728,7 @@ func cmdSetRole(args []string) {
 	fs := flag.NewFlagSet("set-role", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["set-role"]) }
 	username := fs.String("username", "", "username")
-	role := fs.String("role", "", "role (admin|user|publisher|viewer)")
+	role := fs.String("role", "", "role (admin|user|publisher)")
 	fs.Parse(args)
 	if *username == "" || *role == "" {
 		die("--username and --role are required")

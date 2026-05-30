@@ -354,7 +354,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			return nil, false, err
 		}
 
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
+		events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
 		if err != nil {
 			return nil, false, err
 		}

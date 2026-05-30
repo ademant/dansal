@@ -28,7 +28,6 @@
   <select name="role" class="bulk-role-select">
     <option value="user">user</option>
     <option value="publisher">publisher</option>
-    <option value="viewer">viewer</option>
     <option value="admin">admin</option>
   </select>
   <button name="action" value="role" type="submit" class="btn-sm">{{$.Strings.T "users_bulk_change_role"}}</button>
@@ -64,7 +63,6 @@
           <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
           <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
           <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
-          <option value="viewer"{{if eq .Role "viewer"}} selected{{end}}>viewer</option>
         </select>
       </form>
       {{else}}{{.Role}}{{end}}
@@ -119,7 +117,6 @@
     <select name="role">
       <option value="user">user</option>
       <option value="publisher">publisher</option>
-      <option value="viewer">viewer</option>
     </select>
     <button type="submit" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;border:none;cursor:pointer">{{$.Strings.T "admin_user_create_btn"}}</button>
   </form>
@@ -134,7 +131,6 @@
     <select name="role">
       <option value="user">user</option>
       <option value="publisher">publisher</option>
-      <option value="viewer">viewer</option>
       <option value="admin">admin</option>
     </select>
     <select name="org_id">

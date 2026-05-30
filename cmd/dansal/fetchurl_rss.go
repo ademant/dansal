@@ -205,7 +205,7 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 			return nil, false, err
 		}
 
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
+		events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
 		if err != nil {
 			return nil, false, err
 		}
@@ -296,7 +296,7 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 			return nil, false, err
 		}
 
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
+		events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
 		if err != nil {
 			return nil, false, err
 		}

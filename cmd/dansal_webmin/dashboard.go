@@ -92,15 +92,26 @@ func getDansalInfo(ctx context.Context, dansalURL string) (*DansalInfo, error) {
 	return &info, nil
 }
 
-var monitoredUnits = []string{
-	"dansal",
-	"dansal-web",
-	"dansal-webmin",
-	"dansal-fetch.timer",
-	"dansal-backup.timer",
-	"dansal-vacuum.timer",
-	"dansal-prune-images.timer",
-	"dansal-mailcheck.timer",
+func monitoredUnits(instance string) []string {
+	if instance == "" {
+		return []string{
+			"dansal", "dansal-web", "dansal-webmin",
+			"dansal-fetch.timer", "dansal-backup.timer",
+			"dansal-vacuum.timer", "dansal-prune-images.timer",
+			"dansal-mailcheck.timer",
+		}
+	}
+	sfx := "@" + instance
+	return []string{
+		"dansal" + sfx,
+		"dansal-web" + sfx,
+		"dansal-webmin" + sfx,
+		"dansal-fetch" + sfx + ".timer",
+		"dansal-backup" + sfx + ".timer",
+		"dansal-vacuum" + sfx + ".timer",
+		"dansal-prune-images" + sfx + ".timer",
+		"dansal-mailcheck" + sfx + ".timer",
+	}
 }
 
 func getServiceStatus(name string) ServiceStatus {
@@ -160,7 +171,7 @@ func collectDashboard(ctx context.Context, cfg *Config) DashboardData {
 		d.DansalInfo = info
 	}
 
-	for _, unit := range monitoredUnits {
+	for _, unit := range monitoredUnits(cfg.Instance) {
 		d.Services = append(d.Services, getServiceStatus(unit))
 	}
 

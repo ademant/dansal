@@ -19,6 +19,7 @@ type Config struct {
 	AdminSocket   string `yaml:"admin_socket"`
 	SessionSecret string `yaml:"session_secret"`
 	SiteName      string `yaml:"site_name"`
+	Instance      string `yaml:"instance"`
 	configPath    string
 }
 

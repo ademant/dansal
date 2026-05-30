@@ -12,6 +12,10 @@ dansal_url: "http://127.0.0.1:8000"
 # Path to the dansal admin socket (for maintenance operations).
 admin_socket: "/run/dansal/dansal.sock"
 
+# Systemd instance name (e.g. dev, prod). Used to resolve monitored unit names
+# like dansal@prod, dansal-fetch@prod.timer, etc. in the dashboard.
+instance: ""
+
 # Secret used to sign session cookies. Generate with:
 #   openssl rand -hex 32
 # REQUIRED — webmin will refuse to start if this is empty.

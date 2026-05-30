@@ -111,7 +111,7 @@ install-webmin: build-dansal_webmin
 
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
-	# Fixed (legacy) units
+	# Legacy non-template units (installed for reference; not enabled automatically)
 	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
 	install -m 644 dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
 	install -m 644 dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
@@ -122,6 +122,8 @@ install-units:
 	install -m 644 dansal-vacuum.timer      $(SYSTEMDDIR)/dansal-vacuum.timer
 	install -m 644 dansal-prune-images.service  $(SYSTEMDDIR)/dansal-prune-images.service
 	install -m 644 dansal-prune-images.timer    $(SYSTEMDDIR)/dansal-prune-images.timer
+	install -m 644 dansal-mailcheck.service     $(SYSTEMDDIR)/dansal-mailcheck.service
+	install -m 644 dansal-mailcheck.timer       $(SYSTEMDDIR)/dansal-mailcheck.timer
 	# Instance template units
 	install -m 644 dansal@.service              $(SYSTEMDDIR)/dansal@.service
 	install -m 644 dansal-web@.service          $(SYSTEMDDIR)/dansal-web@.service
@@ -134,8 +136,9 @@ install-units:
 	install -m 644 dansal-vacuum@.timer         $(SYSTEMDDIR)/dansal-vacuum@.timer
 	install -m 644 dansal-prune-images@.service $(SYSTEMDDIR)/dansal-prune-images@.service
 	install -m 644 dansal-prune-images@.timer   $(SYSTEMDDIR)/dansal-prune-images@.timer
+	install -m 644 dansal-mailcheck@.service    $(SYSTEMDDIR)/dansal-mailcheck@.service
+	install -m 644 dansal-mailcheck@.timer      $(SYSTEMDDIR)/dansal-mailcheck@.timer
 	systemctl daemon-reload
-	systemctl enable --now dansal-fetch.timer dansal-backup.timer dansal-vacuum.timer dansal-prune-images.timer
 
 update: build install-units
 	@[ "$(shell id -u)" = "0" ] || { echo "update requires root"; exit 1; }
@@ -204,15 +207,20 @@ endif
 		echo "$(SYSCONFDIR)/$(INSTANCE)/web.yaml already exists — not overwriting"; \
 	fi
 	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml ]; then \
-		install -m 640 -o root -g $(SERVICE) packaging/webmin.yaml $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
-		echo "Created $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml — set listen, admin_socket, session_secret."; \
+		sed 's|admin_socket: "/run/dansal/dansal.sock"|admin_socket: "/run/dansal/$(INSTANCE)/dansal.sock"|; \
+		     s|instance: ""|instance: "$(INSTANCE)"|' \
+		    packaging/webmin.yaml > $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
+		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
+		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
+		echo "Created $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml — set listen, session_secret."; \
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/webmin.yaml already exists — not overwriting"; \
 	fi
 	# Enable units (not started — configure first)
 	systemctl enable dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE)
 	systemctl enable dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer \
-	                 dansal-vacuum@$(INSTANCE).timer dansal-prune-images@$(INSTANCE).timer
+	                 dansal-vacuum@$(INSTANCE).timer dansal-prune-images@$(INSTANCE).timer \
+	                 dansal-mailcheck@$(INSTANCE).timer
 	@echo ""
 	@echo "Instance '$(INSTANCE)' is set up.  Next steps:"
 	@echo "  1. Edit $(SYSCONFDIR)/$(INSTANCE)/config.yaml  (port, base_url, smtp, …)"

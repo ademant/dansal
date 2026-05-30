@@ -35,7 +35,7 @@ func adminMatrixGet() adminResponse {
 	tokenSet := config.Server.MatrixAccessToken != ""
 	return adminResponse{OK: true, Data: map[string]any{
 		"homeserver":       config.Server.MatrixHomeserver,
-		"access_token_set": tokenSet,
+		"has_token": tokenSet,
 	}}
 }
 

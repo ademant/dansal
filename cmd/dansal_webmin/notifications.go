@@ -76,12 +76,12 @@ func smtpNotifStatus(s *smtpConfig) notifStatus {
 		return statusMissing
 	}
 	if s.Sendmail != "" {
-		if s.From != "" && s.To != "" {
+		if s.From != "" {
 			return statusOK
 		}
 		return statusPartial
 	}
-	if s.Host != "" && s.From != "" && s.HasPassword && s.To != "" {
+	if s.Host != "" && s.From != "" && s.HasPassword {
 		return statusOK
 	}
 	if s.Host != "" || s.From != "" || s.HasPassword {

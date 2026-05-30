@@ -179,8 +179,8 @@ ifndef INSTANCE
 	$(error INSTANCE is required: sudo make setup-instance INSTANCE=prod)
 endif
 	$(MAKE) install-units
-	# Config directory
-	install -d -m 750 -o root -g $(SERVICE) $(SYSCONFDIR)/$(INSTANCE)
+	# Config directory (770: group-writable so dansal-webmin can save configs)
+	install -d -m 770 -o root -g $(SERVICE) $(SYSCONFDIR)/$(INSTANCE)
 	# State directories
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/images
@@ -192,7 +192,7 @@ endif
 		     s|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
 		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
-		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
+		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		echo "Created $(SYSCONFDIR)/$(INSTANCE)/config.yaml — set port, base_url, smtp, etc."; \
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/config.yaml already exists — not overwriting"; \
@@ -201,7 +201,7 @@ endif
 		sed 's|/var/lib/dansal-web/web.db|/var/lib/dansal-web/$(INSTANCE)/web.db|' \
 		    packaging/web.yaml > $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
-		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
+		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
 		echo "Created $(SYSCONFDIR)/$(INSTANCE)/web.yaml — set listen, domain, dansal_url."; \
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/web.yaml already exists — not overwriting"; \
@@ -211,7 +211,7 @@ endif
 		     s|instance: ""|instance: "$(INSTANCE)"|' \
 		    packaging/webmin.yaml > $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
-		chmod 640 $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
+		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
 		echo "Created $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml — set listen, session_secret."; \
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/webmin.yaml already exists — not overwriting"; \

@@ -18,8 +18,12 @@ func initRegisterRateLimiter() {
 	registerRateLimiter = NewRateLimiter(3, 10*time.Minute)
 }
 
+func smtpEnabled() bool {
+	return config.SMTP.Host != "" || config.SMTP.Sendmail != ""
+}
+
 func selfRegEnabled() bool {
-	return config.SMTP.Host != "" || config.Server.TelegramBotToken != ""
+	return smtpEnabled() || config.Server.TelegramBotToken != ""
 }
 
 func randomHex32() (string, error) {
@@ -120,13 +124,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate channel.
 	channel := req.Channel
 	if channel == "" {
-		if config.SMTP.Host != "" {
+		if smtpEnabled() {
 			channel = "email"
 		} else {
 			channel = "telegram"
 		}
 	}
-	if channel == "email" && config.SMTP.Host == "" {
+	if channel == "email" && !smtpEnabled() {
 		writeError(w, "email channel not available", http.StatusBadRequest)
 		return
 	}

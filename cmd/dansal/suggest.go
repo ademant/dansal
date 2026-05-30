@@ -117,7 +117,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	smtpConfigured := config.SMTP.Host != ""
+	smtpConfigured := smtpEnabled()
 	if smtpConfigured && req.Email == "" {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return

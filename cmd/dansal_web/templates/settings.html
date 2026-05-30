@@ -138,8 +138,8 @@
       <tr{{if .Current}} class="session-current"{{end}}>
         <td>{{if .LastSeenAt}}{{.LastSeenAt}}{{else}}—{{end}}</td>
         <td style="font-size:.82rem;max-width:260px;word-break:break-all">
-          {{if .UserAgent}}<span title="{{.UserAgent}}">{{.UserAgent | truncUA}}</span>{{end}}
-          {{if .IP}}<span class="session-ip">{{.IP}}</span>{{end}}
+          {{if .UserAgent}}<span title="{{.UserAgent}}">{{.UserAgent | friendlyUA}}</span>{{end}}
+          {{if .IP}}<span class="session-ip">{{.IP | friendlyIP}}</span>{{end}}
           {{if .Current}}<span class="badge badge-ok" style="margin-left:.3rem">{{$.Strings.T "settings_sessions_current"}}</span>{{end}}
         </td>
         <td>

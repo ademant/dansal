@@ -668,12 +668,38 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 	},
-	"truncUA": func(s string) string {
-		const max = 60
-		if len(s) <= max {
-			return s
+	"friendlyUA": func() func(string) string {
+		type rule struct {
+			name    string
+			pattern *regexp.Regexp
 		}
-		return s[:max] + "…"
+		rules := []rule{
+			{"Edge", regexp.MustCompile(`Edg(?:e)?/(\d+)`)},
+			{"Opera", regexp.MustCompile(`OPR/(\d+)`)},
+			{"Chrome", regexp.MustCompile(`Chrome/(\d+)`)},
+			{"Firefox", regexp.MustCompile(`Firefox/(\d+)`)},
+			{"Safari", regexp.MustCompile(`Version/(\d+)`)},
+		}
+		return func(ua string) string {
+			if ua == "" {
+				return ""
+			}
+			for _, r := range rules {
+				if m := r.pattern.FindStringSubmatch(ua); m != nil {
+					return r.name + " " + m[1]
+				}
+			}
+			if len(ua) > 40 {
+				return ua[:40] + "…"
+			}
+			return ua
+		}
+	}(),
+	"friendlyIP": func(ip string) string {
+		if ip == "127.0.0.1" || ip == "::1" {
+			return "localhost"
+		}
+		return ip
 	},
 }
 

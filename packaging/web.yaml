@@ -98,9 +98,11 @@ dark_mode: auto
 # To enable the anonymous event suggestion feature, set at least one of the
 # following. They must mirror the corresponding values in the dansal API config.
 # - telegram_bot_token: enables suggestions with direct admin Telegram notification.
-# - smtp_host: enables suggestions with email verification flow.
+# - smtp_host: enables suggestions with email verification flow (remote SMTP).
+# - smtp_sendmail: enables suggestions with email verification flow (local MTA).
 # telegram_bot_token: ""
 # smtp_host: ""
+# smtp_sendmail: ""
 
 # --- Captcha ---
 

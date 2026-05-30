@@ -15,7 +15,7 @@ type telegramCfg struct {
 
 type matrixCfg struct {
 	Homeserver     string `json:"homeserver"`
-	AccessTokenSet bool   `json:"access_token_set"`
+	AccessTokenSet bool   `json:"has_token"`
 }
 
 type heartbeatChannelStatus struct {

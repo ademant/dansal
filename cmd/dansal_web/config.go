@@ -46,7 +46,8 @@ type Config struct {
 	TelegramBotToken      string `yaml:"telegram_bot_token"` // used only to gate suggest feature
 
 	// SMTP — mirrors API config; used only to determine suggest hint text
-	SMTPHost string `yaml:"smtp_host"`
+	SMTPHost     string `yaml:"smtp_host"`
+	SMTPSendmail string `yaml:"smtp_sendmail"`
 
 	// Captcha (Cloudflare Turnstile)
 	CaptchaSiteKey   string `yaml:"captcha_site_key"`

@@ -160,7 +160,7 @@ var logoSVG []byte
 var bannerSVG []byte
 
 func suggestAvailable(cfg *Config) bool {
-	return cfg.SMTPHost != "" || cfg.TelegramBotToken != ""
+	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
 }
 
 func svgHandler(data []byte) http.HandlerFunc {

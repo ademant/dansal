@@ -34,7 +34,7 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:       cfg.SMTPHost != "",
+			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
 			FormToken:      newFormToken(),
 			Dances:         dances,
@@ -54,7 +54,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP: cfg.SMTPHost != "",
+				HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:    i18n.T(r, "suggest_error_rate_limit"),
 			}))
 			return
@@ -65,7 +65,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		if err != nil {
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP: cfg.SMTPHost != "",
+				HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:    i18n.T(r, "suggest_error_parse"),
 			}))
 			return
@@ -80,7 +80,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:       cfg.SMTPHost != "",
+			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			PreviewEvents:  events,
 			PreviewJSON:    previewJSON,
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
@@ -102,7 +102,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP: cfg.SMTPHost != "",
+				HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:    i18n.T(r, "suggest_error_rate_limit"),
 			}))
 			return
@@ -123,7 +123,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			if err := verifyTurnstile(cfg, r.FormValue("cf-turnstile-response")); err != nil {
 				title := i18n.T(r, "suggest_event_title")
 				renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-					HintSMTP: cfg.SMTPHost != "",
+					HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 					Error:    i18n.T(r, "suggest_error_captcha"),
 				}))
 				return
@@ -137,7 +137,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			strings.Contains(description, "http://") || strings.Contains(description, "https://") {
 			pageTitle := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
-				HintSMTP: cfg.SMTPHost != "",
+				HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:    i18n.T(r, "suggest_error_links"),
 			}))
 			return
@@ -177,7 +177,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
 			pageTitle := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
-				HintSMTP: cfg.SMTPHost != "",
+				HintSMTP: cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:    i18n.T(r, "suggest_error_submit"),
 			}))
 			return

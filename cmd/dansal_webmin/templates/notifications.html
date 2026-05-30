@@ -315,9 +315,13 @@ window.smtpWizard = {
     var f = smtpWizard._fields();
     var body = new URLSearchParams(f);
     fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString()})
-      .then(function(r){ return r.json(); })
+      .then(function(r){
+        if (r.redirected) { callback({ok:false,error:'Session expired — please reload the page'}); return Promise.reject(); }
+        if (!r.ok) { return r.text().then(function(t){ return {ok:false,error:'HTTP '+r.status+(t?' — '+t.trim().substring(0,120):'')}; }); }
+        return r.json();
+      })
       .then(callback)
-      .catch(function(e){ callback({ok:false,error:e.message}); });
+      .catch(function(e){ if(e) callback({ok:false,error:e.message}); });
   },
   test: function(){
     document.getElementById('wz-test-btn').disabled = true;
@@ -551,7 +555,11 @@ window.tgWizard = {
   },
   _post: function(url,fields,cb){
     fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields).toString()})
-      .then(function(r){return r.json();}).then(cb).catch(function(e){cb({ok:false,error:e.message});});
+      .then(function(r){
+        if(r.redirected){cb({ok:false,error:'Session expired — please reload the page'});return Promise.reject();}
+        if(!r.ok){return r.text().then(function(t){return {ok:false,error:'HTTP '+r.status+(t?' — '+t.trim().substring(0,120):'')};}); }
+        return r.json();
+      }).then(cb).catch(function(e){if(e)cb({ok:false,error:e.message});});
   },
   _result: function(id,type,msg){
     var el=document.getElementById(id);
@@ -653,7 +661,11 @@ window.mxWizard = {
   },
   _post: function(url,fields,cb){
     fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields).toString()})
-      .then(function(r){return r.json();}).then(cb).catch(function(e){cb({ok:false,error:e.message});});
+      .then(function(r){
+        if(r.redirected){cb({ok:false,error:'Session expired — please reload the page'});return Promise.reject();}
+        if(!r.ok){return r.text().then(function(t){return {ok:false,error:'HTTP '+r.status+(t?' — '+t.trim().substring(0,120):'')};}); }
+        return r.json();
+      }).then(cb).catch(function(e){if(e)cb({ok:false,error:e.message});});
   },
   _doLogin: function(){
     var hs=document.getElementById('mx-hs').value.trim();

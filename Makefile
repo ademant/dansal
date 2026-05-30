@@ -179,6 +179,8 @@ ifndef INSTANCE
 	$(error INSTANCE is required: sudo make setup-instance INSTANCE=prod)
 endif
 	$(MAKE) install-units
+	# Allow dansal to submit mail via sendmail (needs postdrop group for maildrop write access)
+	getent group postdrop >/dev/null && usermod -aG postdrop $(SERVICE) || true
 	# Config directory (770: group-writable so dansal-webmin can save configs)
 	install -d -m 770 -o root -g $(SERVICE) $(SYSCONFDIR)/$(INSTANCE)
 	# State directories

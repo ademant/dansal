@@ -153,6 +153,21 @@ footer.footer-visible{transform:translateY(0)}
 .md-content blockquote{border-left:3px solid var(--blockquote-border);padding:.25rem .75rem;color:var(--fg-dim);margin:.5rem 0}
 .md-content code{background:var(--code-bg);border-radius:3px;padding:.05rem .3rem;font-size:.9em;color:var(--fg)}
 .chip{display:inline-block;background:var(--bg-subtle);color:var(--fg-dim);border-radius:3px;padding:.1rem .5rem;font-size:.82rem;margin:.1rem .1rem 0 0}
+.nav-help-btn{background:transparent;border:1px solid #4a4a7a;color:#9090b8;border-radius:4px;padding:.2rem .55rem;font-size:.85rem;font-weight:700;cursor:pointer;line-height:1.6;flex-shrink:0}
+.nav-help-btn:hover{border-color:#c0c8ff;color:#c0c8ff}
+.hm-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center}
+.hm-box{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:460px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.hm-box h2{font-size:1rem;font-weight:700;color:var(--heading);margin:0 0 1rem;display:flex;justify-content:space-between;align-items:center}
+.hm-close{background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--fg-muted);padding:0 .25rem;line-height:1}
+.hm-close:hover{color:var(--fg)}
+.hm-sec{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted);margin:1rem 0 .35rem}
+.hm-sec:first-child{margin-top:0}
+.hm-list{list-style:none;padding:0;margin:0}
+.hm-list li{padding:.35rem 0;border-bottom:1px solid var(--border-lite);font-size:.88rem;color:var(--fg-2);display:flex;gap:.55rem;align-items:baseline}
+.hm-list li:last-child{border-bottom:none}
+.hm-sym{flex-shrink:0;width:1rem;text-align:center;color:var(--fg-muted);font-size:.8rem}
+.hm-reg{margin-top:.75rem;padding-top:.75rem;border-top:2px solid var(--border);font-size:.88rem}
+.hm-footer{margin-top:1rem;text-align:right;font-size:.82rem}
 </style>
 </head>
 <body>
@@ -189,6 +204,7 @@ footer.footer-visible{transform:translateY(0)}
       </div>
     </div>
     <button class="nav-theme" id="theme-btn" onclick="cycleTheme()" title="Toggle colour scheme">◑</button>
+    <button class="nav-help-btn" onclick="openHelpModal()" title="Help (?)">?</button>
     {{if .User}}
       <a href="/settings" class="nav-user-name">{{if .User.DisplayName}}{{.User.DisplayName}}{{else}}{{emailLocal .User.Email}}{{end}}</a>
       <form method="post" action="/logout" style="margin:0">
@@ -305,5 +321,48 @@ function attachTileLayer(map){
     <div class="footer-right"><a href="/help">{{.Strings.T "nav_help"}}</a>{{if .ImpressumURL}} · <a href="{{.ImpressumURL}}">{{.Strings.T "nav_impressum"}}</a>{{end}}</div>
   </div>
 </footer>
+<div id="hm-backdrop" class="hm-backdrop" hidden onclick="if(event.target===this)closeHelpModal()">
+  <div class="hm-box" role="dialog" aria-modal="true" aria-label="Quick help">
+    <h2>Quick help <button class="hm-close" onclick="closeHelpModal()" aria-label="Close">&#x2715;</button></h2>
+    {{if .User}}
+    <p class="hm-sec">Managing events</p>
+    <ul class="hm-list">
+      <li><span class="hm-sym">+</span><span><a href="/admin/events/new">Create an event</a> — add date, location, tags and description</span></li>
+      <li><span class="hm-sym">&#10003;</span><span><a href="/admin/events">Publish events</a> — drafts are only visible to you until published</span></li>
+      <li><span class="hm-sym">&#8595;</span><span><a href="/admin/fetchurls">Import via feed</a> — subscribe to an iCal or RSS feed to auto-import events</span></li>
+      <li><span class="hm-sym">&#9834;</span><span><a href="/admin/musicians">Musicians</a> — link bands and DJs to events</span></li>
+      <li><span class="hm-sym">&#9679;</span><span><a href="/admin/locations">Locations</a> — save and reuse venues across events</span></li>
+    </ul>
+    <p class="hm-sec">For visitors</p>
+    <ul class="hm-list">
+      <li><span class="hm-sym">&#8776;</span><span>Browse and filter events by type, tag or date on the <a href="/">event list</a></span></li>
+      <li><span class="hm-sym">&#8635;</span><span>iCal, RSS and JSON feeds are available on event list and org pages</span></li>
+      <li><span class="hm-sym">&#9835;</span><span>Follow organizations from Mastodon or any ActivityPub app</span></li>
+    </ul>
+    {{else}}
+    <ul class="hm-list">
+      <li><span class="hm-sym">&#8776;</span><span>Browse and filter events by type, tag or date range on the <a href="/">event list</a></span></li>
+      <li><span class="hm-sym">&#8635;</span><span>Subscribe to <a href="/feed/events.ical">iCal</a> or <a href="/feed/events.rss">RSS</a> to get events in your calendar app</span></li>
+      <li><span class="hm-sym">&#9835;</span><span>Follow organizations from Mastodon or any ActivityPub-compatible app</span></li>
+      {{if .SuggestAvailable}}<li><span class="hm-sym">&#8594;</span><span><a href="/events/suggest">Suggest an event</a> — tip us off about a balfolk event we may have missed</span></li>{{end}}
+    </ul>
+    {{if .RegistrationEnabled}}
+    <div class="hm-reg"><a href="/register"><strong>Register</strong></a> to create and manage your own events on this site.</div>
+    {{end}}
+    {{end}}
+    <div class="hm-footer"><a href="/help">Full help &#8594;</a></div>
+  </div>
+</div>
+<script>
+function openHelpModal(){document.getElementById('hm-backdrop').hidden=false;}
+function closeHelpModal(){document.getElementById('hm-backdrop').hidden=true;}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){closeHelpModal();return;}
+  if(e.key==='?'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){
+    var el=document.getElementById('hm-backdrop');
+    el.hidden?openHelpModal():closeHelpModal();
+  }
+});
+</script>
 </body>
 </html>{{end}}

@@ -1143,6 +1143,7 @@ type EventCreateReq struct {
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
 	Pricing        *Pricing    `json:"pricing,omitempty"`
+	LocationID     *int        `json:"location_id,omitempty"`
 	Location       EventLocReq `json:"location"`
 	Dances         []int       `json:"dances,omitempty"`
 }
@@ -1172,6 +1173,7 @@ type EventUpdateReq struct {
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
 	Pricing        *Pricing    `json:"pricing,omitempty"`
+	LocationID     *int        `json:"location_id,omitempty"`
 	Location       EventLocReq `json:"location"`
 	Musicians      []int       `json:"musicians,omitempty"`
 	Dances         []int       `json:"dances,omitempty"`

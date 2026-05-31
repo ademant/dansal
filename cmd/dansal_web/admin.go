@@ -2473,18 +2473,9 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			URL:                base.URL,
 			OrganizationID:     base.OrganizationID,
 			Pricing:            base.Pricing,
-			Location: EventLocReq{
-				Location:  base.Location,
-				ShortName: base.LocationShortName,
-				Address:   base.LocationAddress,
-				Zipcode:   base.LocationZipcode,
-				Town:      base.LocationTown,
-				Country:   base.LocationCountry,
-				Latitude:  base.LocationLat,
-				Longitude: base.LocationLng,
-			},
-			Musicians: mids,
-			Dances:    danceIDs,
+			LocationID:         base.LocationID,
+			Musicians:          mids,
+			Dances:             danceIDs,
 		}
 		_, _ = client.UpdateEvent(ctx, baseID, req, token)
 
@@ -2887,18 +2878,9 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				URL:                ev.URL,
 				OrganizationID:     ev.OrganizationID,
 				Pricing:            ev.Pricing,
-				Location: EventLocReq{
-					Location:  ev.Location,
-					ShortName: ev.LocationShortName,
-					Address:   ev.LocationAddress,
-					Zipcode:   ev.LocationZipcode,
-					Town:      ev.LocationTown,
-					Country:   ev.LocationCountry,
-					Latitude:  ev.LocationLat,
-					Longitude: ev.LocationLng,
-				},
-				Musicians: musicianIDs,
-				Dances:    danceIDs,
+				LocationID:         ev.LocationID,
+				Musicians:          musicianIDs,
+				Dances:             danceIDs,
 			}
 			if fields["timing"] {
 				req.StartTime = td.StartTime

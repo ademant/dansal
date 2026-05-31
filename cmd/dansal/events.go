@@ -111,6 +111,7 @@ type EventUpdateRequest struct {
 	Tags           []string             `json:"tags"`
 	URL            string               `json:"url"`
 	OrganizationID *int                 `json:"organization_id"`
+	LocationID     *int                 `json:"location_id,omitempty"`
 	Location       EventLocationRequest `json:"location"`
 	Pricing        *Pricing             `json:"pricing"`
 	Musicians      []int                `json:"musicians"`
@@ -137,6 +138,7 @@ type EventCreateRequest struct {
 	ContactEmail         string               `json:"contact_email,omitempty"`
 	Tags               []string             `json:"tags"`
 	URL                string               `json:"url,omitempty"`
+	LocationID         *int                 `json:"location_id,omitempty"`
 	Location           EventLocationRequest `json:"location"`
 	Date               []EventDate          `json:"date"`
 	Musicians          []int                `json:"musicians,omitempty"`
@@ -176,6 +178,16 @@ type Pricing struct {
 	Amount   float64 `json:"amount,omitempty"`
 	Currency string  `json:"currency,omitempty"`
 	Prices   []Price `json:"prices,omitempty"`
+}
+
+// resolveLocationID returns the location ID to use for a write request.
+// If location_id is supplied directly it is used without a DB round-trip.
+// Otherwise ensureLocation does the find-or-create lookup.
+func resolveLocationID(q querier, locID *int, loc EventLocationRequest) (int64, error) {
+	if locID != nil {
+		return int64(*locID), nil
+	}
+	return ensureLocation(q, loc)
 }
 
 // ── package-level state ────────────────────────────────────────────────────
@@ -1177,7 +1189,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	var allCreatedEvents []Event
 	allCreated := true
 	for i, req := range requests {
-		locationID, err := ensureLocation(tx, req.Location)
+		locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -1332,7 +1344,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	locationID, err := ensureLocation(tx, req.Location)
+	locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

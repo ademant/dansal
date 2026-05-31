@@ -49,9 +49,9 @@
     </div>
     {{if .Message}}<p class="bgc-message">{{.Message}}</p>{{end}}
     <div class="bgc-event">
-      <a href="/events/{{.EventID}}" class="bgc-event-link">{{.EventTitle}}</a>
-      {{if .EventTown}}<span class="bgc-meta">· {{.EventTown}}</span>{{end}}
-      {{with isoDate .EventStart}}<span class="bgc-meta">· {{.}}</span>{{end}}
+      <a href="/events/{{.EventID}}" class="bgc-event-link">{{if .Event}}{{.Event.Title}}{{end}}</a>
+      {{if and .Event .Event.Town}}<span class="bgc-meta">· {{.Event.Town}}</span>{{end}}
+      {{if .Event}}{{with isoDate .Event.StartTime}}<span class="bgc-meta">· {{.}}</span>{{end}}{{end}}
     </div>
     {{if not .TelegramUsername}}
     <div class="bgc-actions">

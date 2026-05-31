@@ -12,16 +12,26 @@ import (
 )
 
 type ContactPost struct {
-	ID               int    `json:"id"`
-	EventID          int    `json:"event_id"`
-	Type             string `json:"type"`
-	City             string `json:"city"`
-	Persons          int    `json:"persons"`
-	Message          string `json:"message,omitempty"`
-	Nickname         string `json:"nickname"`
-	TelegramUsername string `json:"telegram_username,omitempty"`
-	EmailVerified    bool   `json:"email_verified"`
-	CreatedAt        string `json:"created_at"`
+	ID               int                `json:"id"`
+	EventID          int                `json:"event_id"`
+	Type             string             `json:"type"`
+	City             string             `json:"city"`
+	Persons          int                `json:"persons"`
+	Message          string             `json:"message,omitempty"`
+	Nickname         string             `json:"nickname"`
+	TelegramUsername string             `json:"telegram_username,omitempty"`
+	EmailVerified    bool               `json:"email_verified"`
+	CreatedAt        string             `json:"created_at"`
+	Event            *ContactPostEvent  `json:"event,omitempty"`
+}
+
+// ContactPostEvent holds the event summary included in the global contact-post listing.
+type ContactPostEvent struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	StartTime string `json:"start_time"`
+	Town      string `json:"town,omitempty"`
+	Country   string `json:"country,omitempty"`
 }
 
 // containsLink returns true if s contains any URL or mailto: link.
@@ -743,13 +753,6 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // GlobalContactPost extends ContactPost with event context for the global board.
-type GlobalContactPost struct {
-	ContactPost
-	EventTitle   string `json:"event_title"`
-	EventStart   string `json:"event_start"`
-	EventTown    string `json:"event_town"`
-	EventCountry string `json:"event_country"`
-}
 
 // GET /api/v1/contact-posts
 // Public. Returns all live verified posts across all published events.
@@ -812,23 +815,30 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	posts := []GlobalContactPost{}
+	posts := []ContactPost{}
 	for rows.Next() {
-		var gp GlobalContactPost
+		var cp ContactPost
 		var ev int
 		var startEpoch int64
+		var evTitle, evTown, evCountry string
 		if err := rows.Scan(
-			&gp.ID, &gp.EventID, &gp.Type, &gp.City, &gp.Persons,
-			&gp.Message, &gp.Nickname, &gp.TelegramUsername,
-			&ev, &gp.CreatedAt,
-			&gp.EventTitle, &startEpoch, &gp.EventTown, &gp.EventCountry,
+			&cp.ID, &cp.EventID, &cp.Type, &cp.City, &cp.Persons,
+			&cp.Message, &cp.Nickname, &cp.TelegramUsername,
+			&ev, &cp.CreatedAt,
+			&evTitle, &startEpoch, &evTown, &evCountry,
 		); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		gp.EmailVerified = ev == 1
-		gp.EventStart = time.Unix(startEpoch, 0).UTC().Format(time.RFC3339)
-		posts = append(posts, gp)
+		cp.EmailVerified = ev == 1
+		cp.Event = &ContactPostEvent{
+			ID:        cp.EventID,
+			Title:     evTitle,
+			StartTime: time.Unix(startEpoch, 0).UTC().Format(time.RFC3339),
+			Town:      evTown,
+			Country:   evCountry,
+		}
+		posts = append(posts, cp)
 	}
 	json.NewEncoder(w).Encode(posts)
 }

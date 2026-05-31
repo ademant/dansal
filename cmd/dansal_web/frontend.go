@@ -1347,7 +1347,7 @@ func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
 }
 
 type BoardData struct {
-	Posts          []GlobalContactPost
+	Posts          []ContactPost
 	TownFilter     string
 	Query          string
 	Towns          []string
@@ -1389,8 +1389,8 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		allPosts, _ := client.GetAllContactPosts(r.Context(), url.Values{})
 		townSet := map[string]struct{}{}
 		for _, p := range allPosts {
-			if p.EventTown != "" {
-				townSet[p.EventTown] = struct{}{}
+			if p.Event != nil && p.Event.Town != "" {
+				townSet[p.Event.Town] = struct{}{}
 			}
 		}
 		towns := make([]string, 0, len(townSet))

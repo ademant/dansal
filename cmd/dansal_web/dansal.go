@@ -1400,15 +1400,24 @@ func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, to
 // ── contact board ────────────────────────────────────────────────────────────
 
 type ContactPost struct {
-	ID               int    `json:"id"`
-	EventID          int    `json:"event_id"`
-	Type             string `json:"type"`
-	City             string `json:"city"`
-	Persons          int    `json:"persons"`
-	Message          string `json:"message,omitempty"`
-	Nickname         string `json:"nickname"`
-	TelegramUsername string `json:"telegram_username,omitempty"`
-	CreatedAt        string `json:"created_at"`
+	ID               int               `json:"id"`
+	EventID          int               `json:"event_id"`
+	Type             string            `json:"type"`
+	City             string            `json:"city"`
+	Persons          int               `json:"persons"`
+	Message          string            `json:"message,omitempty"`
+	Nickname         string            `json:"nickname"`
+	TelegramUsername string            `json:"telegram_username,omitempty"`
+	CreatedAt        string            `json:"created_at"`
+	Event            *ContactPostEvent `json:"event,omitempty"`
+}
+
+type ContactPostEvent struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	StartTime string `json:"start_time"`
+	Town      string `json:"town,omitempty"`
+	Country   string `json:"country,omitempty"`
 }
 
 func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]ContactPost, error) {
@@ -1416,21 +1425,12 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 	return posts, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID), &posts)
 }
 
-// GlobalContactPost mirrors the API's GlobalContactPost with event context.
-type GlobalContactPost struct {
-	ContactPost
-	EventTitle   string `json:"event_title"`
-	EventStart   string `json:"event_start"`
-	EventTown    string `json:"event_town"`
-	EventCountry string `json:"event_country"`
-}
-
-func (c *DansalClient) GetAllContactPosts(ctx context.Context, params url.Values) ([]GlobalContactPost, error) {
+func (c *DansalClient) GetAllContactPosts(ctx context.Context, params url.Values) ([]ContactPost, error) {
 	path := "/api/v1/contact-posts"
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}
-	var posts []GlobalContactPost
+	var posts []ContactPost
 	return posts, c.get(ctx, path, &posts)
 }
 

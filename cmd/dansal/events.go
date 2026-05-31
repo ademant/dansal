@@ -405,17 +405,16 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		*query += " AND l.location LIKE ?"
 		*args = append(*args, "%"+loc+"%")
 	}
-	if v := q.Get("has_ball"); v != "" {
-		*query += " AND e.has_ball = ?"
-		*args = append(*args, boolParam(v))
+	// ?has_ball, ?has_workshop, ?has_festival are kept as aliases for backward
+	// compatibility; they map to their canonical tag equivalents.
+	if q.Get("has_ball") == "true" {
+		*query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = 'bal-folk')"
 	}
-	if v := q.Get("has_workshop"); v != "" {
-		*query += " AND e.has_workshop = ?"
-		*args = append(*args, boolParam(v))
+	if q.Get("has_workshop") == "true" {
+		*query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = 'workshop')"
 	}
-	if v := q.Get("has_festival"); v != "" {
-		*query += " AND e.has_festival = ?"
-		*args = append(*args, boolParam(v))
+	if q.Get("has_festival") == "true" {
+		*query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = 'festival')"
 	}
 	if tag := q.Get("tag"); tag != "" {
 		*query += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?)"

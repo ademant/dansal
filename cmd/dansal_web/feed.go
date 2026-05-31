@@ -152,26 +152,18 @@ func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	}
 }
 
-// feedTypeHandler serves events filtered by has_ball / has_workshop / neither.
+// feedTypeHandler serves events filtered by tag slug via the API.
 func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.HandlerFunc {
+	tagMap := map[string]string{
+		"ball":     "bal-folk",
+		"workshop": "workshop",
+		"festival": "festival",
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		all, _ := client.GetEvents(r.Context(), "")
-		var events []Event
-		for _, e := range all {
-			switch feedType {
-			case "ball":
-				if e.HasBall {
-					events = append(events, e)
-				}
-			case "workshop":
-				if e.HasWorkshop {
-					events = append(events, e)
-				}
-			case "festival":
-				if e.HasFestival {
-					events = append(events, e)
-				}
-			}
+		tag := tagMap[feedType]
+		events, _ := client.GetEvents(r.Context(), "?tag="+tag)
+		if events == nil {
+			events = []Event{}
 		}
 		serveEventFeed(w, r, cfg, feedType+" events", events)
 	}

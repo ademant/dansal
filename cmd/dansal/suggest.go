@@ -140,6 +140,17 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Derive has_ball/workshop/festival from tags (and vice versa) so both
+	// sources of truth stay in sync before writing to the DB.
+	{
+		w := EventWriteRequest{
+			HasBall: req.HasBall, HasWorkshop: req.HasWorkshop, HasFestival: req.HasFestival,
+			Tags: req.Tags,
+		}
+		syncEventTypeTags(&w)
+		req.HasBall, req.HasWorkshop, req.HasFestival, req.Tags = w.HasBall, w.HasWorkshop, w.HasFestival, w.Tags
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)

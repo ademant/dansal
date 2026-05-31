@@ -693,6 +693,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 // createEventFromRequest inserts or updates all events described by req.
 // Returns (events, allCreated, error); allCreated=false if any event was updated.
 func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, bool, error) {
+	syncEventTypeTags(&req.EventWriteRequest)
 	var createdEvents []Event
 	allCreated := true
 
@@ -814,6 +815,50 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 		musicians = append(musicians, m)
 	}
 	return musicians, nil
+}
+
+// syncEventTypeTags reconciles has_ball / has_workshop / has_festival with the
+// tags slice so that either source of truth (explicit booleans from importers,
+// or tag slugs from the web UI) produces consistent DB state.
+//
+// Booleans → tags: if an importer set HasBall=true without including "bal-folk"
+// in Tags, we add the tag. Likewise for workshop and festival.
+// Tags → booleans: after the tag list is complete the booleans are re-derived
+// so that tags are always authoritative.
+// The "workshop" catch-all tag is added whenever any specific workshop tag is
+// present, enabling a single ?tag=workshop filter later.
+func syncEventTypeTags(w *EventWriteRequest) {
+	has := func(slug string) bool {
+		for _, t := range w.Tags {
+			if t == slug {
+				return true
+			}
+		}
+		return false
+	}
+	add := func(slug string) {
+		if !has(slug) {
+			w.Tags = append(w.Tags, slug)
+		}
+	}
+	// booleans → tags (for importers that set booleans directly)
+	if w.HasBall {
+		add("bal-folk")
+	}
+	if w.HasFestival {
+		add("festival")
+	}
+	if w.HasWorkshop && !has("dance-workshop") && !has("musician-workshop") && !has("workshop") {
+		add("workshop")
+	}
+	// tags → booleans (tags are now authoritative)
+	w.HasBall = has("bal-folk")
+	w.HasFestival = has("festival")
+	w.HasWorkshop = has("dance-workshop") || has("musician-workshop") || has("workshop")
+	// ensure workshop catch-all is always present when any workshop tag is set
+	if w.HasWorkshop {
+		add("workshop")
+	}
 }
 
 // syncEventTags replaces all event_tags rows for eventID with the given tags.
@@ -1134,6 +1179,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 
 	for i := range requests {
 		requests[i].Tags = filterKnownTags(requests[i].Tags)
+		syncEventTypeTags(&requests[i].EventWriteRequest)
 	}
 
 	if callerRole != RoleAdmin {
@@ -1320,6 +1366,9 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	req.Tags = filterKnownTags(req.Tags)
+	syncEventTypeTags(&req.EventWriteRequest)
 
 	locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 	if err != nil {

@@ -199,23 +199,25 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 		}
 
 		reqs = append(reqs, EventCreateRequest{
-			Title:          fe.Name,
-			Description:    fe.Details,
-			StartTime:      startTime,
-			EndTime:        endTime,
-			HasBall:        fe.Social,
-			HasWorkshop:    fe.Workshop,
-			IsCancelled:    fe.Cancelled,
-			Tags:           tags,
-			URL:            eventURL,
-			Source:         src.URL,
-			OrganizationID: src.OrganizationID,
-			Dances:         src.DanceIDs,
-			Pricing:        parseFolkdancePrice(fe.Price),
-			Location: EventLocationRequest{
-				Location: folkdanceLocationString(fe.City, fe.State, fe.Country),
-				Town:     fe.City,
-				Country:  fe.Country,
+			Source: src.URL,
+			EventWriteRequest: EventWriteRequest{
+				Title:          fe.Name,
+				Description:    fe.Details,
+				StartTime:      startTime,
+				EndTime:        endTime,
+				HasBall:        fe.Social,
+				HasWorkshop:    fe.Workshop,
+				IsCancelled:    fe.Cancelled,
+				Tags:           tags,
+				URL:            eventURL,
+				OrganizationID: src.OrganizationID,
+				Dances:         src.DanceIDs,
+				Pricing:        parseFolkdancePrice(fe.Price),
+				Location: EventLocationRequest{
+					Location: folkdanceLocationString(fe.City, fe.State, fe.Country),
+					Town:     fe.City,
+					Country:  fe.Country,
+				},
 			},
 		})
 	}
@@ -316,30 +318,32 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 		}
 
 		eventReq := EventCreateRequest{
-			Title:          fe.Name,
-			Description:    fe.Details,
-			StartTime:      startTime,
-			EndTime:        endTime,
-			HasBall:        fe.Social,
-			HasWorkshop:    fe.Workshop,
-			IsCancelled:    fe.Cancelled,
-			Tags:           tags,
-			URL:            eventURL,
-			Source:         src.URL,
-			OrganizationID: func() *int {
-				if src.OrganizationID != nil {
-					return src.OrganizationID
-				}
-				return ensureOrgByName(fe.Organisation)
-			}(),
-			Musicians:      musicianIDs,
-			Dances:         src.DanceIDs,
-			Pricing:        parseFolkdancePrice(fe.Price),
-			FetchSourceID:  src.ID,
-			Location: EventLocationRequest{
-				Location: locStr,
-				Town:     fe.City,
-				Country:  fe.Country,
+			Source:        src.URL,
+			FetchSourceID: src.ID,
+			EventWriteRequest: EventWriteRequest{
+				Title:       fe.Name,
+				Description: fe.Details,
+				StartTime:   startTime,
+				EndTime:     endTime,
+				HasBall:     fe.Social,
+				HasWorkshop: fe.Workshop,
+				IsCancelled: fe.Cancelled,
+				Tags:        tags,
+				URL:         eventURL,
+				OrganizationID: func() *int {
+					if src.OrganizationID != nil {
+						return src.OrganizationID
+					}
+					return ensureOrgByName(fe.Organisation)
+				}(),
+				Musicians: musicianIDs,
+				Dances:    src.DanceIDs,
+				Pricing:   parseFolkdancePrice(fe.Price),
+				Location: EventLocationRequest{
+					Location: locStr,
+					Town:     fe.City,
+					Country:  fe.Country,
+				},
 			},
 		}
 

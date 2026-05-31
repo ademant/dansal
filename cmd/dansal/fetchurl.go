@@ -796,19 +796,21 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 
 			reqs = append(reqs, EventCreateRequest{
 				UID:                uid,
-				Title:              title,
-				Description:        prop(ics.ComponentPropertyDescription),
-				StartTime:          occ[0].UTC().Format(time.RFC3339),
-				EndTime:            occ[1].UTC().Format(time.RFC3339),
-				IsCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
-				Tags:               tags,
-				URL:                attachURL(vevent),
 				Source:             src.URL,
-				OrganizationID:     src.OrganizationID,
-				Dances:             src.DanceIDs,
-				Location:           loc,
 				SourceLastModified: sourceLastModified,
 				FetchSourceID:      src.ID,
+				EventWriteRequest: EventWriteRequest{
+					Title:          title,
+					Description:    prop(ics.ComponentPropertyDescription),
+					StartTime:      occ[0].UTC().Format(time.RFC3339),
+					EndTime:        occ[1].UTC().Format(time.RFC3339),
+					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
+					Tags:           tags,
+					URL:            attachURL(vevent),
+					OrganizationID: src.OrganizationID,
+					Dances:         src.DanceIDs,
+					Location:       loc,
+				},
 			})
 		}
 	}
@@ -908,35 +910,37 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 			}
 			eventReq := EventCreateRequest{
 				UID:                uid,
-				Title:              title,
-				Description:        prop(ics.ComponentPropertyDescription),
-				StartTime:          occ[0].UTC().Format(time.RFC3339),
-				EndTime:            occ[1].UTC().Format(time.RFC3339),
-				IsCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
-				Tags:               tags,
-				URL:                attachURL(vevent),
 				Source:             src.URL,
-				OrganizationID:     orgID,
-				Dances:             src.DanceIDs,
-				Location: func() EventLocationRequest {
-				if apple := parseAppleStructuredLocation(vevent); apple != nil {
-					if apple.Location == "" {
-						apple.Location = prop(ics.ComponentPropertyLocation)
-					}
-					if apple.Latitude == nil {
-						apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
-					}
-					return *apple
-				}
-				lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
-				return EventLocationRequest{
-					Location:  prop(ics.ComponentPropertyLocation),
-					Latitude:  lat,
-					Longitude: lon,
-				}
-			}(),
 				SourceLastModified: sourceLastModified,
 				FetchSourceID:      src.ID,
+				EventWriteRequest: EventWriteRequest{
+					Title:          title,
+					Description:    prop(ics.ComponentPropertyDescription),
+					StartTime:      occ[0].UTC().Format(time.RFC3339),
+					EndTime:        occ[1].UTC().Format(time.RFC3339),
+					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
+					Tags:           tags,
+					URL:            attachURL(vevent),
+					OrganizationID: orgID,
+					Dances:         src.DanceIDs,
+					Location: func() EventLocationRequest {
+						if apple := parseAppleStructuredLocation(vevent); apple != nil {
+							if apple.Location == "" {
+								apple.Location = prop(ics.ComponentPropertyLocation)
+							}
+							if apple.Latitude == nil {
+								apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
+							}
+							return *apple
+						}
+						lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
+						return EventLocationRequest{
+							Location:  prop(ics.ComponentPropertyLocation),
+							Latitude:  lat,
+							Longitude: lon,
+						}
+					}(),
+				},
 			}
 
 			if src.TemplateID != nil {

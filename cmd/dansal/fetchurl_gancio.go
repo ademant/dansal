@@ -135,23 +135,25 @@ func gancioEventsToRequests(events []gancioEvent, src FetchSource) []EventCreate
 		uid := fmt.Sprintf("%d@%s", ge.ID, strings.TrimPrefix(strings.TrimPrefix(base, "https://"), "http://"))
 
 		req := EventCreateRequest{
-			UID:            uid,
-			Title:          ge.Title,
-			StartTime:      startTime.Format(time.RFC3339),
-			EndTime:        endTime.Format(time.RFC3339),
-			Tags:           tags,
-			URL:            eventURL,
-			BookingURL:     bookingURL,
-			Source:         src.URL,
-			OrganizationID: src.OrganizationID,
-			Dances:         src.DanceIDs,
-			Location: EventLocationRequest{
-				Location:  ge.Place.Name,
-				Address:   ge.Place.Address,
-				Town:      town,
-				Country:   country,
-				Latitude:  ge.Place.Latitude,
-				Longitude: ge.Place.Longitude,
+			UID:    uid,
+			Source: src.URL,
+			EventWriteRequest: EventWriteRequest{
+				Title:          ge.Title,
+				StartTime:      startTime.Format(time.RFC3339),
+				EndTime:        endTime.Format(time.RFC3339),
+				Tags:           tags,
+				URL:            eventURL,
+				BookingURL:     bookingURL,
+				OrganizationID: src.OrganizationID,
+				Dances:         src.DanceIDs,
+				Location: EventLocationRequest{
+					Location:  ge.Place.Name,
+					Address:   ge.Place.Address,
+					Town:      town,
+					Country:   country,
+					Latitude:  ge.Place.Latitude,
+					Longitude: ge.Place.Longitude,
+				},
 			},
 		}
 		reqs = append(reqs, req)
@@ -241,26 +243,26 @@ func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
 		uid := fmt.Sprintf("%d@%s", ge.ID, strings.TrimPrefix(strings.TrimPrefix(base, "https://"), "http://"))
 
 		req := EventCreateRequest{
-			UID:        uid,
-			Title:      ge.Title,
-			StartTime:  startTime.Format(time.RFC3339),
-			EndTime:    endTime.Format(time.RFC3339),
-			Tags:       tags,
-			URL:        eventURL,
-			BookingURL: bookingURL,
-			Source:     src.URL,
-			OrganizationID: func() *int {
-				return src.OrganizationID
-			}(),
-			Dances:        src.DanceIDs,
+			UID:           uid,
+			Source:        src.URL,
 			FetchSourceID: src.ID,
-			Location: EventLocationRequest{
-				Location:  ge.Place.Name,
-				Address:   ge.Place.Address,
-				Town:      town,
-				Country:   country,
-				Latitude:  ge.Place.Latitude,
-				Longitude: ge.Place.Longitude,
+			EventWriteRequest: EventWriteRequest{
+				Title:          ge.Title,
+				StartTime:      startTime.Format(time.RFC3339),
+				EndTime:        endTime.Format(time.RFC3339),
+				Tags:           tags,
+				URL:            eventURL,
+				BookingURL:     bookingURL,
+				OrganizationID: src.OrganizationID,
+				Dances:         src.DanceIDs,
+				Location: EventLocationRequest{
+					Location:  ge.Place.Name,
+					Address:   ge.Place.Address,
+					Town:      town,
+					Country:   country,
+					Latitude:  ge.Place.Latitude,
+					Longitude: ge.Place.Longitude,
+				},
 			},
 		}
 

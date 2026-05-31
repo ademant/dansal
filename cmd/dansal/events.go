@@ -77,68 +77,50 @@ type EventDate struct {
 	EndTime     string `json:"end_time"`
 }
 
+// EventWriteRequest holds the fields shared by both create and update requests.
+type EventWriteRequest struct {
+	Title              string               `json:"title"`
+	Description        string               `json:"description"`
+	StartTime          string               `json:"start_time"`
+	EndTime            string               `json:"end_time"`
+	HasBall            bool                 `json:"has_ball"`
+	HasWorkshop        bool                 `json:"has_workshop"`
+	HasFestival        bool                 `json:"has_festival"`
+	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty"`
+	IsCancelled        bool                 `json:"is_cancelled"`
+	IsPublished        bool                 `json:"is_published"`
+	Tags               []string             `json:"tags"`
+	URL                string               `json:"url"`
+	OrganizationID     *int                 `json:"organization_id"`
+	LocationID         *int                 `json:"location_id,omitempty"`
+	Location           EventLocationRequest `json:"location"`
+	Pricing            *Pricing             `json:"pricing"`
+	Musicians          []int                `json:"musicians"`
+	Dances             []int                `json:"dances,omitempty"`
+	BookingURL         string               `json:"booking_url,omitempty"`
+	Availability       string               `json:"availability,omitempty"`
+	TicketsTotal       int                  `json:"tickets_total,omitempty"`
+	BookingEnabled     bool                 `json:"booking_enabled,omitempty"`
+	Food               string               `json:"food,omitempty"`
+	Drink              string               `json:"drink,omitempty"`
+	FloorCondition     string               `json:"floor_condition,omitempty"`
+	Attributes         map[string]bool      `json:"attributes,omitempty"`
+	ContactName        string               `json:"contact_name,omitempty"`
+	ContactEmail       string               `json:"contact_email,omitempty"`
+}
+
 type EventUpdateRequest struct {
-	Title                string               `json:"title"`
-	Description          string               `json:"description"`
-	StartTime            string               `json:"start_time"`
-	EndTime              string               `json:"end_time"`
-	HasBall              bool                 `json:"has_ball"`
-	HasWorkshop          bool                 `json:"has_workshop"`
-	HasFestival          bool                 `json:"has_festival"`
-	WorkshopDifficulty   string               `json:"workshop_difficulty,omitempty"`
-	IsCancelled          bool                 `json:"is_cancelled"`
-	BookingURL           string               `json:"booking_url,omitempty"`
-	Availability         string               `json:"availability,omitempty"`
-	TicketsTotal         int                  `json:"tickets_total,omitempty"`
-	BookingEnabled       bool                 `json:"booking_enabled,omitempty"`
-	Food                 string               `json:"food,omitempty"`
-	Drink                string               `json:"drink,omitempty"`
-	FloorCondition       string               `json:"floor_condition,omitempty"`
-	Attributes           map[string]bool      `json:"attributes,omitempty"`
-	ContactName          string               `json:"contact_name,omitempty"`
-	ContactEmail         string               `json:"contact_email,omitempty"`
-	IsPublished    bool                 `json:"is_published"`
-	Tags           []string             `json:"tags"`
-	URL            string               `json:"url"`
-	OrganizationID *int                 `json:"organization_id"`
-	LocationID     *int                 `json:"location_id,omitempty"`
-	Location       EventLocationRequest `json:"location"`
-	Pricing        *Pricing             `json:"pricing"`
-	Musicians      []int                `json:"musicians"`
-	Dances         []int                `json:"dances,omitempty"`
+	EventWriteRequest
 }
 
 type EventCreateRequest struct {
-	UID                  string               `json:"uid,omitempty"`
-	Title                string               `json:"title"`
-	Description          string               `json:"description"`
-	StartTime            string               `json:"start_time"`
-	EndTime              string               `json:"end_time"`
-	HasBall              bool                 `json:"has_ball"`
-	HasWorkshop          bool                 `json:"has_workshop"`
-	HasFestival          bool                 `json:"has_festival"`
-	WorkshopDifficulty   string               `json:"workshop_difficulty,omitempty"`
-	IsCancelled          bool                 `json:"is_cancelled"`
-	BookingURL           string               `json:"booking_url,omitempty"`
-	Food                 string               `json:"food,omitempty"`
-	Drink                string               `json:"drink,omitempty"`
-	FloorCondition       string               `json:"floor_condition,omitempty"`
-	Attributes           map[string]bool      `json:"attributes,omitempty"`
-	ContactName          string               `json:"contact_name,omitempty"`
-	ContactEmail         string               `json:"contact_email,omitempty"`
-	Tags               []string             `json:"tags"`
-	URL                string               `json:"url,omitempty"`
-	LocationID         *int                 `json:"location_id,omitempty"`
-	Location           EventLocationRequest `json:"location"`
-	Date               []EventDate          `json:"date"`
-	Musicians          []int                `json:"musicians,omitempty"`
-	Dances             []int                `json:"dances,omitempty"`
-	Source             string               `json:"source,omitempty"`
-	OrganizationID     *int                 `json:"organization_id,omitempty"`
-	SourceLastModified int64                `json:"source_last_modified,omitempty"`
-	Pricing            *Pricing             `json:"pricing,omitempty"`
-	FetchSourceID      int                  `json:"fetch_source_id,omitempty"`
-	DuplicateStatus    string               `json:"duplicate_status,omitempty"`
+	EventWriteRequest
+	UID                string      `json:"uid,omitempty"`
+	Date               []EventDate `json:"date"`
+	Source             string      `json:"source,omitempty"`
+	SourceLastModified int64       `json:"source_last_modified,omitempty"`
+	FetchSourceID      int         `json:"fetch_source_id,omitempty"`
+	DuplicateStatus    string      `json:"duplicate_status,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -1102,39 +1084,41 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 					uid = fmt.Sprintf("%s_%d", baseUIDStr, occ[0].UTC().Unix())
 				}
 				requests = append(requests, EventCreateRequest{
-					UID:         uid,
-					Title:       event.GetProperty(ics.ComponentPropertySummary).Value,
-					Description: event.GetProperty(ics.ComponentPropertyDescription).Value,
-					StartTime:   occ[0].UTC().Format(time.RFC3339),
-					EndTime:     occ[1].UTC().Format(time.RFC3339),
-					IsCancelled: isCancelled,
-					Tags:        parseICalCategories(event),
-					URL:         attachURL(event),
-					OrganizationID: orgID,
-					Location: func() EventLocationRequest {
-						if apple := parseAppleStructuredLocation(event); apple != nil {
-							if apple.Location == "" {
-								if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-									apple.Location = p.Value
+					UID: uid,
+					EventWriteRequest: EventWriteRequest{
+						Title:       event.GetProperty(ics.ComponentPropertySummary).Value,
+						Description: event.GetProperty(ics.ComponentPropertyDescription).Value,
+						StartTime:   occ[0].UTC().Format(time.RFC3339),
+						EndTime:     occ[1].UTC().Format(time.RFC3339),
+						IsCancelled: isCancelled,
+						Tags:        parseICalCategories(event),
+						URL:         attachURL(event),
+						OrganizationID: orgID,
+						Location: func() EventLocationRequest {
+							if apple := parseAppleStructuredLocation(event); apple != nil {
+								if apple.Location == "" {
+									if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
+										apple.Location = p.Value
+									}
 								}
-							}
-							if apple.Latitude == nil {
-								if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-									apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
+								if apple.Latitude == nil {
+									if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
+										apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
+									}
 								}
+								return *apple
 							}
-							return *apple
-						}
-						var loc string
-						var lat, lon *float64
-						if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-							loc = p.Value
-						}
-						if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-							lat, lon = parseICalGeo(p.Value)
-						}
-						return EventLocationRequest{Location: loc, Latitude: lat, Longitude: lon}
-					}(),
+							var loc string
+							var lat, lon *float64
+							if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
+								loc = p.Value
+							}
+							if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
+								lat, lon = parseICalGeo(p.Value)
+							}
+							return EventLocationRequest{Location: loc, Latitude: lat, Longitude: lon}
+						}(),
+					},
 				})
 				vevents = append(vevents, event)
 			}
@@ -1635,20 +1619,22 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 
 	// Build create request from source, clearing time and publish state.
 	cloneReq := EventCreateRequest{
-		Title:              src.Title,
-		Description:        src.Description,
-		HasBall:            src.HasBall,
-		HasWorkshop:        src.HasWorkshop,
-		HasFestival:        src.HasFestival,
-		WorkshopDifficulty: src.WorkshopDifficulty,
-		BookingURL:         src.BookingURL,
-		Food:               src.Food,
-		Drink:              src.Drink,
-		FloorCondition:     src.FloorCondition,
-		Attributes:         src.Attributes,
-		ContactName:        src.ContactName,
-		ContactEmail:       src.ContactEmail,
-		OrganizationID:     targetOrgID,
+		EventWriteRequest: EventWriteRequest{
+			Title:              src.Title,
+			Description:        src.Description,
+			HasBall:            src.HasBall,
+			HasWorkshop:        src.HasWorkshop,
+			HasFestival:        src.HasFestival,
+			WorkshopDifficulty: src.WorkshopDifficulty,
+			BookingURL:         src.BookingURL,
+			Food:               src.Food,
+			Drink:              src.Drink,
+			FloorCondition:     src.FloorCondition,
+			Attributes:         src.Attributes,
+			ContactName:        src.ContactName,
+			ContactEmail:       src.ContactEmail,
+			OrganizationID:     targetOrgID,
+		},
 	}
 	if src.Pricing != nil {
 		cloneReq.Pricing = src.Pricing

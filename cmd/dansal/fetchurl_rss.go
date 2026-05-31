@@ -181,17 +181,19 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 		tags := buildRSSTags(src.Tags, item.Categories)
 
 		eventReq := EventCreateRequest{
-			UID:            uid,
-			Title:          title,
-			Description:    item.Description,
-			StartTime:      startT.Format(time.RFC3339),
-			EndTime:        endT.Format(time.RFC3339),
-			Tags:           tags,
-			URL:            firstSet(item.Link),
-			Source:         src.URL,
-			OrganizationID: src.OrganizationID,
-			Dances:         src.DanceIDs,
-			FetchSourceID:  src.ID,
+			UID:           uid,
+			Source:        src.URL,
+			FetchSourceID: src.ID,
+			EventWriteRequest: EventWriteRequest{
+				Title:          title,
+				Description:    item.Description,
+				StartTime:      startT.Format(time.RFC3339),
+				EndTime:        endT.Format(time.RFC3339),
+				Tags:           tags,
+				URL:            firstSet(item.Link),
+				OrganizationID: src.OrganizationID,
+				Dances:         src.DanceIDs,
+			},
 		}
 
 		if src.TemplateID != nil {
@@ -272,17 +274,19 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 		desc := firstSet(entry.Content.Value, entry.Summary.Value)
 
 		eventReq := EventCreateRequest{
-			UID:            uid,
-			Title:          title,
-			Description:    desc,
-			StartTime:      startT.Format(time.RFC3339),
-			EndTime:        endT.Format(time.RFC3339),
-			Tags:           tags,
-			URL:            link,
-			Source:         src.URL,
-			OrganizationID: src.OrganizationID,
-			Dances:         src.DanceIDs,
-			FetchSourceID:  src.ID,
+			UID:           uid,
+			Source:        src.URL,
+			FetchSourceID: src.ID,
+			EventWriteRequest: EventWriteRequest{
+				Title:          title,
+				Description:    desc,
+				StartTime:      startT.Format(time.RFC3339),
+				EndTime:        endT.Format(time.RFC3339),
+				Tags:           tags,
+				URL:            link,
+				OrganizationID: src.OrganizationID,
+				Dances:         src.DanceIDs,
+			},
 		}
 
 		if src.TemplateID != nil {

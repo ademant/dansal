@@ -164,18 +164,8 @@ type Event struct {
 	URL             string     `json:"url,omitempty"`
 	ImageURL        string     `json:"image_url,omitempty"`
 	OrganizationID  *int       `json:"organization_id,omitempty"`
-	LocationID      *int       `json:"location_id,omitempty"`
-	Location          string     `json:"location,omitempty"`
-	LocationShortName string     `json:"location_short_name,omitempty"`
-	LocationAddress   string     `json:"location_address,omitempty"`
-	LocationZipcode string     `json:"location_zipcode,omitempty"`
-	LocationTown    string     `json:"location_town,omitempty"`
-	LocationCountry string     `json:"location_country,omitempty"`
-	LocationLat          *float64   `json:"location_lat,omitempty"`
-	LocationLng          *float64   `json:"location_lng,omitempty"`
-	LocationAttributes     map[string]bool `json:"location_attributes,omitempty"`
-	LocationParking        string          `json:"location_parking,omitempty"`
-	LocationFloorCondition string          `json:"location_floor_condition,omitempty"`
+	LocationID *int      `json:"location_id,omitempty"`
+	Location   *Location `json:"location,omitempty"`
 	Attributes             map[string]bool `json:"attributes,omitempty"`
 	FloorCondition         string          `json:"floor_condition,omitempty"`
 	ContactName     string     `json:"contact_name,omitempty"`

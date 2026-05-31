@@ -829,24 +829,26 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		URL:          eventURL,
 		Organizer:    map[string]string{"type": "Group", "id": base},
 	}
-	locationName := e.Location
-	if locationName == "" {
-		locationName = e.LocationTown
-	}
-	if locationName != "" {
-		place := &APPlace{Type: "Place", Name: locationName}
-		place.Latitude = e.LocationLat
-		place.Longitude = e.LocationLng
-		if e.LocationAddress != "" || e.LocationZipcode != "" || e.LocationTown != "" || e.LocationCountry != "" {
-			place.Address = &APPostalAddress{
-				Type:            "PostalAddress",
-				StreetAddress:   e.LocationAddress,
-				PostalCode:      e.LocationZipcode,
-				AddressLocality: e.LocationTown,
-				AddressCountry:  e.LocationCountry,
-			}
+	if l := e.Location; l != nil {
+		locationName := l.Location
+		if locationName == "" {
+			locationName = l.Town
 		}
-		apEvent.Location = place
+		if locationName != "" {
+			place := &APPlace{Type: "Place", Name: locationName}
+			place.Latitude = l.Latitude
+			place.Longitude = l.Longitude
+			if l.Address != "" || l.Zipcode != "" || l.Town != "" || l.Country != "" {
+				place.Address = &APPostalAddress{
+					Type:            "PostalAddress",
+					StreetAddress:   l.Address,
+					PostalCode:      l.Zipcode,
+					AddressLocality: l.Town,
+					AddressCountry:  l.Country,
+				}
+			}
+			apEvent.Location = place
+		}
 	}
 	for _, tag := range e.Tags {
 		apEvent.Tag = append(apEvent.Tag, APHashtag{

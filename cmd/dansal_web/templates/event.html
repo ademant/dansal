@@ -117,40 +117,43 @@
     {{end}}
 
     {{/* Location block */}}
-    {{if or .Location .LocationTown}}
+    {{with .Location}}
+    {{if or .Location .Town}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
-      {{if or .LocationShortName .Location}}<div class="evt-loc-name">{{if .LocationShortName}}{{.LocationShortName}}{{else}}{{.Location}}{{end}}</div>{{end}}
-      {{if or .LocationAddress .LocationZipcode .LocationTown}}
+      {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</div>{{end}}
+      {{if or .Address .Zipcode .Town}}
       <div class="evt-loc-addr">
-        {{if .LocationAddress}}<span>{{.LocationAddress}}</span><br>{{end}}
-        {{if or .LocationZipcode .LocationTown}}<span>{{.LocationZipcode}} {{.LocationTown}}</span>{{end}}
-        {{if .LocationCountry}}<br><span>{{.LocationCountry}}</span>{{end}}
+        {{if .Address}}<span>{{.Address}}</span><br>{{end}}
+        {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
+        {{if .Country}}<br><span>{{.Country}}</span>{{end}}
       </div>
       {{end}}
-      {{if and .LocationLat .LocationLng}}
-      <div id="evt-map" data-lat="{{.LocationLat}}" data-lng="{{.LocationLng}}" class="evt-map"></div>
-      <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.LocationLat}},{{.LocationLng}}" target="_blank" rel="noopener" class="osm-directions">🗺 OpenStreetMap</a>
+      {{if and .Latitude .Longitude}}
+      <div id="evt-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="evt-map"></div>
+      <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="osm-directions">🗺 OpenStreetMap</a>
       {{end}}
-      {{$attrs := mergeAttrs .LocationAttributes .Attributes}}
-      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .LocationParking}}
+      {{$locAttrs := .Attributes}}
+      {{$attrs := mergeAttrs $locAttrs $.Data.Event.Attributes}}
+      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .Parking}}
       <div class="evt-access">
         {{if index $attrs "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
         {{if index $attrs "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
         {{if index $attrs "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
         {{if index $attrs "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
         {{if index $attrs "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
-        {{if eq .LocationParking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
-        {{if eq .LocationParking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
-        {{if eq .LocationParking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
+        {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
+        {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
+        {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
       </div>
       {{end}}
-      {{range .Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}
+      {{range $.Data.Event.Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}
     </div>
+    {{end}}
     {{end}}
 
     {{/* Floor condition: event override takes precedence over location */}}
-    {{$floor := .FloorCondition}}{{if not $floor}}{{$floor = .LocationFloorCondition}}{{end}}
+    {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
     {{if $floor}}
     <div class="sidebar-block">
       <div class="sidebar-food-row">
@@ -619,7 +622,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 });
 </script>
 
-{{with .Data}}{{if .Event.LocationLat}}
+{{with .Data}}{{if and .Event.Location .Event.Location.Latitude}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script>

@@ -324,7 +324,7 @@
 
     <label for="floor_condition" style="margin-top:.75rem">{{$.Strings.T "floor_label"}}</label>
     <select id="floor_condition" name="floor_condition">
-      <option value="">{{$.Strings.T "floor_from_venue"}}{{with .Event.LocationFloorCondition}} ({{if eq . "parquet"}}{{$.Strings.T "floor_parquet"}}{{else if eq . "stone"}}{{$.Strings.T "floor_stone"}}{{else if eq . "tiles"}}{{$.Strings.T "floor_tiles"}}{{else if eq . "grass"}}{{$.Strings.T "floor_grass"}}{{else if eq . "sand"}}{{$.Strings.T "floor_sand"}}{{else if eq . "pavement"}}{{$.Strings.T "floor_pavement"}}{{end}}){{end}}</option>
+      <option value="">{{$.Strings.T "floor_from_venue"}}{{if .Event.Location}}{{with .Event.Location.FloorCondition}} ({{if eq . "parquet"}}{{$.Strings.T "floor_parquet"}}{{else if eq . "stone"}}{{$.Strings.T "floor_stone"}}{{else if eq . "tiles"}}{{$.Strings.T "floor_tiles"}}{{else if eq . "grass"}}{{$.Strings.T "floor_grass"}}{{else if eq . "sand"}}{{$.Strings.T "floor_sand"}}{{else if eq . "pavement"}}{{$.Strings.T "floor_pavement"}}{{end}}){{end}}{{end}}</option>
       <option value="parquet"{{if eq .Event.FloorCondition "parquet"}} selected{{end}}>{{$.Strings.T "floor_parquet"}}</option>
       <option value="stone"{{if eq .Event.FloorCondition "stone"}} selected{{end}}>{{$.Strings.T "floor_stone"}}</option>
       <option value="tiles"{{if eq .Event.FloorCondition "tiles"}} selected{{end}}>{{$.Strings.T "floor_tiles"}}</option>

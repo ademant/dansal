@@ -2577,9 +2577,9 @@ func prefillFromEvent(ev Event) *EventPrefill {
 		HasWorkshop:        ev.HasWorkshop,
 		HasFestival:        ev.HasFestival,
 		WorkshopDifficulty: ev.WorkshopDifficulty,
-		Location:           ev.Location,
-		Town:               ev.LocationTown,
-		Country:            ev.LocationCountry,
+		Location:           func() string { if ev.Location != nil { return ev.Location.Location }; return "" }(),
+		Town:               func() string { if ev.Location != nil { return ev.Location.Town }; return "" }(),
+		Country:            func() string { if ev.Location != nil { return ev.Location.Country }; return "" }(),
 		Tags:               ev.Tags,
 		OriginalDate:       isoDateStr(ev.StartTime),
 	}

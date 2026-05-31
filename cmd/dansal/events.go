@@ -51,18 +51,8 @@ type Event struct {
 	Pricing        *Pricing         `json:"pricing,omitempty"`
 	Locations       []Location       `json:"locations,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
-	LocationID      *int             `json:"location_id,omitempty"`
-	Location          string           `json:"location,omitempty"`
-	LocationShortName string           `json:"location_short_name,omitempty"`
-	LocationAddress   string           `json:"location_address,omitempty"`
-	LocationZipcode string           `json:"location_zipcode,omitempty"`
-	LocationTown    string           `json:"location_town,omitempty"`
-	LocationCountry string           `json:"location_country,omitempty"`
-	LocationLat              *float64         `json:"location_lat,omitempty"`
-	LocationLng              *float64         `json:"location_lng,omitempty"`
-	LocationAttributes    map[string]bool  `json:"location_attributes,omitempty"`
-	LocationParking       string           `json:"location_parking,omitempty"`
-	LocationFloorCondition string          `json:"location_floor_condition,omitempty"`
+	LocationID *int      `json:"location_id,omitempty"`
+	Location   *Location `json:"location,omitempty"`
 	Attributes            map[string]bool  `json:"attributes,omitempty"`
 	FloorCondition        string           `json:"floor_condition,omitempty"`
 	ContactName     string           `json:"contact_name,omitempty"`
@@ -253,6 +243,7 @@ type scanner interface {
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
+	var loc Location
 	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
 	var locAttrsJSON, evtAttrsJSON string
 	var startEpoch, endEpoch, changedAtEpoch int64
@@ -263,29 +254,21 @@ func scanEventRow(s scanner) (Event, error) {
 	var createdByID sql.NullInt64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
-		&event.LocationShortName, &event.LocationAddress, &event.LocationZipcode, &orgID,
-		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
+		&loc.ShortName, &loc.Address, &loc.Zipcode, &orgID,
+		&event.PricingJSON, &locID, &loc.Town, &loc.Country,
 		&locLat, &locLng, &event.WorkshopDifficulty, &event.BookingURL,
 		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV,
 		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID, &event.Food, &event.Drink,
 		&locAttrsJSON, &evtAttrsJSON,
 		&event.ContactName, &event.ContactEmail,
-		&event.LocationParking, &event.LocationFloorCondition, &event.FloorCondition,
+		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
 		&createdByID); err != nil {
 		return Event{}, err
 	}
 	if createdByID.Valid {
 		v := int(createdByID.Int64)
 		event.CreatedByID = &v
-	}
-	if locLat.Valid {
-		v := locLat.Float64
-		event.LocationLat = &v
-	}
-	if locLng.Valid {
-		v := locLng.Float64
-		event.LocationLng = &v
 	}
 	if changedAtEpoch > 0 {
 		event.ChangedAt = epochToLocal(changedAtEpoch)
@@ -301,9 +284,6 @@ func scanEventRow(s scanner) (Event, error) {
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.BookingEnabled = bookingEnabledInt == 1
-	if locAttrsJSON != "" && locAttrsJSON != "{}" {
-		json.Unmarshal([]byte(locAttrsJSON), &event.LocationAttributes)
-	}
 	if evtAttrsJSON != "" && evtAttrsJSON != "{}" {
 		json.Unmarshal([]byte(evtAttrsJSON), &event.Attributes)
 	}
@@ -313,8 +293,21 @@ func scanEventRow(s scanner) (Event, error) {
 		event.OrganizationID = &v
 	}
 	if locID.Valid {
-		v := int(locID.Int64)
-		event.LocationID = &v
+		id := int(locID.Int64)
+		event.LocationID = &id
+		loc.ID = id
+		if locLat.Valid {
+			v := locLat.Float64
+			loc.Latitude = &v
+		}
+		if locLng.Valid {
+			v := locLng.Float64
+			loc.Longitude = &v
+		}
+		if locAttrsJSON != "" && locAttrsJSON != "{}" {
+			json.Unmarshal([]byte(locAttrsJSON), &loc.Attributes)
+		}
+		event.Location = &loc
 	}
 	if event.TagsJSON != "" {
 		event.Tags = strings.Split(event.TagsJSON, ",")
@@ -368,8 +361,8 @@ func addEventToCalendar(cal *ics.Calendar, event Event) {
 	if end, err := time.Parse(time.RFC3339, event.EndTime); err == nil {
 		vevent.SetProperty(ics.ComponentPropertyDtEnd, end.UTC().Format("20060102T150405Z"))
 	}
-	if event.Location != "" {
-		vevent.SetLocation(event.Location)
+	if event.Location != nil && event.Location.Location != "" {
+		vevent.SetLocation(event.Location.Location)
 	}
 }
 
@@ -990,8 +983,8 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		if latErr == nil && lonErr == nil && radErr == nil && radius > 0 {
 			filtered := events[:0]
 			for _, ev := range events {
-				if ev.LocationLat != nil && ev.LocationLng != nil {
-					if haversineKm(lat, lon, *ev.LocationLat, *ev.LocationLng) <= radius {
+				if ev.Location != nil && ev.Location.Latitude != nil && ev.Location.Longitude != nil {
+					if haversineKm(lat, lon, *ev.Location.Latitude, *ev.Location.Longitude) <= radius {
 						filtered = append(filtered, ev)
 					}
 				}

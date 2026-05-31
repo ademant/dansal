@@ -426,11 +426,11 @@ var tmplFuncMap = template.FuncMap{
 		}
 		var geo []geoEvent
 		for _, e := range events {
-			if e.LocationLat == nil || e.LocationLng == nil || (*e.LocationLat == 0 && *e.LocationLng == 0) {
+			if e.Location == nil || e.Location.Latitude == nil || e.Location.Longitude == nil || (*e.Location.Latitude == 0 && *e.Location.Longitude == 0) {
 				continue
 			}
-			lat := *e.LocationLat
-			lng := *e.LocationLng
+			lat := *e.Location.Latitude
+			lng := *e.Location.Longitude
 			fee := ""
 			if e.Pricing != nil {
 				switch e.Pricing.Type {
@@ -448,15 +448,21 @@ var tmplFuncMap = template.FuncMap{
 			}
 			// Merge location + event attributes for accessibility flags (event overrides location).
 			merged := map[string]bool{}
-			for k, v := range e.LocationAttributes {
-				merged[k] = v
+			if e.Location != nil {
+				for k, v := range e.Location.Attributes {
+					merged[k] = v
+				}
 			}
 			for k, v := range e.Attributes {
 				merged[k] = v
 			}
+			var locName, locShortName, locTown, locCountry string
+			if l := e.Location; l != nil {
+				locName, locShortName, locTown, locCountry = l.Location, l.ShortName, l.Town, l.Country
+			}
 			geo = append(geo, geoEvent{
 				ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
-				Location: e.Location, ShortName: e.LocationShortName, Town: e.LocationTown, Country: e.LocationCountry,
+				Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
 				Lat: lat, Lng: lng, URL: e.URL,
 				Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
 				Festival: e.HasFestival,
@@ -579,6 +585,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return pct
 	},
+	"locAttrs": func(loc *Location) map[string]bool {
+		if loc == nil {
+			return nil
+		}
+		return loc.Attributes
+	},
 	"mergeAttrs": func(loc, evt map[string]bool) map[string]bool {
 		merged := make(map[string]bool, len(loc)+len(evt))
 		for k, v := range loc {
@@ -620,9 +632,12 @@ var tmplFuncMap = template.FuncMap{
 		seen := make(map[string]bool)
 		var out []string
 		for _, e := range events {
-			if e.LocationCountry != "" && !seen[e.LocationCountry] {
-				seen[e.LocationCountry] = true
-				out = append(out, e.LocationCountry)
+			if e.Location == nil || e.Location.Country == "" {
+				continue
+			}
+			if !seen[e.Location.Country] {
+				seen[e.Location.Country] = true
+				out = append(out, e.Location.Country)
 			}
 		}
 		sort.Strings(out)

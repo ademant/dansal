@@ -55,16 +55,19 @@ func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handler
 }
 
 func federatedEventAsEvent(fe FederatedEvent) Event {
-	return Event{
+	ev := Event{
 		ID:          int(fe.ID),
 		Title:       fe.Name,
 		StartTime:   fe.StartTime,
 		EndTime:     fe.EndTime,
 		URL:         fe.URL,
-		Location:    fe.LocationName,
 		IsPublished: true,
 		SourceURL:   fe.URL,
 	}
+	if fe.LocationName != "" {
+		ev.Location = &Location{Location: fe.LocationName}
+	}
+	return ev
 }
 
 // feedOrgHandler serves events for one organisation, identified by its AP slug.
@@ -137,7 +140,7 @@ func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		all, _ := client.GetEvents(r.Context(), "")
 		var events []Event
 		for _, e := range all {
-			if e.Location == found.Location {
+			if e.Location != nil && e.Location.Location == found.Location {
 				events = append(events, e)
 			}
 		}
@@ -229,12 +232,14 @@ func feedAddEventToCalendar(cal *ics.Calendar, domain string, e Event) {
 			vevent.SetProperty(ics.ComponentPropertyDtEnd, tEnd.UTC().Format("20060102T150405Z"))
 		}
 	}
-	loc := e.Location
-	if loc == "" {
-		loc = e.LocationTown
-	}
-	if loc != "" {
-		vevent.SetLocation(loc)
+	if l := e.Location; l != nil {
+		loc := l.Location
+		if loc == "" {
+			loc = l.Town
+		}
+		if loc != "" {
+			vevent.SetLocation(loc)
+		}
 	}
 	if e.URL != "" {
 		vevent.SetProperty(ics.ComponentPropertyUrl, e.URL)
@@ -288,9 +293,12 @@ func serveRSSFeed(w http.ResponseWriter, cfg *Config, title, selfURL string, eve
 		if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
 			pubDate = t.UTC().Format(time.RFC1123Z)
 		}
-		loc := e.Location
-		if loc == "" {
-			loc = e.LocationTown
+		var loc string
+		if l := e.Location; l != nil {
+			loc = l.Location
+			if loc == "" {
+				loc = l.Town
+			}
 		}
 		items = append(items, feedRSSItem{
 			Title:      e.Title,

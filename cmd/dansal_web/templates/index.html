@@ -69,8 +69,8 @@
       data-date="{{isoDate .StartTime}}"
       data-end-date="{{isoDate .EndTime}}"
       data-title="{{.Title}}"
-      data-location="{{if .LocationShortName}}{{.LocationShortName}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}"
-      data-country="{{.LocationCountry}}"
+      data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
+      data-country="{{if .Location}}{{.Location.Country}}{{end}}"
       data-ball="{{if .HasBall}}1{{else}}0{{end}}"
       data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
       data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
@@ -79,18 +79,18 @@
       data-dances="{{range .DanceNames}}{{.}} {{end}}"
       data-id="{{.ID}}"
       data-start="{{.StartTime}}"
-      data-town="{{.LocationTown}}"
+      data-town="{{if .Location}}{{.Location.Town}}{{end}}"
       data-availability="{{.Availability}}"
       data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
       data-food="{{.Food}}"
       data-drink="{{.Drink}}"
-      {{- $ea := mergeAttrs .LocationAttributes .Attributes}}
+      {{- $ea := mergeAttrs (locAttrs .Location) .Attributes}}
       data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
       data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
       data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
       data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
       data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}"
-      data-parking="{{.LocationParking}}">
+      data-parking="{{if .Location}}{{.Location.Parking}}{{end}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{with isoTime .StartTime}}<span class="date-time">{{.}}</span>{{end}}
@@ -102,8 +102,8 @@
       {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
     </td>
     <td class="col-venue">
-      {{if or .LocationShortName .Location}}<span class="venue">{{if .LocationShortName}}{{.LocationShortName}}{{else}}{{.Location}}{{end}}</span>{{end}}
-      {{if .LocationTown}}<span class="town">{{.LocationTown}}</span>{{end}}
+      {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
+      {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
     </td>
     <td class="col-type">
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
@@ -119,7 +119,7 @@
       {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
       {{if index $ea "wheelchair"}}<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
       {{if index $ea "hearing_loop"}}<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>{{end}}
-      {{$floor := .FloorCondition}}{{if not $floor}}{{$floor = .LocationFloorCondition}}{{end}}
+      {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
       {{if eq $floor "parquet"}}<span class="food-icon" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{end}}
       {{if eq $floor "stone"}}<span class="food-icon" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{end}}
       {{if eq $floor "tiles"}}<span class="food-icon" title="{{$.Strings.T "floor_tiles"}}">🔲</span>{{end}}

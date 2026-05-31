@@ -13,6 +13,18 @@
   <h1>{{.Title}}</h1>
   {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
   {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-cancel-event">{{$.Strings.T "admin_event_cancel"}}</button></form>{{end}}
+  {{if $.User}}<details class="evt-tpl-details" id="evt-tpl-details-{{.ID}}">
+    <summary class="btn-tpl-event">{{$.Strings.T "admin_save_as_template"}}</summary>
+    <div class="evt-tpl-form">
+      <input id="evt-tpl-name-{{.ID}}" type="text" placeholder="{{$.Strings.T "admin_template_name_label"}}" style="padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;width:180px">
+      {{if $.Data.UserOrgs}}<select id="evt-tpl-org-{{.ID}}" style="padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem">
+        <option value="">{{$.Strings.T "admin_template_personal"}}</option>
+        {{range $.Data.UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>{{end}}
+      <button type="button" class="btn-tpl-save" onclick="saveTpl({{.ID}},this)">{{$.Strings.T "admin_template_save_btn"}}</button>
+      <span class="tpl-msg" id="evt-tpl-msg-{{.ID}}"></span>
+    </div>
+  </details>{{end}}
   {{if not .IsPublished}}
   <div class="evt-draft-banner">
     <span>{{$.Strings.T "evt_draft_notice"}}</span>
@@ -561,9 +573,39 @@
 .btn-tg-verify{display:inline-block;margin-top:.4rem;padding:.45rem 1.1rem;background:#2481cc;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-tg-verify:hover{background:#1a69a4;color:#fff}
 .board-verify-hint{font-size:.8rem;color:var(--fg-hint);margin:.1rem 0}
+.evt-tpl-details{display:inline-block;vertical-align:middle;margin-left:.4rem}
+.btn-tpl-event{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);cursor:pointer;list-style:none}
+.btn-tpl-event::-webkit-details-marker{display:none}
+.btn-tpl-event:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
+.evt-tpl-form{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:.5rem .6rem;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;margin-top:.3rem}
+.btn-tpl-save{padding:.3rem .65rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.85rem;cursor:pointer}
+.btn-tpl-save:hover{background:#0d4a80}
+.tpl-msg{font-size:.82rem}
+.tpl-msg.ok{color:#155724}
+.tpl-msg.err{color:#991b1b}
 </style>
 
 <script>
+function saveTpl(id, btn) {
+  var nameEl = document.getElementById('evt-tpl-name-'+id);
+  var orgEl  = document.getElementById('evt-tpl-org-'+id);
+  var msgEl  = document.getElementById('evt-tpl-msg-'+id);
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { nameEl && nameEl.focus(); return; }
+  var body = new URLSearchParams({name: name});
+  if (orgEl && orgEl.value) body.set('org_id', orgEl.value);
+  btn.disabled = true;
+  fetch('/admin/events/'+id+'/save-template', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'},
+    body: body.toString()
+  }).then(function(r){return r.json();}).then(function(d){
+    msgEl.textContent = d.ok ? '✓' : (d.error || 'Error');
+    msgEl.className = 'tpl-msg ' + (d.ok ? 'ok' : 'err');
+    if (d.ok) { document.getElementById('evt-tpl-details-'+id).removeAttribute('open'); if(nameEl) nameEl.value=''; }
+  }).catch(function(){ msgEl.textContent='Error'; msgEl.className='tpl-msg err'; })
+  .finally(function(){ btn.disabled=false; });
+}
 document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
   btn.addEventListener('click',function(){
     var form=document.getElementById(btn.dataset.target);

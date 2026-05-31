@@ -1759,6 +1759,7 @@ type AdminEventsData struct {
 	Organizations      []Organization
 	Musicians          []Musician
 	Dances             []Dance
+	UserOrgs           []Organization
 	FilterIncludePast  bool
 	FilterOrgID        int    // -1 = no org assigned
 	FilterDateFrom     string
@@ -2684,13 +2685,35 @@ func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 				orgID = &n
 			}
 		}
+		wantsJSON := r.Header.Get("Accept") == "application/json"
+		jsonResp := func(status int, ok bool, errMsg string) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			if ok {
+				json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			} else {
+				json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": errMsg})
+			}
+		}
 		data, _ := json.Marshal(templateDataFromEvent(ev))
 		if _, err := saveTemplate(db, su.ID, orgID, name, string(data)); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-				http.Error(w, "a template with that name already exists", http.StatusConflict)
+				if wantsJSON {
+					jsonResp(http.StatusConflict, false, "a template with that name already exists")
+				} else {
+					http.Error(w, "a template with that name already exists", http.StatusConflict)
+				}
 			} else {
-				http.Error(w, "save failed", http.StatusInternalServerError)
+				if wantsJSON {
+					jsonResp(http.StatusInternalServerError, false, "save failed")
+				} else {
+					http.Error(w, "save failed", http.StatusInternalServerError)
+				}
 			}
+			return
+		}
+		if wantsJSON {
+			jsonResp(http.StatusOK, true, "")
 			return
 		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -3132,12 +3155,30 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		musicians, _ := client.GetMusicians(r.Context())
 		dances, _ := client.GetDances(r.Context())
 
+		var userOrgs []Organization
+		if su := getSessionUser(r); su != nil {
+			if su.Role == "admin" {
+				userOrgs = orgs
+			} else {
+				orgIDSet := make(map[int]bool)
+				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r)) {
+					orgIDSet[oid] = true
+				}
+				for _, o := range orgs {
+					if orgIDSet[o.ID] {
+						userOrgs = append(userOrgs, o)
+					}
+				}
+			}
+		}
+
 		title := i18n.T(r, "admin_events_title")
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:             events,
 			Organizations:      orgs,
 			Musicians:          musicians,
 			Dances:             dances,
+			UserOrgs:           userOrgs,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,
 			FilterDateFrom:     dateFrom,

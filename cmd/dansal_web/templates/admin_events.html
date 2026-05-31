@@ -89,6 +89,7 @@
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
       {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-sm">{{$.Strings.T "admin_event_cancel"}}</button></form>{{end}}
       {{if eq $.User.Role "admin"}}<button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">{{$.Strings.T "admin_delete"}}</button>{{end}}
+      <button type="button" class="btn-sm btn-tpl" onclick="openTplDialog({{.ID}})">{{$.Strings.T "admin_save_as_template"}}</button>
     </td>
   </tr>
   {{end}}
@@ -99,6 +100,26 @@
 {{else}}
 <p>{{$.Strings.T "no_events_found"}}</p>
 {{end}}
+
+<dialog id="tpl-dialog" style="padding:1.25rem 1.5rem;border:1px solid #ccc;border-radius:8px;min-width:300px">
+  <form method="dialog" style="display:contents">
+    <h3 style="margin:0 0 .9rem;font-size:1rem">{{$.Strings.T "admin_save_as_template"}}</h3>
+    <label style="display:block;font-size:.88rem;font-weight:600;color:#444;margin-bottom:.25rem">{{$.Strings.T "admin_template_name_label"}}</label>
+    <input id="tpl-dialog-name" type="text" required style="width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem;margin-bottom:.75rem;box-sizing:border-box">
+    {{with .Data}}{{if .UserOrgs}}
+    <label style="display:block;font-size:.88rem;font-weight:600;color:#444;margin-bottom:.25rem">{{$.Strings.T "admin_template_org_label"}}</label>
+    <select id="tpl-dialog-org" style="width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem;margin-bottom:.75rem;box-sizing:border-box">
+      <option value="">{{$.Strings.T "admin_template_personal"}}</option>
+      {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    {{end}}{{end}}
+    <div id="tpl-dialog-msg" style="font-size:.85rem;margin-bottom:.5rem;min-height:1.2em"></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+      <button type="button" onclick="document.getElementById('tpl-dialog').close()" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>
+      <button type="button" id="tpl-dialog-save" style="padding:.35rem .8rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_template_save_btn"}}</button>
+    </div>
+  </form>
+</dialog>
 {{end}}
 
 <style>
@@ -123,12 +144,48 @@
 .btn-pub{background:#217a3c;color:#fff;border:none}
 .btn-pub:hover{background:#155727}
 .btn-merge{background:#856404;color:#fff;border:none}
+.btn-tpl{background:#f0f0f8;border-color:#a0a0c0;color:#444}
 .btn-merge:hover{background:#664e03}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
 .col-cb{width:2rem;text-align:center}
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+var _tplEventID = 0;
+function openTplDialog(id) {
+  _tplEventID = id;
+  var d = document.getElementById('tpl-dialog');
+  var nameEl = document.getElementById('tpl-dialog-name');
+  var msgEl = document.getElementById('tpl-dialog-msg');
+  if (nameEl) nameEl.value = '';
+  if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; }
+  d.showModal();
+  if (nameEl) nameEl.focus();
+}
+document.getElementById('tpl-dialog-save') && document.getElementById('tpl-dialog-save').addEventListener('click', function() {
+  var nameEl = document.getElementById('tpl-dialog-name');
+  var orgEl  = document.getElementById('tpl-dialog-org');
+  var msgEl  = document.getElementById('tpl-dialog-msg');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { if (nameEl) nameEl.focus(); return; }
+  var body = new URLSearchParams({name: name});
+  if (orgEl && orgEl.value) body.set('org_id', orgEl.value);
+  var saveBtn = this;
+  saveBtn.disabled = true;
+  fetch('/admin/events/'+_tplEventID+'/save-template', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'},
+    body: body.toString()
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) {
+      document.getElementById('tpl-dialog').close();
+    } else {
+      msgEl.textContent = d.error || 'Error';
+      msgEl.style.color = '#991b1b';
+    }
+  }).catch(function(){ if(msgEl){msgEl.textContent='Error';msgEl.style.color='#991b1b';} })
+  .finally(function(){ saveBtn.disabled = false; });
+});
 function delEvent(id){
   var f=document.createElement('form');
   f.method='post';f.action='/admin/events/'+id+'/delete';

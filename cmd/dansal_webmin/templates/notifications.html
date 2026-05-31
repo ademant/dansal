@@ -718,11 +718,34 @@ document.getElementById('mx-wizard-overlay').addEventListener('click',function(e
 <div class="card notif-card">
   <div class="notif-header">
     <span class="notif-dot notif-{{.HeartbeatStatus}}"></span>
-    <span class="notif-title">Heartbeat interval</span>
+    <span class="notif-title">Heartbeat</span>
     <span class="notif-summary">
       {{if .Heartbeat}}{{if .Heartbeat.IntervalMins}}Every {{.Heartbeat.IntervalMins}} min{{else}}Disabled{{end}}{{else}}Disabled{{end}}
     </span>
   </div>
+  {{if .Heartbeat}}{{if .Heartbeat.IntervalMins}}
+  {{$hb := .Heartbeat}}
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:.75rem">
+    <tr><td style="padding:.2rem .5rem .2rem 0;font-weight:600;width:5.5rem">Email</td>
+      <td>{{if not $hb.Email.Configured}}<span style="color:var(--fg-muted)">not configured</span>
+          {{else if $hb.Email.LastChecked.IsZero}}<span style="color:var(--fg-muted)">pending</span>
+          {{else if $hb.Email.OK}}<span style="color:#166534;font-weight:600">OK</span>
+          {{else}}<span style="color:#991b1b;font-weight:600">error: {{$hb.Email.Error}}</span>{{end}}</td>
+      <td style="font-size:.8rem;color:var(--fg-muted);text-align:right">{{if not $hb.Email.LastChecked.IsZero}}{{$hb.Email.LastChecked.UTC.Format "2006-01-02 15:04"}}{{end}}</td></tr>
+    <tr><td style="padding:.2rem .5rem .2rem 0;font-weight:600">Telegram</td>
+      <td>{{if not $hb.Telegram.Configured}}<span style="color:var(--fg-muted)">not configured</span>
+          {{else if $hb.Telegram.LastChecked.IsZero}}<span style="color:var(--fg-muted)">pending</span>
+          {{else if $hb.Telegram.OK}}<span style="color:#166534;font-weight:600">OK</span>
+          {{else}}<span style="color:#991b1b;font-weight:600">error: {{$hb.Telegram.Error}}</span>{{end}}</td>
+      <td style="font-size:.8rem;color:var(--fg-muted);text-align:right">{{if not $hb.Telegram.LastChecked.IsZero}}{{$hb.Telegram.LastChecked.UTC.Format "2006-01-02 15:04"}}{{end}}</td></tr>
+    <tr><td style="padding:.2rem .5rem .2rem 0;font-weight:600">Matrix</td>
+      <td>{{if not $hb.Matrix.Configured}}<span style="color:var(--fg-muted)">not configured</span>
+          {{else if $hb.Matrix.LastChecked.IsZero}}<span style="color:var(--fg-muted)">pending</span>
+          {{else if $hb.Matrix.OK}}<span style="color:#166534;font-weight:600">OK</span>
+          {{else}}<span style="color:#991b1b;font-weight:600">error: {{$hb.Matrix.Error}}</span>{{end}}</td>
+      <td style="font-size:.8rem;color:var(--fg-muted);text-align:right">{{if not $hb.Matrix.LastChecked.IsZero}}{{$hb.Matrix.LastChecked.UTC.Format "2006-01-02 15:04"}}{{end}}</td></tr>
+  </table>
+  {{end}}{{end}}
   <details{{if index .Errors "heartbeat"}} open{{end}}>
     <summary class="btn btn-secondary" style="font-size:.85rem;cursor:pointer;list-style:none">Configure</summary>
     {{if index .Errors "heartbeat"}}<div class="alert alert-danger" style="margin:.75rem 0 .5rem">{{index .Errors "heartbeat"}}</div>{{end}}

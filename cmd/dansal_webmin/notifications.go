@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 type smtpConfig struct {
@@ -33,8 +34,18 @@ type matrixConfig struct {
 	HasToken   bool   `json:"has_token"`
 }
 
+type channelStatus struct {
+	Configured  bool      `json:"configured"`
+	OK          bool      `json:"ok"`
+	LastChecked time.Time `json:"last_checked"`
+	Error       string    `json:"error,omitempty"`
+}
+
 type heartbeatConfig struct {
-	IntervalMins int `json:"interval_mins"`
+	IntervalMins int          `json:"interval_mins"`
+	Email        channelStatus `json:"email"`
+	Telegram     channelStatus `json:"telegram"`
+	Matrix       channelStatus `json:"matrix"`
 }
 
 func getSocketData(socketPath, cmd string, out any) error {
@@ -119,6 +130,12 @@ func matrixNotifStatus(m *matrixConfig) notifStatus {
 func heartbeatNotifStatus(h *heartbeatConfig) notifStatus {
 	if h == nil || h.IntervalMins == 0 {
 		return statusMissing
+	}
+	// If any configured channel has a probe failure, show partial.
+	for _, ch := range []channelStatus{h.Email, h.Telegram, h.Matrix} {
+		if ch.Configured && !ch.OK && !ch.LastChecked.IsZero() {
+			return statusPartial
+		}
 	}
 	return statusOK
 }

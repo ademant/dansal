@@ -101,6 +101,7 @@ func adminHeartbeatGet() adminResponse {
 	heartbeatMu.RLock()
 	status := heartbeatResult
 	heartbeatMu.RUnlock()
+	status.IntervalMins = config.Server.HeartbeatIntervalMins
 	return adminResponse{OK: true, Data: status}
 }
 

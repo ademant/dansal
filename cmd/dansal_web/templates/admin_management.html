@@ -10,12 +10,10 @@
   <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
   <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
   {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}</a>{{end}}
-  <a href="/admin/site-config" class="mgmt-tab">{{.Strings.T "admin_site_config_title"}}</a>
   {{else}}
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_dances"}}</span>
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_templates"}}</span>
   {{if .RegistrationEnabled}}<span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_registrations"}}</span>{{end}}
-  <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "admin_site_config_title"}}</span>
   {{end}}
 </nav>
 

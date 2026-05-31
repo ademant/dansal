@@ -20,6 +20,8 @@ type Config struct {
 	SessionSecret string `yaml:"session_secret"`
 	SiteName      string `yaml:"site_name"`
 	Instance      string `yaml:"instance"`
+	WebDBPath     string `yaml:"web_db_path"` // path to web.db for site-config editing
+	ImagesDir     string `yaml:"images_dir"`  // path to images dir for logo/banner/favicon
 	configPath    string
 }
 

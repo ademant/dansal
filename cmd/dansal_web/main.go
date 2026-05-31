@@ -227,8 +227,6 @@ func main() {
 		r.HandleFunc("POST /admin/dances", adminRateLimit(adminDanceCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/dances/{id}/delete", adminRateLimit(adminDanceDeleteHandler(cfg, client)))
 
-		r.HandleFunc("GET /admin/site-config", adminSiteConfigHandler(cfg, tmpls, db, client, i18n))
-		r.HandleFunc("POST /admin/site-config", adminRateLimit(adminSiteConfigSaveHandler(cfg, db, client)))
 
 		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))

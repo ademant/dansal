@@ -2043,19 +2043,6 @@ type AdminConfig struct {
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins"`
 }
 
-type ChannelStatus struct {
-	Configured  bool      `json:"configured"`
-	OK          bool      `json:"ok"`
-	LastChecked time.Time `json:"last_checked"`
-	Error       string    `json:"error,omitempty"`
-}
-
-type HeartbeatStatus struct {
-	Email    ChannelStatus `json:"email"`
-	Telegram ChannelStatus `json:"telegram"`
-	Matrix   ChannelStatus `json:"matrix"`
-}
-
 func (c *DansalClient) GetAdminConfig(ctx context.Context, token string) (AdminConfig, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/admin/config", token, nil)
 	if err != nil {
@@ -2080,19 +2067,6 @@ func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac Ad
 		return apiErr(resp)
 	}
 	return nil
-}
-
-func (c *DansalClient) GetHeartbeatStatus(ctx context.Context, token string) (HeartbeatStatus, error) {
-	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/admin/heartbeat", token, nil)
-	if err != nil {
-		return HeartbeatStatus{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return HeartbeatStatus{}, apiErr(resp)
-	}
-	var s HeartbeatStatus
-	return s, json.NewDecoder(resp.Body).Decode(&s)
 }
 
 // MatrixLogin exchanges username+password for a token and stores it server-side.

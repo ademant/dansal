@@ -4062,132 +4062,6 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 	}
 }
 
-// ── Admin Site Config ─────────────────────────────────────────────────────────
-
-type AdminSiteConfigData struct {
-	SiteName          string
-	Contact           string
-	HasLogo           bool
-	HasBanner         bool
-	HasFavicon        bool
-	Dances            []Dance
-	DefaultDanceNames map[string]bool
-	ImpressumTexts    map[string]string
-	ImpressumLangs    []string
-	HolidayCountry    string
-	Success           bool
-}
-
-func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		dances, _ := client.GetDances(r.Context())
-		defaultDanceIDs := loadDefaultDanceIDs(db)
-		defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
-		impTexts := make(map[string]string)
-		for _, lang := range impressumLangs {
-			if v := getSiteSetting(db, "impressum_"+lang); v != "" {
-				impTexts[lang] = v
-			} else {
-				impTexts[lang] = cfg.pagesContent.ImpressumText(lang)
-			}
-		}
-		data := AdminSiteConfigData{
-			SiteName:          getSiteSetting(db, "site_name"),
-			Contact:           getSiteSetting(db, "contact"),
-			HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
-			HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
-			HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
-			Dances:            dances,
-			DefaultDanceNames: defaultDanceNames,
-			ImpressumTexts:    impTexts,
-			ImpressumLangs:    impressumLangs,
-			HolidayCountry:    getSiteSetting(db, "holiday_country"),
-			Success:           r.URL.Query().Get("saved") == "1",
-		}
-		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
-	}
-}
-
-func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if err := r.ParseMultipartForm(4 << 20); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		// Text settings
-		siteName := strings.TrimSpace(r.FormValue("site_name"))
-		contact := strings.TrimSpace(r.FormValue("contact"))
-		holidayCountry := strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country")))
-		_ = setSiteSetting(db, "site_name", siteName)
-		_ = setSiteSetting(db, "contact", contact)
-		_ = setSiteSetting(db, "holiday_country", holidayCountry)
-		cfg.SiteName = siteName
-		cfg.ContactOverride = contact
-
-		// Impressum per language
-		if cfg.ImpressumOverride == nil {
-			cfg.ImpressumOverride = make(map[string]string)
-		}
-		for _, lang := range impressumLangs {
-			text := strings.TrimSpace(r.FormValue("impressum_" + lang))
-			_ = setSiteSetting(db, "impressum_"+lang, text)
-			cfg.ImpressumOverride[lang] = text
-		}
-
-		// Default dance IDs for new events
-		var defaultDanceIDs []int
-		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
-			if n, err2 := strconv.Atoi(v); err2 == nil {
-				defaultDanceIDs = append(defaultDanceIDs, n)
-			}
-		}
-		j, _ := json.Marshal(defaultDanceIDs)
-		_ = setSiteSetting(db, "default_dance_ids", string(j))
-
-		// Image uploads: logo/banner accept SVG/AVIF/JPG; favicon also accepts GIF
-		for _, key := range []string{"logo", "banner", "favicon"} {
-			f, _, err := r.FormFile(key)
-			if err != nil {
-				continue
-			}
-			data, err := io.ReadAll(f)
-			f.Close()
-			if err != nil {
-				continue
-			}
-			mime := detectAssetMIME(data)
-			if mime == "" {
-				continue
-			}
-			if key != "favicon" && mime == "image/gif" {
-				continue
-			}
-			if err := saveSiteAssetToDisk(cfg.ImagesDir, key, data); err != nil {
-				log.Printf("save site asset %s: %v", key, err)
-			}
-		}
-
-		http.Redirect(w, r, "/admin/site-config?saved=1", http.StatusSeeOther)
-	}
-}
-
-
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 
 // findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
@@ -4201,32 +4075,6 @@ func findSiteAssetOnDisk(dir, key string) []byte {
 		}
 	}
 	return nil
-}
-
-// saveSiteAssetToDisk writes data to dir/key.ext, removing stale format files.
-func saveSiteAssetToDisk(dir, key string, data []byte) error {
-	if dir == "" {
-		return fmt.Errorf("images_dir not configured")
-	}
-	var ext string
-	switch detectAssetMIME(data) {
-	case "image/svg+xml":
-		ext = ".svg"
-	case "image/avif":
-		ext = ".avif"
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/gif":
-		ext = ".gif"
-	default:
-		return fmt.Errorf("unsupported format")
-	}
-	for _, old := range siteAssetExts {
-		if old != ext {
-			os.Remove(filepath.Join(dir, key+old))
-		}
-	}
-	return os.WriteFile(filepath.Join(dir, key+ext), data, 0o644)
 }
 
 // detectAssetMIME returns the MIME type for supported site asset formats
@@ -4273,7 +4121,6 @@ type AdminInfoData struct {
 	API          DansalInfo
 	OutboundIP   string
 	LoadAvg      string
-	Heartbeat    HeartbeatStatus
 }
 
 func adminManagementHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
@@ -4298,10 +4145,7 @@ func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			return
 		}
 
-		token := getSessionToken(r)
 		info, _ := client.GetDansalInfo(r.Context())
-		heartbeat, _ := client.GetHeartbeatStatus(r.Context(), token)
-
 		outboundIP := outboundIP()
 		loadAvg := readLoadAvg()
 
@@ -4311,7 +4155,6 @@ func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			API:          info,
 			OutboundIP:   outboundIP,
 			LoadAvg:      loadAvg,
-			Heartbeat:    heartbeat,
 		}
 		renderTemplate(w, tmpls.adminInfo, tmplData(r, cfg, i18n, "System info", data))
 	}

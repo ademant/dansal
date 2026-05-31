@@ -17,9 +17,10 @@ type ChannelStatus struct {
 }
 
 type HeartbeatStatus struct {
-	Email    ChannelStatus `json:"email"`
-	Telegram ChannelStatus `json:"telegram"`
-	Matrix   ChannelStatus `json:"matrix"`
+	IntervalMins int           `json:"interval_mins"`
+	Email        ChannelStatus `json:"email"`
+	Telegram     ChannelStatus `json:"telegram"`
+	Matrix       ChannelStatus `json:"matrix"`
 }
 
 var (

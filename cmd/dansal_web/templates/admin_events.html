@@ -106,13 +106,13 @@
     <h3 style="margin:0 0 .9rem;font-size:1rem">{{$.Strings.T "admin_save_as_template"}}</h3>
     <label style="display:block;font-size:.88rem;font-weight:600;color:#444;margin-bottom:.25rem">{{$.Strings.T "admin_template_name_label"}}</label>
     <input id="tpl-dialog-name" type="text" required style="width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem;margin-bottom:.75rem;box-sizing:border-box">
-    {{with .Data}}{{if .UserOrgs}}
+    {{if .UserOrgs}}
     <label style="display:block;font-size:.88rem;font-weight:600;color:#444;margin-bottom:.25rem">{{$.Strings.T "admin_template_org_label"}}</label>
     <select id="tpl-dialog-org" style="width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem;margin-bottom:.75rem;box-sizing:border-box">
       <option value="">{{$.Strings.T "admin_template_personal"}}</option>
       {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    {{end}}{{end}}
+    {{end}}
     <div id="tpl-dialog-msg" style="font-size:.85rem;margin-bottom:.5rem;min-height:1.2em"></div>
     <div style="display:flex;gap:.5rem;justify-content:flex-end">
       <button type="button" onclick="document.getElementById('tpl-dialog').close()" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>

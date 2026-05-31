@@ -965,20 +965,24 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				}
 			}()
 		}
-		// For non-admin users viewing an unpublished event: fetch their orgs for assign/publish flow.
-		if su != nil && su.Role != "admin" && !event.IsPublished {
+		// For logged-in users: fetch their orgs (for assign/publish flow and save-as-template).
+		if su != nil {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				allOrgs, _ := client.GetOrganizations(r.Context())
-				orgIDs := getUserOrgIDsFromOrgs(r.Context(), client, su.ID, token, allOrgs)
-				idSet := make(map[int]bool, len(orgIDs))
-				for _, oid := range orgIDs {
-					idSet[oid] = true
-				}
-				for _, o := range allOrgs {
-					if idSet[o.ID] {
-						userOrgs = append(userOrgs, o)
+				if su.Role == "admin" {
+					userOrgs = allOrgs
+				} else {
+					orgIDs := getUserOrgIDsFromOrgs(r.Context(), client, su.ID, token, allOrgs)
+					idSet := make(map[int]bool, len(orgIDs))
+					for _, oid := range orgIDs {
+						idSet[oid] = true
+					}
+					for _, o := range allOrgs {
+						if idSet[o.ID] {
+							userOrgs = append(userOrgs, o)
+						}
 					}
 				}
 			}()

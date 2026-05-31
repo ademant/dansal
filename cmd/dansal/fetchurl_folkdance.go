@@ -400,10 +400,13 @@ func httpContentType(rawURL string) string {
 // the caller has not supplied an explicit type.
 func detectFetchType(rawURL string) string {
 	if gancioJSONProbe(rawURL) {
-		return "gancio-json"
+		return "json"
 	}
 	if folkdanceJSONProbe(rawURL) {
-		return "folkdance-json"
+		return "json"
+	}
+	if tecJSONProbe(rawURL) {
+		return "json"
 	}
 	lower := strings.ToLower(rawURL)
 	if strings.Contains(lower, "rss") || strings.Contains(lower, "atom") ||
@@ -413,7 +416,7 @@ func detectFetchType(rawURL string) string {
 	ct := httpContentType(rawURL)
 	switch ct {
 	case "application/json":
-		return "folkdance-json"
+		return "json"
 	case "application/rss+xml", "application/atom+xml", "application/xml", "text/xml":
 		return "rss"
 	default:
@@ -422,6 +425,7 @@ func detectFetchType(rawURL string) string {
 }
 
 // validFetchType returns true for recognised fetch type strings.
+// "json" is the unified public type; "folkdance-json" and "gancio-json" are kept as aliases for backwards compatibility.
 func validFetchType(t string) bool {
-	return t == "ical" || t == "folkdance-json" || t == "gancio-json" || t == "rss"
+	return t == "ical" || t == "json" || t == "folkdance-json" || t == "gancio-json" || t == "rss"
 }

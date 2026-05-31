@@ -12,8 +12,8 @@
   <label for="type">{{$.Strings.T "fetch_type"}}</label>
   <select id="type" name="type">
     <option value="ical"{{if eq .Source.Type "ical"}} selected{{end}}>iCal</option>
-    <option value="folkdance-json"{{if eq .Source.Type "folkdance-json"}} selected{{end}}>folkdance-json</option>
-    <option value="gancio-json"{{if eq .Source.Type "gancio-json"}} selected{{end}}>gancio-json</option>
+    <option value="rss"{{if eq .Source.Type "rss"}} selected{{end}}>RSS</option>
+    <option value="json"{{if or (eq .Source.Type "json") (eq .Source.Type "folkdance-json") (eq .Source.Type "gancio-json")}} selected{{end}}>JSON (auto-detect)</option>
   </select>
 
   <label for="tags">{{$.Strings.T "fetch_tags"}}</label>

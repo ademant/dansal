@@ -112,8 +112,7 @@
     <label for="feed-type">Type</label>
     <select id="feed-type" name="type" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px">
       <option value="ical" {{if eq .FeedType "ical"}}selected{{end}}>{{$.Strings.T "admin_import_type_ical"}}</option>
-      <option value="folkdance-json" {{if eq .FeedType "folkdance-json"}}selected{{end}}>{{$.Strings.T "admin_import_type_json"}}</option>
-      <option value="gancio-json" {{if eq .FeedType "gancio-json"}}selected{{end}}>{{$.Strings.T "admin_import_type_gancio"}}</option>
+      <option value="json" {{if eq .FeedType "json"}}selected{{end}}>{{$.Strings.T "admin_import_type_json"}}</option>
     </select>
   </div>
 

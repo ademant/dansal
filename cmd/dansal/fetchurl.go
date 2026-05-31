@@ -608,6 +608,8 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
 	}
 	switch src.Type {
+	case "json":
+		return importFromJSONSource(src)
 	case "folkdance-json":
 		return importFromFolkdanceJSON(src)
 	case "gancio-json":
@@ -617,6 +619,18 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 	default:
 		return importFromICalSource(src)
 	}
+}
+
+// importFromJSONSource auto-detects the JSON feed format from the URL and dispatches
+// to the appropriate internal importer.
+func importFromJSONSource(src FetchSource) ([]Event, bool, error) {
+	if gancioJSONProbe(src.URL) {
+		return importFromGancioJSON(src)
+	}
+	if tecJSONProbe(src.URL) {
+		return importFromTECJSON(src)
+	}
+	return importFromFolkdanceJSON(src)
 }
 
 // loadTemplateForSource loads and parses the template associated with a fetch source.

@@ -4224,6 +4224,10 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if feedType == "" {
 			feedType = "ical"
 		}
+		// Normalise legacy type names to the unified "json" type.
+		if feedType == "folkdance-json" || feedType == "gancio-json" {
+			feedType = "json"
+		}
 		orgID := r.FormValue("organization_id")
 
 		// Build a new multipart body to forward to the API.

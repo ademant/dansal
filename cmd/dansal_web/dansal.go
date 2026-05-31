@@ -217,19 +217,20 @@ type TimetableEntry struct {
 }
 
 type Organization struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	ActorName    string `json:"actor_name,omitempty"`
-	Website      string `json:"website,omitempty"`
-	Instagram    string `json:"instagram,omitempty"`
-	Mastodon     string `json:"mastodon,omitempty"`
-	Facebook     string `json:"facebook,omitempty"`
-	ContactEmail string `json:"contact_email,omitempty"`
-	ContactName  string `json:"contact_name,omitempty"`
-	CreatedAt    string `json:"created_at"`
-	ImageURL     string `json:"image_url,omitempty"`
-	NotesMd      string `json:"notes_md,omitempty"`
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ActorName     string `json:"actor_name,omitempty"`
+	Website       string `json:"website,omitempty"`
+	Instagram     string `json:"instagram,omitempty"`
+	Mastodon      string `json:"mastodon,omitempty"`
+	Facebook      string `json:"facebook,omitempty"`
+	ContactEmail  string `json:"contact_email,omitempty"`
+	ContactName   string `json:"contact_name,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	ImageURL      string `json:"image_url,omitempty"`
+	NotesMd       string `json:"notes_md,omitempty"`
+	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
 }
 
 type Pricing struct {

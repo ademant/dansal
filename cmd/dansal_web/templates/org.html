@@ -4,7 +4,13 @@
 {{with .Org.ImageURL}}<img src="{{.}}" alt="{{$.Data.Org.Name}}" class="org-banner">{{end}}
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
-  {{if $.User}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
+  {{if $.User}}
+  <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>
+  {{if .Org.FetchSourceID}}
+  <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-edit-event">Edit FetchURL</a>
+  <button id="btn-fetch-now" class="btn-edit-event" onclick="orgFetchNow({{.Org.FetchSourceID}})">Fetch Now</button>
+  {{end}}
+  {{end}}
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
@@ -162,4 +168,18 @@
 .musician-chips li a{display:inline-block;padding:.25rem .7rem;background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:20px;font-size:.85rem;color:var(--link);text-decoration:none}
 .musician-chips li a:hover{background:var(--bg-hover);border-color:var(--link)}
 </style>
+<script>
+function orgFetchNow(id) {
+  var btn = document.getElementById('btn-fetch-now');
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+  fetch('/admin/fetchurls/' + id + '/run', {method: 'POST', credentials: 'same-origin', headers: {'Accept': 'application/json'}})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.textContent = d.error ? '✗ ' + d.error : '✓ ' + d.count + ' events';
+      btn.disabled = false;
+    })
+    .catch(function() { btn.textContent = '✗ Error'; btn.disabled = false; });
+}
+</script>
 {{end}}

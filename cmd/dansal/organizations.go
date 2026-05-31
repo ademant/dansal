@@ -11,19 +11,20 @@ import (
 )
 
 type Organization struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	ActorName    string `json:"actor_name,omitempty"`
-	Website      string `json:"website,omitempty"`
-	Instagram    string `json:"instagram,omitempty"`
-	Mastodon     string `json:"mastodon,omitempty"`
-	Facebook     string `json:"facebook,omitempty"`
-	ContactEmail string `json:"contact_email,omitempty"`
-	ContactName  string `json:"contact_name,omitempty"`
-	CreatedAt    string `json:"created_at"`
-	ImageURL     string `json:"image_url,omitempty"`
-	NotesMd      string `json:"notes_md,omitempty"`
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ActorName     string `json:"actor_name,omitempty"`
+	Website       string `json:"website,omitempty"`
+	Instagram     string `json:"instagram,omitempty"`
+	Mastodon      string `json:"mastodon,omitempty"`
+	Facebook      string `json:"facebook,omitempty"`
+	ContactEmail  string `json:"contact_email,omitempty"`
+	ContactName   string `json:"contact_name,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	ImageURL      string `json:"image_url,omitempty"`
+	NotesMd       string `json:"notes_md,omitempty"`
+	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
 }
 
 type OrganizationMember struct {
@@ -259,6 +260,10 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	var fsID int
+	if db.QueryRow("SELECT id FROM fetch_sources WHERE organization_id = ? LIMIT 1", o.ID).Scan(&fsID) == nil {
+		o.FetchSourceID = &fsID
 	}
 	json.NewEncoder(w).Encode(o)
 }

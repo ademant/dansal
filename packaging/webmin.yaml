@@ -13,7 +13,7 @@ dansal_url: "http://127.0.0.1:8000"
 admin_socket: "/var/lib/dansal/dansal.sock"
 
 # Path to the dansal-web SQLite database (web.db), used for site-config editing.
-web_db_path: "/var/lib/dansal/web.db"
+web_db_path: "/var/lib/dansal-web/web.db"
 
 # Systemd instance name (e.g. dev, prod). Used to resolve monitored unit names
 # like dansal@prod, dansal-fetch@prod.timer, etc. in the dashboard.

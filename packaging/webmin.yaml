@@ -9,8 +9,8 @@ listen: "127.0.0.1:8090"
 # Internal URL of the dansal REST API (used for admin authentication).
 dansal_url: "http://127.0.0.1:8000"
 
-# Path to the dansal admin socket (for maintenance operations).
-admin_socket: "/run/dansal/dansal.sock"
+# Path to the dansal admin socket (must match admin_socket in config.yaml).
+admin_socket: "/var/lib/dansal/dansal.sock"
 
 # Systemd instance name (e.g. dev, prod). Used to resolve monitored unit names
 # like dansal@prod, dansal-fetch@prod.timer, etc. in the dashboard.

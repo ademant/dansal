@@ -52,7 +52,7 @@ type adminResponse struct {
 
 func startAdminSocket(path string) net.Listener {
 	if path == "" {
-		path = "./dansal.sock"
+		path = "/var/lib/dansal/dansal.sock"
 	}
 	os.Remove(path)
 	ln, err := net.Listen("unix", path)

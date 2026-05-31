@@ -187,8 +187,25 @@ Requires authentication. Users manage their own keys; admins can manage any.
 
 **Organization object:**
 ```json
-{ "id": 1, "name": "string", "description": "string", "created_at": "..." }
+{
+  "id": 1,
+  "name": "string",
+  "description": "string",
+  "actor_name": "string",
+  "website": "string",
+  "instagram": "string",
+  "mastodon": "string",
+  "facebook": "string",
+  "contact_email": "string",
+  "contact_name": "string",
+  "created_at": "2026-01-01T00:00:00Z",
+  "image_url": "string",
+  "notes_md": "string",
+  "fetch_source_id": 42
+}
 ```
+
+`fetch_source_id` — when present, indicates this organization has an associated fetch source for automatic event importing. Use `GET /api/v1/fetchurl/{id}` to retrieve the source details and `POST /api/v1/fetchurl/{id}/fetch` to trigger an immediate import.
 
 **Add member body:** `{ "user_id": 42 }`
 

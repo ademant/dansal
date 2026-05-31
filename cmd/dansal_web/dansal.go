@@ -178,8 +178,6 @@ type Event struct {
 	LocationFloorCondition string          `json:"location_floor_condition,omitempty"`
 	Attributes             map[string]bool `json:"attributes,omitempty"`
 	FloorCondition         string          `json:"floor_condition,omitempty"`
-	OrgContactName  string     `json:"org_contact_name,omitempty"`
-	OrgContactEmail string     `json:"org_contact_email,omitempty"`
 	ContactName     string     `json:"contact_name,omitempty"`
 	ContactEmail    string     `json:"contact_email,omitempty"`
 	BookingURL      string     `json:"booking_url,omitempty"`

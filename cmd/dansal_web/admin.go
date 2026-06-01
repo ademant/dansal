@@ -2618,6 +2618,17 @@ func isoTimeStr(t string) string {
 	return ""
 }
 
+// mergeTemplateTime handles both HH:MM (old template format) and full RFC3339
+// (new format). For HH:MM it replaces the time portion of eventTime while
+// keeping its date and timezone suffix, avoiding a 400 from the API.
+func mergeTemplateTime(eventTime, templateTime string) string {
+	if len(templateTime) == 5 && templateTime[2] == ':' && len(eventTime) >= 20 {
+		// HH:MM — graft onto the event's date and timezone
+		return eventTime[:11] + templateTime + ":00" + eventTime[19:]
+	}
+	return templateTime
+}
+
 // ── Event Templates ───────────────────────────────────────────────────────────
 
 type AdminTemplatesData struct {
@@ -2906,8 +2917,8 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				Dances:             danceIDs,
 			}
 			if fields["timing"] {
-				req.StartTime = td.StartTime
-				req.EndTime = td.EndTime
+				req.StartTime = mergeTemplateTime(ev.StartTime, td.StartTime)
+				req.EndTime = mergeTemplateTime(ev.EndTime, td.EndTime)
 			}
 			if fields["org"] && td.OrgID > 0 {
 				oid := td.OrgID

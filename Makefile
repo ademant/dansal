@@ -301,6 +301,7 @@ endif
 	WEB_PORT=$${WEB_PORT:-8080}
 	echo "Deploying nginx for instance '$(INSTANCE)': $$DOMAIN (api=$$API_PORT web=$$WEB_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
+	rm -f /etc/nginx/conf.d/dansal.conf
 	sed \
 	    -e "s/events\.example\.com/$$DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8000/127.0.0.1:$$API_PORT/g" \
@@ -330,6 +331,7 @@ endif
 	WEBMIN_PORT=$${WEBMIN_PORT:-8090}
 	echo "Deploying nginx-webmin for instance '$(INSTANCE)': $$WEBMIN_DOMAIN (port=$$WEBMIN_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
+	rm -f /etc/nginx/conf.d/dansal-webmin.conf
 	sed \
 	    -e "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8090/127.0.0.1:$$WEBMIN_PORT/g" \

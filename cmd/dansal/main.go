@@ -807,7 +807,19 @@ func migrateEventsFK() {
 }
 
 func migrateDB() {
-	// Errors are silently ignored (column already exists).
+	applied := func(v int) bool {
+		var c int
+		db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version=?", v).Scan(&c)
+		return c > 0
+	}
+	mark := func(v int) {
+		db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(?)", v)
+	}
+
+	// v1: all legacy migrations. Each ALTER TABLE silently fails when the column
+	// already exists, so re-running the block on an existing instance is harmless.
+	// createTables() marks v1 applied on fresh installs, so this block is skipped.
+	if !applied(1) {
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
 	db.Exec("ALTER TABLE users ADD COLUMN telegram TEXT")
@@ -1239,6 +1251,8 @@ func migrateDB() {
 	// #419: store template JSON directly in fetch_sources so the importer can
 	// apply it without querying event_templates (which is in web.db, not calendar.db).
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_data TEXT")
+	mark(1)
+	} // end v1
 }
 
 func migrateFetchSourcesDropTemplatesFK() {
@@ -1670,9 +1684,19 @@ func createTables() error {
 		data TEXT NOT NULL,
 		expires_at INTEGER NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		version    INTEGER PRIMARY KEY,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+	// Mark all legacy migrations as applied for fresh installs — createTables
+	// creates the full current schema so migrateDB v1 is a no-op.
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)")
+	return nil
 }
 
 func reloadConfig(path string) {

@@ -436,7 +436,7 @@
   </div>
 </form>
 
-{{if and (not .Event.IsPublished) (eq .Event.Source "suggestion") .Templates}}
+{{if .Templates}}
 <details class="save-tpl-details" style="margin-top:1rem" id="suggestion-tpl-details">
   <summary>{{$.Strings.T "admin_suggestion_apply_template"}}</summary>
   <div class="save-tpl-form">

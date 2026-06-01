@@ -3628,19 +3628,17 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 		}
 		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
 		var editTemplates []EventTemplate
-		if !event.IsPublished && event.Source == "suggestion" {
-			if su := getSessionUser(r); su != nil {
-				tok := getSessionToken(r)
-				var orgIDs []int
-				if su.Role == "admin" {
-					for _, o := range bundle.Orgs {
-						orgIDs = append(orgIDs, o.ID)
-					}
-				} else {
-					orgIDs = getUserOrgIDs(r.Context(), client, su.ID, tok)
+		if su := getSessionUser(r); su != nil {
+			tok := getSessionToken(r)
+			var orgIDs []int
+			if su.Role == "admin" {
+				for _, o := range bundle.Orgs {
+					orgIDs = append(orgIDs, o.ID)
 				}
-				editTemplates, _ = listTemplates(db, su.ID, orgIDs)
+			} else {
+				orgIDs = getUserOrgIDs(r.Context(), client, su.ID, tok)
 			}
+			editTemplates, _ = listTemplates(db, su.ID, orgIDs)
 		}
 		var eventOrg *Organization
 		if event.OrganizationID != nil {

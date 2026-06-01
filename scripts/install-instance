@@ -130,6 +130,15 @@ if ask_yn "Generate a self-signed CA and client certificate for webmin?"; then
     MTLS=true
 fi
 
+# ── TLS certificates ──────────────────────────────────────────────────────────
+
+section "TLS certificates (certbot / Let's Encrypt)"
+info "Requires domains to already point to this server and port 80 accessible."
+CERTBOT=false
+if ask_yn "Obtain TLS certificates with certbot now?" n; then
+    CERTBOT=true
+fi
+
 # ── confirm ───────────────────────────────────────────────────────────────────
 
 section "Summary"
@@ -145,6 +154,7 @@ else
     echo "  Mail     : (not configured)"
 fi
 echo "  mTLS     : ${MTLS}"
+echo "  Certbot  : ${CERTBOT}"
 echo
 ask_yn "Proceed?" y || { echo "Aborted."; exit 0; }
 
@@ -270,6 +280,68 @@ else
     echo
 fi
 
+# ── certbot ───────────────────────────────────────────────────────────────────
+
+if [[ $CERTBOT == true ]]; then
+    section "TLS certificates"
+
+    if ! command -v certbot >/dev/null 2>&1; then
+        info "certbot not found — installing..."
+        apt-get install -y certbot python3-certbot-nginx
+    fi
+
+    # Use --nginx plugin if nginx is running, standalone otherwise
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        CERTBOT_METHOD="--nginx"
+    else
+        info "nginx is not running — using standalone mode (port 80 must be free)"
+        CERTBOT_METHOD="--standalone"
+    fi
+
+    certbot_domain() {
+        local domain=$1
+        info "Obtaining certificate for ${domain}..."
+        certbot certonly ${CERTBOT_METHOD} -d "${domain}" --non-interactive --agree-tos \
+            --register-unsafely-without-email || {
+            echo "  Warning: certbot failed for ${domain} — skipping"
+            return 1
+        }
+    }
+
+    CERTS_OK=true
+
+    certbot_domain "${WEB_DOMAIN}" || CERTS_OK=false
+
+    # API domain only needs its own cert when it differs from the web domain
+    if [[ "${API_DOMAIN}" != "${WEB_DOMAIN}" ]]; then
+        certbot_domain "${API_DOMAIN}" || CERTS_OK=false
+    fi
+
+    if [[ -n $WEBMIN_DOMAIN && "${WEBMIN_DOMAIN}" != "${WEB_DOMAIN}" ]]; then
+        certbot_domain "${WEBMIN_DOMAIN}" || CERTS_OK=false
+    fi
+
+    if [[ $CERTS_OK == true ]]; then
+        info "Deploying nginx configurations..."
+        make deploy-nginx INSTANCE="${INSTANCE}"
+        [[ -n $WEBMIN_DOMAIN ]] && make deploy-nginx-webmin INSTANCE="${INSTANCE}"
+        info "Certbot auto-renewal is handled by the certbot systemd timer."
+        info "Check with: systemctl status certbot.timer"
+    else
+        echo
+        echo "  One or more certificates could not be obtained."
+        echo "  Resolve DNS/port issues, then run manually:"
+        echo "    certbot certonly --nginx -d ${WEB_DOMAIN}"
+        [[ "${API_DOMAIN}" != "${WEB_DOMAIN}" ]] && \
+            echo "    certbot certonly --nginx -d ${API_DOMAIN}"
+        [[ -n $WEBMIN_DOMAIN ]] && \
+            echo "    certbot certonly --nginx -d ${WEBMIN_DOMAIN}"
+        echo "    sudo make deploy-nginx INSTANCE=${INSTANCE}"
+        [[ -n $WEBMIN_DOMAIN ]] && \
+            echo "    sudo make deploy-nginx-webmin INSTANCE=${INSTANCE}"
+    fi
+fi
+
 # ── done ──────────────────────────────────────────────────────────────────────
 
 section "Done"
@@ -280,6 +352,18 @@ echo "    ${CONFDIR}/config.yaml"
 echo "    ${CONFDIR}/web.yaml"
 echo "    ${CONFDIR}/webmin.yaml"
 echo
+if [[ $CERTBOT == false ]]; then
+    echo "  To set up nginx and TLS later:"
+    echo "    certbot certonly --nginx -d ${WEB_DOMAIN}"
+    [[ "${API_DOMAIN}" != "${WEB_DOMAIN}" ]] && \
+        echo "    certbot certonly --nginx -d ${API_DOMAIN}"
+    [[ -n $WEBMIN_DOMAIN ]] && \
+        echo "    certbot certonly --nginx -d ${WEBMIN_DOMAIN}"
+    echo "    sudo make deploy-nginx INSTANCE=${INSTANCE}"
+    [[ -n $WEBMIN_DOMAIN ]] && \
+        echo "    sudo make deploy-nginx-webmin INSTANCE=${INSTANCE}"
+    echo
+fi
 echo "  Start timers when ready:"
 echo "    sudo systemctl start dansal-fetch@${INSTANCE}.timer dansal-backup@${INSTANCE}.timer"
 echo

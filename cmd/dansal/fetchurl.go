@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	ics "github.com/arran4/golang-ical"
 )
@@ -41,26 +42,37 @@ type FetchSource struct {
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
 const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode"
 
+// templateTimetableEntry is a single slot stored in event_templates.data.
+type templateTimetableEntry struct {
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Room        string `json:"room,omitempty"`
+}
+
 // templateImportData mirrors the JSON stored in event_templates.data.
 type templateImportData struct {
-	URL             string    `json:"url"`
-	BookingURL      string    `json:"booking_url"`
-	HasBall         bool      `json:"has_ball"`
-	HasWorkshop     bool      `json:"has_workshop"`
-	HasFestival     bool      `json:"has_festival"`
-	WorkshopDiff    string    `json:"workshop_difficulty"`
-	OrgID           int       `json:"org_id"`
-	LocID           int       `json:"loc_id"`
-	PricingType     string    `json:"pricing_type"`
-	PricingAmount   float64   `json:"pricing_amount"`
-	PricingCurrency string    `json:"pricing_currency"`
-	PricingLines    []Price   `json:"pricing_lines"`
-	Tags            []string  `json:"tags"`
-	DanceIDs        []int     `json:"dance_ids"`
-	Food            string    `json:"food"`
-	Drink           string    `json:"drink"`
-	TicketsTotal    int       `json:"tickets_total"`
-	BookingEnabled  bool      `json:"booking_enabled"`
+	URL             string                   `json:"url"`
+	BookingURL      string                   `json:"booking_url"`
+	HasBall         bool                     `json:"has_ball"`
+	HasWorkshop     bool                     `json:"has_workshop"`
+	HasFestival     bool                     `json:"has_festival"`
+	WorkshopDiff    string                   `json:"workshop_difficulty"`
+	OrgID           int                      `json:"org_id"`
+	LocID           int                      `json:"loc_id"`
+	LocName         string                   `json:"-"` // populated at load time, not stored in JSON
+	PricingType     string                   `json:"pricing_type"`
+	PricingAmount   float64                  `json:"pricing_amount"`
+	PricingCurrency string                   `json:"pricing_currency"`
+	PricingLines    []Price                  `json:"pricing_lines"`
+	Tags            []string                 `json:"tags"`
+	DanceIDs        []int                    `json:"dance_ids"`
+	Food            string                   `json:"food"`
+	Drink           string                   `json:"drink"`
+	TicketsTotal    int                      `json:"tickets_total"`
+	BookingEnabled  bool                     `json:"booking_enabled"`
+	Timetable       []templateTimetableEntry `json:"timetable,omitempty"`
 }
 
 type uaTransport struct{ rt http.RoundTripper }
@@ -648,7 +660,88 @@ func loadTemplateForSource(templateID int) (*templateImportData, error) {
 	if err := json.Unmarshal([]byte(dataJSON), &td); err != nil {
 		return nil, err
 	}
+	if td.LocID != 0 {
+		db.QueryRow("SELECT COALESCE(location,'') FROM locations WHERE id = ?", td.LocID).Scan(&td.LocName)
+	}
 	return &td, nil
+}
+
+// normalizeLocStr lowercases s and replaces non-alphanumeric runes with spaces.
+func normalizeLocStr(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune(' ')
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func wordSet(s string) map[string]bool {
+	m := make(map[string]bool)
+	for _, w := range strings.Fields(s) {
+		if w != "" {
+			m[w] = true
+		}
+	}
+	return m
+}
+
+// locationSimilar returns true when the Jaccard word-overlap of a and b is ≥ 0.5.
+// Used to decide whether the feed's location string matches the template's location.
+func locationSimilar(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	wa := wordSet(normalizeLocStr(a))
+	wb := wordSet(normalizeLocStr(b))
+	if len(wa) == 0 || len(wb) == 0 {
+		return false
+	}
+	inter := 0
+	for w := range wa {
+		if wb[w] {
+			inter++
+		}
+	}
+	union := len(wa) + len(wb) - inter
+	return float64(inter)/float64(union) >= 0.5
+}
+
+// resolveTemplateLocation returns the template's loc_id when the feed location
+// string is similar enough (Jaccard ≥ 0.5), avoiding duplicate location records.
+// Falls back to ensureLocation otherwise.
+func resolveTemplateLocation(q querier, feedLoc EventLocationRequest, td *templateImportData) (int64, error) {
+	if td != nil && td.LocID != 0 && locationSimilar(feedLoc.Location, td.LocName) {
+		return int64(td.LocID), nil
+	}
+	return ensureLocation(q, feedLoc)
+}
+
+// applyTemplateTimetable inserts template timetable entries for eventID.
+// fetch_master: only when the event has no existing entries.
+// template_master: always replaces.
+func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableEntry, mode string) {
+	if len(entries) == 0 {
+		return
+	}
+	if mode == "template_master" {
+		q.Exec("DELETE FROM timetable_entries WHERE event_id = ?", eventID)
+	} else {
+		var count int
+		q.QueryRow("SELECT COUNT(*) FROM timetable_entries WHERE event_id = ?", eventID).Scan(&count)
+		if count > 0 {
+			return
+		}
+	}
+	for _, e := range entries {
+		q.Exec(
+			"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room) VALUES (?, ?, ?, ?, ?, ?)",
+			eventID, e.StartTime, e.EndTime, e.Title, e.Description, e.Room,
+		)
+	}
 }
 
 // locationRequestByID returns an EventLocationRequest populated from a stored location.
@@ -850,6 +943,11 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
+	var td *templateImportData
+	if src.TemplateID != nil {
+		td, _ = loadTemplateForSource(*src.TemplateID)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, false, err
@@ -957,13 +1055,11 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				},
 			}
 
-			if src.TemplateID != nil {
-				if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
-					applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-				}
+			if td != nil {
+				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
 			}
 
-			locationID, err := ensureLocation(tx, eventReq.Location)
+			locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
 			if err != nil {
 				return nil, false, err
 			}
@@ -974,6 +1070,11 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 			}
 			if !created {
 				allCreated = false
+			}
+			if td != nil {
+				for _, ev := range events {
+					applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
+				}
 			}
 			for _, ev := range events {
 				attachImagesFromICalEvent(ev.ID, vevent)

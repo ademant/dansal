@@ -146,6 +146,11 @@ func importFromRSSSource(src FetchSource) ([]Event, bool, error) {
 }
 
 func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
+	var td *templateImportData
+	if src.TemplateID != nil {
+		td, _ = loadTemplateForSource(*src.TemplateID)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, false, err
@@ -196,13 +201,11 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
-		if src.TemplateID != nil {
-			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
-				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-			}
+		if td != nil {
+			applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
 		}
 
-		locationID, err := ensureLocation(tx, eventReq.Location)
+		locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
 		if err != nil {
 			return nil, false, err
 		}
@@ -214,6 +217,11 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 		if !created {
 			allCreated = false
 		}
+		if td != nil {
+			for _, ev := range events {
+				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
+			}
+		}
 		allEvents = append(allEvents, events...)
 	}
 
@@ -224,6 +232,11 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 }
 
 func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, error) {
+	var td *templateImportData
+	if src.TemplateID != nil {
+		td, _ = loadTemplateForSource(*src.TemplateID)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, false, err
@@ -289,13 +302,11 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 			},
 		}
 
-		if src.TemplateID != nil {
-			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
-				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-			}
+		if td != nil {
+			applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
 		}
 
-		locationID, err := ensureLocation(tx, eventReq.Location)
+		locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
 		if err != nil {
 			return nil, false, err
 		}
@@ -306,6 +317,11 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 		}
 		if !created {
 			allCreated = false
+		}
+		if td != nil {
+			for _, ev := range events {
+				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
+			}
 		}
 		allEvents = append(allEvents, events...)
 	}

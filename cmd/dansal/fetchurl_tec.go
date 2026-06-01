@@ -104,6 +104,11 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
+	var td *templateImportData
+	if src.TemplateID != nil {
+		td, _ = loadTemplateForSource(*src.TemplateID)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, false, err
@@ -187,13 +192,11 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
-		if src.TemplateID != nil {
-			if td, err := loadTemplateForSource(*src.TemplateID); err == nil && td != nil {
-				applyTemplateToRequest(&req, *td, src.TemplateMode)
-			}
+		if td != nil {
+			applyTemplateToRequest(&req, *td, src.TemplateMode)
 		}
 
-		locationID, err := ensureLocation(tx, req.Location)
+		locationID, err := resolveTemplateLocation(tx, req.Location, td)
 		if err != nil {
 			return nil, false, err
 		}
@@ -204,6 +207,11 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 		}
 		if !created {
 			allCreated = false
+		}
+		if td != nil {
+			for _, ev := range evs {
+				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
+			}
 		}
 		allEvents = append(allEvents, evs...)
 	}

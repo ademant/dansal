@@ -8,6 +8,7 @@ StartLimitBurst=5
 Type=simple
 User=dansal
 Group=dansal
+SyslogIdentifier=dansal@%i
 ExecStartPre=/usr/lib/dansal/dansal_preflight /etc/dansal/%i/config.yaml
 ExecStart=/usr/lib/dansal/%i/dansal --config /etc/dansal/%i/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID

@@ -9,6 +9,7 @@ StartLimitBurst=5
 Type=simple
 User=dansal
 Group=dansal
+SyslogIdentifier=dansal-web@%i
 ExecStart=/usr/lib/dansal/%i/dansal-web --config /etc/dansal/%i/web.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure

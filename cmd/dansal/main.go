@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -1640,6 +1641,24 @@ func reloadConfig(path string) {
 	log.Printf("Config reloaded from %s", path)
 }
 
+func instanceFromConfigArg() string {
+	for i, arg := range os.Args {
+		var path string
+		switch {
+		case (arg == "--config" || arg == "-config") && i+1 < len(os.Args):
+			path = os.Args[i+1]
+		case strings.HasPrefix(arg, "--config="):
+			path = arg[len("--config="):]
+		case strings.HasPrefix(arg, "-config="):
+			path = arg[len("-config="):]
+		}
+		if path != "" {
+			return filepath.Base(filepath.Dir(path))
+		}
+	}
+	return ""
+}
+
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
@@ -1650,7 +1669,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal"); err == nil {
+	tag := "dansal"
+	if inst := instanceFromConfigArg(); inst != "" {
+		tag = "dansal@" + inst
+	}
+	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {
 		log.SetOutput(w)
 		log.SetFlags(0)
 	}

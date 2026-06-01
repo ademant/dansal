@@ -754,6 +754,34 @@ func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableE
 	}
 }
 
+// importSingleEvent applies template overrides, resolves the location, persists
+// the event, and applies the timetable. It appends created events to *allEvents
+// and clears *allCreated when the event already existed. The returned slice lets
+// callers do per-event post-processing (e.g. image attachment in the iCal importer).
+func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportData, mode string, allCreated *bool, allEvents *[]Event) ([]Event, error) {
+	if td != nil {
+		applyTemplateToRequest(&req, *td, mode)
+	}
+	locationID, err := resolveTemplateLocation(tx, req.Location, td)
+	if err != nil {
+		return nil, err
+	}
+	evs, created, err := createEventFromRequest(tx, req, locationID, true, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !created {
+		*allCreated = false
+	}
+	if td != nil {
+		for _, ev := range evs {
+			applyTemplateTimetable(tx, ev.ID, td.Timetable, mode)
+		}
+	}
+	*allEvents = append(*allEvents, evs...)
+	return evs, nil
+}
+
 // locationRequestByID returns an EventLocationRequest populated from a stored location.
 func locationRequestByID(id int) (EventLocationRequest, bool) {
 	var loc EventLocationRequest
@@ -1062,31 +1090,13 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				},
 			}
 
-			if td != nil {
-				applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-			}
-
-			locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
+			evs, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &allCreated, &allEvents)
 			if err != nil {
 				return nil, false, err
 			}
-
-			events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
-			if err != nil {
-				return nil, false, err
-			}
-			if !created {
-				allCreated = false
-			}
-			if td != nil {
-				for _, ev := range events {
-					applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
-				}
-			}
-			for _, ev := range events {
+			for _, ev := range evs {
 				attachImagesFromICalEvent(ev.ID, vevent)
 			}
-			allEvents = append(allEvents, events...)
 		}
 	}
 

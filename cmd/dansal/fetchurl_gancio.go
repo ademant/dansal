@@ -268,28 +268,9 @@ func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
-		if td != nil {
-			applyTemplateToRequest(&req, *td, src.TemplateMode)
-		}
-
-		locationID, err := resolveTemplateLocation(tx, req.Location, td)
-		if err != nil {
+		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
 			return nil, false, err
 		}
-
-		evs, created, err := createEventFromRequest(tx, req, locationID, true, nil)
-		if err != nil {
-			return nil, false, err
-		}
-		if !created {
-			allCreated = false
-		}
-		if td != nil {
-			for _, ev := range evs {
-				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
-			}
-		}
-		allEvents = append(allEvents, evs...)
 	}
 
 	if err := tx.Commit(); err != nil {

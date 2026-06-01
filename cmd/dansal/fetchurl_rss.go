@@ -198,28 +198,9 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
-		if td != nil {
-			applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-		}
-
-		locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
-		if err != nil {
+		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
 			return nil, false, err
 		}
-
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
-		if err != nil {
-			return nil, false, err
-		}
-		if !created {
-			allCreated = false
-		}
-		if td != nil {
-			for _, ev := range events {
-				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
-			}
-		}
-		allEvents = append(allEvents, events...)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -296,28 +277,9 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 			},
 		}
 
-		if td != nil {
-			applyTemplateToRequest(&eventReq, *td, src.TemplateMode)
-		}
-
-		locationID, err := resolveTemplateLocation(tx, eventReq.Location, td)
-		if err != nil {
+		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
 			return nil, false, err
 		}
-
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true, nil)
-		if err != nil {
-			return nil, false, err
-		}
-		if !created {
-			allCreated = false
-		}
-		if td != nil {
-			for _, ev := range events {
-				applyTemplateTimetable(tx, ev.ID, td.Timetable, src.TemplateMode)
-			}
-		}
-		allEvents = append(allEvents, events...)
 	}
 
 	if err := tx.Commit(); err != nil {

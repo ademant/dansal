@@ -3013,8 +3013,8 @@ func templateDataFromEvent(ev Event) templateEventData {
 	d := templateEventData{
 		URL:                ev.URL,
 		BookingURL:         ev.BookingURL,
-		StartTime:          isoTimeStr(ev.StartTime),
-		EndTime:            isoTimeStr(ev.EndTime),
+		StartTime:          ev.StartTime,
+		EndTime:            ev.EndTime,
 		HasBall:            ev.HasBall,
 		HasWorkshop:        ev.HasWorkshop,
 		HasFestival:        ev.HasFestival,

@@ -1236,6 +1236,9 @@ func migrateDB() {
 	// event_templates — that table lives in web.db, not calendar.db, so the FK
 	// breaks every INSERT into fetch_sources when foreign_keys=ON.
 	migrateFetchSourcesDropTemplatesFK()
+	// #419: store template JSON directly in fetch_sources so the importer can
+	// apply it without querying event_templates (which is in web.db, not calendar.db).
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_data TEXT")
 }
 
 func migrateFetchSourcesDropTemplatesFK() {
@@ -1441,7 +1444,8 @@ func createTables() error {
 		last_result TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		template_id INTEGER,
-		template_mode TEXT NOT NULL DEFAULT ''
+		template_mode TEXT NOT NULL DEFAULT '',
+		template_data TEXT
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

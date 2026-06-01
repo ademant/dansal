@@ -146,10 +146,7 @@ func importFromRSSSource(src FetchSource) ([]Event, bool, error) {
 }
 
 func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
-	var td *templateImportData
-	if src.TemplateID != nil {
-		td, _ = loadTemplateForSource(*src.TemplateID)
-	}
+	td := parseTemplateData(src.TemplateData)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -232,10 +229,7 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 }
 
 func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, error) {
-	var td *templateImportData
-	if src.TemplateID != nil {
-		td, _ = loadTemplateForSource(*src.TemplateID)
-	}
+	td := parseTemplateData(src.TemplateData)
 
 	tx, err := db.Begin()
 	if err != nil {

@@ -305,6 +305,7 @@ type FetchSource struct {
 	CreatedAt      string   `json:"created_at"`
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty"`
+	TemplateData   string   `json:"template_data,omitempty"`
 }
 
 type LoginResponse struct {
@@ -739,7 +740,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 	return nil
 }
 
-func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode string, token string) (int, error) {
+func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode, templateData string, token string) (int, error) {
 	payload := map[string]any{
 		"url":  rawURL,
 		"type": typ,
@@ -751,6 +752,7 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 	if templateID != nil {
 		payload["template_id"] = *templateID
 		payload["template_mode"] = templateMode
+		payload["template_data"] = templateData
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl", token, body)
@@ -798,7 +800,7 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 	return src, json.NewDecoder(resp.Body).Decode(&src)
 }
 
-func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode string, token string) error {
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode, templateData string, token string) error {
 	payload := map[string]any{
 		"type":            typ,
 		"tags":            tags,
@@ -806,6 +808,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 		"organization_id": orgID,
 		"template_id":     templateID,
 		"template_mode":   templateMode,
+		"template_data":   templateData,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, body)

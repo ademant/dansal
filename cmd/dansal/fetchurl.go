@@ -25,6 +25,7 @@ type FetchURLRequest struct {
 	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty"`
+	TemplateData   string   `json:"template_data,omitempty"`
 }
 
 type FetchSource struct {
@@ -39,10 +40,11 @@ type FetchSource struct {
 	CreatedAt      string   `json:"created_at"`
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty"`
+	TemplateData   string   `json:"template_data,omitempty"`
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,'')"
 
 // templateTimetableEntry is a single slot stored in event_templates.data.
 type templateTimetableEntry struct {
@@ -398,7 +400,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -572,6 +574,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		OrganizationID *int     `json:"organization_id"`
 		TemplateID     *int     `json:"template_id"`
 		TemplateMode   string   `json:"template_mode"`
+		TemplateData   string   `json:"template_data"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid body", http.StatusBadRequest)
@@ -588,6 +591,10 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src.OrganizationID = req.OrganizationID
 	src.TemplateID = req.TemplateID
 	src.TemplateMode = req.TemplateMode
+	src.TemplateData = req.TemplateData
+	if src.TemplateID == nil {
+		src.TemplateData = ""
+	}
 
 	tagsJSON, _ := json.Marshal(src.Tags)
 	var orgVal any
@@ -598,9 +605,13 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	if src.TemplateID != nil {
 		tplVal = *src.TemplateID
 	}
+	var tplDataVal any
+	if src.TemplateData != "" {
+		tplDataVal = src.TemplateData
+	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, src.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -647,25 +658,22 @@ func importFromJSONSource(src FetchSource) ([]Event, bool, error) {
 	return importFromFolkdanceJSON(src)
 }
 
-// loadTemplateForSource loads and parses the template associated with a fetch source.
-// Returns nil, nil when no template is set.
-func loadTemplateForSource(templateID int) (*templateImportData, error) {
-	var dataJSON string
-	err := db.QueryRow("SELECT data FROM event_templates WHERE id = ?", templateID).Scan(&dataJSON)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
+// parseTemplateData parses template JSON stored in fetch_sources.template_data.
+// Returns nil when the JSON is empty or invalid. This replaces the old
+// loadTemplateForSource which incorrectly queried event_templates from
+// calendar.db — that table only exists in the web process's web.db.
+func parseTemplateData(jsonStr string) *templateImportData {
+	if jsonStr == "" {
+		return nil
 	}
 	var td templateImportData
-	if err := json.Unmarshal([]byte(dataJSON), &td); err != nil {
-		return nil, err
+	if err := json.Unmarshal([]byte(jsonStr), &td); err != nil {
+		return nil
 	}
 	if td.LocID != 0 {
 		db.QueryRow("SELECT COALESCE(location,'') FROM locations WHERE id = ?", td.LocID).Scan(&td.LocName)
 	}
-	return &td, nil
+	return &td
 }
 
 // normalizeLocStr lowercases s and replaces non-alphanumeric runes with spaces.
@@ -945,10 +953,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
-	var td *templateImportData
-	if src.TemplateID != nil {
-		td, _ = loadTemplateForSource(*src.TemplateID)
-	}
+	td := parseTemplateData(src.TemplateData)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -1151,11 +1156,15 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		if req.TemplateID != nil {
 			tplVal = *req.TemplateID
 		}
-		db.Exec("UPDATE fetch_sources SET template_id = ?, template_mode = ? WHERE id = ?",
-			tplVal, req.TemplateMode, sourceID)
+		var tplDataVal any
+		if req.TemplateData != "" {
+			tplDataVal = req.TemplateData
+		}
+		db.Exec("UPDATE fetch_sources SET template_id = ?, template_mode = ?, template_data = ? WHERE id = ?",
+			tplVal, req.TemplateMode, tplDataVal, sourceID)
 	}
 
-	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode}
+	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData}
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
 		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)

@@ -243,10 +243,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
-	var td *templateImportData
-	if src.TemplateID != nil {
-		td, _ = loadTemplateForSource(*src.TemplateID)
-	}
+	td := parseTemplateData(src.TemplateData)
 
 	tx, err := db.Begin()
 	if err != nil {

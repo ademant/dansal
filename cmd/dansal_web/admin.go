@@ -1120,7 +1120,7 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		}
 		createdAfter := r.FormValue("created_after")
 		token := getSessionToken(r)
-		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, token); err != nil {
+		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, fetchTemplateData(db, templateID), token); err != nil {
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgIDInt := 0
 			if orgID != nil {
@@ -1277,7 +1277,7 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		}
 		templateMode := r.FormValue("template_mode")
 
-		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, token); err != nil {
+		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, fetchTemplateData(db, templateID), token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgMap := make(map[int]Organization, len(orgs))
@@ -1415,7 +1415,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 						}
 						if !hasTag {
 							newTags := append(src.Tags, newTag)
-							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, token)
+							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, token)
 						}
 					}
 				}
@@ -2670,6 +2670,19 @@ func mergeTemplateTime(eventTime, templateTime string) string {
 		return eventTime[:11] + templateTime + ":00" + suffix
 	}
 	return templateTime
+}
+
+// fetchTemplateData looks up a template's JSON from web.db by ID.
+// Returns "" when templateID is nil or the template isn't found.
+func fetchTemplateData(db *sql.DB, templateID *int) string {
+	if templateID == nil {
+		return ""
+	}
+	tpl, err := getTemplate(db, *templateID)
+	if err != nil {
+		return ""
+	}
+	return tpl.Data
 }
 
 // applyTemplateFields copies selected fields from td into req.

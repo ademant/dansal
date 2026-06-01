@@ -3888,8 +3888,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 		if tplOverride != nil {
 			if tplFieldsSet["timing"] {
-				req.StartTime = tplOverride.StartTime
-				req.EndTime = tplOverride.EndTime
+				req.StartTime = mergeTemplateTime(req.StartTime, tplOverride.StartTime)
+				req.EndTime = mergeTemplateTime(req.EndTime, tplOverride.EndTime)
 			}
 			if tplFieldsSet["org"] && tplOverride.OrgID > 0 {
 				oid := tplOverride.OrgID

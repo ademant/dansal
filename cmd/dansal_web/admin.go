@@ -2622,9 +2622,13 @@ func isoTimeStr(t string) string {
 // (new format). For HH:MM it replaces the time portion of eventTime while
 // keeping its date and timezone suffix, avoiding a 400 from the API.
 func mergeTemplateTime(eventTime, templateTime string) string {
-	if len(templateTime) == 5 && templateTime[2] == ':' && len(eventTime) >= 20 {
-		// HH:MM — graft onto the event's date and timezone
-		return eventTime[:11] + templateTime + ":00" + eventTime[19:]
+	if len(templateTime) == 5 && templateTime[2] == ':' && len(eventTime) >= 19 {
+		// HH:MM — graft onto the event's date, preserving any timezone suffix
+		suffix := ""
+		if len(eventTime) > 19 {
+			suffix = eventTime[19:]
+		}
+		return eventTime[:11] + templateTime + ":00" + suffix
 	}
 	return templateTime
 }

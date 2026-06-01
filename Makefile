@@ -190,11 +190,12 @@ endif
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/images
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
-	# Template configs — installed only if not already present
-	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
-		sed 's|/var/lib/dansal/dansal.sock|/var/lib/dansal/$(INSTANCE)/dansal.sock|; \
-		     s|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|; \
-		     s|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
+	# Template configs — installed only if not already present (or empty from a failed prior run)
+	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
+		sed \
+		    -e 's|/var/lib/dansal/dansal.sock|/var/lib/dansal/$(INSTANCE)/dansal.sock|' \
+		    -e 's|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|' \
+		    -e 's|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
 		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
@@ -202,7 +203,7 @@ endif
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/config.yaml already exists — not overwriting"; \
 	fi
-	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/web.yaml ]; then \
+	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/web.yaml ]; then \
 		sed 's|/var/lib/dansal-web/web.db|/var/lib/dansal-web/$(INSTANCE)/web.db|' \
 		    packaging/web.yaml > $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
@@ -211,10 +212,11 @@ endif
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/web.yaml already exists — not overwriting"; \
 	fi
-	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml ]; then \
-		sed 's|admin_socket: "/var/lib/dansal/dansal.sock"|admin_socket: "/var/lib/dansal/$(INSTANCE)/dansal.sock"|; \
-		     s|web_db_path: "/var/lib/dansal-web/web.db"|web_db_path: "/var/lib/dansal-web/$(INSTANCE)/web.db"|; \
-		     s|instance: ""|instance: "$(INSTANCE)"|' \
+	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml ]; then \
+		sed \
+		    -e 's|admin_socket: "/var/lib/dansal/dansal.sock"|admin_socket: "/var/lib/dansal/$(INSTANCE)/dansal.sock"|' \
+		    -e 's|web_db_path: "/var/lib/dansal-web/web.db"|web_db_path: "/var/lib/dansal-web/$(INSTANCE)/web.db"|' \
+		    -e 's|instance: ""|instance: "$(INSTANCE)"|' \
 		    packaging/webmin.yaml > $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
 		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \

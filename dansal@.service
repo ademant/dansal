@@ -20,7 +20,7 @@ RuntimeDirectoryMode=0750
 StateDirectory=dansal/%i
 StateDirectoryMode=0750
 ConfigurationDirectory=dansal/%i
-ConfigurationDirectoryMode=0750
+ConfigurationDirectoryMode=0770
 
 # Sandboxing
 NoNewPrivileges=true

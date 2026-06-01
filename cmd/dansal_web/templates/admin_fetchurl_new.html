@@ -26,11 +26,27 @@
   </div>
   <div class="form-row">
     <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
-    <select id="organization_id" name="organization_id">
+    <select id="organization_id" name="organization_id" onchange="filterTemplates(this.value)">
       <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
       {{range .Orgs}}<option value="{{.ID}}"{{if eq .ID $.Data.OrgID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </div>
+  {{if .Templates}}
+  <div class="form-row" id="tpl-row" style="{{if eq .TemplateID 0}}display:none{{end}}">
+    <label for="template_id">{{$.Strings.T "admin_fetchurl_template_label"}}</label>
+    <select id="template_id" name="template_id">
+      <option value="">—</option>
+      {{range .Templates}}<option value="{{.ID}}" data-org="{{if .OrgID}}{{derefInt .OrgID}}{{end}}"{{if eq .ID $.Data.TemplateID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </div>
+  <div class="form-row" id="tpl-mode-row" style="{{if eq .TemplateID 0}}display:none{{end}}">
+    <label for="template_mode">{{$.Strings.T "admin_fetchurl_template_mode_label"}}</label>
+    <select id="template_mode" name="template_mode">
+      <option value="fetch_master"{{if eq .TemplateMode "fetch_master"}} selected{{end}}>{{$.Strings.T "admin_fetchurl_template_mode_fetch"}}</option>
+      <option value="template_master"{{if eq .TemplateMode "template_master"}} selected{{end}}>{{$.Strings.T "admin_fetchurl_template_mode_tpl"}}</option>
+    </select>
+  </div>
+  {{end}}
   <div class="form-row">
     <label for="tags">{{$.Strings.T "fetch_tags"}}</label>
     <input type="text" id="tags" name="tags" placeholder="folk, balfolk">
@@ -50,6 +66,32 @@
 .import-notice{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .85rem;margin-bottom:1rem;font-size:.9rem}
 </style>
 <script>
+function filterTemplates(orgID) {
+  var row = document.getElementById('tpl-row');
+  var modeRow = document.getElementById('tpl-mode-row');
+  if (!row) return;
+  var sel = document.getElementById('template_id');
+  var opts = sel ? sel.querySelectorAll('option') : [];
+  var anyVisible = false;
+  opts.forEach(function(opt) {
+    if (!opt.value) return; // keep the blank option always
+    var optOrg = opt.getAttribute('data-org') || '';
+    var show = !orgID || optOrg === '' || optOrg === orgID;
+    opt.hidden = !show;
+    if (show) anyVisible = true;
+  });
+  if (!anyVisible) {
+    sel.value = '';
+  } else if (sel && sel.value && sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].hidden) {
+    sel.value = '';
+  }
+  var show = anyVisible && orgID;
+  row.style.display = show ? '' : 'none';
+  modeRow.style.display = show ? '' : 'none';
+}
+// Run on page load to apply the initial org selection
+filterTemplates(document.getElementById('organization_id').value);
+
 document.getElementById('url').addEventListener('blur', function() {
   var u = this.value.toLowerCase();
   var sel = document.getElementById('type');

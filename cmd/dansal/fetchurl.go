@@ -21,8 +21,10 @@ type FetchURLRequest struct {
 	URL            string   `json:"url"`
 	Type           string   `json:"type"`
 	Tags           []string `json:"tags"`
-	Organization   string   `json:"organization,omitempty"`   // find-or-create by name
+	Organization   string   `json:"organization,omitempty"`    // find-or-create by name
 	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
+	TemplateID     *int     `json:"template_id,omitempty"`
+	TemplateMode   string   `json:"template_mode,omitempty"`
 }
 
 type FetchSource struct {
@@ -1140,7 +1142,16 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID}
+	if req.TemplateID != nil || req.TemplateMode != "" {
+		var tplVal any
+		if req.TemplateID != nil {
+			tplVal = *req.TemplateID
+		}
+		db.Exec("UPDATE fetch_sources SET template_id = ?, template_mode = ? WHERE id = ?",
+			tplVal, req.TemplateMode, sourceID)
+	}
+
+	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode}
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
 		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)

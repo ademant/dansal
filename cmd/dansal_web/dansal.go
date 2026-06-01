@@ -739,7 +739,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 	return nil
 }
 
-func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, token string) (int, error) {
+func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode string, token string) (int, error) {
 	payload := map[string]any{
 		"url":  rawURL,
 		"type": typ,
@@ -747,6 +747,10 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 	}
 	if orgID != nil {
 		payload["organization_id"] = *orgID
+	}
+	if templateID != nil {
+		payload["template_id"] = *templateID
+		payload["template_mode"] = templateMode
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl", token, body)

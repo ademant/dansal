@@ -258,8 +258,8 @@ func main() {
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("GET /admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("POST /admin/fetchurls/new", adminRateLimit(adminFetchurlNewPostHandler(cfg, tmpls, client, i18n)))
+		r.HandleFunc("GET /admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/fetchurls/new", adminRateLimit(adminFetchurlNewPostHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/fetchurls/bulk", adminRateLimit(adminFetchurlBulkHandler(cfg, client)))
 		r.HandleFunc("GET /admin/fetchurls/{id}/edit", adminFetchurlEditPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/fetchurls/{id}/edit", adminRateLimit(adminFetchurlSaveHandler(cfg, tmpls, db, client, i18n)))

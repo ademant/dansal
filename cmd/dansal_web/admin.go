@@ -1020,15 +1020,18 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 type AdminFetchurlNewData struct {
 	Orgs         []Organization
+	Templates    []EventTemplate
 	ErrorKey     string
 	URL          string
 	Type         string
 	OrgID        int
+	TemplateID   int
+	TemplateMode string
 	FromImport   bool
 	CreatedAfter string
 }
 
-func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -1047,9 +1050,19 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 			orgs = filtered
 		}
 		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
+		var orgIDs []int
+		if su.Role == "admin" {
+			for _, o := range orgs {
+				orgIDs = append(orgIDs, o.ID)
+			}
+		} else {
+			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
+		}
+		templates, _ := listTemplates(db, su.ID, orgIDs)
 		title := i18n.T(r, "fetch_new_title")
 		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
 			Orgs:         orgs,
+			Templates:    templates,
 			URL:          r.URL.Query().Get("url"),
 			Type:         r.URL.Query().Get("type"),
 			OrgID:        orgID,
@@ -1059,7 +1072,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 	}
 }
 
-func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -1095,21 +1108,47 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, client *DansalCl
 				return
 			}
 		}
+		var templateID *int
+		templateMode := r.FormValue("template_mode")
+		if v := r.FormValue("template_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				templateID = &n
+			}
+		}
+		if templateID == nil {
+			templateMode = ""
+		}
 		createdAfter := r.FormValue("created_after")
 		token := getSessionToken(r)
-		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, token); err != nil {
+		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, token); err != nil {
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgIDInt := 0
 			if orgID != nil {
 				orgIDInt = *orgID
 			}
+			var orgIDs []int
+			if su.Role == "admin" {
+				for _, o := range orgs {
+					orgIDs = append(orgIDs, o.ID)
+				}
+			} else {
+				orgIDs = getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))
+			}
+			templates, _ := listTemplates(db, su.ID, orgIDs)
+			tplIDInt := 0
+			if templateID != nil {
+				tplIDInt = *templateID
+			}
 			title := i18n.T(r, "fetch_new_title")
 			renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
 				Orgs:         orgs,
+				Templates:    templates,
 				ErrorKey:     "fetch_add_error",
 				URL:          rawURL,
 				Type:         typ,
 				OrgID:        orgIDInt,
+				TemplateID:   tplIDInt,
+				TemplateMode: templateMode,
 				FromImport:   createdAfter != "",
 				CreatedAfter: createdAfter,
 			}))

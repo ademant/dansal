@@ -15,12 +15,25 @@ sudo make deploy INSTANCE=prod
 
 `make deploy INSTANCE=<name>` installs binaries to `/usr/lib/dansal/<name>/`, updates systemd template units, and restarts the named instance (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`). Each instance has its own binary directory so dev/test/prod can run different versions independently. It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
 
-**Setting up a new instance** (idempotent — safe to re-run):
+**Setting up a new instance** (first time only):
 ```bash
+# 1. Create dirs, install template configs, enable units
 sudo make setup-instance INSTANCE=prod
-# then edit /etc/dansal/prod/config.yaml, web.yaml, webmin.yaml
-sudo systemctl start dansal@prod dansal-web@prod dansal-webmin@prod
-sudo systemctl start dansal-fetch@prod.timer dansal-backup@prod.timer
+
+# 2. Edit the three config files
+sudo nano /etc/dansal/prod/config.yaml   # port, base_url, smtp
+sudo nano /etc/dansal/prod/web.yaml      # listen, domain, dansal_url
+sudo nano /etc/dansal/prod/webmin.yaml   # listen, session_secret
+
+# 3. Install binaries and start services
+make build
+sudo make deploy INSTANCE=prod
+```
+
+**Updating an existing instance:**
+```bash
+make build
+sudo make deploy INSTANCE=prod
 ```
 
 Do **not** run `go build ./cmd/...` and install manually — always use `make build && sudo make deploy INSTANCE=<name>` to ensure all binaries are updated together.

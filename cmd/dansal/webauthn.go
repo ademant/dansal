@@ -131,10 +131,11 @@ type waRegSession struct {
 	Email       string               `json:"email"`
 	DisplayName string               `json:"display_name"`
 	InviteID    int                  `json:"invite_id"`
+	UserID      int                  `json:"user_id"` // placeholder user created in begin; 0 = legacy
 }
 
 // POST /api/v1/invites/{token}/webauthn/begin
-// Body: {"username":"…","email":"…"}
+// Body: {"display_name":"…","email":"…"} — email is optional
 // Returns: {"session_id":"…","options":{…}}
 func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	if wauthn == nil {
@@ -145,14 +146,16 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 
 	var invite struct {
 		ID          int
+		Role        string
+		OrgID       sql.NullInt64
 		ExpiresAt   string
 		UsedAt      string
 		PresetEmail string
 	}
 	err := db.QueryRow(
-		`SELECT id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
+		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
 		 FROM invite_links WHERE token=?`, token,
-	).Scan(&invite.ID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
+	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
@@ -174,24 +177,49 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	// Preset email from registration overrides whatever the client sends.
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
-	if req.Email == "" {
-		writeError(w, "email is required", http.StatusBadRequest)
+	// Email no longer required — passkey-only accounts are supported.
+
+	// Create a placeholder user upfront so we have a stable numeric ID to use
+	// as the WebAuthn user handle. This enables discoverable (resident-key) login
+	// without any temp-handle workarounds.
+	emailVerified := 0
+	if invite.PresetEmail != "" {
+		emailVerified = 1
+	}
+	var emailVal interface{} = nil
+	if req.Email != "" {
+		emailVal = req.Email
+	}
+	result, err := db.Exec(
+		"INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES (?, ?, '', ?, ?)",
+		emailVal, req.DisplayName, invite.Role, emailVerified,
+	)
+	if err != nil {
+		writeError(w, "Account with this email already exists", http.StatusConflict)
 		return
 	}
+	userID, _ := result.LastInsertId()
 
-	// Use a stable handle scoped to this invite+email so the ceremony can be
-	// completed without the user existing in the DB yet.
-	tempUser := &waUser{
-		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, req.Email)),
-		username: req.Email,
+	username := req.Email
+	if username == "" {
+		username = req.DisplayName
+	}
+	if username == "" {
+		username = fmt.Sprintf("user#%d", userID)
+	}
+	regUser := &waUser{
+		id:       userHandle(int(userID)),
+		username: username,
 	}
 
-	options, sessionData, err := wauthn.BeginRegistration(tempUser)
+	options, sessionData, err := wauthn.BeginRegistration(regUser,
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
+	)
 	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
 		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 		return
 	}
@@ -201,13 +229,16 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		Email:       req.Email,
 		DisplayName: req.DisplayName,
 		InviteID:    invite.ID,
+		UserID:      int(userID),
 	})
 	sessionID, err := generateSessionToken()
 	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
 		return
 	}
 	if err := saveWASession(sessionID, blob); err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
 		writeError(w, "Could not store session", http.StatusInternalServerError)
 		return
 	}
@@ -221,7 +252,7 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/invites/{token}/webauthn/finish?session_id=…
 // Body: PublicKeyCredential JSON from navigator.credentials.create()
-// Returns: {"token":"…","username":"…","role":"…"}
+// Returns: {"token":"…","user_id":…,"role":"…"}
 func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	if wauthn == nil {
 		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
@@ -234,7 +265,6 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load full invite details.
 	var invite struct {
 		ID        int
 		Role      string
@@ -264,44 +294,34 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var stored waRegSession
-	if err := json.Unmarshal(blob, &stored); err != nil || stored.InviteID != invite.ID {
+	if err := json.Unmarshal(blob, &stored); err != nil || stored.InviteID != invite.ID || stored.UserID == 0 {
 		writeError(w, "Session mismatch", http.StatusBadRequest)
 		return
 	}
 
-	tempUser := &waUser{
-		id:       []byte(fmt.Sprintf("pending:%d:%s", invite.ID, stored.Email)),
-		username: stored.Email,
-	}
+	// The user was pre-created in Begin; use the same stable handle.
+	regUser := loadWebAuthnUser(stored.UserID, stored.Email)
 
-	credential, err := wauthn.FinishRegistration(tempUser, stored.Session, r)
+	credential, err := wauthn.FinishRegistration(regUser, stored.Session, r)
 	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
 		writeError(w, "WebAuthn verification failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
 
-	// password_hash is empty string — password login will not work until set.
-	result, err := tx.Exec(
-		"INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES (?, ?, '', ?, 1)",
-		stored.Email, stored.DisplayName, invite.Role,
-	)
-	if err != nil {
-		writeError(w, "Username or email already exists", http.StatusConflict)
-		return
-	}
-	userID, _ := result.LastInsertId()
-
 	if _, err := tx.Exec(
 		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
+		stored.UserID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
 	); err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
 		writeError(w, "Could not store credential", http.StatusInternalServerError)
 		return
 	}
@@ -309,22 +329,27 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	if invite.OrgID.Valid {
 		tx.Exec(
 			"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-			invite.OrgID.Int64, userID,
+			invite.OrgID.Int64, stored.UserID,
 		)
 	}
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 
 	if err := tx.Commit(); err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", stored.Email, invite.Role, invite.ID)
+	identifier := stored.Email
+	if identifier == "" {
+		identifier = stored.DisplayName
+	}
+	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", identifier, invite.Role, invite.ID)
 
-	sessionToken, expiresAt, err := createTokenInDB(int(userID), r.UserAgent(), getClientIP(r), "")
+	sessionToken, expiresAt, err := createTokenInDB(stored.UserID, r.UserAgent(), getClientIP(r), "")
 	if err != nil {
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"status": "created", "email": stored.Email})
+		json.NewEncoder(w).Encode(map[string]any{"status": "created"})
 		return
 	}
 
@@ -333,7 +358,7 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"token":      sessionToken,
 		"expires_at": expiresAt.Format(time.RFC3339),
-		"user_id":    int(userID),
+		"user_id":    stored.UserID,
 		"email":      stored.Email,
 		"role":       invite.Role,
 	})
@@ -347,7 +372,7 @@ type waLoginSession struct {
 }
 
 // POST /api/v1/auth/webauthn/login/begin
-// Body: {"email":"…"}
+// Body: {"email":"…"} — email optional; omitting triggers discoverable (resident-key) login
 // Returns: {"session_id":"…","options":{…}}
 func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 	if wauthn == nil {
@@ -358,31 +383,39 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	if req.Email == "" {
-		writeError(w, "email is required", http.StatusBadRequest)
-		return
-	}
 
+	var options *protocol.CredentialAssertion
+	var sessionData *webauthn.SessionData
 	var userID int
-	var userEmail string
-	if err := db.QueryRow(
-		"SELECT id, email FROM users WHERE email=? AND disabled=0", req.Email,
-	).Scan(&userID, &userEmail); err != nil {
-		// Don't reveal whether user exists; use generic error.
-		writeError(w, "No passkeys found for this user", http.StatusNotFound)
-		return
-	}
 
-	user := loadWebAuthnUser(userID, userEmail)
-	if len(user.credentials) == 0 {
-		writeError(w, "No passkeys registered for this user", http.StatusBadRequest)
-		return
-	}
-
-	options, sessionData, err := wauthn.BeginLogin(user)
-	if err != nil {
-		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
-		return
+	if req.Email == "" {
+		// Discoverable login: browser presents resident-key credentials, no identifier needed.
+		var err error
+		options, sessionData, err = wauthn.BeginDiscoverableLogin()
+		if err != nil {
+			writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
+			return
+		}
+		// userID stays 0 as sentinel for the discoverable path in finish.
+	} else {
+		var userEmail string
+		if err := db.QueryRow(
+			"SELECT id, COALESCE(email,'') FROM users WHERE email=? AND disabled=0", req.Email,
+		).Scan(&userID, &userEmail); err != nil {
+			writeError(w, "No passkeys found for this user", http.StatusNotFound)
+			return
+		}
+		user := loadWebAuthnUser(userID, userEmail)
+		if len(user.credentials) == 0 {
+			writeError(w, "No passkeys registered for this user", http.StatusBadRequest)
+			return
+		}
+		var err error
+		options, sessionData, err = wauthn.BeginLogin(user)
+		if err != nil {
+			writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	blob, _ := json.Marshal(waLoginSession{Session: *sessionData, UserID: userID})
@@ -405,7 +438,7 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/auth/webauthn/login/finish?session_id=…
 // Body: PublicKeyCredential JSON from navigator.credentials.get()
-// Returns: {"token":"…","expires_at":"…","username":"…","role":"…"}
+// Returns: {"token":"…","expires_at":"…","user_id":…,"email":"…","role":"…"}
 func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if wauthn == nil {
 		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
@@ -428,9 +461,53 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Discoverable path: UserID==0 means no email was given at begin time.
+	// Look up the user by credential ID after the browser presents its resident key.
+	if stored.UserID == 0 {
+		var discUserID int
+		var discEmail, discRole string
+		discHandler := func(rawID, _ []byte) (webauthn.User, error) {
+			if err := db.QueryRow(
+				`SELECT c.user_id, COALESCE(u.email,''), u.role
+				 FROM webauthn_credentials c
+				 JOIN users u ON u.id=c.user_id
+				 WHERE c.credential_id=? AND u.disabled=0`,
+				rawID,
+			).Scan(&discUserID, &discEmail, &discRole); err != nil {
+				return nil, fmt.Errorf("credential not found")
+			}
+			return loadWebAuthnUser(discUserID, discEmail), nil
+		}
+		_, credential, err := wauthn.FinishPasskeyLogin(discHandler, stored.Session, r)
+		if err != nil {
+			log.Printf("webauthn: discoverable login failed: %v", err)
+			writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
+			return
+		}
+		db.Exec(
+			"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
+			credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), discUserID, credential.ID,
+		)
+		sessionToken, expiresAt, err := createTokenInDB(discUserID, r.UserAgent(), getClientIP(r), "")
+		if err != nil {
+			writeError(w, "Could not create session", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":      sessionToken,
+			"expires_at": expiresAt.Format(time.RFC3339),
+			"user_id":    discUserID,
+			"email":      discEmail,
+			"role":       discRole,
+		})
+		return
+	}
+
+	// Non-discoverable path: email was specified at begin time.
 	var userEmail, role string
 	if err := db.QueryRow(
-		"SELECT email, role FROM users WHERE id=? AND disabled=0", stored.UserID,
+		"SELECT COALESCE(email,''), role FROM users WHERE id=? AND disabled=0", stored.UserID,
 	).Scan(&userEmail, &role); err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -438,7 +515,6 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 	user := loadWebAuthnUser(stored.UserID, userEmail)
 
-	// Parse the request body once so we can inspect fields before validation.
 	parsedResponse, err := protocol.ParseCredentialRequestResponse(r)
 	if err != nil {
 		writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
@@ -452,11 +528,8 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// The invite registration flow used a temp user handle ("pending:<id>:<email>")
-	// because the user didn't exist in the DB yet at BeginRegistration time.
-	// If the authenticator echoes back a handle that differs from our DB-derived
-	// one, adopt it so the library's identity check passes. Credential ownership
-	// and signature verification still enforce security.
+	// Adopt whatever user handle the authenticator echoes back so the library's
+	// identity check passes. Credential ownership and signature still enforce security.
 	loginSession := stored.Session
 	if uh := parsedResponse.Response.UserHandle; len(uh) > 0 {
 		user.id = uh
@@ -470,7 +543,6 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist updated sign count and flags (fixes stale flags=0 rows).
 	db.Exec(
 		"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
 		credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), stored.UserID, credential.ID,
@@ -530,12 +602,14 @@ func webauthnUserRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	callerID, _ := callerFromRequest(r)
 	var userEmail string
-	if err := db.QueryRow("SELECT email FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+	if err := db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 	user := loadWebAuthnUser(callerID, userEmail)
-	options, sessionData, err := wauthn.BeginRegistration(user)
+	options, sessionData, err := wauthn.BeginRegistration(user,
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
+	)
 	if err != nil {
 		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 		return
@@ -577,7 +651,7 @@ func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var userEmail string
-	if err := db.QueryRow("SELECT email FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+	if err := db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}

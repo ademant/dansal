@@ -12,8 +12,10 @@
   </p>{{end}}
   <div class="login-form">
     <span class="login-section-title">{{$.Strings.T "login_passkey_title"}}</span>
+    <button type="button" id="btn-passkey-instant" onclick="passkeyLoginDiscoverable()" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
+    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
     <label for="passkey-email">{{$.Strings.T "login_email"}}</label>
-    <input id="passkey-email" type="email" autocomplete="email"{{if not .ErrorKey}} autofocus{{end}}>
+    <input id="passkey-email" type="email" autocomplete="email">
     <button type="button" id="btn-passkey-login" onclick="passkeyLogin()">{{$.Strings.T "login_passkey_submit"}}</button>
     <div id="passkey-msg" hidden class="login-error"></div>
   </div>
@@ -64,17 +66,13 @@
     return out.buffer;
   }
 
-  window.passkeyLogin = async function(){
-    var u = document.getElementById('passkey-email').value.trim();
+  async function doPasskeyLogin(email) {
     var msgEl = document.getElementById('passkey-msg');
     msgEl.hidden = true;
-    var btn = document.getElementById('btn-passkey-login');
-    btn.disabled = true;
-
     try {
       var beginResp = await fetch('/auth/webauthn/login/begin', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({email: u})
+        body: JSON.stringify({email: email})
       });
       var beginData = await beginResp.json();
       if(!beginResp.ok) throw new Error(beginData.error || beginResp.statusText);
@@ -110,6 +108,26 @@
     } catch(err) {
       msgEl.hidden = false;
       msgEl.textContent = err.message || '{{$.Strings.T "login_passkey_error"}}';
+    }
+  }
+
+  window.passkeyLoginDiscoverable = async function() {
+    var btn = document.getElementById('btn-passkey-instant');
+    btn.disabled = true;
+    try {
+      await doPasskeyLogin('');
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  window.passkeyLogin = async function() {
+    var u = document.getElementById('passkey-email').value.trim();
+    var btn = document.getElementById('btn-passkey-login');
+    btn.disabled = true;
+    try {
+      await doPasskeyLogin(u);
+    } finally {
       btn.disabled = false;
     }
   };
@@ -125,6 +143,10 @@
 .login-form input:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .login-form button{margin-top:.4rem;padding:.5rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
 .login-form button:hover{background:#0d4a80}
+.btn-passkey-instant{background:#0a7c4a!important;font-weight:600;font-size:1rem!important;padding:.6rem!important}
+.btn-passkey-instant:hover{background:#065e37!important}
+.passkey-or{display:flex;align-items:center;gap:.5rem;color:#999;font-size:.8rem;margin:.15rem 0}
+.passkey-or::before,.passkey-or::after{content:'';flex:1;border-top:1px solid #e0e0e0}
 .login-section-title{font-weight:700;font-size:.95rem;color:#333}
 .magic-section{margin-top:1.25rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.75rem 1.5rem}
 .magic-section summary{cursor:pointer;font-size:.9rem;color:#555;font-weight:600}

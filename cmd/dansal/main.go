@@ -1253,6 +1253,84 @@ func migrateDB() {
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_data TEXT")
 	mark(1)
 	} // end v1
+
+	// v2: #425 email optional, discoverable passkey login.
+	if !applied(2) {
+		migrateUsersEmailOptional()
+		// Clean up placeholder users from interrupted passkey registrations (begin without finish).
+		db.Exec(`DELETE FROM users WHERE password_hash='' AND role != 'admin'
+		         AND id NOT IN (SELECT user_id FROM webauthn_credentials)
+		         AND id NOT IN (SELECT user_id FROM tokens)
+		         AND created_at < datetime('now','-1 day')`)
+		mark(2)
+	}
+}
+
+// migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
+// (no email address) are supported.
+func migrateUsersEmailOptional() {
+	var notNull int
+	if err := db.QueryRow(`SELECT "notnull" FROM pragma_table_info('users') WHERE name='email'`).Scan(&notNull); err != nil || notNull == 0 {
+		return // already nullable or can't determine
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateUsersEmailOptional: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateUsersEmailOptional: pragma off: %v", err)
+		return
+	}
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateUsersEmailOptional: begin: %v", err)
+		return
+	}
+	stmts := []string{
+		`CREATE TABLE users_v3 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			email TEXT UNIQUE,
+			display_name TEXT,
+			password_hash TEXT NOT NULL DEFAULT '',
+			role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher')),
+			telegram TEXT,
+			matrix TEXT,
+			email_verified INTEGER DEFAULT 0,
+			telegram_verified INTEGER DEFAULT 0,
+			matrix_verified INTEGER DEFAULT 0,
+			disabled INTEGER DEFAULT 0,
+			failed_login_count INTEGER DEFAULT 0,
+			failed_login_since INTEGER,
+			last_magic_sent_at INTEGER,
+			description TEXT,
+			mastodon TEXT,
+			website TEXT,
+			telegram_chat_id TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO users_v3 SELECT id, NULLIF(email,''), display_name, password_hash, role, telegram, matrix,
+		  email_verified, telegram_verified, matrix_verified, disabled, failed_login_count,
+		  failed_login_since, last_magic_sent_at, description, mastodon, website, telegram_chat_id, created_at
+		 FROM users`,
+		`DROP TABLE users`,
+		`ALTER TABLE users_v3 RENAME TO users`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateUsersEmailOptional: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateUsersEmailOptional: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+	log.Printf("migrateUsersEmailOptional: users.email is now nullable")
 }
 
 func migrateFetchSourcesDropTemplatesFK() {
@@ -1326,7 +1404,7 @@ func createTables() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT UNIQUE NOT NULL,
+		email TEXT UNIQUE,
 		display_name TEXT,
 		password_hash TEXT NOT NULL DEFAULT '',
 		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher')),
@@ -1693,9 +1771,9 @@ func createTables() error {
 	if err != nil {
 		return err
 	}
-	// Mark all legacy migrations as applied for fresh installs — createTables
-	// creates the full current schema so migrateDB v1 is a no-op.
+	// Mark all migrations as applied for fresh installs.
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(2)")
 	return nil
 }
 

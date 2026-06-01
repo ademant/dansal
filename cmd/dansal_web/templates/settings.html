@@ -6,6 +6,7 @@
   {{with .Data}}
   {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
+  {{if and (not .User.Email) (not .User.Telegram) (not .User.Matrix)}}<p class="msg msg-warn" role="alert">{{$.Strings.T "settings_no_backup_warn"}}</p>{{end}}
   {{if .VerifySent}}<p class="msg msg-ok" role="status">
     {{if eq .VerifySent "telegram"}}{{$.Strings.T "settings_verify_sent_telegram"}}
     {{else if eq .VerifySent "matrix"}}{{$.Strings.T "settings_verify_sent_matrix"}}
@@ -42,7 +43,7 @@
     <h2>{{$.Strings.T "settings_email_section"}}</h2>
     <div class="field-row">
       <label for="email">{{$.Strings.T "settings_email"}}</label>
-      <input id="email" type="email" name="email" value="{{.User.Email}}" required>
+      <input id="email" type="email" name="email" value="{{.User.Email}}">
       {{if .User.Email}}
         {{if .User.EmailVerified}}
           <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
@@ -258,6 +259,7 @@
 .msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem}
 .msg-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
 .msg-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.msg-warn{background:#fff3cd;color:#856404;border:1px solid #ffc107}
 .settings-card{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem}
 .settings-card h2{font-size:1rem;margin:.9rem 0 .5rem;color:#333}
 .settings-card h2:first-child{margin-top:0}

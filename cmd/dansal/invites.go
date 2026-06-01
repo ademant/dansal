@@ -276,16 +276,15 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	// Preset email from registration overrides whatever the client sends.
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
-	if req.Email == "" {
-		writeError(w, "email is required", http.StatusBadRequest)
+	// Email is optional; display_name is required when no email is provided.
+	if req.Email == "" && req.DisplayName == "" {
+		writeError(w, "email or display name is required", http.StatusBadRequest)
 		return
 	}
-	if invite.PresetEmail == "" {
-		// Plain admin invite — user supplies their own email; validate it.
+	if req.Email != "" && invite.PresetEmail == "" {
 		if !isValidEmail(req.Email) {
 			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
 			return
@@ -303,18 +302,20 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Email is pre-verified when the invite came from the registration flow
-	// (preset_email set); plain admin invites leave it unverified.
 	emailVerified := 0
 	if invite.PresetEmail != "" {
 		emailVerified = 1
 	}
+	var emailVal interface{} = nil
+	if req.Email != "" {
+		emailVal = req.Email
+	}
 	result, err := tx.Exec(
 		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		req.Email, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix, emailVerified,
+		emailVal, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix, emailVerified,
 	)
 	if err != nil {
-		writeError(w, "Username or email already exists", http.StatusConflict)
+		writeError(w, "Account with this email already exists", http.StatusConflict)
 		return
 	}
 	userID, _ := result.LastInsertId()

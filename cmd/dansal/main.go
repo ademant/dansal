@@ -1232,6 +1232,59 @@ func migrateDB() {
 	// #398: created_by_id tracks which user created an event or musician.
 	db.Exec("ALTER TABLE events ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
 	db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+	// #342 fix: remove the FK on fetch_sources.template_id that pointed to
+	// event_templates — that table lives in web.db, not calendar.db, so the FK
+	// breaks every INSERT into fetch_sources when foreign_keys=ON.
+	migrateFetchSourcesDropTemplatesFK()
+}
+
+func migrateFetchSourcesDropTemplatesFK() {
+	rows, err := db.Query("PRAGMA foreign_key_list(fetch_sources)")
+	if err != nil {
+		return
+	}
+	hasBadFK := false
+	for rows.Next() {
+		var id, seq int
+		var table, from, to, onUpdate, onDelete, match string
+		rows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
+		if table == "event_templates" {
+			hasBadFK = true
+		}
+	}
+	rows.Close()
+	if !hasBadFK {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateFetchSourcesDropTemplatesFK: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS fetch_sources_v2 (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		url TEXT UNIQUE NOT NULL,
+		type TEXT NOT NULL DEFAULT 'ical',
+		tags TEXT,
+		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+		last_fetched_at INTEGER,
+		last_result TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		template_id INTEGER,
+		template_mode TEXT NOT NULL DEFAULT ''
+	)`)
+	conn.ExecContext(ctx, `INSERT OR IGNORE INTO fetch_sources_v2
+		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
+		       created_at, template_id, template_mode FROM fetch_sources`)
+	conn.ExecContext(ctx, `DROP TABLE fetch_sources`)
+	conn.ExecContext(ctx, `ALTER TABLE fetch_sources_v2 RENAME TO fetch_sources`)
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	log.Printf("migrateFetchSourcesDropTemplatesFK: removed bad FK on fetch_sources.template_id")
 }
 
 func logUnmappedCountries() {
@@ -1387,7 +1440,7 @@ func createTables() error {
 		last_fetched_at INTEGER,
 		last_result TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL,
+		template_id INTEGER,
 		template_mode TEXT NOT NULL DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (

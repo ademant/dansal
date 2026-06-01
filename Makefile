@@ -13,7 +13,7 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
         run fmt vet clean install install-web install-webmin install-units setup-instance \
-        update check-config deb deploy-nginx
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-full
 
 build:
 	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
@@ -279,69 +279,66 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	    dansal_$(DEB_VERSION)_$(DEB_ARCH).deb; \
 	echo "Built dansal_$(DEB_VERSION)_$(DEB_ARCH).deb"
 
-# Deploy nginx configuration using domain from web.yaml
+# Deploy nginx configuration for a specific instance.
+# Usage: sudo make deploy-nginx INSTANCE=prod
 .ONESHELL:
 deploy-nginx:
 	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx requires root"; exit 1; }
-	@if [ ! -f /etc/dansal/web.yaml ]; then \
-	    echo "Error: /etc/dansal/web.yaml not found"; \
-	    echo "Run 'make install-web' first or ensure web.yaml is properly configured"; \
-	    exit 1; \
-	fi
-	# Extract domain with more robust parsing (handles various YAML formats)
-	DOMAIN=$$(grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); \
-	[ -z "$$DOMAIN" ] && { echo "Error: Could not extract domain from /etc/dansal/web.yaml"; echo "Expected format: domain: \"your-domain.com\" or domain: your-domain.com"; echo "Current domain line in /etc/dansal/web.yaml:"; grep -E '^[[:space:]]*domain:' /etc/dansal/web.yaml | sed -E 's/^/    /' || echo "    (no domain line found)"; exit 1; }; \
-	echo "Deploying nginx configuration for domain: $$DOMAIN"
-	# Validate domain format (basic check for dots and valid characters)
-	if ! echo "$$DOMAIN" | grep -q '\.'; then \
-	    echo "Error: Domain '$$DOMAIN' appears invalid (missing dot)"; \
-	    echo "Please check the domain format in /etc/dansal/web.yaml"; \
-	    exit 1; \
-	fi
-	# Create nginx conf.d directory if it doesn't exist
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy-nginx INSTANCE=prod)
+endif
+	set -e
+	WEB_CONF=$(SYSCONFDIR)/$(INSTANCE)/web.yaml
+	API_CONF=$(SYSCONFDIR)/$(INSTANCE)/config.yaml
+	[ -f "$$WEB_CONF" ] || { echo "Error: $$WEB_CONF not found — run setup-instance first"; exit 1; }
+	[ -f "$$API_CONF" ] || { echo "Error: $$API_CONF not found — run setup-instance first"; exit 1; }
+	DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$DOMAIN" ] && { echo "Error: domain not set in $$WEB_CONF"; exit 1; }
+	echo "$$DOMAIN" | grep -q '\.' || { echo "Error: domain '$$DOMAIN' looks invalid"; exit 1; }
+	API_PORT=$$(grep -E '^  port:' "$$API_CONF" | head -1 | sed 's/.*:[[:space:]]*//')
+	API_PORT=$${API_PORT:-8000}
+	WEB_PORT=$$(grep -E '^listen:' "$$WEB_CONF" | sed -E 's/.*:([0-9]+).*/\1/')
+	WEB_PORT=$${WEB_PORT:-8080}
+	echo "Deploying nginx for instance '$(INSTANCE)': $$DOMAIN (api=$$API_PORT web=$$WEB_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
-	# Deploy the nginx configuration template to conf.d
-	# Replace domain in server_name, SSL certificate paths, and comments
-	sed "s/events\.example\.com/$$DOMAIN/g" deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal.conf
-	# Verify the replacement worked
-	if ! grep -q "$$DOMAIN" /etc/nginx/conf.d/dansal.conf; then \
-	    echo "Error: Domain replacement failed. Check if sed command worked."; \
-	    echo "Expected domain: $$DOMAIN"; \
-	    echo "Check the generated file: /etc/nginx/conf.d/dansal.conf"; \
-	    exit 1; \
-	fi
-	# Specifically check that server_name was replaced
-	if ! grep -q "server_name $$DOMAIN;" /etc/nginx/conf.d/dansal.conf; then \
-	    echo "Error: server_name was not properly replaced with domain: $$DOMAIN"; \
-	    echo "Check for empty server_name directives in the generated file"; \
-	    exit 1; \
-	fi
-	# Test the nginx configuration
-	if nginx -t; then \
-	    echo "nginx configuration test passed"; \
-	    # Reload nginx to apply changes \
-	    systemctl reload nginx || systemctl restart nginx; \
-	    echo "nginx configuration deployed and reloaded successfully"; \
-	else \
-	    echo "Error: nginx configuration test failed"; \
-	    exit 1; \
-	fi
+	sed \
+	    -e "s/events\.example\.com/$$DOMAIN/g" \
+	    -e "s/127\.0\.0\.1:8000/127.0.0.1:$$API_PORT/g" \
+	    -e "s/127\.0\.0\.1:8080/127.0.0.1:$$WEB_PORT/g" \
+	    -e "s/\bdansal_api\b/dansal_api_$(INSTANCE)/g" \
+	    -e "s/\bdansal_web\b/dansal_web_$(INSTANCE)/g" \
+	    -e "s/zone=api_limit/zone=api_limit_$(INSTANCE)/g" \
+	    -e "s/zone=auth_limit/zone=auth_limit_$(INSTANCE)/g" \
+	    deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal-$(INSTANCE).conf
+	nginx -t && systemctl reload nginx
+	echo "Deployed /etc/nginx/conf.d/dansal-$(INSTANCE).conf"
 
-# Deploy nginx configuration for dansal-webmin using subdomain from webmin.yaml
+# Deploy nginx configuration for dansal-webmin for a specific instance.
+# Usage: sudo make deploy-nginx-webmin INSTANCE=prod
 .ONESHELL:
 deploy-nginx-webmin:
 	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx-webmin requires root"; exit 1; }
-	@if [ ! -f /etc/dansal/webmin.yaml ]; then \
-	    echo "Error: /etc/dansal/webmin.yaml not found — run 'make install-webmin' first"; \
-	    exit 1; \
-	fi
-	WEBMIN_DOMAIN=$$(grep -E '^[[:space:]]*webmin_domain:' /etc/dansal/webmin.yaml | sed -E 's/webmin_domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); \
-	[ -z "$$WEBMIN_DOMAIN" ] && { echo "Error: webmin_domain not set in /etc/dansal/webmin.yaml"; exit 1; }; \
-	echo "Deploying nginx configuration for webmin domain: $$WEBMIN_DOMAIN"
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy-nginx-webmin INSTANCE=prod)
+endif
+	set -e
+	WEBMIN_CONF=$(SYSCONFDIR)/$(INSTANCE)/webmin.yaml
+	[ -f "$$WEBMIN_CONF" ] || { echo "Error: $$WEBMIN_CONF not found — run setup-instance first"; exit 1; }
+	WEBMIN_DOMAIN=$$(grep -E '^webmin_domain:' "$$WEBMIN_CONF" | sed -E 's/webmin_domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$WEBMIN_DOMAIN" ] && { echo "Error: webmin_domain not set in $$WEBMIN_CONF"; exit 1; }
+	WEBMIN_PORT=$$(grep -E '^listen:' "$$WEBMIN_CONF" | sed -E 's/.*:([0-9]+).*/\1/')
+	WEBMIN_PORT=$${WEBMIN_PORT:-8090}
+	echo "Deploying nginx-webmin for instance '$(INSTANCE)': $$WEBMIN_DOMAIN (port=$$WEBMIN_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
-	sed "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" deploy/nginx/dansal-webmin.conf > /etc/nginx/conf.d/dansal-webmin.conf
+	sed \
+	    -e "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" \
+	    -e "s/127\.0\.0\.1:8090/127.0.0.1:$$WEBMIN_PORT/g" \
+	    -e "s/\bdansal_webmin\b/dansal_webmin_$(INSTANCE)/g" \
+	    -e "s|/etc/dansal/mtls/ca\.crt|$(SYSCONFDIR)/$(INSTANCE)/mtls/ca.crt|g" \
+	    deploy/nginx/dansal-webmin.conf > /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf
 	nginx -t && systemctl reload nginx
-	echo "dansal-webmin nginx configuration deployed"
+	echo "Deployed /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf"
 
-# Deploy both web application and nginx configuration
-deploy-full: install-web deploy-nginx
+# Deploy both web application and nginx configuration for an instance.
+# Usage: sudo make deploy-full INSTANCE=prod
+deploy-full: deploy deploy-nginx

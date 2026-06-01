@@ -111,6 +111,7 @@ server:
   matrix_access_token: ""
 
 smtp:
+  # Remote SMTP delivery — set host to use a network mail server.
   host: ""
   port: 587
   username: ""
@@ -121,6 +122,11 @@ smtp:
   # Path to a file containing only the SMTP password (more secure than
   # embedding it in this file). Takes precedence over password if set.
   password_key: ""
+
+  # Local MTA delivery — set this instead of host to use a local sendmail
+  # binary (e.g. postfix, exim4). Takes precedence over host when set.
+  # Example: /usr/sbin/sendmail
+  sendmail: ""
 
   from: ""
   from_name: "Dansal"

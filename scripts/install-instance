@@ -42,18 +42,11 @@ ask_yn() {
 }
 
 free_port() {
-    # find the lowest free TCP port >= $1
     local port=$1
     while ss -tlnp 2>/dev/null | grep -qE ":${port}[[:space:]]"; do
         port=$((port + 1))
     done
     echo "$port"
-}
-
-set_yaml() {
-    # set_yaml <file> <key-regex> <new-value-line>
-    # Replaces the first matching key line in a YAML file.
-    sed -i "s|${2}|${3}|" "$1"
 }
 
 section() { echo; echo "── $* ──────────────────────────────────────────────────"; }
@@ -90,22 +83,42 @@ ask API_PORT    "API port"    "$DEFAULT_API"
 ask WEB_PORT    "Web port"    "$DEFAULT_WEB"
 ask WEBMIN_PORT "Webmin port" "$DEFAULT_WEBMIN"
 
-# ── URLs & domain ─────────────────────────────────────────────────────────────
+# ── domains ───────────────────────────────────────────────────────────────────
 
-section "URLs"
-ask     API_BASE_URL "API public base URL (e.g. https://api.example.com)"
-ask     WEB_DOMAIN   "Web frontend domain (e.g. events.example.com)"
-ask_optional WEBMIN_DOMAIN "Webmin domain for nginx (leave blank to skip nginx config)"
+section "Domains"
+info "All services are served over https. Enter domain names only."
+echo
 
-# ── SMTP ──────────────────────────────────────────────────────────────────────
+ask WEB_DOMAIN "Web frontend domain (e.g. events.example.com)"
 
-section "SMTP (optional — press Enter to skip and configure later)"
-ask_optional SMTP_HOST "SMTP host"
-if [[ -n $SMTP_HOST ]]; then
-    ask_optional SMTP_PORT     "SMTP port"    "587"
-    ask_optional SMTP_USER     "SMTP username"
-    ask_optional SMTP_PASSWORD "SMTP password"
-    ask_optional SMTP_FROM     "From address"
+ask     API_DOMAIN    "API domain"    "api.${WEB_DOMAIN}"
+ask_optional WEBMIN_DOMAIN "Webmin domain (leave blank to skip nginx config)" \
+    "webmin.${WEB_DOMAIN}"
+
+# ── mail ──────────────────────────────────────────────────────────────────────
+
+section "Mail"
+
+USE_LOCAL_MTA=false
+SENDMAIL_BIN=$(command -v sendmail 2>/dev/null || true)
+SMTP_HOST="" SMTP_PORT="587" SMTP_USER="" SMTP_PASSWORD="" SMTP_FROM=""
+
+if [[ -n $SENDMAIL_BIN ]] && systemctl is-active postfix >/dev/null 2>&1; then
+    info "Postfix is running (sendmail: ${SENDMAIL_BIN})."
+    if ask_yn "Use local MTA instead of a network SMTP server?"; then
+        USE_LOCAL_MTA=true
+        ask SMTP_FROM "From address" "dansal@${WEB_DOMAIN}"
+    fi
+fi
+
+if [[ $USE_LOCAL_MTA == false ]]; then
+    ask_optional SMTP_HOST "SMTP host (leave blank to configure later)"
+    if [[ -n $SMTP_HOST ]]; then
+        ask_optional SMTP_PORT     "SMTP port"     "587"
+        ask_optional SMTP_USER     "SMTP username"
+        ask_optional SMTP_PASSWORD "SMTP password"
+        ask          SMTP_FROM     "From address"  "dansal@${WEB_DOMAIN}"
+    fi
 fi
 
 # ── mTLS for webmin ───────────────────────────────────────────────────────────
@@ -120,12 +133,18 @@ fi
 # ── confirm ───────────────────────────────────────────────────────────────────
 
 section "Summary"
-echo "  Instance   : ${INSTANCE}"
-echo "  API        : 127.0.0.1:${API_PORT}  →  ${API_BASE_URL}"
-echo "  Web        : 127.0.0.1:${WEB_PORT}  (${WEB_DOMAIN})"
-echo "  Webmin     : 127.0.0.1:${WEBMIN_PORT}${WEBMIN_DOMAIN:+  (${WEBMIN_DOMAIN})}"
-[[ -n $SMTP_HOST ]] && echo "  SMTP       : ${SMTP_HOST}:${SMTP_PORT:-587}"
-echo "  mTLS       : ${MTLS}"
+echo "  Instance : ${INSTANCE}"
+echo "  API      : 127.0.0.1:${API_PORT}  (https://${API_DOMAIN})"
+echo "  Web      : 127.0.0.1:${WEB_PORT}  (https://${WEB_DOMAIN})"
+echo "  Webmin   : 127.0.0.1:${WEBMIN_PORT}${WEBMIN_DOMAIN:+  (https://${WEBMIN_DOMAIN})}"
+if [[ $USE_LOCAL_MTA == true ]]; then
+    echo "  Mail     : local MTA (${SENDMAIL_BIN}), from: ${SMTP_FROM}"
+elif [[ -n $SMTP_HOST ]]; then
+    echo "  Mail     : ${SMTP_HOST}:${SMTP_PORT}"
+else
+    echo "  Mail     : (not configured)"
+fi
+echo "  mTLS     : ${MTLS}"
 echo
 ask_yn "Proceed?" y || { echo "Aborted."; exit 0; }
 
@@ -137,33 +156,43 @@ make setup-instance INSTANCE="$INSTANCE"
 # ── patch config.yaml ─────────────────────────────────────────────────────────
 
 CONFIG="${CONFDIR}/config.yaml"
-set_yaml "$CONFIG" '^\s*port: 8000'       "  port: ${API_PORT}"
-set_yaml "$CONFIG" 'base_url: ""'         "  base_url: \"${API_BASE_URL}\""
 
-if [[ -n $SMTP_HOST ]]; then
-    set_yaml "$CONFIG" 'host: ""'         "  host: \"${SMTP_HOST}\""
-    [[ -n ${SMTP_PORT:-} ]]     && set_yaml "$CONFIG" '^smtp:$' "smtp:" # no-op anchor
-    # port line already has a value (587); replace it
-    sed -i "/^smtp:/,/^[^ ]/{s|^  port: .*|  port: ${SMTP_PORT:-587}|}" "$CONFIG"
-    [[ -n ${SMTP_USER:-} ]]     && set_yaml "$CONFIG" 'username: ""'    "  username: \"${SMTP_USER}\""
-    [[ -n ${SMTP_PASSWORD:-} ]] && set_yaml "$CONFIG" 'password: ""'    "  password: \"${SMTP_PASSWORD}\""
-    [[ -n ${SMTP_FROM:-} ]]     && set_yaml "$CONFIG" 'from: ""'        "  from: \"${SMTP_FROM}\""
+sed -i "s|^  port: 8000|  port: ${API_PORT}|" "$CONFIG"
+sed -i "s|base_url: \"\"|  base_url: \"https://${API_DOMAIN}\"|" "$CONFIG"
+
+if [[ $USE_LOCAL_MTA == true ]]; then
+    sed -i "s|  sendmail: \"\"|  sendmail: \"${SENDMAIL_BIN}\"|" "$CONFIG"
+    sed -i "s|  from: \"\"|  from: \"${SMTP_FROM}\"|" "$CONFIG"
+elif [[ -n $SMTP_HOST ]]; then
+    sed -i "s|  host: \"\"|  host: \"${SMTP_HOST}\"|" "$CONFIG"
+    sed -i "/^smtp:/,/^[^ ]/{s|^  port: .*|  port: ${SMTP_PORT}|}" "$CONFIG"
+    [[ -n $SMTP_USER     ]] && sed -i "s|  username: \"\"|  username: \"${SMTP_USER}\"|" "$CONFIG"
+    [[ -n $SMTP_PASSWORD ]] && sed -i "s|  password: \"\"|  password: \"${SMTP_PASSWORD}\"|" "$CONFIG"
+    sed -i "s|  from: \"\"|  from: \"${SMTP_FROM}\"|" "$CONFIG"
 fi
 
 # ── patch web.yaml ────────────────────────────────────────────────────────────
 
 WEB="${CONFDIR}/web.yaml"
-set_yaml "$WEB" '^listen: "127.0.0.1:8080"' "listen: \"127.0.0.1:${WEB_PORT}\""
-set_yaml "$WEB" 'domain: "events.example.com"' "domain: \"${WEB_DOMAIN}\""
-set_yaml "$WEB" '^dansal_url: "http://127.0.0.1:8000"' "dansal_url: \"http://127.0.0.1:${API_PORT}\""
+
+sed -i "s|^listen: \"127.0.0.1:8080\"|listen: \"127.0.0.1:${WEB_PORT}\"|" "$WEB"
+sed -i "s|^domain: \"events.example.com\"|domain: \"${WEB_DOMAIN}\"|" "$WEB"
+sed -i "s|^dansal_url: \"http://127.0.0.1:8000\"|dansal_url: \"http://127.0.0.1:${API_PORT}\"|" "$WEB"
+
+if [[ $USE_LOCAL_MTA == true ]]; then
+    sed -i "s|# smtp_sendmail: \"\"|smtp_sendmail: \"${SENDMAIL_BIN}\"|" "$WEB"
+elif [[ -n $SMTP_HOST ]]; then
+    sed -i "s|# smtp_host: \"\"|smtp_host: \"${SMTP_HOST}\"|" "$WEB"
+fi
 
 # ── patch webmin.yaml ─────────────────────────────────────────────────────────
 
 WEBMIN="${CONFDIR}/webmin.yaml"
 SESSION_SECRET=$(openssl rand -hex 32)
-set_yaml "$WEBMIN" '^listen: "127.0.0.1:8090"' "listen: \"127.0.0.1:${WEBMIN_PORT}\""
-set_yaml "$WEBMIN" '^dansal_url: "http://127.0.0.1:8000"' "dansal_url: \"http://127.0.0.1:${API_PORT}\""
-set_yaml "$WEBMIN" 'session_secret: ""' "session_secret: \"${SESSION_SECRET}\""
+
+sed -i "s|^listen: \"127.0.0.1:8090\"|listen: \"127.0.0.1:${WEBMIN_PORT}\"|" "$WEBMIN"
+sed -i "s|^dansal_url: \"http://127.0.0.1:8000\"|dansal_url: \"http://127.0.0.1:${API_PORT}\"|" "$WEBMIN"
+sed -i "s|session_secret: \"\"|session_secret: \"${SESSION_SECRET}\"|" "$WEBMIN"
 if [[ -n $WEBMIN_DOMAIN ]]; then
     sed -i "s|# webmin_domain: \"webmin.example.com\"|webmin_domain: \"${WEBMIN_DOMAIN}\"|" "$WEBMIN"
 fi
@@ -177,7 +206,6 @@ if [[ $MTLS == true ]]; then
     MTLS_DIR="${CONFDIR}/mtls"
     install -d -m 750 -o root -g dansal "$MTLS_DIR"
 
-    # CA
     openssl genrsa -out "${MTLS_DIR}/ca.key" 4096 2>/dev/null
     openssl req -new -x509 -days 3650 \
         -key "${MTLS_DIR}/ca.key" \
@@ -185,7 +213,6 @@ if [[ $MTLS == true ]]; then
         -subj "/CN=dansal-webmin-${INSTANCE}-ca" 2>/dev/null
     chmod 640 "${MTLS_DIR}/ca.key"
 
-    # Client certificate
     openssl genrsa -out "${MTLS_DIR}/client.key" 4096 2>/dev/null
     openssl req -new \
         -key "${MTLS_DIR}/client.key" \
@@ -199,18 +226,16 @@ if [[ $MTLS == true ]]; then
         -out "${MTLS_DIR}/client.crt" 2>/dev/null
     rm -f "${MTLS_DIR}/client.csr" "${MTLS_DIR}/ca.srl"
 
-    # PKCS#12 bundle for browser import (no password)
     P12="${HOME}/dansal-webmin-${INSTANCE}.p12"
     openssl pkcs12 -export \
-        -in  "${MTLS_DIR}/client.crt" \
+        -in    "${MTLS_DIR}/client.crt" \
         -inkey "${MTLS_DIR}/client.key" \
-        -out "$P12" \
+        -out   "$P12" \
         -passout pass: 2>/dev/null
     chmod 600 "$P12"
 
     info "CA cert    : ${MTLS_DIR}/ca.crt"
-    info "Client cert: ${MTLS_DIR}/client.crt"
-    info "Browser p12: ${P12}  (import this into your browser, no password)"
+    info "Client p12 : ${P12}  (import into browser, no password)"
     echo
     info "Add to your nginx webmin server block:"
     info "  ssl_client_certificate ${MTLS_DIR}/ca.crt;"
@@ -229,10 +254,10 @@ if [[ -f ./dansal && -f ./dansal_web && -f ./dansal_webmin && -f ./dansal_admin 
     make deploy INSTANCE="$INSTANCE"
 elif [[ -f /usr/bin/dansal && -f /usr/bin/dansal-web ]]; then
     info "Package binaries found in /usr/bin/ — copying to instance directory..."
-    install -m 755 /usr/bin/dansal          "${BINDIR}/dansal"
-    install -m 755 /usr/bin/dansal_admin    "${BINDIR}/dansal_admin"
-    install -m 755 /usr/bin/dansal-web      "${BINDIR}/dansal-web"
-    install -m 755 /usr/bin/dansal-webmin   "${BINDIR}/dansal-webmin"
+    install -m 755 /usr/bin/dansal        "${BINDIR}/dansal"
+    install -m 755 /usr/bin/dansal_admin  "${BINDIR}/dansal_admin"
+    install -m 755 /usr/bin/dansal-web    "${BINDIR}/dansal-web"
+    install -m 755 /usr/bin/dansal-webmin "${BINDIR}/dansal-webmin"
     systemctl restart "dansal@${INSTANCE}"
     systemctl try-restart "dansal-web@${INSTANCE}.service"    || true
     systemctl try-restart "dansal-webmin@${INSTANCE}.service" || true

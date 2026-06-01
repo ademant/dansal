@@ -237,15 +237,22 @@ if [[ $MTLS == true ]]; then
     rm -f "${MTLS_DIR}/client.csr" "${MTLS_DIR}/ca.srl"
 
     P12="${HOME}/dansal-webmin-${INSTANCE}.p12"
+    P12_PASSWORD=$(openssl rand -base64 12)
     openssl pkcs12 -export \
         -in    "${MTLS_DIR}/client.crt" \
         -inkey "${MTLS_DIR}/client.key" \
         -out   "$P12" \
-        -passout pass: 2>/dev/null
+        -passout "pass:${P12_PASSWORD}" 2>/dev/null
     chmod 600 "$P12"
 
     info "CA cert    : ${MTLS_DIR}/ca.crt"
-    info "Client p12 : ${P12}  (import into browser, no password)"
+    info "Client p12 : ${P12}"
+    echo
+    echo "  ┌─────────────────────────────────────────────────┐"
+    echo "  │  p12 import password: ${P12_PASSWORD}$(printf '%*s' $((25 - ${#P12_PASSWORD})) '')│"
+    echo "  └─────────────────────────────────────────────────┘"
+    echo "  Save this password — it is not stored anywhere."
+    echo
     echo
     info "Add to your nginx webmin server block:"
     info "  ssl_client_certificate ${MTLS_DIR}/ca.crt;"

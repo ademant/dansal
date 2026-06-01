@@ -1,0 +1,260 @@
+#!/bin/bash
+# install-instance — interactive first-time setup for a new dansal instance.
+# Run as root from the dansal source directory.
+# Usage: sudo scripts/install-instance
+set -euo pipefail
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+die()  { echo "error: $*" >&2; exit 1; }
+info() { echo "  $*"; }
+
+ask() {
+    # ask <var> <prompt> [default]
+    local var=$1 prompt=$2 default=${3:-}
+    local display_default=""
+    [[ -n $default ]] && display_default=" [$default]"
+    while true; do
+        read -rp "  ${prompt}${display_default}: " value
+        value=${value:-$default}
+        [[ -n $value ]] && break
+        echo "  (required)"
+    done
+    printf -v "$var" '%s' "$value"
+}
+
+ask_optional() {
+    # ask_optional <var> <prompt> [default]
+    local var=$1 prompt=$2 default=${3:-}
+    local display_default=""
+    [[ -n $default ]] && display_default=" [$default]"
+    read -rp "  ${prompt}${display_default}: " value
+    printf -v "$var" '%s' "${value:-$default}"
+}
+
+ask_yn() {
+    # ask_yn <prompt> [y|n default]  → returns 0 for yes, 1 for no
+    local prompt=$1 default=${2:-y}
+    local hint="[Y/n]"; [[ $default == n ]] && hint="[y/N]"
+    read -rp "  ${prompt} ${hint}: " answer
+    answer=${answer:-$default}
+    [[ $answer =~ ^[Yy] ]]
+}
+
+free_port() {
+    # find the lowest free TCP port >= $1
+    local port=$1
+    while ss -tlnp 2>/dev/null | grep -qE ":${port}[[:space:]]"; do
+        port=$((port + 1))
+    done
+    echo "$port"
+}
+
+set_yaml() {
+    # set_yaml <file> <key-regex> <new-value-line>
+    # Replaces the first matching key line in a YAML file.
+    sed -i "s|${2}|${3}|" "$1"
+}
+
+section() { echo; echo "── $* ──────────────────────────────────────────────────"; }
+
+# ── preflight ─────────────────────────────────────────────────────────────────
+
+[[ $(id -u) -eq 0 ]] || die "run as root: sudo scripts/install-instance"
+[[ -f Makefile ]] || die "run from the dansal source directory"
+command -v openssl >/dev/null || die "openssl is required"
+
+echo
+echo "dansal instance installer"
+echo "═══════════════════════════════════════════════════════════════"
+
+# ── instance name ─────────────────────────────────────────────────────────────
+
+section "Instance"
+ask INSTANCE "Instance name (e.g. dev, test, prod)"
+
+CONFDIR="/etc/dansal/${INSTANCE}"
+[[ -f "${CONFDIR}/config.yaml" ]] && \
+    die "instance '${INSTANCE}' already exists at ${CONFDIR} — this script is for first-time setup only"
+
+# ── ports ─────────────────────────────────────────────────────────────────────
+
+section "Ports"
+info "Scanning for free ports..."
+
+DEFAULT_API=$(free_port 8000)
+DEFAULT_WEB=$(free_port 8080)
+DEFAULT_WEBMIN=$(free_port 8090)
+
+ask API_PORT    "API port"    "$DEFAULT_API"
+ask WEB_PORT    "Web port"    "$DEFAULT_WEB"
+ask WEBMIN_PORT "Webmin port" "$DEFAULT_WEBMIN"
+
+# ── URLs & domain ─────────────────────────────────────────────────────────────
+
+section "URLs"
+ask     API_BASE_URL "API public base URL (e.g. https://api.example.com)"
+ask     WEB_DOMAIN   "Web frontend domain (e.g. events.example.com)"
+ask_optional WEBMIN_DOMAIN "Webmin domain for nginx (leave blank to skip nginx config)"
+
+# ── SMTP ──────────────────────────────────────────────────────────────────────
+
+section "SMTP (optional — press Enter to skip and configure later)"
+ask_optional SMTP_HOST "SMTP host"
+if [[ -n $SMTP_HOST ]]; then
+    ask_optional SMTP_PORT     "SMTP port"    "587"
+    ask_optional SMTP_USER     "SMTP username"
+    ask_optional SMTP_PASSWORD "SMTP password"
+    ask_optional SMTP_FROM     "From address"
+fi
+
+# ── mTLS for webmin ───────────────────────────────────────────────────────────
+
+section "Webmin mTLS"
+info "mTLS restricts webmin access to browsers with a client certificate."
+MTLS=false
+if ask_yn "Generate a self-signed CA and client certificate for webmin?"; then
+    MTLS=true
+fi
+
+# ── confirm ───────────────────────────────────────────────────────────────────
+
+section "Summary"
+echo "  Instance   : ${INSTANCE}"
+echo "  API        : 127.0.0.1:${API_PORT}  →  ${API_BASE_URL}"
+echo "  Web        : 127.0.0.1:${WEB_PORT}  (${WEB_DOMAIN})"
+echo "  Webmin     : 127.0.0.1:${WEBMIN_PORT}${WEBMIN_DOMAIN:+  (${WEBMIN_DOMAIN})}"
+[[ -n $SMTP_HOST ]] && echo "  SMTP       : ${SMTP_HOST}:${SMTP_PORT:-587}"
+echo "  mTLS       : ${MTLS}"
+echo
+ask_yn "Proceed?" y || { echo "Aborted."; exit 0; }
+
+# ── setup-instance ────────────────────────────────────────────────────────────
+
+section "Creating instance"
+make setup-instance INSTANCE="$INSTANCE"
+
+# ── patch config.yaml ─────────────────────────────────────────────────────────
+
+CONFIG="${CONFDIR}/config.yaml"
+set_yaml "$CONFIG" '^\s*port: 8000'       "  port: ${API_PORT}"
+set_yaml "$CONFIG" 'base_url: ""'         "  base_url: \"${API_BASE_URL}\""
+
+if [[ -n $SMTP_HOST ]]; then
+    set_yaml "$CONFIG" 'host: ""'         "  host: \"${SMTP_HOST}\""
+    [[ -n ${SMTP_PORT:-} ]]     && set_yaml "$CONFIG" '^smtp:$' "smtp:" # no-op anchor
+    # port line already has a value (587); replace it
+    sed -i "/^smtp:/,/^[^ ]/{s|^  port: .*|  port: ${SMTP_PORT:-587}|}" "$CONFIG"
+    [[ -n ${SMTP_USER:-} ]]     && set_yaml "$CONFIG" 'username: ""'    "  username: \"${SMTP_USER}\""
+    [[ -n ${SMTP_PASSWORD:-} ]] && set_yaml "$CONFIG" 'password: ""'    "  password: \"${SMTP_PASSWORD}\""
+    [[ -n ${SMTP_FROM:-} ]]     && set_yaml "$CONFIG" 'from: ""'        "  from: \"${SMTP_FROM}\""
+fi
+
+# ── patch web.yaml ────────────────────────────────────────────────────────────
+
+WEB="${CONFDIR}/web.yaml"
+set_yaml "$WEB" '^listen: "127.0.0.1:8080"' "listen: \"127.0.0.1:${WEB_PORT}\""
+set_yaml "$WEB" 'domain: "events.example.com"' "domain: \"${WEB_DOMAIN}\""
+set_yaml "$WEB" '^dansal_url: "http://127.0.0.1:8000"' "dansal_url: \"http://127.0.0.1:${API_PORT}\""
+
+# ── patch webmin.yaml ─────────────────────────────────────────────────────────
+
+WEBMIN="${CONFDIR}/webmin.yaml"
+SESSION_SECRET=$(openssl rand -hex 32)
+set_yaml "$WEBMIN" '^listen: "127.0.0.1:8090"' "listen: \"127.0.0.1:${WEBMIN_PORT}\""
+set_yaml "$WEBMIN" '^dansal_url: "http://127.0.0.1:8000"' "dansal_url: \"http://127.0.0.1:${API_PORT}\""
+set_yaml "$WEBMIN" 'session_secret: ""' "session_secret: \"${SESSION_SECRET}\""
+if [[ -n $WEBMIN_DOMAIN ]]; then
+    sed -i "s|# webmin_domain: \"webmin.example.com\"|webmin_domain: \"${WEBMIN_DOMAIN}\"|" "$WEBMIN"
+fi
+
+info "Configs written to ${CONFDIR}/"
+
+# ── mTLS certificates ─────────────────────────────────────────────────────────
+
+if [[ $MTLS == true ]]; then
+    section "Generating mTLS certificates"
+    MTLS_DIR="${CONFDIR}/mtls"
+    install -d -m 750 -o root -g dansal "$MTLS_DIR"
+
+    # CA
+    openssl genrsa -out "${MTLS_DIR}/ca.key" 4096 2>/dev/null
+    openssl req -new -x509 -days 3650 \
+        -key "${MTLS_DIR}/ca.key" \
+        -out "${MTLS_DIR}/ca.crt" \
+        -subj "/CN=dansal-webmin-${INSTANCE}-ca" 2>/dev/null
+    chmod 640 "${MTLS_DIR}/ca.key"
+
+    # Client certificate
+    openssl genrsa -out "${MTLS_DIR}/client.key" 4096 2>/dev/null
+    openssl req -new \
+        -key "${MTLS_DIR}/client.key" \
+        -out "${MTLS_DIR}/client.csr" \
+        -subj "/CN=webmin-admin" 2>/dev/null
+    openssl x509 -req -days 3650 \
+        -in  "${MTLS_DIR}/client.csr" \
+        -CA  "${MTLS_DIR}/ca.crt" \
+        -CAkey "${MTLS_DIR}/ca.key" \
+        -CAcreateserial \
+        -out "${MTLS_DIR}/client.crt" 2>/dev/null
+    rm -f "${MTLS_DIR}/client.csr" "${MTLS_DIR}/ca.srl"
+
+    # PKCS#12 bundle for browser import (no password)
+    P12="${HOME}/dansal-webmin-${INSTANCE}.p12"
+    openssl pkcs12 -export \
+        -in  "${MTLS_DIR}/client.crt" \
+        -inkey "${MTLS_DIR}/client.key" \
+        -out "$P12" \
+        -passout pass: 2>/dev/null
+    chmod 600 "$P12"
+
+    info "CA cert    : ${MTLS_DIR}/ca.crt"
+    info "Client cert: ${MTLS_DIR}/client.crt"
+    info "Browser p12: ${P12}  (import this into your browser, no password)"
+    echo
+    info "Add to your nginx webmin server block:"
+    info "  ssl_client_certificate ${MTLS_DIR}/ca.crt;"
+    info "  ssl_verify_client on;"
+fi
+
+# ── binaries ──────────────────────────────────────────────────────────────────
+
+section "Binaries"
+
+BINDIR="/usr/lib/dansal/${INSTANCE}"
+install -d -m 755 "$BINDIR"
+
+if [[ -f ./dansal && -f ./dansal_web && -f ./dansal_webmin && -f ./dansal_admin ]]; then
+    info "Local build artifacts found — installing..."
+    make deploy INSTANCE="$INSTANCE"
+elif [[ -f /usr/bin/dansal && -f /usr/bin/dansal-web ]]; then
+    info "Package binaries found in /usr/bin/ — copying to instance directory..."
+    install -m 755 /usr/bin/dansal          "${BINDIR}/dansal"
+    install -m 755 /usr/bin/dansal_admin    "${BINDIR}/dansal_admin"
+    install -m 755 /usr/bin/dansal-web      "${BINDIR}/dansal-web"
+    install -m 755 /usr/bin/dansal-webmin   "${BINDIR}/dansal-webmin"
+    systemctl restart "dansal@${INSTANCE}"
+    systemctl try-restart "dansal-web@${INSTANCE}.service"    || true
+    systemctl try-restart "dansal-webmin@${INSTANCE}.service" || true
+else
+    echo
+    echo "  No binaries found. Build them as a regular user, then deploy:"
+    echo
+    echo "    make build"
+    echo "    sudo make deploy INSTANCE=${INSTANCE}"
+    echo
+fi
+
+# ── done ──────────────────────────────────────────────────────────────────────
+
+section "Done"
+echo "  Instance '${INSTANCE}' is ready."
+echo
+echo "  Config files (review before starting):"
+echo "    ${CONFDIR}/config.yaml"
+echo "    ${CONFDIR}/web.yaml"
+echo "    ${CONFDIR}/webmin.yaml"
+echo
+echo "  Start timers when ready:"
+echo "    sudo systemctl start dansal-fetch@${INSTANCE}.timer dansal-backup@${INSTANCE}.timer"
+echo

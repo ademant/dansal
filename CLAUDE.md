@@ -17,6 +17,12 @@ sudo make deploy INSTANCE=prod
 
 **Setting up a new instance** (first time only):
 ```bash
+sudo scripts/install-instance
+```
+The script asks for ports, domain, SMTP, and optionally generates a webmin mTLS client certificate. It calls `make setup-instance` internally, patches the config files, and installs binaries.
+
+Manual alternative (if you prefer not to use the script):
+```bash
 # 1. Create dirs, install template configs, enable units
 sudo make setup-instance INSTANCE=prod
 

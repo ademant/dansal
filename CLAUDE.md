@@ -13,7 +13,7 @@ sudo make deploy INSTANCE=dev
 sudo make deploy INSTANCE=prod
 ```
 
-`make deploy INSTANCE=<name>` installs binaries to `/usr/bin/`, updates systemd template units, and restarts the named instance (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`). It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
+`make deploy INSTANCE=<name>` installs binaries to `/usr/lib/dansal/<name>/`, updates systemd template units, and restarts the named instance (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`). Each instance has its own binary directory so dev/test/prod can run different versions independently. It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
 
 **Setting up a new instance** (idempotent — safe to re-run):
 ```bash
@@ -29,9 +29,9 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 
 | Path | Purpose |
 |---|---|
-| `cmd/dansal/` | REST API server (`/usr/bin/dansal`) |
-| `cmd/dansal_web/` | Web frontend + ActivityPub (`/usr/bin/dansal-web`) |
-| `cmd/dansal_admin/` | Admin CLI (`/usr/bin/dansal_admin`) |
+| `cmd/dansal/` | REST API server (`/usr/lib/dansal/<instance>/dansal`) |
+| `cmd/dansal_web/` | Web frontend + ActivityPub (`/usr/lib/dansal/<instance>/dansal-web`) |
+| `cmd/dansal_admin/` | Admin CLI (`/usr/lib/dansal/<instance>/dansal_admin`) |
 | `cmd/dansal_web/templates/` | Go HTML templates |
 | `cmd/dansal_web/i18n.yaml` | Translations (8 languages: `br`, `de`, `bzh`, `en`, `es`, `fr`, `it`, `nl`) |
 

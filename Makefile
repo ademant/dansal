@@ -161,10 +161,11 @@ deploy: install-units
 ifndef INSTANCE
 	$(error INSTANCE is required: sudo make deploy INSTANCE=dev)
 endif
-	install -m 755 dansal        $(BINDIR)/dansal
-	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
-	install -m 755 dansal_web    $(BINDIR)/dansal-web
-	install -m 755 dansal_webmin $(BINDIR)/dansal-webmin
+	install -d -m 755 /usr/lib/dansal/$(INSTANCE)
+	install -m 755 dansal        /usr/lib/dansal/$(INSTANCE)/dansal
+	install -m 755 dansal_admin  /usr/lib/dansal/$(INSTANCE)/dansal_admin
+	install -m 755 dansal_web    /usr/lib/dansal/$(INSTANCE)/dansal-web
+	install -m 755 dansal_webmin /usr/lib/dansal/$(INSTANCE)/dansal-webmin
 	systemctl restart dansal@$(INSTANCE)
 	systemctl try-restart dansal-web@$(INSTANCE).service || true
 	systemctl try-restart dansal-webmin@$(INSTANCE).service || true
@@ -181,6 +182,8 @@ endif
 	$(MAKE) install-units
 	# Allow dansal to submit mail via sendmail (needs postdrop group for maildrop write access)
 	getent group postdrop >/dev/null && usermod -aG postdrop $(SERVICE) || true
+	# Binary directory for this instance
+	install -d -m 755 /usr/lib/dansal/$(INSTANCE)
 	# Config directory (770: group-writable so dansal-webmin can save configs)
 	install -d -m 770 -o root -g $(SERVICE) $(SYSCONFDIR)/$(INSTANCE)
 	# State directories
@@ -189,7 +192,7 @@ endif
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
 	# Template configs — installed only if not already present
 	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
-		sed 's|/run/dansal/dansal.sock|/run/dansal/$(INSTANCE)/dansal.sock|; \
+		sed 's|/var/lib/dansal/dansal.sock|/var/lib/dansal/$(INSTANCE)/dansal.sock|; \
 		     s|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|; \
 		     s|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
 		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
@@ -209,7 +212,8 @@ endif
 		echo "$(SYSCONFDIR)/$(INSTANCE)/web.yaml already exists — not overwriting"; \
 	fi
 	@if [ ! -f $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml ]; then \
-		sed 's|admin_socket: "/run/dansal/dansal.sock"|admin_socket: "/run/dansal/$(INSTANCE)/dansal.sock"|; \
+		sed 's|admin_socket: "/var/lib/dansal/dansal.sock"|admin_socket: "/var/lib/dansal/$(INSTANCE)/dansal.sock"|; \
+		     s|web_db_path: "/var/lib/dansal-web/web.db"|web_db_path: "/var/lib/dansal-web/$(INSTANCE)/web.db"|; \
 		     s|instance: ""|instance: "$(INSTANCE)"|' \
 		    packaging/webmin.yaml > $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml; \

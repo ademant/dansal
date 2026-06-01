@@ -445,7 +445,11 @@
       <option value="">— {{$.Strings.T "admin_template_select_hint"}} —</option>
       {{range .Templates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    <div class="assign-label" style="margin-top:.75rem;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.4rem">{{$.Strings.T "admin_template_assign_fields"}}</div>
+    <div style="margin-top:.75rem;display:flex;align-items:center;gap:.75rem">
+      <span class="assign-label" style="font-weight:600;font-size:.88rem;color:#444">{{$.Strings.T "admin_template_assign_fields"}}</span>
+      <a href="#" class="tpl-sel-all" style="font-size:.8rem">{{$.Strings.T "loc_select_all"}}</a>
+      <a href="#" class="tpl-sel-none" style="font-size:.8rem">{{$.Strings.T "loc_select_none"}}</a>
+    </div>
     <div class="field-grid">
       <label class="field-check"><input type="checkbox" name="tpl_fields" value="timing" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_timing"}}</label>
       <label class="field-check"><input type="checkbox" name="tpl_fields" value="org" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_org"}}</label>
@@ -551,6 +555,16 @@
 
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
+
+(function(){
+  var det=document.getElementById('suggestion-tpl-details');
+  if(!det) return;
+  function cbs(){return det.querySelectorAll('.field-grid input[type=checkbox]');}
+  var all=det.querySelector('.tpl-sel-all');
+  var none=det.querySelector('.tpl-sel-none');
+  if(all) all.addEventListener('click',function(e){e.preventDefault();cbs().forEach(function(c){c.checked=true;});});
+  if(none) none.addEventListener('click',function(e){e.preventDefault();cbs().forEach(function(c){c.checked=false;});});
+})();
 
 function onStartDateChange(v){
   var ed=document.getElementById('end_date');

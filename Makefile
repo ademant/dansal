@@ -311,7 +311,7 @@ endif
 	    -e "s/zone=api_limit/zone=api_limit_$(INSTANCE)/g" \
 	    -e "s/zone=auth_limit/zone=auth_limit_$(INSTANCE)/g" \
 	    deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal-$(INSTANCE).conf
-	nginx -t && systemctl reload nginx
+	nginx -t || { rm -f /etc/nginx/conf.d/dansal-$(INSTANCE).conf; exit 1; }; systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-$(INSTANCE).conf"
 
 # Deploy nginx configuration for dansal-webmin for a specific instance.
@@ -332,13 +332,23 @@ endif
 	echo "Deploying nginx-webmin for instance '$(INSTANCE)': $$WEBMIN_DOMAIN (port=$$WEBMIN_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
 	rm -f /etc/nginx/conf.d/dansal-webmin.conf
+	CA_CERT=$(SYSCONFDIR)/$(INSTANCE)/mtls/ca.crt
 	sed \
 	    -e "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8090/127.0.0.1:$$WEBMIN_PORT/g" \
 	    -e "s/\bdansal_webmin\b/dansal_webmin_$(INSTANCE)/g" \
-	    -e "s|/etc/dansal/mtls/ca\.crt|$(SYSCONFDIR)/$(INSTANCE)/mtls/ca.crt|g" \
+	    -e "s|/etc/dansal/mtls/ca\.crt|$$CA_CERT|g" \
 	    deploy/nginx/dansal-webmin.conf > /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf
-	nginx -t && systemctl reload nginx
+	if [ ! -f "$$CA_CERT" ]; then \
+	    sed -i \
+	        -e '/ssl_verify_client/s/.*/    ssl_verify_client off;/' \
+	        -e '/ssl_client_certificate/d' \
+	        -e '/ssl_verify_depth/d' \
+	        /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf; \
+	    echo "  Note: mTLS disabled (no CA cert for this instance)"; \
+	fi
+	nginx -t || { rm -f /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf; exit 1; }
+	systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf"
 
 # Deploy both web application and nginx configuration for an instance.

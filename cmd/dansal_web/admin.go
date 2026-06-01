@@ -2629,6 +2629,74 @@ func mergeTemplateTime(eventTime, templateTime string) string {
 	return templateTime
 }
 
+// applyTemplateFields copies selected fields from td into req.
+// locations is used to resolve td.LocID; passing nil skips the location lookup.
+func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[string]bool, locations []Location) {
+	if fields["timing"] {
+		req.StartTime = mergeTemplateTime(req.StartTime, td.StartTime)
+		req.EndTime = mergeTemplateTime(req.EndTime, td.EndTime)
+	}
+	if fields["org"] && td.OrgID > 0 {
+		oid := td.OrgID
+		req.OrganizationID = &oid
+	}
+	if fields["loc"] && td.LocID > 0 {
+		for _, l := range locations {
+			if l.ID == td.LocID {
+				req.Location = EventLocReq{
+					Location:  l.Location,
+					Address:   l.Address,
+					Town:      l.Town,
+					Country:   l.Country,
+					Latitude:  l.Latitude,
+					Longitude: l.Longitude,
+				}
+				break
+			}
+		}
+	}
+	if fields["type_flags"] {
+		req.HasBall = td.HasBall
+		req.HasWorkshop = td.HasWorkshop
+		req.HasFestival = td.HasFestival
+		req.WorkshopDifficulty = td.WorkshopDifficulty
+	}
+	if fields["url"] {
+		req.URL = td.URL
+		req.BookingURL = td.BookingURL
+	}
+	if fields["pricing"] {
+		if td.PricingType != "" && td.PricingType != "none" {
+			p := &Pricing{Type: td.PricingType}
+			switch td.PricingType {
+			case "single":
+				p.Amount = td.PricingAmount
+				p.Currency = td.PricingCurrency
+			case "multiple":
+				p.Prices = td.PricingLines
+			}
+			req.Pricing = p
+		} else {
+			req.Pricing = nil
+		}
+	}
+	if fields["tags"] {
+		req.Tags = td.Tags
+	}
+	if fields["dances"] {
+		req.Dances = td.DanceIDs
+	}
+	if fields["food_drink"] {
+		req.Food = td.Food
+		req.Drink = td.Drink
+		req.FloorCondition = td.FloorCondition
+	}
+	if fields["booking"] {
+		req.BookingEnabled = td.BookingEnabled
+		req.TicketsTotal = td.TicketsTotal
+	}
+}
+
 // ── Event Templates ───────────────────────────────────────────────────────────
 
 type AdminTemplatesData struct {
@@ -2848,23 +2916,10 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 			fields[f] = true
 		}
 
-		// Pre-fetch location details if needed.
-		var locForTemplate *EventLocReq
+		// Pre-fetch locations if needed for template location resolution.
+		var tplLocations []Location
 		if fields["loc"] && td.LocID > 0 {
-			bundle := client.FetchRefBundle(r.Context())
-			for _, l := range bundle.Locations {
-				if l.ID == td.LocID {
-					locForTemplate = &EventLocReq{
-						Location:  l.Location,
-						Address:   l.Address,
-						Town:      l.Town,
-						Country:   l.Country,
-						Latitude:  l.Latitude,
-						Longitude: l.Longitude,
-					}
-					break
-				}
-			}
+			tplLocations = client.FetchRefBundle(r.Context()).Locations
 		}
 
 		token := getSessionToken(r)
@@ -2916,57 +2971,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				Musicians:          musicianIDs,
 				Dances:             danceIDs,
 			}
-			if fields["timing"] {
-				req.StartTime = mergeTemplateTime(ev.StartTime, td.StartTime)
-				req.EndTime = mergeTemplateTime(ev.EndTime, td.EndTime)
-			}
-			if fields["org"] && td.OrgID > 0 {
-				oid := td.OrgID
-				req.OrganizationID = &oid
-			}
-			if fields["loc"] && locForTemplate != nil {
-				req.Location = *locForTemplate
-			}
-			if fields["type_flags"] {
-				req.HasBall = td.HasBall
-				req.HasWorkshop = td.HasWorkshop
-				req.HasFestival = td.HasFestival
-				req.WorkshopDifficulty = td.WorkshopDifficulty
-			}
-			if fields["url"] {
-				req.URL = td.URL
-				req.BookingURL = td.BookingURL
-			}
-			if fields["pricing"] {
-				if td.PricingType != "" && td.PricingType != "none" {
-					p := &Pricing{Type: td.PricingType}
-					switch td.PricingType {
-					case "single":
-						p.Amount = td.PricingAmount
-						p.Currency = td.PricingCurrency
-					case "multiple":
-						p.Prices = td.PricingLines
-					}
-					req.Pricing = p
-				} else {
-					req.Pricing = nil
-				}
-			}
-			if fields["tags"] {
-				req.Tags = td.Tags
-			}
-			if fields["dances"] {
-				req.Dances = td.DanceIDs
-			}
-			if fields["food_drink"] {
-				req.Food = td.Food
-				req.Drink = td.Drink
-				req.FloorCondition = td.FloorCondition
-			}
-			if fields["booking"] {
-				req.BookingEnabled = td.BookingEnabled
-				req.TicketsTotal = td.TicketsTotal
-			}
+			applyTemplateFields(&req, &td, fields, tplLocations)
 			if _, err := client.UpdateEvent(r.Context(), evID, req, token); err != nil {
 				log.Printf("template assign update event %d: %v", evID, err)
 			}
@@ -3887,69 +3892,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 		if tplOverride != nil {
-			if tplFieldsSet["timing"] {
-				req.StartTime = mergeTemplateTime(req.StartTime, tplOverride.StartTime)
-				req.EndTime = mergeTemplateTime(req.EndTime, tplOverride.EndTime)
-			}
-			if tplFieldsSet["org"] && tplOverride.OrgID > 0 {
-				oid := tplOverride.OrgID
-				req.OrganizationID = &oid
-			}
-			if tplFieldsSet["loc"] && tplOverride.LocID > 0 {
-				for _, l := range bundle.Locations {
-					if l.ID == tplOverride.LocID {
-						req.Location = EventLocReq{
-							Location:  l.Location,
-							Address:   l.Address,
-							Town:      l.Town,
-							Country:   l.Country,
-							Latitude:  l.Latitude,
-							Longitude: l.Longitude,
-						}
-						break
-					}
-				}
-			}
-			if tplFieldsSet["type_flags"] {
-				req.HasBall = tplOverride.HasBall
-				req.HasWorkshop = tplOverride.HasWorkshop
-				req.HasFestival = tplOverride.HasFestival
-				req.WorkshopDifficulty = tplOverride.WorkshopDifficulty
-			}
-			if tplFieldsSet["url"] {
-				req.URL = tplOverride.URL
-				req.BookingURL = tplOverride.BookingURL
-			}
-			if tplFieldsSet["pricing"] {
-				if tplOverride.PricingType != "" && tplOverride.PricingType != "none" {
-					p := &Pricing{Type: tplOverride.PricingType}
-					switch tplOverride.PricingType {
-					case "single":
-						p.Amount = tplOverride.PricingAmount
-						p.Currency = tplOverride.PricingCurrency
-					case "multiple":
-						p.Prices = tplOverride.PricingLines
-					}
-					req.Pricing = p
-				} else {
-					req.Pricing = nil
-				}
-			}
-			if tplFieldsSet["tags"] {
-				req.Tags = tplOverride.Tags
-			}
-			if tplFieldsSet["dances"] {
-				req.Dances = tplOverride.DanceIDs
-			}
-			if tplFieldsSet["food_drink"] {
-				req.Food = tplOverride.Food
-				req.Drink = tplOverride.Drink
-				req.FloorCondition = tplOverride.FloorCondition
-			}
-			if tplFieldsSet["booking"] {
-				req.BookingEnabled = tplOverride.BookingEnabled
-				req.TicketsTotal = tplOverride.TicketsTotal
-			}
+			applyTemplateFields(&req, tplOverride, tplFieldsSet, bundle.Locations)
 		}
 
 		if req.Title == "" {

@@ -223,11 +223,13 @@ if [[ $MTLS == true ]]; then
         -subj "/CN=dansal-webmin-${INSTANCE}-ca" 2>/dev/null
     chmod 640 "${MTLS_DIR}/ca.key"
 
+    CERT_CN=$(cat /dev/urandom | tr -dc 'a-z' | head -c 12)
+
     openssl genrsa -out "${MTLS_DIR}/client.key" 4096 2>/dev/null
     openssl req -new \
         -key "${MTLS_DIR}/client.key" \
         -out "${MTLS_DIR}/client.csr" \
-        -subj "/CN=webmin-admin" 2>/dev/null
+        -subj "/CN=${CERT_CN}" 2>/dev/null
     openssl x509 -req -days 3650 \
         -in  "${MTLS_DIR}/client.csr" \
         -CA  "${MTLS_DIR}/ca.crt" \
@@ -247,6 +249,13 @@ if [[ $MTLS == true ]]; then
 
     info "CA cert    : ${MTLS_DIR}/ca.crt"
     info "Client p12 : ${P12}  (password: ${P12_PASSWORD})"
+    echo
+    echo "  Certificate CN: ${CERT_CN}"
+    echo "  Webmin auto-login matches the CN against admin user emails."
+    echo "  Create the first admin user with this email:"
+    echo
+    echo "    /usr/lib/dansal/${INSTANCE}/dansal_admin user add --email ${CERT_CN} --role admin"
+    echo
     echo
     info "Add to your nginx webmin server block:"
     info "  ssl_client_certificate ${MTLS_DIR}/ca.crt;"

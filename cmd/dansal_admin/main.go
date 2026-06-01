@@ -240,28 +240,28 @@ func usage() {
 
 User management:
   list-users                                         List all users
-  create-user  --username STR --email STR            Create a new user
-               --password STR [--role STR]
-               [--telegram STR] [--matrix STR]
-  delete-user  --username STR                        Delete a user
-  set-password --username STR --password STR         Change a user's password
-  set-role     --username STR --role STR             Change a user's role
-  enable-user  --username STR                        Re-enable a disabled user
-  disable-user --username STR                        Disable a user account
+  create-user  --email STR [--password STR]          Create a new user
+               [--role STR] [--telegram STR]
+               [--matrix STR]
+  delete-user  --email STR                           Delete a user
+  set-password --email STR --password STR            Change a user's password
+  set-role     --email STR --role STR                Change a user's role
+  enable-user  --email STR                           Re-enable a disabled user
+  disable-user --email STR                           Disable a user account
 
 Invite links:
-  list-invites   [--username STR]                    List invite links (all, or by creator)
+  list-invites   [--email STR]                       List invite links (all, or by creator)
   revoke-invite  --token STR                         Revoke an unused invite link
 
 Session management:
-  list-sessions  --username STR                      List active sessions for a user
+  list-sessions  --email STR                         List active sessions for a user
   revoke-session --id INT                            Revoke a specific session
 
 Organization management:
   list-orgs                                          List all organizations
   list-members --org-id INT                          List members of an org
-  add-member   --org-id INT --username STR           Add user to an org
-  remove-member --org-id INT --username STR          Remove user from an org
+  add-member   --org-id INT --email STR              Add user to an org
+  remove-member --org-id INT --email STR             Remove user from an org
 
 Maintenance:
   fill-location-fields [--db PATH] [--apply]         Parse address/town from location names
@@ -303,9 +303,9 @@ Heartbeat:
 
 mTLS PKI:
   mtls-init                                          Generate CA key and self-signed certificate
-  mtls-issue   --username STR [--days N]             Issue a client certificate (default 3 years)
+  mtls-issue   --email STR [--days N]                Issue a client certificate (default 3 years)
                [--password STR]                       PKCS12 import password (default: none)
-  mtls-revoke  --username STR                        Revoke a certificate and update CRL
+  mtls-revoke  --email STR                           Revoke a certificate and update CRL
   mtls-list                                          List issued certificates and their status
   mtls-ca-cert                                       Print the CA certificate (PEM)
 
@@ -317,49 +317,48 @@ Run 'dansal_admin help <command>' for details on a specific command.`)
 var commandHelp = map[string]string{
 	"list-users": `Usage: dansal_admin list-users
 
-List all users with their ID, username, email, role and creation date.`,
+List all users with their ID, email, role and creation date.`,
 
-	"create-user": `Usage: dansal_admin create-user --username STR --email STR --password STR [--role STR] [--telegram STR] [--matrix STR]
+	"create-user": `Usage: dansal_admin create-user --email STR [--password STR] [--role STR] [--telegram STR] [--matrix STR]
 
 Create a new user account.
 
 Flags:
-  --username  Username (required)
   --email     Email address (required)
-  --password  Password (required)
+  --password  Password (optional; passwordless user created if omitted)
   --role      Role: admin, user, publisher (default: user)
   --telegram  Telegram handle (optional)
   --matrix    Matrix ID (optional)`,
 
-	"delete-user": `Usage: dansal_admin delete-user --username STR
+	"delete-user": `Usage: dansal_admin delete-user --email STR
 
 Delete a user. Admin accounts cannot be deleted.
 
 Flags:
-  --username  Username of the account to delete (required)`,
+  --email  Email address of the account to delete (required)`,
 
-	"set-password": `Usage: dansal_admin set-password --username STR --password STR
+	"set-password": `Usage: dansal_admin set-password --email STR --password STR
 
 Change the password for any user account.
 
 Flags:
-  --username  Username of the target account (required)
+  --email     Email address of the target account (required)
   --password  New password (required)`,
 
-	"set-role": `Usage: dansal_admin set-role --username STR --role STR
+	"set-role": `Usage: dansal_admin set-role --email STR --role STR
 
 Change the role of a user account.
 
 Flags:
-  --username  Username of the target account (required)
-  --role      New role: admin, user, publisher (required)`,
+  --email  Email address of the target account (required)
+  --role   New role: admin, user, publisher (required)`,
 
-	"list-invites": `Usage: dansal_admin list-invites [--username STR]
+	"list-invites": `Usage: dansal_admin list-invites [--email STR]
 
-List invite links. Without --username all links are shown.
+List invite links. Without --email all links are shown.
 
 Flags:
-  --username  Filter by creator username (optional)`,
+  --email  Filter by creator email address (optional)`,
 
 	"revoke-invite": `Usage: dansal_admin revoke-invite --token STR
 
@@ -368,12 +367,12 @@ Revoke an unused invite link.
 Flags:
   --token  Invite token (required)`,
 
-	"list-sessions": `Usage: dansal_admin list-sessions --username STR
+	"list-sessions": `Usage: dansal_admin list-sessions --email STR
 
 List all sessions (active and expired) for a user.
 
 Flags:
-  --username  Username (required)`,
+  --email  Email address (required)`,
 
 	"revoke-session": `Usage: dansal_admin revoke-session --id INT
 
@@ -382,20 +381,20 @@ Revoke a session by its numeric ID. The session token is invalidated immediately
 Flags:
   --id  Session ID (required)`,
 
-	"enable-user": `Usage: dansal_admin enable-user --username STR
+	"enable-user": `Usage: dansal_admin enable-user --email STR
 
 Re-enable a disabled user account and reset its failed-login counter.
 
 Flags:
-  --username  Username of the account to enable (required)`,
+  --email  Email address of the account to enable (required)`,
 
-	"disable-user": `Usage: dansal_admin disable-user --username STR
+	"disable-user": `Usage: dansal_admin disable-user --email STR
 
 Disable a user account. Active sessions are revoked immediately.
 Admin accounts cannot be disabled.
 
 Flags:
-  --username  Username of the account to disable (required)`,
+  --email  Email address of the account to disable (required)`,
 
 	"list-orgs": `Usage: dansal_admin list-orgs
 
@@ -408,13 +407,13 @@ List all members of an organization.
 Flags:
   --org-id  Organization ID (required)`,
 
-	"add-member": `Usage: dansal_admin add-member --org-id INT --username STR
+	"add-member": `Usage: dansal_admin add-member --org-id INT --email STR
 
 Add a user to an organization. Has no effect if the user is already a member.
 
 Flags:
-  --org-id    Organization ID (required)
-  --username  Username to add (required)`,
+  --org-id  Organization ID (required)
+  --email   Email address of the user to add (required)`,
 
 	"smtp-show": `Usage: dansal_admin smtp-show
 
@@ -565,13 +564,13 @@ Flags:
   --since   Include files changed after this time, e.g. 2026-05-01T00:00:00Z (required)
   --output  Destination file (default: ./dansal-incremental-<timestamp>.tar.gz)`,
 
-	"remove-member": `Usage: dansal_admin remove-member --org-id INT --username STR
+	"remove-member": `Usage: dansal_admin remove-member --org-id INT --email STR
 
 Remove a user from an organization.
 
 Flags:
-  --org-id    Organization ID (required)
-  --username  Username to remove (required)`,
+  --org-id  Organization ID (required)
+  --email   Email address of the user to remove (required)`,
 
 	"password-backup": `Usage: dansal_admin password-backup [--output PATH] [--password STR]
 
@@ -604,26 +603,26 @@ Generate a CA key (RSA-4096) and a self-signed CA certificate.
 Files are written to the PKI directory (default /var/lib/dansal/pki).
 Errors if a CA already exists; use mtls-ca-cert to view the existing one.`,
 
-	"mtls-issue": `Usage: dansal_admin mtls-issue --username STR [--days N] [--password STR]
+	"mtls-issue": `Usage: dansal_admin mtls-issue --email STR [--days N] [--password STR]
 
 Issue a client certificate signed by the dansal CA.
 Generates:
-  issued/<username>.key   — RSA-2048 private key
-  issued/<username>.crt   — signed certificate (CN=username)
-  issued/<username>.p12   — PKCS#12 bundle for browser import
+  issued/<email>.key   — RSA-2048 private key
+  issued/<email>.crt   — signed certificate (CN=email)
+  issued/<email>.p12   — PKCS#12 bundle for browser import
 
 Flags:
-  --username  Username (CN field of the certificate) (required)
+  --email     Email address (CN field of the certificate) (required)
   --days      Validity period in days (default: 1095 = 3 years)
   --password  PKCS#12 import password (default: no password)`,
 
-	"mtls-revoke": `Usage: dansal_admin mtls-revoke --username STR
+	"mtls-revoke": `Usage: dansal_admin mtls-revoke --email STR
 
 Revoke a user's certificate and regenerate the CRL (crl.pem).
 The certificate file is kept on disk for audit purposes.
 
 Flags:
-  --username  Username whose certificate to revoke (required)`,
+  --email  Email address whose certificate to revoke (required)`,
 
 	"mtls-list": `Usage: dansal_admin mtls-list
 
@@ -656,9 +655,9 @@ func cmdListUsers(args []string) {
 	var users []user
 	json.Unmarshal(resp.Data, &users)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tUSERNAME\tEMAIL\tROLE\tDISABLED\tCREATED")
+	fmt.Fprintln(w, "ID\tEMAIL\tROLE\tDISABLED\tCREATED")
 	for _, u := range users {
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%v\t%s\n", u.ID, u.Username, u.Email, u.Role, u.Disabled, u.CreatedAt)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%v\t%s\n", u.ID, u.Email, u.Role, u.Disabled, u.CreatedAt)
 	}
 	w.Flush()
 }
@@ -666,19 +665,17 @@ func cmdListUsers(args []string) {
 func cmdCreateUser(args []string) {
 	fs := flag.NewFlagSet("create-user", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["create-user"]) }
-	username := fs.String("username", "", "username")
 	email := fs.String("email", "", "email address")
 	password := fs.String("password", "", "password")
 	role := fs.String("role", "user", "role (admin|user|publisher)")
 	telegram := fs.String("telegram", "", "Telegram handle")
 	matrix := fs.String("matrix", "", "Matrix ID")
 	fs.Parse(args)
-	if *username == "" || *email == "" || *password == "" {
-		die("--username, --email and --password are required")
+	if *email == "" {
+		die("--email is required")
 	}
 	resp := send(socketPath, request{
 		Cmd:      "create-user",
-		Username: *username,
 		Email:    *email,
 		Password: *password,
 		Role:     *role,
@@ -690,54 +687,54 @@ func cmdCreateUser(args []string) {
 	}
 	var u user
 	json.Unmarshal(resp.Data, &u)
-	fmt.Printf("created user %s (id=%d, role=%s)\n", u.Username, u.ID, u.Role)
+	fmt.Printf("created user %s (id=%d, role=%s)\n", u.Email, u.ID, u.Role)
 }
 
 func cmdDeleteUser(args []string) {
 	fs := flag.NewFlagSet("delete-user", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["delete-user"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
-	resp := send(socketPath, request{Cmd: "delete-user", Username: *username})
+	resp := send(socketPath, request{Cmd: "delete-user", Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("deleted user %s\n", *username)
+	fmt.Printf("deleted user %s\n", *email)
 }
 
 func cmdSetPassword(args []string) {
 	fs := flag.NewFlagSet("set-password", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["set-password"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	password := fs.String("password", "", "new password")
 	fs.Parse(args)
-	if *username == "" || *password == "" {
-		die("--username and --password are required")
+	if *email == "" || *password == "" {
+		die("--email and --password are required")
 	}
-	resp := send(socketPath, request{Cmd: "set-password", Username: *username, Password: *password})
+	resp := send(socketPath, request{Cmd: "set-password", Email: *email, Password: *password})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("password updated for %s\n", *username)
+	fmt.Printf("password updated for %s\n", *email)
 }
 
 func cmdSetRole(args []string) {
 	fs := flag.NewFlagSet("set-role", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["set-role"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	role := fs.String("role", "", "role (admin|user|publisher)")
 	fs.Parse(args)
-	if *username == "" || *role == "" {
-		die("--username and --role are required")
+	if *email == "" || *role == "" {
+		die("--email and --role are required")
 	}
-	resp := send(socketPath, request{Cmd: "set-role", Username: *username, Role: *role})
+	resp := send(socketPath, request{Cmd: "set-role", Email: *email, Role: *role})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("role updated: %s → %s\n", *username, *role)
+	fmt.Printf("role updated: %s → %s\n", *email, *role)
 }
 
 func cmdListOrgs(args []string) {
@@ -770,9 +767,9 @@ func cmdListMembers(args []string) {
 	var members []member
 	json.Unmarshal(resp.Data, &members)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "USER_ID\tUSERNAME\tCREATED")
+	fmt.Fprintln(w, "USER_ID\tCREATED")
 	for _, m := range members {
-		fmt.Fprintf(w, "%d\t%s\t%s\n", m.UserID, m.Username, m.CreatedAt)
+		fmt.Fprintf(w, "%d\t%s\n", m.UserID, m.CreatedAt)
 	}
 	w.Flush()
 }
@@ -781,16 +778,16 @@ func cmdAddMember(args []string) {
 	fs := flag.NewFlagSet("add-member", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["add-member"]) }
 	orgID := fs.Int("org-id", 0, "organization ID")
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *orgID == 0 || *username == "" {
-		die("--org-id and --username are required")
+	if *orgID == 0 || *email == "" {
+		die("--org-id and --email are required")
 	}
-	resp := send(socketPath, request{Cmd: "add-member", OrgID: *orgID, Username: *username})
+	resp := send(socketPath, request{Cmd: "add-member", OrgID: *orgID, Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("added %s to organization %d\n", *username, *orgID)
+	fmt.Printf("added %s to organization %d\n", *email, *orgID)
 }
 
 func formatSize(b int64) string {
@@ -999,10 +996,10 @@ type invite struct {
 func cmdListInvites(args []string) {
 	fs := flag.NewFlagSet("list-invites", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["list-invites"]) }
-	username := fs.String("username", "", "filter by creator username")
+	email := fs.String("email", "", "filter by creator email address")
 	fs.Parse(args)
 
-	resp := send(socketPath, request{Cmd: "list-invites", Username: *username})
+	resp := send(socketPath, request{Cmd: "list-invites", Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
@@ -1046,12 +1043,12 @@ func cmdRevokeInvite(args []string) {
 func cmdListSessions(args []string) {
 	fs := flag.NewFlagSet("list-sessions", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["list-sessions"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
-	resp := send(socketPath, request{Cmd: "list-sessions", Username: *username})
+	resp := send(socketPath, request{Cmd: "list-sessions", Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
@@ -1088,47 +1085,47 @@ func cmdRevokeSession(args []string) {
 func cmdEnableUser(args []string) {
 	fs := flag.NewFlagSet("enable-user", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["enable-user"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
-	resp := send(socketPath, request{Cmd: "enable-user", Username: *username})
+	resp := send(socketPath, request{Cmd: "enable-user", Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("user %s enabled\n", *username)
+	fmt.Printf("user %s enabled\n", *email)
 }
 
 func cmdDisableUser(args []string) {
 	fs := flag.NewFlagSet("disable-user", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["disable-user"]) }
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
-	resp := send(socketPath, request{Cmd: "disable-user", Username: *username})
+	resp := send(socketPath, request{Cmd: "disable-user", Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("user %s disabled\n", *username)
+	fmt.Printf("user %s disabled\n", *email)
 }
 
 func cmdRemoveMember(args []string) {
 	fs := flag.NewFlagSet("remove-member", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["remove-member"]) }
 	orgID := fs.Int("org-id", 0, "organization ID")
-	username := fs.String("username", "", "username")
+	email := fs.String("email", "", "email address")
 	fs.Parse(args)
-	if *orgID == 0 || *username == "" {
-		die("--org-id and --username are required")
+	if *orgID == 0 || *email == "" {
+		die("--org-id and --email are required")
 	}
-	resp := send(socketPath, request{Cmd: "remove-member", OrgID: *orgID, Username: *username})
+	resp := send(socketPath, request{Cmd: "remove-member", OrgID: *orgID, Email: *email})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	fmt.Printf("removed %s from organization %d\n", *username, *orgID)
+	fmt.Printf("removed %s from organization %d\n", *email, *orgID)
 }
 
 func cmdFetchAll() {

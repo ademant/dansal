@@ -254,7 +254,7 @@ if [[ $MTLS == true ]]; then
     echo "  Webmin auto-login matches the CN against admin user emails."
     echo "  Create the first admin user with this email:"
     echo
-    echo "    /usr/lib/dansal/${INSTANCE}/dansal_admin user add --email ${CERT_CN} --role admin"
+    echo "    /usr/lib/dansal/${INSTANCE}/dansal_admin create-user --email ${CERT_CN} --role admin"
     echo
     echo
     info "Add to your nginx webmin server block:"

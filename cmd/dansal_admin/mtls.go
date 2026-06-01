@@ -195,13 +195,13 @@ func cmdMTLSInit(args []string) {
 func cmdMTLSIssue(args []string) {
 	fs := flag.NewFlagSet("mtls-issue", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["mtls-issue"]) }
-	username := fs.String("username", "", "username (CN of the cert)")
+	email := fs.String("email", "", "email address (CN of the cert)")
 	days := fs.Int("days", 3*365, "validity in days")
 	password := fs.String("password", "", "PKCS12 import password (empty = no password)")
 	fs.Parse(args)
 
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
 
 	dir := pkiDir()
@@ -221,7 +221,7 @@ func cmdMTLSIssue(args []string) {
 	tpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName:   *username,
+			CommonName:   *email,
 			Organization: []string{"dansal"},
 		},
 		NotBefore: now,
@@ -240,9 +240,9 @@ func cmdMTLSIssue(args []string) {
 		die("create issued dir: %v", err)
 	}
 
-	keyPath := filepath.Join(issuedDir, *username+".key")
-	crtPath := filepath.Join(issuedDir, *username+".crt")
-	p12Path := filepath.Join(issuedDir, *username+".p12")
+	keyPath := filepath.Join(issuedDir, *email+".key")
+	crtPath := filepath.Join(issuedDir, *email+".crt")
+	p12Path := filepath.Join(issuedDir, *email+".p12")
 
 	if err := writePEM(keyPath, "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(clientKey)); err != nil {
 		die("write key: %v", err)
@@ -260,17 +260,17 @@ func cmdMTLSIssue(args []string) {
 	}
 
 	fmt.Printf("Issued cert for %q.\n  Key:  %s\n  Cert: %s\n  P12:  %s\n  Expiry: %s\n",
-		*username, keyPath, crtPath, p12Path, clientCert.NotAfter.Format("2006-01-02"))
+		*email, keyPath, crtPath, p12Path, clientCert.NotAfter.Format("2006-01-02"))
 }
 
 func cmdMTLSRevoke(args []string) {
 	fs := flag.NewFlagSet("mtls-revoke", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["mtls-revoke"]) }
-	username := fs.String("username", "", "username whose cert to revoke")
+	email := fs.String("email", "", "email address whose cert to revoke")
 	fs.Parse(args)
 
-	if *username == "" {
-		die("--username is required")
+	if *email == "" {
+		die("--email is required")
 	}
 
 	dir := pkiDir()
@@ -279,7 +279,7 @@ func cmdMTLSRevoke(args []string) {
 		die("load CA: %v", err)
 	}
 
-	crtPath := filepath.Join(dir, "issued", *username+".crt")
+	crtPath := filepath.Join(dir, "issued", *email+".crt")
 	certPEM, err := os.ReadFile(crtPath)
 	if err != nil {
 		die("read cert %s: %v", crtPath, err)
@@ -314,7 +314,7 @@ func cmdMTLSRevoke(args []string) {
 		}
 	}
 	if alreadyRevoked {
-		die("cert for %q is already revoked", *username)
+		die("cert for %q is already revoked", *email)
 	}
 
 	existing = append(existing, pkix.RevokedCertificate{
@@ -326,7 +326,7 @@ func cmdMTLSRevoke(args []string) {
 		die("regenerate CRL: %v", err)
 	}
 
-	fmt.Printf("Revoked cert for %q (serial %s). CRL updated.\n", *username, cert.SerialNumber)
+	fmt.Printf("Revoked cert for %q (serial %s). CRL updated.\n", *email, cert.SerialNumber)
 }
 
 func cmdMTLSList(args []string) {

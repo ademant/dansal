@@ -1112,6 +1112,10 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	if !strings.Contains(req.URL, "://") {
 		req.URL = "https://" + req.URL
 	}
+	// webcal:// is an iCal subscription alias; treat it as https.
+	if strings.HasPrefix(strings.ToLower(req.URL), "webcal://") {
+		req.URL = "https://" + req.URL[len("webcal://"):]
+	}
 	parsed, err := url.Parse(req.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		writeError(w, "URL must use http or https scheme", http.StatusBadRequest)

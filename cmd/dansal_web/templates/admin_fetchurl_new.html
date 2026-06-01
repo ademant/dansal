@@ -93,6 +93,10 @@ function filterTemplates(orgID) {
 filterTemplates(document.getElementById('organization_id').value);
 
 document.getElementById('url').addEventListener('blur', function() {
+  // Normalise webcal:// → https:// so it's accepted by the server.
+  if (/^webcal:\/\//i.test(this.value)) {
+    this.value = 'https://' + this.value.slice('webcal://'.length);
+  }
   var u = this.value.toLowerCase();
   var sel = document.getElementById('type');
   if (sel.value !== '') return; // don't override an explicit choice

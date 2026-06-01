@@ -11,7 +11,7 @@ import (
 )
 
 func writeError(w http.ResponseWriter, msg string, code int) {
-	if code >= 500 {
+	if code >= 400 {
 		log.Printf("error %d: %s", code, msg)
 	}
 	w.Header().Set("Content-Type", "application/json")

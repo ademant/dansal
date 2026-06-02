@@ -22,9 +22,8 @@
     <option value="admin">admin</option>
   </select>
   <button name="action" value="role" type="submit" class="btn-sm">{{$.Strings.T "users_bulk_change_role"}}</button>
-  <button name="action" value="delete" type="button" id="bulk-del-btn" class="btn-sm btn-del"
-          onclick="return confirmTypedDelete('DELETE',function(){document.getElementById('bulk-del-submit').click();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
-  <button name="action" value="delete" type="submit" id="bulk-del-submit" style="display:none"></button>
+  <button type="button" id="bulk-del-btn" class="btn-sm btn-del"
+          onclick="return confirmTypedDelete('DELETE',function(){bulkDelete();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
 </div>
 {{end}}
 
@@ -409,6 +408,16 @@ document.getElementById('ctd-input').addEventListener('input',function(){
 });
 function ctdConfirm(){if(_ctdCb)_ctdCb();ctdClose();}
 function ctdClose(){document.getElementById('ctd-modal').hidden=true;_ctdCb=null;}
+function bulkDelete(){
+  var ids=[];
+  document.querySelectorAll('.user-cb:checked').forEach(function(cb){ids.push(cb.value);});
+  if(!ids.length)return;
+  var f=document.createElement('form');
+  f.method='post';f.action='/admin/users/bulk';
+  var a=document.createElement('input');a.type='hidden';a.name='action';a.value='delete';f.appendChild(a);
+  ids.forEach(function(id){var i=document.createElement('input');i.type='hidden';i.name='user_ids';i.value=id;f.appendChild(i);});
+  document.body.appendChild(f);f.submit();
+}
 (function(){
   var cbAll = document.getElementById('cb-all');
   if (!cbAll) return;

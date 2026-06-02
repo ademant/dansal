@@ -83,7 +83,11 @@
       <button type="button" class="btn-sm"
               onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
+      {{if or .Email .DisplayName}}
       <button type="button" class="btn-sm" onclick="openPasswordModal({{$uid}})">{{$.Strings.T "admin_user_password_reset"}}</button>
+      {{else}}
+      <button type="button" class="btn-sm" disabled title="{{$.Strings.T "admin_user_password_reset_na"}}" style="opacity:.4;cursor:default">{{$.Strings.T "admin_user_password_reset"}}</button>
+      {{end}}
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
               onclick="return confirmTypedDelete('{{if .Email}}{{js .Email}}{{else if .DisplayName}}{{js .DisplayName}}{{else}}#{{$uid}}{{end}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>

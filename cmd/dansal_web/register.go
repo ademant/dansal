@@ -5,12 +5,18 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
+const pendingRegCookie = "pending_reg"
+
 type RegisterPageData struct {
-	Orgs      []Organization
-	Error     string
-	FormToken string
+	Orgs             []Organization
+	Error            string
+	FormToken        string
+	PendingID        int    // set when cookie found and record still active
+	PendingVerified  bool   // true = verified, awaiting admin review
+	PendingToken     string // verification token for resend
 }
 
 type RegisterDoneData struct {
@@ -31,6 +37,29 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.NotFound(w, r)
 			return
 		}
+
+		// Check for pending registration cookie.
+		if c, err := r.Cookie(pendingRegCookie); err == nil {
+			parts := strings.SplitN(c.Value, ":", 2)
+			if len(parts) == 2 {
+				if id, err := strconv.Atoi(parts[0]); err == nil {
+					pendingToken := parts[1]
+					status, err := client.GetRegistrationStatus(r.Context(), id)
+					if err == nil && status != nil && !status.Expired {
+						title := i18n.T(r, "register_title")
+						renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
+							PendingID:       id,
+							PendingVerified: status.Verified,
+							PendingToken:    pendingToken,
+						}))
+						return
+					}
+					// Expired or not found — clear cookie.
+					http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+				}
+			}
+		}
+
 		orgs, _ := client.GetOrganizations(r.Context())
 		title := i18n.T(r, "register_title")
 		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{Orgs: orgs, FormToken: newFormToken()}))
@@ -116,6 +145,19 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		log.Printf("register: new registration for %s (status=%s)", email, result["status"])
+
+		// Set a persistent cookie so the user can resume verification if the tab is closed.
+		if pid := result["pending_id"]; pid != "" {
+			tok := result["verification_token"]
+			http.SetCookie(w, &http.Cookie{
+				Name:     pendingRegCookie,
+				Value:    pid + ":" + tok,
+				Path:     "/",
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+				Expires:  time.Now().Add(7 * 24 * time.Hour),
+			})
+		}
 
 		redirectURL := "/register/done?ch=email"
 		if result["status"] == "telegram_verification_required" {
@@ -234,5 +276,45 @@ func adminRegistrationRejectHandler(cfg *Config, client *DansalClient) http.Hand
 			log.Printf("reject registration %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
+	}
+}
+
+func registerResendHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(pendingRegCookie)
+		if err != nil {
+			http.Redirect(w, r, "/register", http.StatusSeeOther)
+			return
+		}
+		parts := strings.SplitN(c.Value, ":", 2)
+		if len(parts) != 2 {
+			http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+			http.Redirect(w, r, "/register", http.StatusSeeOther)
+			return
+		}
+		tok := parts[1]
+		if err := client.ResendRegistration(r.Context(), tok); err != nil {
+			log.Printf("register resend: %v", err)
+		}
+		http.Redirect(w, r, "/register", http.StatusSeeOther)
+	}
+}
+
+func registerCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(pendingRegCookie)
+		if err != nil {
+			http.Redirect(w, r, "/register", http.StatusSeeOther)
+			return
+		}
+		parts := strings.SplitN(c.Value, ":", 2)
+		if len(parts) == 2 {
+			tok := parts[1]
+			if err := client.CancelRegistration(r.Context(), tok); err != nil {
+				log.Printf("register cancel: %v", err)
+			}
+		}
+		http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+		http.Redirect(w, r, "/register", http.StatusSeeOther)
 	}
 }

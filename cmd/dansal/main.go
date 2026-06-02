@@ -1884,6 +1884,7 @@ func main() {
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
 	initRegisterRateLimiter()
+	initResendRateLimiter()
 	initWebAuthn()
 
 	smux := http.NewServeMux()
@@ -1958,6 +1959,9 @@ func main() {
 
 	// Self-registration endpoints
 	smux.HandleFunc("POST /api/v1/register", registerHandler)
+	smux.HandleFunc("GET /api/v1/register/status/{id}", registerStatusHandler)
+	smux.HandleFunc("POST /api/v1/register/resend/{token}", registerResendHandler)
+	smux.HandleFunc("DELETE /api/v1/register/{token}", registerCancelHandler)
 	smux.HandleFunc("GET /api/v1/register/verify/email/{token}", verifyEmailRegHandler)
 	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
 	smux.Handle("POST /api/v1/pending-registrations/{id}/approve", auth(approveRegHandler))

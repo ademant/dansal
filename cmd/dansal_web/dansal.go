@@ -2554,3 +2554,53 @@ func (c *DansalClient) RejectRegistration(ctx context.Context, token string, id 
 	}
 	return nil
 }
+
+type PendingRegStatus struct {
+	ID       int  `json:"id"`
+	Verified bool `json:"verified"`
+	Expired  bool `json:"expired"`
+}
+
+func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int) (*PendingRegStatus, error) {
+	resp, err := c.HTTP.Get(fmt.Sprintf("%s/api/v1/register/status/%d", c.BaseURL, id))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var s PendingRegStatus
+	return &s, json.NewDecoder(resp.Body).Decode(&s)
+}
+
+func (c *DansalClient) ResendRegistration(ctx context.Context, token string) error {
+	resp, err := c.HTTP.Post(fmt.Sprintf("%s/api/v1/register/resend/%s", c.BaseURL, token), "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) CancelRegistration(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/api/v1/register/%s", c.BaseURL, token), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}

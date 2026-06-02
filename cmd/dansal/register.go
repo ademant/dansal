@@ -203,16 +203,17 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrgID
 	}
 
-	_, dbErr := db.Exec(
+	var pendingID int64
+	dbErr := db.QueryRow(
 		`INSERT INTO pending_registrations
 		 (verification_token, approval_token, email, description,
 		  reg_type, org_id, org_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
 		verificationToken, approvalToken, req.Email, req.Description,
 		req.RegType, orgIDArg, req.OrgName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, expiresAt,
-	)
+	).Scan(&pendingID)
 	if dbErr != nil {
 		writeError(w, "db error: "+dbErr.Error(), http.StatusInternalServerError)
 		return
@@ -235,15 +236,135 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, verificationToken)
 			}
 		}()
-		json.NewEncoder(w).Encode(map[string]string{"status": "verification_email_sent"})
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":             "verification_email_sent",
+			"pending_id":         pendingID,
+			"verification_token": verificationToken,
+		})
 	} else {
 		// Return token for Telegram bot instructions.
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":        "telegram_verification_required",
-			"telegram_token": verificationToken,
-			"bot_name":      config.Server.TelegramBotName,
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":             "telegram_verification_required",
+			"pending_id":         pendingID,
+			"verification_token": verificationToken,
+			"telegram_token":     verificationToken,
+			"bot_name":           config.Server.TelegramBotName,
 		})
 	}
+}
+
+// GET /api/v1/register/status/{id} — return the status of a pending registration for cookie-based resumption.
+// Public endpoint; returns minimal info (verified/expired) without leaking contact details.
+func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var verified int
+	var expiresAt string
+	err = db.QueryRow(
+		"SELECT verified, expires_at FROM pending_registrations WHERE id=?", id,
+	).Scan(&verified, &expiresAt)
+	if err == sql.ErrNoRows {
+		writeError(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	exp, err := parseTokenExpiration(expiresAt)
+	expired := err != nil || time.Now().After(exp)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":       id,
+		"verified": verified == 1,
+		"expired":  expired,
+	})
+}
+
+// POST /api/v1/register/resend/{token} — resend verification message (rate-limited).
+var resendRateLimiter *RateLimiter
+
+func initResendRateLimiter() {
+	resendRateLimiter = NewRateLimiter(3, time.Hour)
+}
+
+func registerResendHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	ip := getIP(r)
+	if !resendRateLimiter.Allow(ip) {
+		writeError(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	var id int
+	var email, telegram, channel, expiresAt string
+	var verified int
+	err := db.QueryRow(
+		"SELECT id, COALESCE(email,''), COALESCE(telegram,''), verification_channel, expires_at, verified FROM pending_registrations WHERE verification_token=?",
+		token,
+	).Scan(&id, &email, &telegram, &channel, &expiresAt, &verified)
+	if err == sql.ErrNoRows {
+		writeError(w, "registration not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	if verified == 1 {
+		writeError(w, "already verified", http.StatusConflict)
+		return
+	}
+	exp, err := parseTokenExpiration(expiresAt)
+	if err != nil || time.Now().After(exp) {
+		db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+		writeError(w, "registration expired", http.StatusGone)
+		return
+	}
+
+	if channel == "email" && email != "" {
+		base := buildBaseURL(r)
+		verifyURL := base + "/register/verify/email/" + token
+		go func() {
+			msg := fmt.Sprintf(
+				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
+				verifyURL,
+			)
+			if _, err := SendEmail(email, "Confirm your registration", msg); err != nil {
+				log.Printf("register resend: send verify email: %v", err)
+			}
+		}()
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/register/{token} — self-service cancellation of a pending registration.
+func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	var id int
+	var verified int
+	err := db.QueryRow(
+		"SELECT id, verified FROM pending_registrations WHERE verification_token=?", token,
+	).Scan(&id, &verified)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	// Only allow self-cancellation before verification or admin approval.
+	if verified == 1 {
+		// Already verified and in the approval queue — don't allow silent self-cancellation.
+		writeError(w, "registration is already verified; contact an admin to withdraw it", http.StatusConflict)
+		return
+	}
+	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /api/v1/register/verify/email/{token}

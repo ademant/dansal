@@ -7,21 +7,20 @@
 {{with .Data}}
 
 
-<form id="bulk-form" method="post" action="/admin/users/bulk">
 {{if .IsAdmin}}
 <div class="bulk-bar" id="bulk-bar" style="display:none">
   <span id="bulk-count"></span>
-  <select name="org_id">
+  <select id="bulk-org-id">
     <option value="">{{$.Strings.T "loc_no_org"}}</option>
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
-  <button name="action" value="org" type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
-  <select name="role" class="bulk-role-select">
+  <button type="button" class="btn-sm" onclick="bulkAssignOrg()">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <select id="bulk-role" class="bulk-role-select">
     <option value="user">user</option>
     <option value="publisher">publisher</option>
     <option value="admin">admin</option>
   </select>
-  <button name="action" value="role" type="submit" class="btn-sm">{{$.Strings.T "users_bulk_change_role"}}</button>
+  <button type="button" class="btn-sm" onclick="bulkChangeRole()">{{$.Strings.T "users_bulk_change_role"}}</button>
   <button type="button" id="bulk-del-btn" class="btn-sm btn-del"
           onclick="return confirmTypedDelete('DELETE',function(){bulkDelete();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
 </div>
@@ -65,13 +64,10 @@
         </span>
       {{end}}
       {{if $.Data.IsAdmin}}
-      <form method="post" action="/admin/users/{{$uid}}/org" style="display:inline" id="addorg-{{$uid}}">
-        <input type="hidden" name="action" value="add">
-        <select name="org_id" class="inline-select" onchange="if(this.value)document.getElementById('addorg-{{$uid}}').submit()">
-          <option value="">+</option>
-          {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-        </select>
-      </form>
+      <select class="inline-select" onchange="if(this.value)addOrg({{$uid}},this.value)">
+        <option value="">+</option>
+        {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
       {{end}}
     </td>
     {{if $.Data.IsAdmin}}
@@ -98,7 +94,6 @@
   </tbody>
 </table>
 </div>
-</form>
 
 {{if $.Data.IsAdmin}}
 <div class="invite-section">
@@ -282,6 +277,32 @@ function rmOrg(userID, orgID) {
   var a = document.createElement('input'); a.name = 'action'; a.value = 'remove'; f.appendChild(a);
   var o = document.createElement('input'); o.name = 'org_id'; o.value = orgID; f.appendChild(o);
   document.body.appendChild(f); f.submit();
+}
+function addOrg(userID, orgID) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/users/' + userID + '/org';
+  var a = document.createElement('input'); a.name = 'action'; a.value = 'add'; f.appendChild(a);
+  var o = document.createElement('input'); o.name = 'org_id'; o.value = orgID; f.appendChild(o);
+  document.body.appendChild(f); f.submit();
+}
+function bulkAssignOrg() {
+  var ids = [];
+  document.querySelectorAll('.user-cb:checked').forEach(function(cb){ ids.push(cb.value); });
+  if (!ids.length) return;
+  var orgID = document.getElementById('bulk-org-id').value;
+  var body = 'action=org' + ids.map(function(id){ return '&user_ids=' + encodeURIComponent(id); }).join('');
+  if (orgID) body += '&org_id=' + encodeURIComponent(orgID);
+  fetch('/admin/users/bulk', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, credentials:'same-origin', body:body})
+    .then(function(){ location.href = '/admin/users'; }).catch(function(e){ alert('Failed: ' + e); });
+}
+function bulkChangeRole() {
+  var ids = [];
+  document.querySelectorAll('.user-cb:checked').forEach(function(cb){ ids.push(cb.value); });
+  if (!ids.length) return;
+  var role = document.getElementById('bulk-role').value;
+  var body = 'action=role&role=' + encodeURIComponent(role) + ids.map(function(id){ return '&user_ids=' + encodeURIComponent(id); }).join('');
+  fetch('/admin/users/bulk', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, credentials:'same-origin', body:body})
+    .then(function(){ location.href = '/admin/users'; }).catch(function(e){ alert('Failed: ' + e); });
 }
 function changeUserRole(uid, role) {
   var f=document.createElement('form');

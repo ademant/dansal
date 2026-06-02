@@ -282,6 +282,12 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publishers are locked to their initial organisation — org reassignment is blocked.
+	if user.Role == RolePublisher && req.Role != "" && req.Role != RolePublisher {
+		writeError(w, "Publisher accounts cannot change role", http.StatusBadRequest)
+		return
+	}
+
 	if req.Email != "" && req.Email != user.Email {
 		if !isValidEmail(req.Email) {
 			writeError(w, "invalid email address", http.StatusUnprocessableEntity)

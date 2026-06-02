@@ -2049,6 +2049,8 @@ func main() {
 	smux.Handle("GET /api/v1/apikeys", auth(listAPIKeys))
 	smux.Handle("POST /api/v1/apikeys", auth(createAPIKey))
 	smux.Handle("DELETE /api/v1/apikeys/{id}", auth(deleteAPIKey))
+	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
+	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))
 
 	// Invite management (protected)
 	smux.Handle("GET /api/v1/invites", auth(listInvites))

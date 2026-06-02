@@ -115,6 +115,50 @@
 {{end}}
 
 <div class="invite-section">
+  <h2>{{$.Strings.T "admin_publisher_section"}}</h2>
+  <div class="invite-create-row">
+    <input type="text" id="publisher-name" placeholder="{{$.Strings.T "admin_publisher_name_placeholder"}}" style="padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)">
+    <select id="publisher-org-id">
+      {{if $.Data.IsAdmin}}<option value="">—</option>{{end}}
+      {{range .MyOrgs}}
+      <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
+      {{end}}
+    </select>
+    <button type="button" class="btn-sm" onclick="createPublisher()">{{$.Strings.T "admin_publisher_create"}}</button>
+  </div>
+  <div id="publisher-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;font-size:.9rem"></div>
+
+  {{$hasPublishers := false}}
+  {{range .Users}}{{if eq .Role "publisher"}}{{$hasPublishers = true}}{{end}}{{end}}
+  {{if $hasPublishers}}
+  <table class="event-table" style="margin-top:1rem">
+    <thead>
+      <tr>
+        <th>{{$.Strings.T "admin_publisher_name"}}</th>
+        <th>{{$.Strings.T "fetch_org"}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Users}}{{if eq .Role "publisher"}}
+    {{$uid := .ID}}
+    {{$orgNames := ""}}
+    {{range $oid, $_ := $.Data.UserOrgs}}{{if eq $oid $uid}}{{range $.Data.UserOrgs}}{{end}}{{end}}{{end}}
+    <tr>
+      <td>{{if .DisplayName}}{{.DisplayName}}{{else}}<span class="muted">publisher#{{.ID}}</span>{{end}}</td>
+      <td>{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
+      <td style="white-space:nowrap">
+        <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
+        <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_publisher_confirm_delete"}}'))delUser({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
+      </td>
+    </tr>
+    {{end}}{{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+
+<div class="invite-section">
   <h2>{{$.Strings.T "admin_invite_active"}}</h2>
 
   <div class="invite-create-row">
@@ -242,6 +286,42 @@ function revokeInvite(token) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/invites/' + token + '/revoke';
   document.body.appendChild(f); f.submit();
+}
+async function createPublisher() {
+  var name = document.getElementById('publisher-name').value.trim();
+  var orgEl = document.getElementById('publisher-org-id');
+  var orgVal = orgEl ? orgEl.value : '';
+  var body = {};
+  if (name) body.name = name;
+  if (orgVal) body.org_id = parseInt(orgVal);
+  var res = document.getElementById('publisher-result');
+  res.hidden = false; res.innerHTML = '…';
+  try {
+    var r = await fetch('/admin/publishers/new', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    var d = await r.json();
+    if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
+    res.innerHTML = '<strong>' + (d.name||('publisher#'+d.user_id)) + '</strong> {{$.Strings.T "admin_publisher_created_key"}}: ' +
+      '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_key_once_hint"}}</p>';
+    setTimeout(function(){ location.reload(); }, 8000);
+  } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
+}
+async function regenerateKey(id) {
+  if (!confirm('{{$.Strings.T "admin_publisher_confirm_regen"}}')) return;
+  try {
+    var r = await fetch('/admin/publishers/'+id+'/regenerate-key', {method:'POST'});
+    var d = await r.json();
+    if (!r.ok) { alert(d.error||r.statusText); return; }
+    var res = document.getElementById('publisher-result');
+    res.hidden = false;
+    res.innerHTML = '{{$.Strings.T "admin_publisher_new_key"}}: ' +
+      '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_key_once_hint"}}</p>';
+  } catch(e) { alert(e.message); }
 }
 async function createInvite(type) {
   var orgEl = document.getElementById('invite-org-id');

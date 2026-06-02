@@ -2213,6 +2213,54 @@ func (c *DansalClient) DeleteAPIKey(ctx context.Context, token string, id int) e
 	return nil
 }
 
+type PublisherCreated struct {
+	UserID int    `json:"user_id"`
+	Name   string `json:"name"`
+	KeyID  int    `json:"key_id"`
+	APIKey string `json:"api_key"`
+	OrgID  *int   `json:"org_id,omitempty"`
+}
+
+func (c *DansalClient) CreatePublisher(ctx context.Context, name string, orgID *int, token string) (*PublisherCreated, error) {
+	payload := map[string]any{}
+	if name != "" {
+		payload["name"] = name
+	}
+	if orgID != nil {
+		payload["org_id"] = *orgID
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/publishers", token, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return nil, apiErr(resp)
+	}
+	var pub PublisherCreated
+	return &pub, json.NewDecoder(resp.Body).Decode(&pub)
+}
+
+func (c *DansalClient) RegeneratePublisherKey(ctx context.Context, publisherID int, token string) (string, int, error) {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/publishers/%d/regenerate-key", publisherID), token, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, apiErr(resp)
+	}
+	var r struct {
+		KeyID  int    `json:"key_id"`
+		APIKey string `json:"api_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return "", 0, err
+	}
+	return r.APIKey, r.KeyID, nil
+}
+
 func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, token string) error {
 	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/user/password", token, body)

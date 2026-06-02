@@ -18,6 +18,7 @@ type AdminUsersData struct {
 	UserOrgs         map[int][]int
 	MyOrgs           []Organization // orgs the current user belongs to (non-admins: invite target choices)
 	Invites          []InviteLink
+	APIKeys          map[int]APIKey // userID → their API key (for publishers)
 	BaseURL          string
 	NewInviteToken   string
 	PreselectedOrgID int // first org in sorted MyOrgs for non-admins; 0 for admins
@@ -100,6 +101,14 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			preselectedOrgID = myOrgs[0].ID
 		}
 
+		// Build userID→APIKey map for publisher rows.
+		apiKeys := make(map[int]APIKey)
+		if allKeys, err := client.ListAPIKeys(r.Context(), token); err == nil {
+			for _, k := range allKeys {
+				apiKeys[k.UserID] = k
+			}
+		}
+
 		title := i18n.T(r, "admin_users_title")
 		renderTemplate(w, tmpls.adminUsers, tmplData(r, cfg, i18n, title, AdminUsersData{
 			IsAdmin:          isAdmin,
@@ -109,6 +118,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			UserOrgs:         userOrgs,
 			MyOrgs:           myOrgs,
 			Invites:          active,
+			APIKeys:          apiKeys,
 			BaseURL:          cfg.publicBaseURL(),
 			NewInviteToken:   r.URL.Query().Get("new_invite"),
 			PreselectedOrgID: preselectedOrgID,
@@ -394,5 +404,62 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		invToken := r.PathValue("token")
 		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminPublisherCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Name  string `json:"name"`
+			OrgID *int   `json:"org_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		if su.Role != "admin" && req.OrgID == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{"error": "organisation required"})
+			return
+		}
+		pub, err := client.CreatePublisher(r.Context(), req.Name, req.OrgID, token)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(pub)
+	}
+}
+
+func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		newKey, keyID, err := client.RegeneratePublisherKey(r.Context(), id, getSessionToken(r))
+		if err != nil {
+			log.Printf("regenerate publisher key %d: %v", id, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"api_key": newKey, "key_id": keyID})
 	}
 }

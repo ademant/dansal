@@ -81,7 +81,16 @@ func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	if callerRole == RoleAdmin {
 		rows, err = db.Query("SELECT id, user_id, name, expires_at, created_at FROM api_keys ORDER BY id")
 	} else {
-		rows, err = db.Query("SELECT id, user_id, name, expires_at, created_at FROM api_keys WHERE user_id = ? ORDER BY id", callerID)
+		// Non-admins see their own keys plus keys for publishers in the same org(s).
+		rows, err = db.Query(`
+			SELECT ak.id, ak.user_id, ak.name, ak.expires_at, ak.created_at FROM api_keys ak
+			WHERE ak.user_id = ?
+			UNION
+			SELECT ak.id, ak.user_id, ak.name, ak.expires_at, ak.created_at FROM api_keys ak
+			JOIN users u ON u.id = ak.user_id AND u.role = 'publisher'
+			JOIN organization_members om1 ON om1.user_id = ak.user_id
+			JOIN organization_members om2 ON om2.organization_id = om1.organization_id AND om2.user_id = ?
+			ORDER BY id`, callerID, callerID)
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -287,9 +287,10 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	var verified, approved int
 	var expiresAt, approvedInviteURL, storedToken string
+	var userID sql.NullInt64
 	err = db.QueryRow(
-		"SELECT verified, approved, COALESCE(approved_invite_url,''), expires_at, verification_token FROM pending_registrations WHERE id=?", id,
-	).Scan(&verified, &approved, &approvedInviteURL, &expiresAt, &storedToken)
+		"SELECT verified, approved, COALESCE(approved_invite_url,''), expires_at, verification_token, user_id FROM pending_registrations WHERE id=?", id,
+	).Scan(&verified, &approved, &approvedInviteURL, &expiresAt, &storedToken, &userID)
 	if err == sql.ErrNoRows {
 		writeError(w, "not found", http.StatusNotFound)
 		return
@@ -301,11 +302,20 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	exp, err := parseTokenExpiration(expiresAt)
 	expired := err != nil || time.Now().After(exp)
 
+	// Check if a passkey has been bound to this pending registration.
+	hasPasskey := false
+	if userID.Valid {
+		var credCount int
+		db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=?", userID.Int64).Scan(&credCount)
+		hasPasskey = credCount > 0
+	}
+
 	resp := map[string]any{
-		"id":       id,
-		"verified": verified == 1,
-		"approved": approved == 1,
-		"expired":  expired,
+		"id":          id,
+		"verified":    verified == 1,
+		"approved":    approved == 1,
+		"expired":     expired,
+		"has_passkey": hasPasskey,
 	}
 	// Only return invite URL when the caller proves ownership via the verification token.
 	if approved == 1 && token != "" && token == storedToken {
@@ -497,18 +507,19 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		Email               string
 		RegType             string
 		OrgID               sql.NullInt64
+		UserID              sql.NullInt64
 		OrgName, OrgActorName, OrgDescription, OrgWebsite, OrgContactEmail string
 		VerificationChannel, Telegram, TelegramChatID string
 		Verified            int
 	}
 	err = db.QueryRow(
-		`SELECT id, email, reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
-		 org_website, org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified
+		`SELECT id, COALESCE(email,''), reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
+		 org_website, org_contact_email, verification_channel, COALESCE(telegram,''), COALESCE(telegram_chat_id,''), verified, user_id
 		 FROM pending_registrations WHERE id=?`, id,
 	).Scan(
 		&pr.ID, &pr.Email, &pr.RegType,
 		&pr.OrgID, &pr.OrgName, &pr.OrgActorName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
-		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified,
+		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified, &pr.UserID,
 	)
 	if err != nil {
 		writeError(w, "pending registration not found", http.StatusNotFound)
@@ -543,8 +554,50 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// For new_org registrations: create the organisation now so it exists when
-	// the user completes the invite. For join_org the org already exists.
+	// Passkey path: user already has credentials bound — just enable the account.
+	if pr.UserID.Valid {
+		userID := pr.UserID.Int64
+
+		// For new_org: create the org and assign the user.
+		if pr.RegType == "new_org" {
+			var orgID int64
+			if err := tx.QueryRow(
+				"INSERT INTO organizations (name, actor_name, description, website, contact_email) VALUES (?,?,?,?,?) RETURNING id",
+				pr.OrgName, pr.OrgActorName, pr.OrgDescription, pr.OrgWebsite, pr.OrgContactEmail,
+			).Scan(&orgID); err != nil {
+				writeError(w, "failed to create organization", http.StatusInternalServerError)
+				return
+			}
+			tx.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", orgID, userID)
+			tx.Exec("UPDATE users SET role=? WHERE id=?", role, userID)
+		} else if pr.OrgID.Valid {
+			tx.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", pr.OrgID.Int64, userID)
+			tx.Exec("UPDATE users SET role=? WHERE id=?", role, userID)
+		}
+
+		tx.Exec("UPDATE users SET disabled=0 WHERE id=?", userID)
+		tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+
+		if err := tx.Commit(); err != nil {
+			writeError(w, "db error", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("register: approved pending registration %d — enabled passkey user %d (role=%s)", id, userID, role)
+
+		go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
+			"Your registration has been approved. You can now sign in with the passkey you registered.")
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":  "user_enabled",
+			"user_id": userID,
+		})
+		return
+	}
+
+	// Standard path: create an invite link.
 	var orgID int64
 	if pr.RegType == "new_org" {
 		if err := tx.QueryRow(
@@ -622,10 +675,11 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		RegType, Email, TelegramChatID string
 		Verified                       int
 		OrgID                          sql.NullInt64
+		UserID                         sql.NullInt64
 	}
 	err = db.QueryRow(
-		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id FROM pending_registrations WHERE id=?", id,
-	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID)
+		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id, user_id FROM pending_registrations WHERE id=?", id,
+	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID, &pr.UserID)
 	if err != nil {
 		writeError(w, "pending registration not found", http.StatusNotFound)
 		return
@@ -652,6 +706,9 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	if pr.UserID.Valid {
+		db.Exec("DELETE FROM users WHERE id=?", pr.UserID.Int64)
+	}
 	log.Printf("register: rejected pending registration %d", id)
 
 	if pr.Verified == 1 {
@@ -765,19 +822,20 @@ func startAutoDeclineJob() {
 
 func processExpiredRegistrations() {
 	rows, err := db.Query(
-		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified FROM pending_registrations WHERE expires_at < strftime('%s','now')",
+		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, user_id FROM pending_registrations WHERE expires_at < strftime('%s','now')",
 	)
 	if err != nil {
 		return
 	}
 	type expReg struct {
-		id, verified     int
+		id, verified int
 		email, telegramChatID string
+		userID       sql.NullInt64
 	}
 	var expired []expReg
 	for rows.Next() {
 		var e expReg
-		rows.Scan(&e.id, &e.email, &e.telegramChatID, &e.verified)
+		rows.Scan(&e.id, &e.email, &e.telegramChatID, &e.verified, &e.userID)
 		expired = append(expired, e)
 	}
 	rows.Close()
@@ -790,5 +848,8 @@ func processExpiredRegistrations() {
 			)
 		}
 		db.Exec("DELETE FROM pending_registrations WHERE id=?", e.id)
+		if e.userID.Valid {
+			db.Exec("DELETE FROM users WHERE id=?", e.userID.Int64)
+		}
 	}
 }

@@ -1270,6 +1270,10 @@ func migrateDB() {
 		         AND created_at < datetime('now','-1 day')`)
 		mark(2)
 	}
+	if !applied(3) {
+		db.Exec("ALTER TABLE pending_registrations ADD COLUMN user_id INTEGER REFERENCES users(id)")
+		mark(3)
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1746,6 +1750,7 @@ func createTables() error {
 		approved           INTEGER DEFAULT 0,
 		approved_invite_url TEXT DEFAULT '',
 		message_id         TEXT NOT NULL DEFAULT '',
+		user_id             INTEGER REFERENCES users(id),
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
 		expires_at         INTEGER NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
@@ -1784,6 +1789,7 @@ func createTables() error {
 	// Mark all migrations as applied for fresh installs.
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(2)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)")
 	return nil
 }
 
@@ -1971,6 +1977,8 @@ func main() {
 	smux.HandleFunc("POST /api/v1/register/resend/{token}", registerResendHandler)
 	smux.HandleFunc("DELETE /api/v1/register/{token}", registerCancelHandler)
 	smux.HandleFunc("GET /api/v1/register/verify/email/{token}", verifyEmailRegHandler)
+	smux.HandleFunc("POST /api/v1/register/passkey/begin", webauthnRegBegin)
+	smux.HandleFunc("POST /api/v1/register/passkey/finish", webauthnRegFinish)
 	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
 	smux.Handle("GET /api/v1/pending-registrations/count", auth(pendingRegCountHandler))
 	smux.Handle("POST /api/v1/pending-registrations/{id}/approve", auth(approveRegHandler))

@@ -2600,11 +2600,12 @@ func (c *DansalClient) GetPendingRegCount(ctx context.Context, token string) (in
 }
 
 type PendingRegStatus struct {
-	ID        int    `json:"id"`
-	Verified  bool   `json:"verified"`
-	Approved  bool   `json:"approved"`
-	Expired   bool   `json:"expired"`
-	InviteURL string `json:"invite_url,omitempty"`
+	ID         int    `json:"id"`
+	Verified   bool   `json:"verified"`
+	Approved   bool   `json:"approved"`
+	Expired    bool   `json:"expired"`
+	HasPasskey bool   `json:"has_passkey"`
+	InviteURL  string `json:"invite_url,omitempty"`
 }
 
 func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int, token string) (*PendingRegStatus, error) {

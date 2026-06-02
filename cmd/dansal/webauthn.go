@@ -131,7 +131,8 @@ type waRegSession struct {
 	Email       string               `json:"email"`
 	DisplayName string               `json:"display_name"`
 	InviteID    int                  `json:"invite_id"`
-	UserID      int                  `json:"user_id"` // placeholder user created in begin; 0 = legacy
+	UserID      int                  `json:"user_id"`    // placeholder user created in begin; 0 = legacy
+	PendingID   int                  `json:"pending_id"` // set for registration-flow passkey binding
 }
 
 // POST /api/v1/invites/{token}/webauthn/begin
@@ -703,4 +704,180 @@ func webauthnUserCredentialDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/register/passkey/begin
+// Body: {"pending_id":123,"verification_token":"...","display_name":"optional"}
+// Creates a disabled=1 placeholder user, links it to the pending registration,
+// and begins a WebAuthn registration ceremony.
+func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
+	if wauthn == nil {
+		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		PendingID         int    `json:"pending_id"`
+		VerificationToken string `json:"verification_token"`
+		DisplayName       string `json:"display_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PendingID == 0 || req.VerificationToken == "" {
+		writeError(w, "pending_id and verification_token are required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate the pending registration belongs to the caller.
+	var pr struct {
+		ID       int
+		Email    string
+		Verified int
+		UserID   sql.NullInt64
+		ExpiresAt string
+	}
+	if err := db.QueryRow(
+		"SELECT id, COALESCE(email,''), verified, user_id, expires_at FROM pending_registrations WHERE id=? AND verification_token=?",
+		req.PendingID, req.VerificationToken,
+	).Scan(&pr.ID, &pr.Email, &pr.Verified, &pr.UserID, &pr.ExpiresAt); err != nil {
+		writeError(w, "Pending registration not found", http.StatusNotFound)
+		return
+	}
+	if exp, err := parseTokenExpiration(pr.ExpiresAt); err != nil || time.Now().After(exp) {
+		writeError(w, "Registration has expired", http.StatusGone)
+		return
+	}
+	if pr.Verified == 0 {
+		writeError(w, "Email not yet verified", http.StatusConflict)
+		return
+	}
+	// If a placeholder user already exists for this pending reg, delete it so we
+	// start fresh (handles retries after a failed ceremony).
+	if pr.UserID.Valid {
+		db.Exec("DELETE FROM users WHERE id=? AND password_hash='' AND disabled=1", pr.UserID.Int64)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+	}
+
+	// Create a disabled placeholder user.
+	var emailVal interface{} = nil
+	if pr.Email != "" {
+		emailVal = pr.Email
+	}
+	result, err := db.Exec(
+		"INSERT INTO users (email, display_name, password_hash, role, email_verified, disabled) VALUES (?, ?, '', 'user', 0, 1)",
+		emailVal, req.DisplayName,
+	)
+	if err != nil {
+		writeError(w, "Could not create placeholder user", http.StatusInternalServerError)
+		return
+	}
+	userID, _ := result.LastInsertId()
+
+	db.Exec("UPDATE pending_registrations SET user_id=? WHERE id=?", userID, pr.ID)
+
+	username := pr.Email
+	if username == "" {
+		username = req.DisplayName
+	}
+	if username == "" {
+		username = fmt.Sprintf("user#%d", userID)
+	}
+	regUser := &waUser{
+		id:       userHandle(int(userID)),
+		username: username,
+	}
+
+	options, sessionData, err := wauthn.BeginRegistration(regUser,
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
+	)
+	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
+		return
+	}
+
+	blob, _ := json.Marshal(waRegSession{
+		Session:  *sessionData,
+		Email:    pr.Email,
+		UserID:   int(userID),
+		PendingID: pr.ID,
+	})
+	sessionID, err := generateSessionToken()
+	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		writeError(w, "Could not generate session", http.StatusInternalServerError)
+		return
+	}
+	if err := saveWASession(sessionID, blob); err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", userID)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		writeError(w, "Could not store session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"session_id": sessionID,
+		"options":    options,
+	})
+}
+
+// POST /api/v1/register/passkey/finish?session_id=…
+// Body: PublicKeyCredential JSON from navigator.credentials.create()
+// Stores the credential against the placeholder user; account remains disabled
+// until an admin approves the pending registration.
+func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
+	if wauthn == nil {
+		writeError(w, "WebAuthn not configured", http.StatusServiceUnavailable)
+		return
+	}
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		writeError(w, "session_id query parameter required", http.StatusBadRequest)
+		return
+	}
+
+	blob, err := loadWASession(sessionID)
+	if err != nil {
+		writeError(w, "Session expired or not found", http.StatusBadRequest)
+		return
+	}
+	var stored waRegSession
+	if err := json.Unmarshal(blob, &stored); err != nil || stored.UserID == 0 || stored.PendingID == 0 {
+		writeError(w, "Session mismatch", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the pending registration still exists and is not yet approved.
+	var pendingExists int
+	db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE id=? AND user_id=? AND approved=0",
+		stored.PendingID, stored.UserID).Scan(&pendingExists)
+	if pendingExists == 0 {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		writeError(w, "Pending registration not found or already processed", http.StatusConflict)
+		return
+	}
+
+	regUser := loadWebAuthnUser(stored.UserID, stored.Email)
+	credential, err := wauthn.FinishRegistration(regUser, stored.Session, r)
+	if err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", stored.PendingID)
+		writeError(w, "WebAuthn verification failed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if _, err := db.Exec(
+		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
+		stored.UserID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
+	); err != nil {
+		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", stored.PendingID)
+		writeError(w, "Could not store credential", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("webauthn: passkey bound to pending registration %d (user_id=%d)", stored.PendingID, stored.UserID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "passkey_bound"})
 }

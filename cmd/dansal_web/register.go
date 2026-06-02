@@ -18,6 +18,7 @@ type RegisterPageData struct {
 	PendingVerified  bool   // true = verified, awaiting admin review
 	PendingApproved  bool   // true = admin approved; InviteURL holds the link
 	PendingToken     string // verification token for resend
+	PendingHasPasskey bool  // true = passkey already bound to this pending registration
 	InviteURL        string // set when approved without contact info
 }
 
@@ -50,11 +51,12 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 					if err == nil && status != nil && !status.Expired {
 						title := i18n.T(r, "register_title")
 						renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-							PendingID:       id,
-							PendingVerified: status.Verified,
-							PendingApproved: status.Approved,
-							PendingToken:    pendingToken,
-							InviteURL:       status.InviteURL,
+							PendingID:         id,
+							PendingVerified:   status.Verified,
+							PendingApproved:   status.Approved,
+							PendingToken:      pendingToken,
+							PendingHasPasskey: status.HasPasskey,
+							InviteURL:         status.InviteURL,
 						}))
 						return
 					}

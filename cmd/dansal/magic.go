@@ -27,7 +27,9 @@ func createMagicToken(userID int) (token string, expiresAt time.Time, err error)
 }
 
 // POST /api/v1/users/{id}/magic-link — admin generates a one-time login link for a user.
-// Returns {"url":"...","expires_at":"..."} without sending anything.
+// Returns {"url":"...","expires_at":"...","sent_to":"<channel or empty>"}.
+// If the user has a verified Telegram or Matrix contact, the link is sent there automatically.
+// For email-less users with no messaging contact the URL is returned for the admin to share manually.
 func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("X-User-Role") != "admin" {
@@ -40,7 +42,13 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var userID int
-	err = db.QueryRow("SELECT id FROM users WHERE id=? AND disabled=0", targetID).Scan(&userID)
+	var userEmail, telegramChatID, matrixID string
+	var telegramVerified, matrixVerified int
+	err = db.QueryRow(
+		`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(telegram_verified,0),
+		 COALESCE(matrix,''), COALESCE(matrix_verified,0)
+		 FROM users WHERE id=? AND disabled=0`, targetID,
+	).Scan(&userID, &userEmail, &telegramChatID, &telegramVerified, &matrixID, &matrixVerified)
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -54,10 +62,26 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("magic: admin user %s generated login link for user %d", r.Header.Get("X-User-ID"), userID)
+	magicURL := buildBaseURL(r) + "/login/magic/" + token
+	msgText := fmt.Sprintf("An admin has generated a login link for your account:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
+		magicURL, config.Server.MagicLoginExpirySecs/60)
+
+	sentTo := ""
+	if telegramVerified == 1 && telegramChatID != "" {
+		if err2 := sendTelegramMessage(telegramChatID, msgText); err2 == nil {
+			sentTo = "telegram"
+		}
+	} else if matrixVerified == 1 && matrixID != "" {
+		if err2 := sendMatrixMessage(matrixID, msgText); err2 == nil {
+			sentTo = "matrix"
+		}
+	}
+
+	log.Printf("magic: admin user %s generated login link for user %d (sent_to=%q)", r.Header.Get("X-User-ID"), userID, sentTo)
 	json.NewEncoder(w).Encode(map[string]string{
-		"url":        buildBaseURL(r) + "/login/magic/" + token,
+		"url":        magicURL,
 		"expires_at": expiresAt.Format(time.RFC3339),
+		"sent_to":    sentTo,
 	})
 }
 

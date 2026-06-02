@@ -208,6 +208,7 @@
     <h3 style="margin:0 0 .75rem">{{$.Strings.T "admin_magic_link_title"}}</h3>
     <p id="magic-link-toast" hidden style="background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.88rem">{{$.Strings.T "admin_magic_link_copied"}}</p>
     <p style="font-size:.85rem;color:var(--fg-muted);margin-bottom:.5rem">{{$.Strings.T "admin_magic_link_hint"}}</p>
+    <p id="magic-link-sent-to" hidden style="font-size:.85rem;color:#065f46;background:#d1fae5;border-radius:4px;padding:.3rem .6rem;margin-bottom:.5rem"></p>
     <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
       <input id="magic-link-input" type="text" readonly style="flex:1;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;background:var(--bg);color:var(--fg);font-family:monospace">
       <button type="button" class="btn-sm" onclick="copyMagicLink()">{{$.Strings.T "admin_invite_copy"}}</button>
@@ -404,9 +405,14 @@ function genMagicLink(uid) {
     .then(function(d){
       var inp = document.getElementById('magic-link-input');
       inp.value = d.url;
+      var sentEl = document.getElementById('magic-link-sent-to');
+      if (sentEl) {
+        sentEl.hidden = !d.sent_to;
+        sentEl.textContent = d.sent_to ? '{{$.Strings.T "admin_magic_link_sent_to"}}: ' + d.sent_to : '';
+      }
       document.getElementById('magic-link-modal').hidden = false;
       document.getElementById('magic-link-toast').hidden = true;
-      if(navigator.clipboard) {
+      if(!d.sent_to && navigator.clipboard) {
         navigator.clipboard.writeText(d.url).then(function(){
           document.getElementById('magic-link-toast').hidden = false;
         });

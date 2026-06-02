@@ -35,15 +35,14 @@
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td style="white-space:nowrap">
       {{$id := .ID}}
-      {{$noContactJS := "false"}}{{if $noContact}}{{$noContactJS = "true"}}{{end}}
       {{if eq .RegType "new_org"}}
-      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},'user',{{$noContactJS}})">{{$.Strings.T "admin_reg_approve"}}</button>
+      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},'user',{{if $noContact}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_approve"}}</button>
       {{else}}
       <select id="role-{{$id}}" style="font-size:.85rem;padding:.15rem .3rem;margin-right:.3rem">
         <option value="user">user</option>
         <option value="publisher">publisher</option>
       </select>
-      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},document.getElementById('role-{{$id}}').value,{{$noContactJS}})">{{$.Strings.T "admin_reg_approve"}}</button>
+      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},document.getElementById('role-{{$id}}').value,{{if $noContact}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_approve"}}</button>
       {{end}}
       <button type="button" class="btn-sm btn-danger" onclick="rejectReg({{$id}},{{if .Verified}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_reject"}}</button>
     </td>

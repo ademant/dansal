@@ -8,8 +8,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Build
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,13 +22,27 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binaries
-        run: make build-dansal build-dansal_admin
+      - name: Check formatting
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build all binaries
+        run: make build
 
   package:
     name: Package (.deb)
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,23 +59,25 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get install -y dpkg-dev
 
-      - name: Build binaries
-        run: make build-dansal build-dansal_admin
+      - name: Build all binaries
+        run: make build
 
       - name: Build amd64 .deb
         run: |
           DEB_VERSION="${GITHUB_REF_NAME#v}"
           make deb DEB_VERSION="${DEB_VERSION}" DEB_ARCH=amd64
 
+      - name: Install arm64 build dependencies
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build arm64 .deb
         run: |
           DEB_VERSION="${GITHUB_REF_NAME#v}"
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          CGO_ENABLED=1 GOARCH=arm64 CC=aarch64-linux-gnu-gcc \
-            go build -ldflags "-X main.Version=${DEB_VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dansal ./cmd/dansal
-          go build -o dansal_admin ./cmd/dansal_admin
           make deb DEB_VERSION="${DEB_VERSION}" DEB_ARCH=arm64
+        env:
+          CGO_ENABLED: "1"
+          GOARCH: arm64
+          CC: aarch64-linux-gnu-gcc
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

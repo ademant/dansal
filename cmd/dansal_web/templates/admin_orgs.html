@@ -29,7 +29,7 @@
     <td class="col-num">{{.LocationCount}}</td>
     <td class="col-num">{{len .FetchSources}}</td>
     <td class="col-actions" style="white-space:nowrap">
-      {{if $.Data.CanEdit}}
+      {{if .CanEdit}}
       <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{if .FetchSources}}
       <form method="post" action="/admin/organizations/{{.Org.ID}}/run-feeds" style="display:inline">

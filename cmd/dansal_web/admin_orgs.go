@@ -39,6 +39,7 @@ type OrgStats struct {
 	LocationCount int
 	FetchSources  []FetchSource
 	MainTown      string
+	CanEdit       bool // true for admins and org members
 }
 
 type AdminOrgsData struct {
@@ -109,6 +110,14 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			}
 			return best
 		}
+		isAdmin := user.Role == "admin"
+		// For non-admins, build their org membership set to show edit button per org.
+		myOrgIDs := map[int]bool{}
+		if !isAdmin {
+			for _, id := range getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs) {
+				myOrgIDs[id] = true
+			}
+		}
 		stats := make([]OrgStats, len(orgs))
 		for i, o := range orgs {
 			st := statMap[o.ID]
@@ -119,12 +128,13 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				LocationCount: st.LocationCount,
 				FetchSources:  srcsByOrg[o.ID],
 				MainTown:      mainTown(o.ID),
+				CanEdit:       isAdmin || myOrgIDs[o.ID],
 			}
 		}
 		title := i18n.T(r, "admin_orgs_title")
 		renderTemplate(w, tmpls.adminOrgs, tmplData(r, cfg, i18n, title, AdminOrgsData{
 			Stats:   stats,
-			CanEdit: user.Role == "admin",
+			CanEdit: isAdmin,
 		}))
 	}
 }
@@ -198,7 +208,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
+		if user.Role != "admin" && user.Role != "user" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -213,6 +223,14 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			return
 		}
 		token := getSessionToken(r)
+		// Non-admins may only edit orgs they belong to.
+		if user.Role != "admin" {
+			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{org})
+			if len(myOrgs) == 0 {
+				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
+				return
+			}
+		}
 		var follows []FollowRecord
 		hasActorWithFollowers := false
 		if actor, err := getActorByOrgID(db, id); err == nil {
@@ -461,7 +479,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
+		if user.Role != "admin" && user.Role != "user" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -477,6 +495,14 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			http.Error(w, "failed to load organization: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		token := getSessionToken(r)
+		if user.Role != "admin" {
+			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{originalOrg})
+			if len(myOrgs) == 0 {
+				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
+				return
+			}
+		}
 
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
 			if err := r.ParseForm(); err != nil {
@@ -485,7 +511,6 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			}
 		}
 		org := orgFromForm(r)
-		token := getSessionToken(r)
 		if err := client.UpdateOrganization(r.Context(), id, org, token); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{

@@ -242,7 +242,7 @@ func adminRegistrationApproveHandler(cfg *Config, client *DansalClient) http.Han
 func adminRegistrationResendInviteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su := getSessionUser(r)
-		if su == nil || su.Role != "admin" {
+		if su == nil || (su.Role != "admin" && su.Role != "user") {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}

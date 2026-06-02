@@ -56,6 +56,7 @@ type AdminOrgEditData struct {
 	AssignedLocations   []Location
 	UnassignedLocations []Location
 	HasActorWithFollowers bool // True if organization has an actor that has followers
+	IsAdmin             bool
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -303,13 +304,14 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		})
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-			Org:                 org,
-			Follows:             follows,
-			FollowErr:           r.URL.Query().Get("follow_err"),
-			Members:             members,
-			AssignedLocations:   assigned,
-			UnassignedLocations: unassigned,
+			Org:                   org,
+			Follows:               follows,
+			FollowErr:             r.URL.Query().Get("follow_err"),
+			Members:               members,
+			AssignedLocations:     assigned,
+			UnassignedLocations:   unassigned,
 			HasActorWithFollowers: hasActorWithFollowers,
+			IsAdmin:               user.Role == "admin",
 		}))
 	}
 }
@@ -516,6 +518,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 				Org:      org,
 				ErrorKey: "admin_save_error",
+				IsAdmin:  user.Role == "admin",
 			}))
 			return
 		}
@@ -532,6 +535,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 					Org:      org,
 					ErrorKey: errKey,
+					IsAdmin:  user.Role == "admin",
 				}))
 				return
 			}

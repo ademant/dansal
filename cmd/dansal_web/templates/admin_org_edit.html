@@ -21,13 +21,18 @@
     </div>
   </fieldset>
 
+  {{if .IsAdmin}}
   <label for="name">{{$.Strings.T "org_name"}}</label>
   <input id="name" type="text" name="name" value="{{.Org.Name}}" required>
+  {{else}}
+  <input type="hidden" name="name" value="{{.Org.Name}}">
+  {{end}}
 
   <label for="description">{{$.Strings.T "org_description"}}</label>
   <textarea id="description" name="description" rows="4">{{.Org.Description}}</textarea>
 
   <input type="hidden" id="org-id" value="{{.Org.ID}}">
+  {{if .IsAdmin}}
   <label for="actor_name">{{$.Strings.T "org_actor_name"}}</label>
   <input id="actor_name" type="text" name="actor_name" value="{{.Org.ActorName}}" placeholder="my-org">
   <span id="actor-name-status" style="font-size:.82rem;margin-top:-.2rem"></span>
@@ -36,6 +41,9 @@
   <div class="warning-box" style="margin-top: 0.5rem; padding: 0.5rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
     <strong>⚠️ {{$.Strings.T "admin_actor_name_change_warning"}}</strong>
   </div>
+  {{end}}
+  {{else}}
+  <input type="hidden" name="actor_name" value="{{.Org.ActorName}}">
   {{end}}
 
   <label for="website">{{$.Strings.T "org_website"}}</label>

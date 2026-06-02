@@ -49,6 +49,10 @@
           <label for="inv-password">{{$.Strings.T "invite_password"}}</label>
           <input id="inv-password" type="password" autocomplete="new-password" minlength="8">
         </div>
+        <div class="invite-field">
+          <label for="inv-password-confirm">{{$.Strings.T "invite_password_confirm"}}</label>
+          <input id="inv-password-confirm" type="password" autocomplete="new-password" minlength="8">
+        </div>
         <button type="submit" class="btn-primary">{{$.Strings.T "invite_submit_password"}}</button>
       </form>
     </div>
@@ -163,10 +167,12 @@
     ev.preventDefault();
     var e = email(), dn = displayName();
     var pw = document.getElementById('inv-password').value;
-    if(!e && !dn){ msg('{{$.Strings.T "invite_username_email_required"}}', true); return; }
+    var pwc = document.getElementById('inv-password-confirm').value;
+    if(pw !== pwc){ msg('{{$.Strings.T "invite_password_mismatch"}}', true); return; }
+    if(!pw){ msg('{{$.Strings.T "invite_password_required"}}', true); return; }
 
     try {
-      var resp = await fetch('/api/v1/invites/'+TOKEN, {
+      var resp = await fetch('/invites/'+TOKEN+'/password', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({email: e, display_name: dn, password: pw})
@@ -174,7 +180,7 @@
       var data = await resp.json();
       if(!resp.ok) throw new Error(data.error || resp.statusText);
       msg('{{$.Strings.T "invite_success"}}', false);
-      setTimeout(function(){ window.location.href = '/login'; }, 1200);
+      setTimeout(function(){ window.location.href = data.redirect || '/'; }, 1200);
     } catch(err) {
       msg(err.message, true);
     }

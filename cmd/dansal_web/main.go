@@ -138,6 +138,7 @@ func main() {
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client))
 		r.HandleFunc("POST /invites/{token}/webauthn/begin",  webauthnInviteProxy(cfg, client, "begin"))
 		r.HandleFunc("POST /invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
 		r.HandleFunc("POST /auth/webauthn/login/begin",  webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))

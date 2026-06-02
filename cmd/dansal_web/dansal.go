@@ -2028,6 +2028,30 @@ func (c *DansalClient) RevokeInvite(ctx context.Context, inviteToken, authToken 
 	return nil
 }
 
+// UseInvitePassword calls POST /api/v1/invites/{token} to create an account via password track.
+func (c *DansalClient) UseInvitePassword(ctx context.Context, token, email, displayName, password string) error {
+	payload := map[string]string{
+		"email":        email,
+		"display_name": displayName,
+		"password":     password,
+	}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/invites/"+token, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) VerifyContactRequest(ctx context.Context, token string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-requests/verify/"+token, nil)
 	if err != nil {

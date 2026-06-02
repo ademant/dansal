@@ -16,7 +16,9 @@ type RegisterPageData struct {
 	FormToken        string
 	PendingID        int    // set when cookie found and record still active
 	PendingVerified  bool   // true = verified, awaiting admin review
+	PendingApproved  bool   // true = admin approved; InviteURL holds the link
 	PendingToken     string // verification token for resend
+	InviteURL        string // set when approved without contact info
 }
 
 type RegisterDoneData struct {
@@ -44,13 +46,15 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			if len(parts) == 2 {
 				if id, err := strconv.Atoi(parts[0]); err == nil {
 					pendingToken := parts[1]
-					status, err := client.GetRegistrationStatus(r.Context(), id)
+					status, err := client.GetRegistrationStatus(r.Context(), id, pendingToken)
 					if err == nil && status != nil && !status.Expired {
 						title := i18n.T(r, "register_title")
 						renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 							PendingID:       id,
 							PendingVerified: status.Verified,
+							PendingApproved: status.Approved,
 							PendingToken:    pendingToken,
+							InviteURL:       status.InviteURL,
 						}))
 						return
 					}

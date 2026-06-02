@@ -2600,13 +2600,19 @@ func (c *DansalClient) GetPendingRegCount(ctx context.Context, token string) (in
 }
 
 type PendingRegStatus struct {
-	ID       int  `json:"id"`
-	Verified bool `json:"verified"`
-	Expired  bool `json:"expired"`
+	ID        int    `json:"id"`
+	Verified  bool   `json:"verified"`
+	Approved  bool   `json:"approved"`
+	Expired   bool   `json:"expired"`
+	InviteURL string `json:"invite_url,omitempty"`
 }
 
-func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int) (*PendingRegStatus, error) {
-	resp, err := c.HTTP.Get(fmt.Sprintf("%s/api/v1/register/status/%d", c.BaseURL, id))
+func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int, token string) (*PendingRegStatus, error) {
+	url := fmt.Sprintf("%s/api/v1/register/status/%d", c.BaseURL, id)
+	if token != "" {
+		url += "?token=" + token
+	}
+	resp, err := c.HTTP.Get(url)
 	if err != nil {
 		return nil, err
 	}

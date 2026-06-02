@@ -1257,6 +1257,8 @@ func migrateDB() {
 
 	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN org_actor_name TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE pending_registrations ADD COLUMN approved INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE pending_registrations ADD COLUMN approved_invite_url TEXT DEFAULT ''")
 
 	// v2: #425 email optional, discoverable passkey login.
 	if !applied(2) {
@@ -1741,6 +1743,8 @@ func createTables() error {
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
+		approved           INTEGER DEFAULT 0,
+		approved_invite_url TEXT DEFAULT '',
 		message_id         TEXT NOT NULL DEFAULT '',
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
 		expires_at         INTEGER NOT NULL,

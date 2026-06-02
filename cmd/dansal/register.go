@@ -276,18 +276,20 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/v1/register/status/{id} — return the status of a pending registration for cookie-based resumption.
-// Public endpoint; returns minimal info (verified/expired) without leaking contact details.
+// The verification_token query param is required for approved registrations to return the invite URL.
 func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var verified int
-	var expiresAt string
+	token := r.URL.Query().Get("token")
+
+	var verified, approved int
+	var expiresAt, approvedInviteURL, storedToken string
 	err = db.QueryRow(
-		"SELECT verified, expires_at FROM pending_registrations WHERE id=?", id,
-	).Scan(&verified, &expiresAt)
+		"SELECT verified, approved, COALESCE(approved_invite_url,''), expires_at, verification_token FROM pending_registrations WHERE id=?", id,
+	).Scan(&verified, &approved, &approvedInviteURL, &expiresAt, &storedToken)
 	if err == sql.ErrNoRows {
 		writeError(w, "not found", http.StatusNotFound)
 		return
@@ -298,12 +300,19 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	exp, err := parseTokenExpiration(expiresAt)
 	expired := err != nil || time.Now().After(exp)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+
+	resp := map[string]any{
 		"id":       id,
 		"verified": verified == 1,
+		"approved": approved == 1,
 		"expired":  expired,
-	})
+	}
+	// Only return invite URL when the caller proves ownership via the verification token.
+	if approved == 1 && token != "" && token == storedToken {
+		resp["invite_url"] = approvedInviteURL
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // POST /api/v1/register/resend/{token} — resend verification message (rate-limited).
@@ -569,7 +578,17 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	base := buildBaseURL(r)
+	setupURL := base + "/invites/" + inviteToken
+
+	contactFree := pr.Email == "" && pr.Telegram == ""
+	if contactFree {
+		// No contact info — keep the pending record but mark it approved so the user
+		// can discover the invite URL by visiting /register with their cookie.
+		tx.Exec("UPDATE pending_registrations SET approved=1, approved_invite_url=? WHERE id=?", setupURL, id)
+	} else {
+		tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	}
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -578,8 +597,6 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
-	base := buildBaseURL(r)
-	setupURL := base + "/invites/" + inviteToken
 	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
 		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for 72 hours.", setupURL))
 

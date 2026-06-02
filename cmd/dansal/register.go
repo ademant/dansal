@@ -317,9 +317,15 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 		"expired":     expired,
 		"has_passkey": hasPasskey,
 	}
-	// Only return invite URL when the caller proves ownership via the verification token.
-	if approved == 1 && token != "" && token == storedToken {
-		resp["invite_url"] = approvedInviteURL
+	// Only return invite URL when the caller proves ownership via the verification token
+	// and the invite is still valid (not used, not expired).
+	if approved == 1 && token != "" && token == storedToken && approvedInviteURL != "" {
+		inviteToken := inviteTokenFromURL(approvedInviteURL)
+		if inviteToken != "" && isInviteUsable(inviteToken) {
+			resp["invite_url"] = approvedInviteURL
+		}
+		// No invite_url in response when expired/used — the web page shows the approved
+		// state without an actionable link, prompting the user to contact the admin.
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -852,4 +858,38 @@ func processExpiredRegistrations() {
 			db.Exec("DELETE FROM users WHERE id=?", e.userID.Int64)
 		}
 	}
+}
+
+// inviteTokenFromURL extracts the invite token from a full URL like
+// https://example.org/invites/TOKEN. Returns "" if the URL has no /invites/ segment.
+func inviteTokenFromURL(rawURL string) string {
+	const prefix = "/invites/"
+	idx := len(rawURL) - 1
+	for idx >= 0 && rawURL[idx] != '/' {
+		idx--
+	}
+	if idx < 0 {
+		return ""
+	}
+	seg := rawURL[:idx+1]
+	if len(seg) >= len(prefix) && seg[len(seg)-len(prefix):] == prefix {
+		return rawURL[idx+1:]
+	}
+	return ""
+}
+
+// isInviteUsable returns true when the invite link exists, has not been used,
+// and has not expired.
+func isInviteUsable(token string) bool {
+	var usedAt, expiresAt string
+	if err := db.QueryRow(
+		"SELECT COALESCE(used_at,''), expires_at FROM invite_links WHERE token=?", token,
+	).Scan(&usedAt, &expiresAt); err != nil {
+		return false
+	}
+	if usedAt != "" {
+		return false
+	}
+	exp, err := parseTokenExpiration(expiresAt)
+	return err == nil && !time.Now().After(exp)
 }

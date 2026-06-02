@@ -13,6 +13,8 @@
     {{if .InviteURL}}
     <p style="margin:.75rem 0 .5rem;font-weight:600">{{$.Strings.T "pending_reg_invite_link"}}:</p>
     <a href="{{.InviteURL}}" class="btn-primary" style="display:inline-block;margin-bottom:.75rem">{{$.Strings.T "pending_reg_complete_setup"}}</a>
+    {{else}}
+    <p style="font-size:.88rem;color:var(--fg-muted);margin:.5rem 0 0">{{$.Strings.T "pending_reg_invite_expired"}}</p>
     {{end}}
     {{else if .PendingVerified}}
     <p>{{$.Strings.T "pending_reg_awaiting_review"}}</p>

@@ -43,8 +43,8 @@
   {{$uid := .ID}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td>{{.Email}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
-    {{if $.Data.IsAdmin}}<td>{{.DisplayName}}</td>{{end}}
+    <td>{{if .Email}}{{.Email}}{{else if not .DisplayName}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
+    {{if $.Data.IsAdmin}}<td>{{if .DisplayName}}{{.DisplayName}}{{else if not .Email}}<span class="muted">user #{{$uid}}</span>{{end}}</td>{{end}}
     <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
       <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)">

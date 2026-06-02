@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -238,14 +239,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 		json.NewEncoder(w).Encode(map[string]any{
 			"status":             "verification_email_sent",
-			"pending_id":         pendingID,
+			"pending_id":         strconv.FormatInt(pendingID, 10),
 			"verification_token": verificationToken,
 		})
 	} else {
 		// Return token for Telegram bot instructions.
 		json.NewEncoder(w).Encode(map[string]any{
 			"status":             "telegram_verification_required",
-			"pending_id":         pendingID,
+			"pending_id":         strconv.FormatInt(pendingID, 10),
 			"verification_token": verificationToken,
 			"telegram_token":     verificationToken,
 			"bot_name":           config.Server.TelegramBotName,

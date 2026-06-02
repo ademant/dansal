@@ -41,8 +41,8 @@
     <input type="hidden" id="field-reg-type" name="reg_type" value="join_org">
 
     <div class="form-group">
-      <label for="field-email">{{$.Strings.T "register_email"}}</label>
-      <input type="email" id="field-email" name="email" required autocomplete="email" class="form-input">
+      <label for="field-email">{{$.Strings.T "register_email"}} <span class="hint-recommended">{{$.Strings.T "register_contact_recommended"}}</span></label>
+      <input type="email" id="field-email" name="email" autocomplete="email" class="form-input">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
     <div class="form-group">
@@ -95,8 +95,25 @@
       <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
     </div>
 
-    <button type="submit" class="btn-primary">{{$.Strings.T "register_submit"}}</button>
+    <button type="button" class="btn-primary" onclick="checkContactBeforeSubmit()">{{$.Strings.T "register_submit"}}</button>
   </form>
+
+  <!-- No-contact confirmation modal -->
+  <div id="no-contact-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:480px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+      <h3 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "register_no_contact_title"}}</h3>
+      <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:1rem">{{$.Strings.T "register_no_contact_body"}}</p>
+      <div class="form-group">
+        <label for="modal-email">{{$.Strings.T "register_email"}} <span class="hint-recommended">{{$.Strings.T "register_contact_recommended"}}</span></label>
+        <input type="email" id="modal-email" autocomplete="email" class="form-input">
+      </div>
+      <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+        <button type="button" class="btn-primary" onclick="addContactFromModal()">{{$.Strings.T "register_no_contact_add"}}</button>
+        <button type="button" class="btn-secondary" onclick="submitWithoutContact()">{{$.Strings.T "register_no_contact_confirm"}}</button>
+        <button type="button" class="btn-link" onclick="document.getElementById('no-contact-modal').hidden=true">{{$.Strings.T "admin_magic_link_close"}}</button>
+      </div>
+    </div>
+  </div>
   {{end}}{{/* end if PendingID else */}}
   {{end}}
 </div>
@@ -118,6 +135,8 @@
 .pending-reg-notice{background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404);border-radius:6px;padding:1rem 1.25rem;margin-bottom:1.25rem}
 .pending-reg-notice p{margin:0 0 .75rem}
 .btn-link{background:none;border:none;color:var(--fg-muted);cursor:pointer;font-size:.88rem;text-decoration:underline;padding:0}
+.btn-secondary{background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.5rem 1.25rem;font-size:1rem;cursor:pointer}
+.hint-recommended{font-weight:normal;font-size:.8rem;color:#1a6eb5;margin-left:.25rem}
 </style>
 <script>
 function switchTab(tab) {
@@ -131,6 +150,33 @@ function switchTab(tab) {
 function updateChannelFields() {
   var tg = document.querySelector('input[name="channel"]:checked').value === 'telegram';
   document.getElementById('telegram-field').hidden = !tg;
+}
+function hasContactInfo() {
+  var email = document.getElementById('field-email');
+  var channel = document.querySelector('input[name="channel"]:checked');
+  var tg = document.getElementById('field-telegram');
+  if (email && email.value.trim()) return true;
+  if (channel && channel.value === 'telegram' && tg && tg.value.trim()) return true;
+  return false;
+}
+function checkContactBeforeSubmit() {
+  if (hasContactInfo()) {
+    document.querySelector('form[action="/register"]').submit();
+  } else {
+    document.getElementById('no-contact-modal').hidden = false;
+  }
+}
+function addContactFromModal() {
+  var v = document.getElementById('modal-email').value.trim();
+  if (v) {
+    document.getElementById('field-email').value = v;
+    document.getElementById('no-contact-modal').hidden = true;
+    document.querySelector('form[action="/register"]').submit();
+  }
+}
+function submitWithoutContact() {
+  document.getElementById('no-contact-modal').hidden = true;
+  document.querySelector('form[action="/register"]').submit();
 }
 </script>
 {{end}}

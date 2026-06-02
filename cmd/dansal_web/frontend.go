@@ -22,6 +22,10 @@ import (
 	"github.com/yuin/goldmark"
 )
 
+type webContextKey int
+
+const ctxPendingRegCount webContextKey = 1
+
 type TemplateData struct {
 	Title        string
 	Domain       string
@@ -41,6 +45,25 @@ type TemplateData struct {
 	SuggestAvailable        bool
 	RegistrationEnabled     bool
 	SessionIdleTimeoutMins  int
+	PendingRegCount         int // verified pending registrations awaiting action (scoped to caller)
+}
+
+// pendingRegCountMiddleware fetches the scoped pending-registration count for
+// logged-in admin/user roles and stores it in the request context so tmplData
+// can inject it into every rendered page without each handler needing to ask.
+func pendingRegCountMiddleware(client *DansalClient) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			su := getSessionUser(r)
+			if su != nil && (su.Role == "admin" || su.Role == "user") {
+				token := getSessionToken(r)
+				if count, err := client.GetPendingRegCount(r.Context(), token); err == nil && count > 0 {
+					r = r.WithContext(context.WithValue(r.Context(), ctxPendingRegCount, count))
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
@@ -83,6 +106,12 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		SuggestAvailable:       suggestAvailable(cfg),
 		RegistrationEnabled:    suggestAvailable(cfg), // same gate: SMTP or Telegram configured
 		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
+		PendingRegCount:        func() int {
+			if v, ok := r.Context().Value(ctxPendingRegCount).(int); ok {
+				return v
+			}
+			return 0
+		}(),
 	}
 }
 

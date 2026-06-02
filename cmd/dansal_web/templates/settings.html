@@ -6,7 +6,7 @@
   {{with .Data}}
   {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
-  {{if and (not .User.Email) (not .User.Telegram) (not .User.Matrix)}}<p class="msg msg-warn" role="alert">{{$.Strings.T "settings_no_backup_warn"}}</p>{{end}}
+  {{if and (not .User.Email) (not .User.Telegram) (not .User.Matrix) (not .User.HasPassword) (lt (len .Passkeys) 2)}}<p class="msg msg-warn" role="alert">{{$.Strings.T "settings_no_backup_warn"}}</p>{{end}}
   {{if .VerifySent}}<p class="msg msg-ok" role="status">
     {{if eq .VerifySent "telegram"}}{{$.Strings.T "settings_verify_sent_telegram"}}
     {{else if eq .VerifySent "matrix"}}{{$.Strings.T "settings_verify_sent_matrix"}}

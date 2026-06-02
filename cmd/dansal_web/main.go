@@ -286,7 +286,7 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/edit", adminRateLimit(adminLocationSaveHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))
 
-		return certAuthMiddleware(client)(feedRouter(cfg, db, client)(r))
+		return pendingRegCountMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r)))
 	}
 
 	i18n := loadI18n(cfg.I18nFile)

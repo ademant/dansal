@@ -1045,6 +1045,7 @@ func migrateDB() {
 		org_description    TEXT DEFAULT '',
 		org_website        TEXT DEFAULT '',
 		org_contact_email  TEXT DEFAULT '',
+		org_actor_name     TEXT DEFAULT '',
 		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
@@ -1255,6 +1256,7 @@ func migrateDB() {
 	} // end v1
 
 	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")
+	db.Exec("ALTER TABLE pending_registrations ADD COLUMN org_actor_name TEXT DEFAULT ''")
 
 	// v2: #425 email optional, discoverable passkey login.
 	if !applied(2) {
@@ -1734,6 +1736,7 @@ func createTables() error {
 		org_description    TEXT DEFAULT '',
 		org_website        TEXT DEFAULT '',
 		org_contact_email  TEXT DEFAULT '',
+		org_actor_name     TEXT DEFAULT '',
 		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
@@ -1885,6 +1888,7 @@ func main() {
 	initSuggestRateLimiters()
 	initRegisterRateLimiter()
 	initResendRateLimiter()
+	startAutoDeclineJob()
 	initWebAuthn()
 
 	smux := http.NewServeMux()
@@ -1964,6 +1968,7 @@ func main() {
 	smux.HandleFunc("DELETE /api/v1/register/{token}", registerCancelHandler)
 	smux.HandleFunc("GET /api/v1/register/verify/email/{token}", verifyEmailRegHandler)
 	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
+	smux.Handle("GET /api/v1/pending-registrations/count", auth(pendingRegCountHandler))
 	smux.Handle("POST /api/v1/pending-registrations/{id}/approve", auth(approveRegHandler))
 	smux.Handle("DELETE /api/v1/pending-registrations/{id}", auth(rejectRegHandler))
 

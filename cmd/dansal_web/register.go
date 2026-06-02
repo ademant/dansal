@@ -271,8 +271,10 @@ func adminRegistrationRejectHandler(cfg *Config, client *DansalClient) http.Hand
 			http.NotFound(w, r)
 			return
 		}
+		r.ParseForm()
+		reason := strings.TrimSpace(r.FormValue("reason"))
 		token := getSessionToken(r)
-		if err := client.RejectRegistration(r.Context(), token, id); err != nil {
+		if err := client.RejectRegistration(r.Context(), token, id, reason); err != nil {
 			log.Printf("reject registration %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)

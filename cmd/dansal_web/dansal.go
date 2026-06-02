@@ -2542,9 +2542,11 @@ func (c *DansalClient) ApproveRegistration(ctx context.Context, token string, id
 }
 
 // RejectRegistration calls DELETE /api/v1/pending-registrations/{id}.
-func (c *DansalClient) RejectRegistration(ctx context.Context, token string, id int) error {
+// reason is required by the API when the registration is verified.
+func (c *DansalClient) RejectRegistration(ctx context.Context, token string, id int, reason string) error {
+	body, _ := json.Marshal(map[string]string{"reason": reason})
 	path := fmt.Sprintf("/api/v1/pending-registrations/%d", id)
-	resp, err := c.authed(ctx, http.MethodDelete, path, token, nil)
+	resp, err := c.authed(ctx, http.MethodDelete, path, token, body)
 	if err != nil {
 		return err
 	}
@@ -2553,6 +2555,23 @@ func (c *DansalClient) RejectRegistration(ctx context.Context, token string, id 
 		return apiErr(resp)
 	}
 	return nil
+}
+
+// GetPendingRegCount returns the scoped count of verified, unactioned pending registrations.
+func (c *DansalClient) GetPendingRegCount(ctx context.Context, token string) (int, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/pending-registrations/count", token, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, nil
+	}
+	var r struct {
+		Count int `json:"count"`
+	}
+	json.NewDecoder(resp.Body).Decode(&r)
+	return r.Count, nil
 }
 
 type PendingRegStatus struct {

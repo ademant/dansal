@@ -96,18 +96,18 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" {
-		writeError(w, "email is required", http.StatusBadRequest)
-		return
+	if req.Email != "" {
+		if !isValidEmail(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+		if err := validateEmailDomain(r.Context(), req.Email); err != nil {
+			writeError(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
 	}
-	if !isValidEmail(req.Email) {
-		writeError(w, "invalid email address", http.StatusUnprocessableEntity)
-		return
-	}
-	if err := validateEmailDomain(r.Context(), req.Email); err != nil {
-		writeError(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
+	// At least one contact channel or a non-empty motivation is required, but
+	// we allow contact-free registration — the form warns the user.
 	if req.RegType != "join_org" && req.RegType != "new_org" {
 		writeError(w, "reg_type must be 'join_org' or 'new_org'", http.StatusBadRequest)
 		return
@@ -196,7 +196,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := time.Now().UTC().Add(72 * time.Hour).Unix()
+	expiresAt := time.Now().UTC().Add(7 * 24 * time.Hour).Unix()
 
 	var orgIDArg any
 	if req.OrgID != nil {
@@ -583,11 +583,12 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	var pr struct {
 		RegType, Email, TelegramChatID string
-		OrgID sql.NullInt64
+		Verified                       int
+		OrgID                          sql.NullInt64
 	}
 	err = db.QueryRow(
-		"SELECT reg_type, email, COALESCE(telegram_chat_id,''), org_id FROM pending_registrations WHERE id=?", id,
-	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.OrgID)
+		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id FROM pending_registrations WHERE id=?", id,
+	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID)
 	if err != nil {
 		writeError(w, "pending registration not found", http.StatusNotFound)
 		return
@@ -603,26 +604,46 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+
+	if pr.Verified == 1 && body.Reason == "" {
+		writeError(w, "reason is required when rejecting a verified registration", http.StatusBadRequest)
+		return
+	}
+
 	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
 	log.Printf("register: rejected pending registration %d", id)
 
-	go notifyUser(pr.TelegramChatID, pr.Email, "Registration not approved", "Your registration request was not approved.")
+	if pr.Verified == 1 {
+		rejectMsg := "Your registration request was not approved."
+		if body.Reason != "" {
+			rejectMsg += "\n\nReason: " + body.Reason
+		}
+		go notifyUser(pr.TelegramChatID, pr.Email, "Registration not approved", rejectMsg)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // notifyApprovers sends admin/org notification when a registration is verified.
 func notifyApprovers(pendingID int) {
-	var regType, username, orgName string
+	var regType, orgName, email string
 	var orgID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT reg_type, username, org_name, org_id FROM pending_registrations WHERE id=?", pendingID,
-	).Scan(&regType, &username, &orgName, &orgID)
+		"SELECT reg_type, COALESCE(org_name,''), COALESCE(email,''), org_id FROM pending_registrations WHERE id=?", pendingID,
+	).Scan(&regType, &orgName, &email, &orgID)
 	if err != nil {
 		return
 	}
 
-	msg := fmt.Sprintf("New registration request from %q", username)
+	identifier := email
+	if identifier == "" {
+		identifier = "(no contact info)"
+	}
+	msg := fmt.Sprintf("New registration request from %q", identifier)
 	if regType == "new_org" {
 		msg += fmt.Sprintf(" (new organisation: %q)", orgName)
 	} else if orgID.Valid {
@@ -672,4 +693,65 @@ func intPathValue(r *http.Request, key string) (int, error) {
 	var n int
 	_, err := fmt.Sscan(v, &n)
 	return n, err
+}
+
+// GET /api/v1/pending-registrations/count — scoped count of verified, unactioned registrations.
+func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+	var count int
+	if callerRole == RoleAdmin {
+		db.QueryRow(
+			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
+		).Scan(&count)
+	} else {
+		db.QueryRow(`
+			SELECT COUNT(*) FROM pending_registrations pr
+			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now')`,
+			callerID,
+		).Scan(&count)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"count": count})
+}
+
+// startAutoDeclineJob runs an hourly sweep that deletes expired pending registrations
+// and notifies verified ones that their request was not approved in time.
+func startAutoDeclineJob() {
+	go func() {
+		t := time.NewTicker(time.Hour)
+		for range t.C {
+			processExpiredRegistrations()
+		}
+	}()
+}
+
+func processExpiredRegistrations() {
+	rows, err := db.Query(
+		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified FROM pending_registrations WHERE expires_at < strftime('%s','now')",
+	)
+	if err != nil {
+		return
+	}
+	type expReg struct {
+		id, verified     int
+		email, telegramChatID string
+	}
+	var expired []expReg
+	for rows.Next() {
+		var e expReg
+		rows.Scan(&e.id, &e.email, &e.telegramChatID, &e.verified)
+		expired = append(expired, e)
+	}
+	rows.Close()
+
+	for _, e := range expired {
+		if e.verified == 1 {
+			go notifyUser(e.telegramChatID, e.email,
+				"Registration not approved",
+				"Your registration request was not approved within the review period. Your contact information has been deleted.",
+			)
+		}
+		db.Exec("DELETE FROM pending_registrations WHERE id=?", e.id)
+	}
 }

@@ -5,11 +5,11 @@
 {{$isAdmin := eq .User.Role "admin"}}
 <nav class="mgmt-tabs" aria-label="Management">
   <a href="/admin/fetchurls" class="mgmt-tab">{{.Strings.T "nav_admin_fetchurls"}}</a>
-  <a href="/admin/users" class="mgmt-tab">{{.Strings.T "nav_admin_users"}}</a>
+  <a href="/admin/users" class="mgmt-tab">{{.Strings.T "nav_admin_users"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>
   {{if $isAdmin}}
   <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
   <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
-  {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}</a>{{end}}
+  {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>{{end}}
   {{else}}
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_dances"}}</span>
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_templates"}}</span>
@@ -22,5 +22,6 @@
 .mgmt-tab{display:flex;align-items:center;padding:.7rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--fg-2);font-size:.95rem;font-weight:500;transition:background .15s,border-color .15s}
 .mgmt-tab:hover{background:var(--bg-hover);border-color:var(--link);color:var(--link)}
 .mgmt-tab--off{opacity:.35;cursor:not-allowed;pointer-events:none}
+.pending-badge{display:inline-block;background:#e05c00;color:#fff;border-radius:10px;padding:0 .45rem;font-size:.72rem;font-weight:700;margin-left:.4rem;vertical-align:middle;line-height:1.5}
 </style>
 {{end}}

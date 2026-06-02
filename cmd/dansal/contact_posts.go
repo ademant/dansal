@@ -191,7 +191,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	if callerID > 0 {
 		// Fetch verified email and nickname from account.
 		var userEmail, userNick string
-		db.QueryRow("SELECT email, COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id=?", callerID).Scan(&userEmail, &userNick)
+		db.QueryRow("SELECT COALESCE(email,''), COALESCE(NULLIF(display_name,''), CASE WHEN email IS NOT NULL THEN SUBSTR(email,1,INSTR(email,'@')-1) ELSE '' END) FROM users WHERE id=?", callerID).Scan(&userEmail, &userNick)
 		if req.Nickname == "" {
 			req.Nickname = userNick
 		}
@@ -599,7 +599,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := callerFromRequest(r)
 	if callerID > 0 {
 		var senderEmail, senderTelegram string
-		db.QueryRow("SELECT email, COALESCE(telegram,'') FROM users WHERE id=?", callerID).
+		db.QueryRow("SELECT COALESCE(email,''), COALESCE(telegram,'') FROM users WHERE id=?", callerID).
 			Scan(&senderEmail, &senderTelegram)
 		senderContact := senderEmail
 		if senderTelegram != "" {

@@ -256,14 +256,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	var failedSince string
 
 	err := db.QueryRow(
-		"SELECT id, email, COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE email = ?",
+		"SELECT id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE email = ?",
 		req.Email,
 	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
 
 	if err == sql.ErrNoRows {
 		// Fallback: try display_name (case-insensitive, only when exactly one user has it and has a password)
 		rows, qerr := db.Query(
-			"SELECT id, email, COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE display_name = ? COLLATE NOCASE AND password_hash IS NOT NULL AND password_hash != '' LIMIT 2",
+			"SELECT id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE display_name = ? COLLATE NOCASE AND password_hash IS NOT NULL AND password_hash != '' LIMIT 2",
 			req.Email,
 		)
 		if qerr == nil {

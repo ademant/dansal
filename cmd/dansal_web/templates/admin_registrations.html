@@ -5,7 +5,7 @@
 {{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
 
 {{if .Regs}}
-<h2 style="margin:0 0 .5rem;font-size:1rem">Pending verification / admin approval</h2>
+<h2 style="margin:0 0 .5rem;font-size:1rem">{{$.Strings.T "admin_reg_pending_heading"}}</h2>
 <div class="table-wrap">
 <table class="event-table">
   <thead>
@@ -56,7 +56,7 @@
 {{end}}
 
 {{if .PendingInvites}}
-<h2 style="margin:1.5rem 0 .5rem;font-size:1rem">Awaiting account setup</h2>
+<h2 style="margin:1.5rem 0 .5rem;font-size:1rem">{{$.Strings.T "admin_reg_awaiting_setup"}}</h2>
 <div class="table-wrap">
 <table class="event-table">
   <thead>
@@ -75,7 +75,7 @@
     <td>{{.ExpiresAt}}</td>
     <td>
       <form method="post" action="/admin/registrations/{{.ID}}/resend-invite" style="display:inline">
-        <button type="submit" class="btn-sm btn-ok">Resend invite</button>
+        <button type="submit" class="btn-sm btn-ok">{{$.Strings.T "admin_reg_resend_invite"}}</button>
       </form>
     </td>
   </tr>

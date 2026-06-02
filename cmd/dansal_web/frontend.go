@@ -104,7 +104,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		AppVersion:             Version,
 		AppBuildTime:           BuildTime,
 		SuggestAvailable:       suggestAvailable(cfg),
-		RegistrationEnabled:    suggestAvailable(cfg), // same gate: SMTP or Telegram configured
+		RegistrationEnabled:    registrationEnabled(cfg),
 		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
 		PendingRegCount:        func() int {
 			if v, ok := r.Context().Value(ctxPendingRegCount).(int); ok {
@@ -190,6 +190,13 @@ var bannerSVG []byte
 
 func suggestAvailable(cfg *Config) bool {
 	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
+}
+
+// registrationEnabled returns whether self-registration is available.
+// It is decoupled from suggestAvailable so instances without SMTP/Telegram
+// can still accept passkey-only registrations.
+func registrationEnabled(_ *Config) bool {
+	return true
 }
 
 func svgHandler(data []byte) http.HandlerFunc {

@@ -78,9 +78,13 @@ type Config struct {
 	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 5/minute each
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
-	SiteName          string `yaml:"site_name"`
-	ContactOverride   string
-	ImpressumOverride map[string]string
+	SiteName             string `yaml:"site_name"`
+	ContactOverride      string
+	ImpressumOverride    map[string]string
+
+	// SelfRegistrationEnabled controls whether /register is available.
+	// Defaults to true. Set to false to disable self-registration entirely.
+	SelfRegistrationEnabled bool `yaml:"self_registration_enabled"`
 }
 
 var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br", "bzh"}

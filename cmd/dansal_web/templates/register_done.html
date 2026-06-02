@@ -7,6 +7,8 @@
   <p>{{$.Strings.T "register_done_tg"}}</p>
   <pre class="tg-cmd">/register {{.TelegramToken}}</pre>
   {{if .BotName}}<p style="margin-top:.5rem;font-size:.9rem;color:var(--fg-muted)">Bot: @{{.BotName}}</p>{{end}}
+  {{else if eq .Channel "none"}}
+  <p>{{$.Strings.T "register_done_no_contact"}}</p>
   {{else}}
   <p>{{$.Strings.T "register_done_email"}}</p>
   {{end}}

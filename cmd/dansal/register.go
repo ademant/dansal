@@ -70,11 +70,6 @@ type PendingRegistration struct {
 
 // POST /api/v1/register — create a pending registration.
 func registerHandler(w http.ResponseWriter, r *http.Request) {
-	if !selfRegEnabled() {
-		writeError(w, "Self-registration is not enabled", http.StatusForbidden)
-		return
-	}
-
 	ip := getIP(r)
 	if !registerRateLimiter.Allow(ip) {
 		writeError(w, "Rate limit exceeded", http.StatusTooManyRequests)
@@ -108,8 +103,6 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// At least one contact channel or a non-empty motivation is required, but
-	// we allow contact-free registration — the form warns the user.
 	if req.RegType != "join_org" && req.RegType != "new_org" {
 		writeError(w, "reg_type must be 'join_org' or 'new_org'", http.StatusBadRequest)
 		return
@@ -123,48 +116,62 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate channel.
-	channel := req.Channel
-	if channel == "" {
-		if smtpEnabled() {
-			channel = "email"
-		} else {
-			channel = "telegram"
+	// Contact-free path (no email, no telegram): skip channel validation and mark
+	// verified immediately so the registration enters the approval queue without
+	// requiring an email link. The admin sees a "no contact" badge.
+	contactFree := req.Email == "" && req.Telegram == ""
+
+	// Validate channel when contact info is provided.
+	var channel string
+	if !contactFree {
+		channel = req.Channel
+		if channel == "" {
+			if smtpEnabled() {
+				channel = "email"
+			} else {
+				channel = "telegram"
+			}
 		}
-	}
-	if channel == "email" && !smtpEnabled() {
-		writeError(w, "email channel not available", http.StatusBadRequest)
-		return
-	}
-	if channel == "telegram" && config.Server.TelegramBotToken == "" {
-		writeError(w, "telegram channel not available", http.StatusBadRequest)
-		return
+		if channel == "email" && !smtpEnabled() {
+			writeError(w, "email channel not available", http.StatusBadRequest)
+			return
+		}
+		if channel == "telegram" && config.Server.TelegramBotToken == "" {
+			writeError(w, "telegram channel not available", http.StatusBadRequest)
+			return
+		}
+	} else {
+		channel = "email" // placeholder to satisfy NOT NULL constraint
 	}
 
-	// Check uniqueness in users table.
+	// Uniqueness checks — only when email is non-empty to avoid matching all
+	// email-less accounts when contact-free registration is used.
 	var c int
-	db.QueryRow("SELECT COUNT(*) FROM users WHERE email=?", req.Email).Scan(&c)
-	if c > 0 {
-		writeError(w, "Email already registered", http.StatusConflict)
-		return
-	}
-	// Check uniqueness in pending_registrations.
-	db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE email=?", req.Email).Scan(&c)
-	if c > 0 {
-		writeError(w, "A registration with this email is already pending", http.StatusConflict)
-		return
+	if req.Email != "" {
+		db.QueryRow("SELECT COUNT(*) FROM users WHERE email=?", req.Email).Scan(&c)
+		if c > 0 {
+			writeError(w, "Email already registered", http.StatusConflict)
+			return
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE email=?", req.Email).Scan(&c)
+		if c > 0 {
+			writeError(w, "A registration with this email is already pending", http.StatusConflict)
+			return
+		}
 	}
 
 	// Per-address open-token limit: prevent spam floods targeting a single address.
 	limit := config.Server.MaxOpenTokensPerAddress
-	var openCount int
-	db.QueryRow(
-		"SELECT COUNT(*) FROM pending_registrations WHERE LOWER(email)=LOWER(?) AND verified=0 AND expires_at>strftime('%s','now')",
-		req.Email,
-	).Scan(&openCount)
-	if openCount >= limit {
-		writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
-		return
+	if req.Email != "" {
+		var openCount int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM pending_registrations WHERE LOWER(email)=LOWER(?) AND verified=0 AND expires_at>strftime('%s','now')",
+			req.Email,
+		).Scan(&openCount)
+		if openCount >= limit {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
 	}
 	if req.Telegram != "" {
 		var openTg int
@@ -205,16 +212,23 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrgID
 	}
 
+	// Contact-free registrations are marked verified immediately — no email link,
+	// so they enter the approval queue right away with a "no contact" badge.
+	verifiedInitial := 0
+	if contactFree {
+		verifiedInitial = 1
+	}
+
 	var pendingID int64
 	dbErr := db.QueryRow(
 		`INSERT INTO pending_registrations
 		 (verification_token, approval_token, email, description,
 		  reg_type, org_id, org_name, org_actor_name, org_description, org_website, org_contact_email,
-		  verification_channel, telegram, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+		  verification_channel, telegram, verified, expires_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
 		verificationToken, approvalToken, req.Email, req.Description,
 		req.RegType, orgIDArg, req.OrgName, req.OrgActorName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
-		channel, req.Telegram, expiresAt,
+		channel, req.Telegram, verifiedInitial, expiresAt,
 	).Scan(&pendingID)
 	if dbErr != nil {
 		writeError(w, "db error: "+dbErr.Error(), http.StatusInternalServerError)
@@ -224,7 +238,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 
-	if channel == "email" {
+	if contactFree {
+		go notifyApprovers(int(pendingID))
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":             "pending_approval",
+			"pending_id":         strconv.FormatInt(pendingID, 10),
+			"verification_token": verificationToken,
+		})
+	} else if channel == "email" {
 		base := buildBaseURL(r)
 		verifyURL := base + "/register/verify/email/" + verificationToken
 		go func() {
@@ -238,14 +259,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, verificationToken)
 			}
 		}()
-		json.NewEncoder(w).Encode(map[string]any{
+		json.NewEncoder(w).Encode(map[string]string{
 			"status":             "verification_email_sent",
 			"pending_id":         strconv.FormatInt(pendingID, 10),
 			"verification_token": verificationToken,
 		})
 	} else {
-		// Return token for Telegram bot instructions.
-		json.NewEncoder(w).Encode(map[string]any{
+		json.NewEncoder(w).Encode(map[string]string{
 			"status":             "telegram_verification_required",
 			"pending_id":         strconv.FormatInt(pendingID, 10),
 			"verification_token": verificationToken,

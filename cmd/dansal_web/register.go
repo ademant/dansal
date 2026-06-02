@@ -33,7 +33,7 @@ type AdminRegistrationsData struct {
 
 func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !suggestAvailable(cfg) {
+		if !registrationEnabled(cfg) {
 			http.NotFound(w, r)
 			return
 		}
@@ -68,7 +68,7 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 
 func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !suggestAvailable(cfg) {
+		if !registrationEnabled(cfg) {
 			http.NotFound(w, r)
 			return
 		}
@@ -162,7 +162,9 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		redirectURL := "/register/done?ch=email"
-		if result["status"] == "telegram_verification_required" {
+		if result["status"] == "pending_approval" {
+			redirectURL = "/register/done?ch=none"
+		} else if result["status"] == "telegram_verification_required" {
 			redirectURL = "/register/done?ch=telegram&tok=" + result["telegram_token"] + "&bot=" + result["bot_name"]
 		}
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)

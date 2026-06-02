@@ -22,11 +22,9 @@
       <button type="submit" class="btn-primary" style="font-size:.9rem;padding:.4rem .9rem">{{$.Strings.T "pending_reg_resend_btn"}}</button>
     </form>
     {{end}}
-    {{if not .PendingApproved}}
     <form method="post" action="/register/cancel" style="display:inline;margin-left:.5rem">
       <button type="submit" class="btn-link">{{$.Strings.T "pending_reg_start_over_btn"}}</button>
     </form>
-    {{end}}
   </div>
   {{else}}
 

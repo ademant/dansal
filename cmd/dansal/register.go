@@ -388,10 +388,9 @@ func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	// Only allow self-cancellation before verification or admin approval.
+	// Once verified or approved the record stays for admin visibility; just acknowledge.
 	if verified == 1 {
-		// Already verified and in the approval queue — don't allow silent self-cancellation.
-		writeError(w, "registration is already verified; contact an admin to withdraw it", http.StatusConflict)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)

@@ -362,7 +362,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id := r.PathValue("id")
 	rows, err := db.Query(`
-		SELECT om.organization_id, om.user_id, u.email, COALESCE(u.display_name,''), u.role, om.created_at
+		SELECT om.organization_id, om.user_id, COALESCE(u.email,''), COALESCE(u.display_name,''), u.role, om.created_at
 		FROM organization_members om
 		JOIN users u ON om.user_id = u.id
 		WHERE om.organization_id = ?

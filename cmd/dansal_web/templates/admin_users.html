@@ -86,7 +86,7 @@
       <button type="button" class="btn-sm" onclick="openPasswordModal({{$uid}})">{{$.Strings.T "admin_user_password_reset"}}</button>
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
       <button type="button" class="btn-sm btn-del"
-              onclick="return confirmTypedDelete('{{js .Email}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
+              onclick="return confirmTypedDelete('{{if .Email}}{{js .Email}}{{else if .DisplayName}}{{js .DisplayName}}{{else}}#{{$uid}}{{end}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
     </td>
     {{end}}
   </tr>

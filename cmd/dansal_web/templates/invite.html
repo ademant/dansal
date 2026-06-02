@@ -78,6 +78,12 @@
     document.getElementById('btn-password').classList.toggle('track-active', t==='password');
   };
 
+  // Hide passkey option and default to password when WebAuthn is unavailable.
+  if (!window.PublicKeyCredential) {
+    document.getElementById('btn-passkey').hidden = true;
+    showTrack('password');
+  }
+
   function msg(text, isErr){
     var el = document.getElementById('invite-msg');
     el.hidden = false;

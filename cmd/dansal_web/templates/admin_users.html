@@ -43,18 +43,16 @@
   {{range .Users}}
   {{$uid := .ID}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
-    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb" form="bulk-form"></td>{{end}}
+    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
     <td>{{.Email}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     {{if $.Data.IsAdmin}}<td>{{.DisplayName}}</td>{{end}}
     <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
-      <form method="post" action="/admin/users/{{$uid}}/role" style="display:inline">
-        <select name="role" class="inline-select" onchange="this.form.submit()">
-          <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
-          <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
-          <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
-        </select>
-      </form>
+      <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)">
+        <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
+        <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
+        <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
+      </select>
       {{else}}{{.Role}}{{end}}
     </td>
     <td>
@@ -281,6 +279,12 @@ function rmOrg(userID, orgID) {
   var o = document.createElement('input'); o.name = 'org_id'; o.value = orgID; f.appendChild(o);
   document.body.appendChild(f); f.submit();
 }
+function changeUserRole(uid, role) {
+  var f=document.createElement('form');
+  f.method='post';f.action='/admin/users/'+uid+'/role';
+  var r=document.createElement('input');r.type='hidden';r.name='role';r.value=role;f.appendChild(r);
+  document.body.appendChild(f);f.submit();
+}
 function revokeInvite(token) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/invites/' + token + '/revoke';
@@ -412,11 +416,13 @@ function bulkDelete(){
   var ids=[];
   document.querySelectorAll('.user-cb:checked').forEach(function(cb){ids.push(cb.value);});
   if(!ids.length)return;
-  var f=document.createElement('form');
-  f.method='post';f.action='/admin/users/bulk';
-  var a=document.createElement('input');a.type='hidden';a.name='action';a.value='delete';f.appendChild(a);
-  ids.forEach(function(id){var i=document.createElement('input');i.type='hidden';i.name='user_ids';i.value=id;f.appendChild(i);});
-  document.body.appendChild(f);f.submit();
+  var body='action=delete'+ids.map(function(id){return '&user_ids='+encodeURIComponent(id);}).join('');
+  fetch('/admin/users/bulk',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    credentials:'same-origin',
+    body:body
+  }).then(function(){location.href='/admin/users';}).catch(function(e){alert('Delete failed: '+e);});
 }
 (function(){
   var cbAll = document.getElementById('cb-all');

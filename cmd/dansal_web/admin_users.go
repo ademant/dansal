@@ -254,7 +254,9 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		for _, id := range parseFormIDs(r.Form, "user_ids") {
 			switch action {
 			case "delete":
-				_ = client.DeleteUser(r.Context(), id, token)
+				if err := client.DeleteUser(r.Context(), id, token); err != nil {
+					log.Printf("bulk delete user %d: %v", id, err)
+				}
 			case "org":
 				if orgID != nil {
 					_ = client.AddOrgMember(r.Context(), *orgID, id, token)

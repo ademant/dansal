@@ -10,6 +10,7 @@ import (
 type InvitePageData struct {
 	Token       string
 	PresetEmail string
+	Expired     bool // true when invite is already used or expired
 }
 
 func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -21,6 +22,10 @@ func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		defer cancel()
 		if info, err := client.GetInviteInfo(ctx, token); err == nil {
 			data.PresetEmail = info.PresetEmail
+			data.Expired = info.Expired
+		} else {
+			// Token not found or API error — treat as invalid.
+			data.Expired = true
 		}
 
 		title := i18n.T(r, "invite_page_title")

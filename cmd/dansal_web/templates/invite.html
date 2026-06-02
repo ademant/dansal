@@ -4,6 +4,12 @@
 
 {{with .Data}}
 <div class="invite-wrap">
+
+{{if .Expired}}
+  <p class="invite-err" style="padding:.75rem 1rem;border-radius:6px">{{$.Strings.T "invite_expired"}}</p>
+  <p style="margin-top:1rem"><a href="/">{{$.Strings.T "register_done_back"}}</a></p>
+{{else}}
+
   <p class="invite-intro">{{$.Strings.T "invite_intro"}}</p>
 
   <!-- Track selector -->
@@ -187,6 +193,8 @@
   });
 })();
 </script>
+
+{{end}}{{/* end if .Expired else */}}
 
 <style>
 .invite-wrap{max-width:420px;margin:2rem auto}

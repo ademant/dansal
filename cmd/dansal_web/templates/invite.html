@@ -174,8 +174,9 @@
     var e = email(), dn = displayName();
     var pw = document.getElementById('inv-password').value;
     var pwc = document.getElementById('inv-password-confirm').value;
-    if(pw !== pwc){ msg('{{$.Strings.T "invite_password_mismatch"}}', true); return; }
     if(!pw){ msg('{{$.Strings.T "invite_password_required"}}', true); return; }
+    if(pw !== pwc){ msg('{{$.Strings.T "invite_password_mismatch"}}', true); return; }
+    if(!e && !dn){ msg('{{$.Strings.T "invite_username_email_required"}}', true); return; }
 
     try {
       var resp = await fetch('/invites/'+TOKEN+'/password', {

@@ -282,6 +282,11 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
+	// Password requires an identifier so the user can log in later.
+	if req.Password != "" && req.Email == "" && req.DisplayName == "" {
+		writeError(w, "email or display name is required when setting a password", http.StatusBadRequest)
+		return
+	}
 	// Email, display_name, and password are all optional — passkey-only accounts are supported.
 	if req.Email != "" && invite.PresetEmail == "" {
 		if !isValidEmail(req.Email) {

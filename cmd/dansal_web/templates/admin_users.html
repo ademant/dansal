@@ -6,15 +6,6 @@
 
 {{with .Data}}
 
-{{if .NewInviteToken}}
-<div class="invite-banner">
-  <strong>{{$.Strings.T "admin_invite_create"}}:</strong>
-  <code id="new-invite-url">{{.BaseURL}}/invites/{{.NewInviteToken}}</code>
-  <button type="button" class="btn-sm" onclick="copyInvite()">{{$.Strings.T "admin_invite_copy"}}</button>
-  <button type="button" class="btn-sm" onclick="toggleQR('invite-qr','new-invite-url')">{{$.Strings.T "admin_qr_show"}}</button>
-  <div id="invite-qr" style="display:none;margin-top:.5rem"></div>
-</div>
-{{end}}
 
 <form id="bulk-form" method="post" action="/admin/users/bulk">
 {{if .IsAdmin}}
@@ -126,33 +117,24 @@
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_invite_active"}}</h2>
 
-  <form method="post" action="/admin/invites/new" class="invite-form">
-    {{if .IsAdmin}}
-    <select name="role">
-      <option value="user">user</option>
-      <option value="publisher">publisher</option>
-      <option value="admin">admin</option>
+  <div class="invite-create-row">
+    <select id="invite-org-id">
+      {{if $.Data.IsAdmin}}<option value="">—</option>{{end}}
+      {{range .MyOrgs}}
+      <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
+      {{end}}
     </select>
-    <select name="org_id">
-      <option value="">{{$.Strings.T "admin_invite_no_org"}}</option>
-      {{range .MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
-    {{else}}
-    <input type="hidden" name="role" value="user">
-    <select name="org_id" required>
-      <option value="">{{$.Strings.T "admin_invite_no_org"}}</option>
-      {{range .MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
-    {{end}}
-    <button type="submit" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;border:none;cursor:pointer">+ {{$.Strings.T "admin_invite_create"}}</button>
-  </form>
+    <button type="button" class="btn-sm" onclick="createInvite('qr')" title="{{$.Strings.T "admin_invite_qr_hint"}}">{{$.Strings.T "admin_invite_create_qr"}}</button>
+    <button type="button" class="btn-sm" onclick="createInvite('link')" title="{{$.Strings.T "admin_invite_link_hint"}}">{{$.Strings.T "admin_invite_create_link"}}</button>
+  </div>
+  <div id="invite-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px"></div>
 
   {{if .Invites}}
-  <table class="event-table">
+  <table class="event-table" style="margin-top:1rem">
     <thead>
       <tr>
         <th>{{$.Strings.T "admin_invite_link_label"}}</th>
-        <th>{{$.Strings.T "settings_role"}}</th>
+        <th>{{$.Strings.T "admin_invite_type"}}</th>
         <th>{{$.Strings.T "fetch_org"}}</th>
         <th>{{$.Strings.T "admin_invite_expires"}}</th>
         <th></th>
@@ -165,7 +147,7 @@
         <code>{{$.Data.BaseURL}}/invites/{{.Token}}</code>
         <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
       </td>
-      <td>{{.Role}}</td>
+      <td>{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}}</td>
       <td>{{if .OrgID}}{{$o := index $.Data.OrgMap (derefInt .OrgID)}}{{$o.Name}}{{else}}{{$.Strings.T "admin_invite_no_org"}}{{end}}</td>
       <td class="muted">{{.ExpiresAt}}</td>
       <td>
@@ -216,6 +198,8 @@
 .invite-section h2{font-size:1.1rem;margin-bottom:.75rem}
 .invite-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
 .invite-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.invite-create-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap}
+.invite-create-row select{padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
 .create-user-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
 .create-user-form input,.create-user-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
@@ -258,6 +242,46 @@ function revokeInvite(token) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/invites/' + token + '/revoke';
   document.body.appendChild(f); f.submit();
+}
+async function createInvite(type) {
+  var orgEl = document.getElementById('invite-org-id');
+  var orgVal = orgEl ? orgEl.value : '';
+  var body = {type: type};
+  if (orgVal) body.org_id = parseInt(orgVal);
+  var res = document.getElementById('invite-result');
+  res.hidden = false;
+  res.innerHTML = '…';
+  try {
+    var r = await fetch('/admin/invites/new', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    var d = await r.json();
+    if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
+    if (type === 'qr') {
+      var cnt = document.createElement('div');
+      res.innerHTML = '';
+      res.appendChild(cnt);
+      var exp = new Date(d.expires_at);
+      var cd = document.createElement('p');
+      cd.style.cssText = 'margin:.4rem 0 0;font-size:.85rem;color:var(--fg-muted)';
+      res.appendChild(cd);
+      (function tick(){
+        var s = Math.max(0, Math.round((exp - Date.now()) / 1000));
+        cd.textContent = '{{$.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
+        if (s > 0) setTimeout(tick, 1000);
+      })();
+      if (typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(document.createElement('canvas'), d.url, {width:200,margin:2}, function(err, cv) {
+          if (cv) cnt.appendChild(cv);
+        });
+      }
+    } else {
+      res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
+        ' <button class="btn-sm" onclick="copyText(\'' + d.url + '\')" style="margin-left:.4rem">{{$.Strings.T "admin_invite_copy"}}</button>';
+    }
+  } catch(e) {
+    res.innerHTML = '<span style="color:red">' + e.message + '</span>';
+  }
 }
 function copyText(t) {
   if (navigator.clipboard) navigator.clipboard.writeText(t);

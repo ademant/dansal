@@ -22,18 +22,20 @@ func roleRank(role string) int {
 }
 
 type InviteLink struct {
-	ID        int    `json:"id"`
-	Token     string `json:"token"`
-	Role      string `json:"role"`
-	OrgID     *int   `json:"org_id,omitempty"`
-	ExpiresAt string `json:"expires_at"`
-	UsedAt    string `json:"used_at,omitempty"`
-	CreatedAt string `json:"created_at"`
+	ID         int    `json:"id"`
+	Token      string `json:"token"`
+	Role       string `json:"role"`
+	InviteType string `json:"type,omitempty"`
+	OrgID      *int   `json:"org_id,omitempty"`
+	ExpiresAt  string `json:"expires_at"`
+	UsedAt     string `json:"used_at,omitempty"`
+	CreatedAt  string `json:"created_at"`
 }
 
 type CreateInviteRequest struct {
-	Role  string `json:"role"`
-	OrgID *int   `json:"org_id,omitempty"`
+	Role       string `json:"role"`
+	InviteType string `json:"type"`
+	OrgID      *int   `json:"org_id,omitempty"`
 }
 
 type UseInviteRequest struct {
@@ -65,17 +67,8 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	if req.Role == "" {
-		req.Role = RoleUser
-	}
-	if !validateRole(req.Role) {
-		writeError(w, "Invalid role", http.StatusBadRequest)
-		return
-	}
-	if roleRank(req.Role) > roleRank(callerRole) {
-		writeError(w, "Forbidden: cannot invite a user with higher role than your own", http.StatusForbidden)
-		return
-	}
+	// Role is always "user" for UI-created invites.
+	req.Role = RoleUser
 
 	// org_id is always required for all invite creation.
 	orgID := req.OrgID
@@ -95,22 +88,31 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine TTL from invite type.
+	inviteType := req.InviteType
+	if inviteType != "qr" && inviteType != "link" {
+		inviteType = "link"
+	}
+	var expiresAt time.Time
+	if inviteType == "qr" {
+		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteQRExpiryMinutes) * time.Minute)
+	} else {
+		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
+	}
+
 	token, err := generateInviteToken()
 	if err != nil {
 		writeError(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
-	expiryHours := config.Server.InviteExpiryHours
-	expiresAt := time.Now().UTC().Add(time.Duration(expiryHours) * time.Hour)
-
 	var orgVal any
 	if orgID != nil {
 		orgVal = *orgID
 	}
 	_, err = db.Exec(
-		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at) VALUES (?, ?, ?, ?, ?)",
-		token, callerID, req.Role, orgVal, expiresAt.Unix(),
+		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at, invite_type) VALUES (?, ?, ?, ?, ?, ?)",
+		token, callerID, req.Role, orgVal, expiresAt.Unix(), inviteType,
 	)
 	if err != nil {
 		writeError(w, "Failed to create invite link", http.StatusInternalServerError)
@@ -119,10 +121,11 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(InviteLink{
-		Token:     token,
-		Role:      req.Role,
-		OrgID:     orgID,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
+		Token:      token,
+		Role:       req.Role,
+		InviteType: inviteType,
+		OrgID:      orgID,
+		ExpiresAt:  expiresAt.Format(time.RFC3339),
 	})
 }
 
@@ -137,11 +140,11 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if callerRole == RoleAdmin {
 		rows, err = db.Query(
-			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
+			"SELECT id, token, role, COALESCE(invite_type,'link'), org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
 		)
 	} else {
 		rows, err = db.Query(
-			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
+			"SELECT id, token, role, COALESCE(invite_type,'link'), org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
 			callerID,
 		)
 	}
@@ -155,7 +158,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l InviteLink
 		var orgID sql.NullInt64
-		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &l.InviteType, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -279,11 +282,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	if invite.PresetEmail != "" {
 		req.Email = invite.PresetEmail
 	}
-	// Email is optional; display_name is required when no email is provided.
-	if req.Email == "" && req.DisplayName == "" {
-		writeError(w, "email or display name is required", http.StatusBadRequest)
-		return
-	}
+	// Email, display_name, and password are all optional — passkey-only accounts are supported.
 	if req.Email != "" && invite.PresetEmail == "" {
 		if !isValidEmail(req.Email) {
 			writeError(w, "invalid email address", http.StatusUnprocessableEntity)

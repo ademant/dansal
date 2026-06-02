@@ -1254,6 +1254,8 @@ func migrateDB() {
 	mark(1)
 	} // end v1
 
+	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")
+
 	// v2: #425 email optional, discoverable passkey login.
 	if !applied(2) {
 		migrateUsersEmailOptional()
@@ -1593,6 +1595,7 @@ func createTables() error {
 		expires_at INTEGER NOT NULL,
 		used_at INTEGER,
 		preset_email TEXT,
+		invite_type TEXT NOT NULL DEFAULT 'link',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL

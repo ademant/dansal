@@ -4,21 +4,23 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 )
 
 // ── Users & Invites ───────────────────────────────────────────────────────────
 
 type AdminUsersData struct {
-	IsAdmin        bool
-	Users          []UserInfo
-	Orgs           []Organization
-	OrgMap         map[int]Organization
-	UserOrgs       map[int][]int
-	MyOrgs         []Organization // orgs the current user belongs to (non-admins: invite target choices)
-	Invites        []InviteLink
-	BaseURL        string
-	NewInviteToken string
+	IsAdmin          bool
+	Users            []UserInfo
+	Orgs             []Organization
+	OrgMap           map[int]Organization
+	UserOrgs         map[int][]int
+	MyOrgs           []Organization // orgs the current user belongs to (non-admins: invite target choices)
+	Invites          []InviteLink
+	BaseURL          string
+	NewInviteToken   string
+	PreselectedOrgID int // first org in sorted MyOrgs for non-admins; 0 for admins
 }
 
 func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -71,7 +73,13 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			}
 		}
 
-		// Build my-orgs list for the invite form (non-admins can only invite to their own orgs)
+		// Build my-orgs list for the invite form, sorted by actor_name (fallback to name).
+		orgSortKey := func(o Organization) string {
+			if o.ActorName != "" {
+				return o.ActorName
+			}
+			return o.Name
+		}
 		var myOrgs []Organization
 		if isAdmin {
 			myOrgs = orgs
@@ -84,17 +92,26 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			}
 		}
 
+		sort.Slice(myOrgs, func(i, j int) bool {
+			return orgSortKey(myOrgs[i]) < orgSortKey(myOrgs[j])
+		})
+		preselectedOrgID := 0
+		if !isAdmin && len(myOrgs) > 0 {
+			preselectedOrgID = myOrgs[0].ID
+		}
+
 		title := i18n.T(r, "admin_users_title")
 		renderTemplate(w, tmpls.adminUsers, tmplData(r, cfg, i18n, title, AdminUsersData{
-			IsAdmin:        isAdmin,
-			Users:          users,
-			Orgs:           orgs,
-			OrgMap:         orgMap,
-			UserOrgs:       userOrgs,
-			MyOrgs:         myOrgs,
-			Invites:        active,
-			BaseURL:        cfg.publicBaseURL(),
-			NewInviteToken: r.URL.Query().Get("new_invite"),
+			IsAdmin:          isAdmin,
+			Users:            users,
+			Orgs:             orgs,
+			OrgMap:           orgMap,
+			UserOrgs:         userOrgs,
+			MyOrgs:           myOrgs,
+			Invites:          active,
+			BaseURL:          cfg.publicBaseURL(),
+			NewInviteToken:   r.URL.Query().Get("new_invite"),
+			PreselectedOrgID: preselectedOrgID,
 		}))
 	}
 }
@@ -325,39 +342,46 @@ func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+		var req struct {
+			InviteType string `json:"type"`
+			OrgID      *int   `json:"org_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 			return
+		}
+		if req.InviteType != "qr" && req.InviteType != "link" {
+			req.InviteType = "link"
 		}
 		token := getSessionToken(r)
-		role := r.FormValue("role")
-		if role == "" {
-			role = "user"
-		}
-		var orgID *int
-		if s := r.FormValue("org_id"); s != "" {
-			if id, err := strconv.Atoi(s); err == nil {
-				orgID = &id
-			}
-		}
 		if su.Role != "admin" {
-			// Non-admin org members may only invite with role "user" to their own org
-			role = "user"
-			if orgID == nil {
-				http.Error(w, "Forbidden: organisation required", http.StatusForbidden)
+			if req.OrgID == nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]string{"error": "organisation required"})
 				return
 			}
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*orgID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*req.OrgID] {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
 				return
 			}
 		}
-		link, err := client.CreateInvite(r.Context(), role, orgID, token)
+		link, err := client.CreateInvite(r.Context(), req.InviteType, req.OrgID, token)
 		if err != nil {
-			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
-		http.Redirect(w, r, "/admin/users?new_invite="+link.Token, http.StatusSeeOther)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":      link.Token,
+			"type":       link.InviteType,
+			"expires_at": link.ExpiresAt,
+			"url":        cfg.publicBaseURL() + "/invites/" + link.Token,
+		})
 	}
 }
 

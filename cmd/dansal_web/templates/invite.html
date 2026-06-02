@@ -94,7 +94,6 @@
 
   window.registerPasskey = async function(){
     var e = email(), dn = displayName();
-    if(!e && !dn){ msg('{{$.Strings.T "invite_username_email_required"}}', true); return; }
 
     var btn = document.getElementById('btn-register-passkey');
     btn.disabled = true;

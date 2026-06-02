@@ -1754,13 +1754,14 @@ func (c *DansalClient) GetInviteInfo(ctx context.Context, token string) (InviteI
 // ── users & invites ───────────────────────────────────────────────────────────
 
 type InviteLink struct {
-	ID        int    `json:"id"`
-	Token     string `json:"token"`
-	Role      string `json:"role"`
-	OrgID     *int   `json:"org_id,omitempty"`
-	ExpiresAt string `json:"expires_at"`
-	UsedAt    string `json:"used_at,omitempty"`
-	CreatedAt string `json:"created_at"`
+	ID         int    `json:"id"`
+	Token      string `json:"token"`
+	Role       string `json:"role"`
+	InviteType string `json:"type,omitempty"`
+	OrgID      *int   `json:"org_id,omitempty"`
+	ExpiresAt  string `json:"expires_at"`
+	UsedAt     string `json:"used_at,omitempty"`
+	CreatedAt  string `json:"created_at"`
 }
 
 func (c *DansalClient) GetAllUsers(ctx context.Context, token string) ([]UserInfo, error) {
@@ -1997,8 +1998,8 @@ func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteL
 	return links, json.NewDecoder(resp.Body).Decode(&links)
 }
 
-func (c *DansalClient) CreateInvite(ctx context.Context, role string, orgID *int, token string) (InviteLink, error) {
-	payload := map[string]any{"role": role}
+func (c *DansalClient) CreateInvite(ctx context.Context, inviteType string, orgID *int, token string) (InviteLink, error) {
+	payload := map[string]any{"type": inviteType}
 	if orgID != nil {
 		payload["org_id"] = *orgID
 	}

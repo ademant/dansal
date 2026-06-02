@@ -213,7 +213,7 @@ func adminFetchAll() adminResponse {
 }
 
 func adminListUsers() adminResponse {
-	rows, err := db.Query("SELECT id, email, COALESCE(display_name,''), role, COALESCE(disabled,0), created_at FROM users ORDER BY id")
+	rows, err := db.Query("SELECT id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(disabled,0), created_at FROM users ORDER BY id")
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -483,7 +483,7 @@ func adminListMembers(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "org_id is required"}
 	}
 	rows, err := db.Query(`
-		SELECT om.organization_id, om.user_id, u.email, COALESCE(u.display_name,''), om.created_at
+		SELECT om.organization_id, om.user_id, COALESCE(u.email,''), COALESCE(u.display_name,''), om.created_at
 		FROM organization_members om
 		JOIN users u ON om.user_id = u.id
 		WHERE om.organization_id = ?

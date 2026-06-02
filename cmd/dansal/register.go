@@ -529,13 +529,12 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		orgID = pr.OrgID.Int64
 	}
 
-	// Generate a 72-hour invite link pre-seeded with the approved username/email.
 	inviteToken, err := generateInviteToken()
 	if err != nil {
 		writeError(w, "failed to generate invite token", http.StatusInternalServerError)
 		return
 	}
-	expiresAt := time.Now().UTC().Add(72 * time.Hour).Unix()
+	expiresAt := time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour).Unix()
 	var orgVal any
 	if orgID != 0 {
 		orgVal = orgID

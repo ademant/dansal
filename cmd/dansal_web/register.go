@@ -92,6 +92,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		channel := r.FormValue("channel")
 		telegram := strings.TrimSpace(r.FormValue("telegram"))
 		orgName := strings.TrimSpace(r.FormValue("org_name"))
+		orgActorName := strings.TrimSpace(r.FormValue("org_actor_name"))
 		orgDesc := strings.TrimSpace(r.FormValue("org_description"))
 		orgWebsite := strings.TrimSpace(r.FormValue("org_website"))
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
@@ -117,6 +118,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			RegType:         regType,
 			OrgID:           orgID,
 			OrgName:         orgName,
+			OrgActorName:    orgActorName,
 			OrgDescription:  orgDesc,
 			OrgWebsite:      orgWebsite,
 			OrgContactEmail: orgContactEmail,

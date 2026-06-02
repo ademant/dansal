@@ -41,6 +41,7 @@ type RegisterRequest struct {
 	RegType         string `json:"reg_type"`    // "join_org" | "new_org"
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`
+	OrgActorName    string `json:"org_actor_name,omitempty"`
 	OrgDescription  string `json:"org_description,omitempty"`
 	OrgWebsite      string `json:"org_website,omitempty"`
 	OrgContactEmail string `json:"org_contact_email,omitempty"`
@@ -208,11 +209,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	dbErr := db.QueryRow(
 		`INSERT INTO pending_registrations
 		 (verification_token, approval_token, email, description,
-		  reg_type, org_id, org_name, org_description, org_website, org_contact_email,
+		  reg_type, org_id, org_name, org_actor_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
 		verificationToken, approvalToken, req.Email, req.Description,
-		req.RegType, orgIDArg, req.OrgName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
+		req.RegType, orgIDArg, req.OrgName, req.OrgActorName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, expiresAt,
 	).Scan(&pendingID)
 	if dbErr != nil {
@@ -468,17 +469,17 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		Email               string
 		RegType             string
 		OrgID               sql.NullInt64
-		OrgName, OrgDescription, OrgWebsite, OrgContactEmail string
+		OrgName, OrgActorName, OrgDescription, OrgWebsite, OrgContactEmail string
 		VerificationChannel, Telegram, TelegramChatID string
 		Verified            int
 	}
 	err = db.QueryRow(
-		`SELECT id, email, reg_type, org_id, org_name, org_description,
+		`SELECT id, email, reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
 		 org_website, org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified
 		 FROM pending_registrations WHERE id=?`, id,
 	).Scan(
 		&pr.ID, &pr.Email, &pr.RegType,
-		&pr.OrgID, &pr.OrgName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
+		&pr.OrgID, &pr.OrgName, &pr.OrgActorName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
 		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified,
 	)
 	if err != nil {
@@ -519,8 +520,8 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	var orgID int64
 	if pr.RegType == "new_org" {
 		if err := tx.QueryRow(
-			"INSERT INTO organizations (name, description, website, contact_email) VALUES (?,?,?,?) RETURNING id",
-			pr.OrgName, pr.OrgDescription, pr.OrgWebsite, pr.OrgContactEmail,
+			"INSERT INTO organizations (name, actor_name, description, website, contact_email) VALUES (?,?,?,?,?) RETURNING id",
+			pr.OrgName, pr.OrgActorName, pr.OrgDescription, pr.OrgWebsite, pr.OrgContactEmail,
 		).Scan(&orgID); err != nil {
 			writeError(w, "failed to create organization", http.StatusInternalServerError)
 			return

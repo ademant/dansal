@@ -69,6 +69,11 @@
         <input type="text" id="field-org-name" name="org_name" class="form-input">
       </div>
       <div class="form-group">
+        <label for="field-org-actor-name">{{$.Strings.T "register_org_actor_name"}}</label>
+        <input type="text" id="field-org-actor-name" name="org_actor_name" class="form-input" pattern="[a-zA-Z0-9_-]+" title="Letters, digits, underscores and hyphens only">
+        <p class="form-hint">{{$.Strings.T "register_org_actor_name_hint"}}</p>
+      </div>
+      <div class="form-group">
         <label for="field-org-desc">{{$.Strings.T "register_org_desc"}}</label>
         <textarea id="field-org-desc" name="org_description" class="form-input" rows="3"></textarea>
       </div>

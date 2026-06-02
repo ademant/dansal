@@ -2134,6 +2134,7 @@ type RegisterReq struct {
 	RegType         string `json:"reg_type"`
 	OrgID           *int   `json:"org_id,omitempty"`
 	OrgName         string `json:"org_name,omitempty"`
+	OrgActorName    string `json:"org_actor_name,omitempty"`
 	OrgDescription  string `json:"org_description,omitempty"`
 	OrgWebsite      string `json:"org_website,omitempty"`
 	OrgContactEmail string `json:"org_contact_email,omitempty"`

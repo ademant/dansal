@@ -20,6 +20,10 @@ import (
 // Initialised in main() after config is loaded.
 var authThrottle *submissionThrottle
 
+// siteCfg caches contact/site_name/impressum from web.db with a short TTL so
+// that webmin changes are visible without a restart or signal.
+var siteCfg *siteSettingsCache
+
 // publicThrottle is the shared rate limiter for all public form endpoints (booking, board, suggest).
 // Key is IP + "|" + User-Agent. Initialised in main() after config is loaded.
 var publicThrottle *submissionThrottle
@@ -93,19 +97,7 @@ func main() {
 	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	db := initDB(cfg.DBPath)
-	if v := getSiteSetting(db, "site_name"); v != "" {
-		cfg.SiteName = v
-	}
-	if v := getSiteSetting(db, "contact"); v != "" {
-		cfg.ContactOverride = v
-	}
-	imp := make(map[string]string)
-	for _, lang := range impressumLangs {
-		if v := getSiteSetting(db, "impressum_"+lang); v != "" {
-			imp[lang] = v
-		}
-	}
-	cfg.ImpressumOverride = imp
+	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
 		BaseURL: cfg.DansalURL,
 		HTTP:    &http.Client{Timeout: 15 * time.Second},
@@ -308,7 +300,7 @@ func main() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGHUP)
 		for range sig {
-			newCfg := reloadConfig(cfg.configPath, db)
+			newCfg := reloadConfig(cfg.configPath)
 			if newCfg == nil {
 				log.Print("reload failed, keeping current configuration")
 				continue

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -259,11 +258,6 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		if cfg.Instance != "" {
-			if err := exec.Command("systemctl", "kill", "--signal=HUP", "dansal-web@"+cfg.Instance).Run(); err != nil {
-				log.Printf("reload dansal-web@%s: %v", cfg.Instance, err)
-			}
-		}
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"log"
 	"os"
@@ -169,7 +168,7 @@ func loadConfig() *Config {
 
 // reloadConfig re-reads the YAML file at path and applies DB overrides.
 // Returns nil on any error so the caller can keep the current config.
-func reloadConfig(path string, db *sql.DB) *Config {
+func reloadConfig(path string) *Config {
 	cfg := &Config{
 		Listen:                    ":8080",
 		DBPath:                    "web.db",
@@ -218,19 +217,6 @@ func reloadConfig(path string, db *sql.DB) *Config {
 		log.Print("reload: domain and dansal_url are required; keeping current config")
 		return nil
 	}
-	if v := getSiteSetting(db, "site_name"); v != "" {
-		cfg.SiteName = v
-	}
-	if v := getSiteSetting(db, "contact"); v != "" {
-		cfg.ContactOverride = v
-	}
-	imp := make(map[string]string)
-	for _, lang := range impressumLangs {
-		if v := getSiteSetting(db, "impressum_"+lang); v != "" {
-			imp[lang] = v
-		}
-	}
-	cfg.ImpressumOverride = imp
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	cfg.configPath = path
 	return cfg

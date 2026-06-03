@@ -68,12 +68,13 @@ func pendingRegCountMiddleware(client *DansalClient) func(http.Handler) http.Han
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
 	lang := i18n.detectLang(r)
-	contact := cfg.ContactOverride
+	contact := siteCfg.Contact()
 	if contact == "" {
 		contact = cfg.pagesContent.ContactText(lang)
 	}
+	imp := siteCfg.Impressum()
 	impressumURL := ""
-	if cfg.ImpressumOverride[lang] != "" || cfg.pagesContent.ImpressumText(lang) != "" {
+	if imp[lang] != "" || cfg.pagesContent.ImpressumText(lang) != "" {
 		impressumURL = "/impressum"
 	}
 	isMain := r.URL.Path == "/"
@@ -83,7 +84,10 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		bannerHeight = cfg.BannerHeightMain
 		logoHeight = cfg.LogoHeightMain
 	}
-	siteName := cfg.SiteName
+	siteName := siteCfg.SiteName()
+	if siteName == "" {
+		siteName = cfg.SiteName // YAML fallback
+	}
 	if siteName == "" {
 		siteName = cfg.Domain
 	}
@@ -1458,7 +1462,7 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := i18n.detectLang(r)
 		var body template.HTML
-		if text := cfg.ImpressumOverride[lang]; text != "" {
+		if text := siteCfg.Impressum()[lang]; text != "" {
 			body = template.HTML(`<pre class="impressum-text">` + template.HTMLEscapeString(text) + `</pre>`)
 		} else {
 			body = cfg.pagesContent.ImpressumHTML(lang)

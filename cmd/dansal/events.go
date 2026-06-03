@@ -2037,3 +2037,28 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(tags)
 }
+
+// POST /api/v1/events/bulk-set-location — set location_id on multiple events.
+// admin: unrestricted. user: skips events where caller is not an org member.
+func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs        []int `json:"ids"`
+		LocationID int   `json:"location_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 || req.LocationID == 0 {
+		writeError(w, "ids and location_id are required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+			continue
+		}
+		db.Exec("UPDATE events SET location_id=? WHERE id=?", req.LocationID, id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

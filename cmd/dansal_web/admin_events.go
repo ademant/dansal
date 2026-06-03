@@ -181,6 +181,94 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 	}
 }
 
+func adminEventBulkCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				_ = client.CancelEvent(r.Context(), id, token)
+			}
+		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/events"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
+func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				event, fetchErr := client.GetEvent(r.Context(), id)
+				_ = client.DeleteEvent(r.Context(), id, token)
+				if fetchErr == nil && event.OrganizationID != nil {
+					go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
+				}
+			}
+		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/events"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
+func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		locationID, err := strconv.Atoi(r.FormValue("bulk_location_id"))
+		if err != nil || locationID == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		var ids []int
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) > 0 {
+			_ = client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r))
+		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/events"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
 // adminEventMergeHandler merges two or more selected events into one.
 // Among user-edited events the newest (by changed_at) is the base; otherwise
 // the newest by created_at. Tags, musicians and dances are unioned; other empty

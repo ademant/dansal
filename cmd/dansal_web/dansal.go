@@ -449,6 +449,20 @@ func (c *DansalClient) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+func (c *DansalClient) BulkSetEventLocation(ctx context.Context, ids []int, locationID int, token string) error {
+	body, _ := json.Marshal(map[string]any{"ids": ids, "location_id": locationID})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events/bulk-set-location", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateEvents()
+	return nil
+}
+
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)

@@ -68,6 +68,19 @@
   <button type="submit" class="btn-sm btn-merge"
           onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
   <button type="button" class="btn-sm" id="event-bulk-tpl-btn">{{$.Strings.T "evt_apply_template_btn"}}</button>
+  <span class="bulk-sep"></span>
+  <select name="bulk_location_id" class="bulk-loc-sel">
+    <option value="">{{$.Strings.T "filter_all_locations"}}</option>
+    {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+  </select>
+  <button type="submit" formaction="/admin/events/bulk-assign-location" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_loc_btn"}}</button>
+  <span class="bulk-sep"></span>
+  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk"
+          onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+  {{if eq $.User.Role "admin"}}
+  <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del"
+          onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_delete"}}')">{{$.Strings.T "evt_bulk_delete_btn"}}</button>
+  {{end}}
 </div>
 <div class="table-wrap">
 <table class="event-table" data-sortable>
@@ -155,6 +168,12 @@
 .btn-pub{background:#217a3c;color:#fff;border:none}
 .btn-pub:hover{background:#155727}
 .btn-merge{background:#856404;color:#fff;border:none}
+.btn-assign{background:#1a6eb5;color:#fff;border:none}
+.btn-assign:hover{background:#0d4a80}
+.btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
+.btn-cancel-bulk:hover{background:#b85f00}
+.bulk-sep{width:1px;height:1.4em;background:#ccc;margin:0 .1rem}
+.bulk-loc-sel{padding:.25rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.8rem;max-width:12rem}
 .btn-tpl{background:#f0f0f8;border-color:#a0a0c0;color:#444}
 .btn-merge:hover{background:#664e03}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -128,9 +129,25 @@ func main() {
 		WriteTimeout:      time.Duration(cfg.WriteTimeoutSecs) * time.Second,
 		IdleTimeout:       time.Duration(cfg.IdleTimeoutSecs) * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	stop()
+	log.Println("dansal-webmin shutting down...")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutCtx); err != nil {
+		log.Printf("dansal-webmin shutdown error: %v", err)
 	}
+	log.Println("dansal-webmin stopped")
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

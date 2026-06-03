@@ -95,21 +95,6 @@
 </table>
 </div>
 
-{{if $.Data.IsAdmin}}
-<div class="invite-section">
-  <h2>{{$.Strings.T "admin_user_create_title"}}</h2>
-  <form method="post" action="/admin/users/new" class="create-user-form">
-    <input type="email" name="email" placeholder="{{$.Strings.T "settings_email"}}" required>
-    <input type="password" name="password" placeholder="{{$.Strings.T "admin_user_new_password"}}" required>
-    <select name="role">
-      <option value="user">user</option>
-      <option value="publisher">publisher</option>
-    </select>
-    <button type="submit" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;border:none;cursor:pointer">{{$.Strings.T "admin_user_create_btn"}}</button>
-  </form>
-</div>
-{{end}}
-
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_publisher_section"}}</h2>
   <div class="invite-create-row">
@@ -155,8 +140,7 @@
 </div>
 
 <div class="invite-section">
-  <h2>{{$.Strings.T "admin_invite_active"}}</h2>
-
+  <h2>{{$.Strings.T "admin_invite_create_section"}}</h2>
   <div class="invite-create-row">
     <select id="invite-org-id">
       {{if $.Data.IsAdmin}}<option value="">—</option>{{end}}
@@ -168,6 +152,10 @@
     <button type="button" class="btn-sm" onclick="createInvite('link')" title="{{$.Strings.T "admin_invite_link_hint"}}">{{$.Strings.T "admin_invite_create_link"}}</button>
   </div>
   <div id="invite-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px"></div>
+</div>
+
+<div class="invite-section">
+  <h2>{{$.Strings.T "admin_invite_active"}}</h2>
 
   {{if .Invites}}
   <table class="event-table" style="margin-top:1rem">
@@ -355,9 +343,13 @@ async function regenerateKey(id) {
 async function createInvite(type) {
   var orgEl = document.getElementById('invite-org-id');
   var orgVal = orgEl ? orgEl.value : '';
-  var body = {type: type};
-  if (orgVal) body.org_id = parseInt(orgVal);
   var res = document.getElementById('invite-result');
+  if (!orgVal) {
+    res.hidden = false;
+    res.innerHTML = '<span style="color:#c06000">{{$.Strings.T "admin_invite_org_required"}}</span>';
+    return;
+  }
+  var body = {type: type, org_id: parseInt(orgVal)};
   res.hidden = false;
   res.innerHTML = '…';
   try {
@@ -367,8 +359,8 @@ async function createInvite(type) {
     var d = await r.json();
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
     if (type === 'qr') {
-      var cnt = document.createElement('div');
       res.innerHTML = '';
+      var cnt = document.createElement('div');
       res.appendChild(cnt);
       var exp = new Date(d.expires_at);
       var cd = document.createElement('p');
@@ -380,8 +372,10 @@ async function createInvite(type) {
         if (s > 0) setTimeout(tick, 1000);
       })();
       if (typeof QRCode !== 'undefined') {
-        QRCode.toCanvas(document.createElement('canvas'), d.url, {width:200,margin:2}, function(err, cv) {
-          if (cv) cnt.appendChild(cv);
+        var cv = document.createElement('canvas');
+        cnt.appendChild(cv);
+        QRCode.toCanvas(cv, d.url, {width:200,margin:2}, function(err) {
+          if (err) cv.remove();
         });
       }
     } else {
@@ -503,8 +497,10 @@ function toggleQR(containerId, sourceId) {
   if (!url) return;
   el.innerHTML = '';
   el.style.display = 'block';
-  QRCode.toCanvas(document.createElement('canvas'), url, {width: 200, margin: 2}, function(err, canvas) {
-    if (!err) el.appendChild(canvas);
+  var cv = document.createElement('canvas');
+  el.appendChild(cv);
+  QRCode.toCanvas(cv, url, {width: 200, margin: 2}, function(err) {
+    if (err) cv.remove();
   });
 }
 </script>

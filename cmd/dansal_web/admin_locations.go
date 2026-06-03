@@ -11,14 +11,18 @@ import (
 // ── Locations ─────────────────────────────────────────────────────────────────
 
 type AdminLocationsData struct {
-	Locations []Location
-	OrgMap    map[int]Organization
-	Orgs      []Organization
-	IsAdmin   bool
+	Locations   []Location
+	OrgMap      map[int]Organization
+	Orgs        []Organization
+	IsAdmin     bool
+	EditableIDs map[int]bool
+	UserOrgs    []Organization
 }
 
 type AdminLocationEditData struct {
 	Location Location
+	UserOrgs []Organization
+	ReadOnly bool
 	ErrorKey string
 }
 
@@ -48,12 +52,39 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return locs[i].Location < locs[j].Location
 		})
 		orgs, _ := client.GetOrganizations(r.Context())
+		isAdmin := user.Role == "admin"
+		var editableIDs map[int]bool
+		var userOrgs []Organization
+		if !isAdmin {
+			token := getSessionToken(r)
+			userOrgIDs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs)
+			userOrgSet := map[int]bool{}
+			for _, id := range userOrgIDs {
+				userOrgSet[id] = true
+			}
+			editableIDs = map[int]bool{}
+			for _, loc := range locs {
+				for _, oid := range loc.OrganizationIDs {
+					if userOrgSet[oid] {
+						editableIDs[loc.ID] = true
+						break
+					}
+				}
+			}
+			for _, o := range orgs {
+				if userOrgSet[o.ID] {
+					userOrgs = append(userOrgs, o)
+				}
+			}
+		}
 		title := i18n.T(r, "admin_locations_title")
 		renderTemplate(w, tmpls.adminLocations, tmplData(r, cfg, i18n, title, AdminLocationsData{
-			Locations: locs,
-			OrgMap:    buildOrgMap(orgs),
-			Orgs:      orgs,
-			IsAdmin:   user.Role == "admin",
+			Locations:   locs,
+			OrgMap:      buildOrgMap(orgs),
+			Orgs:        orgs,
+			IsAdmin:     isAdmin,
+			EditableIDs: editableIDs,
+			UserOrgs:    userOrgs,
 		}))
 	}
 }
@@ -82,12 +113,27 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 
 func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
+		var userOrgs []Organization
+		if user.Role != "admin" {
+			token := getSessionToken(r)
+			orgs, _ := client.GetOrganizations(r.Context())
+			userOrgIDs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs)
+			userOrgSet := map[int]bool{}
+			for _, id := range userOrgIDs {
+				userOrgSet[id] = true
+			}
+			for _, o := range orgs {
+				if userOrgSet[o.ID] {
+					userOrgs = append(userOrgs, o)
+				}
+			}
+		}
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{}))
+		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{UserOrgs: userOrgs}))
 	}
 }
 
@@ -117,7 +163,8 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			OsmType:     strings.TrimSpace(r.FormValue("osm_type")),
 		}
 		token := getSessionToken(r)
-		if _, err := client.CreateLocation(r.Context(), loc, token); err != nil {
+		created, err := client.CreateLocation(r.Context(), loc, token)
+		if err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 				Location: loc,
@@ -125,13 +172,18 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			}))
 			return
 		}
+		if orgIDStr := r.FormValue("organization_id"); orgIDStr != "" {
+			if orgID, err2 := strconv.Atoi(orgIDStr); err2 == nil && orgID > 0 {
+				_ = client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, &orgID, token)
+			}
+		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}
 }
 
 func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -145,9 +197,26 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			http.NotFound(w, r)
 			return
 		}
+		readOnly := false
+		if user.Role != "admin" {
+			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, getSessionToken(r))
+			userOrgSet := map[int]bool{}
+			for _, uid := range userOrgIDs {
+				userOrgSet[uid] = true
+			}
+			editable := false
+			for _, oid := range loc.OrganizationIDs {
+				if userOrgSet[oid] {
+					editable = true
+					break
+				}
+			}
+			readOnly = !editable
+		}
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 			Location: loc,
+			ReadOnly: readOnly,
 		}))
 	}
 }
@@ -355,6 +424,31 @@ func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) ht
 
 		client.invalidateLocations()
 		client.invalidateEvents()
+		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+	}
+}
+
+func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		orgID, err := strconv.Atoi(r.FormValue("org_id"))
+		if err != nil || orgID == 0 {
+			http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+			return
+		}
+		_ = client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, getSessionToken(r))
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}
 }

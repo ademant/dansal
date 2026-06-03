@@ -134,7 +134,7 @@
     {{if or .Location .Town}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
-      {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</div>{{end}}
+      {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ID}}<a href="/location/{{.ID}}" class="evt-loc-link">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a>{{else}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{end}}</div>{{end}}
       {{if or .Address .Zipcode .Town}}
       <div class="evt-loc-addr">
         {{if .Address}}<span>{{.Address}}</span><br>{{end}}
@@ -510,6 +510,8 @@
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .badge-difficulty{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .evt-loc-name{font-weight:600;font-size:.92rem;color:var(--heading);margin-bottom:.25rem}
+.evt-loc-link{color:var(--heading);text-decoration:none}
+.evt-loc-link:hover{text-decoration:underline}
 .evt-loc-addr{font-size:.88rem;color:var(--fg-dim);line-height:1.5;margin-bottom:.5rem}
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:var(--bg-subtle)}
 .osm-directions{display:inline-block;margin-top:.4rem;font-size:.82rem;color:var(--fg-dim);text-decoration:none}

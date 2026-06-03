@@ -117,6 +117,7 @@ func main() {
 		r.HandleFunc("GET /nodeinfo/2.0", nodeinfoHandler(cfg))
 		r.HandleFunc("GET /nodeinfo/2.1", nodeinfo21Handler(cfg))
 
+		r.HandleFunc("GET /location/{id}", locationPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /org/{name}/outbox", outboxHandler(cfg, db, client))
 		r.HandleFunc("GET /org/{name}/followers", followersHandler(cfg, db))
@@ -286,6 +287,7 @@ func main() {
 		r.HandleFunc("GET /admin/locations/{id}/edit", adminLocationEditPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/{id}/edit", adminRateLimit(adminLocationSaveHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))
+		r.HandleFunc("POST /admin/locations/{id}/assign-org", adminRateLimit(adminLocationAssignOrgHandler(cfg, client)))
 
 		return pendingRegCountMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r)))
 	}

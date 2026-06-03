@@ -1,0 +1,104 @@
+{{template "base" .}}
+{{define "content"}}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+{{with .Data}}
+{{with .Location}}
+<div class="loc-page-header">
+  <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
+  {{if $.User}}<a href="/admin/locations/{{.ID}}/edit" class="btn-edit-loc">{{$.Strings.T "admin_edit"}}</a>{{end}}
+</div>
+
+<div class="loc-meta">
+  {{if or .Address .Town}}
+  <div class="loc-addr">
+    {{if .Address}}<span>{{.Address}}</span><br>{{end}}
+    {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
+    {{if .Country}}<br><span>{{.Country}}</span>{{end}}
+  </div>
+  {{end}}
+  {{if .Internetsite}}
+  <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
+  {{end}}
+  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition}}
+  <div class="loc-attrs">
+    {{if index .Attributes "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
+    {{if index .Attributes "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
+    {{if index .Attributes "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
+    {{if index .Attributes "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
+    {{if index .Attributes "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
+    {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
+    {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
+    {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
+    {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{end}}</span>{{end}}
+  </div>
+  {{end}}
+  {{if and .Latitude .Longitude}}
+  <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-osm-link">🗺 OpenStreetMap</a>
+  {{end}}
+</div>
+
+{{if and .Latitude .Longitude}}
+<div id="loc-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="loc-map"></div>
+{{end}}
+
+{{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
+
+{{end}}{{/* .Location */}}
+
+<h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
+{{if .Events}}
+<ul class="event-list">
+{{range .Events}}
+<li class="event-item">
+  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+  <div class="event-meta">
+    {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+    {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+  </div>
+  {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+  {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
+</li>
+{{end}}
+</ul>
+{{else}}
+<p class="empty-msg">{{$.Strings.T "org_no_events"}}</p>
+{{end}}
+
+{{end}}{{/* .Data */}}
+
+<style>
+.loc-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
+.loc-page-header h1{margin:0}
+.btn-edit-loc{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);text-decoration:none}
+.btn-edit-loc:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
+.loc-meta{margin-bottom:1rem;display:flex;flex-direction:column;gap:.35rem}
+.loc-addr{font-size:.92rem;color:var(--fg-dim);line-height:1.5}
+.loc-website{font-size:.88rem}
+.loc-website a{color:var(--link)}
+.loc-attrs{display:flex;flex-wrap:wrap;gap:.4rem}
+.access-badge{font-size:1.1rem;padding:.1rem .2rem}
+.loc-osm-link{font-size:.85rem;color:var(--link);text-decoration:none}
+.loc-osm-link:hover{text-decoration:underline}
+.loc-map{height:300px;border-radius:6px;border:1px solid var(--border-mid);margin-bottom:1.25rem}
+.loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
+.loc-notes p{margin:.5rem 0}
+.loc-notes a{color:var(--link)}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+</style>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var el = document.getElementById('loc-map');
+  if (!el) return;
+  var lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
+  if (isNaN(lat) || isNaN(lng)) return;
+  var map = L.map('loc-map').setView([lat, lng], 15);
+  attachTileLayer(map);
+  L.marker([lat, lng]).addTo(map);
+})();
+</script>
+{{end}}

@@ -449,6 +449,11 @@ func (c *DansalClient) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)
+}
+
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
 	if after == "" {
 		return cached(&c.mu, &c.eventsCache, eventsTTL, func() ([]Event, error) {

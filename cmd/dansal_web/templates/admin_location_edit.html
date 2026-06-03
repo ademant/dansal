@@ -6,6 +6,7 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 
 <!-- Nominatim geocoding widget -->
 <div class="geo-widget">
@@ -72,6 +73,13 @@
   <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
   <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
 
+  {{if and (not .Location.ID) .UserOrgs}}
+  <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
+  <select id="organization_id" name="organization_id">
+    {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  {{end}}
+
   <fieldset class="access-fieldset">
     <legend>{{$.Strings.T "access_label"}}</legend>
     <label class="check-label"><input type="checkbox" name="attr_wheelchair" value="1"{{if index .Location.Attributes "wheelchair"}} checked{{end}}> {{$.Strings.T "access_wheelchair"}}</label>
@@ -106,7 +114,7 @@
 
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
-      <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+      {{if not .ReadOnly}}<button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>{{end}}
       <a href="/admin/locations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
     </div>
     {{if .Location.ID}}
@@ -122,6 +130,7 @@
 <style>
 .edit-wrap{max-width:600px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .geo-widget{background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:.75rem}
 .geo-widget label{font-weight:600;font-size:.9rem;color:#444;display:block;margin-bottom:.4rem}
 .geo-row{display:flex;gap:.5rem}

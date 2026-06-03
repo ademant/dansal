@@ -158,6 +158,11 @@ type OrgData struct {
 	FollowerCount  int
 }
 
+type LocationPageData struct {
+	Location Location
+	Events   []Event
+}
+
 type OrgListItem struct {
 	Org           Organization
 	Slug          string
@@ -765,6 +770,7 @@ type Templates struct {
 	index              *template.Template
 	event              *template.Template
 	org                *template.Template
+	location           *template.Template
 	login              *template.Template
 	settings           *template.Template
 	verify             *template.Template
@@ -820,6 +826,7 @@ func loadTemplates() *Templates {
 		index:             load("index"),
 		event:             load("event"),
 		org:               load("org"),
+		location:          load("location"),
 		login:             load("login"),
 		settings:          load("settings"),
 		verify:            load("verify"),
@@ -1196,6 +1203,30 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Slug:           slug,
 			Handle:         handle,
 			FollowerCount:  followerCount,
+		}))
+	}
+}
+
+func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		loc, err := client.GetLocation(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		events, _ := client.GetEventsByLocation(r.Context(), id)
+		title := loc.ShortName
+		if title == "" {
+			title = loc.Location
+		}
+		renderTemplate(w, tmpls.location, tmplData(r, cfg, i18n, title, LocationPageData{
+			Location: loc,
+			Events:   events,
 		}))
 	}
 }

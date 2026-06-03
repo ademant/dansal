@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="page-header">
   <h1>{{.Strings.T "admin_locations_title"}}</h1>
-  {{if .Data.IsAdmin}}<a href="/admin/locations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_location_new_title"}}</a>{{end}}
+  <a href="/admin/locations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_location_new_title"}}</a>
 </div>
 
 {{with .Data}}
@@ -63,7 +63,23 @@
       {{if eq .Parking "free"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_free"}}">🅿</span>{{else if eq .Parking "paid"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{else if eq .Parking "none"}}<span class="ind ind-no" title="{{$.Strings.T "parking_none"}}">🅿</span>{{end}}
     </td>
     <td class="col-actions">
+      {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
       <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      {{else}}
+      <span class="btn-sm btn-disabled">{{$.Strings.T "admin_edit"}}</span>
+      {{end}}
+      {{if and $.Data.UserOrgs (not (index $.Data.EditableIDs .ID))}}
+      <form method="post" action="/admin/locations/{{.ID}}/assign-org" style="margin:0;display:inline-flex;gap:.25rem;align-items:center">
+        {{if eq (len $.Data.UserOrgs) 1}}
+        <input type="hidden" name="org_id" value="{{(index $.Data.UserOrgs 0).ID}}">
+        {{else}}
+        <select name="org_id" class="btn-sm" style="padding:.15rem .3rem">
+          {{range $.Data.UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+        {{end}}
+        <button type="submit" class="btn-sm btn-assign">{{$.Strings.T "loc_assign_btn"}}</button>
+      </form>
+      {{end}}
       {{if $.Data.IsAdmin}}<button type="button" class="btn-sm btn-del"
               onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>{{end}}
     </td>
@@ -100,6 +116,9 @@
 .btn-del:hover{background:#800016}
 .btn-merge{background:#856404;color:#fff;border:none}
 .btn-merge:hover{background:#664e03}
+.btn-disabled{opacity:.4;cursor:default;pointer-events:none}
+.btn-assign{background:#1a6eb5;color:#fff;border:none}
+.btn-assign:hover{background:#0d4a80}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 </style>
 

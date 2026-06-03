@@ -19,7 +19,6 @@ type AdminLocationsData struct {
 
 type AdminLocationEditData struct {
 	Location Location
-	Orgs     []Organization
 	ErrorKey string
 }
 
@@ -87,9 +86,8 @@ func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 		if !ok {
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{Orgs: orgs}))
+		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{}))
 	}
 }
 
@@ -103,35 +101,26 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		var orgIDs []int
-		for _, v := range r.Form["organization_ids"] {
-			if n, err := strconv.Atoi(v); err == nil {
-				orgIDs = append(orgIDs, n)
-			}
-		}
 		loc := Location{
-			Location:        strings.TrimSpace(r.FormValue("location")),
-			ShortName:       strings.TrimSpace(r.FormValue("short_name")),
-			Address:         strings.TrimSpace(r.FormValue("address")),
-			Zipcode:         strings.TrimSpace(r.FormValue("zipcode")),
-			Town:            strings.TrimSpace(r.FormValue("town")),
-			Country:         strings.TrimSpace(r.FormValue("country")),
-			CountryCode:     strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
-			Region:          strings.TrimSpace(r.FormValue("region")),
-			Latitude:        parseLatLng(r.FormValue("latitude")),
-			Longitude:       parseLatLng(r.FormValue("longitude")),
-			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:           parseOsmID(r.FormValue("osm_id")),
-			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
-			OrganizationIDs: orgIDs,
+			Location:    strings.TrimSpace(r.FormValue("location")),
+			ShortName:   strings.TrimSpace(r.FormValue("short_name")),
+			Address:     strings.TrimSpace(r.FormValue("address")),
+			Zipcode:     strings.TrimSpace(r.FormValue("zipcode")),
+			Town:        strings.TrimSpace(r.FormValue("town")),
+			Country:     strings.TrimSpace(r.FormValue("country")),
+			CountryCode: strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
+			Region:      strings.TrimSpace(r.FormValue("region")),
+			Latitude:    parseLatLng(r.FormValue("latitude")),
+			Longitude:   parseLatLng(r.FormValue("longitude")),
+			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:       parseOsmID(r.FormValue("osm_id")),
+			OsmType:     strings.TrimSpace(r.FormValue("osm_type")),
 		}
 		token := getSessionToken(r)
 		if _, err := client.CreateLocation(r.Context(), loc, token); err != nil {
-			orgs, _ := client.GetOrganizations(r.Context())
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 				Location: loc,
-				Orgs:     orgs,
 				ErrorKey: "admin_save_error",
 			}))
 			return
@@ -156,11 +145,9 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			http.NotFound(w, r)
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 			Location: loc,
-			Orgs:     orgs,
 		}))
 	}
 }
@@ -176,15 +163,15 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
+		// Fetch existing location to preserve its org assignments.
+		existing, err := client.GetLocation(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
-		}
-		var orgIDs []int
-		for _, v := range r.Form["organization_ids"] {
-			if n, err := strconv.Atoi(v); err == nil {
-				orgIDs = append(orgIDs, n)
-			}
 		}
 		loc := Location{
 			ID:              id,
@@ -198,22 +185,20 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Region:          strings.TrimSpace(r.FormValue("region")),
 			Latitude:        parseLatLng(r.FormValue("latitude")),
 			Longitude:       parseLatLng(r.FormValue("longitude")),
-			Internetsite:         strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:                parseOsmID(r.FormValue("osm_id")),
-			OsmType:              strings.TrimSpace(r.FormValue("osm_type")),
-			OrganizationIDs:      orgIDs,
-			NotesMd:        strings.TrimSpace(r.FormValue("notes_md")),
-			Attributes:     locationAttrsFromForm(r),
-			Parking:        r.FormValue("parking"),
-			FloorCondition: r.FormValue("floor_condition"),
+			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:           parseOsmID(r.FormValue("osm_id")),
+			OsmType:         strings.TrimSpace(r.FormValue("osm_type")),
+			OrganizationIDs: existing.OrganizationIDs,
+			NotesMd:         strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes:      locationAttrsFromForm(r),
+			Parking:         r.FormValue("parking"),
+			FloorCondition:  r.FormValue("floor_condition"),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
-			orgs, _ := client.GetOrganizations(r.Context())
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 				Location: loc,
-				Orgs:     orgs,
 				ErrorKey: "admin_save_error",
 			}))
 			return

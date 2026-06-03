@@ -511,12 +511,10 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(loc)
 }
 
-// POST /api/v1/locations/bulk-assign-org - Admin bulk-assign organization to locations
+// POST /api/v1/locations/bulk-assign-org - Assign organization to locations.
+// admin: any org, org_id may be nil (clears all). user: must be member of target org, org_id required.
 func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: admin only", http.StatusForbidden)
-		return
-	}
+	callerID, requesterRole := callerFromRequest(r)
 	var req struct {
 		IDs            []int `json:"ids"`
 		OrganizationID *int  `json:"organization_id"`
@@ -524,6 +522,20 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
 		writeError(w, "invalid body", http.StatusBadRequest)
 		return
+	}
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if req.OrganizationID == nil {
+			writeError(w, "Forbidden: admin only for unassign-all", http.StatusForbidden)
+			return
+		}
+		if !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+			return
+		}
 	}
 	for _, locID := range req.IDs {
 		if req.OrganizationID != nil {
@@ -536,12 +548,10 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /api/v1/locations/{id} - Delete a location
-// POST /api/v1/locations/unassign-org — remove one org from one location
+// POST /api/v1/locations/unassign-org — remove one org from one location.
+// admin: any org. user: must be member of the specified org.
 func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: admin only", http.StatusForbidden)
-		return
-	}
+	callerID, requesterRole := callerFromRequest(r)
 	var req struct {
 		LocationID     int `json:"location_id"`
 		OrganizationID int `json:"organization_id"`
@@ -549,6 +559,16 @@ func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == 0 || req.OrganizationID == 0 {
 		writeError(w, "location_id and organization_id are required", http.StatusBadRequest)
 		return
+	}
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !isOrgMember(callerID, req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+			return
+		}
 	}
 	db.Exec("DELETE FROM location_organizations WHERE location_id=? AND organization_id=?", req.LocationID, req.OrganizationID)
 	w.WriteHeader(http.StatusNoContent)

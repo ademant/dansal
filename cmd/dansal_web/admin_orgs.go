@@ -446,20 +446,28 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
 		orgID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
+		token := getSessionToken(r)
+		if user.Role != "admin" {
+			org, err := client.GetOrganization(r.Context(), orgID)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{org})
+			if len(myOrgs) == 0 {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		token := getSessionToken(r)
 		action := r.FormValue("action")
 		locID, err := strconv.Atoi(r.FormValue("location_id"))
 		if err != nil {

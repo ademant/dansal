@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -350,22 +351,37 @@ type UserInfo struct {
 }
 
 func (c *DansalClient) get(ctx context.Context, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
-	if err != nil {
-		return err
+	const maxAttempts = 2
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			// Jitter 50–150 ms before retry to avoid thundering-herd.
+			jitter := time.Duration(50+rand.Intn(100)) * time.Millisecond
+			select {
+			case <-time.After(jitter):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+		if err != nil {
+			return err // request build error — not retryable
+		}
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			lastErr = err
+			continue // network/timeout error — retry
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("not found")
+		}
+		if resp.StatusCode != http.StatusOK {
+			return apiErr(resp) // HTTP error — not retryable
+		}
+		return json.NewDecoder(resp.Body).Decode(out)
 	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("not found")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return lastErr
 }
 
 func (c *DansalClient) Login(ctx context.Context, email, password, clientIP, userAgent string) (*LoginResponse, error) {

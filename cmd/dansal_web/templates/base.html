@@ -169,6 +169,9 @@ footer.footer-visible{transform:translateY(0)}
 .hm-sym{flex-shrink:0;width:1rem;text-align:center;color:var(--fg-muted);font-size:.8rem}
 .hm-reg{margin-top:.75rem;padding-top:.75rem;border-top:2px solid var(--border);font-size:.88rem}
 .hm-footer{margin-top:1rem;text-align:right;font-size:.82rem}
+#back-to-top{position:fixed;bottom:3.5rem;right:1rem;z-index:99;background:var(--btn-bg);border:1px solid var(--border-mid);color:var(--fg-2);border-radius:50%;width:2.2rem;height:2.2rem;font-size:1.1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+#back-to-top.visible{opacity:1;pointer-events:auto}
+#back-to-top:hover{background:var(--btn-bg-h)}
 </style>
 </head>
 <body>
@@ -311,10 +314,17 @@ function attachTileLayer(map){
     lastY=y;
   },{passive:true});
 })();
+(function(){
+  var btn=document.getElementById('back-to-top');
+  var nav=document.querySelector('nav');
+  if(!btn||!nav)return;
+  new IntersectionObserver(function(e){btn.classList.toggle('visible',!e[0].isIntersecting);}).observe(nav);
+})();
 </script>
 <main>
 {{block "content" .}}{{end}}
 </main>
+<button id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 <footer>
   <div class="footer-inner">
     <div class="footer-left">{{if .Contact}}{{.Contact}}{{end}}</div>

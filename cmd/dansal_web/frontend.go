@@ -408,6 +408,13 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return *p
 	},
+	"joinInts": func(ids []int) string {
+		parts := make([]string, len(ids))
+		for i, id := range ids {
+			parts[i] = strconv.Itoa(id)
+		}
+		return strings.Join(parts, ",")
+	},
 	"locationsJSON": func(locs []Location) template.JS {
 		type locItem struct {
 			ID     int    `json:"id"`

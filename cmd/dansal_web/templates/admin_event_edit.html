@@ -216,9 +216,9 @@
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>
-        {{range .LocOrgFirst}}<option value="{{.ID}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
-        {{if and .LocOrgFirst .LocOthers}}<option disabled>— {{$.Strings.T "loc_sep_no_org"}} —</option>{{end}}
-        {{range .LocOthers}}<option value="{{.ID}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{range .LocOrgFirst}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{if and .LocOrgFirst .LocOthers}}<option disabled class="loc-sep">— {{$.Strings.T "loc_sep_no_org"}} —</option>{{end}}
+        {{range .LocOthers}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
       </select>
     </div>
 
@@ -578,12 +578,88 @@ function toggleOrgNew(){
   var v=document.getElementById('org_choice').value;
   document.getElementById('org-existing').hidden=(v!=='existing');
   document.getElementById('org-new').hidden=(v!=='new');
+  if(v==='existing') filterLocsByOrg();
+  else restoreLocOptions();
 }
 function toggleLocNew(){
   var v=document.getElementById('loc_choice').value;
   document.getElementById('loc-existing').hidden=(v!=='existing');
   document.getElementById('loc-new').style.display=(v==='new')?'flex':'none';
+  if(v==='existing') filterOrgsByLoc();
+  else restoreOrgOptions();
 }
+// Org → Location: move selected-org's locations to top; hide separator when filtering.
+function filterLocsByOrg(){
+  var orgSel=document.getElementById('org_id');
+  var locSel=document.getElementById('loc_id');
+  if(!orgSel||!locSel) return;
+  var orgID=orgSel.value;
+  var opts=Array.prototype.slice.call(locSel.options);
+  // Reset hidden state first.
+  opts.forEach(function(o){ o.hidden=false; });
+  if(!orgID) return;
+  var sep=locSel.querySelector('.loc-sep');
+  // Split into in-org and out-of-org buckets, preserving within-bucket order.
+  var inOrg=[], outOrg=[], other=[];
+  opts.forEach(function(o){
+    if(!o.value||o.disabled) return;
+    var orgs=(o.dataset.orgs||'').split(',').filter(Boolean);
+    if(orgs.indexOf(orgID)>=0) inOrg.push(o);
+    else outOrg.push(o);
+  });
+  // Re-insert: blank option, inOrg, separator (if both buckets non-empty), outOrg.
+  var blank=locSel.options[0];
+  while(locSel.options.length) locSel.remove(0);
+  locSel.add(blank);
+  inOrg.forEach(function(o){ locSel.add(o); });
+  if(inOrg.length&&outOrg.length&&sep){
+    locSel.add(sep);
+  } else if(sep&&sep.parentNode) sep.parentNode.removeChild(sep);
+  outOrg.forEach(function(o){ locSel.add(o); });
+  // If separator was removed from DOM, re-add it to end for later restore.
+  if(!sep||!sep.parentNode) {
+    var s=document.createElement('option');
+    s.disabled=true; s.className='loc-sep';
+    s.textContent=sep?sep.textContent:'———';
+    if(inOrg.length&&outOrg.length) locSel.add(s);
+  }
+}
+function restoreLocOptions(){ /* order restored on next filterLocsByOrg call or page reload */ }
+// Location → Org: show only orgs that own the selected location.
+function filterOrgsByLoc(){
+  var locSel=document.getElementById('loc_id');
+  var orgSel=document.getElementById('org_id');
+  if(!locSel||!orgSel) return;
+  var locID=locSel.value;
+  if(!locID){ restoreOrgOptions(); return; }
+  var selOpt=null;
+  Array.prototype.forEach.call(locSel.options, function(o){ if(o.value===locID) selOpt=o; });
+  var orgIDs=selOpt?(selOpt.dataset.orgs||'').split(',').filter(Boolean):[];
+  Array.prototype.forEach.call(orgSel.options, function(o){
+    if(!o.value){ o.hidden=false; return; }
+    o.hidden=orgIDs.length>0&&orgIDs.indexOf(o.value)<0;
+  });
+  // If current org selection is now hidden, clear it.
+  if(orgSel.selectedOptions.length&&orgSel.selectedOptions[0].hidden) orgSel.value='';
+  // Auto-select if exactly one org matches.
+  var visible=Array.prototype.filter.call(orgSel.options,function(o){return o.value&&!o.hidden;});
+  if(visible.length===1) orgSel.value=visible[0].value;
+}
+function restoreOrgOptions(){
+  var orgSel=document.getElementById('org_id');
+  if(!orgSel) return;
+  Array.prototype.forEach.call(orgSel.options,function(o){ o.hidden=false; });
+}
+// Wire up the two selects for bidirectional filtering.
+(function(){
+  var orgSel=document.getElementById('org_id');
+  var locSel=document.getElementById('loc_id');
+  if(orgSel) orgSel.addEventListener('change', filterLocsByOrg);
+  if(locSel) locSel.addEventListener('change', filterOrgsByLoc);
+  // Apply on load if values are pre-selected.
+  if(locSel&&locSel.value) filterOrgsByLoc();
+  else if(orgSel&&orgSel.value) filterLocsByOrg();
+})();
 function togglePricing(){
   var v=document.getElementById('pricing_type').value;
   document.getElementById('pricing-single').hidden=(v!=='single'&&v!=='donation');

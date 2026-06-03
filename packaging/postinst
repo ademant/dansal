@@ -15,9 +15,13 @@ case "$1" in
         chown dansal:dansal /var/lib/dansal/calendar.db
         chmod 640           /var/lib/dansal/calendar.db
 
-        # Secure the config file installed by dpkg.
+        # Secure config files installed by dpkg.
         chown root:dansal /etc/dansal/config.yaml
         chmod 640         /etc/dansal/config.yaml
+        chown root:dansal /etc/dansal/web.yaml
+        chmod 640         /etc/dansal/web.yaml
+        chown root:dansal /etc/dansal/webmin.yaml
+        chmod 640         /etc/dansal/webmin.yaml
 
         install -d -m 750 -o dansal -g dansal /var/lib/dansal-web
 
@@ -28,11 +32,14 @@ case "$1" in
             systemctl enable dansal.service
             systemctl start  dansal.service || true
             systemctl enable dansal-web.service
+            systemctl enable dansal-webmin.service
             echo "dansal-web installed. Edit /etc/dansal/web.yaml (set domain + dansal_url), then: systemctl start dansal-web"
+            echo "dansal-webmin installed. Edit /etc/dansal/webmin.yaml (set session_secret), then: systemctl start dansal-webmin"
         else
-            # Upgrade — restart both services.
-            systemctl try-restart dansal.service     || true
-            systemctl try-restart dansal-web.service || true
+            # Upgrade — restart running services.
+            systemctl try-restart dansal.service        || true
+            systemctl try-restart dansal-web.service    || true
+            systemctl try-restart dansal-webmin.service || true
         fi
         ;;
 esac

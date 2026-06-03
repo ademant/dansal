@@ -3,7 +3,7 @@ set -e
 
 case "$1" in
     remove)
-        systemctl disable dansal.service 2>/dev/null || true
+        systemctl disable dansal.service dansal-web.service dansal-webmin.service 2>/dev/null || true
         systemctl daemon-reload || true
         ;;
     purge)

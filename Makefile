@@ -242,20 +242,20 @@ endif
 DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \
                 sed 's/^v//; s/-\([0-9]*\)-g[0-9a-f]*/+\1/' | \
                 grep -E '^[0-9]' || echo "0.0~git.$(shell date +%Y%m%d).$(shell git rev-parse --short HEAD 2>/dev/null)")
-DEB_ARCH    ?= amd64
+DEB_ARCH    ?= $(shell dpkg --print-architecture)
 
-deb: build-dansal build-dansal_web build-dansal_admin
+deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
 	@set -e; \
 	DEB_DIR=$$(mktemp -d /tmp/dansal-deb-XXXXXX); \
 	trap 'rm -rf $$DEB_DIR' EXIT; \
 	\
-	mkdir -p $$DEB_DIR/DEBIAN \
-	         $$DEB_DIR/usr/bin \
-	         $$DEB_DIR/usr/lib/dansal \
-	         $$DEB_DIR/$(SYSTEMDDIR) \
-	         $$DEB_DIR/etc/dansal \
-	         $$DEB_DIR/etc/fail2ban/filter.d \
-	         $$DEB_DIR/etc/fail2ban/jail.d; \
+	install -d -m 755 $$DEB_DIR/DEBIAN; \
+	install -d -m 755 $$DEB_DIR/usr/bin; \
+	install -d -m 755 $$DEB_DIR/usr/lib/dansal; \
+	install -d -m 755 $$DEB_DIR/$(SYSTEMDDIR); \
+	install -d -m 755 $$DEB_DIR/etc/dansal; \
+	install -d -m 755 $$DEB_DIR/etc/fail2ban/filter.d; \
+	install -d -m 755 $$DEB_DIR/etc/fail2ban/jail.d; \
 	\
 	sed 's/VERSION_PLACEHOLDER/$(DEB_VERSION)/; s/amd64/$(DEB_ARCH)/' \
 	    packaging/control > $$DEB_DIR/DEBIAN/control; \
@@ -268,10 +268,13 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	install -m 755 dansal                                $$DEB_DIR/usr/bin/dansal; \
 	install -m 755 dansal_web                            $$DEB_DIR/usr/bin/dansal-web; \
 	install -m 755 dansal_admin                          $$DEB_DIR/usr/bin/dansal_admin; \
+	install -m 755 dansal_webmin                         $$DEB_DIR/usr/bin/dansal-webmin; \
 	install -m 644 dansal.service                        $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
 	install -m 644 dansal-web.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
+	install -m 644 dansal-webmin.service                 $$DEB_DIR/$(SYSTEMDDIR)/dansal-webmin.service; \
 	install -m 644 packaging/config.yaml                 $$DEB_DIR/etc/dansal/config.yaml; \
 	install -m 644 packaging/web.yaml                    $$DEB_DIR/etc/dansal/web.yaml; \
+	install -m 644 packaging/webmin.yaml                 $$DEB_DIR/etc/dansal/webmin.yaml; \
 	install -m 644 deploy/fail2ban/filter.d/dansal.conf  $$DEB_DIR/etc/fail2ban/filter.d/dansal.conf; \
 	install -m 644 deploy/fail2ban/jail.d/dansal.conf    $$DEB_DIR/etc/fail2ban/jail.d/dansal.conf; \
 	\

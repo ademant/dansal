@@ -75,6 +75,8 @@
   </select>
   <button type="submit" formaction="/admin/events/bulk-assign-location" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_loc_btn"}}</button>
   <span class="bulk-sep"></span>
+  <button type="button" class="btn-sm btn-attrs" onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_btn"}}</button>
+  <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk"
           onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
   {{if eq $.User.Role "admin"}}
@@ -122,6 +124,95 @@
 {{else}}
 <p>{{$.Strings.T "no_events_found"}}</p>
 {{end}}
+
+<dialog id="bulk-attrs-dialog" style="padding:1.5rem;border:1px solid #ccc;border-radius:8px;min-width:360px;max-width:520px;width:90vw">
+  <h3 style="margin:0 0 1rem;font-size:1rem">{{$.Strings.T "evt_bulk_attrs_title"}}</h3>
+  <form id="bulk-attrs-form" method="post" action="/admin/events/bulk-set-attributes">
+    <div id="bulk-attrs-ids"></div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-org-enable"> {{$.Strings.T "evt_bulk_attrs_org"}}</label>
+      <div class="ba-group-body" id="ba-org-body" hidden>
+        <select name="org_id" class="ba-select">
+          <option value="0">— {{$.Strings.T "evt_bulk_attrs_unset"}} —</option>
+          {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-tags-enable"> {{$.Strings.T "evt_bulk_attrs_tags"}}</label>
+      <div class="ba-group-body" id="ba-tags-body" hidden>
+        <div class="ba-checks">
+          {{range .AllTags}}<label class="ba-check"><input type="checkbox" name="add_tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}
+        </div>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-dances-enable"> {{$.Strings.T "evt_bulk_attrs_dances"}}</label>
+      <div class="ba-group-body" id="ba-dances-body" hidden>
+        <div class="ba-checks">
+          {{range .Dances}}<label class="ba-check"><input type="checkbox" name="add_dances" value="{{.ID}}"> {{.Name}}</label>{{end}}
+        </div>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-food-enable"> {{$.Strings.T "evt_bulk_attrs_food"}}</label>
+      <div class="ba-group-body" id="ba-food-body" hidden>
+        <label class="ba-radio"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="__unset__"> {{$.Strings.T "food_unset"}}</label>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-drink-enable"> {{$.Strings.T "evt_bulk_attrs_drink"}}</label>
+      <div class="ba-group-body" id="ba-drink-body" hidden>
+        <label class="ba-radio"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="__unset__"> {{$.Strings.T "drink_unset"}}</label>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-access-enable"> {{$.Strings.T "evt_bulk_attrs_access"}}</label>
+      <div class="ba-group-body" id="ba-access-body" hidden>
+        <div class="ba-tristate-row">
+          <span class="ba-ts-label">{{$.Strings.T "access_wheelchair"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_wheelchair" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_wheelchair" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+        <div class="ba-tristate-row">
+          <span class="ba-ts-label">{{$.Strings.T "attr_bar"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_bar" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_bar" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+        <div class="ba-tristate-row">
+          <span class="ba-ts-label">{{$.Strings.T "attr_kitchen"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_kitchen" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_kitchen" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-pricing-enable"> {{$.Strings.T "evt_bulk_attrs_pricing"}}</label>
+      <div class="ba-group-body" id="ba-pricing-body" hidden>
+        <label class="ba-radio"><input type="radio" name="pricing_type" value="free"> {{$.Strings.T "pricing_free"}}</label>
+        <label class="ba-radio"><input type="radio" name="pricing_type" value="donation"> {{$.Strings.T "pricing_donation"}}</label>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem">
+      <button type="button" onclick="document.getElementById('bulk-attrs-dialog').close()" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>
+      <button type="submit" style="padding:.35rem .8rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="tpl-dialog" style="padding:1.25rem 1.5rem;border:1px solid #ccc;border-radius:8px;min-width:300px">
   <form method="dialog" style="display:contents">
@@ -178,6 +269,18 @@
 .btn-merge:hover{background:#664e03}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
 .col-cb{width:2rem;text-align:center}
+.btn-attrs{background:#5e6ad2;color:#fff;border:none}
+.btn-attrs:hover{background:#3d4fb5}
+.ba-group{border:1px solid #e0e4ef;border-radius:6px;margin-bottom:.6rem;overflow:hidden}
+.ba-group-toggle{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#f4f6fb;cursor:pointer;font-size:.88rem;font-weight:600;color:#333;margin:0}
+.ba-group-toggle input{accent-color:#1a6eb5}
+.ba-group-body{padding:.6rem .75rem;display:flex;flex-wrap:wrap;gap:.4rem .75rem;border-top:1px solid #e0e4ef}
+.ba-checks{display:flex;flex-wrap:wrap;gap:.3rem .75rem}
+.ba-check{display:flex;align-items:center;gap:.3rem;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.ba-radio{display:flex;align-items:center;gap:.3rem;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.ba-tristate-row{display:flex;align-items:center;gap:.5rem;width:100%;margin-bottom:.25rem}
+.ba-ts-label{font-size:.82rem;color:#555;min-width:7rem}
+.ba-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;width:100%}
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
@@ -237,6 +340,24 @@ document.getElementById('tpl-dialog-save') && document.getElementById('tpl-dialo
     }
   }).catch(function(){ if(msgEl){msgEl.textContent='Error';msgEl.style.color='#991b1b';} })
   .finally(function(){ saveBtn.disabled = false; });
+});
+function openBulkAttrsModal() {
+  var checked = document.querySelectorAll('.event-cb:checked');
+  if (!checked.length) return;
+  var container = document.getElementById('bulk-attrs-ids');
+  container.innerHTML = '';
+  checked.forEach(function(cb) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'event_ids'; inp.value = cb.value;
+    container.appendChild(inp);
+  });
+  document.getElementById('bulk-attrs-dialog').showModal();
+}
+// Wire up group-enable checkboxes to show/hide their body.
+document.querySelectorAll('.ba-group-toggle input[type=checkbox]').forEach(function(cb) {
+  var body = cb.closest('.ba-group').querySelector('.ba-group-body');
+  if (!body) return;
+  cb.addEventListener('change', function() { body.hidden = !cb.checked; });
 });
 function delEvent(id){
   var f=document.createElement('form');

@@ -2038,6 +2038,94 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tags)
 }
 
+// POST /api/v1/events/bulk-set-attributes — set org, tags, dances, food/drink,
+// accessibility attributes, and/or pricing type on multiple events.
+// Nil fields are skipped. Tags and dances are additive (existing kept).
+func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs        []int    `json:"ids"`
+		OrgID      *int     `json:"org_id"`       // nil = skip; set to apply (can be 0 to unset)
+		AddTags    []string `json:"add_tags"`     // nil = skip; additive
+		AddDances  []int    `json:"add_dances"`   // nil = skip; additive (dance IDs)
+		Food       *string  `json:"food"`         // nil = skip; "" unsets
+		Drink      *string  `json:"drink"`        // nil = skip; "" unsets
+		Wheelchair *bool    `json:"wheelchair"`   // nil = skip
+		Bar        *bool    `json:"bar"`          // nil = skip
+		Kitchen    *bool    `json:"kitchen"`      // nil = skip
+		PricingType *string `json:"pricing_type"` // nil = skip; "free"/"donation"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+			continue
+		}
+		if req.OrgID != nil {
+			if *req.OrgID == 0 {
+				db.Exec("UPDATE events SET organization_id=NULL WHERE id=?", id)
+			} else {
+				db.Exec("UPDATE events SET organization_id=? WHERE id=?", *req.OrgID, id)
+			}
+		}
+		if req.AddTags != nil {
+			for _, t := range req.AddTags {
+				if t = strings.TrimSpace(t); t != "" {
+					db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) VALUES (?, ?)", id, t)
+				}
+			}
+		}
+		if req.AddDances != nil {
+			for _, did := range req.AddDances {
+				db.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, did)
+			}
+		}
+		if req.Food != nil {
+			db.Exec("UPDATE events SET food=? WHERE id=?", *req.Food, id)
+		}
+		if req.Drink != nil {
+			db.Exec("UPDATE events SET drink=? WHERE id=?", *req.Drink, id)
+		}
+		if req.Wheelchair != nil || req.Bar != nil || req.Kitchen != nil {
+			var attrsRaw string
+			db.QueryRow("SELECT COALESCE(attributes,'{}') FROM events WHERE id=?", id).Scan(&attrsRaw)
+			attrs := make(map[string]bool)
+			json.Unmarshal([]byte(attrsRaw), &attrs)
+			if req.Wheelchair != nil {
+				attrs["wheelchair"] = *req.Wheelchair
+			}
+			if req.Bar != nil {
+				attrs["bar"] = *req.Bar
+			}
+			if req.Kitchen != nil {
+				attrs["kitchen"] = *req.Kitchen
+			}
+			db.Exec("UPDATE events SET attributes=? WHERE id=?", attrsJSON(attrs), id)
+		}
+		if req.PricingType != nil {
+			var pricingRaw string
+			db.QueryRow("SELECT COALESCE(pricing,'') FROM events WHERE id=?", id).Scan(&pricingRaw)
+			p := Pricing{Type: *req.PricingType}
+			if pricingRaw != "" {
+				var existing Pricing
+				if json.Unmarshal([]byte(pricingRaw), &existing) == nil {
+					existing.Type = *req.PricingType
+					p = existing
+				}
+			}
+			b, _ := json.Marshal(p)
+			db.Exec("UPDATE events SET pricing=? WHERE id=?", string(b), id)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/v1/events/bulk-set-location — set location_id on multiple events.
 // admin: unrestricted. user: skips events where caller is not an org member.
 func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {

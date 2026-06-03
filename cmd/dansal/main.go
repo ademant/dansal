@@ -1987,6 +1987,7 @@ func main() {
 	// Protected event writes
 	smux.Handle("POST /api/v1/events/preview", auth(previewEventsHandler))
 	smux.Handle("POST /api/v1/events/bulk-set-location", auth(http.HandlerFunc(bulkSetEventLocation)))
+	smux.Handle("POST /api/v1/events/bulk-set-attributes", auth(http.HandlerFunc(bulkSetEventAttributes)))
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))

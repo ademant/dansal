@@ -24,6 +24,7 @@ type AdminEventsData struct {
 	Locations          []Location
 	Musicians          []Musician
 	Dances             []Dance
+	AllTags            []Tag
 	UserOrgs           []Organization
 	FilterIncludePast  bool
 	FilterOrgID        int    // -1 = no org assigned
@@ -261,6 +262,76 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 		if len(ids) > 0 {
 			_ = client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r))
 		}
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/events"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
+func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var ids []int
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		payload := map[string]any{"ids": ids}
+		if v := r.FormValue("org_id"); v != "" {
+			id, _ := strconv.Atoi(v)
+			payload["org_id"] = id
+		}
+		if tags := r.Form["add_tags"]; len(tags) > 0 {
+			payload["add_tags"] = tags
+		}
+		if danceStrs := r.Form["add_dances"]; len(danceStrs) > 0 {
+			var danceIDs []int
+			for _, s := range danceStrs {
+				if id, err := strconv.Atoi(s); err == nil {
+					danceIDs = append(danceIDs, id)
+				}
+			}
+			if len(danceIDs) > 0 {
+				payload["add_dances"] = danceIDs
+			}
+		}
+		if v := r.FormValue("food"); v != "" && v != "__skip__" {
+			s := v
+			if s == "__unset__" {
+				s = ""
+			}
+			payload["food"] = s
+		}
+		if v := r.FormValue("drink"); v != "" && v != "__skip__" {
+			s := v
+			if s == "__unset__" {
+				s = ""
+			}
+			payload["drink"] = s
+		}
+		for _, attr := range []string{"wheelchair", "bar", "kitchen"} {
+			if v := r.FormValue("attr_" + attr); v == "1" || v == "0" {
+				payload[attr] = v == "1"
+			}
+		}
+		if v := r.FormValue("pricing_type"); v != "" && v != "__skip__" {
+			payload["pricing_type"] = v
+		}
+		_ = client.BulkSetEventAttributes(r.Context(), payload, getSessionToken(r))
 		ref := r.Header.Get("Referer")
 		if ref == "" {
 			ref = "/admin/events"
@@ -768,6 +839,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		locs, _ := client.GetLocations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
 		dances, _ := client.GetDances(r.Context())
+		allTags, _ := client.GetTags(r.Context())
 		sort.Slice(locs, func(i, j int) bool {
 			if locs[i].Town != locs[j].Town {
 				return locs[i].Town < locs[j].Town
@@ -807,6 +879,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Locations:          locs,
 			Musicians:          musicians,
 			Dances:             dances,
+			AllTags:            allTags,
 			UserOrgs:           userOrgs,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,

@@ -13,6 +13,7 @@
   <h1>{{.Title}}</h1>
   {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
   {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-cancel-event">{{$.Strings.T "admin_event_cancel"}}</button></form>{{end}}
+  {{if $.User}}<a href="/admin/events/new?clone_from={{.ID}}" class="btn-clone-event">{{$.Strings.T "admin_clone"}}</a>{{end}}
   {{if $.User}}<details class="evt-tpl-details" id="evt-tpl-details-{{.ID}}">
     <summary class="btn-tpl-event">{{$.Strings.T "admin_save_as_template"}}</summary>
     <div class="evt-tpl-form">
@@ -468,6 +469,8 @@
 .btn-edit-event:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
 .btn-cancel-event{display:inline-block;padding:.25rem .7rem;background:#fff3cd;border:1px solid #e0a800;border-radius:4px;font-size:.82rem;color:#856404;cursor:pointer;margin-left:.4rem;vertical-align:middle}
 .btn-cancel-event:hover{background:#ffeaa0;border-color:#c89200}
+.btn-clone-event{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);text-decoration:none;margin-left:.4rem;vertical-align:middle}
+.btn-clone-event:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
 .evt-header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;color:var(--fg-dim);font-size:.95rem}
 .evt-sep{color:var(--fg-hint)}
 .evt-time{font-weight:600;color:var(--heading)}

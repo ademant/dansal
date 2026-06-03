@@ -160,6 +160,11 @@ func main() {
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
 		r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))
+		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Cache-Control", "public, max-age=604800")
+			w.Write(qrcodeJS)
+		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))

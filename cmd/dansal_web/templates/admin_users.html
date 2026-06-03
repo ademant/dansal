@@ -372,11 +372,7 @@ async function createInvite(type) {
         if (s > 0) setTimeout(tick, 1000);
       })();
       if (typeof QRCode !== 'undefined') {
-        var cv = document.createElement('canvas');
-        cnt.appendChild(cv);
-        QRCode.toCanvas(cv, d.url, {width:200,margin:2}, function(err) {
-          if (err) cv.remove();
-        });
+        new QRCode(cnt, {text: d.url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H});
       }
     } else {
       res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
@@ -497,14 +493,12 @@ function toggleQR(containerId, sourceId) {
   if (!url) return;
   el.innerHTML = '';
   el.style.display = 'block';
-  var cv = document.createElement('canvas');
-  el.appendChild(cv);
-  QRCode.toCanvas(cv, url, {width: 200, margin: 2}, function(err) {
-    if (err) cv.remove();
-  });
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(el, {text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H});
+  }
 }
 </script>
-<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous"></script>
+<script src="/static/qrcode.min.js"></script>
 
 <div id="pw-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">

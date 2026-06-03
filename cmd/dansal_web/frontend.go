@@ -188,6 +188,9 @@ var logoSVG []byte
 //go:embed static/banner.svg
 var bannerSVG []byte
 
+//go:embed static/qrcode.min.js
+var qrcodeJS []byte
+
 func suggestAvailable(cfg *Config) bool {
 	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
 }

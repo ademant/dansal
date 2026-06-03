@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,11 +21,13 @@ import (
 type AdminEventsData struct {
 	Events             []Event
 	Organizations      []Organization
+	Locations          []Location
 	Musicians          []Musician
 	Dances             []Dance
 	UserOrgs           []Organization
 	FilterIncludePast  bool
 	FilterOrgID        int    // -1 = no org assigned
+	FilterLocationID   int
 	FilterDateFrom     string
 	FilterDateTo       string
 	FilterMusicianID   int
@@ -573,6 +576,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		q := r.URL.Query()
 		includePast := q.Get("include_past") == "1"
 		orgID, _ := strconv.Atoi(q.Get("org_id"))
+		locationID, _ := strconv.Atoi(q.Get("location_id"))
 		musicianID, _ := strconv.Atoi(q.Get("musician_id"))
 		dateFrom := q.Get("date_from")
 		dateTo := q.Get("date_to")
@@ -595,6 +599,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			if t, err := time.Parse("2006-01-02", dateTo); err == nil {
 				params.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
 			}
+		}
+		if locationID != 0 {
+			params.Set("location_id", strconv.Itoa(locationID))
 		}
 		if musicianID != 0 {
 			params.Set("musician_id", strconv.Itoa(musicianID))
@@ -670,8 +677,23 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 
 		orgs, _ := client.GetOrganizations(r.Context())
+		locs, _ := client.GetLocations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
 		dances, _ := client.GetDances(r.Context())
+		sort.Slice(locs, func(i, j int) bool {
+			if locs[i].Town != locs[j].Town {
+				return locs[i].Town < locs[j].Town
+			}
+			ni := locs[i].ShortName
+			if ni == "" {
+				ni = locs[i].Location
+			}
+			nj := locs[j].ShortName
+			if nj == "" {
+				nj = locs[j].Location
+			}
+			return ni < nj
+		})
 
 		var userOrgs []Organization
 		if su := getSessionUser(r); su != nil {
@@ -694,11 +716,13 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:             events,
 			Organizations:      orgs,
+			Locations:          locs,
 			Musicians:          musicians,
 			Dances:             dances,
 			UserOrgs:           userOrgs,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,
+			FilterLocationID:   locationID,
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,
 			FilterMusicianID:   musicianID,

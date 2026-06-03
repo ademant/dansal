@@ -414,6 +414,7 @@ func getUserOrgIDs(ctx context.Context, client *DansalClient, userID int, token 
 }
 
 // prefillFromEvent builds an EventPrefill from an existing event for clone/template use.
+// Date is intentionally omitted so the user must pick a new one; time-of-day is kept.
 func prefillFromEvent(ev Event) *EventPrefill {
 	pf := &EventPrefill{
 		Title:              ev.Title,
@@ -424,6 +425,8 @@ func prefillFromEvent(ev Event) *EventPrefill {
 		HasWorkshop:        ev.HasWorkshop,
 		HasFestival:        ev.HasFestival,
 		WorkshopDifficulty: ev.WorkshopDifficulty,
+		StartTime:          isoTimeStr(ev.StartTime),
+		EndTime:            isoTimeStr(ev.EndTime),
 		Location:           func() string { if ev.Location != nil { return ev.Location.Location }; return "" }(),
 		Town:               func() string { if ev.Location != nil { return ev.Location.Town }; return "" }(),
 		Country:            func() string { if ev.Location != nil { return ev.Location.Country }; return "" }(),

@@ -239,6 +239,11 @@ func previewLocationUpdated(eventID int, loc EventLocationRequest) bool {
 
 func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
 	switch src.Type {
+	case "json":
+		if gancioJSONProbe(src.URL) {
+			return parseGancioJSONToRequests(body, src)
+		}
+		return parseFolkdanceJSONToRequests(body, src)
 	case "folkdance-json":
 		return parseFolkdanceJSONToRequests(body, src)
 	case "gancio-json":

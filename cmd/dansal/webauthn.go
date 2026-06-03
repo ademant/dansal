@@ -728,10 +728,10 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 
 	// Validate the pending registration belongs to the caller.
 	var pr struct {
-		ID       int
-		Email    string
-		Verified int
-		UserID   sql.NullInt64
+		ID        int
+		Email     string
+		Verified  int
+		UserID    sql.NullInt64
 		ExpiresAt string
 	}
 	if err := db.QueryRow(
@@ -796,9 +796,9 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blob, _ := json.Marshal(waRegSession{
-		Session:  *sessionData,
-		Email:    pr.Email,
-		UserID:   int(userID),
+		Session:   *sessionData,
+		Email:     pr.Email,
+		UserID:    int(userID),
 		PendingID: pr.ID,
 	})
 	sessionID, err := generateSessionToken()

@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-
 type SuggestPageData struct {
 	HintSMTP       bool // SMTP configured → show email verification hint
 	PreviewEvents  []PreviewEvent
@@ -151,18 +150,18 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			}
 		}
 		req := SuggestEventReq{
-			Title:              title,
-			Description:        description,
-			StartTime:          r.FormValue("start_time"),
-			EndTime:            r.FormValue("end_time"),
-			HasBall:            sliceContains(tags, "bal-folk"),
-			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival:        sliceContains(tags, "festival"),
-			Tags:               tags,
-			DanceIDs:           danceIDs,
-			URL:                r.FormValue("url"),
-			Food:               r.FormValue("food"),
-			Drink:              r.FormValue("drink"),
+			Title:       title,
+			Description: description,
+			StartTime:   r.FormValue("start_time"),
+			EndTime:     r.FormValue("end_time"),
+			HasBall:     sliceContains(tags, "bal-folk"),
+			HasWorkshop: sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival: sliceContains(tags, "festival"),
+			Tags:        tags,
+			DanceIDs:    danceIDs,
+			URL:         r.FormValue("url"),
+			Food:        r.FormValue("food"),
+			Drink:       r.FormValue("drink"),
 			Location: PreviewLoc{
 				Location: r.FormValue("location"),
 				Town:     r.FormValue("town"),

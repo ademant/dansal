@@ -251,7 +251,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			ID:          lr.User.ID,
 			Email:       lr.User.Email,
 			DisplayName: lr.User.DisplayName,
-			Role:     lr.User.Role,
+			Role:        lr.User.Role,
 		}, expiresAt)
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}

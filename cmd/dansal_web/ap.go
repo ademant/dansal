@@ -30,33 +30,33 @@ type APEndpoints struct {
 }
 
 type Actor struct {
-	Context                   any `json:"@context"`
-	Type                      string      `json:"type"`
-	ID                        string      `json:"id"`
-	Name                      string      `json:"name"`
-	Summary                   string      `json:"summary,omitempty"`
-	URL                       string      `json:"url,omitempty"`
-	PreferredUsername         string      `json:"preferredUsername"`
-	Inbox                     string      `json:"inbox"`
-	Outbox                    string      `json:"outbox"`
-	Followers                 string      `json:"followers"`
-	ManuallyApprovesFollowers bool        `json:"manuallyApprovesFollowers"`
-	Discoverable              bool        `json:"discoverable"`
-	Indexable                 bool        `json:"indexable"`
+	Context                   any          `json:"@context"`
+	Type                      string       `json:"type"`
+	ID                        string       `json:"id"`
+	Name                      string       `json:"name"`
+	Summary                   string       `json:"summary,omitempty"`
+	URL                       string       `json:"url,omitempty"`
+	PreferredUsername         string       `json:"preferredUsername"`
+	Inbox                     string       `json:"inbox"`
+	Outbox                    string       `json:"outbox"`
+	Followers                 string       `json:"followers"`
+	ManuallyApprovesFollowers bool         `json:"manuallyApprovesFollowers"`
+	Discoverable              bool         `json:"discoverable"`
+	Indexable                 bool         `json:"indexable"`
 	Endpoints                 *APEndpoints `json:"endpoints,omitempty"`
-	Icon                      *APDocument `json:"icon,omitempty"`
-	PublicKey                 PublicKey   `json:"publicKey"`
+	Icon                      *APDocument  `json:"icon,omitempty"`
+	PublicKey                 PublicKey    `json:"publicKey"`
 }
 
 type Activity struct {
-	Context any `json:"@context,omitempty"`
-	Type    string      `json:"type"`
-	ID      string      `json:"id"`
-	Actor   string      `json:"actor"`
-	Object  any `json:"object"`
-	Target  string      `json:"target,omitempty"`
-	To      []string    `json:"to,omitempty"`
-	CC      []string    `json:"cc,omitempty"`
+	Context any      `json:"@context,omitempty"`
+	Type    string   `json:"type"`
+	ID      string   `json:"id"`
+	Actor   string   `json:"actor"`
+	Object  any      `json:"object"`
+	Target  string   `json:"target,omitempty"`
+	To      []string `json:"to,omitempty"`
+	CC      []string `json:"cc,omitempty"`
 }
 
 type APPostalAddress struct {
@@ -122,23 +122,23 @@ type APNote struct {
 }
 
 type OrderedCollection struct {
-	Context    any `json:"@context"`
-	Type       string      `json:"type"`
-	ID         string      `json:"id"`
-	TotalItems int         `json:"totalItems"`
-	First      string      `json:"first,omitempty"`
-	Items      []string    `json:"orderedItems,omitempty"`
+	Context    any      `json:"@context"`
+	Type       string   `json:"type"`
+	ID         string   `json:"id"`
+	TotalItems int      `json:"totalItems"`
+	First      string   `json:"first,omitempty"`
+	Items      []string `json:"orderedItems,omitempty"`
 }
 
 type OrderedCollectionPage struct {
-	Context      any   `json:"@context"`
-	Type         string        `json:"type"`
-	ID           string        `json:"id"`
-	PartOf       string        `json:"partOf"`
-	TotalItems   int           `json:"totalItems"`
-	OrderedItems []any `json:"orderedItems"`
-	Next         string        `json:"next,omitempty"`
-	Prev         string        `json:"prev,omitempty"`
+	Context      any    `json:"@context"`
+	Type         string `json:"type"`
+	ID           string `json:"id"`
+	PartOf       string `json:"partOf"`
+	TotalItems   int    `json:"totalItems"`
+	OrderedItems []any  `json:"orderedItems"`
+	Next         string `json:"next,omitempty"`
+	Prev         string `json:"prev,omitempty"`
 }
 
 type WebFingerLink struct {

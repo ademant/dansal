@@ -12,11 +12,11 @@ type CreatePublisherRequest struct {
 }
 
 type PublisherCreatedResponse struct {
-	UserID  int    `json:"user_id"`
-	Name    string `json:"name"`
-	KeyID   int    `json:"key_id"`
-	APIKey  string `json:"api_key"`
-	OrgID   *int   `json:"org_id,omitempty"`
+	UserID int    `json:"user_id"`
+	Name   string `json:"name"`
+	KeyID  int    `json:"key_id"`
+	APIKey string `json:"api_key"`
+	OrgID  *int   `json:"org_id,omitempty"`
 }
 
 // POST /api/v1/publishers — create a publisher service account + API key atomically.

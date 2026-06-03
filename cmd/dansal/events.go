@@ -25,50 +25,50 @@ type querier interface {
 }
 
 type Event struct {
-	ID             int      `json:"id"`
-	UID            string   `json:"uid,omitempty"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	StartTime      string   `json:"start_time"`
-	EndTime        string   `json:"end_time"`
-	HasBall              bool     `json:"has_ball"`
-	HasWorkshop          bool     `json:"has_workshop"`
-	HasFestival          bool     `json:"has_festival"`
-	WorkshopDifficulty   string   `json:"workshop_difficulty,omitempty"`
-	IsCancelled          bool     `json:"is_cancelled"`
-	Tags           []string `json:"tags"`
-	IsPublished    bool     `json:"is_published"`
-	ShortCode      string   `json:"short_code"`
-	URL            string   `json:"url,omitempty"`
-	Source         string   `json:"source,omitempty"`
-	CreatedAt      string   `json:"created_at"`
-	ImageURL       string   `json:"image_url,omitempty"`
-	OrganizationID *int             `json:"organization_id,omitempty"`
-	Editable       *bool            `json:"editable,omitempty"`
-	Cancelable     *bool            `json:"cancelable,omitempty"`
-	CreatedByID    *int             `json:"created_by_id,omitempty"`
-	Timetable      []TimetableEntry `json:"timetable,omitempty"`
-	Pricing        *Pricing         `json:"pricing,omitempty"`
-	Locations       []Location       `json:"locations,omitempty"`
-	Musicians       []Musician       `json:"musicians,omitempty"`
-	LocationID *int      `json:"location_id,omitempty"`
-	Location   *Location `json:"location,omitempty"`
-	Attributes            map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition        string           `json:"floor_condition,omitempty"`
-	ContactName     string           `json:"contact_name,omitempty"`
-	ContactEmail    string           `json:"contact_email,omitempty"`
-	BookingURL      string           `json:"booking_url,omitempty"`
-	Availability    string           `json:"availability,omitempty"`
-	TicketsTotal    int              `json:"tickets_total,omitempty"`
-	BookingEnabled  bool             `json:"booking_enabled,omitempty"`
-	Food       string          `json:"food,omitempty"`
-	Drink      string          `json:"drink,omitempty"`
-	DanceNames      []string         `json:"dance_names,omitempty"`
-	ChangedAt     string `json:"changed_at,omitempty"`
-	ChangedBy     string `json:"changed_by,omitempty"`
-	FetchSourceID int    `json:"fetch_source_id,omitempty"`
-	TagsJSON        string           `json:"-"`
-	PricingJSON     string           `json:"-"`
+	ID                 int              `json:"id"`
+	UID                string           `json:"uid,omitempty"`
+	Title              string           `json:"title"`
+	Description        string           `json:"description"`
+	StartTime          string           `json:"start_time"`
+	EndTime            string           `json:"end_time"`
+	HasBall            bool             `json:"has_ball"`
+	HasWorkshop        bool             `json:"has_workshop"`
+	HasFestival        bool             `json:"has_festival"`
+	WorkshopDifficulty string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled        bool             `json:"is_cancelled"`
+	Tags               []string         `json:"tags"`
+	IsPublished        bool             `json:"is_published"`
+	ShortCode          string           `json:"short_code"`
+	URL                string           `json:"url,omitempty"`
+	Source             string           `json:"source,omitempty"`
+	CreatedAt          string           `json:"created_at"`
+	ImageURL           string           `json:"image_url,omitempty"`
+	OrganizationID     *int             `json:"organization_id,omitempty"`
+	Editable           *bool            `json:"editable,omitempty"`
+	Cancelable         *bool            `json:"cancelable,omitempty"`
+	CreatedByID        *int             `json:"created_by_id,omitempty"`
+	Timetable          []TimetableEntry `json:"timetable,omitempty"`
+	Pricing            *Pricing         `json:"pricing,omitempty"`
+	Locations          []Location       `json:"locations,omitempty"`
+	Musicians          []Musician       `json:"musicians,omitempty"`
+	LocationID         *int             `json:"location_id,omitempty"`
+	Location           *Location        `json:"location,omitempty"`
+	Attributes         map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition     string           `json:"floor_condition,omitempty"`
+	ContactName        string           `json:"contact_name,omitempty"`
+	ContactEmail       string           `json:"contact_email,omitempty"`
+	BookingURL         string           `json:"booking_url,omitempty"`
+	Availability       string           `json:"availability,omitempty"`
+	TicketsTotal       int              `json:"tickets_total,omitempty"`
+	BookingEnabled     bool             `json:"booking_enabled,omitempty"`
+	Food               string           `json:"food,omitempty"`
+	Drink              string           `json:"drink,omitempty"`
+	DanceNames         []string         `json:"dance_names,omitempty"`
+	ChangedAt          string           `json:"changed_at,omitempty"`
+	ChangedBy          string           `json:"changed_by,omitempty"`
+	FetchSourceID      int              `json:"fetch_source_id,omitempty"`
+	TagsJSON           string           `json:"-"`
+	PricingJSON        string           `json:"-"`
 }
 
 type EventDate struct {
@@ -1136,13 +1136,13 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 				requests = append(requests, EventCreateRequest{
 					UID: uid,
 					EventWriteRequest: EventWriteRequest{
-						Title:       event.GetProperty(ics.ComponentPropertySummary).Value,
-						Description: event.GetProperty(ics.ComponentPropertyDescription).Value,
-						StartTime:   occ[0].UTC().Format(time.RFC3339),
-						EndTime:     occ[1].UTC().Format(time.RFC3339),
-						IsCancelled: isCancelled,
-						Tags:        parseICalCategories(event),
-						URL:         attachURL(event),
+						Title:          event.GetProperty(ics.ComponentPropertySummary).Value,
+						Description:    event.GetProperty(ics.ComponentPropertyDescription).Value,
+						StartTime:      occ[0].UTC().Format(time.RFC3339),
+						EndTime:        occ[1].UTC().Format(time.RFC3339),
+						IsCancelled:    isCancelled,
+						Tags:           parseICalCategories(event),
+						URL:            attachURL(event),
 						OrganizationID: orgID,
 						Location: func() EventLocationRequest {
 							if apple := parseAppleStructuredLocation(event); apple != nil {
@@ -2052,16 +2052,16 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		IDs        []int    `json:"ids"`
-		OrgID      *int     `json:"org_id"`       // nil = skip; set to apply (can be 0 to unset)
-		AddTags    []string `json:"add_tags"`     // nil = skip; additive
-		AddDances  []int    `json:"add_dances"`   // nil = skip; additive (dance IDs)
-		Food       *string  `json:"food"`         // nil = skip; "" unsets
-		Drink      *string  `json:"drink"`        // nil = skip; "" unsets
-		Wheelchair *bool    `json:"wheelchair"`   // nil = skip
-		Bar        *bool    `json:"bar"`          // nil = skip
-		Kitchen    *bool    `json:"kitchen"`      // nil = skip
-		PricingType *string `json:"pricing_type"` // nil = skip; "free"/"donation"
+		IDs         []int    `json:"ids"`
+		OrgID       *int     `json:"org_id"`       // nil = skip; set to apply (can be 0 to unset)
+		AddTags     []string `json:"add_tags"`     // nil = skip; additive
+		AddDances   []int    `json:"add_dances"`   // nil = skip; additive (dance IDs)
+		Food        *string  `json:"food"`         // nil = skip; "" unsets
+		Drink       *string  `json:"drink"`        // nil = skip; "" unsets
+		Wheelchair  *bool    `json:"wheelchair"`   // nil = skip
+		Bar         *bool    `json:"bar"`          // nil = skip
+		Kitchen     *bool    `json:"kitchen"`      // nil = skip
+		PricingType *string  `json:"pricing_type"` // nil = skip; "free"/"donation"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)

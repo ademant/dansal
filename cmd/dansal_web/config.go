@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Listen    string `yaml:"listen"`
 	Domain    string `yaml:"domain"`
-	BaseURL   string `yaml:"base_url"`   // optional; defaults to https://{domain}
+	BaseURL   string `yaml:"base_url"` // optional; defaults to https://{domain}
 	DansalURL string `yaml:"dansal_url"`
 	DBPath    string `yaml:"db_path"`
 	PollSecs  int    `yaml:"poll_secs"`
@@ -65,9 +65,9 @@ type Config struct {
 	PublicThrottleForgetHours int `yaml:"public_throttle_forget_hours"` // forget inactive entries after N hours; default 1
 
 	// Form token anti-bot protection
-	FormTokenMaxAgeMins  int  `yaml:"form_token_max_age_mins"`  // token validity window; default 10
-	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"`  // cleanup interval; default 5
-	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`       // bind token to client IP; default false
+	FormTokenMaxAgeMins  int  `yaml:"form_token_max_age_mins"` // token validity window; default 10
+	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"` // cleanup interval; default 5
+	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`      // bind token to client IP; default false
 
 	// HTTP server timeouts
 	ReadHeaderTimeoutSecs int `yaml:"read_header_timeout_secs"`
@@ -83,9 +83,9 @@ type Config struct {
 	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 5/minute each
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
-	SiteName             string `yaml:"site_name"`
-	ContactOverride      string
-	ImpressumOverride    map[string]string
+	SiteName          string `yaml:"site_name"`
+	ContactOverride   string
+	ImpressumOverride map[string]string
 
 	// SelfRegistrationEnabled controls whether /register is available.
 	// Defaults to true. Set to false to disable self-registration entirely.

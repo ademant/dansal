@@ -8,25 +8,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var Version   = "dev"
+var Version = "dev"
 var BuildTime = "unknown"
 
 const defaultConfigPath = "/etc/dansal/webmin.yaml"
 
 type Config struct {
-	Listen        string `yaml:"listen"`
-	DansalURL     string `yaml:"dansal_url"`
-	AdminSocket   string `yaml:"admin_socket"`
-	SessionSecret string `yaml:"session_secret"`
-	SiteName      string `yaml:"site_name"`
-	Instance      string `yaml:"instance"`
-	WebDBPath        string `yaml:"web_db_path"`        // path to web.db for site-config editing
-	ImagesDir        string `yaml:"images_dir"`         // path to images dir for logo/banner/favicon
+	Listen                string `yaml:"listen"`
+	DansalURL             string `yaml:"dansal_url"`
+	AdminSocket           string `yaml:"admin_socket"`
+	SessionSecret         string `yaml:"session_secret"`
+	SiteName              string `yaml:"site_name"`
+	Instance              string `yaml:"instance"`
+	WebDBPath             string `yaml:"web_db_path"` // path to web.db for site-config editing
+	ImagesDir             string `yaml:"images_dir"`  // path to images dir for logo/banner/favicon
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs       int    `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs      int    `yaml:"write_timeout_secs"`
 	IdleTimeoutSecs       int    `yaml:"idle_timeout_secs"`
-	configPath       string
+	configPath            string
 }
 
 func loadConfig() *Config {

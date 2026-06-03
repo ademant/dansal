@@ -14,21 +14,21 @@ func TestHaversineKm(t *testing.T) {
 		toleranceKm  float64
 	}{
 		{
-			name:         "Berlin to Munich",
+			name: "Berlin to Munich",
 			lat1: 52.5200, lon1: 13.4050,
 			lat2: 48.1351, lon2: 11.5820,
 			wantApproxKm: 504.0,
 			toleranceKm:  2.0,
 		},
 		{
-			name:         "same point",
+			name: "same point",
 			lat1: 48.0, lon1: 11.0,
 			lat2: 48.0, lon2: 11.0,
 			wantApproxKm: 0.0,
 			toleranceKm:  0.001,
 		},
 		{
-			name:         "equator 1 degree lon",
+			name: "equator 1 degree lon",
 			lat1: 0.0, lon1: 0.0,
 			lat2: 0.0, lon2: 1.0,
 			wantApproxKm: 111.195,

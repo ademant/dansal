@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
 )
 
 // createMagicToken generates and stores a magic login token for userID, replacing any existing one.

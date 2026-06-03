@@ -111,11 +111,11 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 // three-tier dedup logic as insertEvent and returns "new", "exists", or "updated".
 func previewDuplicateStatus(req EventCreateRequest) string {
 	type row struct {
-		id         int
-		title      string
-		startTime  int64
+		id          int
+		title       string
+		startTime   int64
 		isCancelled bool
-		srcMod     int64
+		srcMod      int64
 	}
 
 	scan := func(r *sql.Row) (row, error) {

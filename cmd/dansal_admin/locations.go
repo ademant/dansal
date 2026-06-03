@@ -15,10 +15,10 @@ import (
 // Patterns tried in order of specificity.
 // Each captures: (street, zipcode, town) or a subset.
 var addrPatterns = []struct {
-	re          *regexp.Regexp
-	streetIdx   int
-	zipcodeIdx  int
-	townIdx     int
+	re         *regexp.Regexp
+	streetIdx  int
+	zipcodeIdx int
+	townIdx    int
 }{
 	// "Name, Street Nr, 12345 Town"
 	{regexp.MustCompile(`^[^,]+,\s*(.+?),\s*(\d{5})\s+(.+)$`), 1, 2, 3},

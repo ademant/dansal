@@ -393,7 +393,6 @@ func parseICalCategories(event *ics.VEvent) []string {
 	return tags
 }
 
-
 func scanFetchSource(s scanner) (FetchSource, error) {
 	var src FetchSource
 	var tagsJSON, danceIDsCSV string

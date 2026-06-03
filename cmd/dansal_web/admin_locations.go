@@ -148,19 +148,19 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			return
 		}
 		loc := Location{
-			Location:    strings.TrimSpace(r.FormValue("location")),
-			ShortName:   strings.TrimSpace(r.FormValue("short_name")),
-			Address:     strings.TrimSpace(r.FormValue("address")),
-			Zipcode:     strings.TrimSpace(r.FormValue("zipcode")),
-			Town:        strings.TrimSpace(r.FormValue("town")),
-			Country:     strings.TrimSpace(r.FormValue("country")),
-			CountryCode: strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
-			Region:      strings.TrimSpace(r.FormValue("region")),
-			Latitude:    parseLatLng(r.FormValue("latitude")),
-			Longitude:   parseLatLng(r.FormValue("longitude")),
+			Location:     strings.TrimSpace(r.FormValue("location")),
+			ShortName:    strings.TrimSpace(r.FormValue("short_name")),
+			Address:      strings.TrimSpace(r.FormValue("address")),
+			Zipcode:      strings.TrimSpace(r.FormValue("zipcode")),
+			Town:         strings.TrimSpace(r.FormValue("town")),
+			Country:      strings.TrimSpace(r.FormValue("country")),
+			CountryCode:  strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
+			Region:       strings.TrimSpace(r.FormValue("region")),
+			Latitude:     parseLatLng(r.FormValue("latitude")),
+			Longitude:    parseLatLng(r.FormValue("longitude")),
 			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:       parseOsmID(r.FormValue("osm_id")),
-			OsmType:     strings.TrimSpace(r.FormValue("osm_type")),
+			OsmID:        parseOsmID(r.FormValue("osm_id")),
+			OsmType:      strings.TrimSpace(r.FormValue("osm_type")),
 		}
 		token := getSessionToken(r)
 		created, err := client.CreateLocation(r.Context(), loc, token)
@@ -348,22 +348,54 @@ func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) ht
 			orgSet[oid] = true
 		}
 		for _, l := range locs[1:] {
-			if l.Location != ""    { base.Location = l.Location }
-			if l.ShortName != ""   { base.ShortName = l.ShortName }
-			if l.Address != ""     { base.Address = l.Address }
-			if l.Zipcode != ""     { base.Zipcode = l.Zipcode }
-			if l.Town != ""        { base.Town = l.Town }
-			if l.Country != ""     { base.Country = l.Country }
-			if l.CountryCode != "" { base.CountryCode = l.CountryCode }
-			if l.Region != ""      { base.Region = l.Region }
-			if l.Latitude != nil   { base.Latitude = l.Latitude }
-			if l.Longitude != nil  { base.Longitude = l.Longitude }
-			if l.Internetsite != "" { base.Internetsite = l.Internetsite }
-			if l.OsmID != nil      { base.OsmID = l.OsmID }
-			if l.OsmType != ""     { base.OsmType = l.OsmType }
-			if l.NotesMd != ""     { base.NotesMd = l.NotesMd }
-			if l.Parking != ""     { base.Parking = l.Parking }
-			if l.FloorCondition != "" { base.FloorCondition = l.FloorCondition }
+			if l.Location != "" {
+				base.Location = l.Location
+			}
+			if l.ShortName != "" {
+				base.ShortName = l.ShortName
+			}
+			if l.Address != "" {
+				base.Address = l.Address
+			}
+			if l.Zipcode != "" {
+				base.Zipcode = l.Zipcode
+			}
+			if l.Town != "" {
+				base.Town = l.Town
+			}
+			if l.Country != "" {
+				base.Country = l.Country
+			}
+			if l.CountryCode != "" {
+				base.CountryCode = l.CountryCode
+			}
+			if l.Region != "" {
+				base.Region = l.Region
+			}
+			if l.Latitude != nil {
+				base.Latitude = l.Latitude
+			}
+			if l.Longitude != nil {
+				base.Longitude = l.Longitude
+			}
+			if l.Internetsite != "" {
+				base.Internetsite = l.Internetsite
+			}
+			if l.OsmID != nil {
+				base.OsmID = l.OsmID
+			}
+			if l.OsmType != "" {
+				base.OsmType = l.OsmType
+			}
+			if l.NotesMd != "" {
+				base.NotesMd = l.NotesMd
+			}
+			if l.Parking != "" {
+				base.Parking = l.Parking
+			}
+			if l.FloorCondition != "" {
+				base.FloorCondition = l.FloorCondition
+			}
 			// Merge attribute maps: newer value for each key wins.
 			for k, v := range l.Attributes {
 				if base.Attributes == nil {

@@ -133,11 +133,11 @@ func main() {
 
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client))
-		r.HandleFunc("POST /invites/{token}/webauthn/begin",  webauthnInviteProxy(cfg, client, "begin"))
+		r.HandleFunc("POST /invites/{token}/webauthn/begin", webauthnInviteProxy(cfg, client, "begin"))
 		r.HandleFunc("POST /invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
-		r.HandleFunc("POST /auth/webauthn/login/begin",  webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
+		r.HandleFunc("POST /auth/webauthn/login/begin", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
 		r.HandleFunc("POST /auth/webauthn/login/finish", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/finish"))
-		r.HandleFunc("POST /auth/webauthn/register/passkey/begin",  webauthnProxy(cfg, client, "/api/v1/register/passkey/begin"))
+		r.HandleFunc("POST /auth/webauthn/register/passkey/begin", webauthnProxy(cfg, client, "/api/v1/register/passkey/begin"))
 		r.HandleFunc("POST /auth/webauthn/register/passkey/finish", webauthnProxy(cfg, client, "/api/v1/register/passkey/finish"))
 		r.HandleFunc("GET /register", registerPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
@@ -227,7 +227,7 @@ func main() {
 		r.HandleFunc("POST /admin/events/bulk-cancel", adminRateLimit(adminEventBulkCancelHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-delete", adminRateLimit(adminEventBulkDeleteHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/bulk-assign-location", adminRateLimit(adminEventBulkAssignLocationHandler(cfg, client)))
-			r.HandleFunc("POST /admin/events/bulk-set-attributes", adminRateLimit(adminEventBulkSetAttributesHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/bulk-set-attributes", adminRateLimit(adminEventBulkSetAttributesHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminRateLimit(adminEventImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/musicians/{id}/image/delete", adminRateLimit(adminMusicianImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/image/delete", adminRateLimit(adminOrgImageDeleteHandler(cfg, client)))
@@ -262,7 +262,6 @@ func main() {
 		r.HandleFunc("GET /admin/dances", adminDancesHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/dances", adminRateLimit(adminDanceCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/dances/{id}/delete", adminRateLimit(adminDanceDeleteHandler(cfg, client)))
-
 
 		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))

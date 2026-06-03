@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-
 )
 
 type TimetableEntry struct {
@@ -271,4 +270,3 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(entries)
 }
-

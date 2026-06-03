@@ -11,15 +11,15 @@ import (
 const pendingRegCookie = "pending_reg"
 
 type RegisterPageData struct {
-	Orgs             []Organization
-	Error            string
-	FormToken        string
-	PendingID        int    // set when cookie found and record still active
-	PendingVerified  bool   // true = verified, awaiting admin review
-	PendingApproved  bool   // true = admin approved; InviteURL holds the link
-	PendingToken     string // verification token for resend
-	PendingHasPasskey bool  // true = passkey already bound to this pending registration
-	InviteURL        string // set when approved without contact info
+	Orgs              []Organization
+	Error             string
+	FormToken         string
+	PendingID         int    // set when cookie found and record still active
+	PendingVerified   bool   // true = verified, awaiting admin review
+	PendingApproved   bool   // true = admin approved; InviteURL holds the link
+	PendingToken      string // verification token for resend
+	PendingHasPasskey bool   // true = passkey already bound to this pending registration
+	InviteURL         string // set when approved without contact info
 }
 
 type RegisterDoneData struct {

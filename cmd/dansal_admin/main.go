@@ -33,25 +33,25 @@ func socketFromConfig() string {
 }
 
 type request struct {
-	Cmd          string `json:"cmd"`
-	Username     string `json:"username,omitempty"`
-	Email        string `json:"email,omitempty"`
-	Password     string `json:"password,omitempty"`
-	Role         string `json:"role,omitempty"`
-	OrgID        int    `json:"org_id,omitempty"`
-	Path         string `json:"path,omitempty"`
-	Since        string `json:"since,omitempty"`
-	SessionID       int    `json:"session_id,omitempty"`
-	InviteToken     string `json:"invite_token,omitempty"`
-	Telegram        string `json:"telegram,omitempty"`
-	Matrix          string `json:"matrix,omitempty"`
-	SMTPHost        string `json:"smtp_host,omitempty"`
-	SMTPPort        int    `json:"smtp_port,omitempty"`
-	SMTPUsername    string `json:"smtp_username,omitempty"`
-	SMTPFrom        string `json:"smtp_from,omitempty"`
-	SMTPFromName    string `json:"smtp_from_name,omitempty"`
-	SMTPTLS         string `json:"smtp_tls,omitempty"`
-	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
+	Cmd                   string `json:"cmd"`
+	Username              string `json:"username,omitempty"`
+	Email                 string `json:"email,omitempty"`
+	Password              string `json:"password,omitempty"`
+	Role                  string `json:"role,omitempty"`
+	OrgID                 int    `json:"org_id,omitempty"`
+	Path                  string `json:"path,omitempty"`
+	Since                 string `json:"since,omitempty"`
+	SessionID             int    `json:"session_id,omitempty"`
+	InviteToken           string `json:"invite_token,omitempty"`
+	Telegram              string `json:"telegram,omitempty"`
+	Matrix                string `json:"matrix,omitempty"`
+	SMTPHost              string `json:"smtp_host,omitempty"`
+	SMTPPort              int    `json:"smtp_port,omitempty"`
+	SMTPUsername          string `json:"smtp_username,omitempty"`
+	SMTPFrom              string `json:"smtp_from,omitempty"`
+	SMTPFromName          string `json:"smtp_from_name,omitempty"`
+	SMTPTLS               string `json:"smtp_tls,omitempty"`
+	SMTPTimeoutSecs       int    `json:"smtp_timeout_secs,omitempty"`
 	SMTPTo                string `json:"smtp_to,omitempty"`
 	TelegramBotToken      string `json:"telegram_bot_token,omitempty"`
 	TelegramBotName       string `json:"telegram_bot_name,omitempty"`

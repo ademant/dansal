@@ -12,17 +12,17 @@ import (
 )
 
 type ContactPost struct {
-	ID               int                `json:"id"`
-	EventID          int                `json:"event_id"`
-	Type             string             `json:"type"`
-	City             string             `json:"city"`
-	Persons          int                `json:"persons"`
-	Message          string             `json:"message,omitempty"`
-	Nickname         string             `json:"nickname"`
-	TelegramUsername string             `json:"telegram_username,omitempty"`
-	EmailVerified    bool               `json:"email_verified"`
-	CreatedAt        string             `json:"created_at"`
-	Event            *ContactPostEvent  `json:"event,omitempty"`
+	ID               int               `json:"id"`
+	EventID          int               `json:"event_id"`
+	Type             string            `json:"type"`
+	City             string            `json:"city"`
+	Persons          int               `json:"persons"`
+	Message          string            `json:"message,omitempty"`
+	Nickname         string            `json:"nickname"`
+	TelegramUsername string            `json:"telegram_username,omitempty"`
+	EmailVerified    bool              `json:"email_verified"`
+	CreatedAt        string            `json:"created_at"`
+	Event            *ContactPostEvent `json:"event,omitempty"`
 }
 
 // ContactPostEvent holds the event summary included in the global contact-post listing.

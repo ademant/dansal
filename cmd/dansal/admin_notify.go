@@ -34,8 +34,8 @@ func adminTelegramSet(req adminRequest) adminResponse {
 func adminMatrixGet() adminResponse {
 	tokenSet := config.Server.MatrixAccessToken != ""
 	return adminResponse{OK: true, Data: map[string]any{
-		"homeserver":       config.Server.MatrixHomeserver,
-		"has_token": tokenSet,
+		"homeserver": config.Server.MatrixHomeserver,
+		"has_token":  tokenSet,
 	}}
 }
 

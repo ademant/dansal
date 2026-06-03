@@ -4,17 +4,16 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-
 )
 
 type CheckinData struct {
 	QRToken string
 	// result state (from redirect query params after POST)
-	Done    bool   // POST succeeded
+	Done    bool // POST succeeded
 	Name    string
 	Persons string
 	Status  string
-	Err     bool   // POST failed
+	Err     bool // POST failed
 	// session state
 	CanCheckin bool // user is logged in (auth attempt will be made on POST)
 }
@@ -61,4 +60,3 @@ func checkinPostHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		http.Redirect(w, r, "/checkin/"+qrToken+"?"+params.Encode(), http.StatusSeeOther)
 	}
 }
-

@@ -186,13 +186,13 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 	if err != nil || event.OrganizationID == nil {
 		return
 	}
-	
+
 	// Check if organization changed by looking at delivery history
 	history, err := getEventDeliveryHistory(db, eventID)
 	if err != nil {
 		log.Printf("check event history for transfer: %v", err)
 	}
-	
+
 	// Detect organization transfer
 	var oldOrgID *int
 	for _, h := range history {
@@ -204,13 +204,13 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 			}
 		}
 	}
-	
+
 	if oldOrgID != nil {
 		// Organization changed - handle transfer
 		handleEventTransfer(cfg, db, client, eventID, *oldOrgID, *event.OrganizationID)
 		return
 	}
-	
+
 	// Normal update delivery
 	actor, err := getActorByOrgID(db, *event.OrganizationID)
 	if err != nil {
@@ -322,7 +322,7 @@ func deliverTransferNotification(cfg *Config, db *sql.DB, event Event, oldOrgID,
 		log.Printf("transfer notification: failed to get old actor for org %d: %v", oldOrgID, err)
 		return
 	}
-	
+
 	newActor, err := getActorByOrgID(db, newOrgID)
 	if err != nil {
 		log.Printf("transfer notification: failed to get new actor for org %d: %v", newOrgID, err)
@@ -335,13 +335,13 @@ func deliverTransferNotification(cfg *Config, db *sql.DB, event Event, oldOrgID,
 	// Create Move activity
 	moveActivity := Activity{
 		Context: APContext,
-		Type:   "Move",
-		ID:     oldEventURL + "/activities/move-" + strconv.FormatInt(time.Now().UnixNano(), 36),
-		Actor:  actorURL(cfg, oldActor.OrgSlug),
-		Object: oldEventURL,
-		Target: newEventURL,
-		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
-		CC:     []string{actorURL(cfg, oldActor.OrgSlug) + "/followers"},
+		Type:    "Move",
+		ID:      oldEventURL + "/activities/move-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:   actorURL(cfg, oldActor.OrgSlug),
+		Object:  oldEventURL,
+		Target:  newEventURL,
+		To:      []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:      []string{actorURL(cfg, oldActor.OrgSlug) + "/followers"},
 	}
 
 	body, err := json.Marshal(moveActivity)
@@ -394,13 +394,13 @@ func deliverActorMove(cfg *Config, db *sql.DB, oldSlug, newSlug string, orgID in
 
 	moveActivity := Activity{
 		Context: APContext,
-		Type:   "Move",
-		ID:     newActorURL + "/activities/move-" + strconv.FormatInt(time.Now().UnixNano(), 36),
-		Actor:  newActorURL,
-		Object: oldActorURL,
-		Target: newActorURL,
-		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
-		CC:     []string{newActorURL + "/followers"},
+		Type:    "Move",
+		ID:      newActorURL + "/activities/move-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:   newActorURL,
+		Object:  oldActorURL,
+		Target:  newActorURL,
+		To:      []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:      []string{newActorURL + "/followers"},
 	}
 
 	body, err := json.Marshal(moveActivity)

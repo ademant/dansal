@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-
 )
 
 type Musician struct {
@@ -55,7 +54,6 @@ type MusicianCreateRequest struct {
 	Deezer       string `json:"deezer"`
 	Genre        string `json:"genre"`
 }
-
 
 const musicianCols = `id, bandname,
 	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),

@@ -252,7 +252,6 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-
 // middlewareChain applies middlewares in order so the first listed is outermost.
 func middlewareChain(h http.Handler, mws ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(mws) - 1; i >= 0; i-- {
@@ -820,35 +819,35 @@ func migrateDB() {
 	// already exists, so re-running the block on an existing instance is harmless.
 	// createTables() marks v1 applied on fresh installs, so this block is skipped.
 	if !applied(1) {
-	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
-	db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
-	db.Exec("ALTER TABLE users ADD COLUMN telegram TEXT")
-	db.Exec("ALTER TABLE users ADD COLUMN matrix TEXT")
-	db.Exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE users ADD COLUMN telegram_verified INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE users ADD COLUMN matrix_verified INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
-	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
-	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
-	db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
-	db.Exec("ALTER TABLE users ADD COLUMN disabled INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE users ADD COLUMN failed_login_since DATETIME")
-	db.Exec("ALTER TABLE tokens ADD COLUMN user_agent TEXT")
-	db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
-	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
-	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
-	db.Exec("ALTER TABLE events ADD COLUMN url TEXT")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_url ON events(url) WHERE url IS NOT NULL")
-	db.Exec("ALTER TABLE events ADD COLUMN source_last_modified INTEGER")
-	db.Exec("ALTER TABLE events ADD COLUMN is_cancelled INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
-	db.Exec("ALTER TABLE users ADD COLUMN description TEXT")
-	db.Exec("ALTER TABLE users ADD COLUMN mastodon TEXT")
-	db.Exec("ALTER TABLE users ADD COLUMN website TEXT")
-	db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
+		db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
+		db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN telegram TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN matrix TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN telegram_verified INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN matrix_verified INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
+		db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
+		db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
+		db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
+		db.Exec("ALTER TABLE users ADD COLUMN disabled INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN failed_login_since DATETIME")
+		db.Exec("ALTER TABLE tokens ADD COLUMN user_agent TEXT")
+		db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
+		db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
+		db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
+		db.Exec("ALTER TABLE events ADD COLUMN url TEXT")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_url ON events(url) WHERE url IS NOT NULL")
+		db.Exec("ALTER TABLE events ADD COLUMN source_last_modified INTEGER")
+		db.Exec("ALTER TABLE events ADD COLUMN is_cancelled INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
+		db.Exec("ALTER TABLE users ADD COLUMN description TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN mastodon TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN website TEXT")
+		db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
 		user_id INTEGER NOT NULL,
@@ -856,47 +855,47 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
-	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN has_festival INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN mbid TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN mastodon TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN instagram TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN facebook TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN soundcloud TEXT")
-	db.Exec("ALTER TABLE timetable_entries ADD COLUMN description TEXT")
-	db.Exec(`CREATE TABLE IF NOT EXISTS event_locations (
+		db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN has_festival INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN mbid TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN mastodon TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN instagram TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN facebook TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN soundcloud TEXT")
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN description TEXT")
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_locations (
 		event_id INTEGER NOT NULL,
 		location_id INTEGER NOT NULL,
 		PRIMARY KEY (event_id, location_id),
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	)`)
-	db.Exec("ALTER TABLE locations ADD COLUMN country TEXT")
-	db.Exec(`CREATE TABLE IF NOT EXISTS event_musicians (
+		db.Exec("ALTER TABLE locations ADD COLUMN country TEXT")
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_musicians (
 		event_id INTEGER NOT NULL,
 		musician_id INTEGER NOT NULL,
 		PRIMARY KEY (event_id, musician_id),
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	)`)
-	// Remove tables and columns that are no longer part of the schema.
-	db.Exec("DROP TABLE IF EXISTS posts")
-	db.Exec("DROP TABLE IF EXISTS threads")
-	db.Exec("DROP TABLE IF EXISTS bookings")
-	db.Exec("ALTER TABLE events DROP COLUMN capacity") // no-op if already absent
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL") // no-op if already present
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN dance_ids TEXT DEFAULT '[]'")                                             // no-op if already present
-	db.Exec("ALTER TABLE organizations ADD COLUMN actor_name TEXT")
-	db.Exec("ALTER TABLE organizations ADD COLUMN website TEXT")
-	db.Exec("ALTER TABLE organizations ADD COLUMN instagram TEXT")
-	db.Exec("ALTER TABLE organizations ADD COLUMN mastodon TEXT")
-	db.Exec("ALTER TABLE organizations ADD COLUMN facebook TEXT")
-	db.Exec("ALTER TABLE organizations ADD COLUMN contact_email TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN workshop_difficulty TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE events ADD COLUMN booking_url TEXT DEFAULT ''")
-	migrateUsersRoles()
-	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
+		// Remove tables and columns that are no longer part of the schema.
+		db.Exec("DROP TABLE IF EXISTS posts")
+		db.Exec("DROP TABLE IF EXISTS threads")
+		db.Exec("DROP TABLE IF EXISTS bookings")
+		db.Exec("ALTER TABLE events DROP COLUMN capacity")                                                                      // no-op if already absent
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL") // no-op if already present
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN dance_ids TEXT DEFAULT '[]'")                                             // no-op if already present
+		db.Exec("ALTER TABLE organizations ADD COLUMN actor_name TEXT")
+		db.Exec("ALTER TABLE organizations ADD COLUMN website TEXT")
+		db.Exec("ALTER TABLE organizations ADD COLUMN instagram TEXT")
+		db.Exec("ALTER TABLE organizations ADD COLUMN mastodon TEXT")
+		db.Exec("ALTER TABLE organizations ADD COLUMN facebook TEXT")
+		db.Exec("ALTER TABLE organizations ADD COLUMN contact_email TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN workshop_difficulty TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE events ADD COLUMN booking_url TEXT DEFAULT ''")
+		migrateUsersRoles()
+		db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
 		user_id INTEGER NOT NULL,
@@ -905,8 +904,8 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
-	db.Exec("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
-	db.Exec(`CREATE TABLE IF NOT EXISTS contact_posts (
+		db.Exec("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
+		db.Exec(`CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
 		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request')),
@@ -923,11 +922,11 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)")
-	db.Exec("ALTER TABLE events ADD COLUMN availability TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE events ADD COLUMN tickets_total INTEGER DEFAULT 0")
-	db.Exec("ALTER TABLE events ADD COLUMN booking_enabled INTEGER DEFAULT 0")
-	db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)")
+		db.Exec("ALTER TABLE events ADD COLUMN availability TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE events ADD COLUMN tickets_total INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE events ADD COLUMN booking_enabled INTEGER DEFAULT 0")
+		db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
 		name TEXT NOT NULL,
@@ -941,81 +940,81 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
-	db.Exec("ALTER TABLE bookings ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
-	db.Exec("ALTER TABLE musicians ADD COLUMN wikidata_id TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN country TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN begin_year INTEGER")
-	db.Exec("ALTER TABLE musicians ADD COLUMN biography TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN discogs_id TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN spotify TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN deezer TEXT")
-	db.Exec("ALTER TABLE musicians ADD COLUMN genre TEXT")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_end_time ON events(end_time)")
-	db.Exec(`CREATE TABLE IF NOT EXISTS dances (
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
+		db.Exec("ALTER TABLE bookings ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE musicians ADD COLUMN wikidata_id TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN country TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN begin_year INTEGER")
+		db.Exec("ALTER TABLE musicians ADD COLUMN biography TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN discogs_id TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN spotify TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN deezer TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN genre TEXT")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id)")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_end_time ON events(end_time)")
+		db.Exec(`CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL
 	)`)
-	db.Exec(`CREATE TABLE IF NOT EXISTS event_dances (
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_dances (
 		event_id INTEGER NOT NULL,
 		dance_id INTEGER NOT NULL,
 		PRIMARY KEY (event_id, dance_id),
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	)`)
-	db.Exec(`CREATE TABLE IF NOT EXISTS event_tags (
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_tags (
 		event_id INTEGER NOT NULL,
 		tag TEXT NOT NULL,
 		PRIMARY KEY (event_id, tag),
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
-	db.Exec(`INSERT OR IGNORE INTO event_tags (event_id, tag)
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
+		db.Exec(`INSERT OR IGNORE INTO event_tags (event_id, tag)
 		SELECT e.id, j.value FROM events e, json_each(e.tags) j WHERE j.value != ''`)
-	for _, name := range []string{"balfolk", "bretonic", "swedish", "occitan", "balkan", "israelic", "tango", "forro", "salsa", "social dance"} {
-		db.Exec("INSERT OR IGNORE INTO dances (name) VALUES (?)", name)
-	}
-	db.Exec(`CREATE TABLE IF NOT EXISTS fetch_source_dances (
+		for _, name := range []string{"balfolk", "bretonic", "swedish", "occitan", "balkan", "israelic", "tango", "forro", "salsa", "social dance"} {
+			db.Exec("INSERT OR IGNORE INTO dances (name) VALUES (?)", name)
+		}
+		db.Exec(`CREATE TABLE IF NOT EXISTS fetch_source_dances (
 		fetch_source_id INTEGER NOT NULL,
 		dance_id INTEGER NOT NULL,
 		PRIMARY KEY (fetch_source_id, dance_id),
 		FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE CASCADE,
 		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
 	)`)
-	db.Exec(`INSERT OR IGNORE INTO fetch_source_dances (fetch_source_id, dance_id)
+		db.Exec(`INSERT OR IGNORE INTO fetch_source_dances (fetch_source_id, dance_id)
 		SELECT fs.id, CAST(j.value AS INTEGER)
 		FROM fetch_sources fs, json_each(COALESCE(fs.dance_ids,'[]')) j
 		JOIN dances d ON d.id = CAST(j.value AS INTEGER)
 		WHERE fs.dance_ids IS NOT NULL AND fs.dance_ids != '[]'`)
-	migrateLocationsLatLng()
-	db.Exec("ALTER TABLE events ADD COLUMN changed_at INTEGER")
-	db.Exec("ALTER TABLE events ADD COLUMN changed_by TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE events ADD COLUMN fetch_source_id INTEGER REFERENCES fetch_sources(id) ON DELETE SET NULL")
-	db.Exec(`CREATE TABLE IF NOT EXISTS location_organizations (
+		migrateLocationsLatLng()
+		db.Exec("ALTER TABLE events ADD COLUMN changed_at INTEGER")
+		db.Exec("ALTER TABLE events ADD COLUMN changed_by TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE events ADD COLUMN fetch_source_id INTEGER REFERENCES fetch_sources(id) ON DELETE SET NULL")
+		db.Exec(`CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
 		organization_id INTEGER NOT NULL,
 		PRIMARY KEY (location_id, organization_id),
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 	)`)
-	db.Exec(`INSERT OR IGNORE INTO location_organizations (location_id, organization_id)
+		db.Exec(`INSERT OR IGNORE INTO location_organizations (location_id, organization_id)
 		SELECT id, organization_id FROM locations WHERE organization_id IS NOT NULL`)
-	// Drop stale columns now superseded by join tables. Errors are silently
-	// ignored (column already gone, or SQLite < 3.35 — neither is harmful).
-	db.Exec("ALTER TABLE locations DROP COLUMN organization_id")
-	db.Exec("ALTER TABLE fetch_sources DROP COLUMN dance_ids")
-	// Indexes missing from earlier migrations
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_org_members_user_id ON organization_members(user_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN last_result TEXT") // no-op if already present
-	db.Exec("ALTER TABLE contact_posts ADD COLUMN telegram_username TEXT")
-	db.Exec("ALTER TABLE contact_posts ADD COLUMN poster_telegram_chat_id TEXT")
-	db.Exec(`CREATE TABLE IF NOT EXISTS contact_requests (
+		// Drop stale columns now superseded by join tables. Errors are silently
+		// ignored (column already gone, or SQLite < 3.35 — neither is harmful).
+		db.Exec("ALTER TABLE locations DROP COLUMN organization_id")
+		db.Exec("ALTER TABLE fetch_sources DROP COLUMN dance_ids")
+		// Indexes missing from earlier migrations
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_org_members_user_id ON organization_members(user_id)")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id)")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN last_result TEXT") // no-op if already present
+		db.Exec("ALTER TABLE contact_posts ADD COLUMN telegram_username TEXT")
+		db.Exec("ALTER TABLE contact_posts ADD COLUMN poster_telegram_chat_id TEXT")
+		db.Exec(`CREATE TABLE IF NOT EXISTS contact_requests (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		post_id INTEGER NOT NULL,
 		sender_email TEXT NOT NULL DEFAULT '',
@@ -1026,13 +1025,13 @@ func migrateDB() {
 		expires_at INTEGER NOT NULL,
 		FOREIGN KEY (post_id) REFERENCES contact_posts(id) ON DELETE CASCADE
 	)`)
-	migrateContactPostsCheckConstraint()
-	db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)")
-	db.Exec("ALTER TABLE events ADD COLUMN suggester_email TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE events ADD COLUMN suggestion_token TEXT")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_suggestion_token ON events(suggestion_token)")
-	db.Exec(`CREATE TABLE IF NOT EXISTS pending_registrations (
+		migrateContactPostsCheckConstraint()
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)")
+		db.Exec("ALTER TABLE events ADD COLUMN suggester_email TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE events ADD COLUMN suggestion_token TEXT")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_suggestion_token ON events(suggestion_token)")
+		db.Exec(`CREATE TABLE IF NOT EXISTS pending_registrations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		verification_token TEXT UNIQUE NOT NULL,
 		approval_token     TEXT UNIQUE NOT NULL,
@@ -1054,149 +1053,149 @@ func migrateDB() {
 		expires_at         INTEGER NOT NULL,
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	)`)
-	// Drop indexes made redundant by UNIQUE constraints or composite-PK leading-column coverage.
-	db.Exec("DROP INDEX IF EXISTS idx_verification_tokens_token")
-	db.Exec("DROP INDEX IF EXISTS idx_magic_login_tokens_token")
-	db.Exec("DROP INDEX IF EXISTS idx_invite_links_token")
-	db.Exec("DROP INDEX IF EXISTS idx_contact_posts_verify_token")
-	db.Exec("DROP INDEX IF EXISTS idx_contact_requests_verify_token")
-	db.Exec("DROP INDEX IF EXISTS idx_bookings_verify_token")
-	db.Exec("DROP INDEX IF EXISTS idx_bookings_qr_token")
-	db.Exec("DROP INDEX IF EXISTS idx_event_locations_event_id")
-	db.Exec("DROP INDEX IF EXISTS idx_event_musicians_event_id")
-	db.Exec("DROP INDEX IF EXISTS idx_event_dances_event_id")
-	db.Exec("DROP INDEX IF EXISTS idx_fetch_source_dances_source_id")
-	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_verification_token")
-	db.Exec("DROP INDEX IF EXISTS idx_pending_reg_approval_token")
-	// #192: composite index for time-range queries.
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time)")
-	// #193: convert expires_at and other timestamp fields from RFC3339 text to unix epoch integer.
-	// strftime('%s', ...) understands ISO 8601 / RFC3339 format; typeof()='text' guards are
-	// idempotent — rows already stored as integers are left unchanged.
-	db.Exec("UPDATE tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE tokens SET last_seen_at = CAST(strftime('%s', last_seen_at) AS INTEGER) WHERE last_seen_at IS NOT NULL AND typeof(last_seen_at) = 'text'")
-	db.Exec("UPDATE verification_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE magic_login_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE invite_links SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE invite_links SET used_at = CAST(strftime('%s', used_at) AS INTEGER) WHERE used_at IS NOT NULL AND typeof(used_at) = 'text'")
-	db.Exec("UPDATE api_keys SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE expires_at IS NOT NULL AND typeof(expires_at) = 'text'")
-	db.Exec("UPDATE contact_posts SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE contact_requests SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE bookings SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE pending_registrations SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = CAST(strftime('%s', last_fetched_at) AS INTEGER) WHERE last_fetched_at IS NOT NULL AND typeof(last_fetched_at) = 'text'")
-	db.Exec("UPDATE users SET failed_login_since = CAST(strftime('%s', failed_login_since) AS INTEGER) WHERE failed_login_since IS NOT NULL AND typeof(failed_login_since) = 'text'")
-	db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
-	// #195: drop legacy events.tags column; event_tags join table is the source of truth.
-	db.Exec("ALTER TABLE events DROP COLUMN tags")
-	// #208: canonical tags vocabulary table.
-	db.Exec(`CREATE TABLE IF NOT EXISTS tags (
+		// Drop indexes made redundant by UNIQUE constraints or composite-PK leading-column coverage.
+		db.Exec("DROP INDEX IF EXISTS idx_verification_tokens_token")
+		db.Exec("DROP INDEX IF EXISTS idx_magic_login_tokens_token")
+		db.Exec("DROP INDEX IF EXISTS idx_invite_links_token")
+		db.Exec("DROP INDEX IF EXISTS idx_contact_posts_verify_token")
+		db.Exec("DROP INDEX IF EXISTS idx_contact_requests_verify_token")
+		db.Exec("DROP INDEX IF EXISTS idx_bookings_verify_token")
+		db.Exec("DROP INDEX IF EXISTS idx_bookings_qr_token")
+		db.Exec("DROP INDEX IF EXISTS idx_event_locations_event_id")
+		db.Exec("DROP INDEX IF EXISTS idx_event_musicians_event_id")
+		db.Exec("DROP INDEX IF EXISTS idx_event_dances_event_id")
+		db.Exec("DROP INDEX IF EXISTS idx_fetch_source_dances_source_id")
+		db.Exec("DROP INDEX IF EXISTS idx_pending_reg_verification_token")
+		db.Exec("DROP INDEX IF EXISTS idx_pending_reg_approval_token")
+		// #192: composite index for time-range queries.
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time)")
+		// #193: convert expires_at and other timestamp fields from RFC3339 text to unix epoch integer.
+		// strftime('%s', ...) understands ISO 8601 / RFC3339 format; typeof()='text' guards are
+		// idempotent — rows already stored as integers are left unchanged.
+		db.Exec("UPDATE tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE tokens SET last_seen_at = CAST(strftime('%s', last_seen_at) AS INTEGER) WHERE last_seen_at IS NOT NULL AND typeof(last_seen_at) = 'text'")
+		db.Exec("UPDATE verification_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE magic_login_tokens SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE invite_links SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE invite_links SET used_at = CAST(strftime('%s', used_at) AS INTEGER) WHERE used_at IS NOT NULL AND typeof(used_at) = 'text'")
+		db.Exec("UPDATE api_keys SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE expires_at IS NOT NULL AND typeof(expires_at) = 'text'")
+		db.Exec("UPDATE contact_posts SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE contact_requests SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE bookings SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE pending_registrations SET expires_at = CAST(strftime('%s', expires_at) AS INTEGER) WHERE typeof(expires_at) = 'text'")
+		db.Exec("UPDATE fetch_sources SET last_fetched_at = CAST(strftime('%s', last_fetched_at) AS INTEGER) WHERE last_fetched_at IS NOT NULL AND typeof(last_fetched_at) = 'text'")
+		db.Exec("UPDATE users SET failed_login_since = CAST(strftime('%s', failed_login_since) AS INTEGER) WHERE failed_login_since IS NOT NULL AND typeof(failed_login_since) = 'text'")
+		db.Exec("UPDATE users SET last_magic_sent_at = CAST(strftime('%s', last_magic_sent_at) AS INTEGER) WHERE last_magic_sent_at IS NOT NULL AND typeof(last_magic_sent_at) = 'text'")
+		// #195: drop legacy events.tags column; event_tags join table is the source of truth.
+		db.Exec("ALTER TABLE events DROP COLUMN tags")
+		// #208: canonical tags vocabulary table.
+		db.Exec(`CREATE TABLE IF NOT EXISTS tags (
 		slug     TEXT PRIMARY KEY,
 		name     TEXT NOT NULL,
 		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
 	)`)
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Bal Folk',      'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',     'Fest Noz',      'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',      'Session',       'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',      'Concert',       'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',     'Festival',      'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',     'Open Air',      'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('ball',         'Ball',          'format')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',          'Workshop',          'type')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('dance-workshop',    'Dance Workshop',    'type')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('musician-workshop', 'Musician Workshop', 'type')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course',      'Music Course',      'type')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',    'Beginners',     'level')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate', 'Intermediate',  'level')")
-	db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',     'Advanced',      'level')")
-	// #209: remap free-text event_tags rows to canonical slugs; delete the rest.
-	// OR IGNORE skips rows where the rename would duplicate an existing (event_id, slug) pair.
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'bal-folk'     WHERE lower(tag) IN ('balfolk','bal folk','bal-folk','bal folk festival')")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'fest-noz'     WHERE lower(tag) IN ('fest noz','fest-noz','festnoz','dañserlà')")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'session'      WHERE lower(tag) = 'session'")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'concert'      WHERE lower(tag) IN ('konzert','concert')")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'festival'     WHERE lower(tag) = 'festival'")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'open-air'     WHERE lower(tag) IN ('open air','open-air','open air bal folk')")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'ball'         WHERE lower(tag) = 'ball'")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'workshop'     WHERE lower(tag) IN ('workshop','tanzworkshops','workshops','lernabend/-nachmittag')")
-	db.Exec("UPDATE OR IGNORE event_tags SET tag = 'music-course' WHERE lower(tag) IN ('musikkurs','musikerkurs','instrumenten-workshops','music course')")
-	db.Exec("DELETE FROM event_tags WHERE tag NOT IN (SELECT slug FROM tags)")
-	// #196: add FK constraints on events.organization_id and fetch_source_id.
-	migrateEventsFK()
-	// #197: add CHECK constraint on invite_links.role.
-	migrateInviteLinksRole()
-	// #213: add country_code and region to locations.
-	db.Exec("ALTER TABLE locations ADD COLUMN country_code TEXT")
-	db.Exec("ALTER TABLE locations ADD COLUMN region TEXT")
-	// #215: add osm_id and osm_type to locations.
-	db.Exec("ALTER TABLE locations ADD COLUMN osm_id INTEGER")
-	db.Exec("ALTER TABLE locations ADD COLUMN osm_type TEXT")
-	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL")
-	// #221: move music-course and workshop from type→format; remove ball tag.
-	db.Exec("UPDATE tags SET category = 'format' WHERE slug IN ('music-course', 'workshop')")
-	db.Exec("DELETE FROM event_tags WHERE tag = 'ball'")
-	db.Exec("DELETE FROM tags WHERE slug = 'ball'")
-	// #214: normalize free-text country to ISO 3166-1 alpha-2.
-	for _, row := range []struct{ code, country string }{
-		{"AD", "Andorra"},
-		{"AT", "Austria"}, {"AT", "Österreich"}, {"AT", "Oesterreich"},
-		{"BE", "Belgium"}, {"BE", "Belgique"}, {"BE", "België"},
-		{"CH", "Switzerland"}, {"CH", "Schweiz"}, {"CH", "Suisse"}, {"CH", "Svizzera"},
-		{"CZ", "Czech Republic"}, {"CZ", "Czechia"}, {"CZ", "Tschechien"},
-		{"DE", "Germany"}, {"DE", "Deutschland"}, {"DE", "germany"}, {"DE", "de"},
-		{"DK", "Denmark"}, {"DK", "Dänemark"}, {"DK", "Danmark"},
-		{"ES", "Spain"}, {"ES", "España"}, {"ES", "Spanien"},
-		{"FI", "Finland"}, {"FI", "Finnland"},
-		{"FR", "France"}, {"FR", "france"}, {"FR", "fr"},
-		{"GB", "United Kingdom"}, {"GB", "UK"}, {"GB", "Great Britain"},
-		{"HR", "Croatia"}, {"HR", "Kroatien"},
-		{"HU", "Hungary"}, {"HU", "Ungarn"}, {"HU", "Magyarország"},
-		{"IE", "Ireland"}, {"IE", "Irland"},
-		{"IT", "Italy"}, {"IT", "Italien"}, {"IT", "Italia"},
-		{"LU", "Luxembourg"}, {"LU", "Luxemburg"},
-		{"NL", "Netherlands"}, {"NL", "Niederlande"}, {"NL", "Nederland"},
-		{"NO", "Norway"}, {"NO", "Norwegen"}, {"NO", "Norge"},
-		{"PL", "Poland"}, {"PL", "Polen"},
-		{"PT", "Portugal"},
-		{"RO", "Romania"}, {"RO", "Rumänien"},
-		{"SE", "Sweden"}, {"SE", "Schweden"}, {"SE", "Sverige"},
-		{"SI", "Slovenia"}, {"SI", "Slowenien"},
-		{"SK", "Slovakia"}, {"SK", "Slowakei"},
-		{"US", "United States"}, {"US", "USA"},
-	} {
-		db.Exec("UPDATE locations SET country_code = ? WHERE country_code IS NULL AND country = ?", row.code, row.country)
-	}
-	// #229: food and drink availability fields.
-	db.Exec("ALTER TABLE events ADD COLUMN food TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE events ADD COLUMN drink TEXT DEFAULT ''")
-	// #248: backfill bal-folk tag for events with has_ball=1 that lost it when ball tag was deleted.
-	db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id, 'bal-folk' FROM events WHERE has_ball = 1")
-	// #342: template integration for fetch sources.
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL")
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_mode TEXT NOT NULL DEFAULT ''")
-	// #366: per-org and per-location markdown notes.
-	db.Exec("ALTER TABLE organizations ADD COLUMN notes_md TEXT")
-	db.Exec("ALTER TABLE locations ADD COLUMN notes_md TEXT")
-	// #367-370: location accessibility flags (replaced by attributes JSON in next migration).
-	db.Exec("ALTER TABLE locations ADD COLUMN wheelchair_accessible INTEGER NOT NULL DEFAULT 0")
-	db.Exec("ALTER TABLE locations ADD COLUMN hearing_loop INTEGER NOT NULL DEFAULT 0")
-	db.Exec("ALTER TABLE locations ADD COLUMN visual_support INTEGER NOT NULL DEFAULT 0")
-	// attributes JSON replaces individual boolean columns on locations; events get overrides.
-	db.Exec("ALTER TABLE locations ADD COLUMN attributes TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN attributes TEXT")
-	db.Exec("ALTER TABLE locations DROP COLUMN wheelchair_accessible")
-	db.Exec("ALTER TABLE locations DROP COLUMN hearing_loop")
-	db.Exec("ALTER TABLE locations DROP COLUMN visual_support")
-	db.Exec("ALTER TABLE organizations ADD COLUMN contact_name TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN contact_name TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN contact_email TEXT")
-	// #377: parking space tag for locations.
-	db.Exec("ALTER TABLE locations ADD COLUMN parking TEXT")
-	// #378: floor/ground condition for locations and events.
-	db.Exec("ALTER TABLE locations ADD COLUMN floor_condition TEXT")
-	db.Exec("ALTER TABLE events ADD COLUMN floor_condition TEXT")
-	// #380: WebAuthn passkey credentials and challenge sessions.
-	db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Bal Folk',      'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',     'Fest Noz',      'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',      'Session',       'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',      'Concert',       'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',     'Festival',      'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',     'Open Air',      'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('ball',         'Ball',          'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',          'Workshop',          'type')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('dance-workshop',    'Dance Workshop',    'type')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('musician-workshop', 'Musician Workshop', 'type')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course',      'Music Course',      'type')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',    'Beginners',     'level')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate', 'Intermediate',  'level')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',     'Advanced',      'level')")
+		// #209: remap free-text event_tags rows to canonical slugs; delete the rest.
+		// OR IGNORE skips rows where the rename would duplicate an existing (event_id, slug) pair.
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'bal-folk'     WHERE lower(tag) IN ('balfolk','bal folk','bal-folk','bal folk festival')")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'fest-noz'     WHERE lower(tag) IN ('fest noz','fest-noz','festnoz','dañserlà')")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'session'      WHERE lower(tag) = 'session'")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'concert'      WHERE lower(tag) IN ('konzert','concert')")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'festival'     WHERE lower(tag) = 'festival'")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'open-air'     WHERE lower(tag) IN ('open air','open-air','open air bal folk')")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'ball'         WHERE lower(tag) = 'ball'")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'workshop'     WHERE lower(tag) IN ('workshop','tanzworkshops','workshops','lernabend/-nachmittag')")
+		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'music-course' WHERE lower(tag) IN ('musikkurs','musikerkurs','instrumenten-workshops','music course')")
+		db.Exec("DELETE FROM event_tags WHERE tag NOT IN (SELECT slug FROM tags)")
+		// #196: add FK constraints on events.organization_id and fetch_source_id.
+		migrateEventsFK()
+		// #197: add CHECK constraint on invite_links.role.
+		migrateInviteLinksRole()
+		// #213: add country_code and region to locations.
+		db.Exec("ALTER TABLE locations ADD COLUMN country_code TEXT")
+		db.Exec("ALTER TABLE locations ADD COLUMN region TEXT")
+		// #215: add osm_id and osm_type to locations.
+		db.Exec("ALTER TABLE locations ADD COLUMN osm_id INTEGER")
+		db.Exec("ALTER TABLE locations ADD COLUMN osm_type TEXT")
+		db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_osm ON locations(osm_type, osm_id) WHERE osm_id IS NOT NULL")
+		// #221: move music-course and workshop from type→format; remove ball tag.
+		db.Exec("UPDATE tags SET category = 'format' WHERE slug IN ('music-course', 'workshop')")
+		db.Exec("DELETE FROM event_tags WHERE tag = 'ball'")
+		db.Exec("DELETE FROM tags WHERE slug = 'ball'")
+		// #214: normalize free-text country to ISO 3166-1 alpha-2.
+		for _, row := range []struct{ code, country string }{
+			{"AD", "Andorra"},
+			{"AT", "Austria"}, {"AT", "Österreich"}, {"AT", "Oesterreich"},
+			{"BE", "Belgium"}, {"BE", "Belgique"}, {"BE", "België"},
+			{"CH", "Switzerland"}, {"CH", "Schweiz"}, {"CH", "Suisse"}, {"CH", "Svizzera"},
+			{"CZ", "Czech Republic"}, {"CZ", "Czechia"}, {"CZ", "Tschechien"},
+			{"DE", "Germany"}, {"DE", "Deutschland"}, {"DE", "germany"}, {"DE", "de"},
+			{"DK", "Denmark"}, {"DK", "Dänemark"}, {"DK", "Danmark"},
+			{"ES", "Spain"}, {"ES", "España"}, {"ES", "Spanien"},
+			{"FI", "Finland"}, {"FI", "Finnland"},
+			{"FR", "France"}, {"FR", "france"}, {"FR", "fr"},
+			{"GB", "United Kingdom"}, {"GB", "UK"}, {"GB", "Great Britain"},
+			{"HR", "Croatia"}, {"HR", "Kroatien"},
+			{"HU", "Hungary"}, {"HU", "Ungarn"}, {"HU", "Magyarország"},
+			{"IE", "Ireland"}, {"IE", "Irland"},
+			{"IT", "Italy"}, {"IT", "Italien"}, {"IT", "Italia"},
+			{"LU", "Luxembourg"}, {"LU", "Luxemburg"},
+			{"NL", "Netherlands"}, {"NL", "Niederlande"}, {"NL", "Nederland"},
+			{"NO", "Norway"}, {"NO", "Norwegen"}, {"NO", "Norge"},
+			{"PL", "Poland"}, {"PL", "Polen"},
+			{"PT", "Portugal"},
+			{"RO", "Romania"}, {"RO", "Rumänien"},
+			{"SE", "Sweden"}, {"SE", "Schweden"}, {"SE", "Sverige"},
+			{"SI", "Slovenia"}, {"SI", "Slowenien"},
+			{"SK", "Slovakia"}, {"SK", "Slowakei"},
+			{"US", "United States"}, {"US", "USA"},
+		} {
+			db.Exec("UPDATE locations SET country_code = ? WHERE country_code IS NULL AND country = ?", row.code, row.country)
+		}
+		// #229: food and drink availability fields.
+		db.Exec("ALTER TABLE events ADD COLUMN food TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE events ADD COLUMN drink TEXT DEFAULT ''")
+		// #248: backfill bal-folk tag for events with has_ball=1 that lost it when ball tag was deleted.
+		db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id, 'bal-folk' FROM events WHERE has_ball = 1")
+		// #342: template integration for fetch sources.
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_id INTEGER REFERENCES event_templates(id) ON DELETE SET NULL")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_mode TEXT NOT NULL DEFAULT ''")
+		// #366: per-org and per-location markdown notes.
+		db.Exec("ALTER TABLE organizations ADD COLUMN notes_md TEXT")
+		db.Exec("ALTER TABLE locations ADD COLUMN notes_md TEXT")
+		// #367-370: location accessibility flags (replaced by attributes JSON in next migration).
+		db.Exec("ALTER TABLE locations ADD COLUMN wheelchair_accessible INTEGER NOT NULL DEFAULT 0")
+		db.Exec("ALTER TABLE locations ADD COLUMN hearing_loop INTEGER NOT NULL DEFAULT 0")
+		db.Exec("ALTER TABLE locations ADD COLUMN visual_support INTEGER NOT NULL DEFAULT 0")
+		// attributes JSON replaces individual boolean columns on locations; events get overrides.
+		db.Exec("ALTER TABLE locations ADD COLUMN attributes TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN attributes TEXT")
+		db.Exec("ALTER TABLE locations DROP COLUMN wheelchair_accessible")
+		db.Exec("ALTER TABLE locations DROP COLUMN hearing_loop")
+		db.Exec("ALTER TABLE locations DROP COLUMN visual_support")
+		db.Exec("ALTER TABLE organizations ADD COLUMN contact_name TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN contact_name TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN contact_email TEXT")
+		// #377: parking space tag for locations.
+		db.Exec("ALTER TABLE locations ADD COLUMN parking TEXT")
+		// #378: floor/ground condition for locations and events.
+		db.Exec("ALTER TABLE locations ADD COLUMN floor_condition TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN floor_condition TEXT")
+		// #380: WebAuthn passkey credentials and challenge sessions.
+		db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		credential_id BLOB NOT NULL UNIQUE,
@@ -1206,53 +1205,53 @@ func migrateDB() {
 		name TEXT NOT NULL DEFAULT 'Passkey',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
-	db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_sessions (
+		db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_sessions (
 		id TEXT PRIMARY KEY,
 		data TEXT NOT NULL,
 		expires_at INTEGER NOT NULL
 	)`)
-	// #385: user_id on contact_posts for logged-in poster association.
-	db.Exec("ALTER TABLE contact_posts ADD COLUMN user_id INTEGER REFERENCES users(id)")
-	// #386: replace verify_token + delete_token with a single manage_token.
-	db.Exec("ALTER TABLE contact_posts ADD COLUMN manage_token TEXT")
-	db.Exec("UPDATE contact_posts SET manage_token = COALESCE(delete_token, lower(hex(randomblob(16)))) WHERE manage_token IS NULL")
-	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_posts_manage_token ON contact_posts(manage_token)")
-	db.Exec("ALTER TABLE contact_posts DROP COLUMN verify_token")
-	db.Exec("ALTER TABLE contact_posts DROP COLUMN delete_token")
-	// #391: add lost_item / found_item post types; rebuild CHECK constraint if needed.
-	migrateContactPostsLostFound()
-	// #392: preset username/email on invite_links for registration-via-invite flow.
-	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_username TEXT")
-	db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
-	// pending_registrations.description — motivation text shown to admin during approval.
-	db.Exec("ALTER TABLE pending_registrations ADD COLUMN description TEXT DEFAULT ''")
-	// Drop password_hash — no longer stored at registration time; credential setup
-	// happens via the invite link after admin approval.
-	db.Exec("ALTER TABLE pending_registrations DROP COLUMN password_hash")
-	// #393: replace username with email identity + display_name.
-	migrateUsersDropUsername()
-	db.Exec("ALTER TABLE invite_links DROP COLUMN preset_username")
-	db.Exec("ALTER TABLE pending_registrations DROP COLUMN username")
-	// #394: changed_by_id FK on events.
-	db.Exec("ALTER TABLE events ADD COLUMN changed_by_id INTEGER REFERENCES users(id)")
-	db.Exec("UPDATE events SET changed_by_id = (SELECT id FROM users WHERE username = events.changed_by) WHERE changed_by IS NOT NULL AND changed_by != '' AND changed_by != 'fetch'")
-	// Store authenticator flags (BackupEligible/BackupState) so FinishLogin can verify flag consistency.
-	db.Exec("ALTER TABLE webauthn_credentials ADD COLUMN flags INTEGER NOT NULL DEFAULT 0")
-	// #395: email Message-ID for bounce correlation; delivery_failed flag on verification tokens.
-	db.Exec("ALTER TABLE verification_tokens ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
-	db.Exec("ALTER TABLE verification_tokens ADD COLUMN delivery_failed INTEGER NOT NULL DEFAULT 0")
-	db.Exec("ALTER TABLE pending_registrations ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
-	// #398: created_by_id tracks which user created an event or musician.
-	db.Exec("ALTER TABLE events ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
-	db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
-	// #342 fix: remove the FK on fetch_sources.template_id that pointed to
-	// event_templates — that table lives in web.db, not calendar.db, so the FK
-	// breaks every INSERT into fetch_sources when foreign_keys=ON.
-	migrateFetchSourcesDropTemplatesFK()
-	// #419: store template JSON directly in fetch_sources so the importer can
-	// apply it without querying event_templates (which is in web.db, not calendar.db).
-	db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_data TEXT")
-	mark(1)
+		// #385: user_id on contact_posts for logged-in poster association.
+		db.Exec("ALTER TABLE contact_posts ADD COLUMN user_id INTEGER REFERENCES users(id)")
+		// #386: replace verify_token + delete_token with a single manage_token.
+		db.Exec("ALTER TABLE contact_posts ADD COLUMN manage_token TEXT")
+		db.Exec("UPDATE contact_posts SET manage_token = COALESCE(delete_token, lower(hex(randomblob(16)))) WHERE manage_token IS NULL")
+		db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_posts_manage_token ON contact_posts(manage_token)")
+		db.Exec("ALTER TABLE contact_posts DROP COLUMN verify_token")
+		db.Exec("ALTER TABLE contact_posts DROP COLUMN delete_token")
+		// #391: add lost_item / found_item post types; rebuild CHECK constraint if needed.
+		migrateContactPostsLostFound()
+		// #392: preset username/email on invite_links for registration-via-invite flow.
+		db.Exec("ALTER TABLE invite_links ADD COLUMN preset_username TEXT")
+		db.Exec("ALTER TABLE invite_links ADD COLUMN preset_email TEXT")
+		// pending_registrations.description — motivation text shown to admin during approval.
+		db.Exec("ALTER TABLE pending_registrations ADD COLUMN description TEXT DEFAULT ''")
+		// Drop password_hash — no longer stored at registration time; credential setup
+		// happens via the invite link after admin approval.
+		db.Exec("ALTER TABLE pending_registrations DROP COLUMN password_hash")
+		// #393: replace username with email identity + display_name.
+		migrateUsersDropUsername()
+		db.Exec("ALTER TABLE invite_links DROP COLUMN preset_username")
+		db.Exec("ALTER TABLE pending_registrations DROP COLUMN username")
+		// #394: changed_by_id FK on events.
+		db.Exec("ALTER TABLE events ADD COLUMN changed_by_id INTEGER REFERENCES users(id)")
+		db.Exec("UPDATE events SET changed_by_id = (SELECT id FROM users WHERE username = events.changed_by) WHERE changed_by IS NOT NULL AND changed_by != '' AND changed_by != 'fetch'")
+		// Store authenticator flags (BackupEligible/BackupState) so FinishLogin can verify flag consistency.
+		db.Exec("ALTER TABLE webauthn_credentials ADD COLUMN flags INTEGER NOT NULL DEFAULT 0")
+		// #395: email Message-ID for bounce correlation; delivery_failed flag on verification tokens.
+		db.Exec("ALTER TABLE verification_tokens ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE verification_tokens ADD COLUMN delivery_failed INTEGER NOT NULL DEFAULT 0")
+		db.Exec("ALTER TABLE pending_registrations ADD COLUMN message_id TEXT NOT NULL DEFAULT ''")
+		// #398: created_by_id tracks which user created an event or musician.
+		db.Exec("ALTER TABLE events ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+		db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+		// #342 fix: remove the FK on fetch_sources.template_id that pointed to
+		// event_templates — that table lives in web.db, not calendar.db, so the FK
+		// breaks every INSERT into fetch_sources when foreign_keys=ON.
+		migrateFetchSourcesDropTemplatesFK()
+		// #419: store template JSON directly in fetch_sources so the importer can
+		// apply it without querying event_templates (which is in web.db, not calendar.db).
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN template_data TEXT")
+		mark(1)
 	} // end v1
 
 	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")

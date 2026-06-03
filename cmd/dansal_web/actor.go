@@ -80,8 +80,8 @@ var (
 		"Ý", "y", "ý", "y", "ÿ", "y",
 		"'", "", "’", "", // apostrophes (e.g. Breton c'h)
 	)
-	slugRe      = regexp.MustCompile(`[^a-z0-9\-]`)
-	slugDashRe  = regexp.MustCompile(`-{2,}`)
+	slugRe     = regexp.MustCompile(`[^a-z0-9\-]`)
+	slugDashRe = regexp.MustCompile(`-{2,}`)
 )
 
 // effectiveSlug returns the AP actor slug for an org: actor_name if set, else name-derived.
@@ -1032,9 +1032,9 @@ func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox
 		ID:      base + "/activities/undo-" + strconv.FormatInt(time.Now().UnixNano(), 36),
 		Actor:   base,
 		Object: Activity{
-			Type:  "Follow",
-			ID:    followActivityID,
-			Actor: base,
+			Type:   "Follow",
+			ID:     followActivityID,
+			Actor:  base,
 			Object: followeeAPID,
 		},
 	}

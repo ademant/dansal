@@ -111,9 +111,9 @@ func regenerateCRL(dir string, caCert *x509.Certificate, caKey *rsa.PrivateKey, 
 	}
 	now := time.Now()
 	tpl := &x509.RevocationList{
-		Number:              big.NewInt(now.Unix()),
-		ThisUpdate:          now,
-		NextUpdate:          now.Add(365 * 24 * time.Hour),
+		Number:                    big.NewInt(now.Unix()),
+		ThisUpdate:                now,
+		NextUpdate:                now.Add(365 * 24 * time.Hour),
 		RevokedCertificateEntries: entries,
 	}
 	der, err := x509.CreateRevocationList(rand.Reader, tpl, caCert, caKey)
@@ -224,9 +224,9 @@ func cmdMTLSIssue(args []string) {
 			CommonName:   *email,
 			Organization: []string{"dansal"},
 		},
-		NotBefore: now,
-		NotAfter:  now.Add(time.Duration(*days) * 24 * time.Hour),
-		KeyUsage:  x509.KeyUsageDigitalSignature,
+		NotBefore:   now,
+		NotAfter:    now.Add(time.Duration(*days) * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, tpl, caCert, &clientKey.PublicKey, caKey)

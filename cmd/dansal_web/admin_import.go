@@ -12,9 +12,9 @@ import (
 )
 
 type FeedLocation struct {
-	Idx             int
-	Name            string // original location.location from the feed
-	Display         string // "Name, Town Country" for the UI
+	Idx              int
+	Name             string // original location.location from the feed
+	Display          string // "Name, Town Country" for the UI
 	MatchedDBLocID   int    // non-zero when a DB location with the same name exists
 	MatchedDBLocName string // display name of the matched DB location
 }
@@ -53,8 +53,8 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		renderErr := func(msg, feedURL, feedType string) {
 			title := i18n.T(r, "admin_import_title")
 			renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
-				Error:   msg,
-				FeedURL: feedURL,
+				Error:    msg,
+				FeedURL:  feedURL,
 				FeedType: feedType,
 			}))
 		}

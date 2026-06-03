@@ -9,30 +9,29 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
 )
 
 type Location struct {
-	ID              int      `json:"id"`
-	Location        string   `json:"location"`
-	ShortName       string   `json:"short_name,omitempty"`
-	Address         string   `json:"address"`
-	Zipcode         string   `json:"zipcode"`
-	Town            string   `json:"town"`
-	Country         string   `json:"country,omitempty"`
-	CountryCode     string   `json:"country_code,omitempty"`
-	Region          string   `json:"region,omitempty"`
-	Latitude        *float64 `json:"latitude,omitempty"`
-	Longitude       *float64 `json:"longitude,omitempty"`
-	Internetsite    string   `json:"internetsite"`
-	OsmID                *int64   `json:"osm_id,omitempty"`
-	OsmType              string   `json:"osm_type,omitempty"`
-	CreatedAt            string   `json:"created_at"`
-	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd        string          `json:"notes_md,omitempty"`
-	Attributes     map[string]bool `json:"attributes,omitempty"`
-	Parking        string          `json:"parking,omitempty"`
-	FloorCondition string          `json:"floor_condition,omitempty"`
+	ID              int             `json:"id"`
+	Location        string          `json:"location"`
+	ShortName       string          `json:"short_name,omitempty"`
+	Address         string          `json:"address"`
+	Zipcode         string          `json:"zipcode"`
+	Town            string          `json:"town"`
+	Country         string          `json:"country,omitempty"`
+	CountryCode     string          `json:"country_code,omitempty"`
+	Region          string          `json:"region,omitempty"`
+	Latitude        *float64        `json:"latitude,omitempty"`
+	Longitude       *float64        `json:"longitude,omitempty"`
+	Internetsite    string          `json:"internetsite"`
+	OsmID           *int64          `json:"osm_id,omitempty"`
+	OsmType         string          `json:"osm_type,omitempty"`
+	CreatedAt       string          `json:"created_at"`
+	OrganizationIDs []int           `json:"organization_ids,omitempty"`
+	NotesMd         string          `json:"notes_md,omitempty"`
+	Attributes      map[string]bool `json:"attributes,omitempty"`
+	Parking         string          `json:"parking,omitempty"`
+	FloorCondition  string          `json:"floor_condition,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -51,24 +50,24 @@ func validCountryCode(code string) bool {
 }
 
 type LocationCreateRequest struct {
-	Location        string   `json:"location"`
-	ShortName       string   `json:"short_name"`
-	Address         string   `json:"address"`
-	Zipcode         string   `json:"zipcode"`
-	Town            string   `json:"town"`
-	Country         string   `json:"country"`
-	CountryCode     string   `json:"country_code"`
-	Region          string   `json:"region"`
-	Latitude        *float64 `json:"latitude,omitempty"`
-	Longitude       *float64 `json:"longitude,omitempty"`
-	Internetsite         string   `json:"internetsite"`
-	OsmID                *int64   `json:"osm_id,omitempty"`
-	OsmType              string   `json:"osm_type,omitempty"`
-	OrganizationIDs      []int    `json:"organization_ids,omitempty"`
-	NotesMd        string          `json:"notes_md"`
-	Attributes     map[string]bool `json:"attributes,omitempty"`
-	Parking        string          `json:"parking,omitempty"`
-	FloorCondition string          `json:"floor_condition,omitempty"`
+	Location        string          `json:"location"`
+	ShortName       string          `json:"short_name"`
+	Address         string          `json:"address"`
+	Zipcode         string          `json:"zipcode"`
+	Town            string          `json:"town"`
+	Country         string          `json:"country"`
+	CountryCode     string          `json:"country_code"`
+	Region          string          `json:"region"`
+	Latitude        *float64        `json:"latitude,omitempty"`
+	Longitude       *float64        `json:"longitude,omitempty"`
+	Internetsite    string          `json:"internetsite"`
+	OsmID           *int64          `json:"osm_id,omitempty"`
+	OsmType         string          `json:"osm_type,omitempty"`
+	OrganizationIDs []int           `json:"organization_ids,omitempty"`
+	NotesMd         string          `json:"notes_md"`
+	Attributes      map[string]bool `json:"attributes,omitempty"`
+	Parking         string          `json:"parking,omitempty"`
+	FloorCondition  string          `json:"floor_condition,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -203,15 +202,15 @@ func similarLocations(name, street, town string) []Location {
 }
 
 type LocationUpdateRequest struct {
-	ShortName            string   `json:"short_name"`
-	Address              string   `json:"address"`
-	Zipcode              string   `json:"zipcode"`
-	Town                 string   `json:"town"`
-	Country              string   `json:"country"`
-	CountryCode          string   `json:"country_code"`
-	Region               string   `json:"region"`
-	Latitude             *float64 `json:"latitude,omitempty"`
-	Longitude            *float64 `json:"longitude,omitempty"`
+	ShortName      string          `json:"short_name"`
+	Address        string          `json:"address"`
+	Zipcode        string          `json:"zipcode"`
+	Town           string          `json:"town"`
+	Country        string          `json:"country"`
+	CountryCode    string          `json:"country_code"`
+	Region         string          `json:"region"`
+	Latitude       *float64        `json:"latitude,omitempty"`
+	Longitude      *float64        `json:"longitude,omitempty"`
 	Internetsite   string          `json:"internetsite"`
 	NotesMd        string          `json:"notes_md"`
 	Attributes     map[string]bool `json:"attributes,omitempty"`
@@ -371,14 +370,14 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			Region:          req.Region,
 			Latitude:        req.Latitude,
 			Longitude:       req.Longitude,
-			Internetsite:         req.Internetsite,
-			OsmID:                req.OsmID,
-			OsmType:              req.OsmType,
-			OrganizationIDs:      req.OrganizationIDs,
-			NotesMd:        req.NotesMd,
-			Attributes:     req.Attributes,
-			Parking:        req.Parking,
-			FloorCondition: req.FloorCondition,
+			Internetsite:    req.Internetsite,
+			OsmID:           req.OsmID,
+			OsmType:         req.OsmType,
+			OrganizationIDs: req.OrganizationIDs,
+			NotesMd:         req.NotesMd,
+			Attributes:      req.Attributes,
+			Parking:         req.Parking,
+			FloorCondition:  req.FloorCondition,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -435,24 +434,24 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Location             string   `json:"location"`
-		ShortName            string   `json:"short_name"`
-		Address              string   `json:"address"`
-		Zipcode              string   `json:"zipcode"`
-		Town                 string   `json:"town"`
-		Country              string   `json:"country"`
-		CountryCode          string   `json:"country_code"`
-		Region               string   `json:"region"`
-		Latitude             *float64 `json:"latitude"`
-		Longitude            *float64 `json:"longitude"`
-		Internetsite         string   `json:"internetsite"`
-		OsmID                *int64   `json:"osm_id"`
-		OsmType              string   `json:"osm_type"`
-		OrganizationIDs      []int    `json:"organization_ids"`
-		NotesMd        string          `json:"notes_md"`
-		Attributes     map[string]bool `json:"attributes,omitempty"`
-		Parking        string          `json:"parking,omitempty"`
-		FloorCondition string          `json:"floor_condition,omitempty"`
+		Location        string          `json:"location"`
+		ShortName       string          `json:"short_name"`
+		Address         string          `json:"address"`
+		Zipcode         string          `json:"zipcode"`
+		Town            string          `json:"town"`
+		Country         string          `json:"country"`
+		CountryCode     string          `json:"country_code"`
+		Region          string          `json:"region"`
+		Latitude        *float64        `json:"latitude"`
+		Longitude       *float64        `json:"longitude"`
+		Internetsite    string          `json:"internetsite"`
+		OsmID           *int64          `json:"osm_id"`
+		OsmType         string          `json:"osm_type"`
+		OrganizationIDs []int           `json:"organization_ids"`
+		NotesMd         string          `json:"notes_md"`
+		Attributes      map[string]bool `json:"attributes,omitempty"`
+		Parking         string          `json:"parking,omitempty"`
+		FloorCondition  string          `json:"floor_condition,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)

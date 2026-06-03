@@ -131,4 +131,3 @@ func probeMatrix() ChannelStatus {
 	}
 	return ChannelStatus{Configured: true, OK: true, LastChecked: time.Now()}
 }
-

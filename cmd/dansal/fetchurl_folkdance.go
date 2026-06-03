@@ -14,9 +14,9 @@ type folkdanceEvent struct {
 	Name         string   `json:"name"`
 	Links        []string `json:"links"`
 	Start        string   `json:"start"`      // RFC3339 with offset, e.g. "2026-05-13T20:00:00+02:00"
-	End          string   `json:"end"`         // RFC3339, optional
-	StartDate    string   `json:"start_date"`  // date-only fallback, e.g. "2026-05-22"
-	EndDate      string   `json:"end_date"`    // date-only fallback
+	End          string   `json:"end"`        // RFC3339, optional
+	StartDate    string   `json:"start_date"` // date-only fallback, e.g. "2026-05-22"
+	EndDate      string   `json:"end_date"`   // date-only fallback
 	Country      string   `json:"country"`
 	City         string   `json:"city"`
 	State        string   `json:"state"` // AU/US region

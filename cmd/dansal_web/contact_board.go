@@ -180,12 +180,12 @@ func contactBoardDeleteRedirect(w http.ResponseWriter, r *http.Request) {
 
 // ContactManageData is passed to the contact_manage template.
 type ContactManageData struct {
-	Token        string
-	Post         ContactManageResult
-	FormToken    string
-	Updated      bool
-	Deleted      bool
-	NotFound     bool
+	Token     string
+	Post      ContactManageResult
+	FormToken string
+	Updated   bool
+	Deleted   bool
+	NotFound  bool
 }
 
 // GET /contact-posts/manage/{token}

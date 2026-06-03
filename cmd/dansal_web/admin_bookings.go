@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"strconv"
-
 )
 
 // userCanManageEvent returns true if su is admin or an org member of the event's organisation.

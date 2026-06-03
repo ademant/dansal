@@ -96,12 +96,12 @@ CREATE TABLE IF NOT EXISTS delivery_failures (
 	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
 	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
-	
+
 	// Idempotent additions for delivered transfer/update tracking columns
 	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_to INTEGER")
 	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
 	db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
-	
+
 	return db
 }
 
@@ -307,7 +307,7 @@ func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var history []struct {
 		OrgID         int
 		DeliveredAt   string
@@ -315,7 +315,7 @@ func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
 		TransferredAt *string
 		IsUpdate      bool
 	}
-	
+
 	for rows.Next() {
 		var h struct {
 			OrgID         int
@@ -326,11 +326,11 @@ func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
 		}
 		var transferredTo sql.NullInt64
 		var transferredAt sql.NullString
-		
+
 		if err := rows.Scan(&h.OrgID, &h.DeliveredAt, &transferredTo, &transferredAt, &h.IsUpdate); err != nil {
 			return nil, err
 		}
-		
+
 		if transferredTo.Valid {
 			val := int(transferredTo.Int64)
 			h.TransferredTo = &val
@@ -338,10 +338,10 @@ func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
 		if transferredAt.Valid {
 			h.TransferredAt = &transferredAt.String
 		}
-		
+
 		history = append(history, h)
 	}
-	
+
 	return history, nil
 }
 
@@ -451,7 +451,6 @@ func setSiteSetting(db *sql.DB, key, value string) error {
 	)
 	return err
 }
-
 
 type FederatedEvent struct {
 	ID           int64

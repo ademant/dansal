@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 type Booking struct {
@@ -257,8 +256,8 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":    "confirmed",
-		"qr_token":  qrToken,
+		"status":      "confirmed",
+		"qr_token":    qrToken,
 		"checkin_url": checkinURL,
 	})
 }

@@ -35,15 +35,15 @@ func (s *gancioStringOrSlice) UnmarshalJSON(b []byte) error {
 }
 
 type gancioEvent struct {
-	ID              int64                `json:"id"`
-	Title           string               `json:"title"`
-	Slug            string               `json:"slug"`
-	StartDatetime   int64                `json:"start_datetime"`
-	EndDatetime     int64                `json:"end_datetime"`
-	Tags            []string             `json:"tags"`
-	OnlineLocations gancioStringOrSlice  `json:"online_locations"`
-	MultiDate       bool                 `json:"multidate"`
-	ParentID        *int64               `json:"parentId"`
+	ID              int64               `json:"id"`
+	Title           string              `json:"title"`
+	Slug            string              `json:"slug"`
+	StartDatetime   int64               `json:"start_datetime"`
+	EndDatetime     int64               `json:"end_datetime"`
+	Tags            []string            `json:"tags"`
+	OnlineLocations gancioStringOrSlice `json:"online_locations"`
+	MultiDate       bool                `json:"multidate"`
+	ParentID        *int64              `json:"parentId"`
 	Place           struct {
 		ID        int64    `json:"id"`
 		Name      string   `json:"name"`

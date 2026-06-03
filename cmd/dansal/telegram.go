@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 // sendTelegramMessage sends a plain-text message to a Telegram chat.

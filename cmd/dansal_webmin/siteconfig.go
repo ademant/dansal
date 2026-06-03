@@ -150,19 +150,19 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 }
 
 type siteConfigData struct {
-	Flash          string
-	SiteName       string
-	Contact        string
-	HasLogo        bool
-	HasBanner      bool
-	HasFavicon     bool
-	Dances         []dance
+	Flash           string
+	SiteName        string
+	Contact         string
+	HasLogo         bool
+	HasBanner       bool
+	HasFavicon      bool
+	Dances          []dance
 	DefaultDanceIDs map[int]bool
-	ImpressumTexts map[string]string
-	ImpressumLangs []string
-	HolidayCountry string
-	NoDB           bool
-	NoImagesDir    bool
+	ImpressumTexts  map[string]string
+	ImpressumLangs  []string
+	HolidayCountry  string
+	NoDB            bool
+	NoImagesDir     bool
 }
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {

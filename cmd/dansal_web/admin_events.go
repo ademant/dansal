@@ -27,16 +27,16 @@ type AdminEventsData struct {
 	AllTags            []Tag
 	UserOrgs           []Organization
 	FilterIncludePast  bool
-	FilterOrgID        int    // -1 = no org assigned
+	FilterOrgID        int // -1 = no org assigned
 	FilterLocationID   int
 	FilterDateFrom     string
 	FilterDateTo       string
 	FilterMusicianID   int
 	FilterType         string // "ball", "workshop", "festival"
 	FilterDance        string
-	FilterCreatedAfter  string
-	FilterSource        string
-	FilterUnpublished   bool
+	FilterCreatedAfter string
+	FilterSource       string
+	FilterUnpublished  bool
 }
 
 type EventPrefill struct {
@@ -453,19 +453,39 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			if err != nil {
 				continue
 			}
-			if base.Description == ""        { base.Description = ev.Description }
-			if base.URL == ""                { base.URL = ev.URL }
-			if base.BookingURL == ""         { base.BookingURL = ev.BookingURL }
-			if base.Availability == ""       { base.Availability = ev.Availability }
-			if base.Pricing == nil           { base.Pricing = ev.Pricing }
-			if base.Food == ""               { base.Food = ev.Food }
-			if base.Drink == ""              { base.Drink = ev.Drink }
-			if base.WorkshopDifficulty == "" { base.WorkshopDifficulty = ev.WorkshopDifficulty }
-			base.HasBall     = base.HasBall     || ev.HasBall
+			if base.Description == "" {
+				base.Description = ev.Description
+			}
+			if base.URL == "" {
+				base.URL = ev.URL
+			}
+			if base.BookingURL == "" {
+				base.BookingURL = ev.BookingURL
+			}
+			if base.Availability == "" {
+				base.Availability = ev.Availability
+			}
+			if base.Pricing == nil {
+				base.Pricing = ev.Pricing
+			}
+			if base.Food == "" {
+				base.Food = ev.Food
+			}
+			if base.Drink == "" {
+				base.Drink = ev.Drink
+			}
+			if base.WorkshopDifficulty == "" {
+				base.WorkshopDifficulty = ev.WorkshopDifficulty
+			}
+			base.HasBall = base.HasBall || ev.HasBall
 			base.HasWorkshop = base.HasWorkshop || ev.HasWorkshop
 			base.HasFestival = base.HasFestival || ev.HasFestival
-			for _, t := range ev.Tags      { tagSet[t] = true }
-			for _, m := range ev.Musicians { musicianSet[m.ID] = true }
+			for _, t := range ev.Tags {
+				tagSet[t] = true
+			}
+			for _, m := range ev.Musicians {
+				musicianSet[m.ID] = true
+			}
 		}
 
 		tags := make([]string, 0, len(tagSet))
@@ -589,11 +609,26 @@ func prefillFromEvent(ev Event) *EventPrefill {
 		WorkshopDifficulty: ev.WorkshopDifficulty,
 		StartTime:          isoTimeStr(ev.StartTime),
 		EndTime:            isoTimeStr(ev.EndTime),
-		Location:           func() string { if ev.Location != nil { return ev.Location.Location }; return "" }(),
-		Town:               func() string { if ev.Location != nil { return ev.Location.Town }; return "" }(),
-		Country:            func() string { if ev.Location != nil { return ev.Location.Country }; return "" }(),
-		Tags:               ev.Tags,
-		OriginalDate:       isoDateStr(ev.StartTime),
+		Location: func() string {
+			if ev.Location != nil {
+				return ev.Location.Location
+			}
+			return ""
+		}(),
+		Town: func() string {
+			if ev.Location != nil {
+				return ev.Location.Town
+			}
+			return ""
+		}(),
+		Country: func() string {
+			if ev.Location != nil {
+				return ev.Location.Country
+			}
+			return ""
+		}(),
+		Tags:         ev.Tags,
+		OriginalDate: isoDateStr(ev.StartTime),
 	}
 	if ev.OrganizationID != nil {
 		pf.OrgID = *ev.OrganizationID
@@ -889,9 +924,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterMusicianID:   musicianID,
 			FilterType:         filterType,
 			FilterDance:        filterDance,
-			FilterCreatedAfter:  createdAfter,
-			FilterSource:        filterSource,
-			FilterUnpublished:   filterUnpublished,
+			FilterCreatedAfter: createdAfter,
+			FilterSource:       filterSource,
+			FilterUnpublished:  filterUnpublished,
 		}))
 	}
 }
@@ -1245,9 +1280,9 @@ type AdminEventEditData struct {
 	Event              Event
 	Org                *Organization
 	Organizations      []Organization
-	Locations          []Location   // all locations (used for timetable rows)
-	LocOrgFirst        []Location   // location dropdown: same-org locations first
-	LocOthers          []Location   // location dropdown: remaining locations
+	Locations          []Location // all locations (used for timetable rows)
+	LocOrgFirst        []Location // location dropdown: same-org locations first
+	LocOthers          []Location // location dropdown: remaining locations
 	Musicians          []Musician
 	Dances             []Dance
 	GroupedTags        []TagGroup

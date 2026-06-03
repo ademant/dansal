@@ -42,7 +42,7 @@ type channelStatus struct {
 }
 
 type heartbeatConfig struct {
-	IntervalMins int          `json:"interval_mins"`
+	IntervalMins int           `json:"interval_mins"`
 	Email        channelStatus `json:"email"`
 	Telegram     channelStatus `json:"telegram"`
 	Matrix       channelStatus `json:"matrix"`
@@ -166,9 +166,9 @@ func loadNotificationsData(socketPath string) notificationsData {
 	} else {
 		d.Heartbeat = &hb
 	}
-	d.SMTPStatus      = smtpNotifStatus(d.SMTP)
-	d.TelegramStatus  = telegramNotifStatus(d.Telegram)
-	d.MatrixStatus    = matrixNotifStatus(d.Matrix)
+	d.SMTPStatus = smtpNotifStatus(d.SMTP)
+	d.TelegramStatus = telegramNotifStatus(d.Telegram)
+	d.MatrixStatus = matrixNotifStatus(d.Matrix)
 	d.HeartbeatStatus = heartbeatNotifStatus(d.Heartbeat)
 	return d
 }

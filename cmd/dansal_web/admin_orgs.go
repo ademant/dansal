@@ -48,15 +48,15 @@ type AdminOrgsData struct {
 }
 
 type AdminOrgEditData struct {
-	Org                 Organization
-	ErrorKey            string
-	Follows             []FollowRecord
-	FollowErr           string
-	Members             []OrgMember
-	AssignedLocations   []Location
-	UnassignedLocations []Location
+	Org                   Organization
+	ErrorKey              string
+	Follows               []FollowRecord
+	FollowErr             string
+	Members               []OrgMember
+	AssignedLocations     []Location
+	UnassignedLocations   []Location
 	HasActorWithFollowers bool // True if organization has an actor that has followers
-	IsAdmin             bool
+	IsAdmin               bool
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

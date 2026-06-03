@@ -448,7 +448,11 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	callerID, callerRole := callerFromRequest(r)
 
-	var rows interface{ Next() bool; Scan(...any) error; Close() error }
+	var rows interface {
+		Next() bool
+		Scan(...any) error
+		Close() error
+	}
 	var err error
 	if callerRole == RoleAdmin {
 		rows, err = db.Query(
@@ -509,14 +513,14 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var pr struct {
-		ID                  int
-		Email               string
-		RegType             string
-		OrgID               sql.NullInt64
-		UserID              sql.NullInt64
+		ID                                                                 int
+		Email                                                              string
+		RegType                                                            string
+		OrgID                                                              sql.NullInt64
+		UserID                                                             sql.NullInt64
 		OrgName, OrgActorName, OrgDescription, OrgWebsite, OrgContactEmail string
-		VerificationChannel, Telegram, TelegramChatID string
-		Verified            int
+		VerificationChannel, Telegram, TelegramChatID                      string
+		Verified                                                           int
 	}
 	err = db.QueryRow(
 		`SELECT id, COALESCE(email,''), reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
@@ -834,9 +838,9 @@ func processExpiredRegistrations() {
 		return
 	}
 	type expReg struct {
-		id, verified int
+		id, verified          int
 		email, telegramChatID string
-		userID       sql.NullInt64
+		userID                sql.NullInt64
 	}
 	var expired []expReg
 	for rows.Next() {

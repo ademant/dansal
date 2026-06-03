@@ -43,7 +43,7 @@ func (s ServiceStatus) Badge() string {
 }
 
 type DiskInfo struct {
-	Path      string
+	Path       string
 	TotalBytes uint64
 	FreeBytes  uint64
 	UsedBytes  uint64
@@ -224,4 +224,3 @@ func dashboardDataMap(d DashboardData) map[string]any {
 		"CollectedAt":     d.CollectedAt,
 	}
 }
-

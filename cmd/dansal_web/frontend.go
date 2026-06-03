@@ -27,25 +27,25 @@ type webContextKey int
 const ctxPendingRegCount webContextKey = 1
 
 type TemplateData struct {
-	Title        string
-	Domain       string
-	SiteName     string // display name; defaults to Domain when empty
-	User         *SessionUser
-	Strings      I18nStrings
-	LangCode     string
-	Languages    []LangOption
-	Contact      string
-	ImpressumURL string
-	Data         any
-	BannerHeight int
-	LogoHeight   int
-	DarkMode     string // "auto", "light", or "dark"
-	AppVersion              string
-	AppBuildTime            string
-	SuggestAvailable        bool
-	RegistrationEnabled     bool
-	SessionIdleTimeoutMins  int
-	PendingRegCount         int // verified pending registrations awaiting action (scoped to caller)
+	Title                  string
+	Domain                 string
+	SiteName               string // display name; defaults to Domain when empty
+	User                   *SessionUser
+	Strings                I18nStrings
+	LangCode               string
+	Languages              []LangOption
+	Contact                string
+	ImpressumURL           string
+	Data                   any
+	BannerHeight           int
+	LogoHeight             int
+	DarkMode               string // "auto", "light", or "dark"
+	AppVersion             string
+	AppBuildTime           string
+	SuggestAvailable       bool
+	RegistrationEnabled    bool
+	SessionIdleTimeoutMins int
+	PendingRegCount        int // verified pending registrations awaiting action (scoped to caller)
 }
 
 // pendingRegCountMiddleware fetches the scoped pending-registration count for
@@ -92,25 +92,25 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		siteName = cfg.Domain
 	}
 	return TemplateData{
-		Title:        title,
-		Domain:       cfg.Domain,
-		SiteName:     siteName,
-		User:         getSessionUser(r),
-		Strings:      i18n.Strings(lang),
-		LangCode:     lang,
-		Languages:    i18n.Options(lang),
-		Contact:      contact,
-		ImpressumURL: impressumURL,
-		Data:         data,
-		BannerHeight: bannerHeight,
-		LogoHeight:   logoHeight,
-		DarkMode:     cfg.DarkMode,
+		Title:                  title,
+		Domain:                 cfg.Domain,
+		SiteName:               siteName,
+		User:                   getSessionUser(r),
+		Strings:                i18n.Strings(lang),
+		LangCode:               lang,
+		Languages:              i18n.Options(lang),
+		Contact:                contact,
+		ImpressumURL:           impressumURL,
+		Data:                   data,
+		BannerHeight:           bannerHeight,
+		LogoHeight:             logoHeight,
+		DarkMode:               cfg.DarkMode,
 		AppVersion:             Version,
 		AppBuildTime:           BuildTime,
 		SuggestAvailable:       suggestAvailable(cfg),
 		RegistrationEnabled:    registrationEnabled(cfg),
 		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
-		PendingRegCount:        func() int {
+		PendingRegCount: func() int {
 			if v, ok := r.Context().Value(ctxPendingRegCount).(int); ok {
 				return v
 			}
@@ -129,22 +129,22 @@ type IndexData struct {
 }
 
 type EventData struct {
-	Event            Event
-	Org              *Organization
-	OrgSlug          string
-	TagMap           map[string]Tag
-	ContactPosts     []ContactPost
-	CanManageBoard   bool
-	BoardPosted         bool
-	BoardTelegramURL    string
-	BoardContacted      bool
-	BoardContactTgURL   string
-	BoardError          string
-	BookingOK        bool
-	BookingError     string
-	UserOrgs         []Organization
-	BookFormToken    string
-	BoardFormToken   string
+	Event             Event
+	Org               *Organization
+	OrgSlug           string
+	TagMap            map[string]Tag
+	ContactPosts      []ContactPost
+	CanManageBoard    bool
+	BoardPosted       bool
+	BoardTelegramURL  string
+	BoardContacted    bool
+	BoardContactTgURL string
+	BoardError        string
+	BookingOK         bool
+	BookingError      string
+	UserOrgs          []Organization
+	BookFormToken     string
+	BoardFormToken    string
 }
 
 type OrgData struct {
@@ -384,7 +384,7 @@ var tmplFuncMap = template.FuncMap{
 	"join": func(ss []string) string {
 		return strings.Join(ss, ", ")
 	},
-	"emailLocal":        emailLocal,
+	"emailLocal":         emailLocal,
 	"displayNameOrEmail": displayNameOrEmail,
 	"jsStr": func(s string) template.JS {
 		b, _ := json.Marshal(s)
@@ -520,10 +520,10 @@ var tmplFuncMap = template.FuncMap{
 				Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
 				Lat: lat, Lng: lng, URL: e.URL,
 				Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
-				Festival: e.HasFestival,
+				Festival:  e.HasFestival,
 				Cancelled: e.IsCancelled, Availability: e.Availability,
 				BookingEnabled: e.BookingEnabled,
-				Fee: fee, Food: e.Food, Drink: e.Drink,
+				Fee:            fee, Food: e.Food, Drink: e.Drink,
 				Wheelchair: merged["wheelchair"], HearingLoop: merged["hearing_loop"],
 			})
 		}
@@ -774,50 +774,50 @@ var tmplFuncMap = template.FuncMap{
 }
 
 type Templates struct {
-	index              *template.Template
-	event              *template.Template
-	org                *template.Template
-	location           *template.Template
-	login              *template.Template
-	settings           *template.Template
-	verify             *template.Template
-	bookingVerify      *template.Template
-	checkin            *template.Template
-	adminUsers         *template.Template
-	adminBookings      *template.Template
-	adminOrgs          *template.Template
-	adminOrgEdit       *template.Template
-	adminFetchurls     *template.Template
-	adminFetchurlNew   *template.Template
-	adminFetchurlEdit  *template.Template
-	adminLocations     *template.Template
-	adminLocationEdit  *template.Template
-	musicians          *template.Template
-	musician           *template.Template
-	adminMusicians     *template.Template
-	adminMusicianEdit  *template.Template
-	adminEvents        *template.Template
-	adminEventNew      *template.Template
-	adminEventEdit     *template.Template
-	adminEventsImport  *template.Template
-	adminTemplates       *template.Template
-	adminTemplateAssign  *template.Template
-	adminDances          *template.Template
-	adminInfo          *template.Template
-	impressum          *template.Template
-	orgs               *template.Template
-	suggestEvent       *template.Template
-	suggestDone        *template.Template
-	suggestVerified    *template.Template
-	invite             *template.Template
-	register           *template.Template
-	registerDone       *template.Template
-	registerVerified   *template.Template
-	adminRegistrations *template.Template
-	adminManagement    *template.Template
-	help               *template.Template
-	contactManage      *template.Template
-	board              *template.Template
+	index               *template.Template
+	event               *template.Template
+	org                 *template.Template
+	location            *template.Template
+	login               *template.Template
+	settings            *template.Template
+	verify              *template.Template
+	bookingVerify       *template.Template
+	checkin             *template.Template
+	adminUsers          *template.Template
+	adminBookings       *template.Template
+	adminOrgs           *template.Template
+	adminOrgEdit        *template.Template
+	adminFetchurls      *template.Template
+	adminFetchurlNew    *template.Template
+	adminFetchurlEdit   *template.Template
+	adminLocations      *template.Template
+	adminLocationEdit   *template.Template
+	musicians           *template.Template
+	musician            *template.Template
+	adminMusicians      *template.Template
+	adminMusicianEdit   *template.Template
+	adminEvents         *template.Template
+	adminEventNew       *template.Template
+	adminEventEdit      *template.Template
+	adminEventsImport   *template.Template
+	adminTemplates      *template.Template
+	adminTemplateAssign *template.Template
+	adminDances         *template.Template
+	adminInfo           *template.Template
+	impressum           *template.Template
+	orgs                *template.Template
+	suggestEvent        *template.Template
+	suggestDone         *template.Template
+	suggestVerified     *template.Template
+	invite              *template.Template
+	register            *template.Template
+	registerDone        *template.Template
+	registerVerified    *template.Template
+	adminRegistrations  *template.Template
+	adminManagement     *template.Template
+	help                *template.Template
+	contactManage       *template.Template
+	board               *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -830,50 +830,50 @@ func loadTemplates() *Templates {
 		return t
 	}
 	return &Templates{
-		index:             load("index"),
-		event:             load("event"),
-		org:               load("org"),
-		location:          load("location"),
-		login:             load("login"),
-		settings:          load("settings"),
-		verify:            load("verify"),
-		bookingVerify:     load("booking_verify"),
-		checkin:           load("checkin"),
-		adminUsers:        load("admin_users"),
-		adminBookings:     load("admin_bookings"),
-		adminOrgs:         load("admin_orgs"),
-		adminOrgEdit:      load("admin_org_edit"),
-		adminFetchurls:    load("admin_fetchurls"),
-		adminFetchurlNew:  load("admin_fetchurl_new"),
-		adminFetchurlEdit: load("admin_fetchurl_edit"),
-		adminLocations:    load("admin_locations"),
-		adminLocationEdit: load("admin_location_edit"),
-		musicians:         load("musicians"),
-		musician:          load("musician"),
-		adminMusicians:    load("admin_musicians"),
-		adminMusicianEdit: load("admin_musician_edit"),
-		adminEvents:       load("admin_events"),
-		adminEventNew:     load("admin_event_new"),
-		adminEventEdit:    load("admin_event_edit"),
-		adminEventsImport: load("admin_events_import"),
+		index:               load("index"),
+		event:               load("event"),
+		org:                 load("org"),
+		location:            load("location"),
+		login:               load("login"),
+		settings:            load("settings"),
+		verify:              load("verify"),
+		bookingVerify:       load("booking_verify"),
+		checkin:             load("checkin"),
+		adminUsers:          load("admin_users"),
+		adminBookings:       load("admin_bookings"),
+		adminOrgs:           load("admin_orgs"),
+		adminOrgEdit:        load("admin_org_edit"),
+		adminFetchurls:      load("admin_fetchurls"),
+		adminFetchurlNew:    load("admin_fetchurl_new"),
+		adminFetchurlEdit:   load("admin_fetchurl_edit"),
+		adminLocations:      load("admin_locations"),
+		adminLocationEdit:   load("admin_location_edit"),
+		musicians:           load("musicians"),
+		musician:            load("musician"),
+		adminMusicians:      load("admin_musicians"),
+		adminMusicianEdit:   load("admin_musician_edit"),
+		adminEvents:         load("admin_events"),
+		adminEventNew:       load("admin_event_new"),
+		adminEventEdit:      load("admin_event_edit"),
+		adminEventsImport:   load("admin_events_import"),
 		adminTemplates:      load("admin_templates"),
 		adminTemplateAssign: load("admin_template_assign"),
 		adminDances:         load("admin_dances"),
-		adminInfo:         load("admin_info"),
-		impressum:         load("impressum"),
-		orgs:              load("orgs"),
-		suggestEvent:      load("events_suggest"),
-		suggestDone:       load("events_suggest_done"),
-		suggestVerified:   load("events_suggest_verified"),
-		invite:            load("invite"),
-		register:          load("register"),
-		registerDone:      load("register_done"),
-		registerVerified:  load("register_verified"),
-		adminRegistrations: load("admin_registrations"),
-		adminManagement:    load("admin_management"),
-		help:               load("help"),
-		contactManage:      load("contact_manage"),
-		board:              load("board"),
+		adminInfo:           load("admin_info"),
+		impressum:           load("impressum"),
+		orgs:                load("orgs"),
+		suggestEvent:        load("events_suggest"),
+		suggestDone:         load("events_suggest_done"),
+		suggestVerified:     load("events_suggest_verified"),
+		invite:              load("invite"),
+		register:            load("register"),
+		registerDone:        load("register_done"),
+		registerVerified:    load("register_verified"),
+		adminRegistrations:  load("admin_registrations"),
+		adminManagement:     load("admin_management"),
+		help:                load("help"),
+		contactManage:       load("contact_manage"),
+		board:               load("board"),
 	}
 }
 
@@ -1066,22 +1066,22 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 		clientIP := getClientIP(r)
 		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
-			Event:              event,
-			Org:                org,
-			OrgSlug:            slug,
-			TagMap:             tagMap,
-			ContactPosts:       posts,
-			CanManageBoard:     canManage,
-			BoardPosted:        boardPosted,
-			BoardTelegramURL:   boardTelegramURL,
-			BoardContacted:     boardContacted,
-			BoardContactTgURL:  boardContactTgURL,
-			BoardError:         boardError,
-			BookingOK:          bookingOK,
-			BookingError:       bookingError,
-			UserOrgs:           userOrgs,
-			BookFormToken:      issueFormToken(clientIP),
-			BoardFormToken:     issueFormToken(clientIP),
+			Event:             event,
+			Org:               org,
+			OrgSlug:           slug,
+			TagMap:            tagMap,
+			ContactPosts:      posts,
+			CanManageBoard:    canManage,
+			BoardPosted:       boardPosted,
+			BoardTelegramURL:  boardTelegramURL,
+			BoardContacted:    boardContacted,
+			BoardContactTgURL: boardContactTgURL,
+			BoardError:        boardError,
+			BookingOK:         bookingOK,
+			BookingError:      bookingError,
+			UserOrgs:          userOrgs,
+			BookFormToken:     issueFormToken(clientIP),
+			BoardFormToken:    issueFormToken(clientIP),
 		}))
 	}
 }
@@ -1430,15 +1430,15 @@ func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
 }
 
 type BoardData struct {
-	Posts          []ContactPost
-	TownFilter     string
-	Query          string
-	Towns          []string
-	ShowRides      bool
-	ShowSleep      bool
-	ShowTickets    bool
-	ShowLostFound  bool
-	FormToken      string
+	Posts         []ContactPost
+	TownFilter    string
+	Query         string
+	Towns         []string
+	ShowRides     bool
+	ShowSleep     bool
+	ShowTickets   bool
+	ShowLostFound bool
+	FormToken     string
 }
 
 func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1446,16 +1446,24 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		q := r.URL.Query()
 
 		// Type group toggles: default all on; individual group off only if explicitly excluded.
-		showRides     := q.Get("rides")     != "0"
-		showSleep     := q.Get("sleep")     != "0"
-		showTickets   := q.Get("tickets")   != "0"
+		showRides := q.Get("rides") != "0"
+		showSleep := q.Get("sleep") != "0"
+		showTickets := q.Get("tickets") != "0"
 		showLostFound := q.Get("lostfound") != "0"
 
 		var typeList []string
-		if showRides     { typeList = append(typeList, "ride_offer", "ride_request") }
-		if showSleep     { typeList = append(typeList, "sleep_offer", "sleep_request") }
-		if showTickets   { typeList = append(typeList, "ticket_offer", "ticket_request") }
-		if showLostFound { typeList = append(typeList, "lost_item", "found_item") }
+		if showRides {
+			typeList = append(typeList, "ride_offer", "ride_request")
+		}
+		if showSleep {
+			typeList = append(typeList, "sleep_offer", "sleep_request")
+		}
+		if showTickets {
+			typeList = append(typeList, "ticket_offer", "ticket_request")
+		}
+		if showLostFound {
+			typeList = append(typeList, "lost_item", "found_item")
+		}
 
 		params := url.Values{}
 		if len(typeList) < 8 { // if not all types, pass the filter
@@ -1463,8 +1471,12 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		townFilter := q.Get("town")
 		search := q.Get("q")
-		if townFilter != "" { params.Set("town", townFilter) }
-		if search != ""     { params.Set("q", search) }
+		if townFilter != "" {
+			params.Set("town", townFilter)
+		}
+		if search != "" {
+			params.Set("q", search)
+		}
 
 		posts, _ := client.GetAllContactPosts(r.Context(), params)
 
@@ -1477,7 +1489,9 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			}
 		}
 		towns := make([]string, 0, len(townSet))
-		for t := range townSet { towns = append(towns, t) }
+		for t := range townSet {
+			towns = append(towns, t)
+		}
 		sort.Strings(towns)
 
 		title := i18n.T(r, "nav_board")

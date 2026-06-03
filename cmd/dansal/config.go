@@ -13,6 +13,7 @@ type ServerConfig struct {
 	TokenExpirationHours int      `yaml:"token_expiration_hours"`
 	RateLimit            int      `yaml:"rate_limit"`
 	MaxBodyBytes         int64    `yaml:"max_body_bytes"`
+	ReadHeaderTimeoutSecs int      `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs      int      `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs     int      `yaml:"write_timeout_secs"`
 	IdleTimeoutSecs      int      `yaml:"idle_timeout_secs"`
@@ -92,6 +93,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.MaxBodyBytes == 0 {
 		cfg.Server.MaxBodyBytes = 1 << 20
+	}
+	if cfg.Server.ReadHeaderTimeoutSecs == 0 {
+		cfg.Server.ReadHeaderTimeoutSecs = 5
 	}
 	if cfg.Server.ReadTimeoutSecs == 0 {
 		cfg.Server.ReadTimeoutSecs = 10

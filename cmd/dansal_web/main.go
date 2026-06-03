@@ -322,11 +322,12 @@ func main() {
 	log.Printf("web server listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
 		cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
-		Addr:         cfg.Listen,
-		Handler:      securityHeadersMiddleware(&live),
-		ReadTimeout:  time.Duration(cfg.ReadTimeoutSecs) * time.Second,
-		WriteTimeout: time.Duration(cfg.WriteTimeoutSecs) * time.Second,
-		IdleTimeout:  time.Duration(cfg.IdleTimeoutSecs) * time.Second,
+		Addr:              cfg.Listen,
+		Handler:           securityHeadersMiddleware(&live),
+		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutSecs) * time.Second,
+		ReadTimeout:       time.Duration(cfg.ReadTimeoutSecs) * time.Second,
+		WriteTimeout:      time.Duration(cfg.WriteTimeoutSecs) * time.Second,
+		IdleTimeout:       time.Duration(cfg.IdleTimeoutSecs) * time.Second,
 	}
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)

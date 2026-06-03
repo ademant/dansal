@@ -2100,11 +2100,12 @@ func main() {
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
 	srv := &http.Server{
-		Addr:         port,
-		Handler:      handler,
-		ReadTimeout:  time.Duration(config.Server.ReadTimeoutSecs) * time.Second,
-		WriteTimeout: time.Duration(config.Server.WriteTimeoutSecs) * time.Second,
-		IdleTimeout:  time.Duration(config.Server.IdleTimeoutSecs) * time.Second,
+		Addr:              port,
+		Handler:           handler,
+		ReadHeaderTimeout: time.Duration(config.Server.ReadHeaderTimeoutSecs) * time.Second,
+		ReadTimeout:       time.Duration(config.Server.ReadTimeoutSecs) * time.Second,
+		WriteTimeout:      time.Duration(config.Server.WriteTimeoutSecs) * time.Second,
+		IdleTimeout:       time.Duration(config.Server.IdleTimeoutSecs) * time.Second,
 	}
 
 	go func() {

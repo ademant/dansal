@@ -43,6 +43,8 @@ type DansalClient struct {
 }
 
 // cached fetches from cache when fresh; otherwise calls fetch and stores the result.
+// On fetch error, returns the previous stale value if one exists so a transient
+// API outage does not blank pages that were working moments before.
 // Concurrent cache misses may trigger multiple fetches (thundering-herd at small scale is fine).
 func cached[T any](mu *sync.Mutex, entry *cacheEntry[T], ttl time.Duration, fetch func() (T, error)) (T, error) {
 	mu.Lock()
@@ -51,9 +53,18 @@ func cached[T any](mu *sync.Mutex, entry *cacheEntry[T], ttl time.Duration, fetc
 		mu.Unlock()
 		return v, nil
 	}
+	// Snapshot stale value before releasing the lock so we can fall back to it.
+	hasStale := !entry.fetchedAt.IsZero()
+	var stale T
+	if hasStale {
+		stale = entry.val
+	}
 	mu.Unlock()
 	val, err := fetch()
 	if err != nil {
+		if hasStale {
+			return stale, nil // serve stale rather than an error; next request retries
+		}
 		var zero T
 		return zero, err
 	}

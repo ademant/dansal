@@ -2063,6 +2063,13 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
+	// Non-admins may only reassign to an org they belong to, and may not unset the org.
+	if role != RoleAdmin && req.OrgID != nil {
+		if *req.OrgID == 0 || !isOrgMember(callerID, *req.OrgID) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
 	for _, id := range req.IDs {
 		if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
 			continue

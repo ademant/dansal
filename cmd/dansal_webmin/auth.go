@@ -168,7 +168,7 @@ func apiLogin(ctx *http.Request, dansalURL, email, password string) (*loginRespo
 	}
 	req.Header.Set("User-Agent", ctx.UserAgent())
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 			req, err := http.NewRequestWithContext(r.Context(), http.MethodDelete, cfg.DansalURL+"/api/v1/login", nil)
 			if err == nil {
 				req.Header.Set("Authorization", "Bearer "+token)
-				resp, err := http.DefaultClient.Do(req)
+				resp, err := httpClient.Do(req)
 				if err == nil {
 					resp.Body.Close()
 				}

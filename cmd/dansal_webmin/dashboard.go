@@ -77,7 +77,7 @@ func getDansalInfo(ctx context.Context, dansalURL string) (*DansalInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

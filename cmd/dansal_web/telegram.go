@@ -6,7 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
+
+var telegramClient = &http.Client{Timeout: 10 * time.Second}
 
 // telegramWebhookProxyHandler forwards Telegram webhook calls to the dansal API
 // on loopback, keeping port 8000 off the internet.
@@ -36,7 +39,7 @@ func telegramWebhookProxyHandler(cfg *Config) http.HandlerFunc {
 		}
 		req.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := telegramClient.Do(req)
 		if err != nil {
 			log.Printf("telegram proxy: forward: %v", err)
 		} else {

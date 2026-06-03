@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var httpClient = &http.Client{Timeout: 15 * time.Second}
+
 type liveHandler struct {
 	p atomic.Pointer[http.Handler]
 }

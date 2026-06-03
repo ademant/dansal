@@ -27,6 +27,17 @@ nav{background:var(--nav-bg);color:var(--nav-fg);padding:.5rem 1.5rem;display:fl
 .nav-user-name{color:var(--nav-fg);font-size:.9rem}
 .nav-btn{background:transparent;border:1px solid var(--nav-fg);color:var(--nav-fg);border-radius:4px;padding:.2rem .7rem;font-size:.85rem;cursor:pointer;text-decoration:none}
 .nav-btn:hover{background:var(--nav-fg);color:var(--nav-bg)}
+.nav-hamburger{display:none;background:transparent;border:none;color:var(--nav-fg);font-size:1.4rem;cursor:pointer;padding:.1rem .4rem;line-height:1;margin-left:auto}
+.nav-hamburger:hover{color:#fff}
+@media(max-width:700px){
+  nav{gap:.5rem;padding:.5rem 1rem}
+  .nav-hamburger{display:block}
+  .nav-links{display:none;order:10;width:100%;flex-direction:column;gap:0;flex:none;border-top:1px solid rgba(255,255,255,.1);padding-top:.5rem;margin-top:.25rem}
+  nav.nav-open .nav-links{display:flex}
+  .nav-links a{padding:.5rem .25rem;font-size:1rem}
+  .nav-user{margin-left:0;order:9}
+  .nav-user-name{font-size:.85rem}
+}
 main{max-width:1100px;margin:0 auto;padding:1.5rem 1.5rem 3rem}
 h1{font-size:1.5rem;margin-bottom:1.25rem;color:#1a1a2e}
 h2{font-size:1.15rem;margin:1.5rem 0 .6rem;color:#333}
@@ -58,16 +69,9 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
 </style>
 </head>
 <body>
-<nav>
+<nav id="main-nav">
   <a href="/" class="nav-brand">{{.SiteName}}</a>
   {{if .User}}
-  <div class="nav-links">
-    <a href="/">Dashboard</a>
-    <a href="/users">Users</a>
-    <a href="/maintenance">Maintenance</a>
-    <a href="/notifications">Notifications</a>
-    <a href="/site-config">Site config</a>
-  </div>
   <div class="nav-user">
     <span class="nav-user-name">{{if .User.DisplayName}}{{.User.DisplayName}}{{else}}{{.User.Email}}{{end}}{{if .User.CertAuth}} <span title="Authenticated via client certificate" style="font-size:.75rem;opacity:.8">🔐</span>{{end}}</span>
     {{if not .User.CertAuth}}
@@ -76,12 +80,36 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
     </form>
     {{end}}
   </div>
+  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu" aria-expanded="false" aria-controls="main-nav">&#9776;</button>
+  <div class="nav-links">
+    <a href="/"{{if eq .NavPath "/"}} class="active"{{end}}>Dashboard</a>
+    <a href="/users"{{if eq .NavPath "/users"}} class="active"{{end}}>Users</a>
+    <a href="/maintenance"{{if eq .NavPath "/maintenance"}} class="active"{{end}}>Maintenance</a>
+    <a href="/notifications"{{if eq .NavPath "/notifications"}} class="active"{{end}}>Notifications</a>
+    <a href="/site-config"{{if eq .NavPath "/site-config"}} class="active"{{end}}>Site config</a>
+  </div>
   {{end}}
 </nav>
 <main>
 {{block "content" .}}{{end}}
 </main>
 <footer>Powered by <a href="https://github.com/ademant/dansal" style="color:inherit">dansal</a> · webmin {{.Version}}</footer>
+<script>
+function toggleNav(){
+  var nav=document.getElementById('main-nav');
+  var open=nav.classList.toggle('nav-open');
+  var btn=nav.querySelector('.nav-hamburger');
+  if(btn)btn.setAttribute('aria-expanded',open);
+}
+document.addEventListener('click',function(e){
+  var nav=document.getElementById('main-nav');
+  if(nav&&nav.classList.contains('nav-open')&&!nav.contains(e.target)){
+    nav.classList.remove('nav-open');
+    var btn=nav.querySelector('.nav-hamburger');
+    if(btn)btn.setAttribute('aria-expanded','false');
+  }
+});
+</script>
 </body>
 </html>
 {{end}}

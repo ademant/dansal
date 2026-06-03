@@ -53,7 +53,7 @@ func usersPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			errMsg = err.Error()
 			log.Printf("list admin users: %v", err)
 		}
-		d := tmplData(cfg, "Admin Users", map[string]any{
+		d := tmplData(r, cfg, "Admin Users", map[string]any{
 			"Users": users,
 			"Error": errMsg,
 			"Flash": r.URL.Query().Get("flash"),
@@ -137,7 +137,7 @@ func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		} else {
 			json.Unmarshal(resp.Data, &sessions)
 		}
-		d := tmplData(cfg, "Sessions: "+email, map[string]any{
+		d := tmplData(r, cfg, "Sessions: "+email, map[string]any{
 			"Email":    email,
 			"Sessions": sessions,
 			"Error":    errMsg,

@@ -203,7 +203,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		renderTemplate(w, tmpls.login, tmplData(cfg, "Login", map[string]string{
+		renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
 			"Next": r.URL.Query().Get("next"),
 		}))
 	}
@@ -225,7 +225,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		lr, err := apiLogin(r, cfg.DansalURL, email, password)
 		if err != nil {
 			log.Printf("webmin login failed for %q: %v", email, err)
-			renderTemplate(w, tmpls.login, tmplData(cfg, "Login", map[string]string{
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
 				"Error": "Invalid email or password.",
 				"Email": email,
 				"Next":  next,
@@ -235,7 +235,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 
 		if lr.User.Role != "admin" {
 			log.Printf("webmin login rejected: %q has role %q", email, lr.User.Role)
-			renderTemplate(w, tmpls.login, tmplData(cfg, "Login", map[string]string{
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
 				"Error": "Admin access required.",
 				"Email": email,
 				"Next":  next,

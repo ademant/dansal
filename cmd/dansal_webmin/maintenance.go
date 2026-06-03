@@ -10,7 +10,7 @@ import (
 
 func maintenancePageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		d := tmplData(cfg, "Maintenance", map[string]string{
+		d := tmplData(r, cfg, "Maintenance", map[string]string{
 			"Flash": r.URL.Query().Get("flash"),
 		})
 		d.User = getSessionUser(r)

@@ -167,7 +167,7 @@ type siteConfigData struct {
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		d := tmplData(cfg, "Site configuration", nil)
+		d := tmplData(r, cfg, "Site configuration", nil)
 		d.User = getSessionUser(r)
 
 		data := siteConfigData{

@@ -177,7 +177,7 @@ func notificationsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nd := loadNotificationsData(cfg.AdminSocket)
 		nd.Flash = r.URL.Query().Get("flash")
-		d := tmplData(cfg, "Notifications", nd)
+		d := tmplData(r, cfg, "Notifications", nd)
 		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.notifications, d)
 	}

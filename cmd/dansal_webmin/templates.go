@@ -46,14 +46,22 @@ type TemplateData struct {
 	User     *SessionUser
 	Data     any
 	Version  string
+	NavPath  string // top-level path for active nav highlighting
 }
 
-func tmplData(cfg *Config, title string, data any) TemplateData {
+func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData {
+	nav := r.URL.Path
+	// normalise sub-pages to their top-level nav entry
+	switch {
+	case nav == "/sessions" || len(nav) > 9 && nav[:9] == "/sessions":
+		nav = "/users"
+	}
 	return TemplateData{
 		Title:    title,
 		SiteName: cfg.SiteName,
 		Data:     data,
 		Version:  Version,
+		NavPath:  nav,
 	}
 }
 

@@ -20,9 +20,12 @@ type Config struct {
 	SessionSecret string `yaml:"session_secret"`
 	SiteName      string `yaml:"site_name"`
 	Instance      string `yaml:"instance"`
-	WebDBPath     string `yaml:"web_db_path"` // path to web.db for site-config editing
-	ImagesDir     string `yaml:"images_dir"`  // path to images dir for logo/banner/favicon
-	configPath    string
+	WebDBPath        string `yaml:"web_db_path"`        // path to web.db for site-config editing
+	ImagesDir        string `yaml:"images_dir"`         // path to images dir for logo/banner/favicon
+	ReadTimeoutSecs  int    `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs int    `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs  int    `yaml:"idle_timeout_secs"`
+	configPath       string
 }
 
 func loadConfig() *Config {
@@ -47,6 +50,15 @@ func loadConfigFrom(path string) *Config {
 	}
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:8090"
+	}
+	if cfg.ReadTimeoutSecs == 0 {
+		cfg.ReadTimeoutSecs = 10
+	}
+	if cfg.WriteTimeoutSecs == 0 {
+		cfg.WriteTimeoutSecs = 30
+	}
+	if cfg.IdleTimeoutSecs == 0 {
+		cfg.IdleTimeoutSecs = 60
 	}
 	if cfg.DansalURL == "" {
 		cfg.DansalURL = "http://127.0.0.1:8000"

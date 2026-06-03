@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"time"
 )
 
 type liveHandler struct {
@@ -115,8 +116,16 @@ func main() {
 		}
 	}()
 
-	log.Printf("dansal-webmin %s listening on %s", Version, cfg.Listen)
-	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(&live)); err != nil {
+	log.Printf("dansal-webmin %s listening on %s (timeouts: read=%ds write=%ds idle=%ds)",
+		Version, cfg.Listen, cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
+	srv := &http.Server{
+		Addr:         cfg.Listen,
+		Handler:      securityHeadersMiddleware(&live),
+		ReadTimeout:  time.Duration(cfg.ReadTimeoutSecs) * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeoutSecs) * time.Second,
+		IdleTimeout:  time.Duration(cfg.IdleTimeoutSecs) * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

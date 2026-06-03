@@ -70,6 +70,11 @@ type Config struct {
 	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"`  // cleanup interval; default 5
 	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`       // bind token to client IP; default false
 
+	// HTTP server timeouts
+	ReadTimeoutSecs  int `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs int `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs  int `yaml:"idle_timeout_secs"`
+
 	// Session management
 	SessionIdleTimeoutMins int `yaml:"session_idle_timeout_mins"` // 0 = disabled; shown as client-side warning
 
@@ -120,6 +125,9 @@ func loadConfig() *Config {
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
 		UserRateLimitGlobal:       100,
+		ReadTimeoutSecs:           10,
+		WriteTimeoutSecs:          30,
+		IdleTimeoutSecs:           60,
 	}
 
 	configPath := ""
@@ -182,6 +190,9 @@ func reloadConfig(path string, db *sql.DB) *Config {
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
 		UserRateLimitGlobal:       100,
+		ReadTimeoutSecs:           10,
+		WriteTimeoutSecs:          30,
+		IdleTimeoutSecs:           60,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

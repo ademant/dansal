@@ -319,8 +319,16 @@ func main() {
 	}
 	go startDelivery(cfg, db, client, relayActor)
 
-	log.Printf("web server listening on %s (domain: %s, public base URL: %s)", cfg.Listen, cfg.Domain, cfg.publicBaseURL())
-	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(&live)); err != nil {
+	log.Printf("web server listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
+		cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
+	srv := &http.Server{
+		Addr:         cfg.Listen,
+		Handler:      securityHeadersMiddleware(&live),
+		ReadTimeout:  time.Duration(cfg.ReadTimeoutSecs) * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeoutSecs) * time.Second,
+		IdleTimeout:  time.Duration(cfg.IdleTimeoutSecs) * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

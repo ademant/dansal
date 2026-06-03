@@ -1492,8 +1492,8 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	writeError(w, "Forbidden", http.StatusForbidden)
 }
 
-// POST /api/v1/events/{id}/assign-org — assign an organisation to an unpublished event.
-// Admin: any org. User and publisher: only orgs they are a member of.
+// POST /api/v1/events/{id}/assign-org — assign an organisation to an orphaned event
+// (organization_id IS NULL). Admin: any event. User/publisher: only orgs they belong to.
 func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
 	if userRole != RoleAdmin && userRole != RolePublisher && userRole != RoleUser {
@@ -1515,13 +1515,17 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec("UPDATE events SET organization_id=? WHERE id=? AND is_published=0", req.OrgID, id)
+	query := "UPDATE events SET organization_id=? WHERE id=? AND organization_id IS NULL"
+	if userRole == RoleAdmin {
+		query = "UPDATE events SET organization_id=? WHERE id=?"
+	}
+	result, err := db.Exec(query, req.OrgID, id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "Event not found or already published", http.StatusNotFound)
+		writeError(w, "Event not found or already assigned to an organisation", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

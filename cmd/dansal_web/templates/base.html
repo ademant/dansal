@@ -328,7 +328,7 @@ function attachTileLayer(map){
 <footer>
   <div class="footer-inner">
     <div class="footer-left">{{if .Contact}}{{.Contact}}{{end}}</div>
-    <div class="footer-center"><a href="https://github.com/ademant/dansal" target="_blank" rel="noopener">{{.Strings.T "nav_footer"}}</a></div>
+    <div class="footer-center">{{if .SiteName}}<span>{{.Strings.T "footer_presented_by"}} {{.SiteName}}</span> · {{end}}<a href="https://github.com/ademant/dansal" target="_blank" rel="noopener">{{.Strings.T "nav_footer"}}</a></div>
     <div class="footer-right"><a href="/help">{{.Strings.T "nav_help"}}</a>{{if .ImpressumURL}} · <a href="{{.ImpressumURL}}">{{.Strings.T "nav_impressum"}}</a>{{end}}</div>
   </div>
 </footer>

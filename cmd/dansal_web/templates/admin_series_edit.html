@@ -126,8 +126,8 @@
 </table>
 </div>
 <div style="margin-top:.5rem">
-  <button type="submit" id="desc-save-btn" class="btn-primary" disabled
-          style="background:#1a6eb5;color:#fff;border:none;padding:.35rem .9rem;border-radius:4px;cursor:pointer;font-size:.9rem;opacity:.4">{{$.Strings.T "admin_save"}}</button>
+  <button type="submit" id="desc-save-btn" class="btn-sm" disabled
+          style="opacity:.35">{{$.Strings.T "series_save_descriptions"}}</button>
 </div>
 </form>
 
@@ -184,7 +184,7 @@ function postTo(url){
 }
 function descChanged(){
   var btn=document.getElementById('desc-save-btn');
-  if(btn){btn.disabled=false;}
+  if(btn){btn.disabled=false;btn.style.opacity='1';}
 }
 function filterLocOptions(q){
   var sel=document.getElementById('loc-select');

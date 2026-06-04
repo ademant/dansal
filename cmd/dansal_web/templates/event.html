@@ -9,6 +9,17 @@
 </div>
 {{end}}
 
+{{if or $.Data.PrevEvent $.Data.NextEvent}}
+<nav class="series-nav">
+  {{if $.Data.PrevEvent}}
+  <a href="/events/{{$.Data.PrevEvent.ID}}" class="series-nav-prev" title="{{$.Data.PrevEvent.Title}}">← {{formatDate $.LangCode $.Data.PrevEvent.StartTime}}</a>
+  {{else}}<span></span>{{end}}
+  {{if $.Data.NextEvent}}
+  <a href="/events/{{$.Data.NextEvent.ID}}" class="series-nav-next" title="{{$.Data.NextEvent.Title}}">{{formatDate $.LangCode $.Data.NextEvent.StartTime}} →</a>
+  {{else}}<span></span>{{end}}
+</nav>
+{{end}}
+
 <div class="evt-header">
   <h1>{{.Title}}</h1>
   {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
@@ -461,6 +472,9 @@
 .btn-pub-event:hover{background:#155727}
 .evt-assign-form{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .evt-assign-select{padding:.25rem .5rem;border:1px solid #ffc107;border-radius:4px;font-size:.85rem;background:#fff;color:#333}
+.series-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.88rem}
+.series-nav a{color:var(--link);text-decoration:none;padding:.2rem .4rem;border-radius:3px}
+.series-nav a:hover{background:var(--bg-alt,#f4f6fb)}
 .evt-hero{margin:0 -1rem 0;background:#111;max-height:420px;overflow:hidden}
 .evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
 .evt-header{padding:1.25rem 0 .75rem}

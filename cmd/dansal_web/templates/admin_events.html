@@ -75,6 +75,12 @@
   </select>
   <button type="submit" formaction="/admin/events/bulk-assign-location" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_loc_btn"}}</button>
   <span class="bulk-sep"></span>
+  <select name="bulk_series_id" class="bulk-loc-sel">
+    <option value="">— {{$.Strings.T "evt_bulk_series_new"}} —</option>
+    {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+  </select>
+  <button type="submit" formaction="/admin/events/bulk-assign-series" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_series_btn"}}</button>
+  <span class="bulk-sep"></span>
   <button type="button" class="btn-sm btn-attrs" onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_btn"}}</button>
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk"
@@ -99,7 +105,7 @@
   <tbody>
   {{range .Events}}
   <tr>
-    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"></td>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
     <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>

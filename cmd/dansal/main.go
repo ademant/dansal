@@ -1291,6 +1291,24 @@ func migrateDB() {
 		db.Exec("UPDATE organizations SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
 		mark(4)
 	}
+	// v5: event_series table and series_id FK on events.
+	if !applied(5) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_series (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT UNIQUE NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+			default_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+			default_start_time TEXT DEFAULT '',
+			default_end_time TEXT DEFAULT '',
+			invite_token TEXT UNIQUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at INTEGER DEFAULT 0
+		)`)
+		db.Exec("ALTER TABLE events ADD COLUMN series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL")
+		mark(5)
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1491,8 +1509,22 @@ func createTables() error {
 		expires_at INTEGER,
 		location_geohash TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL,
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
+	);
+	CREATE TABLE IF NOT EXISTS event_series (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		slug TEXT UNIQUE NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT DEFAULT '',
+		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+		default_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+		default_start_time TEXT DEFAULT '',
+		default_end_time TEXT DEFAULT '',
+		invite_token TEXT UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at INTEGER DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1816,6 +1848,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(2)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(4)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)")
 	return nil
 }
 
@@ -2021,6 +2054,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
 	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
+	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
@@ -2074,6 +2108,20 @@ func main() {
 	smux.Handle("GET /api/v1/bookings/checkin/{qr_token}", auth(checkinBooking))
 	smux.Handle("PATCH /api/v1/bookings/{id}/status", auth(updateBookingStatus))
 	smux.Handle("DELETE /api/v1/bookings/{id}", auth(deleteBooking))
+
+	// Event series endpoints
+	smux.Handle("GET /api/v1/series", auth(getSeries))
+	smux.Handle("POST /api/v1/series", auth(createSeries))
+	smux.HandleFunc("GET /api/v1/series/token/{token}", getSeriesByToken)
+	smux.HandleFunc("PATCH /api/v1/series/token/{token}/events/{eventID}", patchSeriesEventDescription)
+	smux.Handle("GET /api/v1/series/{id}", auth(getSeriesByID))
+	smux.Handle("PUT /api/v1/series/{id}", auth(updateSeries))
+	smux.Handle("DELETE /api/v1/series/{id}", auth(deleteSeries))
+	smux.Handle("POST /api/v1/series/{id}/add-date", auth(addSeriesDate))
+	smux.Handle("POST /api/v1/series/{id}/descriptions", auth(http.HandlerFunc(updateSeriesDescriptions)))
+	smux.Handle("POST /api/v1/series/{id}/assign-events", auth(http.HandlerFunc(assignSeriesEvents)))
+	smux.Handle("POST /api/v1/series/{id}/token/regenerate", auth(regenerateSeriesToken))
+	smux.Handle("POST /api/v1/series/{id}/token/revoke", auth(revokeSeriesToken))
 
 	// Organization writes (protected)
 	smux.Handle("POST /api/v1/organizations", auth(createOrganization))

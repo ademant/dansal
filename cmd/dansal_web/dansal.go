@@ -202,6 +202,7 @@ type Event struct {
 	Editable           bool             `json:"editable,omitempty"`
 	Cancelable         bool             `json:"cancelable,omitempty"`
 	CreatedByID        *int             `json:"created_by_id,omitempty"`
+	SeriesID           *int             `json:"series_id,omitempty"`
 }
 
 type Dance struct {
@@ -481,6 +482,11 @@ func (c *DansalClient) BulkSetEventAttributes(ctx context.Context, payload map[s
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)
+}
+
+func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?series_id=%d&include_past=true&include_cancelled=true", seriesID), &events)
 }
 
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
@@ -2706,6 +2712,223 @@ func (c *DansalClient) CancelRegistration(ctx context.Context, token string) err
 	if err != nil {
 		return err
 	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// ── Event Series ──────────────────────────────────────────────────────────────
+
+type SeriesEvent struct {
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	LocationID   *int   `json:"location_id,omitempty"`
+	LocationName string `json:"location_name,omitempty"`
+	IsCancelled  bool   `json:"is_cancelled"`
+	IsPublished  bool   `json:"is_published"`
+}
+
+type EventSeries struct {
+	ID                int           `json:"id"`
+	Slug              string        `json:"slug"`
+	Title             string        `json:"title"`
+	Description       string        `json:"description"`
+	OrganizationID    *int          `json:"organization_id,omitempty"`
+	DefaultLocationID *int          `json:"default_location_id,omitempty"`
+	DefaultStartTime  string        `json:"default_start_time"`
+	DefaultEndTime    string        `json:"default_end_time"`
+	InviteToken       string        `json:"invite_token,omitempty"`
+	CreatedAt         string        `json:"created_at"`
+	UpdatedAt         int64         `json:"updated_at"`
+	EventCount        int           `json:"event_count,omitempty"`
+	Events            []SeriesEvent `json:"events,omitempty"`
+}
+
+func (c *DansalClient) GetSeriesList(ctx context.Context, token string) ([]EventSeries, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/series", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var out []EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) GetSeriesByID(ctx context.Context, id int, token string) (EventSeries, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/series/%d", id), token, nil)
+	if err != nil {
+		return EventSeries{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return EventSeries{}, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return EventSeries{}, apiErr(resp)
+	}
+	var out EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) CreateSeries(ctx context.Context, body map[string]any, token string) (EventSeries, error) {
+	b, _ := json.Marshal(body)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/series", token, b)
+	if err != nil {
+		return EventSeries{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return EventSeries{}, apiErr(resp)
+	}
+	var out EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) UpdateSeries(ctx context.Context, id int, body map[string]any, token string) error {
+	b, _ := json.Marshal(body)
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/series/%d", id), token, b)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteSeries(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/series/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) AddSeriesDate(ctx context.Context, id int, body map[string]any, token string) error {
+	b, _ := json.Marshal(body)
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/add-date", id), token, b)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) RegenerateSeriesToken(ctx context.Context, id int, token string) (string, error) {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/token/regenerate", id), token, nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", apiErr(resp)
+	}
+	var result map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result["invite_token"], nil
+}
+
+func (c *DansalClient) RevokeSeriesToken(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/token/revoke", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) UpdateSeriesDescriptions(ctx context.Context, seriesID int, updates []map[string]any, token string) error {
+	b, _ := json.Marshal(map[string]any{"updates": updates})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/descriptions", seriesID), token, b)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) RemoveEventFromSeries(ctx context.Context, eventID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/remove-from-series", eventID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) AssignEventsToSeries(ctx context.Context, seriesID int, eventIDs []int, token string) error {
+	b, _ := json.Marshal(map[string]any{"ids": eventIDs})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/assign-events", seriesID), token, b)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetSeriesByInviteToken(ctx context.Context, seriesToken string) (EventSeries, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.BaseURL+"/api/v1/series/token/"+seriesToken, nil)
+	if err != nil {
+		return EventSeries{}, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return EventSeries{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return EventSeries{}, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return EventSeries{}, apiErr(resp)
+	}
+	var out EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) PatchSeriesEventDescription(ctx context.Context, seriesToken string, eventID int, description string) error {
+	b, _ := json.Marshal(map[string]string{"description": description})
+	path := fmt.Sprintf("/api/v1/series/token/%s/events/%d", seriesToken, eventID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.BaseURL+path, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err

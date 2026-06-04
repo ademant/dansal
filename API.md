@@ -1,82 +1,156 @@
 # dansal API
 
-RESTful calendar API backed by SQLite. All timestamps are RFC3339.
+REST-style calendar API backed by SQLite. Unless noted otherwise, request and response bodies are JSON and timestamps are RFC3339 strings in API payloads.
+
+## Table of Contents
+
+- [Base URL](#base-url)
+- [Authentication](#authentication)
+- [Roles](#roles)
+- [Content Negotiation](#content-negotiation)
+- [Info](#info)
+- [Vocabulary](#vocabulary)
+- [Authentication Endpoints](#authentication-endpoints)
+- [Sessions](#sessions)
+- [Users](#users)
+- [Registration, Invites, and Verification](#registration-invites-and-verification)
+- [WebAuthn Credentials](#webauthn-credentials)
+- [API Keys and Publishers](#api-keys-and-publishers)
+- [Organizations](#organizations)
+- [Locations](#locations)
+- [Musicians](#musicians)
+- [Dances and Tags](#dances-and-tags)
+- [Events](#events)
+- [Anonymous Event Suggestions](#anonymous-event-suggestions)
+- [iCal Feeds](#ical-feeds)
+- [Images](#images)
+- [Fetch Sources](#fetch-sources)
+- [Contact Posts](#contact-posts)
+- [Bookings](#bookings)
+- [Telegram Webhook](#telegram-webhook)
+- [Status Codes](#status-codes)
 
 ## Base URL
-```
+
+```text
 http://localhost:8000
 ```
 
 ## Authentication
 
-Protected endpoints require a Bearer token obtained from `POST /api/v1/login`, or an API key created via `POST /api/v1/apikeys`.
+Protected endpoints require a bearer token from `POST /api/v1/login`, `GET /api/v1/login/magic/{token}`, WebAuthn login, mTLS certificate login, or an API key from `POST /api/v1/apikeys`.
 
-```
+```http
 Authorization: Bearer <token-or-api-key>
 ```
 
-API keys begin with `ak_` and never expire. Session tokens expire after the configured duration (default 24 h).
-
-Public GET endpoints accept an optional `Authorization` header; an invalid or expired token is still rejected with 401.
+- API keys begin with `ak_`
+- Session tokens expire after the configured duration
+- Public GET endpoints may accept an optional bearer token
+- When present, it can expose user-specific fields such as `editable`
 
 ## Roles
 
 | Role | Permissions |
 |------|-------------|
-| `admin` | Full access; bypasses all organization checks |
-| `user` | Read + write; must be org member for org-linked resources |
-| `publisher` | Read + create; no update or delete |
-| `viewer` | Read published events only |
+| `admin` | Full access; bypasses organization checks |
+| `user` | Read + write; must be an organization member for organization-scoped writes |
+| `publisher` | Read + create/publish/cancel within allowed organization scope |
+| `viewer` | Read published data only |
+
+---
+
+## Content Negotiation
+
+Several GET endpoints support alternative output formats via the `Accept` header. The default is always `application/json`.
+
+| `Accept` header | Format | Supported on |
+|-----------------|--------|--------------|
+| `application/json` | JSON (default) | all endpoints |
+| `text/calendar` | iCalendar (RFC 5545) | `GET /api/v1/events`, `GET /api/v1/events/{id}` |
+| `application/atom+xml` | Atom feed (RFC 4287) | events, musicians, locations, organizations |
+| `application/geo+json` | GeoJSON (RFC 7946) | `GET /api/v1/locations`, `GET /api/v1/locations/{id}` |
+
+When `Accept: application/atom+xml` is sent, the response contains an Atom `<feed>` with one `<entry>` per resource. When `Accept: application/geo+json` is sent for locations, the response is a GeoJSON `FeatureCollection` (or a single `Feature` for `/{id}`).
 
 ---
 
 ## Info
 
-### GET /api/v1/info
-Returns server version and build time. Public.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/info` | public | Server version and build time |
 
+**Example response:**
 ```json
 { "version": "1.2.3", "build_time": "2026-05-15T10:00:00Z" }
 ```
 
 ---
 
-## Authentication endpoints
+## Vocabulary
 
-### POST /api/v1/login
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/vocabulary` | public | Enumerable field values used across the API |
 
+Use this endpoint to build dynamic filter UIs without hardcoding strings.
+
+**Response:**
+```json
+{
+  "event_types": [
+    { "key": "ball",     "label": "Ball" },
+    { "key": "workshop", "label": "Workshop" },
+    { "key": "festival", "label": "Festival" }
+  ],
+  "workshop_difficulties": ["beginner", "intermediate", "advanced"],
+  "pricing_types": ["free", "donation", "single", "multiple"],
+  "attributes": ["wheelchair", "bar", "kitchen"],
+  "osm_types": ["node", "way", "relation"]
+}
+```
+
+---
+
+## Authentication Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/login` | public | Login with query/form credentials |
+| POST | `/api/v1/login` | public | Login with JSON or form credentials |
+| DELETE | `/api/v1/login` | bearer | Revoke the current session token |
+| POST | `/api/v1/cert-login` | mTLS | Create a session for the certificate-authenticated user |
+| POST | `/api/v1/login/magic` | public | Send a magic-link login email |
+| GET | `/api/v1/login/magic/{token}` | public | Consume a magic-link token |
+| POST | `/api/v1/auth/webauthn/login/begin` | public | Begin passkey login |
+| POST | `/api/v1/auth/webauthn/login/finish` | public | Finish passkey login |
+
+**Login body:**
 ```json
 { "username": "admin", "password": "secret" }
 ```
 
-Also accepts `application/x-www-form-urlencoded`.
-
-Response `200`:
-```json
-{
-  "token": "string",
-  "expires_at": "2026-06-15T10:00:00Z",
-  "user": { "id": 1, "username": "admin", "email": "admin@localhost", "role": "admin", "created_at": "..." }
-}
-```
-
-### DELETE /api/v1/login
-
-Revokes the current session token. No body required.
-
-Response `204`.
-
-### POST /api/v1/login/magic
-
-Sends a one-time magic-link login email.
+`username` may also be an email address. `POST /api/v1/login/magic` accepts:
 
 ```json
 { "email": "user@example.com" }
 ```
 
-### GET /api/v1/login/magic/{token}
-
-Consumes a magic-link token and returns a session token (same shape as `POST /api/v1/login` response).
+**Successful login response:**
+```json
+{
+  "token": "string",
+  "expires_at": "2026-06-15T10:00:00Z",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@localhost",
+    "role": "admin",
+    "created_at": "2026-01-01T00:00:00Z"
+  }
+}
+```
 
 ---
 
@@ -86,23 +160,30 @@ Requires authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/sessions` | List own active sessions |
-| DELETE | `/api/v1/sessions/{id}` | Revoke a session |
+| GET | `/api/v1/sessions` | List the caller's active sessions |
+| DELETE | `/api/v1/sessions/{id}` | Revoke one session |
 
 ---
 
 ## Users
 
-All user endpoints require admin role, except `PUT /api/v1/users/{id}` which also allows the user themselves.
+Most user management endpoints require `admin`. `PUT /api/v1/users/{id}`, `POST /api/v1/user/password`, and `DELETE /api/v1/users/me` may be used by the target user where allowed by the handler.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/users` | List all users |
+| GET | `/api/v1/users` | List users |
 | POST | `/api/v1/users` | Create user |
 | GET | `/api/v1/users/{id}` | Get user |
 | PUT | `/api/v1/users/{id}` | Update user |
-| DELETE | `/api/v1/users/{id}` | Delete user (non-admin only) |
+| DELETE | `/api/v1/users/{id}` | Delete user |
+| DELETE | `/api/v1/users/me` | Delete own account |
+| POST | `/api/v1/user/password` | Change own password |
+| POST | `/api/v1/users/{id}/password` | Admin-set user password |
 | POST | `/api/v1/users/{id}/verify` | Send verification message |
+| POST | `/api/v1/users/{id}/magic-link` | Generate a magic login link |
+| POST | `/api/v1/users/{id}/telegram/message` | Send a Telegram message to a verified user |
+| GET | `/api/v1/pending-invites` | List pending email invites |
+| POST | `/api/v1/pending-invites/{id}/resend` | Resend a pending invite |
 
 **User object:**
 ```json
@@ -117,73 +198,126 @@ All user endpoints require admin role, except `PUT /api/v1/users/{id}` which als
   "telegram_verified": false,
   "matrix_verified": false,
   "disabled": false,
-  "created_at": "..."
+  "created_at": "2026-01-01T00:00:00Z"
 }
-```
-
-**Create body:**
-```json
-{ "username": "string", "email": "string", "password": "string", "role": "user",
-  "telegram": "string", "matrix": "string" }
-```
-
-**Update body** — all fields optional; only admin may change `role`, `*_verified`, `disabled`:
-```json
-{ "email": "string", "role": "user", "telegram": "string", "matrix": "string",
-  "email_verified": true, "telegram_verified": false, "disabled": false }
 ```
 
 Valid roles: `admin`, `user`, `publisher`, `viewer`.
 
 ---
 
-## Invites
+## Registration, Invites, and Verification
 
-| Method | Path | Description | Role |
-|--------|------|-------------|------|
-| GET | `/api/v1/invites` | List active invites | admin |
-| POST | `/api/v1/invites` | Create invite link | admin |
-| DELETE | `/api/v1/invites/{token}` | Revoke invite | admin |
-| POST | `/api/v1/invites/{token}` | Accept invite (register) | public |
+### Public Registration and Invite Flows
 
-**Create body:**
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/verify/{token}` | public | Consume an account verification token |
+| POST | `/api/v1/register` | public | Create a pending registration |
+| GET | `/api/v1/register/status/{id}` | public | Get pending registration status |
+| POST | `/api/v1/register/resend/{token}` | public | Resend registration verification |
+| DELETE | `/api/v1/register/{token}` | public | Cancel pending registration |
+| GET | `/api/v1/register/verify/email/{token}` | public | Verify registration email |
+| POST | `/api/v1/register/passkey/begin` | public | Begin passkey binding for registration |
+| POST | `/api/v1/register/passkey/finish` | public | Finish passkey binding for registration |
+| GET | `/api/v1/invites/{token}` | public | Get non-sensitive invite info |
+| POST | `/api/v1/invites/{token}` | public | Accept invite and register |
+| POST | `/api/v1/invites/{token}/webauthn/begin` | public | Begin invite passkey registration |
+| POST | `/api/v1/invites/{token}/webauthn/finish` | public | Finish invite passkey registration |
+
+### Protected Approval and Invite Management
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/pending-registrations` | List pending registrations |
+| GET | `/api/v1/pending-registrations/count` | Count verified unactioned registrations |
+| POST | `/api/v1/pending-registrations/{id}/approve` | Approve registration |
+| DELETE | `/api/v1/pending-registrations/{id}` | Reject registration |
+| GET | `/api/v1/invites` | List active invites |
+| POST | `/api/v1/invites` | Create invite |
+| DELETE | `/api/v1/invites/{token}` | Revoke invite |
+
+**Registration body:**
+```json
+{
+  "email": "user@example.com",
+  "description": "Why I need access",
+  "reg_type": "join_org",
+  "org_id": 3,
+  "channel": "email",
+  "telegram": "@user"
+}
+```
+
+`reg_type` is `join_org` or `new_org`. For `new_org`, use `org_name`, `org_actor_name`, `org_description`, `org_website`, and `org_contact_email`.
+
+**Invite creation body:**
 ```json
 { "role": "user", "max_uses": 1, "expires_in_hours": 48 }
 ```
 
 ---
 
-## API Keys
+## WebAuthn Credentials
 
-Requires authentication. Users manage their own keys; admins can manage any.
+Requires authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/apikeys` | List own API keys |
+| GET | `/api/v1/user/webauthn/credentials` | List caller's passkeys |
+| POST | `/api/v1/user/webauthn/register/begin` | Begin adding a passkey |
+| POST | `/api/v1/user/webauthn/register/finish` | Finish adding a passkey |
+| DELETE | `/api/v1/user/webauthn/credentials/{id}` | Delete passkey |
+
+---
+
+## API Keys and Publishers
+
+Requires authentication. Users manage their own API keys; admins may create keys for another `user_id`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/apikeys` | List API keys |
 | POST | `/api/v1/apikeys` | Create API key |
 | DELETE | `/api/v1/apikeys/{id}` | Delete API key |
+| POST | `/api/v1/publishers` | Create publisher service account and API key |
+| POST | `/api/v1/publishers/{id}/regenerate-key` | Rotate publisher API key |
 
-**Create body:** `{ "name": "my-script" }`
-
-**Create response `201`** — the `key` field is only returned once:
+**Create API key body:**
 ```json
-{ "id": 1, "name": "my-script", "key": "ak_...", "created_at": "..." }
+{ "name": "my-script", "expires_at": "2026-12-31T23:59:59Z" }
+```
+
+**Create response (includes secret key only once):**
+```json
+{ "id": 1, "user_id": 2, "name": "my-script", "key": "ak_...", "created_at": "2026-01-01T00:00:00Z" }
+```
+
+**Create publisher body:**
+```json
+{ "name": "partner-feed", "org_id": 3 }
 ```
 
 ---
 
 ## Organizations
 
-| Method | Path | Description | Role |
-|--------|------|-------------|------|
-| GET | `/api/v1/organizations` | List | public |
-| POST | `/api/v1/organizations` | Create | admin |
-| GET | `/api/v1/organizations/{id}` | Get | public |
-| PUT | `/api/v1/organizations/{id}` | Update | admin |
-| DELETE | `/api/v1/organizations/{id}` | Delete | admin |
-| GET | `/api/v1/organizations/{id}/members` | List members | any |
-| POST | `/api/v1/organizations/{id}/members` | Add member | admin |
-| DELETE | `/api/v1/organizations/{id}/members/{user_id}` | Remove member | admin |
+GET list/detail endpoints are public with optional auth. Write and membership endpoints require authentication.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/organizations` | List organizations |
+| GET | `/api/v1/organizations/stats` | Organization statistics |
+| GET | `/api/v1/organizations/check-actor-name` | Check ActivityPub actor-name availability |
+| POST | `/api/v1/organizations` | Create organization |
+| GET | `/api/v1/organizations/{id}` | Get organization |
+| PUT | `/api/v1/organizations/{id}` | Update organization |
+| DELETE | `/api/v1/organizations/{id}` | Delete organization |
+| GET | `/api/v1/organizations/{id}/members` | List members |
+| POST | `/api/v1/organizations/{id}/members` | Add member |
+| DELETE | `/api/v1/organizations/{id}/members/{user_id}` | Remove member |
+
+Content negotiation: `Accept: application/atom+xml` returns an Atom feed.
 
 **Organization object:**
 ```json
@@ -192,36 +326,58 @@ Requires authentication. Users manage their own keys; admins can manage any.
   "name": "string",
   "description": "string",
   "actor_name": "string",
-  "website": "string",
+  "website": "https://example.com",
   "instagram": "string",
   "mastodon": "string",
   "facebook": "string",
-  "contact_email": "string",
+  "contact_email": "info@example.com",
   "contact_name": "string",
-  "created_at": "2026-01-01T00:00:00Z",
-  "image_url": "string",
+  "wikidata_id": "Q12345",
+  "image_url": "/api/v1/org-images/1",
   "notes_md": "string",
-  "fetch_source_id": 42
+  "fetch_source_id": 42,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": 1748000000
 }
 ```
 
-`fetch_source_id` — when present, indicates this organization has an associated fetch source for automatic event importing. Use `GET /api/v1/fetchurl/{id}` to retrieve the source details and `POST /api/v1/fetchurl/{id}/fetch` to trigger an immediate import.
-
-**Add member body:** `{ "user_id": 42 }`
+**Add member body:**
+```json
+{ "user_id": 42 }
+```
 
 ---
 
 ## Locations
 
-GET endpoints are public (optional auth). Write endpoints require authentication.
+GET endpoints are public with optional auth. Write endpoints require authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/locations` | List |
-| POST | `/api/v1/locations` | Create |
-| GET | `/api/v1/locations/{id}` | Get |
-| PUT | `/api/v1/locations/{id}` | Update |
-| DELETE | `/api/v1/locations/{id}` | Delete |
+| GET | `/api/v1/locations` | List locations |
+| POST | `/api/v1/locations` | Create one or more locations |
+| GET | `/api/v1/locations/{id}` | Get location |
+| PATCH | `/api/v1/locations/{id}` | Update location |
+| DELETE | `/api/v1/locations/{id}` | Delete location |
+| POST | `/api/v1/locations/{id}/assign-org` | Assign location to organization |
+| POST | `/api/v1/locations/unassign-org` | Remove one organization assignment |
+| POST | `/api/v1/locations/bulk-assign-org` | Bulk assign organization |
+| POST | `/api/v1/locations/merge` | Merge two locations |
+
+Content negotiation: `Accept: application/geo+json` returns a GeoJSON `FeatureCollection`; `Accept: application/atom+xml` returns an Atom feed.
+
+### Location List Query Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `country` | Comma-separated ISO country codes (e.g. `DE,FR`) |
+| `name` | Case-insensitive substring match on venue name |
+| `town` | Case-insensitive substring match on town |
+| `org_id` | Locations belonging to the given organization ID |
+| `lat`, `lng`, `radius` | Centre point (decimal degrees) + radius in km; converted to bounding box |
+| `bbox` | Bounding box: `minLng,minLat,maxLng,maxLat` |
+
+When `lat/lng/radius` is used, each result includes a `distance_km` field.
 
 **Location object:**
 ```json
@@ -233,40 +389,70 @@ GET endpoints are public (optional auth). Write endpoints require authentication
   "zipcode": "10115",
   "town": "Berlin",
   "country": "Germany",
-  "latitude": "52.5200",
-  "longitude": "13.4050",
+  "country_code": "DE",
+  "region": "Berlin",
+  "latitude": 52.52,
+  "longitude": 13.405,
+  "geohash": "u33db2p",
   "internetsite": "https://example.com",
-  "organization_id": 3,
-  "created_at": "..."
+  "osm_id": 123456,
+  "osm_type": "way",
+  "wikidata_id": "Q12345",
+  "mb_place_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "organization_ids": [3],
+  "notes_md": "string",
+  "attributes": { "wood_floor": true },
+  "parking": "street",
+  "floor_condition": "good",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": 1748000000,
+  "distance_km": 2.4
 }
 ```
 
-**Create/Update body** — all fields optional except `location` on create:
+**Bulk/assignment bodies:**
 ```json
-{
-  "location": "string", "short_name": "string",
-  "address": "string", "zipcode": "string",
-  "town": "string", "country": "string",
-  "latitude": "string", "longitude": "string",
-  "internetsite": "string", "organization_id": 3
-}
+{ "organization_id": 3 }
 ```
 
-`organization_id` is required for `user`/`publisher` (must be org member).
+```json
+{ "location_id": 1, "organization_id": 3 }
+```
+
+```json
+{ "ids": [1, 2], "organization_id": 3 }
+```
+
+```json
+{ "keep_id": 1, "merge_id": 2 }
+```
 
 ---
 
 ## Musicians
 
-GET endpoints are public (optional auth). Write endpoints require authentication.
+GET endpoints are public with optional auth. Write endpoints require authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/musicians` | List |
-| POST | `/api/v1/musicians` | Create |
-| GET | `/api/v1/musicians/{id}` | Get |
-| PUT | `/api/v1/musicians/{id}` | Update |
-| DELETE | `/api/v1/musicians/{id}` | Delete |
+| GET | `/api/v1/musicians` | List musicians |
+| POST | `/api/v1/musicians` | Create one or more musicians |
+| GET | `/api/v1/musicians/{id}` | Get musician |
+| PUT | `/api/v1/musicians/{id}` | Update musician |
+| DELETE | `/api/v1/musicians/{id}` | Delete musician |
+
+Content negotiation: `Accept: application/atom+xml` returns an Atom feed.
+
+### Musician List Query Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `organization_id` | Musicians linked to published events of the given organization |
+| `name` | Case-insensitive substring match on bandname |
+| `mbid` | Exact MusicBrainz artist ID |
+| `wikidata_id` | Exact Wikidata QID (e.g. `Q12345`) |
+| `discogs_id` | Exact Discogs artist ID |
+| `country` | Exact ISO country code (e.g. `DE`) |
 
 **Musician object:**
 ```json
@@ -276,21 +462,60 @@ GET endpoints are public (optional auth). Write endpoints require authentication
   "short_name": "LT",
   "internetsite": "https://latroupe.example.com",
   "description": "string",
-  "created_at": "..."
+  "mbid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "wikidata_id": "Q12345",
+  "discogs_id": "123456",
+  "country": "FR",
+  "begin_year": 2018,
+  "biography": "string",
+  "members_json": "[]",
+  "albums_json": "[]",
+  "mastodon": "string",
+  "instagram": "string",
+  "facebook": "string",
+  "soundcloud": "string",
+  "spotify": "string",
+  "deezer": "string",
+  "genre": "bal folk",
+  "image_url": "/api/v1/musician-images/1",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": 1748000000
 }
 ```
 
-**Create/Update body:**
-```json
-{ "bandname": "string", "short_name": "string", "internetsite": "string", "description": "string" }
-```
+---
+
+## Dances and Tags
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/dances` | optional | List dances |
+| POST | `/api/v1/dances` | bearer | Create dance |
+| DELETE | `/api/v1/dances/{id}` | bearer | Delete dance |
+| GET | `/api/v1/tags` | optional | List distinct event tags |
 
 ---
 
 ## Events
 
-### Event object
+GET endpoints are public with optional auth. Write endpoints require authentication.
 
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/events` | List events |
+| POST | `/api/v1/events/preview` | Parse iCal or folkdance JSON without saving |
+| POST | `/api/v1/events` | Create event(s) or import iCal |
+| GET | `/api/v1/events/{id}` | Get event with locations, musicians, and timetable |
+| PUT | `/api/v1/events/{id}` | Full update |
+| DELETE | `/api/v1/events/{id}` | Delete event |
+| POST | `/api/v1/events/{id}/publish` | Publish event |
+| POST | `/api/v1/events/{id}/cancel` | Cancel event |
+| POST | `/api/v1/events/{id}/clone` | Clone event as unpublished draft |
+| POST | `/api/v1/events/{id}/assign-org` | Assign organization to unpublished event |
+| POST | `/api/v1/events/{id}/timetable` | Add timetable entries |
+| PUT | `/api/v1/events/{id}/timetable` | Replace timetable |
+
+**Event object:**
 ```json
 {
   "id": 1,
@@ -301,17 +526,21 @@ GET endpoints are public (optional auth). Write endpoints require authentication
   "end_time": "2026-05-15T23:00:00+02:00",
   "has_ball": true,
   "has_workshop": false,
+  "has_festival": false,
+  "workshop_difficulty": "beginner",
   "is_cancelled": false,
-  "tags": ["bal-folk", "Köln"],
+  "tags": ["bal-folk"],
   "is_published": true,
   "short_code": "8b911390",
   "url": "https://example.com/event/42",
+  "source": "https://example.com/feed.ics",
   "image_url": "/api/v1/images/1",
   "organization_id": 3,
   "location_id": 7,
-  "location": "Kulturzentrum",
-  "location_town": "Berlin",
-  "location_country": "Germany",
+  "location": { "id": 7, "location": "Kulturzentrum", "town": "Berlin", "geohash": "u33db2p", "osm_id": 123456, "osm_type": "way" },
+  "locations": [],
+  "musicians": [{ "id": 1, "bandname": "La Troupe", "mbid": "...", "wikidata_id": "Q12345", "discogs_id": "123", "image_url": "..." }],
+  "dance_names": ["Bourree"],
   "pricing": {
     "type": "multiple",
     "currency": "EUR",
@@ -320,231 +549,213 @@ GET endpoints are public (optional auth). Write endpoints require authentication
       { "label": "student", "amount": 8 }
     ]
   },
-  "musicians": [
-    { "id": 2, "bandname": "La Troupe" }
-  ],
-  "timetable": [
-    {
-      "id": 1, "event_id": 1,
-      "start_time": "20:00", "end_time": "21:30",
-      "title": "Workshop", "description": "string", "room": "Hall A",
-      "location_id": 7, "location_name": "Kulturzentrum",
-      "created_at": "..."
-    }
-  ],
-  "created_at": "..."
+  "booking_url": "https://tickets.example.com",
+  "availability": "limited",
+  "tickets_total": 80,
+  "booking_enabled": true,
+  "food": "snacks",
+  "drink": "bar",
+  "attributes": { "family_friendly": true },
+  "floor_condition": "good",
+  "contact_name": "Alice",
+  "contact_email": "alice@example.com",
+  "timetable": [],
+  "created_at": "2026-01-01T00:00:00Z"
 }
 ```
 
-The `pricing` field is optional. `type` must be one of:
+`pricing.type` must be `free`, `donation`, `single`, or `multiple`.
 
-| Value | Description |
-|-------|-------------|
-| `free` | No admission fee |
-| `donation` | Pay what you want |
-| `single` | One fixed price; set `amount` and optionally `currency` |
-| `multiple` | Tiered pricing; set `prices` as `[{label, amount}]` and optionally `currency` |
+Content negotiation: `Accept: text/calendar` returns iCalendar; `Accept: application/atom+xml` returns an Atom feed.
 
-`uid` is set from the iCal `UID` field on import and used for deduplication: re-importing the same feed updates existing events. Without `uid`, deduplication falls back to title + location + start time (±3 h).
+### Event List Query Parameters
 
-`timetable` and `musicians` are only populated on `GET /api/v1/events/{id}`, not in the list endpoint.
-
-### Endpoints
-
-GET endpoints are public (optional auth). Write endpoints require authentication.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/events` | List events |
-| POST | `/api/v1/events` | Create event(s) |
-| PATCH | `/api/v1/events` | Bulk-update events |
-| GET | `/api/v1/events/{id}` | Get event (includes timetable + musicians) |
-| DELETE | `/api/v1/events/{id}` | Delete event |
-| POST | `/api/v1/events/{id}/publish` | Publish event |
-| POST | `/api/v1/events/{id}/timetable` | Add timetable entries |
-| PUT | `/api/v1/events/{id}/timetable` | Replace timetable |
-| DELETE | `/api/v1/events/{id}/timetable/{entry_id}` | Delete timetable entry |
-| POST | `/api/v1/events/{id}/locations` | Attach location |
-| DELETE | `/api/v1/events/{id}/locations/{location_id}` | Detach location |
-
-**Write access:** `user`/`publisher` must be members of the event's `organization_id`. `admin` bypasses this check.
-
-**Publication:** events created by `user` or `admin` are published immediately; `publisher` and `viewer` create unpublished events.
-
-### GET /api/v1/events — query parameters
+**Text / date:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `title` | Partial match |
-| `description` | Partial match |
-| `start_time_after` | RFC3339 |
-| `start_time_before` | RFC3339 |
-| `end_time_after` | RFC3339 |
-| `end_time_before` | RFC3339 |
-| `location` | Partial match on location name |
-| `country` | Exact match on location country |
-| `lat`, `lon`, `radius_km` | Geo bounding box (all three required) |
-| `tag` | Partial match |
-| `has_ball` | `true`/`false` |
-| `has_workshop` | `true`/`false` |
-| `is_published` | `true`/`false` — admin/user only |
-| `include_past` | `true` to include past events (default: future only) |
-| `limit` | Default 100, max 1000 |
-| `offset` | Default 0 |
-| `code` | Short-code lookup (public, unauthenticated) |
+| `title` | Partial title match |
+| `description` | Partial description match |
+| `start_time_after`, `start_time_before` | Start-time range (Unix epoch or RFC3339) |
+| `end_time_after`, `end_time_before` | End-time range |
+| `created_after` | Filter by creation time |
+| `include_past` | `true` to include past events |
+| `code` | Public short-code lookup |
+| `limit`, `offset` | Pagination |
 
-Unauthenticated requests and `viewer` role only see published events.
+**Type / classification:**
 
-### POST /api/v1/events — JSON
+| Parameter | Description |
+|-----------|-------------|
+| `type` | Comma-separated event types: `ball`, `workshop`, `festival` (OR semantics) |
+| `has_ball`, `has_workshop`, `has_festival` | Individual boolean flags (legacy; prefer `type=`) |
+| `tag` | Exact tag slug |
+| `dance` | Exact dance name |
+| `dance_id` | Dance ID (integer) |
+| `difficulty` | Exact `workshop_difficulty` value (e.g. `beginner`) |
+| `pricing` | Exact pricing type: `free`, `donation`, `single`, `multiple` |
+| `wheelchair` | `1` — events at wheelchair-accessible locations |
+| `bookable` | `1` — events with online booking enabled |
+| `is_cancelled` | `1` — show cancelled events; `0` — exclude (default) |
+| `is_published` | Boolean; authenticated callers only |
 
-**Single event:**
+**Filtering by related entity:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `organization_id` | Events of the given organization |
+| `location_id` | Events at the given location |
+| `musician_id` | Events featuring the given musician |
+| `location` | Partial location-name match |
+| `country` | Exact country code |
+
+**Geo / spatial:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `lat`, `lon`, `radius_km` | Radius filter (legacy param names; post-filtering) |
+| `bbox` | Bounding box: `minLng,minLat,maxLng,maxLat` |
+| `geohash` | Geohash prefix (any length); decoded to bounding box |
+
+Unauthenticated callers only see published, non-suggestion events.
+
+### Create or Update Event
+
+`POST /api/v1/events` accepts one event object, an array of event objects, or `Content-Type: text/calendar` for iCal import. `PUT /api/v1/events/{id}` accepts a single event object.
+
+**Example body:**
 ```json
 {
   "uid": "optional-stable-id",
   "title": "Bal Folk",
   "description": "string",
-  "start_time": "2026-05-15T20:00:00",
-  "end_time": "2026-05-15T23:00:00",
+  "start_time": "2026-05-15T20:00:00+02:00",
+  "end_time": "2026-05-15T23:00:00+02:00",
   "has_ball": true,
   "has_workshop": false,
+  "has_festival": false,
   "tags": ["bal-folk"],
   "organization_id": 3,
-  "musicians": [1, 2],
+  "location_id": 7,
   "location": {
-    "location": "Kulturzentrum", "address": "Hauptstr. 1",
-    "zipcode": "10115", "town": "Berlin", "country": "Germany",
-    "latitude": "52.52", "longitude": "13.40",
+    "location": "Kulturzentrum",
+    "address": "Hauptstr. 1",
+    "zipcode": "10115",
+    "town": "Berlin",
+    "country": "Germany",
+    "latitude": 52.52,
+    "longitude": 13.4,
     "eventsite": "https://example.com/event/42"
   },
-  "pricing": { "type": "single", "amount": 10, "currency": "EUR" }
+  "musicians": [1, 2],
+  "dances": [1],
+  "pricing": { "type": "single", "amount": 10, "currency": "EUR" },
+  "booking_enabled": true,
+  "tickets_total": 80
 }
 ```
 
-**Event series** — share title/location, differ by date:
+For event series, include a `date` array on create:
+
 ```json
 {
   "title": "Weekly Dance",
   "has_ball": true,
-  "tags": ["bal-folk"],
+  "organization_id": 3,
   "location": { "location": "Kulturzentrum" },
   "date": [
-    { "description": "Week 1", "start_time": "2026-05-15T20:00:00", "end_time": "2026-05-15T23:00:00" },
-    { "description": "Week 2", "start_time": "2026-05-22T20:00:00", "end_time": "2026-05-22T23:00:00" }
+    { "description": "Week 1", "start_time": "2026-05-15T20:00:00+02:00", "end_time": "2026-05-15T23:00:00+02:00" },
+    { "description": "Week 2", "start_time": "2026-05-22T20:00:00+02:00", "end_time": "2026-05-22T23:00:00+02:00" }
   ]
 }
 ```
 
-**Multiple events** — POST a JSON array of event objects.
+iCal imports map `UID`, `SUMMARY`, `DESCRIPTION`, `DTSTART`, `DTEND`, `DURATION`, `LOCATION`, `GEO`, `CATEGORIES`, `STATUS:CANCELLED`, `ORGANIZER`, image `ATTACH`, and `RRULE`. Optional query parameter `organization_id` assigns imported events to an organization.
 
-Response `201`: array of created event objects.
-
-### POST /api/v1/events — iCal upload
-
-```
-Content-Type: text/calendar
-```
-
-Send a `.ics` file body. Optional query parameter `organization_id` assigns all imported events to an organization. iCal fields mapped:
-
-| iCal field | Event field |
-|------------|-------------|
-| `UID` | `uid` (dedup key) |
-| `SUMMARY` | `title` |
-| `DESCRIPTION` | `description` |
-| `DTSTART` / `DTEND` | `start_time` / `end_time` |
-| `DURATION` | used to derive `end_time` when `DTEND` absent |
-| `LOCATION` | location name |
-| `GEO` | location latitude/longitude |
-| `CATEGORIES` | `tags` |
-| `STATUS: CANCELLED` | `is_cancelled` |
-| `ORGANIZER` | organization (found or created by CN/email) |
-| `ATTACH` with `FMTTYPE=image/*` | event image |
-| `RRULE` | recurring events expanded into individual occurrences |
-
-### PATCH /api/v1/events
-
-Bulk-update multiple events. Body is an array of partial event objects each containing at minimum an `"id"` field.
-
-```json
-[
-  { "id": 1, "is_published": true },
-  { "id": 2, "tags": ["bal-folk", "Köln"] }
-]
-```
-
-### POST /api/v1/events/{id}/publish
-
-Publishes an unpublished event. Requires `user` or `admin` role and org membership.
-
-Response `200`: updated event object.
-
-### Timetable entries
-
-**Add (POST) / Replace (PUT) body** — array of:
+**Timetable body:**
 ```json
 [
   {
-    "start_time": "20:00", "end_time": "21:30",
-    "title": "Workshop", "description": "string",
-    "room": "Hall A", "location_id": 7
+    "start_time": "20:00",
+    "end_time": "21:30",
+    "title": "Workshop",
+    "description": "string",
+    "room": "Hall A",
+    "location_id": 7
   }
 ]
 ```
 
-`start_time` and `end_time` are `HH:MM` clock times relative to the event date.
+---
+
+## Anonymous Event Suggestions
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/v1/events/suggest-preview` | public | Parse submitted iCal or folkdance JSON without saving |
+| POST | `/api/v1/events/suggest` | public | Submit an event suggestion |
+| GET | `/api/v1/events/suggest/verify/{token}` | public | Confirm an email-verified suggestion |
+
+Suggestions are rate-limited and require email verification before publication workflow continues.
+
+---
+
+## iCal Feeds
+
+No authentication required. The dansal-web frontend serves feed URLs — the REST API also supports content negotiation directly (see [Content Negotiation](#content-negotiation)).
+
+| Feed URL | Format | Description |
+|----------|--------|-------------|
+| `/feed/events.ical` | iCal | All upcoming events |
+| `/feed/events.json` | JSON | All upcoming events |
+| `/feed/events.rss` | RSS 2.0 | All upcoming events |
+| `/feed/org/{slug}/events.{format}` | iCal / JSON / RSS | One organisation's events |
+| `/feed/location/{slug}/events.{format}` | iCal / JSON / RSS | One location's events |
+| `/feed/musician/{slug}/events.{format}` | iCal / JSON / RSS | One musician's events |
+| `/feed/ball/events.{format}` | iCal / JSON / RSS | Events tagged `bal-folk` |
+| `/feed/workshop/events.{format}` | iCal / JSON / RSS | Events tagged `workshop` |
+| `/feed/festival/events.{format}` | iCal / JSON / RSS | Events tagged `festival` |
+| `/events/{id}.ics` | iCal | Single event download |
+
+The REST API supports content negotiation on `GET /api/v1/events` and `GET /api/v1/events/{id}` for `text/calendar` (iCal) and `application/atom+xml` (Atom), with full query-parameter filtering support.
 
 ---
 
 ## Images
 
+Event images are public with optional auth on read. Musician and organization image reads are public. Writes require authentication.
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/images/{event_id}` | Get event image (AVIF) — public |
+| GET | `/api/v1/images/{event_id}` | Get event image |
 | POST | `/api/v1/images/{event_id}` | Upload event image |
 | DELETE | `/api/v1/images/{event_id}` | Delete event image |
+| GET | `/api/v1/musician-images/{id}` | Get musician image |
+| POST | `/api/v1/musician-images/{id}` | Upload musician image |
+| DELETE | `/api/v1/musician-images/{id}` | Delete musician image |
+| GET | `/api/v1/org-images/{id}` | Get organization image |
+| POST | `/api/v1/org-images/{id}` | Upload organization image |
+| DELETE | `/api/v1/org-images/{id}` | Delete organization image |
 
-Upload accepts any common image format. The image is resized to configured dimensions and stored as AVIF.
-
----
-
-## Tags
-
-### GET /api/v1/tags — public
-
-Returns all distinct tags across published events.
-
-```json
-["Bal Folk", "Workshop", "Köln"]
-```
-
----
-
-## iCal feeds — public
-
-No authentication required.
-
-| Path | Description |
-|------|-------------|
-| `GET /api/v1/events.ics` | All published events |
-| `GET /api/v1/events/tag/{tag}.ics` | Published events for a specific tag |
-| `GET /api/v1/events/town/{town}.ics` | Published events for a specific town |
-
-Supports `Accept: text/calendar` on `GET /api/v1/events` as an alternative to the `.ics` paths.
+Uploads accept common image formats. Stored images are normalized by the server image pipeline.
 
 ---
 
 ## Fetch Sources
 
-Stores external calendar feeds and imports events from them on demand. All endpoints require at least `user` role.
+Fetch sources store external calendar feeds and import events from them. All endpoints require authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/fetchurl` | List sources |
-| POST | `/api/v1/fetchurl` | Add single source and import |
-| POST | `/api/v1/fetchurl/bulk` | Add multiple sources and import |
+| POST | `/api/v1/fetchurl` | Add or update one source and import |
 | GET | `/api/v1/fetchurl/{id}` | Get source |
-| POST | `/api/v1/fetchurl/{id}/fetch` | Re-import from source |
-| POST | `/api/v1/fetchurl/fetch-all` | Re-import from all sources |
+| PATCH | `/api/v1/fetchurl/{id}` | Update source metadata |
+| DELETE | `/api/v1/fetchurl/{id}` | Delete source |
+| POST | `/api/v1/fetchurl/{id}/fetch` | Re-import one source |
+| POST | `/api/v1/fetchurl/bulk-delete` | Delete multiple sources |
+| POST | `/api/v1/fetchurl/bulk-fetch` | Re-import multiple sources |
+| POST | `/api/v1/fetchurl/bulk-assign-org` | Assign multiple sources to an organization |
 
 **Fetch source object:**
 ```json
@@ -555,78 +766,136 @@ Stores external calendar feeds and imports events from them on demand. All endpo
   "tags": ["bal-folk"],
   "organization_id": 3,
   "last_fetched_at": "2026-05-15T10:00:00Z",
-  "created_at": "..."
+  "created_at": "2026-01-01T00:00:00Z"
 }
 ```
 
-`organization_id` — when set, all events imported from this source are assigned to that organization, overriding any organizer information in the feed itself.
+Supported types include `ical`, `folkdance-json`, RSS/Gancio-style sources where enabled by the importer, and auto-detection when type is omitted.
 
-**Supported types:**
-
-| Type | Description |
-|------|-------------|
-| `ical` | Standard iCalendar feed |
-| `folkdance-json` | folkdance.page JSON API |
-
-Type is auto-detected via a HEAD request when omitted.
-
-### POST /api/v1/fetchurl
-
-```json
-{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["bal-folk"], "organization": "My Dance Club" }
-```
-
-`type` and `tags` are optional. `organization` (string name) finds or creates an organization with that name and assigns it to the source. `organization_id` (integer) takes precedence when both are provided.
-
-Re-POSTing the same URL updates its `type`, `tags`, and `organization_id` (upsert by URL).
-
-Response: array of imported event objects. `201` when all events were newly created; `200` if any were updates.
-
-### POST /api/v1/fetchurl/bulk
-
-Registers and imports multiple sources in one call. Entries that do not contain `://` are treated as tags applied to every source in the batch.
-
+**Create body:**
 ```json
 {
-  "entries": [
-    "https://example.com/feed1.ics",
-    "https://example.com/feed2.ics",
-    "bal-folk"
-  ],
-  "tags": ["Germany"],
-  "organization": "My Dance Club"
+  "url": "https://example.com/calendar.ics",
+  "type": "ical",
+  "tags": ["bal-folk"],
+  "organization": "My Dance Club",
+  "organization_id": 3
 }
 ```
 
-`type` — optional; auto-detected per URL when omitted. `organization`, `organization_id`, and `tags` are applied to all sources. `organization_id` takes precedence over `organization` when both are set.
-
-Response: array of per-source results:
+**Bulk bodies use `ids` plus the relevant operation data:**
 ```json
-[
-  { "url": "https://…/feed1.ics", "source_id": 1, "events": 12, "all_created": true },
-  { "url": "https://…/feed2.ics", "source_id": 2, "events": 3,  "all_created": false },
-  { "url": "https://…/feed3.ics", "source_id": 3, "events": 0,  "error": "remote returned 404" }
-]
+{ "ids": [1, 2, 3] }
 ```
 
-### POST /api/v1/fetchurl/fetch-all
-
-Re-imports all stored sources in parallel. Same response shape as `/bulk`.
+```json
+{ "ids": [1, 2, 3], "organization_id": 3 }
+```
 
 ---
 
-## Status codes
+## Contact Posts
+
+Contact posts are public event-local board entries for ride shares, accommodation, and similar coordination.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/contact-posts` | public | List all contact posts |
+| GET | `/api/v1/events/{id}/contact-posts` | public | List posts for one event |
+| POST | `/api/v1/events/{id}/contact-posts` | optional | Create post |
+| GET | `/api/v1/contact-posts/manage/{token}` | public | Get a post by management token |
+| PATCH | `/api/v1/contact-posts/{id}` | token | Update using `?token={manage_token}` |
+| DELETE | `/api/v1/contact-posts/token/{token}` | public | Delete using management token |
+| DELETE | `/api/v1/contact-posts/{id}` | bearer | Delete as authorized user |
+| POST | `/api/v1/contact-posts/{id}/contact` | optional | Contact poster |
+| GET | `/api/v1/contact-requests/verify/{token}` | public | Verify a contact request |
+
+**Create body:**
+```json
+{
+  "type": "ride_offer",
+  "city": "Berlin",
+  "persons": 2,
+  "message": "Leaving Friday afternoon",
+  "nickname": "Alice",
+  "email": "alice@example.com",
+  "telegram": "@alice"
+}
+```
+
+**Contact body:**
+```json
+{ "email": "bob@example.com", "telegram": "@bob", "message": "Can I join?" }
+```
+
+---
+
+## Bookings
+
+Public booking creation is available only for events with booking enabled. Management requires authentication and admin or event-organization membership.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/v1/events/{id}/bookings` | public | Create pending booking and send verification email |
+| GET | `/api/v1/bookings/verify/{token}` | public | Verify booking and return QR token |
+| GET | `/api/v1/events/{id}/bookings` | bearer | List bookings for an event |
+| GET | `/api/v1/bookings/checkin/{qr_token}` | bearer | Check in a booking |
+| PATCH | `/api/v1/bookings/{id}/status` | bearer | Set booking status |
+| DELETE | `/api/v1/bookings/{id}` | bearer | Delete booking |
+
+**Booking object:**
+```json
+{
+  "id": 1,
+  "event_id": 42,
+  "name": "Alice",
+  "email": "alice@example.com",
+  "persons": 2,
+  "message": "string",
+  "status": "confirmed",
+  "qr_token": "string",
+  "created_at": "2026-01-01T00:00:00Z"
+}
+```
+
+**Create body:**
+```json
+{ "name": "Alice", "email": "alice@example.com", "persons": 2, "message": "string" }
+```
+
+**Status body:**
+```json
+{ "status": "approved" }
+```
+
+Allowed management statuses are `approved` and `cancelled`.
+
+---
+
+## Telegram Webhook
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/telegram/webhook` | public | Telegram bot webhook |
+
+---
+
+## Status Codes
 
 | Code | Meaning |
 |------|---------|
 | 200 | OK |
 | 201 | Created |
-| 204 | No content (delete / logout) |
-| 400 | Bad request / invalid input |
+| 202 | Accepted |
+| 204 | No content |
+| 400 | Bad request or invalid input |
 | 401 | Missing or invalid credentials |
-| 403 | Forbidden (wrong role or not org member) |
+| 403 | Forbidden |
 | 404 | Not found |
+| 410 | Gone or expired token |
+| 413 | Request entity too large |
 | 415 | Unsupported media type |
-| 429 | Rate limit exceeded (login) |
-| 502 | Bad gateway (upstream fetch failed) |
+| 422 | Unprocessable content |
+| 429 | Rate limit exceeded |
 | 500 | Internal server error |
+| 502 | Bad gateway or upstream fetch failed |

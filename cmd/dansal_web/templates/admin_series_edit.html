@@ -115,13 +115,8 @@
     <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
     <td class="col-actions" style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="Bearbeiten">{{$.Strings.T "admin_edit"}} ↗</a>
-      <form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline">
-        <button class="btn-sm">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
-      </form>
-      <form method="post" action="/admin/events/{{.ID}}/delete" style="display:inline"
-            onsubmit="return confirm('{{$.Strings.T "admin_delete"}}?')">
-        <button class="btn-sm btn-del">✕</button>
-      </form>
+      <button class="btn-sm" type="button" onclick="postTo('/admin/events/{{.ID}}/cancel')">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
+      <button class="btn-sm btn-del" type="button" onclick="if(confirm('{{$.Strings.T "admin_delete"}}?'))postTo('/admin/events/{{.ID}}/delete')">✕</button>
     </td>
   </tr>
   {{else}}
@@ -182,6 +177,11 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
 </style>
 <script>
+function postTo(url){
+  var f=document.createElement('form');
+  f.method='POST';f.action=url;
+  document.body.appendChild(f);f.submit();
+}
 function descChanged(){
   var btn=document.getElementById('desc-save-btn');
   if(btn){btn.disabled=false;}

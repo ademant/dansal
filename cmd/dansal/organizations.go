@@ -21,7 +21,9 @@ type Organization struct {
 	Facebook      string `json:"facebook,omitempty"`
 	ContactEmail  string `json:"contact_email,omitempty"`
 	ContactName   string `json:"contact_name,omitempty"`
+	WikidataID    string `json:"wikidata_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at,omitempty"`
 	ImageURL      string `json:"image_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
@@ -46,6 +48,7 @@ type CreateOrganizationRequest struct {
 	Facebook     string `json:"facebook"`
 	ContactEmail string `json:"contact_email"`
 	ContactName  string `json:"contact_name"`
+	WikidataID   string `json:"wikidata_id"`
 	NotesMd      string `json:"notes_md"`
 }
 
@@ -114,11 +117,11 @@ func isOrgMember(userID, orgID int) bool {
 	return n > 0
 }
 
-const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), created_at, COALESCE(notes_md,'')`
+const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,'')`
 
 func scanOrg(row interface{ Scan(...any) error }) (Organization, error) {
 	var o Organization
-	if err := row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.CreatedAt, &o.NotesMd); err != nil {
+	if err := row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd); err != nil {
 		return o, err
 	}
 	o.ImageURL = orgImageURL(o.ID)
@@ -161,7 +164,6 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/organizations
 func getOrganizations(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query("SELECT " + orgSelectCols + " FROM organizations ORDER BY id")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -177,7 +179,44 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 		}
 		orgs = append(orgs, o)
 	}
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/atom+xml") {
+		writeOrgsAtom(w, r, orgs)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(orgs)
+}
+
+func writeOrgsAtom(w http.ResponseWriter, r *http.Request, orgs []Organization) {
+	host := r.Host
+	entries := make([]apiFeedEntry, 0, len(orgs))
+	for _, o := range orgs {
+		summary := o.Description
+		if len(summary) > 200 {
+			summary = summary[:200]
+		}
+		e := apiFeedEntry{
+			Title:   o.Name,
+			ID:      "https://" + host + "/api/v1/organizations/" + strconv.Itoa(o.ID),
+			Updated: atomTime(o.UpdatedAt),
+			Summary: summary,
+		}
+		if o.Website != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "alternate", Href: o.Website})
+		}
+		if o.WikidataID != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "related", Href: "https://www.wikidata.org/wiki/" + o.WikidataID})
+		}
+		entries = append(entries, e)
+	}
+	writeAtom(w, apiFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   "Organizations",
+		ID:      "https://" + r.Host + "/api/v1/organizations",
+		Updated: atomTime(0),
+		Entries: entries,
+	})
 }
 
 // GET /api/v1/organizations/check-actor-name?name=foo[&exclude_id=123]
@@ -236,8 +275,8 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	o, err := scanOrg(db.QueryRow(
-		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email, contact_name, notes_md) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING "+orgSelectCols,
-		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail, req.ContactName, req.NotesMd,
+		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email, contact_name, wikidata_id, notes_md, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,strftime('%s','now')) RETURNING "+orgSelectCols,
+		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail, req.ContactName, req.WikidataID, req.NotesMd,
 	))
 	if err != nil {
 		writeError(w, "Failed to create organization", http.StatusInternalServerError)
@@ -250,7 +289,6 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/organizations/{id}
 func getOrganization(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	id := r.PathValue("id")
 	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
@@ -265,6 +303,12 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 	if db.QueryRow("SELECT id FROM fetch_sources WHERE organization_id = ? LIMIT 1", o.ID).Scan(&fsID) == nil {
 		o.FetchSourceID = &fsID
 	}
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/atom+xml") {
+		writeOrgsAtom(w, r, []Organization{o})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(o)
 }
 
@@ -327,10 +371,11 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.Facebook = req.Facebook
 	o.ContactEmail = req.ContactEmail
 	o.ContactName = req.ContactName
+	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
 	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, notes_md=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.NotesMd, id,
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now') WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, id,
 	); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return

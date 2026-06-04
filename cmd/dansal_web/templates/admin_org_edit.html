@@ -49,6 +49,12 @@
   <label for="website">{{$.Strings.T "org_website"}}</label>
   <input id="website" type="url" name="website" value="{{.Org.Website}}" placeholder="https://example.org">
 
+  <label for="wikidata_id">{{$.Strings.T "org_wikidata"}}</label>
+  <div style="display:flex;gap:.5rem;align-items:center">
+    <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Org.WikidataID}}" placeholder="Q12345" style="flex:1">
+    {{with .Org.WikidataID}}<a href="https://www.wikidata.org/wiki/{{.}}" target="_blank" rel="noopener" class="btn-sm mb-open" style="flex-shrink:0">↗ Wikidata</a>{{end}}
+  </div>
+
   <label for="contact_name">{{$.Strings.T "org_contact_name"}}</label>
   <input id="contact_name" type="text" name="contact_name" value="{{.Org.ContactName}}">
 
@@ -286,6 +292,24 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       showPreview(f);
     }
   });
+})();
+(function(){
+  var websiteInp = document.getElementById('website');
+  var wikidataInp = document.getElementById('wikidata_id');
+  if (!websiteInp || !wikidataInp) return;
+  var site = websiteInp.value.trim();
+  if (!site || wikidataInp.value.trim()) return;
+  var sparql = 'SELECT ?item WHERE { ?item wdt:P856 "' + site + '" }';
+  fetch('https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json',
+    {headers:{'Accept':'application/sparql-results+json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var b = d.results && d.results.bindings;
+      if (b && b.length === 1) {
+        var qid = b[0].item.value.replace('http://www.wikidata.org/entity/', '');
+        wikidataInp.value = qid;
+      }
+    }).catch(function(){});
 })();
 </script>
 {{end}}

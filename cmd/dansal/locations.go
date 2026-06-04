@@ -23,10 +23,15 @@ type Location struct {
 	Region          string          `json:"region,omitempty"`
 	Latitude        *float64        `json:"latitude,omitempty"`
 	Longitude       *float64        `json:"longitude,omitempty"`
+	Geohash         string          `json:"geohash,omitempty"`
 	Internetsite    string          `json:"internetsite"`
 	OsmID           *int64          `json:"osm_id,omitempty"`
 	OsmType         string          `json:"osm_type,omitempty"`
+	WikidataID      string          `json:"wikidata_id,omitempty"`
+	MBPlaceID       string          `json:"mb_place_id,omitempty"`
 	CreatedAt       string          `json:"created_at"`
+	UpdatedAt       int64           `json:"updated_at,omitempty"`
+	DistanceKm      *float64        `json:"distance_km,omitempty"`
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`
 	NotesMd         string          `json:"notes_md,omitempty"`
 	Attributes      map[string]bool `json:"attributes,omitempty"`
@@ -63,6 +68,8 @@ type LocationCreateRequest struct {
 	Internetsite    string          `json:"internetsite"`
 	OsmID           *int64          `json:"osm_id,omitempty"`
 	OsmType         string          `json:"osm_type,omitempty"`
+	WikidataID      string          `json:"wikidata_id,omitempty"`
+	MBPlaceID       string          `json:"mb_place_id,omitempty"`
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`
 	NotesMd         string          `json:"notes_md"`
 	Attributes      map[string]bool `json:"attributes,omitempty"`
@@ -75,7 +82,8 @@ type LocationCreateRequest struct {
 const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
 	l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
-	l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
+	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
+	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
 	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,'')`
 
 func scanLocation(s scanner, loc *Location) error {
@@ -83,13 +91,17 @@ func scanLocation(s scanner, loc *Location) error {
 	if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
-		&loc.CreatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition); err != nil {
+		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition); err != nil {
 		return err
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
 		json.Unmarshal([]byte(attrsJSON), &loc.Attributes)
 	}
 	loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
+	if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
+		loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
+	}
 	return nil
 }
 
@@ -220,11 +232,37 @@ type LocationUpdateRequest struct {
 
 // GET /api/v1/locations - List all locations
 func getLocations(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	q := r.URL.Query()
+
+	// Determine if lat/lng/radius geo search is requested (for haversine distance).
+	var geoLat, geoLng float64
+	var geoRadius float64
+	hasGeoRadius := false
+	if latStr, lngStr, radStr := q.Get("lat"), q.Get("lng"), q.Get("radius"); latStr != "" && lngStr != "" && radStr != "" {
+		lat, latErr := strconv.ParseFloat(latStr, 64)
+		lng, lngErr := strconv.ParseFloat(lngStr, 64)
+		rad, radErr := strconv.ParseFloat(radStr, 64)
+		if latErr == nil && lngErr == nil && radErr == nil && rad > 0 {
+			geoLat, geoLng, geoRadius = lat, lng, rad
+			hasGeoRadius = true
+		}
+	}
 
 	query := `SELECT ` + locationCols + ` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
 	var args []any
-	if country := r.URL.Query().Get("country"); country != "" {
+	where := false
+
+	addWhere := func(clause string, vals ...any) {
+		if !where {
+			query += " WHERE " + clause
+			where = true
+		} else {
+			query += " AND " + clause
+		}
+		args = append(args, vals...)
+	}
+
+	if country := q.Get("country"); country != "" {
 		codes, err := parseCountryCodes(country)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusBadRequest)
@@ -232,11 +270,42 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		}
 		placeholders := strings.Repeat("?,", len(codes))
 		placeholders = placeholders[:len(placeholders)-1]
-		query += " WHERE l.country_code IN (" + placeholders + ")"
+		addWhere("l.country_code IN (" + placeholders + ")")
 		for _, c := range codes {
 			args = append(args, c)
 		}
 	}
+
+	// Task A: name, town, org_id filters
+	if name := q.Get("name"); name != "" {
+		addWhere("LOWER(l.location) LIKE LOWER(?)", "%"+name+"%")
+	}
+	if town := q.Get("town"); town != "" {
+		addWhere("l.town LIKE ?", "%"+town+"%")
+	}
+	if orgIDStr := q.Get("org_id"); orgIDStr != "" {
+		if orgID, err := strconv.Atoi(orgIDStr); err == nil {
+			addWhere("EXISTS (SELECT 1 FROM location_organizations lo2 WHERE lo2.location_id=l.id AND lo2.organization_id=?)", orgID)
+		}
+	}
+
+	// Task B: bbox and lat/lng/radius geo filters
+	if bboxStr := q.Get("bbox"); bboxStr != "" {
+		parts := strings.Split(bboxStr, ",")
+		if len(parts) == 4 {
+			minLng, e1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+			minLat, e2 := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+			maxLng, e3 := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+			maxLat, e4 := strconv.ParseFloat(strings.TrimSpace(parts[3]), 64)
+			if e1 == nil && e2 == nil && e3 == nil && e4 == nil {
+				addWhere("l.latitude BETWEEN ? AND ? AND l.longitude BETWEEN ? AND ? AND l.latitude IS NOT NULL", minLat, maxLat, minLng, maxLng)
+			}
+		}
+	} else if hasGeoRadius {
+		minLat, maxLat, minLng, maxLng := geohashRadiusToBBox(geoLat, geoLng, geoRadius)
+		addWhere("l.latitude BETWEEN ? AND ? AND l.longitude BETWEEN ? AND ? AND l.latitude IS NOT NULL", minLat, maxLat, minLng, maxLng)
+	}
+
 	query += " GROUP BY l.id"
 
 	rows, err := db.Query(query, args...)
@@ -246,6 +315,8 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	accept := r.Header.Get("Accept")
+
 	locations := []Location{}
 	for rows.Next() {
 		var location Location
@@ -253,10 +324,21 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if hasGeoRadius && location.Latitude != nil && location.Longitude != nil {
+			d := haversineKm(geoLat, geoLng, *location.Latitude, *location.Longitude)
+			location.DistanceKm = &d
+		}
 		locations = append(locations, location)
 	}
 
-	json.NewEncoder(w).Encode(locations)
+	if strings.Contains(accept, "application/geo+json") {
+		writeLocationGeoJSON(w, locations)
+	} else if strings.Contains(accept, "application/atom+xml") {
+		writeLocationsAtom(w, r, locations)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(locations)
+	}
 }
 
 // POST /api/v1/locations - Create one or more locations
@@ -348,9 +430,13 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 
 		similar := similarLocations(req.Location, street, town)
 
+		insertGH := ""
+		if req.Latitude != nil && req.Longitude != nil {
+			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
+		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, notes_md, attributes, parking, floor_condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -388,8 +474,6 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/locations/{id} - Get a specific location
 func getLocation(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	id := r.PathValue("id")
 
 	var location Location
@@ -406,7 +490,74 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(location)
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/geo+json") {
+		writeLocationGeoJSONSingle(w, location)
+	} else if strings.Contains(accept, "application/atom+xml") {
+		writeLocationsAtom(w, r, []Location{location})
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(location)
+	}
+}
+
+func writeLocationGeoJSON(w http.ResponseWriter, locations []Location) {
+	w.Header().Set("Content-Type", "application/geo+json")
+	features := make([]map[string]any, 0, len(locations))
+	for _, loc := range locations {
+		features = append(features, locationFeature(loc))
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"type":     "FeatureCollection",
+		"features": features,
+	})
+}
+
+func writeLocationGeoJSONSingle(w http.ResponseWriter, loc Location) {
+	w.Header().Set("Content-Type", "application/geo+json")
+	json.NewEncoder(w).Encode(locationFeature(loc))
+}
+
+func locationFeature(loc Location) map[string]any {
+	var geometry any
+	if loc.Latitude != nil && loc.Longitude != nil {
+		geometry = map[string]any{
+			"type":        "Point",
+			"coordinates": []float64{*loc.Longitude, *loc.Latitude},
+		}
+	}
+	return map[string]any{
+		"type":       "Feature",
+		"geometry":   geometry,
+		"properties": loc,
+	}
+}
+
+func writeLocationsAtom(w http.ResponseWriter, r *http.Request, locations []Location) {
+	host := r.Host
+	entries := make([]apiFeedEntry, 0, len(locations))
+	for _, loc := range locations {
+		e := apiFeedEntry{
+			Title:   loc.Location,
+			ID:      "https://" + host + "/api/v1/locations/" + strconv.Itoa(loc.ID),
+			Updated: atomTime(loc.UpdatedAt),
+			Summary: loc.Town,
+		}
+		if loc.Internetsite != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "alternate", Href: loc.Internetsite})
+		}
+		if loc.WikidataID != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "related", Href: "https://www.wikidata.org/wiki/" + loc.WikidataID})
+		}
+		entries = append(entries, e)
+	}
+	writeAtom(w, apiFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   "Locations",
+		ID:      "https://" + r.Host + "/api/v1/locations",
+		Updated: atomTime(0),
+		Entries: entries,
+	})
 }
 
 // PATCH /api/v1/locations/{id} - Full update including organization_id
@@ -447,6 +598,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		Internetsite    string          `json:"internetsite"`
 		OsmID           *int64          `json:"osm_id"`
 		OsmType         string          `json:"osm_type"`
+		WikidataID      string          `json:"wikidata_id"`
+		MBPlaceID       string          `json:"mb_place_id"`
 		OrganizationIDs []int           `json:"organization_ids"`
 		NotesMd         string          `json:"notes_md"`
 		Attributes      map[string]bool `json:"attributes,omitempty"`
@@ -492,15 +645,22 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	loc.Internetsite = req.Internetsite
 	loc.OsmID = req.OsmID
 	loc.OsmType = req.OsmType
+	loc.WikidataID = req.WikidataID
+	loc.MBPlaceID = req.MBPlaceID
 	loc.OrganizationIDs = req.OrganizationIDs
 	loc.NotesMd = req.NotesMd
 	loc.Attributes = req.Attributes
 	loc.Parking = req.Parking
 	loc.FloorCondition = req.FloorCondition
 
+	gh := ""
+	if loc.Latitude != nil && loc.Longitude != nil {
+		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
+		loc.Geohash = gh
+	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, notes_md=?, attributes=?, parking=?, floor_condition=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, updated_at=strftime('%s','now') WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

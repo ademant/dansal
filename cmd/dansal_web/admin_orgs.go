@@ -28,6 +28,7 @@ func orgFromForm(r *http.Request) Organization {
 		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
 		ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
 		ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
+		WikidataID:   strings.TrimSpace(r.FormValue("wikidata_id")),
 		NotesMd:      strings.TrimSpace(r.FormValue("notes_md")),
 	}
 }

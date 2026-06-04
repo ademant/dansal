@@ -176,7 +176,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&locAttrsJSON, &evtAttrsJSON,
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
-		&createdByID); err != nil {
+		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash); err != nil {
 		return Event{}, err
 	}
 	if createdByID.Valid {
@@ -288,6 +288,9 @@ func scanEventRow(s scanner) (Event, error) {
 		}
 		if locAttrsJSON != "" && locAttrsJSON != "{}" {
 			json.Unmarshal([]byte(locAttrsJSON), &loc.Attributes)
+		}
+		if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
+			loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 		}
 		event.Location = &loc
 	}
@@ -451,6 +454,72 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 			*args = append(*args, lat-latDelta, lat+latDelta, lon-lonDelta, lon+lonDelta)
 		}
 	}
+	// Task C: bbox geo filter
+	if bboxStr := q.Get("bbox"); bboxStr != "" {
+		parts := strings.Split(bboxStr, ",")
+		if len(parts) == 4 {
+			minLng, e1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+			minLat, e2 := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+			maxLng, e3 := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+			maxLat, e4 := strconv.ParseFloat(strings.TrimSpace(parts[3]), 64)
+			if e1 == nil && e2 == nil && e3 == nil && e4 == nil {
+				*query += " AND l.latitude BETWEEN ? AND ? AND l.longitude BETWEEN ? AND ? AND l.latitude IS NOT NULL"
+				*args = append(*args, minLat, maxLat, minLng, maxLng)
+			}
+		}
+	}
+	// Task C: geohash filter
+	if ghStr := q.Get("geohash"); ghStr != "" {
+		minLat, maxLat, minLng, maxLng := geohashBBox(ghStr)
+		*query += " AND l.latitude BETWEEN ? AND ? AND l.longitude BETWEEN ? AND ? AND l.latitude IS NOT NULL"
+		*args = append(*args, minLat, maxLat, minLng, maxLng)
+	}
+	// Task D: type filter (ball, workshop, festival)
+	if typeStr := q.Get("type"); typeStr != "" {
+		types := strings.Split(typeStr, ",")
+		var typeClauses []string
+		for _, t := range types {
+			switch strings.TrimSpace(t) {
+			case "ball":
+				typeClauses = append(typeClauses, "e.has_ball=1")
+			case "workshop":
+				typeClauses = append(typeClauses, "e.has_workshop=1")
+			case "festival":
+				typeClauses = append(typeClauses, "e.has_festival=1")
+			}
+		}
+		if len(typeClauses) > 0 {
+			*query += " AND (" + strings.Join(typeClauses, " OR ") + ")"
+		}
+	}
+	// Task D: dance_id filter
+	if v := q.Get("dance_id"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			*query += " AND EXISTS (SELECT 1 FROM event_dances ed WHERE ed.event_id=e.id AND ed.dance_id=?)"
+			*args = append(*args, n)
+		}
+	}
+	// Task D: difficulty filter
+	if v := q.Get("difficulty"); v != "" {
+		*query += " AND e.workshop_difficulty=?"
+		*args = append(*args, v)
+	}
+	// Task D: pricing=free filter
+	if v := q.Get("pricing"); v == "free" {
+		*query += ` AND e.pricing LIKE '%"type":"free"%'`
+	}
+	// Task D: wheelchair filter
+	if q.Get("wheelchair") == "1" {
+		*query += ` AND e.attributes LIKE '%"wheelchair":true%'`
+	}
+	// Task D: bookable filter
+	if q.Get("bookable") == "1" {
+		*query += " AND e.booking_enabled=1"
+	}
+	// Task D: is_cancelled filter
+	if q.Get("is_cancelled") == "1" {
+		*query += " AND e.is_cancelled=1"
+	}
 	if v := q.Get("organization_id"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			*query += " AND e.organization_id = ?"
@@ -490,6 +559,21 @@ func applyPagination(r *http.Request, query *string, args *[]any) {
 	}
 	*query += " ORDER BY e.start_time ASC LIMIT ? OFFSET ?"
 	*args = append(*args, limit, offset)
+}
+
+// GET /api/v1/vocabulary
+func getVocabulary(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{
+		"event_types": []map[string]string{
+			{"key": "ball", "label": "Ball"},
+			{"key": "workshop", "label": "Workshop"},
+			{"key": "festival", "label": "Festival"},
+		},
+		"workshop_difficulties": []string{"beginner", "intermediate", "advanced"},
+		"pricing_types":         []string{"free", "donation", "single", "multiple"},
+		"attributes":            []string{"wheelchair", "bar", "kitchen"},
+		"osm_types":             []string{"node", "way", "relation"},
+	})
 }
 
 // ── event insert / update ──────────────────────────────────────────────────
@@ -692,7 +776,21 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		return 0, "", false, err
 	}
 	id, _ := result.LastInsertId()
+	syncEventLocationGeohash(int(id))
 	return int(id), shortCode, true, nil
+}
+
+// syncEventLocationGeohash updates location_geohash on an event from its location's coordinates.
+func syncEventLocationGeohash(eventID int) {
+	var lat, lng sql.NullFloat64
+	if err := db.QueryRow(
+		`SELECT l.latitude, l.longitude FROM locations l
+		 JOIN events e ON l.id=e.location_id WHERE e.id=?`, eventID,
+	).Scan(&lat, &lng); err != nil || !lat.Valid || !lng.Valid {
+		return
+	}
+	gh := geohashEncode(lat.Float64, lng.Float64, 7)
+	db.Exec("UPDATE events SET location_geohash=? WHERE id=?", gh, eventID)
 }
 
 // createEventFromRequest inserts or updates all events described by req.
@@ -802,7 +900,8 @@ func annotateEditable(events []Event, userRole string, userID int) {
 func fetchEventMusicians(eventID int) ([]Musician, error) {
 	rows, err := db.Query(
 		`SELECT m.id, m.bandname, COALESCE(m.short_name,''), COALESCE(m.internetsite,''),
-		 COALESCE(m.description,''), m.created_at
+		 COALESCE(m.description,''), COALESCE(m.mbid,''), COALESCE(m.wikidata_id,''),
+		 COALESCE(m.discogs_id,''), m.created_at
 		 FROM musicians m JOIN event_musicians em ON m.id = em.musician_id
 		 WHERE em.event_id = ? ORDER BY m.bandname`,
 		eventID,
@@ -814,9 +913,11 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 	var musicians []Musician
 	for rows.Next() {
 		var m Musician
-		if err := rows.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
+			&m.MBID, &m.WikidataID, &m.DiscogsID, &m.CreatedAt); err != nil {
 			return nil, err
 		}
+		m.ImageURL = musicianImageURL(m.ID)
 		musicians = append(musicians, m)
 	}
 	return musicians, nil
@@ -882,8 +983,9 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 	const sel = `SELECT l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
 		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''),
 		COALESCE(l.country_code,''), COALESCE(l.region,''), l.latitude,
-		l.longitude, COALESCE(l.internetsite,''), l.created_at,
-		COALESCE(GROUP_CONCAT(lo.organization_id),'')
+		l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
+		COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
+		l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),'')
 		FROM locations l
 		LEFT JOIN location_organizations lo ON l.id=lo.location_id
 		JOIN events e ON l.id=e.location_id
@@ -894,7 +996,9 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 	err := db.QueryRow(sel, eventID).Scan(
 		&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region, &lat, &lng,
-		&loc.Internetsite, &loc.CreatedAt, &orgIDsStr,
+		&loc.Internetsite, &loc.OsmID, &loc.OsmType,
+		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
+		&loc.CreatedAt, &orgIDsStr,
 	)
 	if err != nil {
 		return nil, err
@@ -906,6 +1010,9 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 	if lng.Valid {
 		v := lng.Float64
 		loc.Longitude = &v
+	}
+	if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
+		loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
 	return []Location{loc}, nil
@@ -1033,10 +1140,46 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/calendar")
 		w.Write([]byte(cal.Serialize()))
+	} else if strings.Contains(accept, "application/atom+xml") {
+		writeEventsAtom(w, r, events)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(events)
 	}
+}
+
+func writeEventsAtom(w http.ResponseWriter, r *http.Request, events []Event) {
+	host := r.Host
+	entries := make([]apiFeedEntry, 0, len(events))
+	for _, ev := range events {
+		updatedAt := ev.ChangedAt
+		if updatedAt == "" {
+			updatedAt = ev.CreatedAt
+		}
+		summary := ev.Description
+		if len(summary) > 300 {
+			summary = summary[:300]
+		}
+		e := apiFeedEntry{
+			Title:   ev.Title,
+			ID:      "https://" + host + "/api/v1/events/" + strconv.Itoa(ev.ID),
+			Updated: atomTimeStr(updatedAt),
+			Summary: summary,
+		}
+		href := ev.URL
+		if href == "" {
+			href = "https://" + host + "/events/" + strconv.Itoa(ev.ID)
+		}
+		e.Links = append(e.Links, apiFeedLink{Rel: "alternate", Href: href})
+		entries = append(entries, e)
+	}
+	writeAtom(w, apiFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   "Events",
+		ID:      "https://" + r.Host + "/api/v1/events",
+		Updated: atomTime(0),
+		Entries: entries,
+	})
 }
 
 // POST /api/v1/events
@@ -1307,6 +1450,8 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		addEventToCalendar(cal, event)
 		w.Header().Set("Content-Type", "text/calendar")
 		w.Write([]byte(cal.Serialize()))
+	} else if strings.Contains(accept, "application/atom+xml") {
+		writeEventsAtom(w, r, []Event{event})
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(event)
@@ -1433,6 +1578,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	syncEventLocationGeohash(id)
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {

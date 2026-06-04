@@ -239,6 +239,7 @@ type Organization struct {
 	Facebook      string `json:"facebook,omitempty"`
 	ContactEmail  string `json:"contact_email,omitempty"`
 	ContactName   string `json:"contact_name,omitempty"`
+	WikidataID    string `json:"wikidata_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
 	ImageURL      string `json:"image_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`

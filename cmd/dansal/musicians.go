@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 type Musician struct {
@@ -31,6 +33,7 @@ type Musician struct {
 	Genre        string `json:"genre,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at,omitempty"`
 }
 
 type MusicianCreateRequest struct {
@@ -61,35 +64,62 @@ const musicianCols = `id, bandname,
 	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
 	COALESCE(mastodon,''), COALESCE(instagram,''),
 	COALESCE(facebook,''), COALESCE(soundcloud,''),
-	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at`
+	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at, COALESCE(updated_at,0)`
 
 func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 	var m Musician
 	err := row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
 		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
 		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud,
-		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt)
+		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
 	}
 	return m, err
 }
 
-// GET /api/v1/musicians - List all musicians; optional ?organization_id=N filter
+// GET /api/v1/musicians - List all musicians; optional filters
 func getMusicians(w http.ResponseWriter, r *http.Request) {
-	var rows *sql.Rows
-	var err error
-	if orgIDStr := r.URL.Query().Get("organization_id"); orgIDStr != "" {
-		rows, err = db.Query(
-			`SELECT `+musicianCols+` FROM musicians
-			 WHERE id IN (
+	q := r.URL.Query()
+	query := "SELECT " + musicianCols + " FROM musicians"
+	var args []any
+	where := false
+
+	addWhere := func(clause string, vals ...any) {
+		if !where {
+			query += " WHERE " + clause
+			where = true
+		} else {
+			query += " AND " + clause
+		}
+		args = append(args, vals...)
+	}
+
+	if orgIDStr := q.Get("organization_id"); orgIDStr != "" {
+		addWhere(`id IN (
 			   SELECT DISTINCT em.musician_id FROM event_musicians em
 			   JOIN events e ON e.id = em.event_id
 			   WHERE e.organization_id = ? AND e.is_published = 1
-			 ) ORDER BY bandname`, orgIDStr)
-	} else {
-		rows, err = db.Query("SELECT " + musicianCols + " FROM musicians ORDER BY bandname")
+			 )`, orgIDStr)
 	}
+	if name := q.Get("name"); name != "" {
+		addWhere("LOWER(bandname) LIKE LOWER(?)", "%"+name+"%")
+	}
+	if mbid := q.Get("mbid"); mbid != "" {
+		addWhere("mbid=?", mbid)
+	}
+	if wid := q.Get("wikidata_id"); wid != "" {
+		addWhere("wikidata_id=?", wid)
+	}
+	if did := q.Get("discogs_id"); did != "" {
+		addWhere("discogs_id=?", did)
+	}
+	if country := q.Get("country"); country != "" {
+		addWhere("country=?", country)
+	}
+	query += " ORDER BY bandname"
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -106,7 +136,46 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		musicians = append(musicians, m)
 	}
 
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/atom+xml") {
+		writeMusiciansAtom(w, r, musicians)
+		return
+	}
 	writeJSON(w, musicians)
+}
+
+func writeMusiciansAtom(w http.ResponseWriter, r *http.Request, musicians []Musician) {
+	host := r.Host
+	entries := make([]apiFeedEntry, 0, len(musicians))
+	for _, m := range musicians {
+		summary := m.Description
+		if len(summary) > 200 {
+			summary = summary[:200]
+		}
+		e := apiFeedEntry{
+			Title:   m.Bandname,
+			ID:      "https://" + host + "/api/v1/musicians/" + strconv.Itoa(m.ID),
+			Updated: atomTime(m.UpdatedAt),
+			Summary: summary,
+		}
+		if m.Internetsite != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "alternate", Href: m.Internetsite})
+		}
+		if m.MBID != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "related", Href: "https://musicbrainz.org/artist/" + m.MBID})
+		}
+		if m.WikidataID != "" {
+			e.Links = append(e.Links, apiFeedLink{Rel: "related", Href: "https://www.wikidata.org/wiki/" + m.WikidataID})
+		}
+		entries = append(entries, e)
+	}
+	writeAtom(w, apiFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   "Musicians",
+		ID:      "https://" + r.Host + "/api/v1/musicians",
+		Updated: atomTime(0),
+		Entries: entries,
+	})
 }
 
 // GET /api/v1/musicians/{id} - Get single musician
@@ -121,6 +190,11 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/atom+xml") {
+		writeMusiciansAtom(w, r, []Musician{musician})
+		return
+	}
 	writeJSON(w, musician)
 }
 
@@ -196,7 +270,8 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
-		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=? WHERE id=?`,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?,
+		 updated_at=strftime('%s','now') WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 		req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,

@@ -78,6 +78,7 @@
              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="[0-9a-f\-]*">
       {{if .Musician.MBID}}<a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ MusicBrainz</a>{{end}}
     </div>
+    <div id="mb-albums"></div>
     <label for="wikidata_id">{{$.Strings.T "musician_wikidata"}}</label>
     <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Musician.WikidataID}}" placeholder="Q12345">
     <label for="discogs_id">Discogs ID</label>
@@ -187,6 +188,10 @@ function toggleSec(btn){
     btn.textContent=body.hidden?'✎':'✕';
   }
 }
+if ({{if .Data.IsNew}}true{{else}}false{{end}}) {
+  document.querySelectorAll('.sec-body').forEach(function(b){ b.hidden=false; });
+  document.querySelectorAll('.btn-sec-edit').forEach(function(b){ b.textContent='✕'; });
+}
 </script>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
@@ -198,6 +203,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   var bcRes       = document.getElementById('bandcamp-results');
   var matchHint   = document.getElementById('match-hint');
   var mbidInp     = document.getElementById('mbid');
+  var wikidataInp = document.getElementById('wikidata_id');
   var discogsIdInp= document.getElementById('discogs_id');
   var nameInp     = document.getElementById('bandname');
   var countryInp  = document.getElementById('country');
@@ -296,7 +302,47 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
         mbidInp.focus();
         fetchMBDetails(a.id);
       });
-      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
+      var expBtn = document.createElement('button');
+      expBtn.type = 'button';
+      expBtn.textContent = '▶';
+      expBtn.title = 'Show releases';
+      expBtn.style.cssText = 'background:#555;color:#fff;border:none;border-radius:3px;padding:.15rem .4rem;font-size:.75rem;cursor:pointer;flex-shrink:0';
+      (function(mbid, li, btn){
+        var loaded = false;
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var sub = li.querySelector('.mb-releases');
+          if (sub) { sub.remove(); btn.textContent='▶'; return; }
+          if (loaded) return;
+          loaded = true;
+          btn.textContent = '…';
+          fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=release-groups&fmt=json',
+            {headers:{'Accept':'application/json'}})
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+              var rgs = (d['release-groups']||[])
+                .filter(function(rg){ return rg['primary-type']==='Album'; })
+                .sort(function(a,b){ return (a['first-release-date']||'').localeCompare(b['first-release-date']||''); })
+                .slice(0,5);
+              var sub = document.createElement('ul');
+              sub.className = 'mb-releases';
+              sub.style.cssText = 'margin:.3rem 0 0 0;padding:0 0 0 .5rem;list-style:none;font-size:.78rem;color:#555;border-left:2px solid #b3d4f5;width:100%';
+              if (!rgs.length) {
+                var li2=document.createElement('li'); li2.textContent='No albums found'; sub.appendChild(li2);
+              }
+              rgs.forEach(function(rg){
+                var li2=document.createElement('li');
+                var yr = rg['first-release-date'] ? rg['first-release-date'].slice(0,4) : '';
+                li2.textContent = (yr ? yr+' — ' : '') + rg.title;
+                sub.appendChild(li2);
+              });
+              li.style.flexWrap='wrap';
+              li.appendChild(sub);
+              btn.textContent='▼';
+            }).catch(function(){ btn.textContent='▶'; loaded=false; });
+        });
+      })(a.id, li, expBtn);
+      li.appendChild(info); li.appendChild(meta); li.insertBefore(expBtn, btn); li.appendChild(btn);
       mbResults.appendChild(li);
     });
     highlightMatches();
@@ -386,7 +432,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   }
 
   function fetchMBDetails(mbid){
-    fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=url-rels+genres+annotation&fmt=json', {headers:{'Accept':'application/json'}})
+    fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=url-rels+genres+annotation+release-groups&fmt=json', {headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
       .then(function(d){
         if (d.genres && d.genres.length && !genreInp.value)
@@ -406,12 +452,51 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
             if (m) facebookInp.value = m[1];
           }
         });
+        // Show top albums
+        var albumsDiv = document.getElementById('mb-albums');
+        if (albumsDiv && d['release-groups']) {
+          var rgs = (d['release-groups'])
+            .filter(function(rg){ return rg['primary-type']==='Album'; })
+            .sort(function(a,b){ return (a['first-release-date']||'').localeCompare(b['first-release-date']||''); })
+            .slice(0,5);
+          if (rgs.length) {
+            var ul = document.createElement('ul');
+            ul.style.cssText = 'margin:.3rem 0 0 0;padding:0 0 0 .5rem;list-style:none;font-size:.78rem;color:#555;border-left:2px solid #b3d4f5';
+            rgs.forEach(function(rg){
+              var li = document.createElement('li');
+              var yr = rg['first-release-date'] ? rg['first-release-date'].slice(0,4) : '';
+              li.textContent = (yr ? yr+' — ' : '') + rg.title;
+              ul.appendChild(li);
+            });
+            albumsDiv.innerHTML = '';
+            albumsDiv.appendChild(ul);
+          }
+        }
       })
       .catch(function(){});
   }
 
   searchBtn.addEventListener('click', doSearch);
   searchInput.addEventListener('keydown', function(e){ if (e.key==='Enter'){ e.preventDefault(); doSearch(); } });
+
+  // Auto-fetch Wikidata QID if MBID is set but wikidata_id is empty
+  (function(){
+    var mbid = mbidInp && mbidInp.value.trim();
+    var wid  = wikidataInp && wikidataInp.value.trim();
+    if (mbid && !wid) {
+      var sparql = 'SELECT ?item WHERE { ?item wdt:P434 "' + mbid + '" }';
+      fetch('https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json',
+        {headers:{'Accept':'application/sparql-results+json'}})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var b = d.results && d.results.bindings;
+          if (b && b.length === 1) {
+            var qid = b[0].item.value.replace('http://www.wikidata.org/entity/', '');
+            wikidataInp.value = qid;
+          }
+        }).catch(function(){});
+    }
+  })();
 })();
 
 // Image drop zone

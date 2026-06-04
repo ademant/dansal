@@ -1273,6 +1273,24 @@ func migrateDB() {
 		db.Exec("ALTER TABLE pending_registrations ADD COLUMN user_id INTEGER REFERENCES users(id)")
 		mark(3)
 	}
+	// v4: #463 geohash on locations, #464 location_geohash on events,
+	//     #469 wikidata/MB place ID on locations, #471 wikidata on orgs,
+	//     #477 updated_at on musicians/locations/organizations.
+	if !applied(4) {
+		db.Exec("ALTER TABLE locations ADD COLUMN geohash TEXT")
+		db.Exec("ALTER TABLE locations ADD COLUMN wikidata_id TEXT")
+		db.Exec("ALTER TABLE locations ADD COLUMN mb_place_id TEXT")
+		db.Exec("ALTER TABLE events ADD COLUMN location_geohash TEXT")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_location_geohash ON events(location_geohash)")
+		db.Exec("ALTER TABLE organizations ADD COLUMN wikidata_id TEXT")
+		db.Exec("ALTER TABLE musicians ADD COLUMN updated_at INTEGER")
+		db.Exec("ALTER TABLE locations ADD COLUMN updated_at INTEGER")
+		db.Exec("ALTER TABLE organizations ADD COLUMN updated_at INTEGER")
+		db.Exec("UPDATE musicians SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
+		db.Exec("UPDATE locations SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
+		db.Exec("UPDATE organizations SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
+		mark(4)
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1471,10 +1489,12 @@ func createTables() error {
 		fetch_source_id INTEGER,
 		has_lost_found INTEGER NOT NULL DEFAULT 0,
 		expires_at INTEGER,
+		location_geohash TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
+	CREATE INDEX IF NOT EXISTS idx_events_location_geohash ON events(location_geohash);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
@@ -1502,11 +1522,15 @@ func createTables() error {
 		internetsite TEXT,
 		osm_id INTEGER,
 		osm_type TEXT,
+		geohash TEXT,
+		wikidata_id TEXT,
+		mb_place_id TEXT,
 		notes_md TEXT,
 		attributes TEXT,
 		parking TEXT,
 		floor_condition TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at INTEGER
 	);
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1529,7 +1553,8 @@ func createTables() error {
 		spotify TEXT,
 		deezer TEXT,
 		genre TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at INTEGER
 	);
 	CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1583,7 +1608,9 @@ func createTables() error {
 		contact_email TEXT,
 		contact_name TEXT,
 		notes_md TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		wikidata_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at INTEGER
 	);
 	CREATE TABLE IF NOT EXISTS organization_members (
 		organization_id INTEGER NOT NULL,
@@ -1950,6 +1977,7 @@ func main() {
 
 	// Public reads — OptionalTokenMiddleware enriches the response when a valid
 	// token is present (e.g. editable flag, unpublished events).
+	smux.HandleFunc("GET /api/v1/vocabulary", getVocabulary)
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
 	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))

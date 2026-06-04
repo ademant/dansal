@@ -302,17 +302,6 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse start date
-	if req.StartDate == "" {
-		writeError(w, "start_date is required", http.StatusBadRequest)
-		return
-	}
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
-	if err != nil {
-		writeError(w, "invalid start_date: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	// Parse default times
 	startTimeStr := req.DefaultStartTime
 	endTimeStr := req.DefaultEndTime
@@ -323,37 +312,42 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		endTimeStr = "23:00"
 	}
 
-	// Parse recurrence interval
-	interval := 7 // weekly default
-	if req.Recurrence == "biweekly" {
-		interval = 14
-	}
-
-	// Compute dates
+	// Compute dates from recurrence only when start_date is provided.
 	var dates []time.Time
-	if req.EndDate != "" {
-		endDate, err := time.Parse("2006-01-02", req.EndDate)
+	if req.StartDate != "" {
+		startDate, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
-			writeError(w, "invalid end_date", http.StatusBadRequest)
+			writeError(w, "invalid start_date: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		d := startDate
-		for !d.After(endDate) && len(dates) < 52 {
-			dates = append(dates, d)
-			d = d.AddDate(0, 0, interval)
+		interval := 7
+		if req.Recurrence == "biweekly" {
+			interval = 14
 		}
-	} else {
-		n := req.Occurrences
-		if n <= 0 {
-			n = 10
-		}
-		if n > 52 {
-			n = 52
-		}
-		d := startDate
-		for i := 0; i < n; i++ {
-			dates = append(dates, d)
-			d = d.AddDate(0, 0, interval)
+		if req.EndDate != "" {
+			endDate, err := time.Parse("2006-01-02", req.EndDate)
+			if err != nil {
+				writeError(w, "invalid end_date", http.StatusBadRequest)
+				return
+			}
+			d := startDate
+			for !d.After(endDate) && len(dates) < 52 {
+				dates = append(dates, d)
+				d = d.AddDate(0, 0, interval)
+			}
+		} else {
+			n := req.Occurrences
+			if n <= 0 {
+				n = 10
+			}
+			if n > 52 {
+				n = 52
+			}
+			d := startDate
+			for i := 0; i < n; i++ {
+				dates = append(dates, d)
+				d = d.AddDate(0, 0, interval)
+			}
 		}
 	}
 

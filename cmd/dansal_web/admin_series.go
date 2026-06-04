@@ -129,13 +129,10 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		token := getSessionToken(r)
 
 		body := map[string]any{
-			"title":               strings.TrimSpace(r.FormValue("title")),
-			"description":         strings.TrimSpace(r.FormValue("description")),
-			"default_start_time":  r.FormValue("default_start_time"),
-			"default_end_time":    r.FormValue("default_end_time"),
-			"start_date":          r.FormValue("start_date"),
-			"recurrence":          r.FormValue("recurrence"),
-			"end_date":            r.FormValue("end_date"),
+			"title":              strings.TrimSpace(r.FormValue("title")),
+			"description":        strings.TrimSpace(r.FormValue("description")),
+			"default_start_time": r.FormValue("default_start_time"),
+			"default_end_time":   r.FormValue("default_end_time"),
 		}
 
 		if v := r.FormValue("organization_id"); v != "" {
@@ -160,6 +157,30 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Error(w, "failed to create series: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		// Add manually entered dates from the growing date table.
+		dates := r.Form["series_date"]
+		starts := r.Form["series_start"]
+		ends := r.Form["series_end"]
+		for i, d := range dates {
+			d = strings.TrimSpace(d)
+			if d == "" {
+				continue
+			}
+			st := r.FormValue("default_start_time")
+			et := r.FormValue("default_end_time")
+			if i < len(starts) && strings.TrimSpace(starts[i]) != "" {
+				st = starts[i]
+			}
+			if i < len(ends) && strings.TrimSpace(ends[i]) != "" {
+				et = ends[i]
+			}
+			_ = client.AddSeriesDate(r.Context(), created.ID, map[string]any{
+				"date":       d,
+				"start_time": st,
+				"end_time":   et,
+			}, token)
+		}
+
 		// Assign any events that were passed from the bulk-assign flow.
 		var assignIDs []int
 		for _, s := range r.Form["assign_event_ids"] {

@@ -72,8 +72,9 @@
 <section style="margin-bottom:2rem;padding:1rem;background:#f8f9fa;border:1px solid #ddd;border-radius:6px">
   <h2 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "series_invite_link"}}</h2>
   {{if .Series.InviteToken}}
-  <p style="margin:.25rem 0">
-    <a href="{{.BaseURL}}/series_token/{{.Series.InviteToken}}" target="_blank" style="word-break:break-all">{{.BaseURL}}/series_token/{{.Series.InviteToken}}</a>
+  <p style="margin:.25rem 0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+    <a id="invite-link" href="{{.BaseURL}}/series_token/{{.Series.InviteToken}}" target="_blank" style="word-break:break-all">{{.BaseURL}}/series_token/{{.Series.InviteToken}}</a>
+    <button type="button" class="btn-sm" onclick="copyInviteLink(this)" title="{{$.Strings.T "series_copy_link"}}">{{$.Strings.T "series_copy_link"}}</button>
   </p>
   <form method="post" action="/admin/series/{{.Series.ID}}/token/regenerate" style="display:inline">
     <button class="btn-sm">{{$.Strings.T "series_regenerate_token"}}</button>
@@ -175,6 +176,13 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
 </style>
 <script>
+function copyInviteLink(btn){
+  var url=document.getElementById('invite-link').href;
+  navigator.clipboard.writeText(url).then(function(){
+    var orig=btn.textContent;btn.textContent='✓';
+    setTimeout(function(){btn.textContent=orig;},1500);
+  });
+}
 function postTo(url){
   var f=document.createElement('form');
   f.method='POST';f.action=url;

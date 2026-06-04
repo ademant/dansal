@@ -2314,3 +2314,23 @@ func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// POST /api/v1/events/{id}/remove-from-series
+func removeEventFromSeries(w http.ResponseWriter, r *http.Request) {
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	db.Exec("UPDATE events SET series_id=NULL WHERE id=?", eventID)
+	w.WriteHeader(http.StatusNoContent)
+}

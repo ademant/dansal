@@ -436,6 +436,30 @@
   </div>
 </form>
 
+<!-- Series assignment -->
+<div class="save-tpl-details" style="margin-top:1rem">
+  <div style="font-weight:600;font-size:.9rem;color:#1a6eb5;margin-bottom:.6rem">{{$.Strings.T "evt_series_section"}}</div>
+  {{if .CurrentSeries}}
+  <p style="margin:0 0 .5rem;font-size:.9rem">{{$.Strings.T "evt_series_current"}}: <a href="/admin/series/{{.CurrentSeries.ID}}" style="font-weight:600">{{.CurrentSeries.Title}}</a></p>
+  <form method="post" action="/admin/events/{{.Event.ID}}/remove-from-series" style="display:inline">
+    <button class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "evt_series_remove_confirm"}}')">{{$.Strings.T "evt_series_remove_btn"}}</button>
+  </form>
+  {{else}}
+  <form method="post" action="/admin/events/{{.Event.ID}}/assign-series" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
+    <select name="series_id" class="assign-select" required>
+      <option value="">— {{$.Strings.T "evt_series_select"}} —</option>
+      {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+    </select>
+    <button type="submit" class="btn-sm" {{if not .Series}}disabled{{end}}>{{$.Strings.T "evt_series_assign_btn"}}</button>
+  </form>
+  {{with .Event.OrganizationID}}
+  <a href="/admin/series/new?ids={{$.Data.Event.ID}}&prefill_event_id={{$.Data.Event.ID}}&org_id={{.}}" class="btn-sm" style="text-decoration:none">+ {{$.Strings.T "evt_series_create_btn"}}</a>
+  {{else}}
+  <a href="/admin/series/new?ids={{.Event.ID}}&prefill_event_id={{.Event.ID}}" class="btn-sm" style="text-decoration:none">+ {{$.Strings.T "evt_series_create_btn"}}</a>
+  {{end}}
+  {{end}}
+</div>
+
 {{if .Templates}}
 <details class="save-tpl-details" style="margin-top:1rem" id="suggestion-tpl-details">
   <summary>{{$.Strings.T "admin_suggestion_apply_template"}}</summary>

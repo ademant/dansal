@@ -2054,6 +2054,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
 	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
+	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))

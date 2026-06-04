@@ -239,6 +239,47 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 	}
 }
 
+func adminEventAssignSeriesHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
+		token := getSessionToken(r)
+		if seriesID > 0 {
+			_ = client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, token)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminEventRemoveFromSeriesHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		_ = client.RemoveEventFromSeries(r.Context(), id, token)
+		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
 func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -1373,6 +1414,8 @@ type AdminEventEditData struct {
 	ErrorKey           string
 	UserOrgs           []Organization
 	Templates          []EventTemplate
+	Series             []EventSeries  // series the user can assign to
+	CurrentSeries      *EventSeries   // set when event already belongs to a series
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -1470,6 +1513,24 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 				}
 			}
 		}
+		seriesList, _ := client.GetSeriesList(r.Context(), tok)
+		var currentSeries *EventSeries
+		if event.SeriesID != nil {
+			for i := range seriesList {
+				if seriesList[i].ID == *event.SeriesID {
+					currentSeries = &seriesList[i]
+					break
+				}
+			}
+			// Series may belong to a different org than the user has access to;
+			// fetch it directly if not found in the accessible list.
+			if currentSeries == nil {
+				s, err := client.GetSeriesByID(r.Context(), *event.SeriesID, tok)
+				if err == nil {
+					currentSeries = &s
+				}
+			}
+		}
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
@@ -1483,6 +1544,8 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			SelectedDanceNames: buildSelectedDanceNames(event),
 			UserOrgs:           userOrgs,
 			Templates:          editTemplates,
+			Series:             seriesList,
+			CurrentSeries:      currentSeries,
 		}))
 	}
 }

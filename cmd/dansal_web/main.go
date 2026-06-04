@@ -240,6 +240,8 @@ func main() {
 		r.HandleFunc("POST /admin/events/new", adminRateLimit(adminEventCreateHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("GET /admin/events/{id}/edit", adminEventEditPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/events/{id}/edit", adminRateLimit(adminEventSaveHandler(cfg, tmpls, db, client, i18n)))
+		r.HandleFunc("POST /admin/events/{id}/assign-series", adminRateLimit(adminEventAssignSeriesHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/{id}/remove-from-series", adminRateLimit(adminEventRemoveFromSeriesHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/save-template", adminRateLimit(adminTemplateSaveHandler(cfg, db, client)))
 		r.HandleFunc("GET /admin/events/template-assign", adminTemplateAssignPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/events/template-assign", adminRateLimit(adminTemplateAssignApplyHandler(cfg, db, client)))

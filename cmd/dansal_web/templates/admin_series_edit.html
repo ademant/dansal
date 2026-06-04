@@ -111,7 +111,7 @@
     <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
     <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
     <td>{{.LocationName}}</td>
-    <td><textarea name="desc_{{.ID}}" rows="2" class="desc-field" oninput="descChanged()">{{.Description}}</textarea></td>
+    <td><textarea name="desc_{{.ID}}" rows="2" class="desc-field">{{.Description}}</textarea></td>
     <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
     <td class="col-actions" style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="Bearbeiten">{{$.Strings.T "admin_edit"}} ↗</a>
@@ -126,8 +126,7 @@
 </table>
 </div>
 <div style="margin-top:.5rem">
-  <button type="submit" id="desc-save-btn" class="btn-sm" disabled
-          style="opacity:.35">{{$.Strings.T "series_save_descriptions"}}</button>
+  <button type="submit" class="btn-sm">{{$.Strings.T "series_save_descriptions"}}</button>
 </div>
 </form>
 
@@ -168,7 +167,6 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .col-actions{display:flex;gap:.3rem;align-items:center}
 .desc-field{width:100%;padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.85rem;resize:vertical;min-height:2.4em;box-sizing:border-box;background:#fafafa}
 .desc-field:focus{outline:none;border-color:#1a6eb5;background:#fff}
-#desc-save-btn:not([disabled]){opacity:1;cursor:pointer}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
 .btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
@@ -181,10 +179,6 @@ function postTo(url){
   var f=document.createElement('form');
   f.method='POST';f.action=url;
   document.body.appendChild(f);f.submit();
-}
-function descChanged(){
-  var btn=document.getElementById('desc-save-btn');
-  if(btn){btn.disabled=false;btn.style.opacity='1';}
 }
 function filterLocOptions(q){
   var sel=document.getElementById('loc-select');

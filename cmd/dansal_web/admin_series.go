@@ -46,22 +46,24 @@ type AdminSeriesNewData struct {
 	PrefillDateCount int // number of pre-filled rows; handler skips these when calling AddSeriesDate
 }
 
-// parseTimeOnly extracts HH:MM from an RFC3339 timestamp in local time.
+// parseTimeOnly extracts HH:MM from an RFC3339 timestamp, preserving the
+// timezone offset embedded in the string (Berlin time from epochToLocal).
 func parseTimeOnly(ts string) (string, error) {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
 		return "", err
 	}
-	return t.Local().Format("15:04"), nil
+	return t.Format("15:04"), nil
 }
 
-// parseDateOnly extracts YYYY-MM-DD from an RFC3339 timestamp in local time.
+// parseDateOnly extracts YYYY-MM-DD from an RFC3339 timestamp, preserving
+// the timezone offset embedded in the string.
 func parseDateOnly(ts string) (string, error) {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
 		return "", err
 	}
-	return t.Local().Format("2006-01-02"), nil
+	return t.Format("2006-01-02"), nil
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────

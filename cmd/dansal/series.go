@@ -145,8 +145,8 @@ func loadSeriesEvents(seriesID int) ([]SeriesEvent, error) {
 		}
 		se.IsCancelled = isCancelled != 0
 		se.IsPublished = isPublished != 0
-		se.StartTime = time.Unix(startEpoch, 0).Format(time.RFC3339)
-		se.EndTime = time.Unix(endEpoch, 0).Format(time.RFC3339)
+		se.StartTime = epochToLocal(startEpoch)
+		se.EndTime = epochToLocal(endEpoch)
 		events = append(events, se)
 	}
 	return events, nil
@@ -315,7 +315,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	// Compute dates from recurrence only when start_date is provided.
 	var dates []time.Time
 	if req.StartDate != "" {
-		startDate, err := time.Parse("2006-01-02", req.StartDate)
+		startDate, err := time.ParseInLocation("2006-01-02", req.StartDate, berlinLoc)
 		if err != nil {
 			writeError(w, "invalid start_date: "+err.Error(), http.StatusBadRequest)
 			return
@@ -325,7 +325,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 			interval = 14
 		}
 		if req.EndDate != "" {
-			endDate, err := time.Parse("2006-01-02", req.EndDate)
+			endDate, err := time.ParseInLocation("2006-01-02", req.EndDate, berlinLoc)
 			if err != nil {
 				writeError(w, "invalid end_date", http.StatusBadRequest)
 				return
@@ -537,7 +537,7 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "date is required", http.StatusBadRequest)
 		return
 	}
-	d, err := time.Parse("2006-01-02", req.Date)
+	d, err := time.ParseInLocation("2006-01-02", req.Date, berlinLoc)
 	if err != nil {
 		writeError(w, "invalid date", http.StatusBadRequest)
 		return
@@ -704,7 +704,7 @@ func combineDateAndTime(d time.Time, timeStr string) int64 {
 		h, _ = strconv.Atoi(parts[0])
 		m, _ = strconv.Atoi(parts[1])
 	}
-	t := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, d.Location())
+	t := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, berlinLoc)
 	return t.Unix()
 }
 

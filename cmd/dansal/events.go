@@ -533,6 +533,12 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 			*args = append(*args, n)
 		}
 	}
+	if v := q.Get("series_id"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			*query += " AND e.series_id = ?"
+			*args = append(*args, n)
+		}
+	}
 	if v := q.Get("created_after"); v != "" {
 		*query += " AND e.created_at >= ?"
 		*args = append(*args, v)

@@ -145,6 +145,8 @@ type EventData struct {
 	UserOrgs          []Organization
 	BookFormToken     string
 	BoardFormToken    string
+	PrevEvent         *Event
+	NextEvent         *Event
 }
 
 type OrgData struct {
@@ -1030,6 +1032,31 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				}
 			}()
 		}
+		// Series siblings for prev/next navigation.
+		var prevEvent, nextEvent *Event
+		if event.SeriesID != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				siblings, err := client.GetEventsBySeries(r.Context(), *event.SeriesID)
+				if err != nil {
+					return
+				}
+				for i, e := range siblings {
+					if e.ID == event.ID {
+						if i > 0 {
+							prev := siblings[i-1]
+							prevEvent = &prev
+						}
+						if i < len(siblings)-1 {
+							next := siblings[i+1]
+							nextEvent = &next
+						}
+						break
+					}
+				}
+			}()
+		}
 		// For logged-in users: fetch their orgs (for assign/publish flow and save-as-template).
 		if su != nil {
 			wg.Add(1)
@@ -1090,6 +1117,8 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			UserOrgs:          userOrgs,
 			BookFormToken:     issueFormToken(clientIP),
 			BoardFormToken:    issueFormToken(clientIP),
+			PrevEvent:         prevEvent,
+			NextEvent:         nextEvent,
 		}))
 	}
 }

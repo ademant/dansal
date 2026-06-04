@@ -483,6 +483,11 @@ func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) 
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)
 }
 
+func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?series_id=%d&include_past=true&include_cancelled=true", seriesID), &events)
+}
+
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
 	if after == "" {
 		return cached(&c.mu, &c.eventsCache, eventsTTL, func() ([]Event, error) {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ── Data structs ──────────────────────────────────────────────────────────────
@@ -24,10 +25,26 @@ type AdminSeriesEditData struct {
 }
 
 type AdminSeriesNewData struct {
-	Locations []Location
-	Orgs      []Organization
-	IsAdmin   bool
-	ErrorKey  string
+	Locations      []Location
+	Orgs           []Organization
+	Series         []EventSeries
+	IsAdmin        bool
+	ErrorKey       string
+	PrefillTitle   string
+	PrefillLocID   int
+	PrefillStart   string
+	PrefillEnd     string
+	PrefillOrgID   int
+	PrefillEventIDs []int
+}
+
+// parseTimeOnly extracts HH:MM from an RFC3339 timestamp string.
+func parseTimeOnly(ts string) (string, error) {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return "", err
+	}
+	return t.Format("15:04"), nil
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -58,14 +75,44 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if !ok {
 			return
 		}
+		token := getSessionToken(r)
 		locs, _ := client.GetLocations(r.Context())
 		orgs, _ := client.GetOrganizations(r.Context())
-		title := i18n.T(r, "series_new")
-		renderTemplate(w, tmpls.adminSeriesNew, tmplData(r, cfg, i18n, title, AdminSeriesNewData{
+
+		data := AdminSeriesNewData{
 			Locations: locs,
 			Orgs:      orgs,
 			IsAdmin:   user.Role == "admin",
-		}))
+		}
+
+		// Pre-fill from event IDs passed by bulk-assign-series
+		if idsParam := r.URL.Query().Get("ids"); idsParam != "" {
+			for _, s := range strings.Split(idsParam, ",") {
+				if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && id > 0 {
+					data.PrefillEventIDs = append(data.PrefillEventIDs, id)
+				}
+			}
+		}
+		if orgIDStr := r.URL.Query().Get("org_id"); orgIDStr != "" {
+			data.PrefillOrgID, _ = strconv.Atoi(orgIDStr)
+		}
+		if prefillID, err := strconv.Atoi(r.URL.Query().Get("prefill_event_id")); err == nil && prefillID > 0 {
+			if ev, err := client.GetEventAuthed(r.Context(), prefillID, token); err == nil {
+				data.PrefillTitle = ev.Title
+				if ev.LocationID != nil {
+					data.PrefillLocID = *ev.LocationID
+				}
+				if t, err := parseTimeOnly(ev.StartTime); err == nil {
+					data.PrefillStart = t
+				}
+				if t, err := parseTimeOnly(ev.EndTime); err == nil {
+					data.PrefillEnd = t
+				}
+			}
+		}
+
+		title := i18n.T(r, "series_new")
+		renderTemplate(w, tmpls.adminSeriesNew, tmplData(r, cfg, i18n, title, data))
 	}
 }
 
@@ -112,6 +159,16 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if err != nil {
 			http.Error(w, "failed to create series: "+err.Error(), http.StatusBadGateway)
 			return
+		}
+		// Assign any events that were passed from the bulk-assign flow.
+		var assignIDs []int
+		for _, s := range r.Form["assign_event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil && id > 0 {
+				assignIDs = append(assignIDs, id)
+			}
+		}
+		if len(assignIDs) > 0 {
+			_ = client.AssignEventsToSeries(r.Context(), created.ID, assignIDs, token)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", created.ID), http.StatusSeeOther)
 	}

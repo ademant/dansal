@@ -713,3 +713,37 @@ func combineDateAndTime(d time.Time, timeStr string) int64 {
 	t := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, d.Location())
 	return t.Unix()
 }
+
+// POST /api/v1/series/{id}/assign-events
+// Assigns existing events to this series. Per-event org check: only events
+// whose organization_id matches the series org (or that are orphaned) are
+// assigned; mismatches are silently skipped.
+func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		var evOrgID *int
+		var tmp sql.NullInt64
+		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&tmp); err != nil {
+			continue
+		}
+		if tmp.Valid {
+			v := int(tmp.Int64)
+			evOrgID = &v
+		}
+		if evOrgID != nil && series.OrganizationID != nil && *evOrgID != *series.OrganizationID {
+			continue // org mismatch — skip silently
+		}
+		db.Exec("UPDATE events SET series_id=? WHERE id=?", series.ID, id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

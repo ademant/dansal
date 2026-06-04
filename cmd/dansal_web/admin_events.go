@@ -26,6 +26,7 @@ type AdminEventsData struct {
 	Dances             []Dance
 	AllTags            []Tag
 	UserOrgs           []Organization
+	Series             []EventSeries
 	FilterIncludePast  bool
 	FilterOrgID        int // -1 = no org assigned
 	FilterLocationID   int
@@ -267,6 +268,86 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 			ref = "/admin/events"
 		}
 		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}
+}
+
+func adminEventBulkAssignSeriesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var ids []int
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+
+		token := getSessionToken(r)
+		seriesIDStr := r.FormValue("bulk_series_id")
+		seriesID, _ := strconv.Atoi(seriesIDStr)
+
+		if seriesID > 0 {
+			// Path A: assign to existing series
+			_ = client.AssignEventsToSeries(r.Context(), seriesID, ids, token)
+			ref := r.Header.Get("Referer")
+			if ref == "" {
+				ref = "/admin/events"
+			}
+			http.Redirect(w, r, ref, http.StatusSeeOther)
+			return
+		}
+
+		// Path B: new series — validate common org
+		orgIDSet := map[int]bool{}
+		for _, id := range ids {
+			orgStr := r.FormValue(fmt.Sprintf("event_org_%d", id))
+			if orgID, err := strconv.Atoi(orgStr); err == nil && orgID > 0 {
+				orgIDSet[orgID] = true
+			}
+		}
+		if len(orgIDSet) > 1 {
+			// conflicting orgs — show error
+			series, _ := client.GetSeriesList(r.Context(), token)
+			orgs, _ := client.GetOrganizations(r.Context())
+			locs, _ := client.GetLocations(r.Context())
+			title := i18n.T(r, "series_new")
+			renderTemplate(w, tmpls.adminSeriesNew, tmplData(r, cfg, i18n, title, AdminSeriesNewData{
+				Locations: locs,
+				Orgs:      orgs,
+				IsAdmin:   user.Role == "admin",
+				ErrorKey:  "evt_bulk_series_org_error",
+				Series:    series,
+			}))
+			return
+		}
+
+		// Build redirect to series/new with prefill
+		commonOrgID := 0
+		for id := range orgIDSet {
+			commonOrgID = id
+		}
+		firstID := ids[0]
+		idStrs := make([]string, len(ids))
+		for i, id := range ids {
+			idStrs[i] = strconv.Itoa(id)
+		}
+		q := url.Values{}
+		q.Set("ids", strings.Join(idStrs, ","))
+		q.Set("prefill_event_id", strconv.Itoa(firstID))
+		if commonOrgID > 0 {
+			q.Set("org_id", strconv.Itoa(commonOrgID))
+		}
+		http.Redirect(w, r, "/admin/series/new?"+q.Encode(), http.StatusSeeOther)
 	}
 }
 
@@ -875,6 +956,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		musicians, _ := client.GetMusicians(r.Context())
 		dances, _ := client.GetDances(r.Context())
 		allTags, _ := client.GetTags(r.Context())
+		series, _ := client.GetSeriesList(r.Context(), token)
 		sort.Slice(locs, func(i, j int) bool {
 			if locs[i].Town != locs[j].Town {
 				return locs[i].Town < locs[j].Town
@@ -916,6 +998,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Dances:             dances,
 			AllTags:            allTags,
 			UserOrgs:           userOrgs,
+			Series:             series,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,
 			FilterLocationID:   locationID,

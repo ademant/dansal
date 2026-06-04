@@ -228,6 +228,7 @@ func main() {
 		r.HandleFunc("POST /admin/events/bulk-delete", adminRateLimit(adminEventBulkDeleteHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/bulk-assign-location", adminRateLimit(adminEventBulkAssignLocationHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-set-attributes", adminRateLimit(adminEventBulkSetAttributesHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/bulk-assign-series", adminRateLimit(adminEventBulkAssignSeriesHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminRateLimit(adminEventImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/musicians/{id}/image/delete", adminRateLimit(adminMusicianImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/image/delete", adminRateLimit(adminOrgImageDeleteHandler(cfg, client)))

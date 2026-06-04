@@ -7,9 +7,11 @@
 
 <form method="post" class="evt-form">
 
+  {{range .PrefillEventIDs}}<input type="hidden" name="assign_event_ids" value="{{.}}">{{end}}
+
   <section class="form-section">
     <h2>{{$.Strings.T "col_title"}}</h2>
-    <input type="text" name="title" required placeholder="{{$.Strings.T "col_title"}}" style="width:100%">
+    <input type="text" name="title" required placeholder="{{$.Strings.T "col_title"}}" value="{{.PrefillTitle}}" style="width:100%">
   </section>
 
   <section class="form-section">
@@ -23,7 +25,7 @@
     <select name="organization_id" style="width:100%">
       <option value="">— {{$.Strings.T "filter_all_orgs"}} —</option>
       {{range .Orgs}}
-      <option value="{{.ID}}">{{.Name}}</option>
+      <option value="{{.ID}}"{{if eq $.Data.PrefillOrgID .ID}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
   </section>
@@ -36,7 +38,7 @@
       <select name="default_location_id" id="loc-select" size="1" style="width:100%">
         <option value="">— {{$.Strings.T "filter_all_locations"}} —</option>
         {{range .Locations}}
-        <option value="{{.ID}}" data-search="{{lower .Town}} {{lower (or .ShortName .Location)}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
+        <option value="{{.ID}}" data-search="{{lower .Town}} {{lower (or .ShortName .Location)}}"{{if eq $.Data.PrefillLocID .ID}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
         {{end}}
       </select>
     </div>
@@ -47,11 +49,11 @@
     <div class="field-row">
       <div>
         <label>{{$.Strings.T "series_start_time"}}</label>
-        <input type="time" name="default_start_time" value="20:00">
+        <input type="time" name="default_start_time" value="{{if .PrefillStart}}{{.PrefillStart}}{{else}}20:00{{end}}">
       </div>
       <div>
         <label>{{$.Strings.T "series_end_time"}}</label>
-        <input type="time" name="default_end_time" value="23:00">
+        <input type="time" name="default_end_time" value="{{if .PrefillEnd}}{{.PrefillEnd}}{{else}}23:00{{end}}">
       </div>
     </div>
   </section>

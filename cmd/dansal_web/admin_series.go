@@ -24,18 +24,25 @@ type AdminSeriesEditData struct {
 	ErrorKey  string
 }
 
+type PrefillDate struct {
+	Date  string
+	Start string
+	End   string
+}
+
 type AdminSeriesNewData struct {
-	Locations      []Location
-	Orgs           []Organization
-	Series         []EventSeries
-	IsAdmin        bool
-	ErrorKey       string
-	PrefillTitle   string
-	PrefillLocID   int
-	PrefillStart   string
-	PrefillEnd     string
-	PrefillOrgID   int
+	Locations       []Location
+	Orgs            []Organization
+	Series          []EventSeries
+	IsAdmin         bool
+	ErrorKey        string
+	PrefillTitle    string
+	PrefillLocID    int
+	PrefillStart    string
+	PrefillEnd      string
+	PrefillOrgID    int
 	PrefillEventIDs []int
+	PrefillDates    []PrefillDate
 }
 
 // parseTimeOnly extracts HH:MM from an RFC3339 timestamp string.
@@ -45,6 +52,15 @@ func parseTimeOnly(ts string) (string, error) {
 		return "", err
 	}
 	return t.Format("15:04"), nil
+}
+
+// parseDateOnly extracts YYYY-MM-DD from an RFC3339 timestamp string.
+func parseDateOnly(ts string) (string, error) {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return "", err
+	}
+	return t.Format("2006-01-02"), nil
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -109,6 +125,26 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 					data.PrefillEnd = t
 				}
 			}
+		}
+
+		// Fetch dates for all selected event IDs.
+		for _, id := range data.PrefillEventIDs {
+			ev, err := client.GetEventAuthed(r.Context(), id, token)
+			if err != nil {
+				continue
+			}
+			d, err := parseDateOnly(ev.StartTime)
+			if err != nil {
+				continue
+			}
+			pd := PrefillDate{Date: d}
+			if t, err := parseTimeOnly(ev.StartTime); err == nil {
+				pd.Start = t
+			}
+			if t, err := parseTimeOnly(ev.EndTime); err == nil {
+				pd.End = t
+			}
+			data.PrefillDates = append(data.PrefillDates, pd)
 		}
 
 		title := i18n.T(r, "series_new")

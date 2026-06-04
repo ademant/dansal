@@ -70,6 +70,14 @@
         </tr>
       </thead>
       <tbody id="sd-body">
+        {{range .PrefillDates}}
+        <tr class="sd-row">
+          <td><input type="date" name="series_date" value="{{.Date}}" oninput="growSDTable(this)"></td>
+          <td><input type="time" name="series_start" value="{{.Start}}" placeholder="{{$.Strings.T "series_time_default"}}"></td>
+          <td><input type="time" name="series_end" value="{{.End}}" placeholder="{{$.Strings.T "series_time_default"}}"></td>
+          <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
+        </tr>
+        {{end}}
         <tr class="sd-row">
           <td><input type="date" name="series_date" oninput="growSDTable(this)"></td>
           <td><input type="time" name="series_start" placeholder="{{$.Strings.T "series_time_default"}}"></td>

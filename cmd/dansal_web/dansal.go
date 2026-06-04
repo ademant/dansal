@@ -202,6 +202,7 @@ type Event struct {
 	Editable           bool             `json:"editable,omitempty"`
 	Cancelable         bool             `json:"cancelable,omitempty"`
 	CreatedByID        *int             `json:"created_by_id,omitempty"`
+	SeriesID           *int             `json:"series_id,omitempty"`
 }
 
 type Dance struct {

@@ -115,7 +115,7 @@ const seriesSelectCols = `id, slug, title, COALESCE(description,''),
 func loadSeriesEvents(seriesID int) ([]SeriesEvent, error) {
 	rows, err := db.Query(`
 		SELECT e.id, e.title, COALESCE(e.description,''), e.start_time, e.end_time,
-		       e.location_id, COALESCE(l.location,''),
+		       e.location_id, COALESCE(NULLIF(l.short_name,''), l.location,''),
 		       e.is_cancelled, e.is_published
 		FROM events e
 		LEFT JOIN locations l ON l.id = e.location_id

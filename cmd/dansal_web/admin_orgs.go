@@ -152,7 +152,7 @@ func adminOrgNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.Hand
 			return
 		}
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{}))
+		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{IsAdmin: user.Role == "admin"}))
 	}
 }
 
@@ -180,6 +180,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 				Org:      org,
 				ErrorKey: "admin_save_error",
+				IsAdmin:  user.Role == "admin",
 			}))
 			return
 		}
@@ -196,6 +197,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 					Org:      created,
 					ErrorKey: errKey,
+					IsAdmin:  user.Role == "admin",
 				}))
 				return
 			}

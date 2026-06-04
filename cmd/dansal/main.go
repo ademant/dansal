@@ -1494,7 +1494,6 @@ func createTables() error {
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
-	CREATE INDEX IF NOT EXISTS idx_events_location_geohash ON events(location_geohash);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
@@ -1816,6 +1815,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(2)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(4)")
 	return nil
 }
 

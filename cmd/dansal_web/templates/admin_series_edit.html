@@ -6,7 +6,7 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
 <!-- Header form -->
-<form method="post" action="/admin/series/{{.Series.ID}}/edit" class="evt-form" style="margin-bottom:2rem">
+<form id="series-header-form" method="post" action="/admin/series/{{.Series.ID}}/edit" class="evt-form" style="margin-bottom:0">
   <section class="form-section">
     <label>{{$.Strings.T "col_title"}}</label>
     <input type="text" name="title" value="{{.Series.Title}}" required style="width:100%">
@@ -58,15 +58,15 @@
       </div>
     </div>
   </section>
-  <div style="display:flex;align-items:center;gap:1rem">
-    <button type="submit" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/series" style="color:#555;text-decoration:none">{{$.Strings.T "admin_cancel"}}</a>
-    <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
-          onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?')">
-      <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
-    </form>
-  </div>
 </form>
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem">
+  <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
+  <a href="/admin/series" style="color:#555;text-decoration:none">{{$.Strings.T "admin_cancel"}}</a>
+  <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
+        onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?')">
+    <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
+  </form>
+</div>
 
 <!-- Invite token section -->
 <section style="margin-bottom:2rem;padding:1rem;background:#f8f9fa;border:1px solid #ddd;border-radius:6px">

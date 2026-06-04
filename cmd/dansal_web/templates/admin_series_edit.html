@@ -86,6 +86,7 @@
 
 <!-- Events table -->
 <h2 style="font-size:1.05rem;margin-bottom:.5rem">{{$.Strings.T "series_events"}}</h2>
+<form method="post" action="/admin/series/{{.Series.ID}}/descriptions" id="desc-form">
 <div class="table-wrap">
 <table class="event-table">
   <thead>
@@ -93,7 +94,7 @@
       <th>{{$.Strings.T "series_date"}}</th>
       <th>{{$.Strings.T "evt_start"}}</th>
       <th>{{$.Strings.T "series_default_location"}}</th>
-      <th style="min-width:200px">{{$.Strings.T "series_description"}}</th>
+      <th style="min-width:220px">{{$.Strings.T "series_description"}}</th>
       <th>Status</th>
       <th>{{$.Strings.T "series_actions"}}</th>
     </tr>
@@ -104,7 +105,7 @@
     <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
     <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
     <td>{{.LocationName}}</td>
-    <td>{{.Description}}</td>
+    <td><textarea name="desc_{{.ID}}" rows="2" class="desc-field" oninput="descChanged()">{{.Description}}</textarea></td>
     <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
     <td class="col-actions" style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="Bearbeiten">{{$.Strings.T "admin_edit"}} ↗</a>
@@ -123,6 +124,11 @@
   </tbody>
 </table>
 </div>
+<div style="margin-top:.5rem">
+  <button type="submit" id="desc-save-btn" class="btn-primary" disabled
+          style="background:#1a6eb5;color:#fff;border:none;padding:.35rem .9rem;border-radius:4px;cursor:pointer;font-size:.9rem;opacity:.4">{{$.Strings.T "admin_save"}}</button>
+</div>
+</form>
 
 <!-- Add date form -->
 <form method="post" action="/admin/series/{{.Series.ID}}/add-date" class="add-date-form" style="margin-top:1rem;display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap">
@@ -167,6 +173,9 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .badge-cancelled{background:#e05c00;color:#fff;padding:0 .4rem;border-radius:3px;font-size:.75rem}
 .badge-pub{color:#217a3c;font-weight:700}
 .col-actions{display:flex;gap:.3rem;align-items:center}
+.desc-field{width:100%;padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.85rem;resize:vertical;min-height:2.4em;box-sizing:border-box;background:#fafafa}
+.desc-field:focus{outline:none;border-color:#1a6eb5;background:#fff}
+#desc-save-btn:not([disabled]){opacity:1;cursor:pointer}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
 .btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
@@ -175,6 +184,10 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
 </style>
 <script>
+function descChanged(){
+  var btn=document.getElementById('desc-save-btn');
+  if(btn){btn.disabled=false;}
+}
 function filterLocOptions(q){
   var sel=document.getElementById('loc-select');
   if(!sel)return;

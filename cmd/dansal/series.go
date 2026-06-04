@@ -708,6 +708,38 @@ func combineDateAndTime(d time.Time, timeStr string) int64 {
 	return t.Unix()
 }
 
+// POST /api/v1/series/{id}/descriptions
+// Bulk-updates the description of events belonging to this series.
+// Body: {"updates": [{"event_id": 1, "description": "..."}, ...]}
+func updateSeriesDescriptions(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Updates []struct {
+			EventID     int    `json:"event_id"`
+			Description string `json:"description"`
+		} `json:"updates"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	for _, u := range req.Updates {
+		// Verify the event belongs to this series before updating.
+		var sid sql.NullInt64
+		if err := db.QueryRow("SELECT series_id FROM events WHERE id=?", u.EventID).Scan(&sid); err != nil {
+			continue
+		}
+		if !sid.Valid || int(sid.Int64) != series.ID {
+			continue
+		}
+		db.Exec("UPDATE events SET description=? WHERE id=?", u.Description, u.EventID)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/v1/series/{id}/assign-events
 // Assigns existing events to this series. Per-event org check: only events
 // whose organization_id matches the series org (or that are orphaned) are

@@ -265,6 +265,7 @@ func main() {
 		r.HandleFunc("POST /admin/series/new", adminRateLimit(adminSeriesCreateHandler(cfg, client)))
 		r.HandleFunc("GET /admin/series/{id}", adminSeriesEditPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/series/{id}/edit", adminRateLimit(adminSeriesSaveHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/descriptions", adminRateLimit(adminSeriesSaveDescriptionsHandler(cfg, client)))
 		r.HandleFunc("POST /admin/series/{id}/delete", adminRateLimit(adminSeriesDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/series/{id}/add-date", adminRateLimit(adminSeriesAddDateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/series/{id}/token/regenerate", adminRateLimit(adminSeriesRegenerateTokenHandler(cfg, client)))

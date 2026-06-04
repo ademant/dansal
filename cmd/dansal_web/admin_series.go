@@ -318,6 +318,44 @@ func adminSeriesDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
+func adminSeriesSaveDescriptionsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		var updates []map[string]any
+		for key, vals := range r.Form {
+			if !strings.HasPrefix(key, "desc_") {
+				continue
+			}
+			eventIDStr := strings.TrimPrefix(key, "desc_")
+			eventID, err := strconv.Atoi(eventIDStr)
+			if err != nil || len(vals) == 0 {
+				continue
+			}
+			updates = append(updates, map[string]any{
+				"event_id":    eventID,
+				"description": vals[0],
+			})
+		}
+		if len(updates) > 0 {
+			_ = client.UpdateSeriesDescriptions(r.Context(), id, updates, token)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
+	}
+}
+
 func adminSeriesAddDateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

@@ -2856,6 +2856,19 @@ func (c *DansalClient) RevokeSeriesToken(ctx context.Context, id int, token stri
 	return nil
 }
 
+func (c *DansalClient) UpdateSeriesDescriptions(ctx context.Context, seriesID int, updates []map[string]any, token string) error {
+	b, _ := json.Marshal(map[string]any{"updates": updates})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/descriptions", seriesID), token, b)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) AssignEventsToSeries(ctx context.Context, seriesID int, eventIDs []int, token string) error {
 	b, _ := json.Marshal(map[string]any{"ids": eventIDs})
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/assign-events", seriesID), token, b)

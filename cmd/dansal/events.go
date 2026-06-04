@@ -67,6 +67,7 @@ type Event struct {
 	ChangedAt          string           `json:"changed_at,omitempty"`
 	ChangedBy          string           `json:"changed_by,omitempty"`
 	FetchSourceID      int              `json:"fetch_source_id,omitempty"`
+	SeriesID           *int             `json:"series_id,omitempty"`
 	TagsJSON           string           `json:"-"`
 	PricingJSON        string           `json:"-"`
 }

@@ -1,0 +1,113 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "series_new"}}</h1>
+
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<form method="post" class="evt-form">
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "col_title"}}</h2>
+    <input type="text" name="title" required placeholder="{{$.Strings.T "col_title"}}" style="width:100%">
+  </section>
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_description"}}</h2>
+    <textarea name="description" rows="3" style="width:100%"></textarea>
+  </section>
+
+  {{if .Orgs}}
+  <section class="form-section">
+    <h2>{{$.Strings.T "org_name"}}</h2>
+    <select name="organization_id" style="width:100%">
+      <option value="">— {{$.Strings.T "filter_all_orgs"}} —</option>
+      {{range .Orgs}}
+      <option value="{{.ID}}">{{.Name}}</option>
+      {{end}}
+    </select>
+  </section>
+  {{end}}
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_default_location"}}</h2>
+    <div class="loc-filter-wrap">
+      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" oninput="filterLocOptions(this.value)" onfocus="filterLocOptions(this.value)">
+      <select name="default_location_id" id="loc-select" size="1" style="width:100%">
+        <option value="">— {{$.Strings.T "filter_all_locations"}} —</option>
+        {{range .Locations}}
+        <option value="{{.ID}}" data-search="{{lower .Town}} {{lower (or .ShortName .Location)}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
+        {{end}}
+      </select>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_default_times"}}</h2>
+    <div class="field-row">
+      <div>
+        <label>{{$.Strings.T "series_start_time"}}</label>
+        <input type="time" name="default_start_time" value="20:00">
+      </div>
+      <div>
+        <label>{{$.Strings.T "series_end_time"}}</label>
+        <input type="time" name="default_end_time" value="23:00">
+      </div>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_recurrence"}}</h2>
+    <select name="recurrence" style="width:100%">
+      <option value="weekly">{{$.Strings.T "series_weekly"}}</option>
+      <option value="biweekly">{{$.Strings.T "series_biweekly"}}</option>
+    </select>
+  </section>
+
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_start_date"}}</h2>
+    <input type="date" name="start_date" required style="width:100%">
+  </section>
+
+  <section class="form-section">
+    <div class="field-row">
+      <div>
+        <label>{{$.Strings.T "series_occurrences"}}</label>
+        <input type="number" name="occurrences" min="1" max="52" value="10" style="width:100px">
+      </div>
+      <div>
+        <label>{{$.Strings.T "series_end_date"}}</label>
+        <input type="date" name="end_date">
+      </div>
+    </div>
+    <p class="form-hint" style="color:#888;font-size:.85rem;margin-top:.25rem">Wenn ein Enddatum gesetzt ist, wird es statt der Anzahl verwendet.</p>
+  </section>
+
+  <button type="submit" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.5rem 1.5rem;border-radius:4px;cursor:pointer;font-size:1rem">{{$.Strings.T "admin_save"}}</button>
+  <a href="/admin/series" style="margin-left:1rem;color:#555;text-decoration:none">{{$.Strings.T "admin_cancel"}}</a>
+</form>
+{{end}}
+
+<style>
+.evt-form{max-width:700px}
+.form-section{margin-bottom:1.5rem}
+.form-section h2{font-size:1rem;margin-bottom:.5rem;color:#333}
+.field-row{display:flex;gap:1rem;flex-wrap:wrap}
+.field-row>div{flex:1;min-width:120px}
+input[type=text],input[type=time],input[type=date],input[type=number],select,textarea{
+  width:100%;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.loc-filter-wrap{position:relative}
+.form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px}
+</style>
+<script>
+function filterLocOptions(q){
+  var sel=document.getElementById('loc-select');
+  if(!sel)return;
+  q=q.toLowerCase();
+  Array.from(sel.options).forEach(function(o){
+    if(!o.value){return;}
+    o.hidden=q&&!(o.dataset.search||'').includes(q);
+  });
+}
+</script>
+{{end}}

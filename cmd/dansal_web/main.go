@@ -259,6 +259,18 @@ func main() {
 		r.HandleFunc("POST /admin/organizations/{id}/follow", adminRateLimit(adminOrgFollowHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/unfollow", adminRateLimit(adminOrgUnfollowHandler(cfg, db, client)))
 
+		r.HandleFunc("GET /admin/series", adminSeriesListHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/series/new", adminSeriesNewPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/series/new", adminRateLimit(adminSeriesCreateHandler(cfg, client)))
+		r.HandleFunc("GET /admin/series/{id}", adminSeriesEditPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/series/{id}/edit", adminRateLimit(adminSeriesSaveHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/delete", adminRateLimit(adminSeriesDeleteHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/add-date", adminRateLimit(adminSeriesAddDateHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/token/regenerate", adminRateLimit(adminSeriesRegenerateTokenHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/token/revoke", adminRateLimit(adminSeriesRevokeTokenHandler(cfg, client)))
+		r.HandleFunc("GET /series_token/{token}", seriesTokenPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /series_token/{token}/events/{eventID}/description", seriesTokenSaveDescriptionHandler(cfg, client))
+
 		r.HandleFunc("GET /admin/dances", adminDancesHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/dances", adminRateLimit(adminDanceCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/dances/{id}/delete", adminRateLimit(adminDanceDeleteHandler(cfg, client)))

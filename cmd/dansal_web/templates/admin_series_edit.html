@@ -1,0 +1,188 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "series_edit"}}: {{.Data.Series.Title}}</h1>
+
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<!-- Header form -->
+<form method="post" action="/admin/series/{{.Series.ID}}/edit" class="evt-form" style="margin-bottom:2rem">
+  <section class="form-section">
+    <label>{{$.Strings.T "col_title"}}</label>
+    <input type="text" name="title" value="{{.Series.Title}}" required style="width:100%">
+  </section>
+  <section class="form-section">
+    <label>{{$.Strings.T "series_description"}}</label>
+    <textarea name="description" rows="3" style="width:100%">{{.Series.Description}}</textarea>
+  </section>
+  {{if .IsAdmin}}
+  <section class="form-section">
+    <label>{{$.Strings.T "org_name"}}</label>
+    <select name="organization_id" style="width:100%">
+      <option value="">—</option>
+      {{range .Orgs}}
+      <option value="{{.ID}}" {{if and $.Data.Series.OrganizationID (eq .ID (derefInt $.Data.Series.OrganizationID))}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </section>
+  {{else if .Series.OrganizationID}}
+  <section class="form-section">
+    <label>{{$.Strings.T "org_name"}}</label>
+    <span style="font-weight:500">{{.Series.OrganizationID}}</span>
+  </section>
+  {{end}}
+  <section class="form-section">
+    <label>{{$.Strings.T "series_default_location"}}</label>
+    <div class="loc-filter-wrap">
+      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" oninput="filterLocOptions(this.value)" onfocus="filterLocOptions(this.value)">
+      <select name="default_location_id" id="loc-select" size="1" style="width:100%">
+        <option value="">—</option>
+        {{range .Locations}}
+        <option value="{{.ID}}"
+          {{if and $.Data.Series.DefaultLocationID (eq .ID (derefInt $.Data.Series.DefaultLocationID))}}selected{{end}}
+          data-search="{{lower .Town}} {{lower (or .ShortName .Location)}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
+        {{end}}
+      </select>
+    </div>
+  </section>
+  <section class="form-section">
+    <label>{{$.Strings.T "series_default_times"}}</label>
+    <div class="field-row">
+      <div>
+        <label>{{$.Strings.T "series_start_time"}}</label>
+        <input type="time" name="default_start_time" value="{{.Series.DefaultStartTime}}">
+      </div>
+      <div>
+        <label>{{$.Strings.T "series_end_time"}}</label>
+        <input type="time" name="default_end_time" value="{{.Series.DefaultEndTime}}">
+      </div>
+    </div>
+  </section>
+  <button type="submit" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
+  <a href="/admin/series" style="margin-left:1rem;color:#555;text-decoration:none">{{$.Strings.T "admin_cancel"}}</a>
+</form>
+
+<!-- Invite token section -->
+<section style="margin-bottom:2rem;padding:1rem;background:#f8f9fa;border:1px solid #ddd;border-radius:6px">
+  <h2 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "series_invite_link"}}</h2>
+  {{if .Series.InviteToken}}
+  <p style="margin:.25rem 0">
+    <a href="{{.BaseURL}}/series_token/{{.Series.InviteToken}}" target="_blank" style="word-break:break-all">{{.BaseURL}}/series_token/{{.Series.InviteToken}}</a>
+  </p>
+  <form method="post" action="/admin/series/{{.Series.ID}}/token/regenerate" style="display:inline">
+    <button class="btn-sm">{{$.Strings.T "series_regenerate_token"}}</button>
+  </form>
+  <form method="post" action="/admin/series/{{.Series.ID}}/token/revoke" style="display:inline;margin-left:.5rem"
+        onsubmit="return confirm('{{$.Strings.T "series_revoke_token"}}?')">
+    <button class="btn-sm btn-del">{{$.Strings.T "series_revoke_token"}}</button>
+  </form>
+  {{else}}
+  <p style="color:#888;margin:.25rem 0">{{$.Strings.T "series_no_token"}}</p>
+  <form method="post" action="/admin/series/{{.Series.ID}}/token/regenerate">
+    <button class="btn-sm">{{$.Strings.T "series_generate_token"}}</button>
+  </form>
+  {{end}}
+</section>
+
+<!-- Events table -->
+<h2 style="font-size:1.05rem;margin-bottom:.5rem">{{$.Strings.T "series_events"}}</h2>
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "series_date"}}</th>
+      <th>{{$.Strings.T "evt_start"}}</th>
+      <th>{{$.Strings.T "series_default_location"}}</th>
+      <th style="min-width:200px">{{$.Strings.T "series_description"}}</th>
+      <th>Status</th>
+      <th>{{$.Strings.T "series_actions"}}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Series.Events}}
+  <tr {{if .IsCancelled}}style="opacity:.55"{{end}}>
+    <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
+    <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
+    <td>{{.LocationName}}</td>
+    <td>{{.Description}}</td>
+    <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
+    <td class="col-actions" style="white-space:nowrap">
+      <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="Bearbeiten">{{$.Strings.T "admin_edit"}} ↗</a>
+      <form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline">
+        <button class="btn-sm">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
+      </form>
+      <form method="post" action="/admin/events/{{.ID}}/delete" style="display:inline"
+            onsubmit="return confirm('{{$.Strings.T "admin_delete"}}?')">
+        <button class="btn-sm btn-del">✕</button>
+      </form>
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="6" style="text-align:center;color:#888;padding:1rem">—</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<!-- Add date form -->
+<form method="post" action="/admin/series/{{.Series.ID}}/add-date" class="add-date-form" style="margin-top:1rem;display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap">
+  <div>
+    <label style="font-size:.85rem">{{$.Strings.T "series_date"}}</label>
+    <input type="date" name="date" required>
+  </div>
+  <div>
+    <label style="font-size:.85rem">{{$.Strings.T "series_start_time"}}</label>
+    <input type="time" name="start_time" placeholder="{{.Series.DefaultStartTime}}">
+  </div>
+  <div>
+    <label style="font-size:.85rem">{{$.Strings.T "series_end_time"}}</label>
+    <input type="time" name="end_time" placeholder="{{.Series.DefaultEndTime}}">
+  </div>
+  <button type="submit" class="btn-sm" style="background:#217a3c;color:#fff;border:none;padding:.35rem .8rem">+ {{$.Strings.T "series_add_date"}}</button>
+</form>
+
+<!-- Delete series -->
+<section style="margin-top:3rem;padding-top:1rem;border-top:1px solid #eee">
+  <form method="post" action="/admin/series/{{.Series.ID}}/delete"
+        onsubmit="return confirm('Serie «{{.Series.Title}}» löschen? Einzeltermine bleiben erhalten.')">
+    <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}} {{$.Strings.T "series_title"}}</button>
+  </form>
+</section>
+
+{{end}}
+
+<style>
+.evt-form{max-width:700px}
+.form-section{margin-bottom:1rem}
+.form-section label{display:block;font-size:.85rem;color:#555;margin-bottom:.2rem}
+.field-row{display:flex;gap:1rem;flex-wrap:wrap}
+.field-row>div{flex:1;min-width:120px}
+input[type=text],input[type=time],input[type=date],select,textarea{
+  padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.4rem .6rem;text-align:left;border-bottom:1px solid #eee;vertical-align:middle}
+.event-table thead th{background:#f4f6fb;font-weight:600;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
+.badge-cancelled{background:#e05c00;color:#fff;padding:0 .4rem;border-radius:3px;font-size:.75rem}
+.badge-pub{color:#217a3c;font-weight:700}
+.col-actions{display:flex;gap:.3rem;align-items:center}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+.loc-filter-wrap{position:relative}
+.form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
+</style>
+<script>
+function filterLocOptions(q){
+  var sel=document.getElementById('loc-select');
+  if(!sel)return;
+  q=q.toLowerCase();
+  Array.from(sel.options).forEach(function(o){
+    if(!o.value){return;}
+    o.hidden=q&&!(o.dataset.search||'').includes(q);
+  });
+}
+</script>
+{{end}}

@@ -818,6 +818,10 @@ type Templates struct {
 	help                *template.Template
 	contactManage       *template.Template
 	board               *template.Template
+	adminSeries         *template.Template
+	adminSeriesNew      *template.Template
+	adminSeriesEdit     *template.Template
+	seriesToken         *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -874,6 +878,10 @@ func loadTemplates() *Templates {
 		help:                load("help"),
 		contactManage:       load("contact_manage"),
 		board:               load("board"),
+		adminSeries:         load("admin_series"),
+		adminSeriesNew:      load("admin_series_new"),
+		adminSeriesEdit:     load("admin_series_edit"),
+		seriesToken:         load("series_token"),
 	}
 }
 

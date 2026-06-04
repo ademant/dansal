@@ -1,0 +1,58 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "series_title"}}</h1>
+  <a href="/admin/series/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "series_new"}}</a>
+</div>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th data-sort="str">{{$.Strings.T "col_title"}}</th>
+      <th data-sort="str">{{$.Strings.T "org_name"}}</th>
+      <th class="col-num" data-sort="num">{{$.Strings.T "series_events"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Series}}
+  <tr>
+    <td><a href="/admin/series/{{.ID}}">{{.Title}}</a></td>
+    <td class="muted">{{if .OrganizationID}}{{.OrganizationID}}{{end}}</td>
+    <td class="col-num">{{.EventCount}}</td>
+    <td class="col-actions" style="white-space:nowrap">
+      <a href="/admin/series/{{.ID}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <form method="post" action="/admin/series/{{.ID}}/delete" style="display:inline"
+            onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Title}}»?')">
+        <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
+      </form>
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="4" style="text-align:center;color:#888;padding:1rem">—</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
+.muted{color:#888;font-size:.9rem}
+.col-num{text-align:right;white-space:nowrap;width:70px}
+.col-actions{display:flex;gap:.3rem;align-items:center}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+</style>
+<script>document.querySelectorAll('table[data-sortable]').forEach(initSortable);</script>
+{{end}}

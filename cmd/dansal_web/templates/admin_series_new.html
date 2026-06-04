@@ -8,6 +8,7 @@
 <form method="post" class="evt-form">
 
   {{range .PrefillEventIDs}}<input type="hidden" name="assign_event_ids" value="{{.}}">{{end}}
+  <input type="hidden" name="prefill_count" value="{{.PrefillDateCount}}">
 
   <section class="form-section">
     <h2>{{$.Strings.T "col_title"}}</h2>

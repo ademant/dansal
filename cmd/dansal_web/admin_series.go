@@ -31,36 +31,37 @@ type PrefillDate struct {
 }
 
 type AdminSeriesNewData struct {
-	Locations       []Location
-	Orgs            []Organization
-	Series          []EventSeries
-	IsAdmin         bool
-	ErrorKey        string
-	PrefillTitle    string
-	PrefillLocID    int
-	PrefillStart    string
-	PrefillEnd      string
-	PrefillOrgID    int
-	PrefillEventIDs []int
-	PrefillDates    []PrefillDate
+	Locations        []Location
+	Orgs             []Organization
+	Series           []EventSeries
+	IsAdmin          bool
+	ErrorKey         string
+	PrefillTitle     string
+	PrefillLocID     int
+	PrefillStart     string
+	PrefillEnd       string
+	PrefillOrgID     int
+	PrefillEventIDs  []int
+	PrefillDates     []PrefillDate
+	PrefillDateCount int // number of pre-filled rows; handler skips these when calling AddSeriesDate
 }
 
-// parseTimeOnly extracts HH:MM from an RFC3339 timestamp string.
+// parseTimeOnly extracts HH:MM from an RFC3339 timestamp in local time.
 func parseTimeOnly(ts string) (string, error) {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
 		return "", err
 	}
-	return t.Format("15:04"), nil
+	return t.Local().Format("15:04"), nil
 }
 
-// parseDateOnly extracts YYYY-MM-DD from an RFC3339 timestamp string.
+// parseDateOnly extracts YYYY-MM-DD from an RFC3339 timestamp in local time.
 func parseDateOnly(ts string) (string, error) {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
 		return "", err
 	}
-	return t.Format("2006-01-02"), nil
+	return t.Local().Format("2006-01-02"), nil
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			}
 		}
 
-		// Fetch dates for all selected event IDs.
+		// Fetch dates for all selected event IDs and pre-fill the date table.
 		for _, id := range data.PrefillEventIDs {
 			ev, err := client.GetEventAuthed(r.Context(), id, token)
 			if err != nil {
@@ -146,6 +147,7 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			}
 			data.PrefillDates = append(data.PrefillDates, pd)
 		}
+		data.PrefillDateCount = len(data.PrefillDates)
 
 		title := i18n.T(r, "series_new")
 		renderTemplate(w, tmpls.adminSeriesNew, tmplData(r, cfg, i18n, title, data))
@@ -194,10 +196,16 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			return
 		}
 		// Add manually entered dates from the growing date table.
+		// Skip the first prefill_count rows — those correspond to existing events
+		// being assigned via assign_event_ids and must not generate new events.
+		prefillCount, _ := strconv.Atoi(r.FormValue("prefill_count"))
 		dates := r.Form["series_date"]
 		starts := r.Form["series_start"]
 		ends := r.Form["series_end"]
 		for i, d := range dates {
+			if i < prefillCount {
+				continue
+			}
 			d = strings.TrimSpace(d)
 			if d == "" {
 				continue

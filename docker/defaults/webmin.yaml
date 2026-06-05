@@ -1,0 +1,6 @@
+listen: ":8090"
+dansal_url: "http://dansal:8000"   # override with DANSAL_WEBMIN_DANSAL_URL
+session_secret: "change-me"        # override with DANSAL_WEBMIN_SESSION_SECRET
+site_name: "Dansal Webmin"
+web_db_path: /var/lib/dansal-web/web.db
+images_dir: /var/lib/dansal-web

@@ -148,22 +148,40 @@ func loadConfig() *Config {
 		}
 	}
 
-	if v := os.Getenv("DANSAL_DOMAIN"); v != "" {
-		cfg.Domain = v
-	}
-	if v := os.Getenv("DANSAL_URL"); v != "" {
-		cfg.DansalURL = v
-	}
+	applyWebEnvOverrides(cfg)
 
 	if cfg.Domain == "" {
-		log.Fatal("domain is required (set via config file or DANSAL_DOMAIN env var)")
+		log.Fatal("domain is required (set via config file or DANSAL_WEB_DOMAIN / DANSAL_DOMAIN env var)")
 	}
 	if cfg.DansalURL == "" {
-		log.Fatal("dansal_url is required (set via config file or DANSAL_URL env var)")
+		log.Fatal("dansal_url is required (set via config file or DANSAL_WEB_DANSAL_URL / DANSAL_URL env var)")
 	}
 
 	cfg.configPath = configPath
 	return cfg
+}
+
+// applyWebEnvOverrides overlays environment variables onto cfg, allowing
+// container deployments to inject per-environment values without editing YAML.
+func applyWebEnvOverrides(cfg *Config) {
+	if v := os.Getenv("DANSAL_WEB_LISTEN"); v != "" {
+		cfg.Listen = v
+	}
+	if v := os.Getenv("DANSAL_WEB_BASE_URL"); v != "" {
+		cfg.BaseURL = v
+	}
+	// DANSAL_WEB_DOMAIN and legacy DANSAL_DOMAIN are both accepted.
+	if v := os.Getenv("DANSAL_WEB_DOMAIN"); v != "" {
+		cfg.Domain = v
+	} else if v := os.Getenv("DANSAL_DOMAIN"); v != "" {
+		cfg.Domain = v
+	}
+	// DANSAL_WEB_DANSAL_URL and legacy DANSAL_URL are both accepted.
+	if v := os.Getenv("DANSAL_WEB_DANSAL_URL"); v != "" {
+		cfg.DansalURL = v
+	} else if v := os.Getenv("DANSAL_URL"); v != "" {
+		cfg.DansalURL = v
+	}
 }
 
 // reloadConfig re-reads the YAML file at path and applies DB overrides.
@@ -207,12 +225,7 @@ func reloadConfig(path string) *Config {
 			return nil
 		}
 	}
-	if v := os.Getenv("DANSAL_DOMAIN"); v != "" {
-		cfg.Domain = v
-	}
-	if v := os.Getenv("DANSAL_URL"); v != "" {
-		cfg.DansalURL = v
-	}
+	applyWebEnvOverrides(cfg)
 	if cfg.Domain == "" || cfg.DansalURL == "" {
 		log.Print("reload: domain and dansal_url are required; keeping current config")
 		return nil

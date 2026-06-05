@@ -81,7 +81,41 @@ func loadConfig(filename string) (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
+	applyEnvOverrides(cfg)
 	return cfg, nil
+}
+
+// applyEnvOverrides lets Docker / container deployments inject secrets and
+// per-environment values without modifying the YAML config file.
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("DANSAL_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Server.Port = p
+		}
+	}
+	if v := os.Getenv("DANSAL_BASE_URL"); v != "" {
+		cfg.Server.BaseURL = v
+	}
+	if v := os.Getenv("DANSAL_DB_PATH"); v != "" {
+		cfg.Server.DBPath = v
+	}
+	if v := os.Getenv("DANSAL_SMTP_HOST"); v != "" {
+		cfg.SMTP.Host = v
+	}
+	if v := os.Getenv("DANSAL_SMTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.SMTP.Port = p
+		}
+	}
+	if v := os.Getenv("DANSAL_SMTP_USER"); v != "" {
+		cfg.SMTP.Username = v
+	}
+	if v := os.Getenv("DANSAL_SMTP_PASS"); v != "" {
+		cfg.SMTP.Password = v
+	}
+	if v := os.Getenv("DANSAL_SMTP_FROM"); v != "" {
+		cfg.SMTP.From = v
+	}
 }
 
 func applyDefaults(cfg *Config) {

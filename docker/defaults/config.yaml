@@ -1,0 +1,13 @@
+server:
+  port: 8000
+  base_url: ""        # override with DANSAL_BASE_URL
+  db_path: /var/lib/dansal/calendar.db
+  images_dir: /var/lib/dansal/images
+
+smtp:
+  host: ""            # override with DANSAL_SMTP_HOST
+  port: 587
+  username: ""        # override with DANSAL_SMTP_USER
+  password: ""        # override with DANSAL_SMTP_PASS
+  from: ""            # override with DANSAL_SMTP_FROM
+  tls: starttls

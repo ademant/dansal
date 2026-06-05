@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -49,6 +50,7 @@ func loadConfigFrom(path string) *Config {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("parse config: %v", err)
 	}
+	applyWebminEnvOverrides(&cfg)
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:8090"
 	}
@@ -78,4 +80,18 @@ func loadConfigFrom(path string) *Config {
 	}
 	cfg.configPath = path
 	return &cfg
+}
+
+// applyWebminEnvOverrides overlays environment variables so container
+// deployments can inject secrets without editing the YAML config file.
+func applyWebminEnvOverrides(cfg *Config) {
+	if v := os.Getenv("DANSAL_WEBMIN_LISTEN"); v != "" {
+		cfg.Listen = v
+	}
+	if v := os.Getenv("DANSAL_WEBMIN_SESSION_SECRET"); v != "" {
+		cfg.SessionSecret = v
+	}
+	if v := os.Getenv("DANSAL_WEBMIN_DANSAL_URL"); v != "" {
+		cfg.DansalURL = strings.TrimRight(v, "/")
+	}
 }

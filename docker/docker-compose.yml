@@ -1,0 +1,49 @@
+services:
+  dansal:
+    image: ghcr.io/ademant/dansal:latest
+    restart: unless-stopped
+    environment:
+      DANSAL_BASE_URL: ${DANSAL_BASE_URL}
+      DANSAL_SMTP_HOST: ${DANSAL_SMTP_HOST:-}
+      DANSAL_SMTP_PORT: ${DANSAL_SMTP_PORT:-587}
+      DANSAL_SMTP_USER: ${DANSAL_SMTP_USER:-}
+      DANSAL_SMTP_PASS: ${DANSAL_SMTP_PASS:-}
+      DANSAL_SMTP_FROM: ${DANSAL_SMTP_FROM:-}
+    volumes:
+      - ./config:/etc/dansal
+      - ./data:/var/lib/dansal
+    networks: [dansal]
+
+  dansal_web:
+    image: ghcr.io/ademant/dansal-web:latest
+    restart: unless-stopped
+    environment:
+      DANSAL_WEB_DOMAIN: ${DANSAL_WEB_DOMAIN}
+      DANSAL_WEB_BASE_URL: ${DANSAL_BASE_URL}
+      DANSAL_WEB_DANSAL_URL: http://dansal:8000
+      DANSAL_WEB_LISTEN: ":8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config:/etc/dansal
+      - ./data-web:/var/lib/dansal-web
+    networks: [dansal]
+    depends_on: [dansal]
+
+  dansal_webmin:
+    image: ghcr.io/ademant/dansal-webmin:latest
+    restart: unless-stopped
+    environment:
+      DANSAL_WEBMIN_LISTEN: ":8090"
+      DANSAL_WEBMIN_SESSION_SECRET: ${DANSAL_WEBMIN_SESSION_SECRET}
+      DANSAL_WEBMIN_DANSAL_URL: http://dansal:8000
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./config:/etc/dansal
+      - ./data-web:/var/lib/dansal-web
+    networks: [dansal]
+    depends_on: [dansal]
+
+networks:
+  dansal:

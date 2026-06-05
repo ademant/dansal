@@ -1,0 +1,6 @@
+listen: ":8080"
+domain: ""            # override with DANSAL_WEB_DOMAIN
+dansal_url: "http://dansal:8000"   # override with DANSAL_WEB_DANSAL_URL
+db_path: /var/lib/dansal-web/web.db
+images_dir: /var/lib/dansal-web
+dark_mode: auto

@@ -1,9 +1,44 @@
-# dansal
+# dansal - Comprehensive Dance Event Management System
 
-Calendar REST API backed by SQLite. See [API.md](API.md) for full endpoint documentation.
+dansal is a powerful, open-source calendar and event management platform designed specifically for dance communities. Built with SQLite backend and REST API, dansal makes it easy to organize, publish, and discover dance events of all types - from folk dances and tangos to salsa festivals and workshops.
 
-This server should present dancing events. Events can be fetched by iCal-Feeds and inserted.
-Existing events can be exported via iCal, JSON-Feed to existing instances. Events are publiches via activitypub into fediverse.
+## Key Features
+
+✅ **Multi-Format Import** - Import events via iCal (.ics), Folkdance.json, or direct API integration
+✅ **Automatic Publishing** - Events are automatically published to the fediverse via ActivityPub
+✅ **Multi-Language Support** - Available in 8 languages with easy localization
+✅ **Geospatial Discovery** - Find events near you with interactive map visualization
+✅ **Multi-Channel Notifications** - Email, Telegram, and Matrix alert options
+✅ **Comprehensive Access Control** - Role-based permissions (admin, publisher, user, viewer)
+✅ **Venue Management** - Detailed venue profiles with accessibility, parking, and dance floor information
+✅ **Bulletin Board System** - Ride-sharing, ticket exchange, and community messaging
+
+## For Event Organizers
+
+dansal simplifies event management by allowing you to:
+- **Integrate existing calendars** - Connect your current iCal feeds for automatic event synchronization
+- **Create rich event listings** - Add detailed schedules, pricing tiers, musician information, and more
+- **Manage multiple venues** - Maintain venue profiles with accessibility details and amenities
+- **Use templates** - Save event configurations as reusable templates
+- **Control visibility** - Publish events publicly or keep them private for your organization
+
+## For Dance Enthusiasts
+
+Find your next dance experience with:
+- **Interactive map interface** - Browse events by location and date
+- **Detailed event information** - View schedules, pricing, venue details, and organizer contacts
+- **Community bulletin board** - Connect with others for ride-sharing and ticket exchanges
+- **Multi-language support** - Access information in your preferred language
+- **Mobile-friendly design** - Swipe through weeks and access information on-the-go
+
+## Technical Overview
+
+- **Backend**: Go-based REST API with SQLite database
+- **Frontend**: Responsive web interface with dark/light mode support
+- **Integration**: ActivityPub federation, Telegram bot support, MusicBrainz artist linking
+- **Deployment**: Simple single-binary deployment with configurable options
+
+dansal is perfect for folk dance clubs, tango communities, salsa schools, and any organization that wants to simplify event management while providing a rich experience for participants.
 
 ## Structure
 For managing events the service offer following data types to describe events:

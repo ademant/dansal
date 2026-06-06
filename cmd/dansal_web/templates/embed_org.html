@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff;padding:.85rem}
+.org-header{display:flex;gap:.75rem;align-items:center;margin-bottom:.75rem}
+.org-logo{width:52px;height:52px;object-fit:contain;border-radius:4px;flex-shrink:0}
+.org-name{font-size:1rem;font-weight:600;margin-bottom:.2rem}
+.org-desc{color:#555;font-size:.85rem;line-height:1.4;margin-bottom:.75rem}
+.org-links{font-size:.8rem;color:#888;margin-bottom:.85rem}
+.org-links a{color:#1a6eb5;text-decoration:none;margin-right:.6rem}
+.org-links a:hover{text-decoration:underline}
+.ev-list{list-style:none;border-top:1px solid #eee}
+.ev-item{display:flex;gap:.65rem;padding:.5rem 0;border-bottom:1px solid #eee;align-items:flex-start}
+.ev-item:last-child{border-bottom:none}
+.ev-date{min-width:5rem;font-weight:600;color:#1a6eb5;white-space:nowrap;font-size:.82rem}
+.ev-title a{color:#222;text-decoration:none;font-weight:500}
+.ev-title a:hover{color:#1a6eb5;text-decoration:underline}
+.ev-loc{color:#888;font-size:.78rem}
+.all-link{display:inline-block;margin-top:.7rem;font-size:.82rem;color:#1a6eb5;text-decoration:none}
+.all-link:hover{text-decoration:underline}
+.empty{color:#999;font-size:.85rem;margin-top:.5rem}
+</style>
+</head>
+<body>
+<div class="org-header">
+  {{if .Org.ImageURL}}<img class="org-logo" src="{{.BaseURL}}{{.Org.ImageURL}}" alt="">{{end}}
+  <div>
+    <div class="org-name">{{.Org.Name}}</div>
+  </div>
+</div>
+{{if .Org.Description}}<p class="org-desc">{{.Org.Description}}</p>{{end}}
+{{if or .Org.Website .Org.Facebook .Org.Instagram}}
+<div class="org-links">
+  {{if .Org.Website}}<a href="{{.Org.Website}}" target="_blank" rel="noopener">{{.Org.Website}}</a>{{end}}
+  {{if .Org.Facebook}}<a href="{{.Org.Facebook}}" target="_blank" rel="noopener">Facebook</a>{{end}}
+  {{if .Org.Instagram}}<a href="{{.Org.Instagram}}" target="_blank" rel="noopener">Instagram</a>{{end}}
+</div>
+{{end}}
+{{if .Events}}
+<ul class="ev-list">
+{{range .Events}}
+<li class="ev-item">
+  <div class="ev-date">{{formatDate $.Lang .StartTime}}</div>
+  <div>
+    <div class="ev-title"><a href="{{$.BaseURL}}/events/{{.ID}}" target="_blank" rel="noopener">{{.Title}}</a></div>
+    {{if .Location}}<div class="ev-loc">{{.Location.Location}}</div>{{end}}
+  </div>
+</li>
+{{end}}
+</ul>
+<a class="all-link" href="{{.BaseURL}}/org/{{.Org.ActorName}}" target="_blank" rel="noopener">{{.Strings.T "all_events"}} →</a>
+{{else}}
+<p class="empty">—</p>
+{{end}}
+<script>
+  function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
+  window.addEventListener('load',reportHeight);
+  new ResizeObserver(reportHeight).observe(document.body);
+</script>
+</body>
+</html>

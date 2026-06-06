@@ -877,6 +877,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Terminserie (Estr)"
       series_save_description: "Enrollañ"
+      event_more_info: "Muioc'h a titourou"
+      all_events: "An holl evenimantoù"
 
   de:
     flag: "🇩🇪"
@@ -1760,6 +1762,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Terminserie (Gast)"
       series_save_description: "Speichern"
+      event_more_info: "Mehr Infos"
+      all_events: "Alle Veranstaltungen"
 
   br:
     flag: "BZH"
@@ -2641,6 +2645,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Terminserie (Estr)"
       series_save_description: "Enrollañ"
+      event_more_info: "Muioc'h a titourou"
+      all_events: "An holl evenimantoù"
 
   en:
     flag: "🇬🇧"
@@ -3525,6 +3531,8 @@ languages:
       nav_admin_series: "Event Series"
       series_token_view: "Event Series (Guest)"
       series_save_description: "Save"
+      event_more_info: "More info"
+      all_events: "All events"
 
   es:
     flag: "🇪🇸"
@@ -4396,6 +4404,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Serie de eventos (Invitado)"
       series_save_description: "Guardar"
+      event_more_info: "Más información"
+      all_events: "Todos los eventos"
 
   fr:
     flag: "🇫🇷"
@@ -5279,6 +5289,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Série (Invité)"
       series_save_description: "Enregistrer"
+      event_more_info: "Plus d'infos"
+      all_events: "Tous les événements"
 
   it:
     flag: "🇮🇹"
@@ -6150,6 +6162,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Serie (Ospite)"
       series_save_description: "Salva"
+      event_more_info: "Più informazioni"
+      all_events: "Tutti gli eventi"
 
   nl:
     flag: "🇳🇱"
@@ -7021,6 +7035,8 @@ languages:
       nav_admin_series: "Terminserie"
       series_token_view: "Evenementenserie (Gast)"
       series_save_description: "Opslaan"
+      event_more_info: "Meer informatie"
+      all_events: "Alle evenementen"
 
   uk:
     flag: "🇺🇦"

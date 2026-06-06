@@ -824,6 +824,10 @@ type Templates struct {
 	adminSeriesNew      *template.Template
 	adminSeriesEdit     *template.Template
 	seriesToken         *template.Template
+	embedEvents         *template.Template
+	embedEvent          *template.Template
+	embedOrg            *template.Template
+	embedNext           *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -832,6 +836,15 @@ func loadTemplates() *Templates {
 			"templates/base.html", "templates/"+page+".html")
 		if err != nil {
 			log.Fatalf("load template %s: %v", page, err)
+		}
+		return t
+	}
+	// Standalone embed templates — no base.html wrapper.
+	loadEmbed := func(page string) *template.Template {
+		t, err := template.New(page).Funcs(tmplFuncMap).ParseFS(templateFS,
+			"templates/"+page+".html")
+		if err != nil {
+			log.Fatalf("load embed template %s: %v", page, err)
 		}
 		return t
 	}
@@ -884,6 +897,10 @@ func loadTemplates() *Templates {
 		adminSeriesNew:      load("admin_series_new"),
 		adminSeriesEdit:     load("admin_series_edit"),
 		seriesToken:         load("series_token"),
+		embedEvents:         loadEmbed("embed_events"),
+		embedEvent:          loadEmbed("embed_event"),
+		embedOrg:            loadEmbed("embed_org"),
+		embedNext:           loadEmbed("embed_next"),
 	}
 }
 

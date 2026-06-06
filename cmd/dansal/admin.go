@@ -303,8 +303,7 @@ func adminMagicLink(req adminRequest) adminResponse {
 		base = fmt.Sprintf("http://localhost%s", getPort())
 	}
 	url := base + "/api/v1/login/magic/" + token
-	data, _ := json.Marshal(map[string]string{"url": url})
-	return adminResponse{OK: true, Data: data}
+	return adminResponse{OK: true, Data: map[string]string{"url": url}}
 }
 
 func adminListSessions(req adminRequest) adminResponse {

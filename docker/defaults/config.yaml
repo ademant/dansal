@@ -3,6 +3,8 @@ server:
   base_url: ""        # override with DANSAL_BASE_URL
   db_path: /var/lib/dansal/calendar.db
   images_dir: /var/lib/dansal/images
+  backup_dir: /var/lib/dansal/backups
+  backup_interval_hours: 0   # 0 = disabled; e.g. 24 for daily automatic backups
 
 smtp:
   host: ""            # override with DANSAL_SMTP_HOST

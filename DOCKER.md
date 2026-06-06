@@ -1,6 +1,6 @@
 # Running dansal with Docker
 
-Three images are published to the GitHub Container Registry on every push to `main` and on version tags:
+Three images are published to the GitHub Container Registry on new version tags:
 
 | Image | Service | Default port |
 |---|---|---|
@@ -53,6 +53,7 @@ Dansal uses a two-layer configuration approach:
 | `DANSAL_SMTP_USER` | `smtp.username` | *(empty)* |
 | `DANSAL_SMTP_PASS` | `smtp.password` | *(empty)* |
 | `DANSAL_SMTP_FROM` | `smtp.from` | *(empty)* |
+| `DANSAL_BACKUP_DIR` | `server.backup_dir` | `/var/lib/dansal/backups` |
 
 ### dansal-web (frontend)
 

@@ -54,6 +54,30 @@
   </form>
 </div>
 
+<div class="card">
+  <div class="card-title">Restore from backup</div>
+  <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:.75rem">
+    Restore database, config, and images from a backup archive in the configured backup directory.
+    <strong>This will overwrite live data.</strong>
+  </p>
+  {{if .Backups}}
+  <form method="POST" action="/maintenance/restore">
+    <div class="form-group">
+      <label>Select backup</label>
+      <select name="filename" style="width:100%">
+        {{range .Backups}}
+        <option value="{{.Name}}">{{.Name}} ({{.SizeDisplay}})</option>
+        {{end}}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-danger"
+      onclick="return confirm('Restore from this backup? This will overwrite the live database and config.')">Restore</button>
+  </form>
+  {{else}}
+  <p style="color:var(--fg-muted);font-size:.9rem">No backups found in the backup directory.</p>
+  {{end}}
+</div>
+
 </div>
 {{end}}
 {{end}}

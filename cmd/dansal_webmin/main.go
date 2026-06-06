@@ -97,6 +97,7 @@ func main() {
 		mux.HandleFunc("POST /maintenance/prune-images", requireLogin(cfg, maintenancePruneImagesHandler(cfg)))
 		mux.HandleFunc("POST /maintenance/fetch-all", requireLogin(cfg, maintenanceFetchAllHandler(cfg)))
 		mux.HandleFunc("POST /maintenance/backup", requireLogin(cfg, maintenanceBackupHandler(cfg)))
+		mux.HandleFunc("POST /maintenance/restore", requireLogin(cfg, maintenanceRestoreHandler(cfg)))
 		mux.HandleFunc("GET /site-config", requireLogin(cfg, siteConfigPageHandler(cfg, tmpls, webDB)))
 		mux.HandleFunc("POST /site-config", requireLogin(cfg, siteConfigSaveHandler(cfg, webDB)))
 		return mux

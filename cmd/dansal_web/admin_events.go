@@ -1414,8 +1414,8 @@ type AdminEventEditData struct {
 	ErrorKey           string
 	UserOrgs           []Organization
 	Templates          []EventTemplate
-	Series             []EventSeries  // series the user can assign to
-	CurrentSeries      *EventSeries   // set when event already belongs to a series
+	Series             []EventSeries // series the user can assign to
+	CurrentSeries      *EventSeries  // set when event already belongs to a series
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {

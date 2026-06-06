@@ -14,18 +14,18 @@ import (
 
 // EventSeries represents a recurring event series.
 type EventSeries struct {
-	ID                int          `json:"id"`
-	Slug              string       `json:"slug"`
-	Title             string       `json:"title"`
-	Description       string       `json:"description"`
-	OrganizationID    *int         `json:"organization_id,omitempty"`
-	DefaultLocationID *int         `json:"default_location_id,omitempty"`
-	DefaultStartTime  string       `json:"default_start_time"`
-	DefaultEndTime    string       `json:"default_end_time"`
-	InviteToken       string       `json:"invite_token,omitempty"`
-	CreatedAt         string       `json:"created_at"`
-	UpdatedAt         int64        `json:"updated_at"`
-	EventCount        int          `json:"event_count,omitempty"`
+	ID                int           `json:"id"`
+	Slug              string        `json:"slug"`
+	Title             string        `json:"title"`
+	Description       string        `json:"description"`
+	OrganizationID    *int          `json:"organization_id,omitempty"`
+	DefaultLocationID *int          `json:"default_location_id,omitempty"`
+	DefaultStartTime  string        `json:"default_start_time"`
+	DefaultEndTime    string        `json:"default_end_time"`
+	InviteToken       string        `json:"invite_token,omitempty"`
+	CreatedAt         string        `json:"created_at"`
+	UpdatedAt         int64         `json:"updated_at"`
+	EventCount        int           `json:"event_count,omitempty"`
 	Events            []SeriesEvent `json:"events,omitempty"`
 }
 
@@ -209,7 +209,7 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 				FROM event_series WHERE organization_id=? ORDER BY id DESC`, oid)
 		} else {
 			rows, err = db.Query(`
-				SELECT `+seriesSelectCols+`,
+				SELECT ` + seriesSelectCols + `,
 				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
 				FROM event_series ORDER BY id DESC`)
 		}

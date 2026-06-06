@@ -166,6 +166,7 @@ endif
 	install -m 755 dansal_admin  /usr/lib/dansal/$(INSTANCE)/dansal_admin
 	install -m 755 dansal_web    /usr/lib/dansal/$(INSTANCE)/dansal-web
 	install -m 755 dansal_webmin /usr/lib/dansal/$(INSTANCE)/dansal-webmin
+	install -m 755 packaging/dansal_preflight /usr/lib/dansal/dansal_preflight
 	systemctl restart dansal@$(INSTANCE)
 	systemctl try-restart dansal-web@$(INSTANCE).service || true
 	systemctl try-restart dansal-webmin@$(INSTANCE).service || true

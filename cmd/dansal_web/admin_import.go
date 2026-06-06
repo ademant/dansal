@@ -75,6 +75,11 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		orgID := r.FormValue("organization_id")
 
+		if su := getSessionUser(r); su != nil && su.Role != "admin" && orgID == "" {
+			renderErr(i18n.T(r, "admin_import_org_required"), feedURL, feedType)
+			return
+		}
+
 		// Build a new multipart body to forward to the API.
 		var buf bytes.Buffer
 		mw := multipart.NewWriter(&buf)

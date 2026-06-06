@@ -335,7 +335,17 @@ endif
 	echo "Deploying nginx-webmin for instance '$(INSTANCE)': $$WEBMIN_DOMAIN (port=$$WEBMIN_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
 	rm -f /etc/nginx/conf.d/dansal-webmin.conf
-	CA_CERT=$(SYSCONFDIR)/$(INSTANCE)/mtls/ca.crt
+	API_CONF=$(SYSCONFDIR)/$(INSTANCE)/config.yaml
+	PKI_DIR=$$(grep -E '^\s+pki_dir:' "$$API_CONF" 2>/dev/null | sed -E 's/.*:[[:space:]]*//' | tr -d '"')
+	if [ -z "$$PKI_DIR" ]; then \
+	    DB_PATH=$$(grep -E '^\s+db_path:' "$$API_CONF" 2>/dev/null | sed -E 's/.*:[[:space:]]*//' | tr -d '"'); \
+	    if [ -n "$$DB_PATH" ]; then \
+	        PKI_DIR=$$(dirname "$$DB_PATH")/pki; \
+	    else \
+	        PKI_DIR=$(STATEDIR)/pki; \
+	    fi; \
+	fi
+	CA_CERT=$$PKI_DIR/ca.crt
 	sed \
 	    -e "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8090/127.0.0.1:$$WEBMIN_PORT/g" \

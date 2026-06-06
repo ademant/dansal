@@ -22,19 +22,26 @@ import (
 const defaultPKIDir = "/var/lib/dansal/pki"
 
 func pkiDir() string {
-	data, err := os.ReadFile(defaultConfigPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return defaultPKIDir
 	}
 	var cfg struct {
 		Server struct {
 			PKIDir string `yaml:"pki_dir"`
+			DBPath string `yaml:"db_path"`
 		} `yaml:"server"`
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil || cfg.Server.PKIDir == "" {
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return defaultPKIDir
 	}
-	return cfg.Server.PKIDir
+	if cfg.Server.PKIDir != "" {
+		return cfg.Server.PKIDir
+	}
+	if cfg.Server.DBPath != "" {
+		return filepath.Join(filepath.Dir(cfg.Server.DBPath), "pki")
+	}
+	return defaultPKIDir
 }
 
 func writePEM(path, pemType string, data []byte) error {

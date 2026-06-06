@@ -16,8 +16,10 @@ const defaultSocket = "./dansal.sock"
 const defaultConfigPath = "/etc/dansal/config.yaml"
 const defaultWebConfigPath = "/etc/dansal/web.yaml"
 
+var configPath = defaultConfigPath
+
 func socketFromConfig() string {
-	data, err := os.ReadFile(defaultConfigPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return defaultSocket
 	}
@@ -127,9 +129,14 @@ func die(format string, args ...any) {
 var socketPath string
 
 func main() {
-	flag.StringVar(&socketPath, "socket", socketFromConfig(), "path to dansal admin socket")
+	flag.StringVar(&configPath, "config", defaultConfigPath, "path to instance config.yaml (e.g. /etc/dansal/prod/config.yaml)")
+	flag.StringVar(&socketPath, "socket", "", "path to dansal admin socket (default: from config)")
 	flag.Usage = usage
 	flag.Parse()
+
+	if socketPath == "" {
+		socketPath = socketFromConfig()
+	}
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -236,7 +243,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `Usage: dansal_admin [--socket PATH] <command> [flags]
+	fmt.Fprintln(os.Stderr, `Usage: dansal_admin [--config PATH] [--socket PATH] <command> [flags]
 
 User management:
   list-users                                         List all users

@@ -656,6 +656,11 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		}
 	}
 
+	var locIDArg any
+	if locationID != 0 {
+		locIDArg = locationID
+	}
+
 	if lookupErr == nil {
 		// Skip update when the source tells us nothing has changed since last import.
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
@@ -711,21 +716,21 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			return existingID, existingShortCode, false, nil
 		}
 
-		var err error
+	var err error
 		if source != "" {
 			var fsArg any
 			if fetchSourceID > 0 {
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id) WHERE id=?",
-				description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
+				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id) WHERE id=?",
+				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
 				time.Now().UTC().Unix(), "fetch", fsArg, existingID,
 			)
 		} else {
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
-				description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, existingID,
+				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
+				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, existingID,
 			)
 		}
 		if err != nil {
@@ -774,7 +779,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		}
 		result, err = q.Exec(
 			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg,
+			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg,
 		)
 		if err == nil {
 			break

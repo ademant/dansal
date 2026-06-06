@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff;padding:.75rem}
+.ev-list{list-style:none}
+.ev-item{display:flex;gap:.75rem;padding:.6rem 0;border-bottom:1px solid #eee;align-items:flex-start}
+.ev-item:last-child{border-bottom:none}
+.ev-date{min-width:5rem;font-weight:600;color:#1a6eb5;white-space:nowrap;font-size:.85rem;line-height:1.3}
+.ev-time{color:#666;font-size:.8rem}
+.ev-body{flex:1;min-width:0}
+.ev-title a{color:#222;text-decoration:none;font-weight:500}
+.ev-title a:hover{color:#1a6eb5;text-decoration:underline}
+.ev-loc{color:#888;font-size:.8rem;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev-org{color:#999;font-size:.75rem}
+.ev-cancelled{color:#e05c00;font-size:.75rem;margin-left:.3rem}
+.empty{color:#999;text-align:center;padding:1.5rem}
+</style>
+</head>
+<body>
+{{if .Events}}
+<ul class="ev-list">
+{{range .Events}}
+<li class="ev-item">
+  <div>
+    <div class="ev-date">{{formatDate $.Lang .StartTime}}</div>
+    <div class="ev-time">{{isoTime .StartTime}}{{if .EndTime}} – {{isoTime .EndTime}}{{end}}</div>
+  </div>
+  <div class="ev-body">
+    <div class="ev-title">
+      <a href="{{$.BaseURL}}/events/{{.ID}}" target="_blank" rel="noopener">{{.Title}}</a>
+      {{if .IsCancelled}}<span class="ev-cancelled">✕</span>{{end}}
+    </div>
+    {{if .Location}}<div class="ev-loc">{{.Location.Location}}</div>{{end}}
+    {{if .OrganizationID}}<div class="ev-org">{{index $.OrgNames (derefInt .OrganizationID)}}</div>{{end}}
+  </div>
+</li>
+{{end}}
+</ul>
+{{else}}
+<div class="empty">—</div>
+{{end}}
+<script>
+  function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
+  window.addEventListener('load',reportHeight);
+  new ResizeObserver(reportHeight).observe(document.body);
+</script>
+</body>
+</html>

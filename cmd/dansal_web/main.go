@@ -308,6 +308,11 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/assign-org", adminRateLimit(adminLocationAssignOrgHandler(cfg, client)))
 
+		r.HandleFunc("GET /embed/events", embedEventsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /embed/event/{id}", embedEventHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /embed/org/{slug}", embedOrgHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /embed/next", embedNextHandler(cfg, tmpls, client, i18n))
+
 		return pendingRegCountMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r)))
 	}
 
@@ -372,9 +377,12 @@ func main() {
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		// Embed pages must be iframeable by any origin; all other pages restrict to same-origin.
+		if !strings.HasPrefix(r.URL.Path, "/embed/") {
+			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

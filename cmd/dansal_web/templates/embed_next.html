@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:.85rem;color:#222;background:#fff;padding:.5rem 0}
+ul{list-style:none}
+li{display:flex;gap:.5rem;padding:.35rem 0;border-bottom:1px solid #f0f0f0;align-items:baseline}
+li:last-child{border-bottom:none}
+.d{min-width:5.5rem;font-weight:600;color:#1a6eb5;white-space:nowrap;font-size:.8rem;flex-shrink:0}
+.t a{color:#222;text-decoration:none}
+.t a:hover{color:#1a6eb5;text-decoration:underline}
+.loc{display:block;color:#aaa;font-size:.75rem}
+.empty{color:#aaa;padding:.5rem 0}
+</style>
+</head>
+<body>
+{{if .Events}}
+<ul>
+{{range .Events}}
+<li>
+  <span class="d">{{formatDate $.Lang .StartTime}}</span>
+  <span class="t">
+    <a href="{{$.BaseURL}}/events/{{.ID}}" target="_blank" rel="noopener">{{.Title}}</a>
+    {{if .Location}}<span class="loc">{{.Location.Location}}</span>{{end}}
+  </span>
+</li>
+{{end}}
+</ul>
+{{else}}
+<span class="empty">—</span>
+{{end}}
+<script>
+  function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
+  window.addEventListener('load',reportHeight);
+  new ResizeObserver(reportHeight).observe(document.body);
+</script>
+</body>
+</html>

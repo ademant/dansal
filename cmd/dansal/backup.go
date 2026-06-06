@@ -7,8 +7,10 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,16 +38,37 @@ func adminIncrementalBackup(req adminRequest) adminResponse {
 	return createBackup(req.Path, since)
 }
 
-func createBackup(outputPath string, since time.Time) adminResponse {
-	incremental := !since.IsZero()
+// resolveBackupPath returns a full file path for the backup archive.
+// If outputPath is empty or a directory, a timestamped filename is generated
+// inside the configured backup_dir (empty) or the given directory.
+func resolveBackupPath(outputPath string, incremental bool) string {
+	kind := "backup"
+	if incremental {
+		kind = "incremental"
+	}
+	filename := fmt.Sprintf("dansal-%s-%s.tar.gz", kind, time.Now().Format("20060102-150405"))
 
 	if outputPath == "" {
-		kind := "backup"
-		if incremental {
-			kind = "incremental"
+		dir := "/var/lib/dansal/backups"
+		if config != nil && config.Server.BackupDir != "" {
+			dir = config.Server.BackupDir
 		}
-		outputPath = fmt.Sprintf("./dansal-%s-%s.tar.gz", kind, time.Now().Format("20060102-150405"))
+		return filepath.Join(dir, filename)
 	}
+
+	// If it looks like a directory (trailing slash or existing dir), put file inside.
+	if strings.HasSuffix(outputPath, "/") || strings.HasSuffix(outputPath, string(os.PathSeparator)) {
+		return filepath.Join(outputPath, filename)
+	}
+	if info, err := os.Stat(outputPath); err == nil && info.IsDir() {
+		return filepath.Join(outputPath, filename)
+	}
+	return outputPath
+}
+
+func createBackup(outputPath string, since time.Time) adminResponse {
+	incremental := !since.IsZero()
+	outputPath = resolveBackupPath(outputPath, incremental)
 
 	// Consistent DB snapshot via VACUUM INTO a temp file.
 	tmpDB, err := os.CreateTemp("", "dansal-db-*.db")
@@ -64,6 +87,10 @@ func createBackup(outputPath string, since time.Time) adminResponse {
 	if snapDB, err := sql.Open("sqlite3", tmpDB.Name()); err == nil {
 		snapDB.Exec("UPDATE users SET password_hash = ''")
 		snapDB.Close()
+	}
+
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
+		return adminResponse{OK: false, Error: "mkdir: " + err.Error()}
 	}
 
 	f, err := os.Create(outputPath)
@@ -142,7 +169,16 @@ func adminRestore(req adminRequest) adminResponse {
 	if req.Path == "" {
 		return adminResponse{OK: false, Error: "path is required"}
 	}
-	restored, err := restoreFromTar(req.Path)
+	path := req.Path
+	// If only a filename was given (no directory component), resolve it against backup_dir.
+	if !strings.ContainsAny(path, "/\\") {
+		dir := "/var/lib/dansal/backups"
+		if config != nil && config.Server.BackupDir != "" {
+			dir = config.Server.BackupDir
+		}
+		path = filepath.Join(dir, path)
+	}
+	restored, err := restoreFromTar(path)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -287,6 +323,87 @@ func restoreDB(srcPath string) error {
 			return bk.Finish()
 		})
 	})
+}
+
+type backupFileInfo struct {
+	Name    string    `json:"name"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"mod_time"`
+}
+
+func listBackups() ([]backupFileInfo, error) {
+	dir := "/var/lib/dansal/backups"
+	if config != nil && config.Server.BackupDir != "" {
+		dir = config.Server.BackupDir
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []backupFileInfo{}, nil
+		}
+		return nil, err
+	}
+	var files []backupFileInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, backupFileInfo{
+			Name:    e.Name(),
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+		})
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime.After(files[j].ModTime)
+	})
+	return files, nil
+}
+
+func adminListBackups(_ adminRequest) adminResponse {
+	files, err := listBackups()
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	return adminResponse{OK: true, Data: files}
+}
+
+func startScheduledBackup() {
+	if config == nil || config.Server.BackupIntervalHours <= 0 {
+		return
+	}
+	interval := time.Duration(config.Server.BackupIntervalHours) * time.Hour
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			resp := createBackup("", time.Time{})
+			if resp.OK {
+				if r, ok := resp.Data.(backupResult); ok {
+					log.Printf("scheduled backup: %s (%s)", r.Path, fmtSize(r.Size))
+				}
+			} else {
+				log.Printf("scheduled backup failed: %s", resp.Error)
+			}
+		}
+	}()
+}
+
+func fmtSize(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func addDirToTar(tw *tar.Writer, srcDir, prefix string, since time.Time) error {

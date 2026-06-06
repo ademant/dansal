@@ -50,6 +50,8 @@ type ServerConfig struct {
 	WebAuthnRPName          string   `yaml:"webauthn_rp_name"`   // display name, default "Dansal"
 	ImageFormat             string   `yaml:"image_format"`       // "avif" | "jpeg", default "avif"
 	BoardOpenPosting        bool     `yaml:"board_open_posting"` // true = posts visible immediately; false (default) = verify contact first
+	BackupDir               string   `yaml:"backup_dir"`
+	BackupIntervalHours     int      `yaml:"backup_interval_hours"` // 0 = disabled
 }
 
 type SMTPConfig struct {
@@ -116,6 +118,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("DANSAL_SMTP_FROM"); v != "" {
 		cfg.SMTP.From = v
 	}
+	if v := os.Getenv("DANSAL_BACKUP_DIR"); v != "" {
+		cfg.Server.BackupDir = v
+	}
 }
 
 func applyDefaults(cfg *Config) {
@@ -163,6 +168,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.DBMaxConns == 0 {
 		cfg.Server.DBMaxConns = 10
+	}
+	if cfg.Server.BackupDir == "" {
+		cfg.Server.BackupDir = "/var/lib/dansal/backups"
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

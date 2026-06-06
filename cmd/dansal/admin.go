@@ -116,6 +116,8 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "list-backups":
+		return adminListBackups(req)
 	case "magic-link":
 		return adminMagicLink(req)
 	case "list-invites":

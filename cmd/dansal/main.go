@@ -1949,6 +1949,7 @@ func main() {
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
 	initMetrics()
 	startTokenCleanup()
+	startScheduledBackup()
 	log.Println("Database initialized successfully")
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)

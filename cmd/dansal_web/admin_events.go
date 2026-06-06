@@ -21,6 +21,7 @@ import (
 type AdminEventsData struct {
 	Events             []Event
 	Organizations      []Organization
+	OrgMap             map[int]string
 	Locations          []Location
 	Musicians          []Musician
 	Dances             []Dance
@@ -1031,9 +1032,14 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 
 		title := i18n.T(r, "admin_events_title")
-		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
+		orgMap := make(map[int]string, len(orgs))
+			for _, o := range orgs {
+				orgMap[o.ID] = o.Name
+			}
+			renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:             events,
 			Organizations:      orgs,
+			OrgMap:             orgMap,
 			Locations:          locs,
 			Musicians:          musicians,
 			Dances:             dances,

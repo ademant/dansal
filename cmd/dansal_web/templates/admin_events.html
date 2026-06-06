@@ -81,6 +81,12 @@
   </select>
   <button type="submit" formaction="/admin/events/bulk-assign-series" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_series_btn"}}</button>
   <span class="bulk-sep"></span>
+  <select name="org_id" class="bulk-loc-sel" id="bulk-org-sel">
+    <option value="">— {{$.Strings.T "fetch_org"}} —</option>
+    {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button type="submit" formaction="/admin/events/bulk-set-attributes" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_org_btn"}}</button>
+  <span class="bulk-sep"></span>
   <button type="button" class="btn-sm btn-attrs" onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_btn"}}</button>
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk"
@@ -98,6 +104,7 @@
       <th data-sort="str">{{$.Strings.T "col_date"}}</th>
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "col_location"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="str">Status</th>
       <th></th>
     </tr>
@@ -109,6 +116,7 @@
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
     <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
+    <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>

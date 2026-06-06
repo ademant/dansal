@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -268,6 +269,31 @@ func cmdMTLSIssue(args []string) {
 
 	fmt.Printf("Issued cert for %q.\n  Key:  %s\n  Cert: %s\n  P12:  %s\n  Expiry: %s\n",
 		*email, keyPath, crtPath, p12Path, clientCert.NotAfter.Format("2006-01-02"))
+
+	// Ensure a matching admin user exists so cert auth works immediately.
+	resp := send(socketPath, request{Cmd: "list-users"})
+	if !resp.OK {
+		fmt.Fprintf(os.Stderr, "  warning: could not check users (%s) — create admin user manually if needed\n", resp.Error)
+		return
+	}
+	var users []user
+	json.Unmarshal(resp.Data, &users)
+	for _, u := range users {
+		if u.Email == *email {
+			if u.Role != "admin" {
+				fmt.Fprintf(os.Stderr, "  warning: user %q exists but has role %q — cert auth requires role=admin\n", *email, u.Role)
+			} else {
+				fmt.Printf("  Admin user %q already exists.\n", *email)
+			}
+			return
+		}
+	}
+	cr := send(socketPath, request{Cmd: "create-user", Email: *email, Role: "admin"})
+	if !cr.OK {
+		fmt.Fprintf(os.Stderr, "  warning: could not create admin user (%s) — create it manually\n", cr.Error)
+		return
+	}
+	fmt.Printf("  Created admin user %q (no password — cert auth only).\n", *email)
 }
 
 func cmdMTLSRevoke(args []string) {

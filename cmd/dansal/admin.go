@@ -302,7 +302,7 @@ func adminMagicLink(req adminRequest) adminResponse {
 	if base == "" {
 		base = fmt.Sprintf("http://localhost%s", getPort())
 	}
-	url := base + "/api/v1/login/magic/" + token
+	url := base + "/login/magic/" + token
 	return adminResponse{OK: true, Data: map[string]string{"url": url}}
 }
 

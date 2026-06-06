@@ -15,6 +15,10 @@
     <input id="geo-search" type="text" placeholder="{{.Location.Address}}, {{.Location.Zipcode}} {{.Location.Town}}" autocomplete="off">
     <button type="button" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
   </div>
+  <div class="geo-row" style="margin-top:.4rem;gap:.4rem">
+    <button type="button" id="geo-from-fields" style="flex:1">{{$.Strings.T "loc_geocode_from_fields"}}</button>
+    <button type="button" id="geo-reverse" style="flex:1">{{$.Strings.T "loc_geocode_reverse"}}</button>
+  </div>
   <ul id="geo-results" class="geo-results"></ul>
 </div>
 
@@ -72,6 +76,16 @@
 
   <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
   <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
+
+  <div class="loc-meta">
+    <span><strong>ID</strong> {{.Location.ID}}</span>
+    {{if .Location.OsmID}}
+    <span><strong>OSM</strong>
+      {{if .Location.OsmType}}<a href="https://www.openstreetmap.org/{{.Location.OsmType}}/{{int64Val .Location.OsmID}}" target="_blank" rel="noopener">{{int64Val .Location.OsmID}} ({{.Location.OsmType}})</a>{{else}}{{int64Val .Location.OsmID}}{{end}}
+    </span>
+    {{end}}
+    {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
+  </div>
 
   {{if and (not .Location.ID) .UserOrgs}}
   <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
@@ -162,6 +176,7 @@
 .btn-del{padding:.45rem 1.2rem;background:#b00020;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-del:hover{background:#800016}
 .field-err{color:#b00020;font-size:.8rem;font-weight:normal}
+.loc-meta{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;font-size:.8rem;color:#555;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;padding:.4rem .75rem;margin:.2rem 0}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
@@ -260,10 +275,9 @@
   };
 
   /* ── Nominatim search ── */
-  btn.addEventListener('click', function(){
-    var q = input.value.trim();
+  function runSearch(q, searchBtn) {
     if (!q) return;
-    btn.disabled = true;
+    if (searchBtn) searchBtn.disabled = true;
     results.innerHTML = '<li style="color:#666">…</li>';
     fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=8&addressdetails=1', {
       headers: {'Accept-Language': document.documentElement.lang || 'de'}
@@ -304,11 +318,68 @@
       });
     })
     .catch(function(){ results.innerHTML = '<li style="color:#c00">Error</li>'; })
-    .finally(function(){ btn.disabled = false; });
+    .finally(function(){ if (searchBtn) searchBtn.disabled = false; });
+  }
+
+  btn.addEventListener('click', function(){
+    runSearch(input.value.trim(), btn);
   });
 
   input.addEventListener('keydown', function(e){
     if (e.key === 'Enter'){ e.preventDefault(); btn.click(); }
+  });
+
+  /* ── Fill from address fields ── */
+  document.getElementById('geo-from-fields').addEventListener('click', function(){
+    var parts = [
+      document.getElementById('location').value,
+      document.getElementById('address').value,
+      [document.getElementById('zipcode').value, document.getElementById('town').value].filter(Boolean).join(' '),
+      document.getElementById('country').value
+    ].map(function(s){ return s.trim(); }).filter(Boolean);
+    var q = parts.join(', ');
+    if (!q) return;
+    input.value = q;
+    runSearch(q, this);
+  });
+
+  /* ── Reverse geocode from coordinates ── */
+  document.getElementById('geo-reverse').addEventListener('click', function(){
+    var lat = parseFloat(latInp.value);
+    var lon = parseFloat(lonInp.value);
+    if (isNaN(lat) || isNaN(lon)) return;
+    var btn = this;
+    btn.disabled = true;
+    results.innerHTML = '<li style="color:#666">…</li>';
+    fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1', {
+      headers: {'Accept-Language': document.documentElement.lang || 'de'}
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(item){
+      results.innerHTML = '';
+      if (!item || item.error) {
+        results.innerHTML = '<li style="color:#999">–</li>';
+        return;
+      }
+      _geoItems = [item];
+      showResultsOnMap([item]);
+      var li = document.createElement('li');
+      var name = document.createElement('span');
+      name.textContent = item.display_name;
+      var coords = document.createElement('span');
+      coords.className = 'geo-coords';
+      coords.textContent = parseFloat(item.lat).toFixed(4) + ', ' + parseFloat(item.lon).toFixed(4);
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = '↙';
+      copyBtn.addEventListener('click', function(){ window._geoSelect(0); });
+      li.appendChild(name);
+      li.appendChild(coords);
+      li.appendChild(copyBtn);
+      results.appendChild(li);
+    })
+    .catch(function(){ results.innerHTML = '<li style="color:#c00">Error</li>'; })
+    .finally(function(){ btn.disabled = false; });
   });
 
   /* ── initialise map from existing coords ── */

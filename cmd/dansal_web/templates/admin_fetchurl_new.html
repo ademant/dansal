@@ -32,7 +32,7 @@
     </select>
   </div>
   {{if .Templates}}
-  <div class="form-row" id="tpl-row" style="{{if eq .TemplateID 0}}display:none{{end}}">
+  <div class="form-row">
     <label for="template_id">{{$.Strings.T "admin_fetchurl_template_label"}}</label>
     <select id="template_id" name="template_id">
       <option value="">—</option>
@@ -67,28 +67,27 @@
 </style>
 <script>
 function filterTemplates(orgID) {
-  var row = document.getElementById('tpl-row');
   var modeRow = document.getElementById('tpl-mode-row');
-  if (!row) return;
   var sel = document.getElementById('template_id');
-  var opts = sel ? sel.querySelectorAll('option') : [];
-  var anyVisible = false;
+  if (!sel) return;
+  var opts = sel.querySelectorAll('option');
   opts.forEach(function(opt) {
     if (!opt.value) return; // keep the blank option always
     var optOrg = opt.getAttribute('data-org') || '';
-    var show = !orgID || optOrg === '' || optOrg === orgID;
-    opt.hidden = !show;
-    if (show) anyVisible = true;
+    opt.hidden = orgID ? (optOrg !== '' && optOrg !== orgID) : false;
   });
-  if (!anyVisible) {
-    sel.value = '';
-  } else if (sel && sel.value && sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].hidden) {
+  // If the currently selected option is now hidden, reset to blank.
+  if (sel.value && sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].hidden) {
     sel.value = '';
   }
-  var show = anyVisible && orgID;
-  row.style.display = show ? '' : 'none';
-  modeRow.style.display = show ? '' : 'none';
+  if (modeRow) modeRow.style.display = sel.value ? '' : 'none';
 }
+
+document.getElementById('template_id') && document.getElementById('template_id').addEventListener('change', function() {
+  var modeRow = document.getElementById('tpl-mode-row');
+  if (modeRow) modeRow.style.display = this.value ? '' : 'none';
+});
+
 // Run on page load to apply the initial org selection
 filterTemplates(document.getElementById('organization_id').value);
 

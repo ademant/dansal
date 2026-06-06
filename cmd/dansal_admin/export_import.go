@@ -27,18 +27,19 @@ type exportFetchSource struct {
 }
 
 type exportLocation struct {
-	ID             int     `json:"id"`
-	Location       string  `json:"location"`
-	ShortName      string  `json:"short_name,omitempty"`
-	Address        string  `json:"address,omitempty"`
-	Zipcode        string  `json:"zipcode,omitempty"`
-	Town           string  `json:"town,omitempty"`
-	Country        string  `json:"country,omitempty"`
-	Latitude       float64 `json:"latitude,omitempty"`
-	Longitude      float64 `json:"longitude,omitempty"`
-	Internetsite   string  `json:"internetsite,omitempty"`
-	OrganizationID *int    `json:"organization_id,omitempty"`
-	CreatedAt      string  `json:"created_at"`
+	ID              int     `json:"id"`
+	Location        string  `json:"location"`
+	ShortName       string  `json:"short_name,omitempty"`
+	Address         string  `json:"address,omitempty"`
+	Zipcode         string  `json:"zipcode,omitempty"`
+	Town            string  `json:"town,omitempty"`
+	Country         string  `json:"country,omitempty"`
+	Latitude        float64 `json:"latitude,omitempty"`
+	Longitude       float64 `json:"longitude,omitempty"`
+	Internetsite    string  `json:"internetsite,omitempty"`
+	OrganizationIDs []int   `json:"organization_ids,omitempty"`
+	OrganizationID  *int    `json:"organization_id,omitempty"` // legacy: read-only during import
+	CreatedAt       string  `json:"created_at"`
 }
 
 type exportOrganization struct {
@@ -213,7 +214,7 @@ func exportLocations(db *sql.DB, output string) {
 	rows, err := db.Query(`SELECT id, location, COALESCE(short_name,''), COALESCE(address,''),
 		COALESCE(zipcode,''), COALESCE(town,''), COALESCE(country,''),
 		COALESCE(latitude,0), COALESCE(longitude,0), COALESCE(internetsite,''),
-		organization_id, created_at FROM locations ORDER BY id`)
+		created_at FROM locations ORDER BY id`)
 	if err != nil {
 		die("query: %v", err)
 	}
@@ -222,15 +223,19 @@ func exportLocations(db *sql.DB, output string) {
 	var out []exportLocation
 	for rows.Next() {
 		var l exportLocation
-		var orgID sql.NullInt64
 		if err := rows.Scan(&l.ID, &l.Location, &l.ShortName, &l.Address, &l.Zipcode,
 			&l.Town, &l.Country, &l.Latitude, &l.Longitude, &l.Internetsite,
-			&orgID, &l.CreatedAt); err != nil {
+			&l.CreatedAt); err != nil {
 			die("scan: %v", err)
 		}
-		if orgID.Valid {
-			v := int(orgID.Int64)
-			l.OrganizationID = &v
+		orgRows, _ := db.Query("SELECT organization_id FROM location_organizations WHERE location_id=? ORDER BY organization_id", l.ID)
+		if orgRows != nil {
+			for orgRows.Next() {
+				var oid int
+				orgRows.Scan(&oid)
+				l.OrganizationIDs = append(l.OrganizationIDs, oid)
+			}
+			orgRows.Close()
 		}
 		out = append(out, l)
 	}
@@ -406,10 +411,6 @@ func importLocations(db *sql.DB, input string, apply bool) {
 	fmt.Printf("importing %d location(s)...\n", len(records))
 	n := 0
 	for _, l := range records {
-		var orgVal any
-		if l.OrganizationID != nil {
-			orgVal = *l.OrganizationID
-		}
 		fmt.Printf("  %s\n", l.Location)
 		if !apply {
 			continue
@@ -418,19 +419,30 @@ func importLocations(db *sql.DB, input string, apply bool) {
 		db.QueryRow("SELECT id FROM locations WHERE location=?", l.Location).Scan(&existing)
 		if existing > 0 {
 			db.Exec(`UPDATE locations SET short_name=?,address=?,zipcode=?,town=?,country=?,
-				latitude=?,longitude=?,internetsite=?,organization_id=? WHERE id=?`,
+				latitude=?,longitude=?,internetsite=? WHERE id=?`,
 				nullStr(l.ShortName), nullStr(l.Address), nullStr(l.Zipcode), nullStr(l.Town),
 				nullStr(l.Country), nullFloat(l.Latitude), nullFloat(l.Longitude),
-				nullStr(l.Internetsite), orgVal, existing)
+				nullStr(l.Internetsite), existing)
 		} else {
-			if _, err := db.Exec(`INSERT INTO locations (location,short_name,address,zipcode,town,country,latitude,longitude,internetsite,organization_id)
-				VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			res, err := db.Exec(`INSERT INTO locations (location,short_name,address,zipcode,town,country,latitude,longitude,internetsite)
+				VALUES (?,?,?,?,?,?,?,?,?)`,
 				l.Location, nullStr(l.ShortName), nullStr(l.Address), nullStr(l.Zipcode),
 				nullStr(l.Town), nullStr(l.Country), nullFloat(l.Latitude), nullFloat(l.Longitude),
-				nullStr(l.Internetsite), orgVal); err != nil {
+				nullStr(l.Internetsite))
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "  error: %v\n", err)
 				continue
 			}
+			id, _ := res.LastInsertId()
+			existing = int(id)
+		}
+		// Assign org IDs via join table (new format).
+		for _, oid := range l.OrganizationIDs {
+			db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?,?)", existing, oid)
+		}
+		// Legacy single org_id field for backward-compatible imports.
+		if l.OrganizationID != nil {
+			db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?,?)", existing, *l.OrganizationID)
 		}
 		n++
 	}

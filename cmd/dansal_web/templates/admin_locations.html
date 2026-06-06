@@ -160,7 +160,9 @@ function delLocation(id) {
     countEl.textContent = n > 0 ? n + ' ✓' : '';
   }
   cbAll.addEventListener('change', function(){
-    cbs.forEach(function(cb){ cb.checked = cbAll.checked; });
+    cbs.forEach(function(cb){
+      if(cb.closest('tr').style.display !== 'none') cb.checked = cbAll.checked;
+    });
     updateCount();
   });
   cbs.forEach(function(cb){ cb.addEventListener('change', updateCount); });

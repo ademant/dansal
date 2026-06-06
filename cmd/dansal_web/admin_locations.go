@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"net/http"
 	"sort"
 	"strconv"
@@ -296,7 +295,7 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 // The newest location (by created_at) is the base; missing fields are filled
 // from the others. Events and org assignments are transferred; remaining
 // locations are deleted.
-func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)
 		if !ok {
@@ -416,42 +415,11 @@ func adminLocationMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) ht
 		// Update base location (applies merged fields + org assignments).
 		_ = client.UpdateLocation(ctx, base.ID, base, token)
 
-		// Reassign events from dropped locations to base before deleting.
-		var dropIDs []int
-		for _, l := range locs {
-			if l.ID != base.ID {
-				dropIDs = append(dropIDs, l.ID)
-			}
-		}
-		ph := make([]string, len(dropIDs))
-		dropArgs := make([]interface{}, len(dropIDs)+1)
-		dropArgs[0] = base.ID
-		for i, id := range dropIDs {
-			ph[i] = "?"
-			dropArgs[i+1] = id
-		}
-		db.ExecContext(ctx,
-			"UPDATE events SET location_id=? WHERE location_id IN ("+strings.Join(ph, ",")+")",
-			dropArgs...)
-
-		// Reassign event_locations rows for dropped locations. UPDATE OR IGNORE
-		// skips pairs where the base is already a secondary location for that
-		// event; the subsequent DELETE removes any rows that couldn't be
-		// reassigned (i.e. the drop was redundant with an existing base entry).
-		db.ExecContext(ctx,
-			"UPDATE OR IGNORE event_locations SET location_id=? WHERE location_id IN ("+strings.Join(ph, ",")+")",
-			dropArgs...)
-		dropOnlyArgs := make([]interface{}, len(dropIDs))
-		for i, id := range dropIDs {
-			dropOnlyArgs[i] = id
-		}
-		db.ExecContext(ctx,
-			"DELETE FROM event_locations WHERE location_id IN ("+strings.Join(ph, ",")+")",
-			dropOnlyArgs...)
-
-		// Delete dropped locations (cascade cleans their location_organizations).
-		for _, id := range dropIDs {
-			_ = client.DeleteLocation(ctx, id, token)
+		// Delete dropped locations. MergeLocation passes ?reassign_to=base.ID so
+		// the API reassigns events and event_locations before deleting, satisfying
+		// the FK constraint on events.location_id without touching the wrong DB.
+		for _, l := range locs[1:] {
+			_ = client.MergeLocation(ctx, l.ID, base.ID, token)
 		}
 
 		client.invalidateLocations()

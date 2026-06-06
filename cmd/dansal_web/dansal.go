@@ -667,7 +667,19 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 }
 
 func (c *DansalClient) DeleteLocation(ctx context.Context, id int, token string) error {
-	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d", id), token, nil)
+	return c.deleteLocation(ctx, id, 0, token)
+}
+
+func (c *DansalClient) MergeLocation(ctx context.Context, dropID, targetID int, token string) error {
+	return c.deleteLocation(ctx, dropID, targetID, token)
+}
+
+func (c *DansalClient) deleteLocation(ctx context.Context, id, reassignTo int, token string) error {
+	path := fmt.Sprintf("/api/v1/locations/%d", id)
+	if reassignTo != 0 {
+		path += fmt.Sprintf("?reassign_to=%d", reassignTo)
+	}
+	resp, err := c.authed(ctx, http.MethodDelete, path, token, nil)
 	if err != nil {
 		return err
 	}

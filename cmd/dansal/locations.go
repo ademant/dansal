@@ -761,6 +761,12 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Cannot delete: location has events assigned", http.StatusConflict)
 			return
 		}
+	} else if reassignTo := r.URL.Query().Get("reassign_to"); reassignTo != "" && reassignTo != id {
+		// Admin merge: reassign events and secondary-location rows before deletion
+		// so that the FK constraint on events.location_id is satisfied.
+		db.Exec("UPDATE events SET location_id=? WHERE location_id=?", reassignTo, id)
+		db.Exec("UPDATE OR IGNORE event_locations SET location_id=? WHERE location_id=?", reassignTo, id)
+		db.Exec("DELETE FROM event_locations WHERE location_id=?", id)
 	}
 
 	var locationID int

@@ -26,6 +26,10 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
+func saveDataOn(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Save-Data"), "on")
+}
+
 // imageExtFromConfig returns the configured output file extension and MIME type.
 func imageExtFromConfig() (ext, contentType string) {
 	if config.Server.ImageFormat == "jpeg" {
@@ -250,6 +254,31 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 }
 
 // GET /api/v1/images/{event_id}
+func maybeServePrecompressed(w http.ResponseWriter, r *http.Request, path, contentType string) bool {
+	// Set Vary so caches know content varies by Accept-Encoding
+	w.Header().Set("Vary", "Accept-Encoding")
+
+	// If client prefers brotli and a .br file exists, serve it
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "br") {
+		if _, err := os.Stat(path + ".br"); err == nil {
+			w.Header().Set("Content-Encoding", "br")
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, path+".br")
+			return true
+		}
+	}
+	// If client accepts gzip and a .gz file exists, serve it
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		if _, err := os.Stat(path + ".gz"); err == nil {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, path+".gz")
+			return true
+		}
+	}
+	return false
+}
+
 func getEventImage(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("event_id")
 
@@ -264,6 +293,25 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 	imgPath, contentType, found := imagePathForID(config.Server.ImagesDir, eventID)
 	if !found {
 		writeError(w, "Image not found", http.StatusNotFound)
+		return
+	}
+
+	// Respect Save-Data by preferring a "small" variant if available
+	if saveDataOn(r) {
+		ext := filepath.Ext(imgPath)
+		smallPath := strings.TrimSuffix(imgPath, ext) + ".small" + ext
+		if _, err := os.Stat(smallPath); err == nil {
+			if maybeServePrecompressed(w, r, smallPath, contentType) {
+				return
+			}
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, smallPath)
+			return
+		}
+	}
+
+	// Try serving precompressed variants of the canonical file
+	if maybeServePrecompressed(w, r, imgPath, contentType) {
 		return
 	}
 

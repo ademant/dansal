@@ -9,9 +9,37 @@ import (
 	"strings"
 )
 
+// maybeServePrecompressed attempts to serve path or its precompressed variants
+// path.br or path.gz depending on Accept-Encoding. Returns true if a file
+// was served.
+func maybeServePrecompressed(w http.ResponseWriter, r *http.Request, path, contentType string) bool {
+	w.Header().Set("Vary", "Accept-Encoding")
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "br") {
+		if _, err := os.Stat(path + ".br"); err == nil {
+			w.Header().Set("Content-Encoding", "br")
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, path+".br")
+			return true
+		}
+	}
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		if _, err := os.Stat(path + ".gz"); err == nil {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, path+".gz")
+			return true
+		}
+	}
+	return false
+}
+
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 
 // findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
+// findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
+// It will not consider compressed variants — callers should prefer the
+// streaming helper maybeServeSiteAsset which can serve .br/.gz variants when
+// present and set appropriate headers.
 func findSiteAssetOnDisk(dir, key string) []byte {
 	if dir == "" {
 		return nil
@@ -22,6 +50,56 @@ func findSiteAssetOnDisk(dir, key string) []byte {
 		}
 	}
 	return nil
+}
+
+// maybeServeSiteAsset attempts to serve a site asset from disk, preferring
+// precompressed .br/.gz variants when the client supports them. Returns true
+// if a file was served.
+func maybeServeSiteAsset(w http.ResponseWriter, r *http.Request, dir, key string) bool {
+	if dir == "" {
+		return false
+	}
+	for _, ext := range siteAssetExts {
+		path := filepath.Join(dir, key+ext)
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		mime := detectAssetMIMEFromExt(ext)
+		// Respect Save-Data by preferring a small variant if present
+		if saveDataOn(r) {
+			smallPath := filepath.Join(dir, key+".small"+ext)
+			if _, err := os.Stat(smallPath); err == nil {
+				if maybeServePrecompressed(w, r, smallPath, mime) {
+					return true
+				}
+				w.Header().Set("Content-Type", mime)
+				http.ServeFile(w, r, smallPath)
+				return true
+			}
+		}
+		if maybeServePrecompressed(w, r, path, mime) {
+			return true
+		}
+		w.Header().Set("Content-Type", mime)
+		http.ServeFile(w, r, path)
+		return true
+	}
+	return false
+}
+
+func detectAssetMIMEFromExt(ext string) string {
+	switch ext {
+	case ".svg":
+		return "image/svg+xml"
+	case ".avif":
+		return "image/avif"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // detectAssetMIME returns the MIME type for supported site asset formats

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"embed"
@@ -235,8 +236,19 @@ func registrationEnabled(_ *Config) bool {
 
 func svgHandler(data []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Vary", "Accept-Encoding")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Content-Type", "image/svg+xml")
+		// For embedded SVG fallback, prefer gzip when client accepts it and
+		// Save-Data isn't set. Serve on-the-fly gzip to avoid shipping a separate
+		// precompressed asset in the repo.
+		if !saveDataOn(r) && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gw := gzip.NewWriter(w)
+			defer gw.Close()
+			gw.Write(data)
+			return
+		}
 		w.Write(data)
 	}
 }

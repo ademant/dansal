@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"flag"
 	"fmt"
@@ -154,8 +155,22 @@ func main() {
 		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
 		r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Set("Content-Type", "application/javascript")
 			w.Header().Set("Cache-Control", "public, max-age=604800")
+			// Respect Save-Data: return a tiny stub to reduce traffic.
+			if saveDataOn(r) {
+				w.Write([]byte("/* Save-Data: on - script omitted */"))
+				return
+			}
+			// If client supports gzip, compress on-the-fly to save bandwidth.
+			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				w.Header().Set("Content-Encoding", "gzip")
+				gw := gzip.NewWriter(w)
+				defer gw.Close()
+				gw.Write(qrcodeJS)
+				return
+			}
 			w.Write(qrcodeJS)
 		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))

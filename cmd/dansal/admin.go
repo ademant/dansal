@@ -42,6 +42,7 @@ type adminRequest struct {
 	MatrixUsername        string `json:"matrix_username,omitempty"`
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
+	EventID               int    `json:"event_id,omitempty"`
 }
 
 type adminResponse struct {
@@ -172,6 +173,8 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminPruneImages()
 	case "mail-bounces":
 		return adminMailBounces()
+	case "delete-event":
+		return adminDeleteEvent(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -762,5 +765,32 @@ func adminRemoveMember(req adminRequest) adminResponse {
 	if n, _ := result.RowsAffected(); n == 0 {
 		return adminResponse{OK: false, Error: "member not found in organization"}
 	}
+	return adminResponse{OK: true}
+}
+
+func adminDeleteEvent(req adminRequest) adminResponse {
+	if req.EventID == 0 {
+		return adminResponse{OK: false, Error: "event_id is required"}
+	}
+	
+	// Check if event exists first
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE id = ?", req.EventID).Scan(&exists); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	if exists == 0 {
+		return adminResponse{OK: false, Error: "event not found"}
+	}
+	
+	// Delete the event (cascade will handle related tables)
+	result, err := db.Exec("DELETE FROM events WHERE id = ?", req.EventID)
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	if n, _ := result.RowsAffected(); n == 0 {
+		return adminResponse{OK: false, Error: "event not found"}
+	}
+	
 	return adminResponse{OK: true}
 }

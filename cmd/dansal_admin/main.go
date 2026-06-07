@@ -62,6 +62,7 @@ type request struct {
 	MatrixUsername        string `json:"matrix_username,omitempty"`
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
+	EventID               int    `json:"event_id,omitempty"`
 }
 
 type response struct {
@@ -225,6 +226,8 @@ func main() {
 		cmdPruneImages()
 	case "mail-bounces":
 		cmdMailBounces()
+	case "delete-event":
+		cmdDeleteEvent(rest)
 	case "mtls-init":
 		cmdMTLSInit(rest)
 	case "mtls-issue":
@@ -275,6 +278,9 @@ Maintenance:
   vacuum                                             Reclaim unused database space
   fetch-all                                          Fetch all configured feed sources
   prune-images                                       Remove image files with no matching DB record
+
+Event management:
+  delete-event  --id INT                             Delete an event by ID
 
 Data export/import:
   export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
@@ -638,6 +644,16 @@ List all issued certificates with their status (valid / REVOKED / expired).`,
 	"mtls-ca-cert": `Usage: dansal_admin mtls-ca-cert
 
 Print the CA certificate in PEM format (for piping into nginx config or distribution).`,
+
+	"delete-event": `Usage: dansal_admin delete-event --id INT
+
+Delete an event by its ID.
+
+Flags:
+  --id  Event ID (required)
+
+Note: This permanently deletes the event and all associated data (timetable, musicians, etc.)
+      due to database cascade constraints.`,
 }
 
 func cmdHelp(args []string) {
@@ -1196,4 +1212,19 @@ func cmdMailBounces() {
 		}
 	}
 	fmt.Printf("bounces checked: %d total, %d newly marked\n", len(results), marked)
+}
+
+func cmdDeleteEvent(args []string) {
+	fs := flag.NewFlagSet("delete-event", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["delete-event"]) }
+	eventID := fs.Int("id", 0, "event ID")
+	fs.Parse(args)
+	if *eventID == 0 {
+		die("--id is required")
+	}
+	resp := send(socketPath, request{Cmd: "delete-event", EventID: *eventID})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("deleted event %d\n", *eventID)
 }

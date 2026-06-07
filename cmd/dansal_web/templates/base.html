@@ -175,7 +175,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 </head>
 <body>
 <nav>
-  <a class="nav-brand" href="/"><img src="/logo.svg" alt="{{.SiteName}}"><span class="nav-brand-name">{{.SiteName}}</span></a>
+  <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}"><span class="nav-brand-name">{{.SiteName}}</span></a>
   <div class="nav-lang">
     <select class="lang-select" aria-label="Language" onchange="location.href='/lang?code='+this.value">
       {{range .Languages}}<option value="{{.Code}}"{{if .Active}} selected{{end}}>{{.Flag}} {{.Name}}</option>{{end}}
@@ -231,7 +231,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 {{end}}
 {{if gt .BannerHeight 0}}
 <div class="site-banner">
-  <img src="/banner.svg" alt="">
+  <img src="/banner.avif" alt="">
 </div>
 {{end}}
 <style>

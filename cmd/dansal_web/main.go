@@ -152,8 +152,8 @@ func main() {
 		r.HandleFunc("POST /admin/registrations/{id}/resend-invite", adminRateLimit(adminRegistrationResendInviteHandler(cfg, client)))
 
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
-		r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
-		r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))
+		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
+		r.HandleFunc("GET /banner.avif", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerAVIF))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Set("Content-Type", "application/javascript")

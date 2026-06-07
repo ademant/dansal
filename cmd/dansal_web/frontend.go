@@ -214,11 +214,11 @@ var templateFS embed.FS
 //go:embed static/favicon.svg
 var faviconSVG []byte
 
-//go:embed static/logo.svg
-var logoSVG []byte
+//go:embed static/logo.avif
+var logoAVIF []byte
 
-//go:embed static/banner.svg
-var bannerSVG []byte
+//go:embed static/banner.avif
+var bannerAVIF []byte
 
 //go:embed static/qrcode.min.js
 var qrcodeJS []byte

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -228,6 +229,8 @@ func main() {
 		cmdMailBounces()
 	case "delete-event":
 		cmdDeleteEvent(rest)
+	case "delete-all-events":
+		cmdDeleteAllEvents(rest)
 	case "mtls-init":
 		cmdMTLSInit(rest)
 	case "mtls-issue":
@@ -280,7 +283,8 @@ Maintenance:
   prune-images                                       Remove image files with no matching DB record
 
 Event management:
-  delete-event  --id INT                             Delete an event by ID
+  delete-event      --id INT                         Delete an event by ID
+  delete-all-events [--confirm]                     Delete ALL events in database
 
 Data export/import:
   export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
@@ -654,6 +658,17 @@ Flags:
 
 Note: This permanently deletes the event and all associated data (timetable, musicians, etc.)
       due to database cascade constraints.`,
+
+	"delete-all-events": `Usage: dansal_admin delete-all-events [--confirm]
+
+Delete ALL events in the database.
+
+Flags:
+  --confirm  Required confirmation flag (use --confirm to execute)
+
+WARNING: This will permanently delete ALL events and their associated data
+         including timetable entries, musicians, and organization assignments.
+         This action cannot be undone!`,
 }
 
 func cmdHelp(args []string) {
@@ -1227,4 +1242,38 @@ func cmdDeleteEvent(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Printf("deleted event %d\n", *eventID)
+}
+
+func cmdDeleteAllEvents(args []string) {
+	fs := flag.NewFlagSet("delete-all-events", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["delete-all-events"]) }
+	confirm := fs.Bool("confirm", false, "confirm deletion (required)")
+	fs.Parse(args)
+	
+	if !*confirm {
+		die("--confirm flag is required to delete all events. This is a safety measure.")
+	}
+	
+	// Ask for additional confirmation
+	fmt.Print("WARNING: This will delete ALL events. Are you sure? (y/N): ")
+	var response string
+	fmt.Scanln(&response)
+	if strings.ToLower(strings.TrimSpace(response)) != "y" {
+		die("Operation cancelled.")
+	}
+	
+	resp := send(socketPath, request{Cmd: "delete-all-events"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	
+	var result struct {
+		Deleted int `json:"deleted"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	
+	fmt.Printf("Deleted %d events from the database.\n", result.Deleted)
+	if result.Deleted > 0 {
+		fmt.Println("Note: All associated data (timetable entries, musicians, organization assignments) was also removed.")
+	}
 }

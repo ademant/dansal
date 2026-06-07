@@ -175,6 +175,8 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminMailBounces()
 	case "delete-event":
 		return adminDeleteEvent(req)
+	case "delete-all-events":
+		return adminDeleteAllEvents(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -793,4 +795,31 @@ func adminDeleteEvent(req adminRequest) adminResponse {
 	}
 	
 	return adminResponse{OK: true}
+}
+
+func adminDeleteAllEvents(req adminRequest) adminResponse {
+	// Count events before deletion for reporting
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	if count == 0 {
+		return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
+	}
+	
+	// Delete all events (cascade will handle related tables)
+	result, err := db.Exec("DELETE FROM events")
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	// Also clear any organization-event assignments that might remain
+	db.Exec("DELETE FROM location_organizations WHERE location_id NOT IN (SELECT id FROM locations)")
+	
+	if n, _ := result.RowsAffected(); n > 0 {
+		return adminResponse{OK: true, Data: map[string]int{"deleted": int(n)}}
+	}
+	
+	return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
 }

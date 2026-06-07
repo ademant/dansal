@@ -164,6 +164,11 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		locByName := make(map[string]Location, len(locs))
 		for _, l := range locs {
 			locByName[l.Location] = l
+			for _, alias := range l.Aliases {
+				if _, exists := locByName[alias]; !exists {
+					locByName[alias] = l
+				}
+			}
 		}
 
 		seen := map[string]bool{}

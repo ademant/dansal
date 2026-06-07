@@ -413,6 +413,19 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 			return
 		}
+		token := getSessionToken(r)
+		// Location and series assignment are handled separately before the
+		// generic attributes payload because they use dedicated API endpoints.
+		if v := r.FormValue("location_id"); v != "" {
+			if locID, err := strconv.Atoi(v); err == nil && locID > 0 {
+				_ = client.BulkSetEventLocation(r.Context(), ids, locID, token)
+			}
+		}
+		if v := r.FormValue("series_id"); v != "" {
+			if seriesID, err := strconv.Atoi(v); err == nil && seriesID > 0 {
+				_ = client.AssignEventsToSeries(r.Context(), seriesID, ids, token)
+			}
+		}
 		payload := map[string]any{"ids": ids}
 		if v := r.FormValue("org_id"); v != "" {
 			id, _ := strconv.Atoi(v)
@@ -454,7 +467,7 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 		if v := r.FormValue("pricing_type"); v != "" && v != "__skip__" {
 			payload["pricing_type"] = v
 		}
-		_ = client.BulkSetEventAttributes(r.Context(), payload, getSessionToken(r))
+		_ = client.BulkSetEventAttributes(r.Context(), payload, token)
 		ref := r.Header.Get("Referer")
 		if ref == "" {
 			ref = "/admin/events"

@@ -68,25 +68,6 @@
   <button type="submit" class="btn-sm btn-merge"
           onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
   <button type="button" class="btn-sm" id="event-bulk-tpl-btn">{{$.Strings.T "evt_apply_template_btn"}}</button>
-  <span class="bulk-sep"></span>
-  <select name="bulk_location_id" class="bulk-loc-sel">
-    <option value="">{{$.Strings.T "filter_all_locations"}}</option>
-    {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
-  </select>
-  <button type="submit" formaction="/admin/events/bulk-assign-location" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_loc_btn"}}</button>
-  <span class="bulk-sep"></span>
-  <select name="bulk_series_id" class="bulk-loc-sel">
-    <option value="">— {{$.Strings.T "evt_bulk_series_new"}} —</option>
-    {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
-  </select>
-  <button type="submit" formaction="/admin/events/bulk-assign-series" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_series_btn"}}</button>
-  <span class="bulk-sep"></span>
-  <select name="org_id" class="bulk-loc-sel" id="bulk-org-sel">
-    <option value="">— {{$.Strings.T "fetch_org"}} —</option>
-    {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-  </select>
-  <button type="submit" formaction="/admin/events/bulk-set-attributes" class="btn-sm btn-assign">{{$.Strings.T "evt_bulk_assign_org_btn"}}</button>
-  <span class="bulk-sep"></span>
   <button type="button" class="btn-sm btn-attrs" onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_btn"}}</button>
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk"
@@ -150,6 +131,26 @@
         <select name="org_id" class="ba-select">
           <option value="0">— {{$.Strings.T "evt_bulk_attrs_unset"}} —</option>
           {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-loc-enable"> {{$.Strings.T "evt_bulk_attrs_location"}}</label>
+      <div class="ba-group-body" id="ba-loc-body" hidden>
+        <select name="location_id" class="ba-select">
+          <option value="">—</option>
+          {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        </select>
+      </div>
+    </div>
+
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-series-enable"> {{$.Strings.T "evt_bulk_attrs_series"}}</label>
+      <div class="ba-group-body" id="ba-series-body" hidden>
+        <select name="series_id" class="ba-select">
+          <option value="">—</option>
+          {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
         </select>
       </div>
     </div>

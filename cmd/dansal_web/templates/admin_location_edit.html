@@ -126,6 +126,10 @@
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>
   <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
 
+  <label for="aliases">{{$.Strings.T "loc_aliases"}}</label>
+  <textarea id="aliases" name="aliases" rows="3" placeholder="{{$.Strings.T "loc_aliases_hint"}}">{{range $i, $a := .Location.Aliases}}{{if $i}}
+{{end}}{{$a}}{{end}}</textarea>
+
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
       {{if not .ReadOnly}}<button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>{{end}}

@@ -1309,6 +1309,21 @@ func migrateDB() {
 		db.Exec("ALTER TABLE events ADD COLUMN series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL")
 		mark(5)
 	}
+	// v6: location aliases for feed deduplication.
+	if !applied(6) {
+		db.Exec("ALTER TABLE locations ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+		mark(6)
+	}
+	// Safety net: ensure aliases column exists even if v6 was pre-marked before
+	// schema_migrations existed (legacy upgrade path where createTables created the
+	// table and marked all versions applied without running the ALTER TABLE).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='aliases'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE locations ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1560,6 +1575,7 @@ func createTables() error {
 		attributes TEXT,
 		parking TEXT,
 		floor_condition TEXT,
+		aliases TEXT NOT NULL DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER
 	);
@@ -1849,6 +1865,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(4)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(6)")
 	return nil
 }
 

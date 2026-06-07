@@ -87,6 +87,12 @@ func (c *DansalClient) invalidateMusicians() {
 	c.mu.Unlock()
 }
 
+func (c *DansalClient) invalidateDances() {
+	c.mu.Lock()
+	c.dancesCache.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
 func (c *DansalClient) invalidateLocations() {
 	c.mu.Lock()
 	c.locationsCache.fetchedAt = time.Time{}
@@ -305,6 +311,7 @@ type Location struct {
 	Attributes      map[string]bool `json:"attributes,omitempty"`
 	Parking         string          `json:"parking,omitempty"`
 	FloorCondition  string          `json:"floor_condition,omitempty"`
+	Aliases         []string        `json:"aliases,omitempty"`
 }
 
 type FetchSource struct {
@@ -2049,7 +2056,11 @@ func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dan
 		return Dance{}, apiErr(resp)
 	}
 	var d Dance
-	return d, json.NewDecoder(resp.Body).Decode(&d)
+	err = json.NewDecoder(resp.Body).Decode(&d)
+	if err == nil {
+		c.invalidateDances()
+	}
+	return d, err
 }
 
 func (c *DansalClient) DeleteDance(ctx context.Context, id int, token string) error {
@@ -2061,6 +2072,7 @@ func (c *DansalClient) DeleteDance(ctx context.Context, id int, token string) er
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateDances()
 	return nil
 }
 

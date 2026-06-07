@@ -25,6 +25,16 @@ type AdminLocationEditData struct {
 	ErrorKey string
 }
 
+func parseAliases(raw string) []string {
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		if s := strings.TrimSpace(line); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func buildOrgMap(orgs []Organization) map[int]Organization {
 	m := make(map[int]Organization, len(orgs))
 	for _, o := range orgs {
@@ -160,6 +170,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
 			OsmID:        parseOsmID(r.FormValue("osm_id")),
 			OsmType:      strings.TrimSpace(r.FormValue("osm_type")),
+			Aliases:      parseAliases(r.FormValue("aliases")),
 		}
 		token := getSessionToken(r)
 		created, err := client.CreateLocation(r.Context(), loc, token)
@@ -261,6 +272,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Attributes:      locationAttrsFromForm(r),
 			Parking:         r.FormValue("parking"),
 			FloorCondition:  r.FormValue("floor_condition"),
+			Aliases:         parseAliases(r.FormValue("aliases")),
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
@@ -346,6 +358,10 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		for _, oid := range base.OrganizationIDs {
 			orgSet[oid] = true
 		}
+		aliasSet := make(map[string]bool)
+		for _, a := range base.Aliases {
+			aliasSet[a] = true
+		}
 		for _, l := range locs[1:] {
 			if l.Location != "" {
 				base.Location = l.Location
@@ -405,12 +421,26 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			for _, oid := range l.OrganizationIDs {
 				orgSet[oid] = true
 			}
+			// Collect old names as aliases so feed deduplication still works.
+			if l.Location != base.Location {
+				aliasSet[l.Location] = true
+			}
+			for _, a := range l.Aliases {
+				aliasSet[a] = true
+			}
 		}
 		mergedOrgs := make([]int, 0, len(orgSet))
 		for oid := range orgSet {
 			mergedOrgs = append(mergedOrgs, oid)
 		}
 		base.OrganizationIDs = mergedOrgs
+		mergedAliases := make([]string, 0, len(aliasSet))
+		for a := range aliasSet {
+			if a != base.Location {
+				mergedAliases = append(mergedAliases, a)
+			}
+		}
+		base.Aliases = mergedAliases
 
 		// Update base location (applies merged fields + org assignments).
 		_ = client.UpdateLocation(ctx, base.ID, base, token)

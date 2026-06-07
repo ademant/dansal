@@ -28,7 +28,7 @@
     <option value="{{.ID}}" {{if eq .ID $.Data.FilterOrgID}}selected{{end}}>{{.Name}}</option>
     {{end}}
   </select>
-  <select id="city-filter" onchange="onCityChange(this.value)">
+  <select id="city-filter" name="city" onchange="this.form.submit()" data-active="{{.FilterCity}}">
     <option value="">{{$.Strings.T "filter_all_towns"}}</option>
   </select>
   <select name="location_id" id="loc-select" onchange="this.form.submit()">
@@ -317,9 +317,8 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
     citySel.appendChild(o);
   });
 
-  // Pre-select city that matches the currently selected location.
-  var chosen = locSel.options[locSel.selectedIndex];
-  var activeCity = (chosen && chosen.value) ? (chosen.dataset.town || '') : '';
+  // Pre-select city from server-side filter value.
+  var activeCity = citySel.dataset.active || '';
   if (activeCity) citySel.value = activeCity;
 
   function applyCity(city) {
@@ -334,11 +333,8 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 
   applyCity(activeCity);
 
-  window.onCityChange = function(city) {
-    applyCity(city);
-    // Auto-submit only when resetting to "all" so the location filter is cleared.
-    if (!city && !locSel.value) locSel.form.submit();
-  };
+  // Also filter the location dropdown on city change (before form submits).
+  citySel.addEventListener('change', function() { applyCity(this.value); });
 })();
 var _tplEventID = 0;
 function openTplDialog(id) {

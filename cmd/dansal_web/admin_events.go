@@ -31,6 +31,7 @@ type AdminEventsData struct {
 	FilterIncludePast  bool
 	FilterOrgID        int // -1 = no org assigned
 	FilterLocationID   int
+	FilterCity         string
 	FilterDateFrom     string
 	FilterDateTo       string
 	FilterMusicianID   int
@@ -912,6 +913,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		dateTo := q.Get("date_to")
 		filterType := q.Get("type")
 		filterDance := q.Get("dance")
+		filterCity := q.Get("city")
 		createdAfter := q.Get("created_after")
 		filterSource := q.Get("source")
 		filterUnpublished := q.Get("unpublished") == "1"
@@ -1005,6 +1007,15 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 			events = filtered
 		}
+		if filterCity != "" {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.Location != nil && e.Location.Town == filterCity {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
@@ -1062,6 +1073,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,
 			FilterLocationID:   locationID,
+			FilterCity:         filterCity,
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,
 			FilterMusicianID:   musicianID,

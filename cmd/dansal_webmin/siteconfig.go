@@ -16,7 +16,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var siteConfigLangs = []string{"de", "en", "fr", "nl", "it", "es", "br", "bzh"}
+var siteConfigLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 
 type dance struct {

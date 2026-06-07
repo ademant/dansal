@@ -779,7 +779,7 @@ func adminDeleteEvent(req adminRequest) adminResponse {
 	if req.EventID == 0 {
 		return adminResponse{OK: false, Error: "event_id is required"}
 	}
-	
+
 	// Check if event exists first
 	var exists int
 	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE id = ?", req.EventID).Scan(&exists); err != nil {
@@ -788,17 +788,17 @@ func adminDeleteEvent(req adminRequest) adminResponse {
 	if exists == 0 {
 		return adminResponse{OK: false, Error: "event not found"}
 	}
-	
+
 	// Delete the event (cascade will handle related tables)
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", req.EventID)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
-	
+
 	if n, _ := result.RowsAffected(); n == 0 {
 		return adminResponse{OK: false, Error: "event not found"}
 	}
-	
+
 	return adminResponse{OK: true}
 }
 
@@ -808,24 +808,24 @@ func adminDeleteAllEvents(req adminRequest) adminResponse {
 	if err := db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
-	
+
 	if count == 0 {
 		return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
 	}
-	
+
 	// Delete all events (cascade will handle related tables)
 	result, err := db.Exec("DELETE FROM events")
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
-	
+
 	// Also clear any organization-event assignments that might remain
 	db.Exec("DELETE FROM location_organizations WHERE location_id NOT IN (SELECT id FROM locations)")
-	
+
 	if n, _ := result.RowsAffected(); n > 0 {
 		return adminResponse{OK: true, Data: map[string]int{"deleted": int(n)}}
 	}
-	
+
 	return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
 }
 
@@ -889,9 +889,9 @@ func adminExportLocationsGeoJSON(req adminRequest) adminResponse {
 	}
 
 	featureCollection := map[string]any{
-		"type":         "FeatureCollection",
-		"features":      features,
-		"generated_at":  time.Now().Format(time.RFC3339),
+		"type":           "FeatureCollection",
+		"features":       features,
+		"generated_at":   time.Now().Format(time.RFC3339),
 		"dansal_version": "1.0",
 	}
 
@@ -929,7 +929,7 @@ func locationGeoJSONFeature(loc Location) map[string]any {
 		"floor_condition":  loc.FloorCondition,
 		"created_at":       loc.CreatedAt,
 		"updated_at":       loc.UpdatedAt,
-		"organization_ids":  loc.OrganizationIDs,
+		"organization_ids": loc.OrganizationIDs,
 	}
 
 	return map[string]any{
@@ -951,9 +951,9 @@ func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
 	}
 
 	var featureCollection struct {
-		Type     string                 `json:"type"`
-		Features []map[string]any      `json:"features"`
-		Properties map[string]any       `json:"properties,omitempty"`
+		Type       string           `json:"type"`
+		Features   []map[string]any `json:"features"`
+		Properties map[string]any   `json:"properties,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &featureCollection); err != nil {
@@ -968,7 +968,7 @@ func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
 	imported := 0
 	skipped := 0
 	updated := 0
-	
+
 	for _, feature := range featureCollection.Features {
 		if feature["type"] != "Feature" {
 			continue
@@ -1026,7 +1026,7 @@ func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
 
 		// Check for existing location using multiple deduplication strategies
 		existingID, _ := findExistingLocation(loc)
-		
+
 		if existingID > 0 {
 			// Update existing location
 			if err := updateLocation(existingID, loc); err != nil {
@@ -1048,8 +1048,8 @@ func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
 
 	return adminResponse{OK: true, Data: map[string]int{
 		"imported": imported,
-		"updated": updated,
-		"skipped": skipped,
+		"updated":  updated,
+		"skipped":  skipped,
 	}}
 }
 
@@ -1119,17 +1119,17 @@ func findExistingLocation(loc Location) (int, string) {
 	if loc.Location != "" && (loc.Address != "" || (loc.Latitude != nil && loc.Longitude != nil)) {
 		query := "SELECT id FROM locations WHERE location = ?"
 		params := []any{loc.Location}
-		
+
 		if loc.Address != "" {
 			query += " AND address = ?"
 			params = append(params, loc.Address)
 		}
-		
+
 		if loc.Latitude != nil && loc.Longitude != nil {
 			query += " AND latitude = ? AND longitude = ?"
 			params = append(params, *loc.Latitude, *loc.Longitude)
 		}
-		
+
 		var id int
 		if err := db.QueryRow(query, params...).Scan(&id); err == nil {
 			return id, "name_address_coords"
@@ -1225,7 +1225,7 @@ func insertLocation(loc Location) error {
 func updateLocationOrganizations(locationID int, orgIDs []int) {
 	// Clear existing assignments
 	db.Exec("DELETE FROM location_organizations WHERE location_id = ?", locationID)
-	
+
 	// Add new assignments
 	for _, orgID := range orgIDs {
 		db.Exec("INSERT INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locationID, orgID)

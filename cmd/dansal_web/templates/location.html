@@ -33,7 +33,10 @@
   </div>
   {{end}}
   {{if and .Latitude .Longitude}}
-  <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-osm-link">🗺 OpenStreetMap</a>
+  <div class="loc-map-links">
+    <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
+    <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
+  </div>
   {{end}}
 </div>
 
@@ -80,8 +83,11 @@
 .loc-website a{color:var(--link)}
 .loc-attrs{display:flex;flex-wrap:wrap;gap:.4rem}
 .access-badge{font-size:1.1rem;padding:.1rem .2rem}
-.loc-osm-link{font-size:.85rem;color:var(--link);text-decoration:none}
-.loc-osm-link:hover{text-decoration:underline}
+.loc-map-links{display:flex;flex-wrap:wrap;gap:.5rem}
+.loc-map-link{font-size:.85rem;text-decoration:none}
+.loc-map-link:hover{text-decoration:underline}
+.loc-map-link-nav{color:var(--link)}
+.loc-osm-link{color:var(--fg-dim)}
 .loc-map{height:300px;border-radius:6px;border:1px solid var(--border-mid);margin-bottom:1.25rem}
 .loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .loc-notes p{margin:.5rem 0}

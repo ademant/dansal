@@ -155,7 +155,10 @@
       {{end}}
       {{if and .Latitude .Longitude}}
       <div id="evt-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="evt-map"></div>
-      <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="osm-directions">🗺 OpenStreetMap</a>
+      <div class="map-links">
+        <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" class="map-link map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
+        <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="map-link osm-directions">🗺 OpenStreetMap</a>
+      </div>
       {{end}}
       {{$locAttrs := .Attributes}}
       {{$attrs := mergeAttrs $locAttrs $.Data.Event.Attributes}}
@@ -528,8 +531,10 @@
 .evt-loc-link:hover{text-decoration:underline}
 .evt-loc-addr{font-size:.88rem;color:var(--fg-dim);line-height:1.5;margin-bottom:.5rem}
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:var(--bg-subtle)}
-.osm-directions{display:inline-block;margin-top:.4rem;font-size:.82rem;color:var(--fg-dim);text-decoration:none}
-.osm-directions:hover{color:var(--fg)}
+.map-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.4rem}
+.map-link{font-size:.82rem;color:var(--fg-dim);text-decoration:none}
+.map-link:hover{color:var(--fg)}
+.map-link-nav{color:var(--link)}
 .evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 .access-badge{font-size:1.1rem;opacity:.85;cursor:default}
 .evt-loc-notes{margin-top:.6rem;font-size:.86rem;color:var(--fg-dim);line-height:1.55}

@@ -1324,6 +1324,28 @@ func migrateDB() {
 			db.Exec("ALTER TABLE locations ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
 		}
 	}
+	// Safety net: repopulate canonical tags vocabulary if the table is empty.
+	// Happens when createTables pre-marked the v1 migration on an existing DB that
+	// lacked schema_migrations, skipping all the INSERT statements in that block.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM tags").Scan(&n)
+		if n == 0 {
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',          'Bal Folk',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',          'Fest Noz',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',           'Session',           'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',           'Concert',           'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',          'Festival',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',          'Open Air',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',          'Workshop',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course',      'Music Course',      'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('dance-workshop',    'Dance Workshop',    'type')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('musician-workshop', 'Musician Workshop', 'type')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',         'Beginners',         'level')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate',      'Intermediate',      'level')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',          'Advanced',          'level')")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts

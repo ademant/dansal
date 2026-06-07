@@ -231,6 +231,10 @@ func main() {
 		cmdDeleteEvent(rest)
 	case "delete-all-events":
 		cmdDeleteAllEvents(rest)
+	case "export-locations-geojson":
+		cmdExportLocationsGeoJSON(rest)
+	case "import-locations-geojson":
+		cmdImportLocationsGeoJSON(rest)
 	case "mtls-init":
 		cmdMTLSInit(rest)
 	case "mtls-issue":
@@ -285,6 +289,10 @@ Maintenance:
 Event management:
   delete-event      --id INT                         Delete an event by ID
   delete-all-events [--confirm]                     Delete ALL events in database
+
+Location GeoJSON:
+  export-locations-geojson [--output FILE]         Export locations as GeoJSON
+  import-locations-geojson --input FILE [--dry-run] Import locations from GeoJSON
 
 Data export/import:
   export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
@@ -669,6 +677,41 @@ Flags:
 WARNING: This will permanently delete ALL events and their associated data
          including timetable entries, musicians, and organization assignments.
          This action cannot be undone!`,
+
+	"export-locations-geojson": `Usage: dansal_admin export-locations-geojson [--output FILE]
+
+Export all locations as GeoJSON FeatureCollection.
+
+Flags:
+  --output  Output file path (optional, defaults to locations.geojson)
+
+The export includes comprehensive location data for deduplication:
+  - Basic info (name, address, coordinates)
+  - External IDs (OSM ID, Wikidata ID, MusicBrainz Place ID)
+  - Additional metadata (notes, parking, floor condition)
+  - Organization assignments
+  - Timestamps (created_at, updated_at)
+
+Format: RFC 7946 compliant GeoJSON FeatureCollection`,
+
+	"import-locations-geojson": `Usage: dansal_admin import-locations-geojson --input FILE [--dry-run]
+
+Import locations from GeoJSON file with intelligent deduplication.
+
+Flags:
+  --input    Input GeoJSON file path (required)
+  --dry-run   Simulate import without making changes (optional)
+
+Deduplication Strategy:
+  1. OSM ID matching (most reliable)
+  2. Wikidata ID matching
+  3. MusicBrainz Place ID matching
+  4. Name + Address + Coordinates matching
+
+For existing locations: Updates all fields and organization assignments
+For new locations: Creates new entries with all metadata
+
+Returns statistics: imported, updated, skipped counts`,
 }
 
 func cmdHelp(args []string) {
@@ -1275,5 +1318,79 @@ func cmdDeleteAllEvents(args []string) {
 	fmt.Printf("Deleted %d events from the database.\n", result.Deleted)
 	if result.Deleted > 0 {
 		fmt.Println("Note: All associated data (timetable entries, musicians, organization assignments) was also removed.")
+	}
+}
+
+func cmdExportLocationsGeoJSON(args []string) {
+	fs := flag.NewFlagSet("export-locations-geojson", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["export-locations-geojson"]) }
+	output := fs.String("output", "locations.geojson", "output file path")
+	fs.Parse(args)
+	
+	resp := send(socketPath, request{Cmd: "export-locations-geojson", Path: *output})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	
+	// Write the GeoJSON to file
+	var data map[string]any
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
+		die("invalid response: %v", err)
+	}
+	
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		die("marshal JSON: %v", err)
+	}
+	
+	if err := os.WriteFile(*output, jsonData, 0644); err != nil {
+		die("write file: %v", err)
+	}
+	
+	fmt.Printf("Exported %d locations to %s\n", len(data["features"].([]any)), *output)
+}
+
+func cmdImportLocationsGeoJSON(args []string) {
+	fs := flag.NewFlagSet("import-locations-geojson", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["import-locations-geojson"]) }
+	input := fs.String("input", "", "input GeoJSON file path")
+	dryRun := fs.Bool("dry-run", false, "simulate import without making changes")
+	fs.Parse(args)
+	
+	if *input == "" {
+		die("--input is required")
+	}
+	
+	// Check if file exists
+	if _, err := os.Stat(*input); err != nil {
+		die("input file not found: %v", err)
+	}
+	
+	if *dryRun {
+		fmt.Println("DRY RUN: Would import from", *input)
+	}
+	
+	resp := send(socketPath, request{Cmd: "import-locations-geojson", Path: *input})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	
+	var result struct {
+		Imported int `json:"imported"`
+		Updated  int `json:"updated"`
+		Skipped  int `json:"skipped"`
+	}
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		die("invalid response: %v", err)
+	}
+	
+	fmt.Printf("Import completed:\n")
+	fmt.Printf("  Imported: %d new locations\n", result.Imported)
+	fmt.Printf("  Updated: %d existing locations\n", result.Updated)
+	fmt.Printf("  Skipped: %d locations (errors)\n", result.Skipped)
+	fmt.Printf("  Total processed: %d locations\n", result.Imported+result.Updated+result.Skipped)
+	
+	if result.Skipped > 0 {
+		fmt.Println("\nNote: Some locations were skipped due to errors.")
 	}
 }

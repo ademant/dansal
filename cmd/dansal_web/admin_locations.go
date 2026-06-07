@@ -16,6 +16,7 @@ type AdminLocationsData struct {
 	IsAdmin     bool
 	EditableIDs map[int]bool
 	UserOrgs    []Organization
+	EventCounts map[int]int
 }
 
 type AdminLocationEditData struct {
@@ -61,11 +62,12 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return locs[i].Location < locs[j].Location
 		})
 		orgs, _ := client.GetOrganizations(r.Context())
+		token := getSessionToken(r)
+		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
 		isAdmin := user.Role == "admin"
 		var editableIDs map[int]bool
 		var userOrgs []Organization
 		if !isAdmin {
-			token := getSessionToken(r)
 			userOrgIDs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs)
 			userOrgSet := map[int]bool{}
 			for _, id := range userOrgIDs {
@@ -94,6 +96,7 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			IsAdmin:     isAdmin,
 			EditableIDs: editableIDs,
 			UserOrgs:    userOrgs,
+			EventCounts: eventCounts,
 		}))
 	}
 }

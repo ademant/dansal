@@ -915,6 +915,19 @@ func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 	})
 }
 
+func (c *DansalClient) GetLocationEventCounts(ctx context.Context, token string) (map[int]int, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/locations/event-counts", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var counts map[int]int
+	if err := json.NewDecoder(resp.Body).Decode(&counts); err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
 func (c *DansalClient) GetLocation(ctx context.Context, id int) (Location, error) {
 	var loc Location
 	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d", id), &loc); err != nil {

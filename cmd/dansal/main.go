@@ -2054,6 +2054,7 @@ func main() {
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
 	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))
+	smux.Handle("GET /api/v1/locations/event-counts", auth(http.HandlerFunc(locationEventCounts)))
 	smux.Handle("GET /api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation)))
 	smux.Handle("GET /api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations)))
 	smux.Handle("GET /api/v1/organizations/stats", optAuth(http.HandlerFunc(getOrganizationStats)))

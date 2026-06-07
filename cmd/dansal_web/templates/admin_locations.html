@@ -38,7 +38,7 @@
       <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
-      <th title="Geo / Town / Website">✓</th>
+      <th title="Geo / Town / Website / Events">✓</th>
       <th></th>
     </tr>
   </thead>
@@ -61,6 +61,7 @@
       {{if index .Attributes "bar"}}<span class="ind ind-ok" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
       {{if index .Attributes "kitchen"}}<span class="ind ind-ok" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
       {{if eq .Parking "free"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_free"}}">🅿</span>{{else if eq .Parking "paid"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{else if eq .Parking "none"}}<span class="ind ind-no" title="{{$.Strings.T "parking_none"}}">🅿</span>{{end}}
+      {{with index $.Data.EventCounts .ID}}<span class="evt-count" title="{{$.Strings.T "loc_event_count"}}">{{.}}</span>{{end}}
     </td>
     <td class="col-actions">
       {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
@@ -120,6 +121,7 @@
 .btn-assign{background:#1a6eb5;color:#fff;border:none}
 .btn-assign:hover{background:#0d4a80}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
+.evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
 </style>
 
 <script>

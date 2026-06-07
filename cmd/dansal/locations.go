@@ -984,3 +984,22 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
+
+// GET /api/v1/locations/event-counts — returns a map of location_id → event count.
+func locationEventCounts(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query(`SELECT location_id, COUNT(*) FROM events WHERE location_id IS NOT NULL GROUP BY location_id`)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	counts := map[int]int{}
+	for rows.Next() {
+		var id, n int
+		if err := rows.Scan(&id, &n); err == nil {
+			counts[id] = n
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(counts)
+}

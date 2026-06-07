@@ -639,10 +639,20 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	// Fuzzy fallback: fires when both uid and url lookups missed.
 	if lookupErr == sql.ErrNoRows {
 		const threeHours = int64(3 * 60 * 60)
-		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
-			title, locationID, startTime, threeHours,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+		if locationID > 0 {
+			lookupErr = q.QueryRow(
+				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
+				title, locationID, startTime, threeHours,
+			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+		} else {
+			// Tier 4: feed location name didn't resolve to a DB location — fall back to
+			// title + start_time only to catch manually-entered events whose location was
+			// named differently than what the feed provides (e.g. city vs venue name).
+			lookupErr = q.QueryRow(
+				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
+				title, startTime, threeHours,
+			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+		}
 	}
 
 	if lookupErr != nil && lookupErr != sql.ErrNoRows {

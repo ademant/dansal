@@ -219,6 +219,16 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     {{end}}
   </div>
 </nav>
+{{if .ShowCookieBanner}}
+<div id="cookie-banner" style="background:#fff7e6;border-top:1px solid #e6d8c2;padding:.8rem;display:flex;gap:.8rem;align-items:center;justify-content:center;position:relative;z-index:600">
+  <div style="max-width:960px;display:flex;align-items:center;gap:.8rem;flex:1;padding:0 .5rem">
+    <div style="flex:1;color:#2a2a2a">{{.Strings.T "cookie_banner_text"}}</div>
+    <form id="cookie-form" method="post" action="/cookie-consent">
+      <button type="submit" style="background:#1a6eb5;color:#fff;border:none;padding:.45rem .8rem;border-radius:5px;cursor:pointer">{{.Strings.T "accept_cookies"}}</button>
+    </form>
+  </div>
+</div>
+{{end}}
 {{if gt .BannerHeight 0}}
 <div class="site-banner">
   <img src="/banner.svg" alt="">

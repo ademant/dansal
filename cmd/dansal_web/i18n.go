@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -87,6 +88,27 @@ func (i *I18n) detectLang(r *http.Request) string {
 	if c, err := r.Cookie(cookieLang); err == nil {
 		if i.HasLang(c.Value) {
 			return c.Value
+		}
+	}
+	// Fallback to Accept-Language header parsing when no cookie is present.
+	al := r.Header.Get("Accept-Language")
+	if al != "" {
+		parts := strings.Split(al, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if idx := strings.IndexByte(p, ';'); idx >= 0 {
+				p = p[:idx]
+			}
+			// Use primary subtag (en-US -> en)
+			if idx := strings.IndexByte(p, '-'); idx >= 0 {
+				p = p[:idx]
+			}
+			if i.HasLang(p) {
+				return p
+			}
 		}
 	}
 	return i.DefaultLang

@@ -1292,11 +1292,11 @@ func cmdDeleteAllEvents(args []string) {
 	fs.Usage = func() { fmt.Println(commandHelp["delete-all-events"]) }
 	confirm := fs.Bool("confirm", false, "confirm deletion (required)")
 	fs.Parse(args)
-	
+
 	if !*confirm {
 		die("--confirm flag is required to delete all events. This is a safety measure.")
 	}
-	
+
 	// Ask for additional confirmation
 	fmt.Print("WARNING: This will delete ALL events. Are you sure? (y/N): ")
 	var response string
@@ -1304,17 +1304,17 @@ func cmdDeleteAllEvents(args []string) {
 	if strings.ToLower(strings.TrimSpace(response)) != "y" {
 		die("Operation cancelled.")
 	}
-	
+
 	resp := send(socketPath, request{Cmd: "delete-all-events"})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	
+
 	var result struct {
 		Deleted int `json:"deleted"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	
+
 	fmt.Printf("Deleted %d events from the database.\n", result.Deleted)
 	if result.Deleted > 0 {
 		fmt.Println("Note: All associated data (timetable entries, musicians, organization assignments) was also removed.")
@@ -1326,27 +1326,27 @@ func cmdExportLocationsGeoJSON(args []string) {
 	fs.Usage = func() { fmt.Println(commandHelp["export-locations-geojson"]) }
 	output := fs.String("output", "locations.geojson", "output file path")
 	fs.Parse(args)
-	
+
 	resp := send(socketPath, request{Cmd: "export-locations-geojson", Path: *output})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	
+
 	// Write the GeoJSON to file
 	var data map[string]any
 	if err := json.Unmarshal(resp.Data, &data); err != nil {
 		die("invalid response: %v", err)
 	}
-	
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		die("marshal JSON: %v", err)
 	}
-	
+
 	if err := os.WriteFile(*output, jsonData, 0644); err != nil {
 		die("write file: %v", err)
 	}
-	
+
 	fmt.Printf("Exported %d locations to %s\n", len(data["features"].([]any)), *output)
 }
 
@@ -1356,25 +1356,25 @@ func cmdImportLocationsGeoJSON(args []string) {
 	input := fs.String("input", "", "input GeoJSON file path")
 	dryRun := fs.Bool("dry-run", false, "simulate import without making changes")
 	fs.Parse(args)
-	
+
 	if *input == "" {
 		die("--input is required")
 	}
-	
+
 	// Check if file exists
 	if _, err := os.Stat(*input); err != nil {
 		die("input file not found: %v", err)
 	}
-	
+
 	if *dryRun {
 		fmt.Println("DRY RUN: Would import from", *input)
 	}
-	
+
 	resp := send(socketPath, request{Cmd: "import-locations-geojson", Path: *input})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	
+
 	var result struct {
 		Imported int `json:"imported"`
 		Updated  int `json:"updated"`
@@ -1383,13 +1383,13 @@ func cmdImportLocationsGeoJSON(args []string) {
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
 		die("invalid response: %v", err)
 	}
-	
+
 	fmt.Printf("Import completed:\n")
 	fmt.Printf("  Imported: %d new locations\n", result.Imported)
 	fmt.Printf("  Updated: %d existing locations\n", result.Updated)
 	fmt.Printf("  Skipped: %d locations (errors)\n", result.Skipped)
 	fmt.Printf("  Total processed: %d locations\n", result.Imported+result.Updated+result.Skipped)
-	
+
 	if result.Skipped > 0 {
 		fmt.Println("\nNote: Some locations were skipped due to errors.")
 	}

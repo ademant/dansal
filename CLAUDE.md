@@ -1,5 +1,31 @@
 # dansal — Claude Code project instructions
 
+## Workflow
+
+Before implementing any non-trivial change:
+1. **Discuss** the approach — explain the plan and tradeoffs, wait for confirmation
+2. **Create a GitHub issue** with `gh issue create` describing the problem and solution
+3. **Implement** the fix
+4. **Commit** with `Closes #<issue>` in the message so the issue is closed automatically on push
+
+```bash
+gh issue create --title "short description" --body "problem, solution, impact"
+# then implement, then:
+git commit -m "fix: description\n\nCloses #NNN\n\nCo-Authored-By: ..."
+```
+
+Skip the discussion step only for obvious typos or single-line fixes. Always create the issue before writing code.
+
+## Go version
+
+This project requires **Go 1.26+** (`go.mod` currently declares `go 1.26.3`). Before running `make build`, verify:
+
+```bash
+go version  # must print go1.26 or higher
+```
+
+Do not downgrade `go.mod`. If a new language or stdlib feature from 1.24+ is available and fits the problem, prefer it over a manual workaround.
+
 ## Build & deploy
 
 Always rebuild and redeploy **all** binaries together, regardless of which files changed. A selective deploy risks shipping stale binaries (see issue #147).
@@ -51,14 +77,96 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 | `cmd/dansal/` | REST API server (`/usr/lib/dansal/<instance>/dansal`) |
 | `cmd/dansal_web/` | Web frontend + ActivityPub (`/usr/lib/dansal/<instance>/dansal-web`) |
 | `cmd/dansal_admin/` | Admin CLI (`/usr/lib/dansal/<instance>/dansal_admin`) |
+| `cmd/dansal_webmin/` | Web admin UI (`/usr/lib/dansal/<instance>/dansal-webmin`) |
 | `cmd/dansal_web/templates/` | Go HTML templates |
 | `cmd/dansal_web/i18n.yaml` | Translations (7 languages: `br`, `de`, `en`, `es`, `fr`, `it`, `nl`) |
 
 ## Key facts
 
-- **DB**: SQLite at `/var/lib/dansal/calendar.db`; config at `/etc/dansal/config.yaml` (API) and `/etc/dansal/web.yaml` (web)
-- **Services**: `dansal` (API, port 8000), `dansal-web` (frontend, port 8080 behind nginx)
+- **DB**: SQLite at `/var/lib/dansal/<instance>/calendar.db`; config at `/etc/dansal/<instance>/config.yaml` (API), `/etc/dansal/<instance>/web.yaml` (web), `/etc/dansal/<instance>/webmin.yaml` (webmin)
+- **Services**: `dansal` (API, port 8000), `dansal-web` (frontend, port 8080 behind nginx), `dansal-webmin` (admin UI)
 - **DB migrations**: append idempotent `db.Exec(...)` calls at the end of `runMigrations()` in `cmd/dansal/main.go`; also update `createTables()` for fresh installs
 - **Maps**: always use `attachTileLayer(map)` from `base.html` — never call `L.tileLayer` directly
 - **Email**: always send in a goroutine — never block the HTTP handler
-- **New i18n strings**: add to all 8 language sections in `i18n.yaml`
+- **New i18n strings**: add to all 7 language sections in `i18n.yaml` (`br`, `de`, `en`, `es`, `fr`, `it`, `nl`)
+
+## DB migration safety-net pattern
+
+`createTables()` is designed for fresh installs — it creates all tables including `schema_migrations` and marks **all** versions applied via `INSERT OR IGNORE`. On existing DBs that lacked `schema_migrations`, this incorrectly skips migrations. After each migration block in `runMigrations()`, add an unconditional structural check that self-heals at zero cost once correct:
+
+```go
+// Safety net: ensure column exists even if migration was pre-marked
+{
+    var n int
+    db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('table') WHERE name='column'").Scan(&n)
+    if n == 0 {
+        db.Exec("ALTER TABLE table ADD COLUMN column TYPE DEFAULT value")
+    }
+}
+```
+
+For table population (e.g. seed data), use a COUNT-based check:
+```go
+{
+    var n int
+    db.QueryRow("SELECT COUNT(*) FROM tags").Scan(&n)
+    if n == 0 {
+        db.Exec("INSERT OR IGNORE INTO tags ...")
+    }
+}
+```
+
+## Event deduplication (4 tiers)
+
+`previewDuplicateStatus()` in `cmd/dansal/preview.go` and `insertEvent()` in `cmd/dansal/events.go` both use the same 4-tier hierarchy:
+
+1. **UID** — exact match on feed UID
+2. **URL** — exact match on event URL
+3. **title + location_id + start_time ±3h** — when `locationID > 0`
+4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location)
+
+Tier 4 exists because feeds often use city-level location names while the DB has venue names. Only fires when `locationID == 0` to avoid false positives between distinct events at different known venues.
+
+## Location aliases
+
+`locations.aliases` (JSON array column) stores alternate names a location is known by in external feeds. Used in:
+- **Auto-matching** during import (`adminImportEventsHandler` in `admin_import.go`): feed location name is looked up against DB location names and all their aliases
+- **Persisting manual overrides** (`adminImportConfirmHandler`): when admin manually maps a feed location to a DB location, the feed name is automatically appended as a new alias so future imports auto-match
+- **Merge** (`admin_locations.go`): dropped location names are preserved as aliases on the surviving location
+
+## Index page data flow
+
+`indexHandler` (`cmd/dansal_web/frontend.go`) fetches events **once** via `client.GetEvents` (up to 100 future published events) and passes the same slice to the template. The template renders three views from that single dataset:
+
+- **Map**: `eventsGeoJSON` projects events to a compact JSON blob (only fields needed for map popups, short key names). Events without coordinates are excluded.
+- **Weekly table** and **future list**: server-rendered `<li>` elements with `data-*` attributes; JS filters/arranges client-side.
+
+The full `Event` struct (with all API fields) is never sent to the browser — `eventsGeoJSON` deliberately strips fields like `geohash`, `osm_id`, `notes_md`, `aliases`, `contact_*`, `series_id`, etc.
+
+## Images
+
+- Stored as AVIF (default) or JPEG in `config.Server.ImagesDir`, one file per event: `{event_id}.avif`
+- Resized at upload time to fit within `ImageXMax` × `ImageYMax` (default 1024×1024)
+- Served directly via `http.ServeFile` in `getEventImage` — no per-request resizing or device adaptation
+- `imgCache` is an in-memory set of event IDs with images, populated at startup from disk scan; avoids `os.Stat` per event in list responses
+- For mobile-optimised serving, the right approach is `srcset` in templates + a `?w=` query param generating cached smaller variants — **not** User-Agent detection (breaks HTTP caching)
+
+## Theme and language persistence
+
+- **Theme**: stored in browser `localStorage` key `colorScheme` (`auto`/`dark`/`light`). Pure client-side — server never reads it. Instance-wide default can be set in `web.yaml` (`dark_mode: auto|light|dark`), which sets the initial `<html>` class server-side to avoid flash on load.
+- **Language**: stored in cookie `dsw_lang` (1-year expiry, set server-side). Server reads it in `detectLang()` before rendering. Cannot use `localStorage` alone because Go templates are rendered server-side and need the language before the page is built. `Accept-Language` header could be used as a fallback default for new visitors.
+
+## Responsive design
+
+All mobile adaptation is CSS (`@media` queries) and JS — the server sends identical HTML to all clients. Never use User-Agent detection for layout decisions: it's unreliable and fragments the HTTP cache (`Vary: User-Agent` is very cache-unfriendly).
+
+## Navigation deep-links
+
+Use `geo:lat,lon?q=lat,lon` links alongside OpenStreetMap links to let mobile users open OsmAnd or other native navigation apps. Both `event.html` and `location.html` have these. No `target="_blank"` on `geo:` links — they open native apps, not browser tabs.
+
+## Tags vocabulary
+
+`tags` table: `slug TEXT PRIMARY KEY, name TEXT, category TEXT CHECK(category IN ('format','level','type'))`. `validateTags()` rejects unknown slugs. Categories:
+- `format`: `bal-folk`, `fest-noz`, `session`, `concert`, `festival`, `open-air`, `workshop`, `music-course`
+- `type`: `dance-workshop`, `musician-workshop`
+- `level`: `beginners`, `intermediate`, `advanced`

@@ -185,6 +185,8 @@ func main() {
 		r.HandleFunc("POST /login", loginHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /logout", logoutHandler(cfg, client))
 		r.HandleFunc("GET /lang", langHandler(i18n))
+		// Cookie consent endpoint (privacy banner)
+		r.HandleFunc("POST /cookie-consent", cookieConsentHandler())
 		r.HandleFunc("GET /settings", settingsPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings", settingsUpdateHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/verify", settingsSendVerifyHandler(cfg, tmpls, client, i18n))

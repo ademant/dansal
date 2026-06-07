@@ -726,7 +726,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			return existingID, existingShortCode, false, nil
 		}
 
-	var err error
+		var err error
 		if source != "" {
 			var fsArg any
 			if fetchSourceID > 0 {

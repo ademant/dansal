@@ -1057,10 +1057,10 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 
 		title := i18n.T(r, "admin_events_title")
 		orgMap := make(map[int]string, len(orgs))
-			for _, o := range orgs {
-				orgMap[o.ID] = o.Name
-			}
-			renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
+		for _, o := range orgs {
+			orgMap[o.ID] = o.Name
+		}
+		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:             events,
 			Organizations:      orgs,
 			OrgMap:             orgMap,

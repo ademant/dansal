@@ -264,6 +264,29 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		orgID, _ := strconv.Atoi(r.FormValue("org_id"))
 
 		token := getSessionToken(r)
+
+		// For each manually-mapped feed location, persist the feed name as an
+		// alias on the DB location so future imports auto-match without manual
+		// intervention.
+		for feedName, dbLoc := range feedLocOverride {
+			if feedName == dbLoc.Location {
+				continue
+			}
+			already := false
+			for _, a := range dbLoc.Aliases {
+				if a == feedName {
+					already = true
+					break
+				}
+			}
+			if already {
+				continue
+			}
+			patched := dbLoc
+			patched.Aliases = append(append([]string{}, dbLoc.Aliases...), feedName)
+			client.UpdateLocation(r.Context(), dbLoc.ID, patched, token)
+		}
+
 		createdAt := time.Now().UTC().Format(time.RFC3339)
 
 		var selected []json.RawMessage

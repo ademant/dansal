@@ -2,6 +2,18 @@
 {{define "content"}}
 <h1>{{.Strings.T "admin_management_title"}}</h1>
 
+<!-- Prominent entry points for bulk maintenance -->
+<div class="mgmt-hero">
+  <a class="mgmt-hero-card" href="/admin/events">
+    <div class="mgmt-hero-title">Events</div>
+    <div class="mgmt-hero-desc">Bulk event maintenance: multi-select, bulk-assign, cancel, delete, tags and location changes.</div>
+  </a>
+  <a class="mgmt-hero-card" href="/admin/locations">
+    <div class="mgmt-hero-title">Locations</div>
+    <div class="mgmt-hero-desc">Bulk location maintenance: assign orgs, merge, geocode and metadata updates.</div>
+  </a>
+</div>
+
 {{$isAdmin := eq .User.Role "admin"}}
 <nav class="mgmt-tabs" aria-label="Management">
   <a href="/admin/fetchurls" class="mgmt-tab">{{.Strings.T "nav_admin_fetchurls"}}</a>
@@ -19,6 +31,11 @@
 </nav>
 
 <style>
+.mgmt-hero{display:flex;gap:1rem;margin-top:1.25rem;margin-bottom:1.25rem}
+.mgmt-hero-card{flex:1;display:block;padding:1.2rem;border-radius:8px;background:var(--bg-card);border:1px solid var(--border);text-decoration:none;color:var(--fg);box-shadow:0 1px 0 rgba(0,0,0,0.02);}
+.mgmt-hero-card:hover{border-color:var(--link);background:var(--bg-hover)}
+.mgmt-hero-title{font-weight:700;font-size:1.05rem;margin-bottom:.25rem}
+.mgmt-hero-desc{color:var(--fg-2);font-size:.92rem}
 .mgmt-tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem}
 .mgmt-tab{display:flex;align-items:center;padding:.7rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--fg-2);font-size:.95rem;font-weight:500;transition:background .15s,border-color .15s}
 .mgmt-tab:hover{background:var(--bg-hover);border-color:var(--link);color:var(--link)}

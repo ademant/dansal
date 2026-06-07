@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type adminRequest struct {
@@ -42,6 +43,7 @@ type adminRequest struct {
 	MatrixUsername        string `json:"matrix_username,omitempty"`
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
+	EventID               int    `json:"event_id,omitempty"`
 }
 
 type adminResponse struct {
@@ -172,6 +174,14 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminPruneImages()
 	case "mail-bounces":
 		return adminMailBounces()
+	case "delete-event":
+		return adminDeleteEvent(req)
+	case "delete-all-events":
+		return adminDeleteAllEvents(req)
+	case "export-locations-geojson":
+		return adminExportLocationsGeoJSON(req)
+	case "import-locations-geojson":
+		return adminImportLocationsGeoJSON(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -763,4 +773,461 @@ func adminRemoveMember(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "member not found in organization"}
 	}
 	return adminResponse{OK: true}
+}
+
+func adminDeleteEvent(req adminRequest) adminResponse {
+	if req.EventID == 0 {
+		return adminResponse{OK: false, Error: "event_id is required"}
+	}
+	
+	// Check if event exists first
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE id = ?", req.EventID).Scan(&exists); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	if exists == 0 {
+		return adminResponse{OK: false, Error: "event not found"}
+	}
+	
+	// Delete the event (cascade will handle related tables)
+	result, err := db.Exec("DELETE FROM events WHERE id = ?", req.EventID)
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	if n, _ := result.RowsAffected(); n == 0 {
+		return adminResponse{OK: false, Error: "event not found"}
+	}
+	
+	return adminResponse{OK: true}
+}
+
+func adminDeleteAllEvents(req adminRequest) adminResponse {
+	// Count events before deletion for reporting
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	if count == 0 {
+		return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
+	}
+	
+	// Delete all events (cascade will handle related tables)
+	result, err := db.Exec("DELETE FROM events")
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	
+	// Also clear any organization-event assignments that might remain
+	db.Exec("DELETE FROM location_organizations WHERE location_id NOT IN (SELECT id FROM locations)")
+	
+	if n, _ := result.RowsAffected(); n > 0 {
+		return adminResponse{OK: true, Data: map[string]int{"deleted": int(n)}}
+	}
+	
+	return adminResponse{OK: true, Data: map[string]int{"deleted": 0}}
+}
+
+func adminExportLocationsGeoJSON(req adminRequest) adminResponse {
+	rows, err := db.Query(`SELECT id, location, COALESCE(short_name,''), COALESCE(address,''),
+		COALESCE(zipcode,''), COALESCE(town,''), COALESCE(country,''),
+		COALESCE(country_code,''), COALESCE(region,''), 
+		COALESCE(latitude,0), COALESCE(longitude,0), COALESCE(internetsite,''),
+		COALESCE(osm_id,0), COALESCE(osm_type,''), COALESCE(wikidata_id,''),
+		COALESCE(mb_place_id,''), COALESCE(geohash,''), COALESCE(notes_md,''),
+		COALESCE(parking,''), COALESCE(floor_condition,''), created_at, COALESCE(updated_at,0)
+		FROM locations ORDER BY id`)
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	defer rows.Close()
+
+	features := make([]map[string]any, 0)
+	for rows.Next() {
+		var loc Location
+		var latitude, longitude sql.NullFloat64
+		var osmID sql.NullInt64
+		var updatedAt sql.NullInt64
+
+		if err := rows.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+			&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
+			&latitude, &longitude, &loc.Internetsite, &osmID, &loc.OsmType,
+			&loc.WikidataID, &loc.MBPlaceID, &loc.Geohash, &loc.NotesMd,
+			&loc.Parking, &loc.FloorCondition, &loc.CreatedAt, &updatedAt); err != nil {
+			continue
+		}
+
+		if latitude.Valid {
+			f := float64(latitude.Float64)
+			loc.Latitude = &f
+		}
+		if longitude.Valid {
+			f := float64(longitude.Float64)
+			loc.Longitude = &f
+		}
+		if osmID.Valid {
+			id := int64(osmID.Int64)
+			loc.OsmID = &id
+		}
+		if updatedAt.Valid {
+			loc.UpdatedAt = int64(updatedAt.Int64)
+		}
+
+		// Get organization assignments for deduplication
+		orgRows, _ := db.Query("SELECT organization_id FROM location_organizations WHERE location_id=? ORDER BY organization_id", loc.ID)
+		if orgRows != nil {
+			for orgRows.Next() {
+				var oid int
+				orgRows.Scan(&oid)
+				loc.OrganizationIDs = append(loc.OrganizationIDs, oid)
+			}
+			orgRows.Close()
+		}
+
+		features = append(features, locationGeoJSONFeature(loc))
+	}
+
+	featureCollection := map[string]any{
+		"type":         "FeatureCollection",
+		"features":      features,
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"dansal_version": "1.0",
+	}
+
+	return adminResponse{OK: true, Data: featureCollection}
+}
+
+func locationGeoJSONFeature(loc Location) map[string]any {
+	var geometry any
+	if loc.Latitude != nil && loc.Longitude != nil {
+		geometry = map[string]any{
+			"type":        "Point",
+			"coordinates": []float64{*loc.Longitude, *loc.Latitude},
+		}
+	}
+
+	// Create properties with all fields for deduplication
+	properties := map[string]any{
+		"id":               loc.ID,
+		"name":             loc.Location,
+		"short_name":       loc.ShortName,
+		"address":          loc.Address,
+		"zipcode":          loc.Zipcode,
+		"town":             loc.Town,
+		"country":          loc.Country,
+		"country_code":     loc.CountryCode,
+		"region":           loc.Region,
+		"internetsite":     loc.Internetsite,
+		"osm_id":           loc.OsmID,
+		"osm_type":         loc.OsmType,
+		"wikidata_id":      loc.WikidataID,
+		"mb_place_id":      loc.MBPlaceID,
+		"geohash":          loc.Geohash,
+		"notes":            loc.NotesMd,
+		"parking":          loc.Parking,
+		"floor_condition":  loc.FloorCondition,
+		"created_at":       loc.CreatedAt,
+		"updated_at":       loc.UpdatedAt,
+		"organization_ids":  loc.OrganizationIDs,
+	}
+
+	return map[string]any{
+		"type":       "Feature",
+		"geometry":   geometry,
+		"properties": properties,
+	}
+}
+
+func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
+	if req.Path == "" {
+		return adminResponse{OK: false, Error: "path is required"}
+	}
+
+	// Read the GeoJSON file
+	data, err := os.ReadFile(req.Path)
+	if err != nil {
+		return adminResponse{OK: false, Error: "read file: " + err.Error()}
+	}
+
+	var featureCollection struct {
+		Type     string                 `json:"type"`
+		Features []map[string]any      `json:"features"`
+		Properties map[string]any       `json:"properties,omitempty"`
+	}
+
+	if err := json.Unmarshal(data, &featureCollection); err != nil {
+		return adminResponse{OK: false, Error: "parse GeoJSON: " + err.Error()}
+	}
+
+	if featureCollection.Type != "FeatureCollection" {
+		return adminResponse{OK: false, Error: "expected GeoJSON FeatureCollection"}
+	}
+
+	// Process each feature
+	imported := 0
+	skipped := 0
+	updated := 0
+	
+	for _, feature := range featureCollection.Features {
+		if feature["type"] != "Feature" {
+			continue
+		}
+
+		properties, ok := feature["properties"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Extract location data
+		loc := Location{
+			Location:       getString(properties, "name"),
+			ShortName:      getString(properties, "short_name"),
+			Address:        getString(properties, "address"),
+			Zipcode:        getString(properties, "zipcode"),
+			Town:           getString(properties, "town"),
+			Country:        getString(properties, "country"),
+			CountryCode:    getString(properties, "country_code"),
+			Region:         getString(properties, "region"),
+			Internetsite:   getString(properties, "internetsite"),
+			OsmType:        getString(properties, "osm_type"),
+			WikidataID:     getString(properties, "wikidata_id"),
+			MBPlaceID:      getString(properties, "mb_place_id"),
+			Geohash:        getString(properties, "geohash"),
+			NotesMd:        getString(properties, "notes"),
+			Parking:        getString(properties, "parking"),
+			FloorCondition: getString(properties, "floor_condition"),
+			CreatedAt:      getString(properties, "created_at"),
+		}
+
+		// Extract numeric/pointer fields
+		if osmID := getInt(properties, "osm_id"); osmID != 0 {
+			id64 := int64(osmID)
+			loc.OsmID = &id64
+		}
+		if lat := getFloat(properties, "latitude"); lat != 0 {
+			loc.Latitude = &lat
+		}
+		if lon := getFloat(properties, "longitude"); lon != 0 {
+			loc.Longitude = &lon
+		}
+		if updatedAt := getInt64(properties, "updated_at"); updatedAt != 0 {
+			loc.UpdatedAt = updatedAt
+		}
+
+		// Extract organization IDs
+		if orgIDs, ok := properties["organization_ids"].([]any); ok {
+			for _, orgID := range orgIDs {
+				if id, ok := orgID.(float64); ok {
+					loc.OrganizationIDs = append(loc.OrganizationIDs, int(id))
+				}
+			}
+		}
+
+		// Check for existing location using multiple deduplication strategies
+		existingID, _ := findExistingLocation(loc)
+		
+		if existingID > 0 {
+			// Update existing location
+			if err := updateLocation(existingID, loc); err != nil {
+				skipped++
+				continue
+			}
+			updated++
+			// Update organization assignments
+			updateLocationOrganizations(existingID, loc.OrganizationIDs)
+		} else {
+			// Insert new location
+			if err := insertLocation(loc); err != nil {
+				skipped++
+				continue
+			}
+			imported++
+		}
+	}
+
+	return adminResponse{OK: true, Data: map[string]int{
+		"imported": imported,
+		"updated": updated,
+		"skipped": skipped,
+	}}
+}
+
+// Helper functions for import
+func getString(m map[string]any, key string) string {
+	if val, ok := m[key]; ok {
+		if s, ok := val.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func getInt(m map[string]any, key string) int {
+	if val, ok := m[key]; ok {
+		if f, ok := val.(float64); ok {
+			return int(f)
+		}
+	}
+	return 0
+}
+
+func getInt64(m map[string]any, key string) int64 {
+	if val, ok := m[key]; ok {
+		if f, ok := val.(float64); ok {
+			return int64(f)
+		}
+	}
+	return 0
+}
+
+func getFloat(m map[string]any, key string) float64 {
+	if val, ok := m[key]; ok {
+		if f, ok := val.(float64); ok {
+			return f
+		}
+	}
+	return 0
+}
+
+func findExistingLocation(loc Location) (int, string) {
+	// Check by OSM ID (most reliable)
+	if loc.OsmID != nil && *loc.OsmID > 0 {
+		var id int
+		if err := db.QueryRow("SELECT id FROM locations WHERE osm_id = ?", loc.OsmID).Scan(&id); err == nil {
+			return id, "osm_id"
+		}
+	}
+
+	// Check by Wikidata ID
+	if loc.WikidataID != "" {
+		var id int
+		if err := db.QueryRow("SELECT id FROM locations WHERE wikidata_id = ?", loc.WikidataID).Scan(&id); err == nil {
+			return id, "wikidata_id"
+		}
+	}
+
+	// Check by MusicBrainz Place ID
+	if loc.MBPlaceID != "" {
+		var id int
+		if err := db.QueryRow("SELECT id FROM locations WHERE mb_place_id = ?", loc.MBPlaceID).Scan(&id); err == nil {
+			return id, "mb_place_id"
+		}
+	}
+
+	// Check by exact name + address + coordinates (for locations without external IDs)
+	if loc.Location != "" && (loc.Address != "" || (loc.Latitude != nil && loc.Longitude != nil)) {
+		query := "SELECT id FROM locations WHERE location = ?"
+		params := []any{loc.Location}
+		
+		if loc.Address != "" {
+			query += " AND address = ?"
+			params = append(params, loc.Address)
+		}
+		
+		if loc.Latitude != nil && loc.Longitude != nil {
+			query += " AND latitude = ? AND longitude = ?"
+			params = append(params, *loc.Latitude, *loc.Longitude)
+		}
+		
+		var id int
+		if err := db.QueryRow(query, params...).Scan(&id); err == nil {
+			return id, "name_address_coords"
+		}
+	}
+
+	return 0, ""
+}
+
+func updateLocation(id int, loc Location) error {
+	query := `UPDATE locations SET 
+		location = ?,
+		short_name = ?,
+		address = ?,
+		zipcode = ?,
+		town = ?,
+		country = ?,
+		country_code = ?,
+		region = ?,
+		latitude = ?,
+		longitude = ?,
+		internetsite = ?,
+		osm_id = ?,
+		osm_type = ?,
+		wikidata_id = ?,
+		mb_place_id = ?,
+		geohash = ?,
+		notes_md = ?,
+		parking = ?,
+		floor_condition = ?,
+		updated_at = ?
+		WHERE id = ?`
+
+	_, err := db.Exec(query,
+		loc.Location,
+		loc.ShortName,
+		loc.Address,
+		loc.Zipcode,
+		loc.Town,
+		loc.Country,
+		loc.CountryCode,
+		loc.Region,
+		loc.Latitude,
+		loc.Longitude,
+		loc.Internetsite,
+		loc.OsmID,
+		loc.OsmType,
+		loc.WikidataID,
+		loc.MBPlaceID,
+		loc.Geohash,
+		loc.NotesMd,
+		loc.Parking,
+		loc.FloorCondition,
+		time.Now().Unix(),
+		id,
+	)
+	return err
+}
+
+func insertLocation(loc Location) error {
+	query := `INSERT INTO locations (
+		location, short_name, address, zipcode, town, country, country_code, region,
+		latitude, longitude, internetsite, osm_id, osm_type, wikidata_id, mb_place_id,
+		geohash, notes_md, parking, floor_condition, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := db.Exec(query,
+		loc.Location,
+		loc.ShortName,
+		loc.Address,
+		loc.Zipcode,
+		loc.Town,
+		loc.Country,
+		loc.CountryCode,
+		loc.Region,
+		loc.Latitude,
+		loc.Longitude,
+		loc.Internetsite,
+		loc.OsmID,
+		loc.OsmType,
+		loc.WikidataID,
+		loc.MBPlaceID,
+		loc.Geohash,
+		loc.NotesMd,
+		loc.Parking,
+		loc.FloorCondition,
+		time.Now().Format("2006-01-02 15:04:05"),
+		time.Now().Unix(),
+	)
+	return err
+}
+
+func updateLocationOrganizations(locationID int, orgIDs []int) {
+	// Clear existing assignments
+	db.Exec("DELETE FROM location_organizations WHERE location_id = ?", locationID)
+	
+	// Add new assignments
+	for _, orgID := range orgIDs {
+		db.Exec("INSERT INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locationID, orgID)
+	}
 }

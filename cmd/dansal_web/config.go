@@ -92,7 +92,7 @@ type Config struct {
 	SelfRegistrationEnabled bool `yaml:"self_registration_enabled"`
 }
 
-var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br", "bzh"}
+var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
 
 // publicBaseURL returns the canonical public URL of the web app.
 func (cfg *Config) publicBaseURL() string {

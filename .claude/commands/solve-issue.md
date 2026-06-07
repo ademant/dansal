@@ -36,7 +36,7 @@ Read the relevant files before writing any code.
 
 ### 3. Check for i18n needs
 
-If new UI strings are needed, add them to all 8 language sections in `cmd/dansal_web/i18n.yaml`. The sections are, in order: `br`, `de`, `bzh`, `en`, `es`, `fr`, `it`, `nl`. Use existing nearby keys as anchors to keep each edit unique. Each edit must match exactly one occurrence — use surrounding context lines if the key pattern repeats.
+If new UI strings are needed, add them to all 7 language sections in `cmd/dansal_web/i18n.yaml`. The sections are, in order: `br`, `de`, `en`, `es`, `fr`, `it`, `nl`. Use existing nearby keys as anchors to keep each edit unique. Each edit must match exactly one occurrence — use surrounding context lines if the key pattern repeats.
 
 ### 4. Implement
 

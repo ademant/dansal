@@ -52,7 +52,7 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 | `cmd/dansal_web/` | Web frontend + ActivityPub (`/usr/lib/dansal/<instance>/dansal-web`) |
 | `cmd/dansal_admin/` | Admin CLI (`/usr/lib/dansal/<instance>/dansal_admin`) |
 | `cmd/dansal_web/templates/` | Go HTML templates |
-| `cmd/dansal_web/i18n.yaml` | Translations (8 languages: `br`, `de`, `bzh`, `en`, `es`, `fr`, `it`, `nl`) |
+| `cmd/dansal_web/i18n.yaml` | Translations (7 languages: `br`, `de`, `en`, `es`, `fr`, `it`, `nl`) |
 
 ## Key facts
 

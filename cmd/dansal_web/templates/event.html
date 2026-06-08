@@ -162,7 +162,7 @@
       {{end}}
       {{$locAttrs := .Attributes}}
       {{$attrs := mergeAttrs $locAttrs $.Data.Event.Attributes}}
-      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .Parking}}
+      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .Parking .Location.NoStreetShoes}}
       <div class="evt-access">
         {{if index $attrs "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
         {{if index $attrs "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
@@ -172,6 +172,7 @@
         {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
         {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
         {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
+        {{if .Location.NoStreetShoes}}<span class="access-badge" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫</span>{{end}}
       </div>
       {{end}}
       {{range $.Data.Event.Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}

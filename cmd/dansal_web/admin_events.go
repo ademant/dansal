@@ -16,6 +16,20 @@ import (
 	"time"
 )
 
+func parseChangedAt(changedAt string) int64 {
+	if changedAt == "" {
+		return 0
+	}
+	if n, err := strconv.ParseInt(changedAt, 10, 64); err == nil {
+		return n
+	}
+	// If it's not a Unix timestamp, try to parse as ISO timestamp
+	if t, err := time.Parse(time.RFC3339, changedAt); err == nil {
+		return t.Unix()
+	}
+	return 0
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
@@ -500,6 +514,20 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 			return
 		}
+		// Remove duplicate IDs
+		idMap := make(map[int]bool)
+		uniqueIDs := make([]int, 0, len(ids))
+		for _, id := range ids {
+			if !idMap[id] {
+				idMap[id] = true
+				uniqueIDs = append(uniqueIDs, id)
+			}
+		}
+		if len(uniqueIDs) < 2 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		ids = uniqueIDs
 		ctx := r.Context()
 		token := getSessionToken(r)
 
@@ -511,61 +539,65 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		}
 		inClause := "(" + strings.Join(ph, ",") + ")"
 
-		// Determine base from DB (newest user-edited, or newest by created_at).
-		type evRow struct {
+		// Determine base from API (newest user-edited, or newest by created_at).
+		type evMeta struct {
 			id        int
 			changedAt int64
 			changedBy string
 			createdAt string
 		}
-		evrows, err := db.QueryContext(ctx,
-			"SELECT id, COALESCE(changed_at,0), COALESCE(changed_by,''), created_at FROM events WHERE id IN "+inClause,
-			qargs...)
-		if err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
-			return
+		var evMetas []evMeta
+		for _, id := range ids {
+			ev, err := client.GetEventAuthed(ctx, id, token)
+			if err != nil {
+				log.Printf("Event merge: failed to get event %d: %v", id, err)
+				continue
+			}
+			evMetas = append(evMetas, evMeta{
+				id:        ev.ID,
+				changedAt: parseChangedAt(ev.ChangedAt),
+				changedBy: ev.ChangedBy,
+				createdAt: ev.CreatedAt,
+			})
 		}
-		var dbRows []evRow
-		for evrows.Next() {
-			var er evRow
-			evrows.Scan(&er.id, &er.changedAt, &er.changedBy, &er.createdAt)
-			dbRows = append(dbRows, er)
-		}
-		evrows.Close()
-		if len(dbRows) < 2 {
+		if len(evMetas) < 2 {
 			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 			return
 		}
 
 		hasEdited := false
-		for _, er := range dbRows {
-			if er.changedBy != "" {
+		for _, em := range evMetas {
+			if em.changedBy != "" {
 				hasEdited = true
 				break
 			}
 		}
-		baseRow := dbRows[0]
-		for _, er := range dbRows[1:] {
+		if len(evMetas) == 0 {
+			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			return
+		}
+		baseMeta := evMetas[0]
+		for _, em := range evMetas[1:] {
 			if hasEdited {
-				baseEdited := baseRow.changedBy != ""
-				erEdited := er.changedBy != ""
-				if !baseEdited && erEdited {
-					baseRow = er
+				baseEdited := baseMeta.changedBy != ""
+				emEdited := em.changedBy != ""
+				if !baseEdited && emEdited {
+					baseMeta = em
 					continue
 				}
-				if baseEdited && !erEdited {
+				if baseEdited && !emEdited {
 					continue
 				}
-				if er.changedAt > baseRow.changedAt {
-					baseRow = er
+				if em.changedAt > baseMeta.changedAt {
+					baseMeta = em
 				}
 			} else {
-				if er.createdAt > baseRow.createdAt {
-					baseRow = er
+				if em.createdAt > baseMeta.createdAt {
+					baseMeta = em
 				}
 			}
 		}
-		baseID := baseRow.id
+		baseID := baseMeta.id
 
 		base, err := client.GetEventAuthed(ctx, baseID, token)
 		if err != nil {
@@ -684,7 +716,13 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		}
 
 		client.invalidateEvents()
-		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+		// Preserve query parameters from the original request
+		queryParams := r.URL.Query()
+		redirectURL := "/admin/events"
+		if len(queryParams) > 0 {
+			redirectURL += "?" + queryParams.Encode()
+		}
+		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 	}
 }
 

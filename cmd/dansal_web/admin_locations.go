@@ -174,6 +174,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			OsmID:        parseOsmID(r.FormValue("osm_id")),
 			OsmType:      strings.TrimSpace(r.FormValue("osm_type")),
 			Aliases:      parseAliases(r.FormValue("aliases")),
+			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
 		}
 		token := getSessionToken(r)
 		created, err := client.CreateLocation(r.Context(), loc, token)
@@ -275,6 +276,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Attributes:      locationAttrsFromForm(r),
 			Parking:         r.FormValue("parking"),
 			FloorCondition:  r.FormValue("floor_condition"),
+			NoStreetShoes:   r.FormValue("no_street_shoes") == "1",
 			Aliases:         parseAliases(r.FormValue("aliases")),
 		}
 		token := getSessionToken(r)

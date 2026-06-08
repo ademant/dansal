@@ -37,6 +37,7 @@ type Location struct {
 	Attributes      map[string]bool `json:"attributes,omitempty"`
 	Parking         string          `json:"parking,omitempty"`
 	FloorCondition  string          `json:"floor_condition,omitempty"`
+	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 }
 
@@ -76,6 +77,7 @@ type LocationCreateRequest struct {
 	Attributes      map[string]bool `json:"attributes,omitempty"`
 	Parking         string          `json:"parking,omitempty"`
 	FloorCondition  string          `json:"floor_condition,omitempty"`
+	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 }
 
@@ -86,7 +88,7 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.aliases,'[]')`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE(l.aliases,'[]')`
 
 func scanLocation(s scanner, loc *Location) error {
 	var orgIDsStr, attrsJSON, aliasesJSON string
@@ -94,7 +96,7 @@ func scanLocation(s scanner, loc *Location) error {
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &aliasesJSON); err != nil {
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON); err != nil {
 		return err
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
@@ -241,6 +243,7 @@ type LocationUpdateRequest struct {
 	Attributes     map[string]bool `json:"attributes,omitempty"`
 	Parking        string          `json:"parking,omitempty"`
 	FloorCondition string          `json:"floor_condition,omitempty"`
+	NoStreetShoes  bool            `json:"no_street_shoes,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -448,8 +451,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, aliases, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, aliasesJSON(req.Aliases),
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, aliases, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, aliasesJSON(req.Aliases),
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -674,8 +677,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		loc.Geohash = gh
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, aliases=?, updated_at=strftime('%s','now') WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, aliasesJSON(loc.Aliases), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now') WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, aliasesJSON(loc.Aliases), loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

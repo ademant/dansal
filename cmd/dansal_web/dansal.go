@@ -311,6 +311,7 @@ type Location struct {
 	Attributes      map[string]bool `json:"attributes,omitempty"`
 	Parking         string          `json:"parking,omitempty"`
 	FloorCondition  string          `json:"floor_condition,omitempty"`
+	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 }
 

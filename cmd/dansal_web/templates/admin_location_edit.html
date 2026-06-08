@@ -121,6 +121,7 @@
       <option value="sand"{{if eq .Location.FloorCondition "sand"}} selected{{end}}>{{$.Strings.T "floor_sand"}}</option>
       <option value="pavement"{{if eq .Location.FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
     </select>
+    <label class="check-label"><input type="checkbox" name="no_street_shoes" value="1"{{if .Location.NoStreetShoes}} checked{{end}}> {{$.Strings.T "no_street_shoes_label"}}</label>
   </fieldset>
 
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>

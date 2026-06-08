@@ -422,5 +422,48 @@ function pubEvent(id){
     window.location.href='/admin/events/template-assign?'+p.toString();
   });}
 })();
+
+// Filter merge form to only include organization data for selected events
+(function() {
+  var mergeForm = document.getElementById('event-bulk-form');
+  if (mergeForm && mergeForm.action === '/admin/events/merge') {
+    mergeForm.addEventListener('submit', function(e) {
+      var checked = document.querySelectorAll('.event-cb:checked');
+      var checkedIDs = {};
+      checked.forEach(function(cb) {
+        checkedIDs[cb.value] = true;
+      });
+      
+      // Remove organization fields for unchecked events
+      var inputs = mergeForm.querySelectorAll('input[name^="event_org_"]');
+      inputs.forEach(function(input) {
+        var eventID = input.name.replace('event_org_', '');
+        if (!checkedIDs[eventID]) {
+          input.remove();
+        }
+      });
+    });
+  }
+  
+  // Preserve URL query parameters in bulk form submissions
+  (function() {
+    var bulkForm = document.getElementById('event-bulk-form');
+    if (bulkForm) {
+      bulkForm.addEventListener('submit', function(e) {
+        // Copy current URL query parameters to form as hidden inputs
+        var urlParams = new URLSearchParams(window.location.search);
+        urlParams.forEach(function(value, key) {
+          if (key !== 'event_ids' && !bulkForm.querySelector('input[name="' + key + '"]')) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            bulkForm.appendChild(input);
+          }
+        });
+      });
+    }
+  })();
+})();
 </script>
 {{end}}

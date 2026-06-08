@@ -1194,6 +1194,8 @@ func migrateDB() {
 		// #378: floor/ground condition for locations and events.
 		db.Exec("ALTER TABLE locations ADD COLUMN floor_condition TEXT")
 		db.Exec("ALTER TABLE events ADD COLUMN floor_condition TEXT")
+		// Add no_street_shoes boolean field to locations
+		db.Exec("ALTER TABLE locations ADD COLUMN no_street_shoes INTEGER DEFAULT 0")
 		// #380: WebAuthn passkey credentials and challenge sessions.
 		db.Exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

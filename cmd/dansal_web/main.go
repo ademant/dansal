@@ -339,6 +339,7 @@ func main() {
 		r.HandleFunc("POST /admin/locations/new", adminRateLimit(adminLocationCreateHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/bulk-assign", adminRateLimit(adminLocationBulkAssignHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/merge", adminRateLimit(adminLocationMergeHandler(cfg, client)))
+		r.HandleFunc("POST /admin/locations/{id}/update-json", adminRateLimit(adminLocationUpdateJSONHandler(cfg, client)))
 		r.HandleFunc("GET /admin/locations/{id}/edit", adminLocationEditPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/{id}/edit", adminRateLimit(adminLocationSaveHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))

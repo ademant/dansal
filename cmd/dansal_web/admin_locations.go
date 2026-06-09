@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
 	"strconv"
@@ -133,6 +134,69 @@ func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dans
 			IsAdmin:     true,
 			EventCounts: eventCounts,
 		}))
+	}
+}
+
+func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"forbidden"}`))
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"invalid id"}`))
+			return
+		}
+		existing, err := client.GetLocation(r.Context(), id)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not found"}`))
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"bad request"}`))
+			return
+		}
+		loc := Location{
+			ID:              id,
+			Location:        strings.TrimSpace(r.FormValue("location")),
+			ShortName:       strings.TrimSpace(r.FormValue("short_name")),
+			Address:         strings.TrimSpace(r.FormValue("address")),
+			Zipcode:         strings.TrimSpace(r.FormValue("zipcode")),
+			Town:            strings.TrimSpace(r.FormValue("town")),
+			Country:         strings.TrimSpace(r.FormValue("country")),
+			CountryCode:     strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
+			Region:          strings.TrimSpace(r.FormValue("region")),
+			Latitude:        parseLatLng(r.FormValue("latitude")),
+			Longitude:       parseLatLng(r.FormValue("longitude")),
+			Internetsite:    existing.Internetsite,
+			OsmID:           existing.OsmID,
+			OsmType:         existing.OsmType,
+			OrganizationIDs: existing.OrganizationIDs,
+			NotesMd:         strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes:      existing.Attributes,
+			Parking:         existing.Parking,
+			FloorCondition:  existing.FloorCondition,
+			NoStreetShoes:   existing.NoStreetShoes,
+			Aliases:         existing.Aliases,
+		}
+		token := getSessionToken(r)
+		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			b, _ := json.Marshal(map[string]string{"error": err.Error()})
+			w.Write(b)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
 	}
 }
 

@@ -13,34 +13,10 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
         run fmt vet clean install install-web install-webmin install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-full generate-robots
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-full
 
-build: generate-robots
+build:
 	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
-
-# generate-robots: produce public/robots.txt from template using BASE_URL
-# Usage: make generate-robots BASE_URL=https://example.org
-generate-robots:
-	@mkdir -p public
-	@BASE_VAL="$(BASE_URL)"; \
-	if [ -z "$$BASE_VAL" ]; then \
-		# try to extract base_url or domain from packaging/web.yaml
-		BASE_VAL=$$(awk -F': ' '/^base_url:/{print $$2; exit}' packaging/web.yaml 2>/dev/null); \
-		if [ -z "$$BASE_VAL" ]; then \
-			DOMAIN=$$(awk -F': ' '/^domain:/{print $$2; exit}' packaging/web.yaml 2>/dev/null); \
-			if [ -n "$$DOMAIN" ]; then BASE_VAL="https://$$DOMAIN"; fi; \
-		fi; \
-	fi; \
-	if [ -z "$$BASE_VAL" ]; then \
-		echo "Warning: BASE_URL not provided and not found in packaging/web.yaml; defaulting to https://dev.balfolk-jetzt"; \
-		BASE_VAL="https://dev.balfolk-jetzt"; \
-	fi; \
-	if [ -f public/robots.txt.tpl ]; then \
-		sed 's|{{BASE_URL}}|$$BASE_VAL|g; s|{{DATE}}|$$(date -u +"%Y-%m-%d")|g' public/robots.txt.tpl > public/robots.txt; \
-		echo "Wrote public/robots.txt (Sitemap: $$BASE_VAL/sitemap.xml)"; \
-	else \
-		echo "public/robots.txt.tpl not found — create one to enable generation"; \
-	fi
 
 build-dansal:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal ./cmd/dansal

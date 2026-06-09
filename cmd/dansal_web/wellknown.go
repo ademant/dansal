@@ -74,6 +74,16 @@ Contact the instance administrator for privacy inquiries.
 	}
 }
 
+// robotsTxtHandler serves /robots.txt.
+func robotsTxtHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		base := cfg.publicBaseURL()
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nSitemap: %s/sitemap.xml\n", base)
+	}
+}
+
 // dntStatusHandler serves /.well-known/dnt with machine-readable compliance status.
 func dntStatusHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

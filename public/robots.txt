@@ -1,5 +1,5 @@
 # Dansal Robots.txt - Optimized for SEO and Crawl Efficiency
-# Generated: 2024-06-07
+# Generated: $(date -u +"%Y-%m-%d")
 # Contact: webmaster@balfolk-jetzt
 
 # Global Rules - Allow important public content
@@ -14,12 +14,7 @@ Allow: /faq
 
 # Disallow private/admin areas
 Disallow: /admin/
-Disallow: /private/
-Disallow: /management/
 Disallow: /api/
-Disallow: /internal/
-Disallow: /admin-*
-Disallow: /private-*
 
 # Disallow search results and dynamic pages
 Disallow: /search?
@@ -38,25 +33,22 @@ Disallow: /*.xlsx$
 Disallow: /*.pptx$
 
 # Sitemap Reference
-Sitemap: https://dev.balfolk-jetzt/sitemap.xml
+Sitemap: $BASE_VAL/sitemap.xml
 
 # Search Engine Specific Rules
 User-agent: Googlebot
 Allow: /events/
 Allow: /locations/
-Disallow: /private/
 Disallow: /admin/
 
 User-agent: Bingbot
 Allow: /events/
 Allow: /locations/
-Disallow: /private/
 Disallow: /admin/
 
 User-agent: DuckDuckBot
 Allow: /events/
 Allow: /locations/
-Disallow: /private/
 Disallow: /admin/
 
 # Crawl Control for Aggressive Bots

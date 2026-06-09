@@ -9,11 +9,13 @@ import (
 )
 
 type LoginPageData struct {
-	ErrorKey  string
-	Email     string
-	MagicSent string // "email" or "telegram" when a link was just sent
-	Next      string
-	FormToken string
+	ErrorKey     string
+	Email        string
+	MagicSent    string // "email" or "telegram" when a link was just sent
+	Next         string
+	FormToken    string
+	TotpRequired bool   // password verified; waiting for TOTP code
+	Password     string // held briefly for TOTP second step (POST body only, never in URL)
 }
 
 // safeNext returns next only when it is a local path with no host or scheme,
@@ -68,6 +70,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		email := r.FormValue("email")
 		password := r.FormValue("password")
+		totpCode := r.FormValue("totp_code")
 		next := safeNext(r.FormValue("next"))
 		ip := getClientIP(r)
 
@@ -87,7 +90,18 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 
-		lr, err := client.Login(r.Context(), email, password, ip, r.UserAgent())
+		lr, err := client.Login(r.Context(), email, password, totpCode, ip, r.UserAgent())
+		if err == ErrTOTPRequired {
+			title := i18n.T(r, "login_title")
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
+				TotpRequired: true,
+				Email:        email,
+				Password:     password,
+				Next:         r.FormValue("next"),
+				FormToken:    newFormToken(),
+			}))
+			return
+		}
 		if err != nil {
 			delay := throttle.recordFailure(ip)
 			log.Printf("%s ip=%s path=/login", authFail, ip)

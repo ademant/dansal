@@ -62,7 +62,7 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		redirect := "/login"
 		if req.Email != "" && req.Password != "" {
 			ip := getClientIP(r)
-			if lr, err := client.Login(ctx, req.Email, req.Password, ip, r.UserAgent()); err == nil {
+			if lr, err := client.Login(ctx, req.Email, req.Password, "", ip, r.UserAgent()); err == nil {
 				expAt, parseErr := time.Parse(time.RFC3339, lr.ExpiresAt)
 				if parseErr != nil {
 					expAt = time.Now().Add(24 * time.Hour)

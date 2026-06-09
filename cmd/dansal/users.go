@@ -35,6 +35,7 @@ type User struct {
 	MatrixVerified   bool   `json:"matrix_verified"`
 	Disabled         bool   `json:"disabled"`
 	HasPassword      bool   `json:"has_password"`
+	TOTPEnabled      bool   `json:"totp_enabled"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -120,17 +121,18 @@ func validateRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RolePublisher
 }
 
-const userSelectCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, created_at"
+const userSelectCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, CASE WHEN totp_secret IS NOT NULL AND totp_secret != '' THEN 1 ELSE 0 END, created_at"
 
 type userScanner interface{ Scan(...any) error }
 
 func scanUser(s userScanner) (User, error) {
 	var u User
-	var emailVer, telegramVer, matrixVer, disabled, hasPw int
-	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &hasPw, &u.CreatedAt); err != nil {
+	var emailVer, telegramVer, matrixVer, disabled, hasPw, totpEnabled int
+	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &hasPw, &totpEnabled, &u.CreatedAt); err != nil {
 		return User{}, err
 	}
 	u.HasPassword = hasPw != 0
+	u.TOTPEnabled = totpEnabled != 0
 	u.EmailVerified = emailVer == 1
 	u.TelegramVerified = telegramVer == 1
 	u.MatrixVerified = matrixVer == 1

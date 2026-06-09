@@ -47,7 +47,8 @@ type ServerConfig struct {
 	MetricsPort             int      `yaml:"metrics_port"`
 	MetricsAllowedIPs       []string `yaml:"metrics_allowed_ips"`
 	PKIDir                  string   `yaml:"pki_dir"`
-	WebAuthnRPName          string   `yaml:"webauthn_rp_name"`   // display name, default "Dansal"
+	WebAuthnRPName          string   `yaml:"webauthn_rp_name"`          // display name, default "Dansal"
+	WebAuthnUserVerification string  `yaml:"webauthn_user_verification"` // "preferred" (default) | "required" | "discouraged"
 	ImageFormat             string   `yaml:"image_format"`       // "avif" | "jpeg", default "avif"
 	BoardOpenPosting        bool     `yaml:"board_open_posting"` // true = posts visible immediately; false (default) = verify contact first
 	BackupDir               string   `yaml:"backup_dir"`

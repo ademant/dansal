@@ -27,6 +27,7 @@ type LoginRequest struct {
 	Email       string `json:"email"`
 	Username    string `json:"username"` // legacy field — treated as email for backward compat
 	Password    string `json:"password"`
+	TotpCode    string `json:"totp_code,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
@@ -321,6 +322,23 @@ func login(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(req.Password), user.ID)
 	}
 	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", user.ID)
+
+	// Check TOTP when enabled.
+	var totpSecret string
+	db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", user.ID).Scan(&totpSecret)
+	if totpSecret != "" {
+		if req.TotpCode == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(TokenError{Error: "totp_required"})
+			return
+		}
+		if !totpValid(totpSecret, req.TotpCode, time.Now()) {
+			log.Printf("auth failed from %s: invalid TOTP code for %q", clientIP, user.Email)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(TokenError{Error: "Invalid TOTP code"})
+			return
+		}
+	}
 
 	// Generate token / session
 	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)

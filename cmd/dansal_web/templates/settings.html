@@ -185,6 +185,51 @@
   </div>
 
   <div class="settings-card">
+    <h2>{{$.Strings.T "settings_totp_title"}}</h2>
+    {{if .TOTPSetupURI}}
+    <p class="hint">{{$.Strings.T "settings_totp_scan_hint"}}</p>
+    <div id="totp-qr" style="margin:.75rem 0"></div>
+    <p style="font-size:.82rem;color:#888">{{$.Strings.T "settings_totp_manual_entry"}}: <code id="totp-secret" style="user-select:all;font-size:.9rem">{{.TOTPSetupSecret}}</code></p>
+    <form method="post" action="/settings/totp/confirm" class="settings-form" style="margin-top:.75rem">
+      <label for="totp_confirm_code">{{$.Strings.T "settings_totp_confirm_code"}}</label>
+      <input id="totp_confirm_code" type="text" name="code" inputmode="numeric" pattern="[0-9]{6}"
+             maxlength="6" placeholder="000000" required autofocus autocomplete="one-time-code"
+             style="max-width:120px;letter-spacing:.15em;font-size:1.1rem">
+      <div class="form-actions">
+        <button type="submit">{{$.Strings.T "settings_totp_activate_btn"}}</button>
+        <a href="/settings" class="btn-sm">{{$.Strings.T "settings_totp_cancel"}}</a>
+      </div>
+    </form>
+    <script>
+    (function(){
+      var uri = {{jsStr .TOTPSetupURI}};
+      var el = document.getElementById('totp-qr');
+      if(typeof QRCode !== 'undefined'){
+        new QRCode(el,{text:uri,width:200,height:200,correctLevel:QRCode.CorrectLevel.M});
+      } else {
+        el.innerHTML='<a href="'+encodeURI(uri)+'">'+uri+'</a>';
+      }
+    })();
+    </script>
+    <script src="/static/qrcode.min.js"></script>
+    {{else if .User.TOTPEnabled}}
+    <p><span class="badge badge-ok">{{$.Strings.T "settings_totp_enabled"}}</span></p>
+    <form method="post" action="/settings/totp/disable" class="settings-form" style="margin-top:.5rem">
+      <label for="totp_disable_code">{{$.Strings.T "settings_totp_confirm_code"}}</label>
+      <input id="totp_disable_code" type="text" name="code" inputmode="numeric" pattern="[0-9]{6}"
+             maxlength="6" placeholder="000000" required autocomplete="one-time-code"
+             style="max-width:120px;letter-spacing:.15em;font-size:1.1rem">
+      <div class="form-actions">
+        <button type="submit" class="btn-del">{{$.Strings.T "settings_totp_disable_btn"}}</button>
+      </div>
+    </form>
+    {{else}}
+    <p class="hint">{{$.Strings.T "settings_totp_not_configured"}}</p>
+    <a href="/settings/totp/setup" class="btn-secondary" style="display:inline-block;margin-top:.5rem">{{$.Strings.T "settings_totp_setup_btn"}}</a>
+    {{end}}
+  </div>
+
+  <div class="settings-card">
     <h2>{{$.Strings.T "settings_password_title"}}</h2>
     <form method="post" action="/settings/password" class="settings-form">
       {{if .User.HasPassword}}

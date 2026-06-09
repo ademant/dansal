@@ -1316,6 +1316,21 @@ func migrateDB() {
 		db.Exec("ALTER TABLE locations ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
 		mark(6)
 	}
+	// v7: TOTP support — totp_secret stores the active secret, totp_pending the unconfirmed one.
+	if !applied(7) {
+		db.Exec("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+		db.Exec("ALTER TABLE users ADD COLUMN totp_pending TEXT")
+		mark(7)
+	}
+	// Safety net: ensure totp columns exist even if v7 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='totp_secret'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+			db.Exec("ALTER TABLE users ADD COLUMN totp_pending TEXT")
+		}
+	}
 	// Safety net: ensure aliases column exists even if v6 was pre-marked before
 	// schema_migrations existed (legacy upgrade path where createTables created the
 	// table and marked all versions applied without running the ALTER TABLE).
@@ -1505,6 +1520,8 @@ func createTables() error {
 		mastodon TEXT,
 		website TEXT,
 		telegram_chat_id TEXT,
+		totp_secret TEXT,
+		totp_pending TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
@@ -1890,6 +1907,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(4)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(6)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(7)")
 	return nil
 }
 
@@ -2039,6 +2057,9 @@ func main() {
 	smux.Handle("POST /api/v1/user/webauthn/register/begin", auth(webauthnUserRegisterBegin))
 	smux.Handle("POST /api/v1/user/webauthn/register/finish", auth(webauthnUserRegisterFinish))
 	smux.Handle("DELETE /api/v1/user/webauthn/credentials/{id}", auth(webauthnUserCredentialDelete))
+	smux.Handle("GET /api/v1/auth/totp/setup", auth(totpSetupHandler))
+	smux.Handle("POST /api/v1/auth/totp/confirm", auth(totpConfirmHandler))
+	smux.Handle("DELETE /api/v1/auth/totp", auth(totpDisableHandler))
 
 	// Telegram bot webhook (public, called by Telegram servers)
 	smux.HandleFunc("POST /telegram/webhook", telegramWebhookHandler)

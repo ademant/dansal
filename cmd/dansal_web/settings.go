@@ -24,6 +24,8 @@ type SettingsData struct {
 	NewAPIKey        *APIKey
 	Sessions         []SessionInfo
 	Passkeys         []PasskeyInfo
+	TOTPSetupURI     string // non-empty during setup flow
+	TOTPSetupSecret  string // shown as manual-entry fallback during setup
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -389,5 +391,77 @@ func settingsPasskeyDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 			resp.Body.Close()
 		}
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	}
+}
+
+// GET /settings/totp/setup — generate a new TOTP secret and show the QR code.
+func settingsTOTPSetupHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		info, err := client.TOTPSetup(r.Context(), token)
+		if err != nil {
+			log.Printf("totp setup: %v", err)
+			http.Redirect(w, r, "/settings?error=totp_setup_failed", http.StatusSeeOther)
+			return
+		}
+		u, _ := client.GetUser(r.Context(), su.ID, token)
+		keys, _ := client.ListAPIKeys(r.Context(), token)
+		sessions, _ := client.GetSessions(r.Context(), token)
+		passkeys, _ := client.ListPasskeys(r.Context(), token)
+		title := i18n.T(r, "settings_title")
+		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+			User:            u,
+			APIKeys:         keys,
+			Sessions:        sessions,
+			Passkeys:        passkeys,
+			TOTPSetupURI:    info.URI,
+			TOTPSetupSecret: info.Secret,
+		}))
+	}
+}
+
+// POST /settings/totp/confirm — verify the code and activate TOTP.
+func settingsTOTPConfirmHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		code := r.FormValue("code")
+		if err := client.TOTPConfirm(r.Context(), token, code); err != nil {
+			http.Redirect(w, r, "/settings/totp/setup?error=invalid_code", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+	}
+}
+
+// POST /settings/totp/disable — disable TOTP; requires current TOTP code.
+func settingsTOTPDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		code := r.FormValue("code")
+		if err := client.TOTPDisable(r.Context(), token, code); err != nil {
+			http.Redirect(w, r, "/settings?error=totp_invalid_code", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
 	}
 }

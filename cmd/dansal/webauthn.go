@@ -44,6 +44,21 @@ func initWebAuthn() {
 	}
 }
 
+// webauthnUserVerificationOpt returns a LoginOption based on the configured
+// webauthn_user_verification setting ("preferred" by default).
+func webauthnUserVerificationOpt() webauthn.LoginOption {
+	uv := protocol.VerificationPreferred
+	if config != nil {
+		switch config.Server.WebAuthnUserVerification {
+		case "required":
+			uv = protocol.VerificationRequired
+		case "discouraged":
+			uv = protocol.VerificationDiscouraged
+		}
+	}
+	return webauthn.WithUserVerification(uv)
+}
+
 // waUser implements webauthn.User for an existing or pending account.
 type waUser struct {
 	id          []byte
@@ -389,10 +404,11 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 	var sessionData *webauthn.SessionData
 	var userID int
 
+	uvOpt := webauthnUserVerificationOpt()
 	if req.Email == "" {
 		// Discoverable login: browser presents resident-key credentials, no identifier needed.
 		var err error
-		options, sessionData, err = wauthn.BeginDiscoverableLogin()
+		options, sessionData, err = wauthn.BeginDiscoverableLogin(uvOpt)
 		if err != nil {
 			writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 			return
@@ -412,7 +428,7 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var err error
-		options, sessionData, err = wauthn.BeginLogin(user)
+		options, sessionData, err = wauthn.BeginLogin(user, uvOpt)
 		if err != nil {
 			writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 			return

@@ -359,6 +359,7 @@ type UserInfo struct {
 	MatrixVerified   bool   `json:"matrix_verified"`
 	Disabled         bool   `json:"disabled"`
 	HasPassword      bool   `json:"has_password"`
+	TOTPEnabled      bool   `json:"totp_enabled"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -424,8 +425,16 @@ func (c *DansalClient) getConditional(ctx context.Context, path, etag string, ou
 	return newETag, false, json.NewDecoder(resp.Body).Decode(out)
 }
 
-func (c *DansalClient) Login(ctx context.Context, email, password, clientIP, userAgent string) (*LoginResponse, error) {
-	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+// ErrTOTPRequired is returned by Login when the credentials are valid but a
+// TOTP code is required to complete authentication.
+var ErrTOTPRequired = fmt.Errorf("totp_required")
+
+func (c *DansalClient) Login(ctx context.Context, email, password, totpCode, clientIP, userAgent string) (*LoginResponse, error) {
+	payload := map[string]string{"email": email, "password": password}
+	if totpCode != "" {
+		payload["totp_code"] = totpCode
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login",
 		bytes.NewReader(body))
 	if err != nil {
@@ -444,6 +453,13 @@ func (c *DansalClient) Login(ctx context.Context, email, password, clientIP, use
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		var body struct {
+			Error string `json:"error"`
+		}
+		json.NewDecoder(resp.Body).Decode(&body)
+		if body.Error == "totp_required" {
+			return nil, ErrTOTPRequired
+		}
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -3043,6 +3059,70 @@ func (c *DansalClient) PatchSeriesEventDescription(ctx context.Context, seriesTo
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+type TOTPSetupInfo struct {
+	Secret string `json:"secret"`
+	URI    string `json:"uri"`
+}
+
+func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/auth/totp/setup", nil)
+	if err != nil {
+		return TOTPSetupInfo{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return TOTPSetupInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return TOTPSetupInfo{}, apiErr(resp)
+	}
+	var info TOTPSetupInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return TOTPSetupInfo{}, err
+	}
+	return info, nil
+}
+
+func (c *DansalClient) TOTPConfirm(ctx context.Context, token, code string) error {
+	body, _ := json.Marshal(map[string]string{"code": code})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/auth/totp/confirm", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) error {
+	body, _ := json.Marshal(map[string]string{"code": code})
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/auth/totp", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}
 	return nil

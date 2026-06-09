@@ -150,6 +150,9 @@
       <button type="button" class="btn-sm btn-save-next" id="lov-save-next">Save &amp; Next</button>
       <button type="button" class="btn-sm btn-save-close" id="lov-save-close">Save &amp; Close</button>
       <button type="button" class="btn-sm btn-cancel" id="lov-cancel">Cancel</button>
+      <span class="lov-nav-sep"></span>
+      <button type="button" class="btn-sm btn-nav" id="lov-prev">← Prev</button>
+      <button type="button" class="btn-sm btn-nav" id="lov-next">Next →</button>
     </div>
   </div>
 </div>
@@ -222,6 +225,9 @@
 .btn-save-close{background:#217a3c;color:#fff;border:none}
 .btn-save-close:hover{background:#155727}
 .btn-cancel{color:#555}
+.lov-nav-sep{flex:1}
+.btn-nav{color:#333}
+.btn-nav:disabled{opacity:.35;cursor:default;pointer-events:none}
 </style>
 
 <script>
@@ -333,6 +339,11 @@ function openOverlay(ids) {
   loadLocation(selQueue[queueIdx]);
 }
 
+function updateNavButtons() {
+  document.getElementById('lov-prev').disabled = (queueIdx === 0);
+  document.getElementById('lov-next').disabled = (queueIdx === selQueue.length - 1);
+}
+
 function loadLocation(id) {
   lovStatus.textContent = 'Loading…';
   lovStatus.className = 'lov-status';
@@ -354,6 +365,7 @@ function loadLocation(id) {
       markChanged();
       lovStatus.textContent = '';
       lovCounter.textContent = 'Location ' + (queueIdx+1) + ' of ' + selQueue.length + ' · ID ' + id;
+      updateNavButtons();
       overlay.hidden = false;
       fieldEl('location').focus();
     })
@@ -430,6 +442,13 @@ document.getElementById('lov-save-close').addEventListener('click', function(){
 });
 
 function closeOverlay(){ overlay.hidden = true; }
+
+document.getElementById('lov-prev').addEventListener('click', function(){
+  if(queueIdx > 0){ queueIdx--; loadLocation(selQueue[queueIdx]); }
+});
+document.getElementById('lov-next').addEventListener('click', function(){
+  if(queueIdx < selQueue.length - 1){ queueIdx++; loadLocation(selQueue[queueIdx]); }
+});
 
 overlay.addEventListener('click', function(e){
   if(e.target === overlay) closeOverlay();

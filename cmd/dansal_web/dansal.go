@@ -533,6 +533,12 @@ func (c *DansalClient) BulkSetEventAttributes(ctx context.Context, payload map[s
 	return nil
 }
 
+// GetAllEvents fetches all published events including past ones; used by the sitemap.
+func (c *DansalClient) GetAllEvents(ctx context.Context) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &events)
+}
+
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)

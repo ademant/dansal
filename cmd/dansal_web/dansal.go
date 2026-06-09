@@ -19,6 +19,7 @@ import (
 type cacheEntry[T any] struct {
 	val       T
 	fetchedAt time.Time
+	etag      string // ETag from the last successful response, for conditional GETs
 }
 
 const (
@@ -394,6 +395,34 @@ func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 	return lastErr
 }
 
+// getConditional makes a GET with an optional If-None-Match header.
+// Returns (newETag, notModified, error). When notModified is true, out is not written.
+func (c *DansalClient) getConditional(ctx context.Context, path, etag string, out any) (string, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+	if err != nil {
+		return etag, false, err
+	}
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return etag, false, err
+	}
+	defer resp.Body.Close()
+	newETag := resp.Header.Get("Etag")
+	if newETag == "" {
+		newETag = etag
+	}
+	if resp.StatusCode == http.StatusNotModified {
+		return newETag, true, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return newETag, false, apiErr(resp)
+	}
+	return newETag, false, json.NewDecoder(resp.Body).Decode(out)
+}
+
 func (c *DansalClient) Login(ctx context.Context, email, password, clientIP, userAgent string) (*LoginResponse, error) {
 	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login",
@@ -499,10 +528,41 @@ func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]E
 
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
 	if after == "" {
-		return cached(&c.mu, &c.eventsCache, eventsTTL, func() ([]Event, error) {
-			var events []Event
-			return events, c.get(ctx, "/api/v1/events?is_published=true", &events)
-		})
+		// Use conditional GET: send If-None-Match when we have a cached ETag.
+		// On 304 the TTL is refreshed without re-downloading the payload.
+		c.mu.Lock()
+		if !c.eventsCache.fetchedAt.IsZero() && time.Since(c.eventsCache.fetchedAt) < eventsTTL {
+			v := c.eventsCache.val
+			c.mu.Unlock()
+			return v, nil
+		}
+		cachedETag := c.eventsCache.etag
+		hasStale := !c.eventsCache.fetchedAt.IsZero()
+		var stale []Event
+		if hasStale {
+			stale = c.eventsCache.val
+		}
+		c.mu.Unlock()
+
+		var events []Event
+		newETag, notModified, err := c.getConditional(ctx, "/api/v1/events?is_published=true", cachedETag, &events)
+		if err != nil {
+			if hasStale {
+				return stale, nil
+			}
+			return nil, err
+		}
+		c.mu.Lock()
+		if notModified {
+			c.eventsCache.fetchedAt = time.Now() // extend TTL, keep existing val
+		} else {
+			c.eventsCache.val = events
+			c.eventsCache.etag = newETag
+			c.eventsCache.fetchedAt = time.Now()
+		}
+		v := c.eventsCache.val
+		c.mu.Unlock()
+		return v, nil
 	}
 	path := "/api/v1/events?is_published=true&start_time_after=" + after
 	var events []Event

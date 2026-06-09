@@ -121,6 +121,7 @@ func main() {
 		r.HandleFunc("GET /.well-known/host-meta", hostMetaHandler(cfg))
 		r.HandleFunc("GET /.well-known/dnt-policy.txt", dntPolicyHandler())
 		r.HandleFunc("GET /.well-known/dnt", dntStatusHandler(cfg))
+		r.HandleFunc("GET /health", healthHandler())
 
 		r.HandleFunc("GET /location/{id}", locationPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n))

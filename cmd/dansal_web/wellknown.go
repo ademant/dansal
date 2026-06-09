@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+// healthHandler serves GET /health — returns 200 OK with basic JSON.
+func healthHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		fmt.Fprintf(w, `{"status":"ok","version":%q,"time":%q}`+"\n", Version, time.Now().UTC().Format(time.RFC3339))
+	}
+}
+
 // securityTxtHandler serves /.well-known/security.txt per RFC 9116.
 // Only active when SecurityContact is set in web.yaml.
 func securityTxtHandler(cfg *Config) http.HandlerFunc {

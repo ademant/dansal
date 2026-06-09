@@ -2012,6 +2012,13 @@ func main() {
 	// Info endpoint (public)
 	smux.HandleFunc("GET /api/v1/info", getInfo)
 
+	// Health endpoint (public)
+	smux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		fmt.Fprintf(w, `{"status":"ok","version":%q,"time":%q}`+"\n", Version, time.Now().UTC().Format(time.RFC3339))
+	})
+
 	// Authentication endpoints (no token required)
 	smux.HandleFunc("GET /api/v1/login", login)
 	smux.HandleFunc("POST /api/v1/login", login)

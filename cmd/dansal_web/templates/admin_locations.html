@@ -7,6 +7,7 @@
 
 {{with .Data}}
 <div class="loc-filters">
+  <input id="loc-search" type="search" placeholder="{{$.Strings.T "loc_search_placeholder"}}" autocomplete="off" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;min-width:180px">
   <select id="filter-town">
     <option value="">{{$.Strings.T "filter_all_towns"}}</option>
   </select>
@@ -38,6 +39,9 @@
       <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str" class="col-addr">{{$.Strings.T "loc_address"}}</th>
+      <th class="col-coords">{{$.Strings.T "loc_coordinates"}}</th>
+      <th data-sort="num" class="col-updated">{{$.Strings.T "loc_updated"}}</th>
       <th title="Geo / Town / Website / Events">✓</th>
       <th></th>
     </tr>
@@ -46,11 +50,16 @@
   {{range .Locations}}
   {{$orgName := ""}}
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
-  <tr data-town="{{.Town}}" data-org="{{$orgName}}">
+  {{$coordStr := ""}}{{if and .Latitude .Longitude}}{{$coordStr = printf "%s, %s" (floatVal .Latitude) (floatVal .Longitude)}}{{end}}
+  {{$displayName := .Location}}{{if .ShortName}}{{$displayName = .ShortName}}{{end}}
+  <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-search="{{$displayName}} {{.Town}} {{.Address}} {{.CountryCode}} {{$orgName}}" data-updated="{{.UpdatedAt}}">
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
+    <td data-val="{{$displayName}}">{{$displayName}}</td>
     <td>{{.Town}}</td>
     <td>{{$orgName}}</td>
+    <td class="col-addr muted">{{.Address}}</td>
+    <td class="col-coords muted">{{$coordStr}}</td>
+    <td class="col-updated muted" data-val="{{.UpdatedAt}}">{{if .UpdatedAt}}{{fmtUnix .UpdatedAt}}{{end}}</td>
     <td class="ind-cell">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
       <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
@@ -122,6 +131,11 @@
 .btn-assign:hover{background:#0d4a80}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 .evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
+.col-addr{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
+.col-coords{font-size:.78rem;white-space:nowrap;font-family:monospace;color:#666}
+.col-updated{font-size:.82rem;white-space:nowrap;color:#888}
+.muted{color:#888}
+@media(max-width:900px){.col-addr,.col-coords,.col-updated{display:none}}
 </style>
 
 <script>
@@ -137,15 +151,20 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
   var oSel=document.getElementById('filter-org');
   towns.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;tSel.appendChild(o);});
   orgs.forEach(function(o){var el=document.createElement('option');el.value=o;el.textContent=o;oSel.appendChild(el);});
+  var searchEl=document.getElementById('loc-search');
   function applyFilters(){
-    var t=tSel.value, o=oSel.value;
+    var t=tSel.value, o=oSel.value, q=(searchEl?searchEl.value.trim().toLowerCase():'');
     rows.forEach(function(r){
-      r.style.display=(!t||r.dataset.town===t)&&(!o||r.dataset.org===o)?'':'none';
+      var matchT=!t||r.dataset.town===t;
+      var matchO=!o||r.dataset.org===o;
+      var matchQ=!q||(r.dataset.search||'').toLowerCase().indexOf(q)>=0;
+      r.style.display=(matchT&&matchO&&matchQ)?'':'none';
     });
   }
   tSel.addEventListener('change',applyFilters);
   oSel.addEventListener('change',applyFilters);
-  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';applyFilters();});
+  if(searchEl)searchEl.addEventListener('input',applyFilters);
+  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';if(searchEl)searchEl.value='';applyFilters();});
 })();
 function delLocation(id) {
   var f = document.createElement('form');

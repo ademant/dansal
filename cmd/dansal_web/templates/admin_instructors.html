@@ -1,0 +1,57 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "admin_instructors_title"}}</h1>
+  <a href="/admin/instructors/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_instructor_new_title"}}</a>
+</div>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th data-sort="str">{{$.Strings.T "instructor_name"}}</th>
+      <th data-sort="str">{{$.Strings.T "instructor_website"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Instructors}}
+  <tr>
+    <td>{{.Name}}</td>
+    <td>{{if .Website}}<a href="{{.Website}}" target="_blank" rel="noopener">{{.Website}}</a>{{end}}</td>
+    <td class="col-actions">
+      <a href="/admin/instructors/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('{{$.Strings.T "instructor_confirm_delete"}}'))delInstructor({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+function delInstructor(id) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/instructors/' + id + '/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
+.col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
+.btn-del{color:#c33;border-color:#faa}
+.btn-del:hover{background:#fff0f0}
+</style>
+{{end}}

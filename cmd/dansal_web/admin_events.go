@@ -1415,6 +1415,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		titles := r.MultipartForm.Value["tt_title"]
 		descs := r.MultipartForm.Value["tt_desc"]
 		rooms := r.MultipartForm.Value["tt_room"]
+		ttTypes := r.MultipartForm.Value["tt_type"]
 		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
 		musNames := r.MultipartForm.Value["tt_musician_name"]
@@ -1437,6 +1438,13 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 			if i < len(rooms) {
 				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(ttTypes) {
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
+					entry.EntryType = "workshop"
+				} else {
+					entry.EntryType = "bal"
+				}
 			}
 			if i < len(locIDs) {
 				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
@@ -1477,6 +1485,7 @@ type AdminEventEditData struct {
 	LocOrgFirst        []Location // location dropdown: same-org locations first
 	LocOthers          []Location // location dropdown: remaining locations
 	Musicians          []Musician
+	Instructors        []Instructor
 	Dances             []Dance
 	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
@@ -1609,6 +1618,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			LocOrgFirst:        locOrgFirst,
 			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
+			Instructors:        bundle.Instructors,
 			Dances:             bundle.Dances,
 			SelectedDanceNames: buildSelectedDanceNames(event),
 			UserOrgs:           userOrgs,
@@ -1658,6 +1668,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
+				Instructors:        bundle.Instructors,
 				Dances:             bundle.Dances,
 				SelectedDanceNames: buildSelectedDanceNames(event),
 				ErrorKey:           errKey,
@@ -1774,6 +1785,12 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				musicianIDs = append(musicianIDs, n)
 			}
 		}
+		var instructorIDs []int
+		for _, v := range r.MultipartForm.Value["instructor_ids"] {
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				instructorIDs = append(instructorIDs, n)
+			}
+		}
 		var danceIDs []int
 		for _, v := range r.MultipartForm.Value["dance_ids"] {
 			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
@@ -1808,6 +1825,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Pricing:        pricing,
 			Location:       locReq,
 			Musicians:      musicianIDs,
+			Instructors:    instructorIDs,
 			Dances:         danceIDs,
 		}
 
@@ -1872,6 +1890,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			titles := r.MultipartForm.Value["tt_title"]
 			descs := r.MultipartForm.Value["tt_desc"]
 			rooms := r.MultipartForm.Value["tt_room"]
+			ttTypes := r.MultipartForm.Value["tt_type"]
 			locIDs := r.MultipartForm.Value["tt_loc_id"]
 			musIDs := r.MultipartForm.Value["tt_musician_id"]
 			musNames := r.MultipartForm.Value["tt_musician_name"]
@@ -1893,6 +1912,13 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				}
 				if i < len(rooms) {
 					entry.Room = strings.TrimSpace(rooms[i])
+				}
+				if i < len(ttTypes) {
+					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
+						entry.EntryType = "workshop"
+					} else {
+						entry.EntryType = "bal"
+					}
 				}
 				if i < len(locIDs) {
 					if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {

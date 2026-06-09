@@ -1,0 +1,65 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{if .Data.IsNew}}{{.Strings.T "admin_new"}}{{else}}{{.Strings.T "admin_edit"}}{{with .Data.Instructor.Name}} — {{.}}{{end}}{{end}}</h1>
+
+<div class="edit-wrap">
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<form method="post" class="edit-form">
+
+  <div class="sec-head"><h3>{{$.Strings.T "instructor_name"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body">
+    <label for="name">{{$.Strings.T "instructor_name"}} *</label>
+    <input id="name" type="text" name="name" value="{{.Instructor.Name}}" required autofocus>
+  </div>
+
+  <div class="sec-head"><h3>{{$.Strings.T "instructor_bio"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="bio">{{$.Strings.T "instructor_bio"}}</label>
+    <textarea id="bio" name="bio" rows="4">{{.Instructor.Bio}}</textarea>
+  </div>
+
+  <div class="sec-head"><h3>{{$.Strings.T "instructor_contact"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    <label for="website">{{$.Strings.T "instructor_website"}}</label>
+    <input id="website" type="url" name="website" value="{{.Instructor.Website}}" placeholder="https://...">
+    <label for="email">{{$.Strings.T "instructor_email"}}</label>
+    <input id="email" type="email" name="email" value="{{.Instructor.Email}}" placeholder="...@example.com">
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+    <a href="/admin/instructors" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+
+</form>
+{{end}}
+</div>
+
+<style>
+.edit-wrap{max-width:640px}
+.edit-form{display:flex;flex-direction:column;gap:0}
+.sec-head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--border);padding:.5rem 0;margin-top:1.25rem}
+.sec-head h3{margin:0;font-size:1rem}
+.sec-body{display:flex;flex-direction:column;gap:.5rem;padding:.75rem 0 .25rem 0}
+label{font-size:.9rem;font-weight:600;color:var(--fg-secondary)}
+input[type=text],input[type=url],input[type=email],textarea{width:100%;padding:.45rem .6rem;border:1px solid var(--input-border);border-radius:4px;font-size:.95rem;background:var(--input-bg);color:var(--fg)}
+textarea{resize:vertical}
+.form-error{color:#c33;border:1px solid #fcc;background:#fff8f8;padding:.5rem 1rem;border-radius:4px}
+.form-actions{display:flex;gap:.75rem;margin-top:1.5rem}
+.btn-primary{padding:.5rem 1.25rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.95rem}
+.btn-primary:hover{background:#155a96}
+.btn-secondary{padding:.5rem 1.25rem;background:var(--bg-card);color:var(--fg);border:1px solid var(--border);border-radius:4px;text-decoration:none;font-size:.95rem}
+.btn-sec-edit{background:none;border:none;cursor:pointer;color:var(--link);font-size:1rem;padding:.1rem .3rem}
+</style>
+
+<script>
+function toggleSec(btn) {
+  var body = btn.closest('.sec-head').nextElementSibling;
+  body.hidden = !body.hidden;
+}
+// Open name section on load
+document.querySelector('.sec-body').hidden = false;
+</script>
+{{end}}

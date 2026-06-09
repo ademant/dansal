@@ -51,6 +51,7 @@ type Event struct {
 	Pricing            *Pricing         `json:"pricing,omitempty"`
 	Locations          []Location       `json:"locations,omitempty"`
 	Musicians          []Musician       `json:"musicians,omitempty"`
+	Instructors        []Instructor     `json:"instructors,omitempty"`
 	LocationID         *int             `json:"location_id,omitempty"`
 	Location           *Location        `json:"location,omitempty"`
 	Attributes         map[string]bool  `json:"attributes,omitempty"`
@@ -97,6 +98,7 @@ type EventWriteRequest struct {
 	Location           EventLocationRequest `json:"location"`
 	Pricing            *Pricing             `json:"pricing"`
 	Musicians          []int                `json:"musicians"`
+	Instructors        []int                `json:"instructors,omitempty"`
 	Dances             []int                `json:"dances,omitempty"`
 	BookingURL         string               `json:"booking_url,omitempty"`
 	Availability       string               `json:"availability,omitempty"`
@@ -867,6 +869,12 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 				q.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
 			}
 		}
+		if len(req.Instructors) > 0 {
+			q.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
+			for _, instrID := range req.Instructors {
+				q.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", id, instrID)
+			}
+		}
 		if len(req.Dances) > 0 {
 			q.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
 			for _, danceID := range req.Dances {
@@ -1450,15 +1458,17 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	event.Cancelable = &cancelable
 
 	var (
-		timetable []TimetableEntry
-		locs      []Location
-		musicians []Musician
-		wg        sync.WaitGroup
+		timetable   []TimetableEntry
+		locs        []Location
+		musicians   []Musician
+		instructors []Instructor
+		wg          sync.WaitGroup
 	)
-	wg.Add(3)
+	wg.Add(4)
 	go func() { defer wg.Done(); timetable, _ = fetchTimetable(event.ID) }()
 	go func() { defer wg.Done(); locs, _ = fetchEventLocation(event.ID) }()
 	go func() { defer wg.Done(); musicians, _ = fetchEventMusicians(event.ID) }()
+	go func() { defer wg.Done(); instructors, _ = fetchEventInstructors(event.ID) }()
 	wg.Wait()
 	if len(timetable) > 0 {
 		event.Timetable = timetable
@@ -1468,6 +1478,9 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(musicians) > 0 {
 		event.Musicians = musicians
+	}
+	if len(instructors) > 0 {
+		event.Instructors = instructors
 	}
 
 	if strings.Contains(accept, "text/calendar") {
@@ -1594,6 +1607,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	for _, musicianID := range req.Musicians {
 		tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
 	}
+	tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
+	for _, instrID := range req.Instructors {
+		tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", id, instrID)
+	}
 	tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
 	for _, danceID := range req.Dances {
 		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
@@ -1613,6 +1630,9 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if musicians, err := fetchEventMusicians(id); err == nil {
 		event.Musicians = musicians
+	}
+	if instructors, err := fetchEventInstructors(id); err == nil {
+		event.Instructors = instructors
 	}
 	if timetable, err := fetchTimetable(id); err == nil {
 		event.Timetable = timetable

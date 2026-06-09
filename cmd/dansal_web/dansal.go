@@ -128,23 +128,25 @@ func (c *DansalClient) GetOrgStats(ctx context.Context) (map[int]OrgStatRecord, 
 	return m, nil
 }
 
-// RefBundle holds all four slow-changing reference lists needed by admin forms.
+// RefBundle holds slow-changing reference lists needed by admin forms.
 type RefBundle struct {
-	Orgs      []Organization
-	Locations []Location
-	Musicians []Musician
-	Dances    []Dance
+	Orgs        []Organization
+	Locations   []Location
+	Musicians   []Musician
+	Dances      []Dance
+	Instructors []Instructor
 }
 
-// FetchRefBundle loads all four reference lists in parallel (cache hits are in-memory).
+// FetchRefBundle loads all reference lists in parallel (cache hits are in-memory).
 func (c *DansalClient) FetchRefBundle(ctx context.Context) RefBundle {
 	var b RefBundle
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
 	go func() { defer wg.Done(); b.Orgs, _ = c.GetOrganizations(ctx) }()
 	go func() { defer wg.Done(); b.Locations, _ = c.GetLocations(ctx) }()
 	go func() { defer wg.Done(); b.Musicians, _ = c.GetMusicians(ctx) }()
 	go func() { defer wg.Done(); b.Dances, _ = c.GetDances(ctx) }()
+	go func() { defer wg.Done(); b.Instructors, _ = c.GetInstructors(ctx) }()
 	wg.Wait()
 	return b
 }
@@ -199,6 +201,7 @@ type Event struct {
 	Pricing            *Pricing         `json:"pricing,omitempty"`
 	Locations          []Location       `json:"locations,omitempty"`
 	Musicians          []Musician       `json:"musicians,omitempty"`
+	Instructors        []Instructor     `json:"instructors,omitempty"`
 	DanceNames         []string         `json:"dance_names,omitempty"`
 	Timetable          []TimetableEntry `json:"timetable,omitempty"`
 	CreatedAt          string           `json:"created_at"`
@@ -231,10 +234,20 @@ type TimetableEntry struct {
 	Title        string `json:"title"`
 	Description  string `json:"description,omitempty"`
 	Room         string `json:"room,omitempty"`
+	EntryType    string `json:"entry_type,omitempty"`
 	LocationID   *int   `json:"location_id,omitempty"`
 	LocationName string `json:"location_name,omitempty"`
 	MusicianID   *int   `json:"musician_id,omitempty"`
 	MusicianName string `json:"musician_name,omitempty"`
+}
+
+type Instructor struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio,omitempty"`
+	Website   string `json:"website,omitempty"`
+	Email     string `json:"email,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 type Organization struct {
@@ -754,6 +767,73 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 		return apiErr(resp)
 	}
 	c.invalidateMusicians()
+	return nil
+}
+
+func (c *DansalClient) GetInstructors(ctx context.Context) ([]Instructor, error) {
+	var out []Instructor
+	return out, c.get(ctx, "/api/v1/instructors", &out)
+}
+
+func (c *DansalClient) GetInstructor(ctx context.Context, id int) (Instructor, error) {
+	var out Instructor
+	return out, c.get(ctx, fmt.Sprintf("/api/v1/instructors/%d", id), &out)
+}
+
+func (c *DansalClient) CreateInstructor(ctx context.Context, inst Instructor, token string) (Instructor, error) {
+	body, _ := json.Marshal(inst)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/instructors", token, body)
+	if err != nil {
+		return Instructor{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return Instructor{}, apiErr(resp)
+	}
+	var out Instructor
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) UpdateInstructor(ctx context.Context, id int, inst Instructor, token string) error {
+	body, _ := json.Marshal(inst)
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/instructors/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteInstructor(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/instructors/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetEventInstructors(ctx context.Context, eventID int) ([]Instructor, error) {
+	var out []Instructor
+	return out, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/instructors", eventID), &out)
+}
+
+func (c *DansalClient) SetEventInstructors(ctx context.Context, eventID int, ids []int, token string) error {
+	body, _ := json.Marshal(ids)
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/instructors", eventID), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
 	return nil
 }
 
@@ -1357,6 +1437,7 @@ type EventUpdateReq struct {
 	LocationID         *int            `json:"location_id,omitempty"`
 	Location           EventLocReq     `json:"location"`
 	Musicians          []int           `json:"musicians,omitempty"`
+	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
 }
 
@@ -1377,6 +1458,7 @@ type TimetableEntryReq struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Room        string `json:"room,omitempty"`
+	EntryType   string `json:"entry_type,omitempty"`
 	LocationID  *int   `json:"location_id,omitempty"`
 	MusicianID  *int   `json:"musician_id,omitempty"`
 }

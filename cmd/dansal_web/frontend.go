@@ -395,6 +395,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return s
 	},
+	"fmtUnix": func(ts int64) string {
+		if ts == 0 {
+			return ""
+		}
+		return time.Unix(ts, 0).UTC().Format("2006-01-02")
+	},
 	"isoTime": func(s string) string {
 		if t, ok := parseTime(s); ok {
 			return t.Format("15:04")
@@ -828,8 +834,10 @@ type Templates struct {
 	adminLocationEdit   *template.Template
 	musicians           *template.Template
 	musician            *template.Template
-	adminMusicians      *template.Template
-	adminMusicianEdit   *template.Template
+	adminMusicians       *template.Template
+	adminMusicianEdit    *template.Template
+	adminInstructors     *template.Template
+	adminInstructorEdit  *template.Template
 	adminEvents         *template.Template
 	adminEventNew       *template.Template
 	adminEventEdit      *template.Template
@@ -903,6 +911,8 @@ func loadTemplates() *Templates {
 		musician:            load("musician"),
 		adminMusicians:      load("admin_musicians"),
 		adminMusicianEdit:   load("admin_musician_edit"),
+		adminInstructors:    load("admin_instructors"),
+		adminInstructorEdit: load("admin_instructor_edit"),
 		adminEvents:         load("admin_events"),
 		adminEventNew:       load("admin_event_new"),
 		adminEventEdit:      load("admin_event_edit"),

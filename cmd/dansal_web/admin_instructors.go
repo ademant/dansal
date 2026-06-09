@@ -1,0 +1,139 @@
+package main
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+)
+
+type AdminInstructorsData struct {
+	Instructors []Instructor
+}
+
+type AdminInstructorEditData struct {
+	Instructor Instructor
+	IsNew      bool
+	ErrorKey   string
+}
+
+func instructorFromForm(r *http.Request) Instructor {
+	return Instructor{
+		Name:    strings.TrimSpace(r.FormValue("name")),
+		Bio:     strings.TrimSpace(r.FormValue("bio")),
+		Website: strings.TrimSpace(r.FormValue("website")),
+		Email:   strings.TrimSpace(r.FormValue("email")),
+	}
+}
+
+func adminInstructorsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		instructors, err := client.GetInstructors(r.Context())
+		if err != nil {
+			http.Error(w, "could not load instructors", http.StatusBadGateway)
+			return
+		}
+		title := i18n.T(r, "admin_instructors_title")
+		renderTemplate(w, tmpls.adminInstructors, tmplData(r, cfg, i18n, title, AdminInstructorsData{Instructors: instructors}))
+	}
+}
+
+func adminInstructorNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		title := i18n.T(r, "admin_new")
+		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{IsNew: true}))
+	}
+}
+
+func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		inst := instructorFromForm(r)
+		if _, err := client.CreateInstructor(r.Context(), inst, getSessionToken(r)); err != nil {
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
+				Instructor: inst, IsNew: true, ErrorKey: "admin_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
+	}
+}
+
+func adminInstructorEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		inst, err := client.GetInstructor(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		title := i18n.T(r, "admin_edit")
+		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{Instructor: inst}))
+	}
+}
+
+func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		inst := instructorFromForm(r)
+		if err := client.UpdateInstructor(r.Context(), id, inst, getSessionToken(r)); err != nil {
+			title := i18n.T(r, "admin_edit")
+			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
+				Instructor: inst, ErrorKey: "admin_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
+	}
+}
+
+func adminInstructorDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteInstructor(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
+	}
+}

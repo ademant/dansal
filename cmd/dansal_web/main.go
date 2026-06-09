@@ -326,6 +326,13 @@ func main() {
 		r.HandleFunc("POST /admin/musicians/{id}/edit", adminRateLimit(adminMusicianSaveHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/musicians/{id}/delete", adminRateLimit(adminMusicianDeleteHandler(cfg, client)))
 
+		r.HandleFunc("GET /admin/instructors", adminInstructorsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/instructors/new", adminInstructorNewPageHandler(cfg, tmpls, i18n))
+		r.HandleFunc("POST /admin/instructors/new", adminRateLimit(adminInstructorCreateHandler(cfg, tmpls, client, i18n)))
+		r.HandleFunc("GET /admin/instructors/{id}/edit", adminInstructorEditPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/instructors/{id}/edit", adminRateLimit(adminInstructorSaveHandler(cfg, tmpls, client, i18n)))
+		r.HandleFunc("POST /admin/instructors/{id}/delete", adminRateLimit(adminInstructorDeleteHandler(cfg, client)))
+
 		r.HandleFunc("GET /admin/locations", adminLocationsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/locations/new", adminLocationNewPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/new", adminRateLimit(adminLocationCreateHandler(cfg, tmpls, client, i18n)))

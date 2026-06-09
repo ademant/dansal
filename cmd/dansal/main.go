@@ -1322,6 +1322,38 @@ func migrateDB() {
 		db.Exec("ALTER TABLE users ADD COLUMN totp_pending TEXT")
 		mark(7)
 	}
+	// v8: instructors table and event_instructors join table.
+	if !applied(8) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS instructors (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			bio TEXT,
+			website TEXT,
+			email TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
+		db.Exec(`CREATE TABLE IF NOT EXISTS event_instructors (
+			event_id INTEGER NOT NULL,
+			instructor_id INTEGER NOT NULL,
+			PRIMARY KEY (event_id, instructor_id),
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+			FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE CASCADE
+		)`)
+		mark(8)
+	}
+	// v9: entry_type column on timetable_entries (bal/workshop).
+	if !applied(9) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop'))")
+		mark(9)
+	}
+	// Safety net: ensure entry_type column exists even if v9 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='entry_type'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop'))")
+		}
+	}
 	// Safety net: ensure totp columns exist even if v7 was pre-marked.
 	{
 		var n int
@@ -1751,6 +1783,7 @@ func createTables() error {
 		room TEXT,
 		location_id INTEGER,
 		musician_id INTEGER,
+		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop')),
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
@@ -1772,6 +1805,21 @@ func createTables() error {
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id);
+	CREATE TABLE IF NOT EXISTS instructors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		bio TEXT,
+		website TEXT,
+		email TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS event_instructors (
+		event_id INTEGER NOT NULL,
+		instructor_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, instructor_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE CASCADE
+	);
 	CREATE TABLE IF NOT EXISTS event_dances (
 		event_id INTEGER NOT NULL,
 		dance_id INTEGER NOT NULL,
@@ -1908,6 +1956,8 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(6)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(7)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)")
 	return nil
 }
 
@@ -2091,6 +2141,9 @@ func main() {
 	smux.Handle("GET /api/v1/organizations/{id}", optAuth(http.HandlerFunc(getOrganization)))
 	smux.Handle("GET /api/v1/musicians", optAuth(http.HandlerFunc(getMusicians)))
 	smux.Handle("GET /api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician)))
+	smux.Handle("GET /api/v1/instructors", optAuth(http.HandlerFunc(getInstructors)))
+	smux.Handle("GET /api/v1/instructors/{id}", optAuth(http.HandlerFunc(getInstructor)))
+	smux.Handle("GET /api/v1/events/{id}/instructors", optAuth(http.HandlerFunc(getEventInstructors)))
 	smux.Handle("GET /api/v1/tags", optAuth(http.HandlerFunc(getTags)))
 	smux.Handle("GET /api/v1/dances", optAuth(http.HandlerFunc(getDances)))
 	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
@@ -2148,6 +2201,12 @@ func main() {
 	smux.Handle("POST /api/v1/musicians", auth(createMusician))
 	smux.Handle("PUT /api/v1/musicians/{id}", auth(updateMusician))
 	smux.Handle("DELETE /api/v1/musicians/{id}", auth(deleteMusician))
+
+	// Instructor endpoints
+	smux.Handle("POST /api/v1/instructors", auth(createInstructor))
+	smux.Handle("PUT /api/v1/instructors/{id}", auth(updateInstructor))
+	smux.Handle("DELETE /api/v1/instructors/{id}", auth(deleteInstructor))
+	smux.Handle("PUT /api/v1/events/{id}/instructors", auth(setEventInstructors))
 
 	// Protected image writes
 	smux.Handle("POST /api/v1/images/{event_id}", auth(uploadEventImage))

@@ -164,6 +164,66 @@
     </script>
   </section>
 
+  <!-- Instructors -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_instructors"}}</h2>
+    <div id="selected-instructors">
+      {{range .Event.Instructors}}
+      <div class="musician-chip" data-id="{{.ID}}">
+        <span>{{.Name}}</span>
+        <button type="button" class="btn-chip-del" onclick="removeInstructor(this)" title="Remove">×</button>
+        <input type="hidden" name="instructor_ids" value="{{.ID}}">
+      </div>
+      {{end}}
+    </div>
+    <div class="ac-wrap">
+      <input id="instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off" oninput="searchInstructors(this.value)">
+      <div id="ac-instr-list" class="ac-list" hidden></div>
+    </div>
+    <script>
+    var allInstructors = [{{range .Instructors}}{id:{{.ID}},name:{{jsStr .Name}}},{{end}}];
+    function selectedInstrIDs(){
+      return Array.from(document.querySelectorAll('#selected-instructors input[name=instructor_ids]')).map(function(i){return parseInt(i.value,10);});
+    }
+    function searchInstructors(q){
+      var list=document.getElementById('ac-instr-list');
+      q=q.trim();
+      if(!q){list.hidden=true;return;}
+      var sel=selectedInstrIDs();
+      var results=allInstructors.filter(function(m){
+        return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
+      }).slice(0,8);
+      if(results.length===0){list.hidden=true;return;}
+      list.innerHTML=results.map(function(m){
+        var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
+      }).join('');
+      list.querySelectorAll('.ac-item').forEach(function(item){
+        item.addEventListener('click',function(){addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
+      });
+      list.hidden=false;
+    }
+    function addInstructor(id,name){
+      var wrap=document.getElementById('selected-instructors');
+      var chip=document.createElement('div');
+      chip.className='musician-chip';
+      chip.dataset.id=id;
+      var span=document.createElement('span'); span.textContent=name; chip.appendChild(span);
+      var btn=document.createElement('button'); btn.type='button'; btn.className='btn-chip-del'; btn.title='Remove'; btn.textContent='×';
+      btn.addEventListener('click',function(){removeInstructor(this);}); chip.appendChild(btn);
+      var inp=document.createElement('input'); inp.type='hidden'; inp.name='instructor_ids'; inp.value=id;
+      chip.appendChild(inp); wrap.appendChild(chip);
+      document.getElementById('instructor-search').value='';
+      document.getElementById('ac-instr-list').hidden=true;
+    }
+    function removeInstructor(btn){btn.closest('.musician-chip').remove();}
+    document.addEventListener('click',function(e){
+      if(!e.target.closest('.ac-wrap'))document.getElementById('ac-instr-list').hidden=true;
+    });
+    </script>
+  </section>
+
   <!-- Dance styles -->
   <section class="form-section">
     <h2>Dance styles</h2>
@@ -401,7 +461,8 @@
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
-          <td colspan="2"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td><select name="tt_type" class="tt-type-sel"><option value="bal"{{if ne .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option></select></td>
+          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
           <td colspan="4"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
         {{end}}
@@ -414,7 +475,8 @@
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
-          <td colspan="2"><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td><select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option></select></td>
+          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
           <td colspan="4"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
       </tbody>
@@ -797,7 +859,9 @@ function addTTRow(){
     '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
   var row2=document.createElement('tr');
   row2.className='tt-row-detail';
-  row2.innerHTML='<td colspan="2">'+_buildTTMusWidget()+'</td>'+
+  var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
+  row2.innerHTML='<td><select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select></td>'+
+    '<td>'+_buildTTMusWidget()+'</td>'+
     '<td colspan="4"><input type="text" name="tt_desc" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></td>';
   tbody.appendChild(row1);
   tbody.appendChild(row2);

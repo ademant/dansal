@@ -117,6 +117,10 @@ func main() {
 		r.HandleFunc("GET /.well-known/nodeinfo", nodeinfoIndexHandler(cfg))
 		r.HandleFunc("GET /nodeinfo/2.0", nodeinfoHandler(cfg))
 		r.HandleFunc("GET /nodeinfo/2.1", nodeinfo21Handler(cfg))
+		r.HandleFunc("GET /.well-known/security.txt", securityTxtHandler(cfg))
+		r.HandleFunc("GET /.well-known/host-meta", hostMetaHandler(cfg))
+		r.HandleFunc("GET /.well-known/dnt-policy.txt", dntPolicyHandler())
+		r.HandleFunc("GET /.well-known/dnt", dntStatusHandler(cfg))
 
 		r.HandleFunc("GET /location/{id}", locationPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n))

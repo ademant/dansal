@@ -90,7 +90,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		lr, err := client.Login(r.Context(), email, password, ip, r.UserAgent())
 		if err != nil {
 			delay := throttle.recordFailure(ip)
-			log.Printf("login failed from %s: invalid credentials for %q", ip, email)
+			log.Printf("%s ip=%s path=/login", authFail, ip)
 			timer := time.NewTimer(delay)
 			select {
 			case <-timer.C:

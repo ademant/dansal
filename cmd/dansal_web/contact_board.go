@@ -30,7 +30,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
 			return
 		}
@@ -124,7 +124,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
 			return
 		}

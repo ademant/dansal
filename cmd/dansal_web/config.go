@@ -25,6 +25,10 @@ type Config struct {
 	NodeInfoMaintainerName  string `yaml:"nodeinfo_maintainer_name"`
 	NodeInfoMaintainerEmail string `yaml:"nodeinfo_maintainer_email"`
 
+	// Security contact (served at /.well-known/security.txt per RFC 9116)
+	SecurityContact string `yaml:"security_contact"` // mailto: or https: URL
+	SecurityPolicy  string `yaml:"security_policy"`  // optional URL to security policy page
+
 	// Federation
 	RelayActorName      string `yaml:"relay_actor_name"`
 	ShowFederatedEvents bool   `yaml:"show_federated_events"`

@@ -26,7 +26,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			return
 		}
 		if r.FormValue("honeypot") != "" {
-			log.Printf("dansal-web: HONEYPOT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
 			return
 		}

@@ -101,6 +101,41 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 	}
 }
 
+func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		locs, err := client.GetLocations(r.Context())
+		if err != nil {
+			http.Error(w, "could not load locations", http.StatusBadGateway)
+			return
+		}
+		sort.Slice(locs, func(i, j int) bool {
+			if locs[i].Town != locs[j].Town {
+				return locs[i].Town < locs[j].Town
+			}
+			return locs[i].Location < locs[j].Location
+		})
+		orgs, _ := client.GetOrganizations(r.Context())
+		token := getSessionToken(r)
+		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
+		title := i18n.T(r, "admin_loc_maintenance_title")
+		renderTemplate(w, tmpls.adminLocationsMaintenance, tmplData(r, cfg, i18n, title, AdminLocationsData{
+			Locations:   locs,
+			OrgMap:      buildOrgMap(orgs),
+			Orgs:        orgs,
+			IsAdmin:     true,
+			EventCounts: eventCounts,
+		}))
+	}
+}
+
 func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)

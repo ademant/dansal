@@ -328,6 +328,7 @@ type Location struct {
 	FloorCondition  string          `json:"floor_condition,omitempty"`
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
+	UpdatedAt       int64           `json:"updated_at,omitempty"`
 }
 
 type FetchSource struct {

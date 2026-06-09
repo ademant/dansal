@@ -334,6 +334,7 @@ func main() {
 		r.HandleFunc("POST /admin/instructors/{id}/delete", adminRateLimit(adminInstructorDeleteHandler(cfg, client)))
 
 		r.HandleFunc("GET /admin/locations", adminLocationsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/locations/maintenance", adminLocationMaintenanceHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/locations/new", adminLocationNewPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/locations/new", adminRateLimit(adminLocationCreateHandler(cfg, tmpls, client, i18n)))
 		r.HandleFunc("POST /admin/locations/bulk-assign", adminRateLimit(adminLocationBulkAssignHandler(cfg, client)))

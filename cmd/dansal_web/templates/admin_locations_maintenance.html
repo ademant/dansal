@@ -1,12 +1,13 @@
 {{template "base" .}}
 {{define "content"}}
 <div class="page-header">
-  <h1>{{.Strings.T "admin_locations_title"}}</h1>
+  <h1>{{.Strings.T "admin_loc_maintenance_title"}}</h1>
   <a href="/admin/locations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_location_new_title"}}</a>
 </div>
 
 {{with .Data}}
 <div class="loc-filters">
+  <input id="loc-search" type="search" placeholder="{{$.Strings.T "loc_search_placeholder"}}" autocomplete="off" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;min-width:180px">
   <select id="filter-town">
     <option value="">{{$.Strings.T "filter_all_towns"}}</option>
   </select>
@@ -16,7 +17,6 @@
   <button type="button" class="btn-reset" id="filter-clear">{{$.Strings.T "filter_clear"}}</button>
 </div>
 
-{{if .IsAdmin}}
 <form method="post" action="/admin/locations/bulk-assign" id="bulk-form">
 <div class="bulk-bar">
   <span id="bulk-count"></span>
@@ -28,16 +28,18 @@
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge"
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
-{{end}}
 
 <div class="table-wrap">
 <table class="event-table" id="loc-table" data-sortable>
   <thead>
     <tr>
-      {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
+      <th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
       <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str" class="col-addr">{{$.Strings.T "loc_address"}}</th>
+      <th class="col-coords">{{$.Strings.T "loc_coordinates"}}</th>
+      <th data-sort="num" class="col-updated">{{$.Strings.T "loc_updated"}}</th>
       <th title="Geo / Town / Website / Events">✓</th>
       <th></th>
     </tr>
@@ -46,11 +48,16 @@
   {{range .Locations}}
   {{$orgName := ""}}
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
-  <tr data-town="{{.Town}}" data-org="{{$orgName}}">
-    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
+  {{$displayName := .Location}}{{if .ShortName}}{{$displayName = .ShortName}}{{end}}
+  {{$coordStr := ""}}{{if and .Latitude .Longitude}}{{$coordStr = printf "%s, %s" (floatVal .Latitude) (floatVal .Longitude)}}{{end}}
+  <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-search="{{$displayName}} {{.Town}} {{.Address}} {{.CountryCode}} {{$orgName}}" data-updated="{{.UpdatedAt}}">
+    <td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>
+    <td data-val="{{$displayName}}"><a href="/admin/locations/{{.ID}}/edit" class="loc-name-link">{{$displayName}}</a></td>
     <td>{{.Town}}</td>
     <td>{{$orgName}}</td>
+    <td class="col-addr muted">{{.Address}}</td>
+    <td class="col-coords muted">{{$coordStr}}</td>
+    <td class="col-updated muted" data-val="{{.UpdatedAt}}">{{if .UpdatedAt}}{{fmtUnix .UpdatedAt}}{{end}}</td>
     <td class="ind-cell">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
       <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
@@ -64,32 +71,16 @@
       {{with index $.Data.EventCounts .ID}}<span class="evt-count" title="{{$.Strings.T "loc_event_count"}}">{{.}}</span>{{end}}
     </td>
     <td class="col-actions">
-      {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
       <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
-      {{else}}
-      <span class="btn-sm btn-disabled">{{$.Strings.T "admin_edit"}}</span>
-      {{end}}
-      {{if and $.Data.UserOrgs (not (index $.Data.EditableIDs .ID))}}
-      <form method="post" action="/admin/locations/{{.ID}}/assign-org" style="margin:0;display:inline-flex;gap:.25rem;align-items:center">
-        {{if eq (len $.Data.UserOrgs) 1}}
-        <input type="hidden" name="org_id" value="{{(index $.Data.UserOrgs 0).ID}}">
-        {{else}}
-        <select name="org_id" class="btn-sm" style="padding:.15rem .3rem">
-          {{range $.Data.UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-        </select>
-        {{end}}
-        <button type="submit" class="btn-sm btn-assign">{{$.Strings.T "loc_assign_btn"}}</button>
-      </form>
-      {{end}}
-      {{if $.Data.IsAdmin}}<button type="button" class="btn-sm btn-del"
-              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>{{end}}
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
   </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{if .IsAdmin}}</form>{{end}}
+</form>
 {{end}}
 
 <style>
@@ -117,11 +108,15 @@
 .btn-del:hover{background:#800016}
 .btn-merge{background:#856404;color:#fff;border:none}
 .btn-merge:hover{background:#664e03}
-.btn-disabled{opacity:.4;cursor:default;pointer-events:none}
-.btn-assign{background:#1a6eb5;color:#fff;border:none}
-.btn-assign:hover{background:#0d4a80}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 .evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
+.col-addr{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
+.col-coords{font-size:.78rem;white-space:nowrap;font-family:monospace;color:#666}
+.col-updated{font-size:.82rem;white-space:nowrap;color:#888}
+.muted{color:#888}
+.loc-name-link{color:inherit;text-decoration:none}
+.loc-name-link:hover{text-decoration:underline;color:var(--link,#1a6eb5)}
+@media(max-width:900px){.col-addr,.col-coords,.col-updated{display:none}}
 </style>
 
 <script>
@@ -135,17 +130,22 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
   var orgs =unique(rows.map(function(r){return r.dataset.org||'';}));
   var tSel=document.getElementById('filter-town');
   var oSel=document.getElementById('filter-org');
+  var searchEl=document.getElementById('loc-search');
   towns.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;tSel.appendChild(o);});
   orgs.forEach(function(o){var el=document.createElement('option');el.value=o;el.textContent=o;oSel.appendChild(el);});
   function applyFilters(){
-    var t=tSel.value, o=oSel.value;
+    var t=tSel.value, o=oSel.value, q=searchEl.value.trim().toLowerCase();
     rows.forEach(function(r){
-      r.style.display=(!t||r.dataset.town===t)&&(!o||r.dataset.org===o)?'':'none';
+      var matchT=!t||r.dataset.town===t;
+      var matchO=!o||r.dataset.org===o;
+      var matchQ=!q||(r.dataset.search||'').toLowerCase().indexOf(q)>=0;
+      r.style.display=(matchT&&matchO&&matchQ)?'':'none';
     });
   }
   tSel.addEventListener('change',applyFilters);
   oSel.addEventListener('change',applyFilters);
-  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';applyFilters();});
+  searchEl.addEventListener('input',applyFilters);
+  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';searchEl.value='';applyFilters();});
 })();
 function delLocation(id) {
   var f = document.createElement('form');

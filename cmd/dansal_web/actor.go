@@ -255,17 +255,32 @@ func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
-func buildNodeInfo(cfg *Config, version string) NodeInfo {
+func buildNodeInfo(cfg *Config, schemaVersion string, info DansalInfo) NodeInfo {
+	repo := cfg.NodeInfoRepository
+	if repo == "" {
+		repo = "https://github.com/ademant/dansal"
+	}
+	homepage := cfg.NodeInfoHomepage
+	if homepage == "" {
+		homepage = cfg.publicBaseURL()
+	}
 	ni := NodeInfo{
-		Version: version,
+		Version: schemaVersion,
 		Software: NodeInfoSoftware{
-			Name:    "dansal-web",
-			Version: "1.0.0",
+			Name:       "dansal",
+			Version:    Version,
+			Repository: repo,
+			Homepage:   homepage,
 		},
 		Protocols:         []string{"activitypub"},
 		OpenRegistrations: false,
+		Usage: NodeInfoUsage{
+			LocalPosts:    info.PublishedEvents,
+			LocalComments: info.BoardEntries,
+		},
 	}
-	if version == "2.1" {
+	ni.Usage.Users.Total = info.TotalUsers
+	if schemaVersion == "2.1" {
 		var meta *NodeInfoMetadata
 		if cfg.NodeInfoDescription != "" || cfg.NodeInfoMaintainerName != "" || cfg.NodeInfoMaintainerEmail != "" {
 			meta = &NodeInfoMetadata{NodeDescription: cfg.NodeInfoDescription}
@@ -281,17 +296,19 @@ func buildNodeInfo(cfg *Config, version string) NodeInfo {
 	return ni
 }
 
-func nodeinfoHandler(cfg *Config) http.HandlerFunc {
+func nodeinfoHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ni := buildNodeInfo(cfg, "2.0")
+		info, _ := client.GetServiceInfo(r.Context())
+		ni := buildNodeInfo(cfg, "2.0", info)
 		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.0#"`)
 		json.NewEncoder(w).Encode(ni)
 	}
 }
 
-func nodeinfo21Handler(cfg *Config) http.HandlerFunc {
+func nodeinfo21Handler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ni := buildNodeInfo(cfg, "2.1")
+		info, _ := client.GetServiceInfo(r.Context())
+		ni := buildNodeInfo(cfg, "2.1", info)
 		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"`)
 		json.NewEncoder(w).Encode(ni)
 	}

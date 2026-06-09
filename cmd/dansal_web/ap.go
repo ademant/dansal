@@ -162,8 +162,11 @@ type NodeInfoSoftware struct {
 
 type NodeInfoUsage struct {
 	Users struct {
-		Total int `json:"total"`
+		Total       int `json:"total"`
+		ActiveMonth int `json:"activeMonth,omitempty"`
 	} `json:"users"`
+	LocalPosts    int `json:"localPosts"`
+	LocalComments int `json:"localComments"`
 }
 
 type NodeInfoMaintainer struct {

@@ -60,6 +60,17 @@ show_federated_events: false
 nodeinfo_description: ""
 nodeinfo_maintainer_name: ""
 nodeinfo_maintainer_email: ""
+# nodeinfo_repository: ""   # defaults to https://github.com/ademant/dansal
+# nodeinfo_homepage: ""     # defaults to the instance base URL
+
+# Security contact served at /.well-known/security.txt (RFC 9116).
+# Use a mailto: or https: URL. Leave blank to disable the endpoint.
+# security_contact: ""
+# security_policy: ""
+
+# Directory for legal documents in Markdown format.
+# Place impressum.md, privacy.md, terms.md, contact.md here.
+# legal_dir: /etc/dansal/legal
 
 # --- Appearance ---
 

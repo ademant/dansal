@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"html"
 	"html/template"
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v2"
 )
 
@@ -63,4 +66,22 @@ func (pc *PagesContent) ImpressumHTML(lang string) template.HTML {
 		return ""
 	}
 	return template.HTML(`<pre class="impressum-text">` + html.EscapeString(text) + `</pre>`)
+}
+
+// LegalMarkdownHTML reads {dir}/{name}.md, renders it as sanitised HTML.
+// Returns "" when the file does not exist or dir is empty.
+func LegalMarkdownHTML(dir, name string) template.HTML {
+	if dir == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name+".md"))
+	if err != nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := goldmark.Convert(data, &buf); err != nil {
+		log.Printf("legal markdown %s: render error: %v", name, err)
+		return template.HTML(`<pre>` + html.EscapeString(string(data)) + `</pre>`)
+	}
+	return template.HTML(sanitizeMarkdownHTML(buf.String()))
 }

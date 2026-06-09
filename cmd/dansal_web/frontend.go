@@ -1602,6 +1602,8 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 		var body template.HTML
 		if text := siteCfg.Impressum()[lang]; text != "" {
 			body = template.HTML(`<pre class="impressum-text">` + template.HTMLEscapeString(text) + `</pre>`)
+		} else if md := LegalMarkdownHTML(cfg.LegalDir, "impressum"); md != "" {
+			body = md
 		} else {
 			body = cfg.pagesContent.ImpressumHTML(lang)
 		}
@@ -1610,6 +1612,18 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 			return
 		}
 		title := i18n.T(r, "nav_impressum")
+		renderTemplate(w, tmpls.impressum, tmplData(r, cfg, i18n, title, body))
+	}
+}
+
+func legalPageHandler(cfg *Config, tmpls *Templates, i18n *I18n, file, titleKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body := LegalMarkdownHTML(cfg.LegalDir, file)
+		if body == "" {
+			http.NotFound(w, r)
+			return
+		}
+		title := i18n.T(r, titleKey)
 		renderTemplate(w, tmpls.impressum, tmplData(r, cfg, i18n, title, body))
 	}
 }

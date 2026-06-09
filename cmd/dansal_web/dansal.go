@@ -42,6 +42,7 @@ type DansalClient struct {
 	musiciansCache cacheEntry[[]Musician]
 	locationsCache cacheEntry[[]Location]
 	eventsCache    cacheEntry[[]Event]
+	infoCache      cacheEntry[DansalInfo]
 }
 
 // cached fetches from cache when fresh; otherwise calls fetch and stores the result.
@@ -2294,9 +2295,18 @@ type DansalInfo struct {
 	TotalEvents             int    `json:"total_events"`
 	PublishedEvents         int    `json:"published_events"`
 	UpcomingEvents          int    `json:"upcoming_events"`
+	TotalUsers              int    `json:"total_users"`
+	BoardEntries            int    `json:"board_entries"`
 	DBSizeBytes             int64  `json:"db_size_bytes"`
 	ImagesSizeBytes         int64  `json:"images_size_bytes"`
 	SelfRegistrationEnabled bool   `json:"self_registration_enabled"`
+}
+
+func (c *DansalClient) GetServiceInfo(ctx context.Context) (DansalInfo, error) {
+	return cached(&c.mu, &c.infoCache, 10*time.Minute, func() (DansalInfo, error) {
+		var info DansalInfo
+		return info, c.get(ctx, "/api/v1/info", &info)
+	})
 }
 
 type PendingRegistration struct {

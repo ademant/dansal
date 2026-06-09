@@ -18,12 +18,15 @@ type Config struct {
 	PollSecs  int    `yaml:"poll_secs"`
 	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
 	PagesFile string `yaml:"pages_file"` // optional path to impressum/contact YAML
+	LegalDir  string `yaml:"legal_dir"`  // optional directory for legal markdown files (impressum.md, privacy.md, terms.md, contact.md)
 	HelpDir   string `yaml:"help_dir"`   // optional path to per-language help markdown overrides, e.g. /etc/dansal/help
 
 	// NodeInfo metadata (served at /nodeinfo/2.1)
 	NodeInfoDescription     string `yaml:"nodeinfo_description"`
 	NodeInfoMaintainerName  string `yaml:"nodeinfo_maintainer_name"`
 	NodeInfoMaintainerEmail string `yaml:"nodeinfo_maintainer_email"`
+	NodeInfoRepository      string `yaml:"nodeinfo_repository"` // defaults to the dansal GitHub repo
+	NodeInfoHomepage        string `yaml:"nodeinfo_homepage"`   // defaults to the instance base URL
 
 	// Security contact (served at /.well-known/security.txt per RFC 9116)
 	SecurityContact string `yaml:"security_contact"` // mailto: or https: URL

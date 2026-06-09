@@ -121,6 +121,21 @@ if [[ $USE_LOCAL_MTA == false ]]; then
     fi
 fi
 
+# ── instance identity ─────────────────────────────────────────────────────────
+
+section "Instance identity (NodeInfo / federation metadata)"
+info "These appear in fediverse crawlers and federation directories."
+info "All fields are optional — press Enter to skip."
+echo
+ask_optional NODEINFO_DESCRIPTION    "Instance description (one line)"
+ask_optional NODEINFO_MAINTAINER_NAME  "Maintainer name"
+ask_optional NODEINFO_MAINTAINER_EMAIL "Maintainer email"
+
+section "Security contact (/.well-known/security.txt)"
+info "Used by security researchers to report vulnerabilities."
+info "Enter a mailto: or https: URL, or leave blank to disable."
+ask_optional SECURITY_CONTACT "Security contact"
+
 # ── mTLS for webmin ───────────────────────────────────────────────────────────
 
 section "Webmin mTLS"
@@ -155,6 +170,8 @@ else
 fi
 echo "  mTLS     : ${MTLS}"
 echo "  Certbot  : ${CERTBOT}"
+[[ -n $SECURITY_CONTACT ]] && echo "  Security : ${SECURITY_CONTACT}"
+[[ -n $NODEINFO_DESCRIPTION ]] && echo "  NodeInfo : ${NODEINFO_DESCRIPTION}"
 echo
 ask_yn "Proceed?" y || { echo "Aborted."; exit 0; }
 
@@ -194,6 +211,11 @@ if [[ $USE_LOCAL_MTA == true ]]; then
 elif [[ -n $SMTP_HOST ]]; then
     sed -i "s|# smtp_host: \"\"|smtp_host: \"${SMTP_HOST}\"|" "$WEB"
 fi
+
+[[ -n $NODEINFO_DESCRIPTION    ]] && sed -i "s|^nodeinfo_description: \"\"|nodeinfo_description: \"${NODEINFO_DESCRIPTION}\"|" "$WEB"
+[[ -n $NODEINFO_MAINTAINER_NAME  ]] && sed -i "s|^nodeinfo_maintainer_name: \"\"|nodeinfo_maintainer_name: \"${NODEINFO_MAINTAINER_NAME}\"|" "$WEB"
+[[ -n $NODEINFO_MAINTAINER_EMAIL ]] && sed -i "s|^nodeinfo_maintainer_email: \"\"|nodeinfo_maintainer_email: \"${NODEINFO_MAINTAINER_EMAIL}\"|" "$WEB"
+[[ -n $SECURITY_CONTACT ]] && sed -i "s|# security_contact: \"\"|security_contact: \"${SECURITY_CONTACT}\"|" "$WEB"
 
 # ── patch webmin.yaml ─────────────────────────────────────────────────────────
 

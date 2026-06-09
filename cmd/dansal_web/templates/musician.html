@@ -95,9 +95,10 @@
     <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
     <div class="event-meta">
       {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-      {{if .LocationShortName}}
-        &mdash; {{.LocationShortName}}{{if .LocationAddress}}, {{.LocationAddress}}{{end}}{{if .LocationTown}}, {{.LocationTown}}{{end}}
-      {{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+      {{with .Location}}
+        {{if .ShortName}} &mdash; {{.ShortName}}{{if .Address}}, {{.Address}}{{end}}{{if .Town}}, {{.Town}}{{end}}
+        {{else if .Location}} &mdash; {{.Location}}{{else if .Town}} &mdash; {{.Town}}{{end}}
+      {{end}}
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}

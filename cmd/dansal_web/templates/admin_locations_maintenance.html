@@ -537,13 +537,24 @@ document.getElementById('lov-geocode').addEventListener('click', function(){
 });
 
 // ── Autofill missing address fields from coordinates (reverse geocode) ──
+// Region/state names are requested in the country's local language (e.g. "Bayern"
+// instead of "Bavaria" for Germany), since that's what local organizers expect.
+var REGION_LANG = {
+  DE:'de', AT:'de', CH:'de,fr,it', LI:'de',
+  FR:'fr', BE:'nl,fr', LU:'fr,de', MC:'fr',
+  NL:'nl', ES:'es', PT:'pt', AD:'ca',
+  IT:'it', SM:'it', VA:'it',
+  DK:'da', SE:'sv', NO:'no', FI:'fi,sv',
+  PL:'pl', CZ:'cs', SK:'sk', HU:'hu', RO:'ro'
+};
 document.getElementById('lov-autofill').addEventListener('click', function(){
   var lat = parseFloat(fieldEl('latitude').value);
   var lon = parseFloat(fieldEl('longitude').value);
   if(isNaN(lat) || isNaN(lon)){ lovStatus.textContent = 'Set coordinates first'; lovStatus.className = 'lov-status err'; return; }
   lovStatus.textContent = 'Looking up address…';
   lovStatus.className = 'lov-status';
-  fetch('https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' + lat + '&lon=' + lon, {
+  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' + lat + '&lon=' + lon;
+  fetch(url, {
     headers: {'Accept-Language':'en'}
   }).then(function(r){ return r.json(); }).then(function(item){
     if(!item || item.error){ lovStatus.textContent = 'No result found'; lovStatus.className = 'lov-status err'; return; }
@@ -552,18 +563,35 @@ document.getElementById('lov-autofill').addEventListener('click', function(){
     function fill(field, val){
       if(val && !fieldEl(field).value){ fieldEl(field).value = val; filled.push(field); }
     }
+    function finish(){
+      markChanged();
+      if(filled.length){
+        lovStatus.textContent = '✓ ' + filled.join(', ');
+        lovStatus.className = 'lov-status ok';
+      } else {
+        lovStatus.textContent = 'Nothing to fill in';
+        lovStatus.className = 'lov-status ok';
+      }
+    }
     fill('zipcode', a.postcode || '');
     fill('town', a.city || a.town || a.village || a.hamlet || a.municipality || '');
-    fill('region', a.state || a.county || '');
     fill('country', a.country || '');
     fill('country_code', (a.country_code || '').toUpperCase());
-    markChanged();
-    if(filled.length){
-      lovStatus.textContent = '✓ ' + filled.join(', ');
-      lovStatus.className = 'lov-status ok';
+
+    var cc = (fieldEl('country_code').value || a.country_code || '').toUpperCase();
+    var lang = REGION_LANG[cc];
+    if(!fieldEl('region').value && (a.state || a.county) && lang){
+      fetch(url, {headers: {'Accept-Language': lang}}).then(function(r2){ return r2.json(); }).then(function(item2){
+        var a2 = (item2 && item2.address) || {};
+        fill('region', a2.state || a2.county || a.state || a.county || '');
+        finish();
+      }).catch(function(){
+        fill('region', a.state || a.county || '');
+        finish();
+      });
     } else {
-      lovStatus.textContent = 'Nothing to fill in';
-      lovStatus.className = 'lov-status ok';
+      fill('region', a.state || a.county || '');
+      finish();
     }
   }).catch(function(){ lovStatus.textContent = 'Lookup failed'; lovStatus.className = 'lov-status err'; });
 });

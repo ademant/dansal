@@ -867,21 +867,15 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 
 		if len(req.Musicians) > 0 {
 			q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
-			for _, musicianID := range req.Musicians {
-				q.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
-			}
+			batchInsertPairs(q, "event_musicians", "event_id", "musician_id", id, req.Musicians)
 		}
 		if len(req.Instructors) > 0 {
 			q.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
-			for _, instrID := range req.Instructors {
-				q.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", id, instrID)
-			}
+			batchInsertPairs(q, "event_instructors", "event_id", "instructor_id", id, req.Instructors)
 		}
 		if len(req.Dances) > 0 {
 			q.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
-			for _, danceID := range req.Dances {
-				q.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
-			}
+			batchInsertPairs(q, "event_dances", "event_id", "dance_id", id, req.Dances)
 		}
 		syncEventTags(q, id, req.Tags)
 
@@ -1003,14 +997,31 @@ func syncEventTypeTags(w *EventWriteRequest) {
 	}
 }
 
+// batchInsertPairs inserts (leftID, rightVal) rows into a junction table with
+// a single multi-row INSERT, avoiding one query per row.
+func batchInsertPairs[T any](q querier, table, leftCol, rightCol string, leftID int, rightVals []T) {
+	if len(rightVals) == 0 {
+		return
+	}
+	placeholders := make([]string, len(rightVals))
+	args := make([]any, 0, len(rightVals)*2)
+	for i, v := range rightVals {
+		placeholders[i] = "(?, ?)"
+		args = append(args, leftID, v)
+	}
+	q.Exec("INSERT OR IGNORE INTO "+table+" ("+leftCol+", "+rightCol+") VALUES "+strings.Join(placeholders, ","), args...)
+}
+
 // syncEventTags replaces all event_tags rows for eventID with the given tags.
 func syncEventTags(q querier, eventID int, tags []string) {
 	q.Exec("DELETE FROM event_tags WHERE event_id = ?", eventID)
+	clean := make([]string, 0, len(tags))
 	for _, tag := range tags {
 		if t := strings.TrimSpace(tag); t != "" {
-			q.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) VALUES (?, ?)", eventID, t)
+			clean = append(clean, t)
 		}
 	}
+	batchInsertPairs(q, "event_tags", "event_id", "tag", eventID, clean)
 }
 
 // fetchEventLocation returns the primary location for an event as a full
@@ -1606,17 +1617,11 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
-	for _, musicianID := range req.Musicians {
-		tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
-	}
+	batchInsertPairs(tx, "event_musicians", "event_id", "musician_id", id, req.Musicians)
 	tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
-	for _, instrID := range req.Instructors {
-		tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", id, instrID)
-	}
+	batchInsertPairs(tx, "event_instructors", "event_id", "instructor_id", id, req.Instructors)
 	tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
-	for _, danceID := range req.Dances {
-		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
-	}
+	batchInsertPairs(tx, "event_dances", "event_id", "dance_id", id, req.Dances)
 	syncEventTags(tx, id, req.Tags)
 
 	if err := tx.Commit(); err != nil {
@@ -2280,16 +2285,16 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if req.AddTags != nil {
+			clean := make([]string, 0, len(req.AddTags))
 			for _, t := range req.AddTags {
 				if t = strings.TrimSpace(t); t != "" {
-					db.Exec("INSERT OR IGNORE INTO event_tags (event_id, tag) VALUES (?, ?)", id, t)
+					clean = append(clean, t)
 				}
 			}
+			batchInsertPairs(db, "event_tags", "event_id", "tag", id, clean)
 		}
 		if req.AddDances != nil {
-			for _, did := range req.AddDances {
-				db.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, did)
-			}
+			batchInsertPairs(db, "event_dances", "event_id", "dance_id", id, req.AddDances)
 		}
 		if req.Food != nil {
 			db.Exec("UPDATE events SET food=? WHERE id=?", *req.Food, id)

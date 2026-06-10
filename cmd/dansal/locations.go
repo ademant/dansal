@@ -144,9 +144,7 @@ func parseOrgIDs(s string) []int {
 
 func syncLocationOrgs(locationID int, orgIDs []int) {
 	db.Exec("DELETE FROM location_organizations WHERE location_id = ?", locationID)
-	for _, orgID := range orgIDs {
-		db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locationID, orgID)
-	}
+	batchInsertPairs(db, "location_organizations", "location_id", "organization_id", locationID, orgIDs)
 }
 
 func locationHasOrgMember(locationID, userID int) bool {

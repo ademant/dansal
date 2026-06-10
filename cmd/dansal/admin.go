@@ -1035,7 +1035,7 @@ func adminImportLocationsGeoJSON(req adminRequest) adminResponse {
 			}
 			updated++
 			// Update organization assignments
-			updateLocationOrganizations(existingID, loc.OrganizationIDs)
+			syncLocationOrgs(existingID, loc.OrganizationIDs)
 		} else {
 			// Insert new location
 			if err := insertLocation(loc); err != nil {
@@ -1222,12 +1222,3 @@ func insertLocation(loc Location) error {
 	return err
 }
 
-func updateLocationOrganizations(locationID int, orgIDs []int) {
-	// Clear existing assignments
-	db.Exec("DELETE FROM location_organizations WHERE location_id = ?", locationID)
-
-	// Add new assignments
-	for _, orgID := range orgIDs {
-		db.Exec("INSERT INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locationID, orgID)
-	}
-}

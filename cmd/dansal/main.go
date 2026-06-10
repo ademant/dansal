@@ -1395,6 +1395,9 @@ func migrateDB() {
 			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',          'Advanced',          'level')")
 		}
 	}
+	// Index for location_organizations(location_id), used by syncLocationOrgs
+	// deletes and location merge/lookup queries.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1891,6 +1894,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_org_members_user_id    ON organization_members(user_id);
 	CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id);
+	CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
 	CREATE TABLE IF NOT EXISTS pending_registrations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

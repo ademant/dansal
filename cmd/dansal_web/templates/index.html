@@ -18,18 +18,6 @@
     <option value="">All dance styles</option>
     {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
   </select>
-  <select id="f-fee" aria-label="{{$.Strings.T "filter_all_fees"}}">
-    <option value="">{{$.Strings.T "filter_all_fees"}}</option>
-    <option value="free">{{$.Strings.T "filter_fee_free"}}</option>
-    <option value="donation">{{$.Strings.T "filter_fee_donation"}}</option>
-    <option value="paid">{{$.Strings.T "filter_fee_paid"}}</option>
-  </select>
-  <select id="f-parking" aria-label="{{$.Strings.T "filter_all_parking"}}">
-    <option value="">{{$.Strings.T "filter_all_parking"}}</option>
-    <option value="free">{{$.Strings.T "parking_free"}}</option>
-    <option value="paid">{{$.Strings.T "parking_paid"}}</option>
-    <option value="none">{{$.Strings.T "parking_none"}}</option>
-  </select>
 </div>
 
 <!-- Map -->
@@ -71,6 +59,7 @@
       data-title="{{.Title}}"
       data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
       data-country="{{if .Location}}{{.Location.Country}}{{end}}"
+      data-region="{{if .Location}}{{.Location.Region}}{{end}}"
       data-ball="{{if .HasBall}}1{{else}}0{{end}}"
       data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
       data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
@@ -89,8 +78,7 @@
       data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
       data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
       data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
-      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}"
-      data-parking="{{if .Location}}{{.Location.Parking}}{{end}}">
+      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{with isoTime .StartTime}}<span class="date-time">{{.}}</span>{{end}}
@@ -321,9 +309,10 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
   var HOLIDAYS = new Set({{.Data.HolidayDates}});
-  var regionCountry = '', regionTown = '';
+  var regionCountry = '', regionState = '', regionTown = '';
   var REGION = {
     allCountries: "{{$.Strings.T "filter_all_countries"}}",
+    allStates: "{{$.Strings.T "filter_all_states"}}",
     allTowns: "{{$.Strings.T "filter_all_towns"}}"
   };
 
@@ -756,10 +745,38 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if(sortedC.length === 0){ bar.hidden=true; return; }
     var html = '<select id="f-country"><option value="">'+escHtml(REGION.allCountries)+'</option>';
     sortedC.forEach(function(c){ html+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; });
-    html += '</select><span id="region-town-wrap" hidden><span class="region-sep"> ›</span> <select id="f-town"><option value="">'+escHtml(REGION.allTowns)+'</option></select></span>';
+    html += '</select>';
+    html += '<span id="region-state-wrap" hidden><span class="region-sep"> ›</span> <select id="f-state"><option value="">'+escHtml(REGION.allStates)+'</option></select></span>';
+    html += '<span id="region-town-wrap" hidden><span class="region-sep"> ›</span> <select id="f-town"><option value="">'+escHtml(REGION.allTowns)+'</option></select></span>';
     bar.innerHTML = html;
     document.getElementById('f-country').addEventListener('change', function(){
       regionCountry = this.value;
+      regionState = '';
+      regionTown = '';
+      updateStateDropdown();
+      updateTownDropdown();
+      mapFitted = false;
+      applyFilters();
+    });
+  }
+
+  function updateStateDropdown(){
+    var wrap = document.getElementById('region-state-wrap');
+    if(!regionCountry){ wrap.hidden=true; return; }
+    var states = {};
+    rows.forEach(function(r){
+      if((r.dataset.country||'')===regionCountry){ var s=r.dataset.region||''; if(s) states[s]=1; }
+    });
+    var sorted = Object.keys(states).sort();
+    if(sorted.length === 0){ wrap.hidden=true; return; }
+    var sel = document.getElementById('f-state');
+    var html = '<option value="">'+escHtml(REGION.allStates)+'</option>';
+    sorted.forEach(function(s){ html+='<option value="'+escHtml(s)+'">'+escHtml(s)+'</option>'; });
+    sel.innerHTML = html;
+    sel.value = regionState;
+    wrap.hidden = false;
+    sel.addEventListener('change', function(){
+      regionState = this.value;
       regionTown = '';
       updateTownDropdown();
       mapFitted = false;
@@ -772,7 +789,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if(!regionCountry){ wrap.hidden=true; return; }
     var towns = {};
     rows.forEach(function(r){
-      if((r.dataset.country||'')===regionCountry){ var t=r.dataset.town||''; if(t) towns[t]=1; }
+      if((r.dataset.country||'')!==regionCountry) return;
+      if(regionState && (r.dataset.region||'')!==regionState) return;
+      var t=r.dataset.town||''; if(t) towns[t]=1;
     });
     var sorted = Object.keys(towns).sort();
     var sel = document.getElementById('f-town');
@@ -791,13 +810,12 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
     document.getElementById('f-dance').value    = '';
-    document.getElementById('f-fee').value      = '';
-    document.getElementById('f-parking').value  = '';
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
-    regionCountry = ''; regionTown = '';
+    regionCountry = ''; regionState = ''; regionTown = '';
     var fc = document.getElementById('f-country');
     if(fc) fc.value = '';
+    updateStateDropdown();
     updateTownDropdown();
     mapFitted=false;
     applyFilters();
@@ -805,8 +823,6 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
   function applyFilters(){
     var dance          = document.getElementById('f-dance').value.toLowerCase();
-    var feeFilter      = document.getElementById('f-fee').value;
-    var parkingFilter  = document.getElementById('f-parking').value;
     var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
     var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
 
@@ -824,11 +840,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
         var dances = (r.dataset.dances||'').toLowerCase();
         if(dances.indexOf(dance)<0) return false;
       }
-      // Fee filter: unknown fee events (data-fee="") are not excluded by this filter
-      if(feeFilter && r.dataset.fee && r.dataset.fee!==feeFilter) return false;
-      // Parking filter: events with no parking data are not excluded
-      if(parkingFilter && r.dataset.parking && r.dataset.parking!==parkingFilter) return false;
       if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
+      if(regionState   && (r.dataset.region||'')!==regionState)   return false;
       if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
       return true;
     });
@@ -893,7 +906,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
   });
 
-  ['f-dance','f-fee','f-parking'].forEach(function(id){
+  ['f-dance'].forEach(function(id){
     var el=document.getElementById(id);
     el.addEventListener('input',  applyFilters);
     el.addEventListener('change', applyFilters);

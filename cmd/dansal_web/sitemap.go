@@ -11,8 +11,8 @@ import (
 
 // sitemapXML is the root element of a sitemap document.
 type sitemapXML struct {
-	XMLName xml.Name    `xml:"urlset"`
-	NS      string      `xml:"xmlns,attr"`
+	XMLName xml.Name     `xml:"urlset"`
+	NS      string       `xml:"xmlns,attr"`
 	URLs    []sitemapURL `xml:"url"`
 }
 

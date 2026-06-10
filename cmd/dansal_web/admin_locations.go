@@ -69,7 +69,7 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		var editableIDs map[int]bool
 		var userOrgs []Organization
 		if !isAdmin {
-			userOrgIDs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs)
+			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
 			userOrgSet := map[int]bool{}
 			for _, id := range userOrgIDs {
 				userOrgSet[id] = true
@@ -232,7 +232,7 @@ func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 		if user.Role != "admin" {
 			token := getSessionToken(r)
 			orgs, _ := client.GetOrganizations(r.Context())
-			userOrgIDs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs)
+			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
 			userOrgSet := map[int]bool{}
 			for _, id := range userOrgIDs {
 				userOrgSet[id] = true

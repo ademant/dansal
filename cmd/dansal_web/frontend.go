@@ -1127,7 +1127,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				if su.Role == "admin" {
 					userOrgs = allOrgs
 				} else {
-					orgIDs := getUserOrgIDsFromOrgs(r.Context(), client, su.ID, token, allOrgs)
+					orgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
 					idSet := make(map[int]bool, len(orgIDs))
 					for _, oid := range orgIDs {
 						idSet[oid] = true
@@ -1182,24 +1182,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			NextEvent:         nextEvent,
 		}))
 	}
-}
-
-// getUserOrgIDsFromOrgs returns org IDs the given user belongs to, given an already-fetched org list.
-func getUserOrgIDsFromOrgs(ctx context.Context, client *DansalClient, userID int, token string, allOrgs []Organization) []int {
-	var ids []int
-	for _, o := range allOrgs {
-		members, err := client.GetOrganizationMembers(ctx, o.ID, token)
-		if err != nil {
-			continue
-		}
-		for _, m := range members {
-			if m.UserID == userID {
-				ids = append(ids, o.ID)
-				break
-			}
-		}
-	}
-	return ids
 }
 
 func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
@@ -1578,8 +1560,12 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 		posts, _ := client.GetAllContactPosts(r.Context(), params)
 
-		// Always fetch the unfiltered list once to populate the town dropdown.
-		allPosts, _ := client.GetAllContactPosts(r.Context(), url.Values{})
+		// Reuse posts for the town dropdown when no filter narrowed the
+		// results; only fetch the unfiltered list separately if needed.
+		allPosts := posts
+		if len(params) > 0 {
+			allPosts, _ = client.GetAllContactPosts(r.Context(), url.Values{})
+		}
 		townSet := map[string]struct{}{}
 		for _, p := range allPosts {
 			if p.Event != nil && p.Event.Town != "" {

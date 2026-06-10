@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -238,6 +239,31 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(user)
+}
+
+// GET /api/v1/users/{id}/organizations - IDs of organizations the user belongs to
+func getUserOrganizations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	requesterID, requesterRole := callerFromRequest(r)
+	if requesterRole != RoleAdmin && requesterID != targetID {
+		writeError(w, "Forbidden: only the user or an admin may view this", http.StatusForbidden)
+		return
+	}
+
+	orgSet := userOrgSet(targetID)
+	ids := make([]int, 0, len(orgSet))
+	for id := range orgSet {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	json.NewEncoder(w).Encode(map[string][]int{"organization_ids": ids})
 }
 
 // PUT /api/v1/users/{id} - Update user

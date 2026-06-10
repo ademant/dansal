@@ -753,20 +753,7 @@ func orgIDSet(ids []int) map[int]bool {
 
 // getUserOrgIDs returns the IDs of all organisations the given user belongs to.
 func getUserOrgIDs(ctx context.Context, client *DansalClient, userID int, token string) []int {
-	orgs, _ := client.GetOrganizations(ctx)
-	var ids []int
-	for _, o := range orgs {
-		members, err := client.GetOrganizationMembers(ctx, o.ID, token)
-		if err != nil {
-			continue
-		}
-		for _, m := range members {
-			if m.UserID == userID {
-				ids = append(ids, o.ID)
-				break
-			}
-		}
-	}
+	ids, _ := client.GetUserOrganizationIDs(ctx, userID, token)
 	return ids
 }
 

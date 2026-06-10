@@ -2225,6 +2225,7 @@ func main() {
 	smux.Handle("POST /api/v1/users", auth(createUser))
 	smux.Handle("DELETE /api/v1/users/me", auth(deleteOwnAccount))
 	smux.Handle("GET /api/v1/users/{id}", auth(getUser))
+	smux.Handle("GET /api/v1/users/{id}/organizations", auth(getUserOrganizations))
 	smux.Handle("PUT /api/v1/users/{id}", auth(updateUser))
 	smux.Handle("DELETE /api/v1/users/{id}", auth(deleteUser))
 	smux.Handle("GET /api/v1/pending-invites", auth(listPendingInvites))

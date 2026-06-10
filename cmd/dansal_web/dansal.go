@@ -1674,6 +1674,25 @@ func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, to
 	return members, json.NewDecoder(resp.Body).Decode(&members)
 }
 
+// GetUserOrganizationIDs returns the IDs of all organizations the given user belongs to.
+func (c *DansalClient) GetUserOrganizationIDs(ctx context.Context, userID int, token string) ([]int, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/users/%d/organizations", userID), token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var result struct {
+		OrganizationIDs []int `json:"organization_ids"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.OrganizationIDs, nil
+}
+
 // ── contact board ────────────────────────────────────────────────────────────
 
 type ContactPost struct {

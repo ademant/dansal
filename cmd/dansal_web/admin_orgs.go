@@ -116,7 +116,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		// For non-admins, build their org membership set to show edit button per org.
 		myOrgIDs := map[int]bool{}
 		if !isAdmin {
-			for _, id := range getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, orgs) {
+			for _, id := range getUserOrgIDs(r.Context(), client, user.ID, token) {
 				myOrgIDs[id] = true
 			}
 		}
@@ -229,8 +229,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		token := getSessionToken(r)
 		// Non-admins may only edit orgs they belong to.
 		if user.Role != "admin" {
-			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{org})
-			if len(myOrgs) == 0 {
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[org.ID] {
 				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
 				return
 			}
@@ -461,8 +460,7 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				http.NotFound(w, r)
 				return
 			}
-			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{org})
-			if len(myOrgs) == 0 {
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[org.ID] {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -510,8 +508,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		}
 		token := getSessionToken(r)
 		if user.Role != "admin" {
-			myOrgs := getUserOrgIDsFromOrgs(r.Context(), client, user.ID, token, []Organization{originalOrg})
-			if len(myOrgs) == 0 {
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[originalOrg.ID] {
 				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
 				return
 			}

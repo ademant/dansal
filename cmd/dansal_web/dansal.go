@@ -320,6 +320,7 @@ type Location struct {
 	Internetsite    string          `json:"internetsite"`
 	OsmID           *int64          `json:"osm_id,omitempty"`
 	OsmType         string          `json:"osm_type,omitempty"`
+	Geohash         string          `json:"geohash,omitempty"`
 	CreatedAt       string          `json:"created_at"`
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`
 	NotesMd         string          `json:"notes_md,omitempty"`

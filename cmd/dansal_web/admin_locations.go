@@ -178,7 +178,7 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			Region:          strings.TrimSpace(r.FormValue("region")),
 			Latitude:        parseLatLng(r.FormValue("latitude")),
 			Longitude:       parseLatLng(r.FormValue("longitude")),
-			Internetsite:    existing.Internetsite,
+			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
 			OsmID:           existing.OsmID,
 			OsmType:         existing.OsmType,
 			OrganizationIDs: existing.OrganizationIDs,

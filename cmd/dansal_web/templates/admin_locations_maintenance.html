@@ -30,16 +30,21 @@
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
 
-<div class="table-wrap">
+<div class="table-wrap loc-table-wrap">
 <table class="event-table" id="loc-table" data-sortable>
   <thead>
     <tr>
       <th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
+      <th data-sort="str" class="col-shortname">{{$.Strings.T "loc_short_name"}}</th>
       <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
-      <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
-      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="str" class="col-addr">{{$.Strings.T "loc_address"}}</th>
+      <th data-sort="str" class="col-zip">{{$.Strings.T "loc_zipcode"}}</th>
+      <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
+      <th data-sort="str" class="col-region">{{$.Strings.T "loc_region"}}</th>
+      <th data-sort="str" class="col-country">{{$.Strings.T "loc_country"}}</th>
+      <th class="col-geohash">{{$.Strings.T "loc_geohash"}}</th>
       <th class="col-coords">{{$.Strings.T "loc_coordinates"}}</th>
+      <th data-sort="str" class="col-org">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="num" class="col-updated">{{$.Strings.T "loc_updated"}}</th>
       <th title="Geo / Town / Website / Events">✓</th>
       <th></th>
@@ -49,20 +54,24 @@
   {{range .Locations}}
   {{$orgName := ""}}
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
-  {{$displayName := .Location}}{{if .ShortName}}{{$displayName = .ShortName}}{{end}}
   {{$coordStr := ""}}{{if and .Latitude .Longitude}}{{$coordStr = printf "%s, %s" (floatVal .Latitude) (floatVal .Longitude)}}{{end}}
-  <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-search="{{$displayName}} {{.Town}} {{.Address}} {{.CountryCode}} {{$orgName}}" data-updated="{{.UpdatedAt}}" data-id="{{.ID}}">
+  <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-search="{{.ShortName}} {{.Location}} {{.Town}} {{.Address}} {{.CountryCode}} {{.Region}} {{$orgName}}" data-updated="{{.UpdatedAt}}" data-id="{{.ID}}">
     <td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>
-    <td data-val="{{$displayName}}"><a href="/admin/locations/{{.ID}}/edit" class="loc-name-link">{{$displayName}}</a></td>
-    <td>{{.Town}}</td>
-    <td>{{$orgName}}</td>
+    <td class="col-shortname muted">{{.ShortName}}</td>
+    <td class="col-name"><a href="/admin/locations/{{.ID}}/edit" class="loc-name-link">{{.Location}}</a></td>
     <td class="col-addr muted">{{.Address}}</td>
+    <td class="col-zip muted">{{.Zipcode}}</td>
+    <td class="col-town">{{.Town}}</td>
+    <td class="col-region muted">{{.Region}}</td>
+    <td class="col-country">{{if .CountryCode}}<span class="cc-badge" title="{{.Country}}">{{.CountryCode}}</span>{{end}}</td>
+    <td class="col-geohash muted">{{.Geohash}}</td>
     <td class="col-coords muted">{{$coordStr}}</td>
+    <td class="col-org">{{$orgName}}</td>
     <td class="col-updated muted" data-val="{{.UpdatedAt}}">{{if .UpdatedAt}}{{fmtUnix .UpdatedAt}}{{end}}</td>
     <td class="ind-cell">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
       <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
-      <span class="ind {{if .Internetsite}}ind-ok{{else}}ind-no{{end}}" title="Website">🔗</span>
+      <span class="ind ind-website {{if .Internetsite}}ind-ok{{else}}ind-no{{end}}" title="Website">🔗</span>
       {{if index .Attributes "wheelchair"}}<span class="ind ind-ok" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
       {{if index .Attributes "hearing_loop"}}<span class="ind ind-ok" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
       {{if index .Attributes "visual_support"}}<span class="ind ind-ok" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
@@ -114,19 +123,23 @@
           <input type="text" name="town" id="lov-town">
         </div>
       </div>
+      <div class="lov-row">
+        <label>{{$.Strings.T "loc_region"}}</label>
+        <input type="text" name="region" id="lov-region">
+      </div>
       <div class="lov-row lov-row-2">
         <div>
-          <label>Country code</label>
+          <label>{{$.Strings.T "loc_country_code"}}</label>
           <input type="text" name="country_code" id="lov-country_code" maxlength="2" style="width:5rem;text-transform:uppercase">
         </div>
         <div style="flex:1">
-          <label>Country</label>
+          <label>{{$.Strings.T "loc_country"}}</label>
           <input type="text" name="country" id="lov-country">
         </div>
       </div>
       <div class="lov-row">
-        <label>Region</label>
-        <input type="text" name="region" id="lov-region">
+        <label>{{$.Strings.T "loc_website"}}</label>
+        <input type="text" name="internetsite" id="lov-internetsite" placeholder="https://…">
       </div>
       <div class="lov-row lov-row-2">
         <div>
@@ -137,7 +150,8 @@
           <label>Longitude</label>
           <input type="text" name="longitude" id="lov-longitude" style="width:10rem">
         </div>
-        <button type="button" class="btn-sm" id="lov-geocode" style="align-self:flex-end">🔍 Geocode</button>
+        <button type="button" class="btn-sm" id="lov-geocode" style="align-self:flex-end">🔍 {{$.Strings.T "loc_geocode_from_fields"}}</button>
+        <button type="button" class="btn-sm" id="lov-autofill" style="align-self:flex-end">✨ {{$.Strings.T "loc_autofill_btn"}}</button>
       </div>
       <div class="lov-row">
         <label>Notes</label>
@@ -158,6 +172,7 @@
 </div>
 
 <style>
+main:has(.loc-table-wrap){max-width:none}
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
 .table-wrap{overflow-x:auto}
@@ -187,12 +202,19 @@
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 .evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
 .col-addr{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
+.col-shortname{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
+.col-zip{font-size:.82rem;white-space:nowrap}
+.col-region{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
+.col-country{white-space:nowrap}
+.col-geohash{font-size:.78rem;white-space:nowrap;font-family:monospace;color:#666}
+.col-org{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem}
 .col-coords{font-size:.78rem;white-space:nowrap;font-family:monospace;color:#666}
 .col-updated{font-size:.82rem;white-space:nowrap;color:#888}
 .muted{color:#888}
 .loc-name-link{color:inherit;text-decoration:none}
 .loc-name-link:hover{text-decoration:underline;color:var(--link,#1a6eb5)}
-@media(max-width:900px){.col-addr,.col-coords,.col-updated{display:none}}
+@media(max-width:1200px){.col-shortname,.col-zip,.col-geohash,.col-org{display:none}}
+@media(max-width:900px){.col-addr,.col-coords,.col-updated,.col-country{display:none}}
 /* overlay */
 .loc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding-top:5vh;overflow-y:auto}
 .loc-overlay[hidden]{display:none}
@@ -304,7 +326,7 @@ var selQueue = [];   // IDs of selected locations in order
 var queueIdx = 0;    // index into selQueue of current location
 var origVals = {};   // field-name → original value (for changed detection)
 
-var FIELDS = ['location','short_name','address','zipcode','town','country_code','country','region','latitude','longitude','notes_md'];
+var FIELDS = ['location','short_name','address','zipcode','town','region','country_code','country','internetsite','latitude','longitude','notes_md'];
 
 function fieldEl(name) { return document.getElementById('lov-' + name); }
 
@@ -355,9 +377,10 @@ function loadLocation(id) {
       setField('address',    loc.address    || '');
       setField('zipcode',    loc.zipcode    || '');
       setField('town',       loc.town       || '');
+      setField('region',     loc.region     || '');
       setField('country_code', loc.country_code || '');
       setField('country',    loc.country    || '');
-      setField('region',     loc.region     || '');
+      setField('internetsite', loc.internetsite || '');
       setField('latitude',   loc.latitude   != null ? loc.latitude  : '');
       setField('longitude',  loc.longitude  != null ? loc.longitude : '');
       setField('notes_md',   loc.notes_md   || '');
@@ -399,19 +422,47 @@ function saveLocation(id, onSuccess) {
 function updateTableRow(id) {
   var row = document.querySelector('#loc-table tr[data-id="' + id + '"]');
   if(!row) return;
-  var td = row.querySelector('td[data-val]');
-  var newName = fieldEl('location').value;
+  var name = fieldEl('location').value;
   var sn = fieldEl('short_name').value;
-  var display = sn || newName;
-  if(td) { td.dataset.val = display; td.querySelector('a') && (td.querySelector('a').textContent = display); }
-  row.dataset.search = [display, fieldEl('town').value, fieldEl('address').value].join(' ');
+  var tdShort = row.querySelector('.col-shortname');
+  if(tdShort) tdShort.textContent = sn;
+  var tdName = row.querySelector('.col-name');
+  if(tdName) { var a = tdName.querySelector('a'); if(a) a.textContent = name; }
+  var cc = fieldEl('country_code').value.toUpperCase();
+  var country = fieldEl('country').value;
+  var region = fieldEl('region').value;
+  row.dataset.search = [sn, name, fieldEl('town').value, fieldEl('address').value, cc, region].join(' ');
   var tdAddr = row.querySelector('.col-addr');
   if(tdAddr) tdAddr.textContent = fieldEl('address').value;
+  var tdZip = row.querySelector('.col-zip');
+  if(tdZip) tdZip.textContent = fieldEl('zipcode').value;
+  var tdTown = row.querySelector('.col-town');
+  if(tdTown) tdTown.textContent = fieldEl('town').value;
+  var tdRegion = row.querySelector('.col-region');
+  if(tdRegion) tdRegion.textContent = region;
+  var tdCountry = row.querySelector('.col-country');
+  if(tdCountry){
+    tdCountry.innerHTML = '';
+    if(cc){
+      var badge = document.createElement('span');
+      badge.className = 'cc-badge';
+      badge.title = country;
+      badge.textContent = cc;
+      tdCountry.appendChild(badge);
+    }
+  }
   var tdCoords = row.querySelector('.col-coords');
   if(tdCoords){
     var lat = fieldEl('latitude').value, lng = fieldEl('longitude').value;
     tdCoords.textContent = (lat && lng) ? lat + ', ' + lng : '';
   }
+  var indWebsite = row.querySelector('.ind-website');
+  if(indWebsite){
+    var hasSite = !!fieldEl('internetsite').value;
+    indWebsite.classList.toggle('ind-ok', hasSite);
+    indWebsite.classList.toggle('ind-no', !hasSite);
+  }
+  row.dataset.town = fieldEl('town').value;
 }
 
 document.getElementById('btn-edit-sel').addEventListener('click', function(){
@@ -476,6 +527,38 @@ document.getElementById('lov-geocode').addEventListener('click', function(){
     lovStatus.textContent = '✓ ' + r.display_name;
     lovStatus.className = 'lov-status ok';
   }).catch(function(){ lovStatus.textContent = 'Geocoding failed'; lovStatus.className = 'lov-status err'; });
+});
+
+// ── Autofill missing address fields from coordinates (reverse geocode) ──
+document.getElementById('lov-autofill').addEventListener('click', function(){
+  var lat = parseFloat(fieldEl('latitude').value);
+  var lon = parseFloat(fieldEl('longitude').value);
+  if(isNaN(lat) || isNaN(lon)){ lovStatus.textContent = 'Set coordinates first'; lovStatus.className = 'lov-status err'; return; }
+  lovStatus.textContent = 'Looking up address…';
+  lovStatus.className = 'lov-status';
+  fetch('https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' + lat + '&lon=' + lon, {
+    headers: {'Accept-Language':'en'}
+  }).then(function(r){ return r.json(); }).then(function(item){
+    if(!item || item.error){ lovStatus.textContent = 'No result found'; lovStatus.className = 'lov-status err'; return; }
+    var a = item.address || {};
+    var filled = [];
+    function fill(field, val){
+      if(val && !fieldEl(field).value){ fieldEl(field).value = val; filled.push(field); }
+    }
+    fill('zipcode', a.postcode || '');
+    fill('town', a.city || a.town || a.village || a.hamlet || a.municipality || '');
+    fill('region', a.state || a.county || '');
+    fill('country', a.country || '');
+    fill('country_code', (a.country_code || '').toUpperCase());
+    markChanged();
+    if(filled.length){
+      lovStatus.textContent = '✓ ' + filled.join(', ');
+      lovStatus.className = 'lov-status ok';
+    } else {
+      lovStatus.textContent = 'Nothing to fill in';
+      lovStatus.className = 'lov-status ok';
+    }
+  }).catch(function(){ lovStatus.textContent = 'Lookup failed'; lovStatus.className = 'lov-status err'; });
 });
 </script>
 {{end}}

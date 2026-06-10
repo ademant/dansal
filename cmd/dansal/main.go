@@ -1346,6 +1346,21 @@ func migrateDB() {
 		db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop'))")
 		mark(9)
 	}
+	// Safety net: backfill events.organization_id from fetch_sources.organization_id
+	// for events imported before insertEvent() learned to write organization_id on
+	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
+	// edited the event (and may have intentionally cleared organization_id) is
+	// never overwritten on subsequent runs.
+	{
+		db.Exec(`UPDATE events SET organization_id = (
+			SELECT fs.organization_id FROM fetch_sources fs WHERE fs.id = events.fetch_source_id
+		) WHERE organization_id IS NULL
+		  AND fetch_source_id IS NOT NULL
+		  AND COALESCE(changed_by,'') IN ('', 'fetch')
+		  AND EXISTS (
+			SELECT 1 FROM fetch_sources fs WHERE fs.id = events.fetch_source_id AND fs.organization_id IS NOT NULL
+		  )`)
+	}
 	// Safety net: ensure entry_type column exists even if v9 was pre-marked.
 	{
 		var n int

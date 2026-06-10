@@ -369,6 +369,8 @@
   {{if .BoardTelegramURL}}
   <p class="msg msg-ok">{{$.Strings.T "board_posted_telegram"}}</p>
   <a href="{{.BoardTelegramURL}}" class="btn-tg-verify" target="_blank" rel="noopener">{{$.Strings.T "board_verify_telegram_btn"}}</a>
+  {{else if $.User}}
+  <p class="msg msg-ok">{{$.Strings.T "board_posted_ok_loggedin"}}</p>
   {{else}}
   <p class="msg msg-ok">{{$.Strings.T "board_posted_ok"}}</p>
   {{end}}

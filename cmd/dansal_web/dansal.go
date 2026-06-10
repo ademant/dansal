@@ -1444,14 +1444,16 @@ type EventUpdateReq struct {
 }
 
 type EventLocReq struct {
-	Location  string   `json:"location"`
-	ShortName string   `json:"short_name,omitempty"`
-	Address   string   `json:"address,omitempty"`
-	Zipcode   string   `json:"zipcode,omitempty"`
-	Town      string   `json:"town,omitempty"`
-	Country   string   `json:"country,omitempty"`
-	Latitude  *float64 `json:"latitude,omitempty"`
-	Longitude *float64 `json:"longitude,omitempty"`
+	Location    string   `json:"location"`
+	ShortName   string   `json:"short_name,omitempty"`
+	Address     string   `json:"address,omitempty"`
+	Zipcode     string   `json:"zipcode,omitempty"`
+	Town        string   `json:"town,omitempty"`
+	Country     string   `json:"country,omitempty"`
+	CountryCode string   `json:"country_code,omitempty"`
+	Region      string   `json:"region,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
 }
 
 type TimetableEntryReq struct {

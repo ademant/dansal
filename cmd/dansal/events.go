@@ -127,15 +127,17 @@ type EventCreateRequest struct {
 }
 
 type EventLocationRequest struct {
-	Location  string   `json:"location"`
-	ShortName string   `json:"short_name,omitempty"`
-	Address   string   `json:"address"`
-	Zipcode   string   `json:"zipcode"`
-	Town      string   `json:"town"`
-	Country   string   `json:"country"`
-	Latitude  *float64 `json:"latitude,omitempty"`
-	Longitude *float64 `json:"longitude,omitempty"`
-	Eventsite string   `json:"eventsite"`
+	Location    string   `json:"location"`
+	ShortName   string   `json:"short_name,omitempty"`
+	Address     string   `json:"address"`
+	Zipcode     string   `json:"zipcode"`
+	Town        string   `json:"town"`
+	Country     string   `json:"country"`
+	CountryCode string   `json:"country_code,omitempty"`
+	Region      string   `json:"region,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
+	Eventsite   string   `json:"eventsite"`
 }
 
 // Price is one entry in a multi-tier pricing list.

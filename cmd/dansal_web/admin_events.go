@@ -1290,14 +1290,16 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		case "new":
 			locReq = EventLocReq{
-				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
-				ShortName: strings.TrimSpace(r.FormValue("new_loc_short_name")),
-				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
-				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
-				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
-				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
-				Latitude:  parseLatLng(r.FormValue("new_loc_lat")),
-				Longitude: parseLatLng(r.FormValue("new_loc_lng")),
+				Location:    strings.TrimSpace(r.FormValue("new_loc_name")),
+				ShortName:   strings.TrimSpace(r.FormValue("new_loc_short_name")),
+				Address:     strings.TrimSpace(r.FormValue("new_loc_address")),
+				Zipcode:     strings.TrimSpace(r.FormValue("new_loc_zip")),
+				Town:        strings.TrimSpace(r.FormValue("new_loc_town")),
+				Country:     strings.TrimSpace(r.FormValue("new_loc_country")),
+				CountryCode: strings.TrimSpace(r.FormValue("new_loc_country_code")),
+				Region:      strings.TrimSpace(r.FormValue("new_loc_region")),
+				Latitude:    parseLatLng(r.FormValue("new_loc_lat")),
+				Longitude:   parseLatLng(r.FormValue("new_loc_lng")),
 			}
 		}
 
@@ -1382,14 +1384,16 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 
 		if createStandaloneLocation {
 			newLoc := Location{
-				Location:  locReq.Location,
-				ShortName: locReq.ShortName,
-				Address:   locReq.Address,
-				Zipcode:   locReq.Zipcode,
-				Town:      locReq.Town,
-				Country:   locReq.Country,
-				Latitude:  locReq.Latitude,
-				Longitude: locReq.Longitude,
+				Location:    locReq.Location,
+				ShortName:   locReq.ShortName,
+				Address:     locReq.Address,
+				Zipcode:     locReq.Zipcode,
+				Town:        locReq.Town,
+				Country:     locReq.Country,
+				CountryCode: locReq.CountryCode,
+				Region:      locReq.Region,
+				Latitude:    locReq.Latitude,
+				Longitude:   locReq.Longitude,
 			}
 			if created, lerr := client.CreateLocation(r.Context(), newLoc, getSessionToken(r)); lerr == nil {
 				if orgID != nil {
@@ -1732,14 +1736,16 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		case "new":
 			locReq = EventLocReq{
-				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
-				ShortName: strings.TrimSpace(r.FormValue("new_loc_short_name")),
-				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
-				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
-				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
-				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
-				Latitude:  parseLatLng(r.FormValue("new_loc_lat")),
-				Longitude: parseLatLng(r.FormValue("new_loc_lng")),
+				Location:    strings.TrimSpace(r.FormValue("new_loc_name")),
+				ShortName:   strings.TrimSpace(r.FormValue("new_loc_short_name")),
+				Address:     strings.TrimSpace(r.FormValue("new_loc_address")),
+				Zipcode:     strings.TrimSpace(r.FormValue("new_loc_zip")),
+				Town:        strings.TrimSpace(r.FormValue("new_loc_town")),
+				Country:     strings.TrimSpace(r.FormValue("new_loc_country")),
+				CountryCode: strings.TrimSpace(r.FormValue("new_loc_country_code")),
+				Region:      strings.TrimSpace(r.FormValue("new_loc_region")),
+				Latitude:    parseLatLng(r.FormValue("new_loc_lat")),
+				Longitude:   parseLatLng(r.FormValue("new_loc_lng")),
 			}
 		}
 

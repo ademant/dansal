@@ -158,6 +158,8 @@
           <input id="new_loc_country" type="text" name="new_loc_country" value="{{if .Prefill}}{{.Prefill.Country}}{{end}}">
         </div>
       </div>
+      <input type="hidden" id="new_loc_region" name="new_loc_region">
+      <input type="hidden" id="new_loc_country_code" name="new_loc_country_code">
       <div class="field-row">
         <div>
           <label for="new_loc_lat">{{$.Strings.T "loc_lat"}}</label>
@@ -540,6 +542,8 @@ function geocodeLocation(){
         var city=a.city||a.town||a.village||a.hamlet||a.municipality||'';
         if(city) document.getElementById('new_loc_town').value=city;
         if(a.country) document.getElementById('new_loc_country').value=a.country;
+        document.getElementById('new_loc_region').value=a.state||a.county||'';
+        document.getElementById('new_loc_country_code').value=(a.country_code||'').toUpperCase();
         var snInp=document.getElementById('new_loc_short_name');
         if(!snInp.value){var sn=r.name||a.amenity||'';if(sn)snInp.value=sn;}
         status.textContent='✓ '+r.display_name;

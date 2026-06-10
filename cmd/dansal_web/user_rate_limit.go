@@ -10,10 +10,22 @@ import (
 type userCounter struct {
 	globalCount    int
 	endpointCounts map[string]int
+	lastRequest    map[string]time.Time
 	windowStart    time.Time
 }
 
+// throttleDelay is the maximum delay applied per request once a user exceeds
+// an endpoint's soft limit within the current window.
+const throttleDelay = 4 * time.Second
+
 // UserRateLimiter tracks per-user POST request counts within a sliding 1-minute window.
+//
+// Two limits apply:
+//   - a per-endpoint "soft" limit (defaultLimit / endpointLimits): once exceeded,
+//     requests are not rejected but delayed by up to throttleDelay, so rapid
+//     sequential actions (e.g. "Save & Next") slow down instead of erroring.
+//   - a global hard limit (globalLimit): once exceeded, requests are rejected
+//     with 429 as a last-resort abuse ceiling.
 type UserRateLimiter struct {
 	globalLimit    int
 	defaultLimit   int
@@ -32,13 +44,16 @@ func newUserRateLimiter(globalLimit int, endpointLimits map[string]int) *UserRat
 	}
 	return &UserRateLimiter{
 		globalLimit:    globalLimit,
-		defaultLimit:   5,
+		defaultLimit:   15,
 		endpointLimits: lim,
 		counters:       make(map[int]*userCounter),
 	}
 }
 
-func (rl *UserRateLimiter) Allow(userID int, endpoint string) bool {
+// Check reports whether the request is allowed at all (false if the hard
+// global limit is exceeded), and how long the caller should sleep before
+// proceeding to enforce the soft per-endpoint limit.
+func (rl *UserRateLimiter) Check(userID int, endpoint string) (allowed bool, delay time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -47,22 +62,30 @@ func (rl *UserRateLimiter) Allow(userID int, endpoint string) bool {
 	if !ok || now.Sub(c.windowStart) > time.Minute {
 		c = &userCounter{
 			endpointCounts: make(map[string]int),
+			lastRequest:    make(map[string]time.Time),
 			windowStart:    now,
 		}
 		rl.counters[userID] = c
 	}
+
+	if c.globalCount >= rl.globalLimit {
+		return false, 0
+	}
+	c.globalCount++
+	c.endpointCounts[endpoint]++
 
 	limit := rl.defaultLimit
 	if v, ok := rl.endpointLimits[endpoint]; ok && v > 0 {
 		limit = v
 	}
 
-	if c.globalCount >= rl.globalLimit || c.endpointCounts[endpoint] >= limit {
-		return false
+	if c.endpointCounts[endpoint] > limit {
+		if since := now.Sub(c.lastRequest[endpoint]); since < throttleDelay {
+			delay = throttleDelay - since
+		}
 	}
-	c.globalCount++
-	c.endpointCounts[endpoint]++
-	return true
+	c.lastRequest[endpoint] = now
+	return true, delay
 }
 
 func (rl *UserRateLimiter) cleanup() {
@@ -146,10 +169,14 @@ func adminRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			if endpoint == "" {
 				endpoint = r.Pattern
 			}
-			if !userRateLimiter.Allow(su.ID, endpoint) {
+			allowed, delay := userRateLimiter.Check(su.ID, endpoint)
+			if !allowed {
 				log.Printf("dansal-web: USER_RATE_LIMIT user=%d action=%s ip=%s", su.ID, endpoint, getClientIP(r))
 				http.Error(w, "Rate limit exceeded. Please slow down.", http.StatusTooManyRequests)
 				return
+			}
+			if delay > 0 {
+				time.Sleep(delay)
 			}
 		}
 		next(w, r)

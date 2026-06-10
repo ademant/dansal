@@ -404,7 +404,14 @@ function saveLocation(id, onSuccess) {
     method: 'POST',
     headers: {'Content-Type':'application/x-www-form-urlencoded'},
     body: data.toString()
-  }).then(function(r){ return r.json(); }).then(function(d){
+  }).then(function(r){
+    return r.text().then(function(t){
+      var d = null;
+      try { d = JSON.parse(t); } catch(e) {}
+      if(!r.ok) throw new Error((d && d.error) || t || ('HTTP ' + r.status));
+      return d || {};
+    });
+  }).then(function(d){
     if(d.ok){
       lovStatus.textContent = '✓ Saved';
       lovStatus.className = 'lov-status ok';
@@ -416,7 +423,7 @@ function saveLocation(id, onSuccess) {
       lovStatus.textContent = d.error || 'Save failed';
       lovStatus.className = 'lov-status err';
     }
-  }).catch(function(){ lovStatus.textContent = 'Network error'; lovStatus.className = 'lov-status err'; });
+  }).catch(function(e){ lovStatus.textContent = (e && e.message) || 'Network error'; lovStatus.className = 'lov-status err'; });
 }
 
 function updateTableRow(id) {

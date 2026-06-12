@@ -12,6 +12,7 @@ languages:
       # Navigation
       nav_events: "Veranstaltungen"
       nav_musicians: "Musiker"
+      nav_instructors: "Lehrkräfte"
       nav_orgs: "Organisationen"
       musicians_title: "Musiker"
       musicians_none: "Noch keine Musiker vorhanden."
@@ -944,6 +945,7 @@ languages:
       # Navigation
       nav_events: "Darvoudoù"
       nav_musicians: "Sonerien"
+      nav_instructors: "Kelennerien"
       nav_orgs: "Gevredigezhioù"
       musicians_title: "Sonerien"
       musicians_none: "Sonerien ebet evit poent."
@@ -1874,6 +1876,7 @@ languages:
       # Navigation
       nav_events: "Events"
       nav_musicians: "Musicians"
+      nav_instructors: "Instructors"
       nav_orgs: "Organizations"
       musicians_title: "Musicians"
       musicians_none: "No musicians yet."
@@ -2806,6 +2809,7 @@ languages:
     strings:
       nav_events: "Eventos"
       nav_musicians: "Músicos"
+      nav_instructors: "Instructores"
       nav_orgs: "Organizaciones"
       musicians_title: "Músicos"
       musicians_none: "Aún no hay músicos."
@@ -3727,6 +3731,7 @@ languages:
       # Navigation
       nav_events: "Événements"
       nav_musicians: "Musiciens"
+      nav_instructors: "Intervenant·e·s"
       nav_orgs: "Organisations"
       musicians_title: "Musiciens"
       musicians_none: "Aucun musicien pour l'instant."
@@ -4658,6 +4663,7 @@ languages:
     strings:
       nav_events: "Eventi"
       nav_musicians: "Musicisti"
+      nav_instructors: "Insegnanti"
       nav_orgs: "Organizzazioni"
       musicians_title: "Musicisti"
       musicians_none: "Nessun musicista ancora."
@@ -5578,6 +5584,7 @@ languages:
     strings:
       nav_events: "Evenementen"
       nav_musicians: "Muzikanten"
+      nav_instructors: "Instructeurs"
       nav_orgs: "Organisaties"
       musicians_title: "Muzikanten"
       musicians_none: "Nog geen muzikanten."
@@ -6498,6 +6505,7 @@ languages:
     strings:
       nav_events: "Події"
       nav_musicians: "Музиканти"
+      nav_instructors: "Викладачі"
       nav_orgs: "Організації"
       musicians_title: "Музиканти"
       musicians_none: "Поки що немає музикантів."
@@ -6937,6 +6945,7 @@ languages:
     strings:
       nav_events: "Esdeveniments"
       nav_musicians: "Músics"
+      nav_instructors: "Instructors"
       nav_orgs: "Organitzacions"
       musicians_title: "Músics"
       musicians_none: "Encara no hi ha músics."
@@ -7028,6 +7037,7 @@ languages:
     strings:
       nav_events: "Eventos"
       nav_musicians: "Músicos"
+      nav_instructors: "Instrutores"
       nav_orgs: "Organizações"
       musicians_title: "Músicos"
       musicians_none: "Ainda não há músicos."
@@ -7119,6 +7129,7 @@ languages:
     strings:
       nav_events: "Wydarzenia"
       nav_musicians: "Muzycy"
+      nav_instructors: "Instruktorzy"
       nav_orgs: "Organizacje"
       musicians_title: "Muzycy"
       musicians_none: "Jeszcze nie ma muzyków."
@@ -7210,6 +7221,7 @@ languages:
     strings:
       nav_events: "Události"
       nav_musicians: "Hudebníci"
+      nav_instructors: "Instruktoři"
       nav_orgs: "Organizace"
       musicians_title: "Hudebníci"
       musicians_none: "Zatím nejsou žádní hudebníci."

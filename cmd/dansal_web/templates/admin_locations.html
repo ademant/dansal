@@ -24,8 +24,8 @@
     <option value="">{{$.Strings.T "loc_no_org"}}</option>
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
-  <button type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
-  <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge"
+  <button type="submit" class="btn-sm loc-bulk-action-btn" disabled>{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge loc-bulk-action-btn" disabled
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
 {{end}}
@@ -102,6 +102,11 @@
 .event-table tbody tr:hover{background:#f9f9ff}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
 .bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.loc-bulk-action-btn:disabled{opacity:.45;cursor:default}
+@media(min-width:1300px){
+  .bulk-bar{flex-direction:column;align-items:stretch;position:fixed;left:.75rem;top:7rem;width:140px;z-index:10}
+  .bulk-bar #bulk-count{text-align:center;font-size:.85rem;color:#555}
+}
 .col-cb{width:2rem;text-align:center}
 .col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
 .ind-cell{white-space:nowrap}
@@ -158,9 +163,11 @@ function delLocation(id) {
   if(!cbAll) return;
   var cbs = document.querySelectorAll('.loc-cb');
   var countEl = document.getElementById('bulk-count');
+  var actionBtns = document.querySelectorAll('.loc-bulk-action-btn');
   function updateCount(){
     var n = document.querySelectorAll('.loc-cb:checked').length;
     countEl.textContent = n > 0 ? n + ' ✓' : '';
+    actionBtns.forEach(function(btn){ btn.disabled = n === 0; });
   }
   cbAll.addEventListener('change', function(){
     cbs.forEach(function(cb){

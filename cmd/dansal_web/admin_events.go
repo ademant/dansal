@@ -40,7 +40,6 @@ type AdminEventsData struct {
 	Musicians          []Musician
 	Dances             []Dance
 	AllTags            []Tag
-	UserOrgs           []Organization
 	Series             []EventSeries
 	FilterIncludePast  bool
 	FilterOrgID        int // -1 = no org assigned
@@ -1063,23 +1062,6 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			return ni < nj
 		})
 
-		var userOrgs []Organization
-		if su := getSessionUser(r); su != nil {
-			if su.Role == "admin" {
-				userOrgs = orgs
-			} else {
-				orgIDSet := make(map[int]bool)
-				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r)) {
-					orgIDSet[oid] = true
-				}
-				for _, o := range orgs {
-					if orgIDSet[o.ID] {
-						userOrgs = append(userOrgs, o)
-					}
-				}
-			}
-		}
-
 		title := i18n.T(r, "admin_events_title")
 		orgMap := make(map[int]string, len(orgs))
 		for _, o := range orgs {
@@ -1093,7 +1075,6 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Musicians:          musicians,
 			Dances:             dances,
 			AllTags:            allTags,
-			UserOrgs:           userOrgs,
 			Series:             series,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,

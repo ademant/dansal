@@ -65,9 +65,9 @@
     </td>
     <td class="col-actions">
       {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
-      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-sm btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       {{else}}
-      <span class="btn-sm btn-disabled">{{$.Strings.T "admin_edit"}}</span>
+      <span class="btn-sm btn-icon btn-disabled" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</span>
       {{end}}
       {{if and $.Data.UserOrgs (not (index $.Data.EditableIDs .ID))}}
       <form method="post" action="/admin/locations/{{.ID}}/assign-org" style="margin:0;display:inline-flex;gap:.25rem;align-items:center">
@@ -81,8 +81,8 @@
         <button type="submit" class="btn-sm btn-assign">{{$.Strings.T "loc_assign_btn"}}</button>
       </form>
       {{end}}
-      {{if $.Data.IsAdmin}}<button type="button" class="btn-sm btn-del"
-              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>{{end}}
+      {{if $.Data.IsAdmin}}<button type="button" class="btn-sm btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>
   {{end}}
@@ -120,6 +120,7 @@
 .btn-disabled{opacity:.4;cursor:default;pointer-events:none}
 .btn-assign{background:#1a6eb5;color:#fff;border:none}
 .btn-assign:hover{background:#0d4a80}
+.btn-icon{font-size:1rem;line-height:1;padding:.2rem .4rem}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 .evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
 </style>

@@ -61,6 +61,15 @@ Download latest releases from [GitHub Releases](https://github.com/ademant/dansa
 
 See **[DOCKER.md](DOCKER.md)** for containerized deployment.
 
+### Branding Before Going Live
+
+dansal ships with default logo, banner and favicon images built into the
+`dansal_web` binary. Before announcing a new instance, drop your own
+`logo`, `banner` and `favicon` files (`.svg`, `.avif`, `.jpg` or `.gif`)
+into the instance's `images_dir` (configured in `web.yaml`, e.g.
+`/var/lib/dansal-web/<instance>/`) — these are served in place of the
+built-in defaults immediately, with no rebuild or restart required.
+
 ## ⚙️ Configuration
 
 ### Main Configuration File

@@ -1388,6 +1388,15 @@ func migrateDB() {
 			db.Exec("ALTER TABLE locations ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
 		}
 	}
+	// Safety net: ensure no_street_shoes column exists even if v1 was pre-marked
+	// before this ALTER TABLE was added to the v1 block.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='no_street_shoes'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE locations ADD COLUMN no_street_shoes INTEGER DEFAULT 0")
+		}
+	}
 	// Safety net: repopulate canonical tags vocabulary if the table is empty.
 	// Happens when createTables pre-marked the v1 migration on an existing DB that
 	// lacked schema_migrations, skipping all the INSERT statements in that block.

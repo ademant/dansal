@@ -65,7 +65,7 @@
     </td>
     <td class="col-actions">
       {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
-      <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       {{else}}
       <span class="btn-sm btn-disabled">{{$.Strings.T "admin_edit"}}</span>
       {{end}}

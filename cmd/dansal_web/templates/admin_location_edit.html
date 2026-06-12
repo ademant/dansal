@@ -25,6 +25,7 @@
 <div id="map" class="geo-map"></div>
 
 <form method="post" class="edit-form">
+  <input type="hidden" name="return" value="{{.ReturnURL}}">
   <label for="location">{{$.Strings.T "loc_name"}}</label>
   <input id="location" type="text" name="location" value="{{.Location.Location}}" required>
 
@@ -134,10 +135,11 @@
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
       {{if not .ReadOnly}}<button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>{{end}}
-      <a href="/admin/locations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+      <a href="{{if .ReturnURL}}{{.ReturnURL}}{{else}}/admin/locations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
     </div>
     {{if .Location.ID}}
     <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
+      <input type="hidden" name="return" value="{{.ReturnURL}}">
       <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
     </form>
     {{end}}

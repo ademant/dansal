@@ -58,7 +58,7 @@
   <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-search="{{.ShortName}} {{.Location}} {{.Town}} {{.Address}} {{.CountryCode}} {{.Region}} {{$orgName}}" data-updated="{{.UpdatedAt}}" data-id="{{.ID}}">
     <td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>
     <td class="col-shortname muted">{{.ShortName}}</td>
-    <td class="col-name"><a href="/admin/locations/{{.ID}}/edit" class="loc-name-link">{{.Location}}</a></td>
+    <td class="col-name"><a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="loc-name-link">{{.Location}}</a></td>
     <td class="col-addr muted">{{.Address}}</td>
     <td class="col-zip muted">{{.Zipcode}}</td>
     <td class="col-town">{{.Town}}</td>
@@ -81,7 +81,7 @@
       {{with index $.Data.EventCounts .ID}}<span class="evt-count" title="{{$.Strings.T "loc_event_count"}}">{{.}}</span>{{end}}
     </td>
     <td class="col-actions">
-      <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <button type="button" class="btn-sm btn-del"
               onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
@@ -287,6 +287,9 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delLocation(id) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/locations/' + id + '/delete';
+  var ret = document.createElement('input');
+  ret.type = 'hidden'; ret.name = 'return'; ret.value = location.pathname + location.search;
+  f.appendChild(ret);
   document.body.appendChild(f); f.submit();
 }
 

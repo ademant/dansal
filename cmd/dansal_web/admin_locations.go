@@ -18,13 +18,29 @@ type AdminLocationsData struct {
 	EditableIDs map[int]bool
 	UserOrgs    []Organization
 	EventCounts map[int]int
+	ReturnURL   string
 }
 
 type AdminLocationEditData struct {
-	Location Location
-	UserOrgs []Organization
-	ReadOnly bool
-	ErrorKey string
+	Location  Location
+	UserOrgs  []Organization
+	ReadOnly  bool
+	ErrorKey  string
+	ReturnURL string
+}
+
+// safeLocationsReturnURL validates that raw is a same-site path under
+// /admin/locations, to avoid open-redirect via the "return" parameter.
+// Falls back to /admin/locations for anything else (empty, absolute URL,
+// protocol-relative URL, or unrelated path).
+func safeLocationsReturnURL(raw string) string {
+	if raw == "" || raw[0] != '/' || strings.HasPrefix(raw, "//") {
+		return "/admin/locations"
+	}
+	if raw != "/admin/locations" && !strings.HasPrefix(raw, "/admin/locations/") && !strings.HasPrefix(raw, "/admin/locations?") {
+		return "/admin/locations"
+	}
+	return raw
 }
 
 func parseAliases(raw string) []string {
@@ -98,6 +114,7 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			EditableIDs: editableIDs,
 			UserOrgs:    userOrgs,
 			EventCounts: eventCounts,
+			ReturnURL:   r.URL.RequestURI(),
 		}))
 	}
 }
@@ -133,6 +150,7 @@ func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dans
 			Orgs:        orgs,
 			IsAdmin:     true,
 			EventCounts: eventCounts,
+			ReturnURL:   r.URL.RequestURI(),
 		}))
 	}
 }
@@ -328,8 +346,9 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		}
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
-			Location: loc,
-			ReadOnly: readOnly,
+			Location:  loc,
+			ReadOnly:  readOnly,
+			ReturnURL: safeLocationsReturnURL(r.URL.Query().Get("return")),
 		}))
 	}
 }
@@ -378,16 +397,18 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			NoStreetShoes:   r.FormValue("no_street_shoes") == "1",
 			Aliases:         parseAliases(r.FormValue("aliases")),
 		}
+		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
-				Location: loc,
-				ErrorKey: "admin_save_error",
+				Location:  loc,
+				ErrorKey:  "admin_save_error",
+				ReturnURL: returnURL,
 			}))
 			return
 		}
-		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+		http.Redirect(w, r, returnURL, http.StatusSeeOther)
 	}
 }
 
@@ -403,7 +424,7 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		_ = client.DeleteLocation(r.Context(), id, getSessionToken(r))
-		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+		http.Redirect(w, r, safeLocationsReturnURL(r.FormValue("return")), http.StatusSeeOther)
 	}
 }
 

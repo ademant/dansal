@@ -1256,6 +1256,16 @@ func migrateDB() {
 		mark(1)
 	} // end v1
 
+	// Safety net: ensure musicians.created_by_id exists even if v1 was pre-marked
+	// before this ALTER TABLE was added to the v1 block.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('musicians') WHERE name='created_by_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+		}
+	}
+
 	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN org_actor_name TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN approved INTEGER DEFAULT 0")
@@ -1701,7 +1711,8 @@ func createTables() error {
 		deezer TEXT,
 		genre TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at INTEGER
+		updated_at INTEGER,
+		created_by_id INTEGER REFERENCES users(id)
 	);
 	CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

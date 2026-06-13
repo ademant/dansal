@@ -2362,10 +2362,10 @@ func main() {
 	startMetricsServer()
 	go runHeartbeat()
 
-	port := getPort()
-	log.Printf("Server starting on %s\n", port)
+	listenAddr := getListenAddr()
+	log.Printf("Server starting on %s\n", listenAddr)
 	srv := &http.Server{
-		Addr:              port,
+		Addr:              listenAddr,
 		Handler:           handler,
 		ReadHeaderTimeout: time.Duration(config.Server.ReadHeaderTimeoutSecs) * time.Second,
 		ReadTimeout:       time.Duration(config.Server.ReadTimeoutSecs) * time.Second,

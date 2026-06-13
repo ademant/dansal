@@ -10,6 +10,7 @@ import (
 
 type ServerConfig struct {
 	Port                     int      `yaml:"port"`
+	Listen                   string   `yaml:"listen"`
 	TokenExpirationHours     int      `yaml:"token_expiration_hours"`
 	RateLimit                int      `yaml:"rate_limit"`
 	MaxBodyBytes             int64    `yaml:"max_body_bytes"`
@@ -128,6 +129,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8000
 	}
+	if cfg.Server.Listen == "" {
+		cfg.Server.Listen = "127.0.0.1:" + strconv.Itoa(cfg.Server.Port)
+	}
 	if cfg.Server.TokenExpirationHours == 0 {
 		cfg.Server.TokenExpirationHours = 24
 	}
@@ -235,4 +239,13 @@ func getPort() string {
 		return ":8000"
 	}
 	return ":" + strconv.Itoa(config.Server.Port)
+}
+
+// getListenAddr returns the address the API server should bind to,
+// e.g. "127.0.0.1:8000". Falls back to loopback if unset.
+func getListenAddr() string {
+	if config == nil || config.Server.Listen == "" {
+		return "127.0.0.1" + getPort()
+	}
+	return config.Server.Listen
 }

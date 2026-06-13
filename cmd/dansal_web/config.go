@@ -111,7 +111,7 @@ func (cfg *Config) publicBaseURL() string {
 
 func loadConfig() *Config {
 	cfg := &Config{
-		Listen:                    ":8080",
+		Listen:                    "127.0.0.1:8080",
 		DBPath:                    "web.db",
 		PollSecs:                  300,
 		ImagesDir:                 "/var/lib/dansal-web",
@@ -195,7 +195,7 @@ func applyWebEnvOverrides(cfg *Config) {
 // Returns nil on any error so the caller can keep the current config.
 func reloadConfig(path string) *Config {
 	cfg := &Config{
-		Listen:                    ":8080",
+		Listen:                    "127.0.0.1:8080",
 		DBPath:                    "web.db",
 		PollSecs:                  300,
 		ImagesDir:                 "/var/lib/dansal-web",

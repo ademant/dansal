@@ -74,6 +74,9 @@ CONFDIR="/etc/dansal/${INSTANCE}"
 
 section "Ports"
 info "Scanning for free ports..."
+info "All three services bind to 127.0.0.1 by default (nginx proxies locally)."
+info "For multi-host setups, edit 'listen' in config.yaml/web.yaml/webmin.yaml"
+info "after install and restrict access at the firewall."
 
 DEFAULT_API=$(free_port 8000)
 DEFAULT_WEB=$(free_port 8080)
@@ -185,6 +188,7 @@ make setup-instance INSTANCE="$INSTANCE"
 CONFIG="${CONFDIR}/config.yaml"
 
 sed -i "s|^  port: 8000|  port: ${API_PORT}|" "$CONFIG"
+sed -i "s|^  listen: \"127.0.0.1:8000\"|  listen: \"127.0.0.1:${API_PORT}\"|" "$CONFIG"
 sed -i "s|base_url: \"\"|  base_url: \"https://${API_DOMAIN}\"|" "$CONFIG"
 
 if [[ $USE_LOCAL_MTA == true ]]; then

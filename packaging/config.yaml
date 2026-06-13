@@ -2,6 +2,13 @@ server:
   # TCP port the API listens on.
   port: 8000
 
+  # Address the API server binds to. Defaults to "127.0.0.1:<port>" — the
+  # API is reachable only from this host (nginx/dansal-web proxy locally).
+  # For multi-host deployments where dansal-web runs on a different host
+  # than dansal, set this to a non-loopback address (e.g. "0.0.0.0:8000")
+  # and ensure firewall rules restrict access appropriately.
+  listen: "127.0.0.1:8000"
+
   # Path to the SQLite database.
   db_path: /var/lib/dansal/calendar.db
 

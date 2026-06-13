@@ -48,6 +48,7 @@ type TemplateData struct {
 	SessionIdleTimeoutMins int
 	PendingRegCount        int // verified pending registrations awaiting action (scoped to caller)
 	ShowCookieBanner       bool
+	Path                   string // current request path, for building "return to this page" links
 }
 
 // pendingRegCountMiddleware fetches the scoped pending-registration count for
@@ -137,6 +138,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 			return 0
 		}(),
 		ShowCookieBanner: showCookieBanner,
+		Path:             r.URL.Path,
 	}
 }
 

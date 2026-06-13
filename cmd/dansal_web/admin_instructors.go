@@ -14,6 +14,7 @@ type AdminInstructorEditData struct {
 	Instructor Instructor
 	IsNew      bool
 	ErrorKey   string
+	From       string
 }
 
 func instructorFromForm(r *http.Request) Instructor {
@@ -91,7 +92,10 @@ func adminInstructorEditPageHandler(cfg *Config, tmpls *Templates, client *Dansa
 			return
 		}
 		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{Instructor: inst}))
+		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
+			Instructor: inst,
+			From:       safeReturnPath(r.URL.Query().Get("from")),
+		}))
 	}
 }
 
@@ -110,15 +114,20 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		from := safeReturnPath(r.FormValue("from"))
 		inst := instructorFromForm(r)
 		if err := client.UpdateInstructor(r.Context(), id, inst, getSessionToken(r)); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
-				Instructor: inst, ErrorKey: "admin_save_error",
+				Instructor: inst, ErrorKey: "admin_save_error", From: from,
 			}))
 			return
 		}
-		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
+		target := "/admin/instructors"
+		if from != "" {
+			target = from
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

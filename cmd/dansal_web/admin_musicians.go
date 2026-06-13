@@ -21,6 +21,7 @@ type AdminMusicianEditData struct {
 	Events   []Event
 	IsNew    bool
 	ErrorKey string
+	From     string
 }
 
 func musicianFromForm(r *http.Request) Musician {
@@ -142,6 +143,7 @@ func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
 			Musician: musician,
+			From:     safeReturnPath(r.URL.Query().Get("from")),
 		}))
 	}
 }
@@ -163,11 +165,12 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				return
 			}
 		}
+		from := safeReturnPath(r.FormValue("from"))
 		m := musicianFromForm(r)
 		if err := client.UpdateMusician(r.Context(), id, m, getSessionToken(r)); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
-				Musician: m, ErrorKey: "admin_save_error",
+				Musician: m, ErrorKey: "admin_save_error", From: from,
 			}))
 			return
 		}
@@ -178,7 +181,11 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				log.Printf("upload musician image error: %v", uerr)
 			}
 		}
-		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
+		target := "/admin/musicians"
+		if from != "" {
+			target = from
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

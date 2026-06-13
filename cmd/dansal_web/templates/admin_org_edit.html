@@ -6,6 +6,7 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 <form method="post" enctype="multipart/form-data" class="edit-form">
+  <input type="hidden" name="from" value="{{.From}}">
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
@@ -79,7 +80,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/organizations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    <a href="{{if .From}}{{.From}}{{else}}/admin/organizations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
 

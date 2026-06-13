@@ -35,6 +35,7 @@
 </div>
 
 <form method="post" enctype="multipart/form-data" class="edit-form">
+  <input type="hidden" name="from" value="{{.From}}">
 
   <div class="sec-head"><h3>{{$.Strings.T "musician_bandname"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
   <div class="sec-body" hidden>
@@ -118,7 +119,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/musicians" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    <a href="{{if .From}}{{.From}}{{else}}/admin/musicians{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
 {{end}}

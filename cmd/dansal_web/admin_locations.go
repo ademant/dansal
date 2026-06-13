@@ -27,6 +27,7 @@ type AdminLocationEditData struct {
 	ReadOnly  bool
 	ErrorKey  string
 	ReturnURL string
+	From      string
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under
@@ -349,6 +350,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			Location:  loc,
 			ReadOnly:  readOnly,
 			ReturnURL: safeLocationsReturnURL(r.URL.Query().Get("return")),
+			From:      safeReturnPath(r.URL.Query().Get("from")),
 		}))
 	}
 }
@@ -398,6 +400,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Aliases:         parseAliases(r.FormValue("aliases")),
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
+		from := safeReturnPath(r.FormValue("from"))
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			title := i18n.T(r, "admin_edit")
@@ -405,10 +408,15 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				Location:  loc,
 				ErrorKey:  "admin_save_error",
 				ReturnURL: returnURL,
+				From:      from,
 			}))
 			return
 		}
-		http.Redirect(w, r, returnURL, http.StatusSeeOther)
+		target := returnURL
+		if from != "" {
+			target = from
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

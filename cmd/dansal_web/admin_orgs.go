@@ -58,6 +58,7 @@ type AdminOrgEditData struct {
 	UnassignedLocations   []Location
 	HasActorWithFollowers bool // True if organization has an actor that has followers
 	IsAdmin               bool
+	From                  string
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -314,6 +315,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			UnassignedLocations:   unassigned,
 			HasActorWithFollowers: hasActorWithFollowers,
 			IsAdmin:               user.Role == "admin",
+			From:                  safeReturnPath(r.URL.Query().Get("from")),
 		}))
 	}
 }
@@ -520,6 +522,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 				return
 			}
 		}
+		from := safeReturnPath(r.FormValue("from"))
 		org := orgFromForm(r)
 		if err := client.UpdateOrganization(r.Context(), id, org, token); err != nil {
 			title := i18n.T(r, "admin_edit")
@@ -527,6 +530,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 				Org:      org,
 				ErrorKey: "admin_save_error",
 				IsAdmin:  user.Role == "admin",
+				From:     from,
 			}))
 			return
 		}
@@ -544,6 +548,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 					Org:      org,
 					ErrorKey: errKey,
 					IsAdmin:  user.Role == "admin",
+					From:     from,
 				}))
 				return
 			}
@@ -559,7 +564,11 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			}
 		}
 
-		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+		target := "/admin/organizations"
+		if from != "" {
+			target = from
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

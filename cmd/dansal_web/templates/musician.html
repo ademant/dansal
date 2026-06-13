@@ -12,7 +12,7 @@
       {{if .Musician.BeginYear}}<span class="chip">est. {{.Musician.BeginYear}}</span>{{end}}
     </div>
   </div>
-  {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit" class="btn-icon btn-edit-musician" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+  {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon btn-edit-musician" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
 </div>
 
 {{if .Musician.Biography}}

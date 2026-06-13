@@ -7,6 +7,7 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
 <form method="post" class="edit-form">
+  <input type="hidden" name="from" value="{{.From}}">
 
   <div class="sec-head"><h3>{{$.Strings.T "instructor_name"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
   <div class="sec-body">
@@ -30,7 +31,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/instructors" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    <a href="{{if .From}}{{.From}}{{else}}/admin/instructors{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 
 </form>

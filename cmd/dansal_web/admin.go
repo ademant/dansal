@@ -9,6 +9,16 @@ import (
 	"strings"
 )
 
+// safeReturnPath validates that raw is a same-site relative path suitable for
+// redirecting back to after an admin edit (e.g. the page the user came from).
+// Returns "" if raw is empty or not a safe same-site path.
+func safeReturnPath(raw string) string {
+	if raw == "" || raw[0] != '/' || strings.HasPrefix(raw, "//") || strings.Contains(raw, "://") {
+		return ""
+	}
+	return raw
+}
+
 // geoDistKm returns the haversine distance in km between two lat/lon points.
 func geoDistKm(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 6371.0

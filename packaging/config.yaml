@@ -77,7 +77,10 @@ server:
     - "::1"
 
   # CORS: origins allowed to call the API from a browser.
-  # Leave empty to disable CORS headers entirely.
+  # Leave empty/unset to allow ALL origins (Access-Control-Allow-Origin: *),
+  # which is fine for a fully public read API but widens the scripting/
+  # scraping surface. Set this to the dansal-web origin(s) (and any other
+  # trusted frontends/embeds) to restrict it.
   # Example: ["https://dansal.example.com"]
   allowed_origins: []
 

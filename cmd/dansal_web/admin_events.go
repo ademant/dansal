@@ -122,6 +122,7 @@ type AdminEventNewData struct {
 	Organizations      []Organization
 	Locations          []Location
 	Musicians          []Musician
+	Instructors        []Instructor
 	Dances             []Dance
 	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
@@ -1170,6 +1171,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
 			Musicians:          bundle.Musicians,
+			Instructors:        bundle.Instructors,
 			Dances:             bundle.Dances,
 			SelectedDanceNames: selected,
 			Prefill:            prefill,
@@ -1196,6 +1198,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Organizations: bundle.Orgs,
 				Locations:     bundle.Locations,
 				Musicians:     bundle.Musicians,
+				Instructors:   bundle.Instructors,
 				Dances:        bundle.Dances,
 				ErrorKey:      errKey,
 			}))
@@ -1315,6 +1318,19 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		var musicianIDs []int
+		for _, v := range r.MultipartForm.Value["musician_ids"] {
+			if n, err2 := strconv.Atoi(strings.TrimSpace(v)); err2 == nil {
+				musicianIDs = append(musicianIDs, n)
+			}
+		}
+		var instructorIDs []int
+		for _, v := range r.MultipartForm.Value["instructor_ids"] {
+			if n, err2 := strconv.Atoi(strings.TrimSpace(v)); err2 == nil {
+				instructorIDs = append(instructorIDs, n)
+			}
+		}
+
 		req := EventCreateReq{
 			Title:          strings.TrimSpace(r.FormValue("title")),
 			Description:    strings.TrimSpace(r.FormValue("description")),
@@ -1335,6 +1351,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			OrganizationID: orgID,
 			Pricing:        pricing,
 			Location:       locReq,
+			Musicians:      musicianIDs,
+			Instructors:    instructorIDs,
 			Dances:         danceIDs,
 		}
 

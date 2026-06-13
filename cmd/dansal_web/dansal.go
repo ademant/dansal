@@ -1408,6 +1408,8 @@ type EventCreateReq struct {
 	Pricing            *Pricing        `json:"pricing,omitempty"`
 	LocationID         *int            `json:"location_id,omitempty"`
 	Location           EventLocReq     `json:"location"`
+	Musicians          []int           `json:"musicians,omitempty"`
+	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
 }
 

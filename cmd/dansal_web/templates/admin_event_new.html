@@ -284,6 +284,121 @@
     </table>
   </section>
 
+  <!-- Musicians -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_musicians"}} <a href="/help#musicians" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
+    <div id="selected-musicians"></div>
+    <div class="ac-wrap">
+      <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" oninput="searchMusicians(this.value)">
+      <div id="ac-list" class="ac-list" hidden></div>
+    </div>
+    <script>
+    var allMusicians = [{{range .Musicians}}{id:{{.ID}},name:{{jsStr .Bandname}}},{{end}}];
+    function selectedIDs(){
+      return Array.from(document.querySelectorAll('#selected-musicians input[name=musician_ids]')).map(function(i){return parseInt(i.value,10);});
+    }
+    function searchMusicians(q){
+      var list=document.getElementById('ac-list');
+      q=q.trim();
+      if(!q){list.hidden=true;return;}
+      var sel=selectedIDs();
+      var results=allMusicians.filter(function(m){
+        return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
+      }).slice(0,8);
+      if(results.length===0){list.hidden=true;return;}
+      list.innerHTML=results.map(function(m){
+        var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
+      }).join('');
+      list.querySelectorAll('.ac-item').forEach(function(item){
+        item.addEventListener('click',function(){addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
+      });
+      list.hidden=false;
+    }
+    function addMusician(id,name){
+      var wrap=document.getElementById('selected-musicians');
+      var chip=document.createElement('div');
+      chip.className='musician-chip';
+      chip.dataset.id=id;
+      var span=document.createElement('span');
+      span.textContent=name;
+      chip.appendChild(span);
+      var btn=document.createElement('button');
+      btn.type='button';
+      btn.className='btn-chip-del';
+      btn.title='Remove';
+      btn.textContent='×';
+      btn.addEventListener('click',function(){removeMusician(this);});
+      chip.appendChild(btn);
+      var inp=document.createElement('input');
+      inp.type='hidden';
+      inp.name='musician_ids';
+      inp.value=id;
+      chip.appendChild(inp);
+      wrap.appendChild(chip);
+      document.getElementById('musician-search').value='';
+      document.getElementById('ac-list').hidden=true;
+    }
+    function removeMusician(btn){btn.closest('.musician-chip').remove();}
+    document.addEventListener('click',function(e){
+      if(!e.target.closest('.ac-wrap'))document.getElementById('ac-list').hidden=true;
+    });
+    </script>
+  </section>
+
+  <!-- Instructors -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_instructors"}}</h2>
+    <div id="selected-instructors"></div>
+    <div class="ac-wrap">
+      <input id="instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off" oninput="searchInstructors(this.value)">
+      <div id="ac-instr-list" class="ac-list" hidden></div>
+    </div>
+    <script>
+    var allInstructors = [{{range .Instructors}}{id:{{.ID}},name:{{jsStr .Name}}},{{end}}];
+    function selectedInstrIDs(){
+      return Array.from(document.querySelectorAll('#selected-instructors input[name=instructor_ids]')).map(function(i){return parseInt(i.value,10);});
+    }
+    function searchInstructors(q){
+      var list=document.getElementById('ac-instr-list');
+      q=q.trim();
+      if(!q){list.hidden=true;return;}
+      var sel=selectedInstrIDs();
+      var results=allInstructors.filter(function(m){
+        return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
+      }).slice(0,8);
+      if(results.length===0){list.hidden=true;return;}
+      list.innerHTML=results.map(function(m){
+        var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
+      }).join('');
+      list.querySelectorAll('.ac-item').forEach(function(item){
+        item.addEventListener('click',function(){addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
+      });
+      list.hidden=false;
+    }
+    function addInstructor(id,name){
+      var wrap=document.getElementById('selected-instructors');
+      var chip=document.createElement('div');
+      chip.className='musician-chip';
+      chip.dataset.id=id;
+      var span=document.createElement('span'); span.textContent=name; chip.appendChild(span);
+      var btn=document.createElement('button'); btn.type='button'; btn.className='btn-chip-del'; btn.title='Remove'; btn.textContent='×';
+      btn.addEventListener('click',function(){removeInstructor(this);}); chip.appendChild(btn);
+      var inp=document.createElement('input'); inp.type='hidden'; inp.name='instructor_ids'; inp.value=id;
+      chip.appendChild(inp); wrap.appendChild(chip);
+      document.getElementById('instructor-search').value='';
+      document.getElementById('ac-instr-list').hidden=true;
+    }
+    function removeInstructor(btn){btn.closest('.musician-chip').remove();}
+    document.addEventListener('click',function(e){
+      if(!e.target.closest('.ac-wrap'))document.getElementById('ac-instr-list').hidden=true;
+    });
+    </script>
+  </section>
+
   {{if .Dances}}
   <section class="form-section">
     <h2>Dance styles</h2>
@@ -322,6 +437,15 @@
 .attr-override-name{font-size:.88rem;font-weight:600;color:#444}
 .field-hint{font-size:.82rem;color:#666;margin:.15rem 0 .6rem}
 .dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .5rem}
+.ac-wrap{position:relative;margin-top:.4rem}
+.ac-wrap input{width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
+.ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
+.ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
+#selected-musicians,#selected-instructors{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;min-height:1rem}
+.musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
+.btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
+.btn-chip-del:hover{color:#c0392b}
 .tag-picker{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;margin-top:.4rem}
 .tag-picker legend{font-weight:600;font-size:.88rem;color:#444;padding:0 .25rem}
 .tag-group{margin-bottom:.5rem}

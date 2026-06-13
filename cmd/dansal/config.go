@@ -47,6 +47,13 @@ type ServerConfig struct {
 	AllowedOrigins           []string `yaml:"allowed_origins"`
 	MetricsPort              int      `yaml:"metrics_port"`
 	MetricsAllowedIPs        []string `yaml:"metrics_allowed_ips"`
+
+	// InternalSharedSecret, when set, exempts loopback requests that send a
+	// matching X-Dansal-Internal header from RateLimitMiddleware and
+	// ConnLimitMiddleware (see isInternalCaller in main.go). Used by
+	// dansal-web's backend calls, which otherwise share dansal-web's whole
+	// visitor traffic under a single loopback rate-limit bucket.
+	InternalSharedSecret string `yaml:"internal_shared_secret"`
 	PKIDir                   string   `yaml:"pki_dir"`
 	WebAuthnRPName           string   `yaml:"webauthn_rp_name"`           // display name, default "Dansal"
 	WebAuthnUserVerification string   `yaml:"webauthn_user_verification"` // "preferred" (default) | "required" | "discouraged"

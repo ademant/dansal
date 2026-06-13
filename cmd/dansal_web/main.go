@@ -100,8 +100,9 @@ func main() {
 	db := initDB(cfg.DBPath)
 	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
-		BaseURL: cfg.DansalURL,
-		HTTP:    &http.Client{Timeout: 15 * time.Second},
+		BaseURL:        cfg.DansalURL,
+		HTTP:           &http.Client{Timeout: 15 * time.Second},
+		InternalSecret: cfg.InternalSharedSecret,
 	}
 
 	tmpls := loadTemplates()

@@ -110,6 +110,13 @@ server:
     - "127.0.0.1"
     - "::1"
 
+  # Shared secret dansal-web sends as X-Dansal-Internal on backend API calls
+  # to exempt them from the per-IP rate limiter (otherwise all of
+  # dansal-web's visitor traffic shares one loopback bucket). Must match
+  # internal_shared_secret in web.yaml. Leave empty to disable (no
+  # exemption). Generated automatically by scripts/install-instance.
+  internal_shared_secret: ""
+
   # --- Integrations (optional) ---
 
   # Telegram bot for event notifications. Leave blank to disable.

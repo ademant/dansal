@@ -35,6 +35,11 @@ type DansalClient struct {
 	BaseURL string
 	HTTP    *http.Client
 
+	// InternalSecret, when set, is sent as X-Dansal-Internal on backend API
+	// calls so dansal's rate limiter doesn't bucket all of dansal-web's
+	// requests under the shared loopback IP.
+	InternalSecret string
+
 	mu             sync.Mutex
 	orgsCache      cacheEntry[[]Organization]
 	dancesCache    cacheEntry[[]Dance]
@@ -43,6 +48,16 @@ type DansalClient struct {
 	locationsCache cacheEntry[[]Location]
 	eventsCache    cacheEntry[[]Event]
 	infoCache      cacheEntry[DansalInfo]
+}
+
+// setInternalHeader marks req as an internal backend call so dansal's rate
+// limiter exempts it (see RateLimitMiddleware/ConnLimitMiddleware in
+// cmd/dansal/main.go). Not set on Login/CertLogin/UseMagicLogin, which must
+// remain subject to per-visitor login rate limiting.
+func (c *DansalClient) setInternalHeader(req *http.Request) {
+	if c.InternalSecret != "" {
+		req.Header.Set("X-Dansal-Internal", c.InternalSecret)
+	}
 }
 
 // cached fetches from cache when fresh; otherwise calls fetch and stores the result.
@@ -395,6 +410,7 @@ func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 		if err != nil {
 			return err // request build error — not retryable
 		}
+		c.setInternalHeader(req)
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
 			lastErr = err
@@ -422,6 +438,7 @@ func (c *DansalClient) getConditional(ctx context.Context, path, etag string, ou
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return etag, false, err
@@ -935,6 +952,7 @@ func (c *DansalClient) authed(ctx context.Context, method, path, token string, b
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
 	return c.HTTP.Do(req)
 }
 

@@ -191,6 +191,10 @@ sed -i "s|^  port: 8000|  port: ${API_PORT}|" "$CONFIG"
 sed -i "s|^  listen: \"127.0.0.1:8000\"|  listen: \"127.0.0.1:${API_PORT}\"|" "$CONFIG"
 sed -i "s|base_url: \"\"|  base_url: \"https://${API_DOMAIN}\"|" "$CONFIG"
 
+# Shared secret exempting dansal-web's backend calls from dansal's rate limiter.
+INTERNAL_SECRET=$(openssl rand -hex 32)
+sed -i "s|  internal_shared_secret: \"\"|  internal_shared_secret: \"${INTERNAL_SECRET}\"|" "$CONFIG"
+
 if [[ $USE_LOCAL_MTA == true ]]; then
     sed -i "s|  sendmail: \"\"|  sendmail: \"${SENDMAIL_BIN}\"|" "$CONFIG"
     sed -i "s|  from: \"\"|  from: \"${SMTP_FROM}\"|" "$CONFIG"
@@ -209,6 +213,7 @@ WEB="${CONFDIR}/web.yaml"
 sed -i "s|^listen: \"127.0.0.1:8080\"|listen: \"127.0.0.1:${WEB_PORT}\"|" "$WEB"
 sed -i "s|^domain: \"events.example.com\"|domain: \"${WEB_DOMAIN}\"|" "$WEB"
 sed -i "s|^dansal_url: \"http://127.0.0.1:8000\"|dansal_url: \"http://127.0.0.1:${API_PORT}\"|" "$WEB"
+sed -i "s|^internal_shared_secret: \"\"|internal_shared_secret: \"${INTERNAL_SECRET}\"|" "$WEB"
 
 if [[ $USE_LOCAL_MTA == true ]]; then
     sed -i "s|# smtp_sendmail: \"\"|smtp_sendmail: \"${SENDMAIL_BIN}\"|" "$WEB"

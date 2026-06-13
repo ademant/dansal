@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -78,6 +79,10 @@ func (cl *ConnLimiter) release(ip string) {
 
 func ConnLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isInternalCaller(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		ip := getIP(r)
 		if !connLimiter.acquire(ip) {
 			writeError(w, "Too many concurrent connections", http.StatusTooManyRequests)
@@ -183,6 +188,10 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isInternalCaller(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		ip := getIP(r)
 		if !rateLimiter.Allow(ip) {
 			rateLimitRejectionsTotal.Inc()
@@ -191,6 +200,28 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isInternalCaller reports whether r is dansal-web's backend client calling
+// over loopback with the configured shared secret. Such requests are exempt
+// from RateLimitMiddleware/ConnLimitMiddleware, since they otherwise share a
+// single loopback bucket with all of dansal-web's visitor-driven traffic.
+//
+// Both conditions are required: the loopback check stops internet clients
+// (whose RemoteAddr is also loopback when proxied through nginx) from
+// supplying the header themselves — nginx strips X-Dansal-Internal on the
+// public /api/ location, so only same-host processes can set it.
+func isInternalCaller(r *http.Request) bool {
+	secret := config.Server.InternalSharedSecret
+	if secret == "" {
+		return false
+	}
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if host != "127.0.0.1" && host != "::1" {
+		return false
+	}
+	got := r.Header.Get("X-Dansal-Internal")
+	return subtle.ConstantTimeCompare([]byte(got), []byte(secret)) == 1
 }
 
 func getIP(r *http.Request) string {

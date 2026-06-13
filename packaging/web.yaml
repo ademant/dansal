@@ -15,6 +15,12 @@ domain: "events.example.com"
 # Internal URL of the dansal REST API.
 dansal_url: "http://127.0.0.1:8000"
 
+# Shared secret sent as X-Dansal-Internal on backend calls to the dansal API,
+# exempting them from dansal's per-IP rate limiter. Must match
+# server.internal_shared_secret in dansal's config.yaml. Leave empty to
+# disable. Generated automatically by scripts/install-instance.
+internal_shared_secret: ""
+
 # Path to the SQLite database used to store AP keys and followers.
 db_path: /var/lib/dansal-web/web.db
 

@@ -14,6 +14,11 @@ type Config struct {
 	Domain    string `yaml:"domain"`
 	BaseURL   string `yaml:"base_url"` // optional; defaults to https://{domain}
 	DansalURL string `yaml:"dansal_url"`
+
+	// InternalSharedSecret is sent as X-Dansal-Internal on every backend call
+	// to the dansal API, exempting it from dansal's per-IP rate limiting.
+	// Must match server.internal_shared_secret in dansal's config.yaml.
+	InternalSharedSecret string `yaml:"internal_shared_secret"`
 	DBPath    string `yaml:"db_path"`
 	PollSecs  int    `yaml:"poll_secs"`
 	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
@@ -173,6 +178,9 @@ func loadConfig() *Config {
 func applyWebEnvOverrides(cfg *Config) {
 	if v := os.Getenv("DANSAL_WEB_LISTEN"); v != "" {
 		cfg.Listen = v
+	}
+	if v := os.Getenv("DANSAL_WEB_INTERNAL_SHARED_SECRET"); v != "" {
+		cfg.InternalSharedSecret = v
 	}
 	if v := os.Getenv("DANSAL_WEB_BASE_URL"); v != "" {
 		cfg.BaseURL = v

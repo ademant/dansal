@@ -90,7 +90,81 @@ func handleAdminConn(conn net.Conn) {
 	json.NewEncoder(conn).Encode(dispatchAdminCmd(req))
 }
 
+// mutatingAdminCmds lists admin-socket commands that change state and are
+// worth an audit trail. Read-only commands (list-*, *-get, *-test) are noisy
+// and lower-value, so they're not logged.
+var mutatingAdminCmds = map[string]bool{
+	"create-user":              true,
+	"delete-user":              true,
+	"set-password":             true,
+	"set-role":                 true,
+	"add-member":               true,
+	"remove-member":            true,
+	"vacuum":                   true,
+	"backup":                   true,
+	"incremental-backup":       true,
+	"restore":                  true,
+	"magic-link":               true,
+	"revoke-invite":            true,
+	"revoke-session":           true,
+	"enable-user":              true,
+	"disable-user":             true,
+	"smtp-set":                 true,
+	"smtp-set-password":        true,
+	"telegram-set":             true,
+	"matrix-set":               true,
+	"matrix-login":             true,
+	"heartbeat-set":            true,
+	"fetch-all":                true,
+	"prune-images":             true,
+	"mail-bounces":             true,
+	"delete-event":             true,
+	"delete-all-events":        true,
+	"import-locations-geojson": true,
+}
+
+// adminAuditTarget returns a short, identifying description of req for audit
+// logging. It must never include secrets (passwords, tokens, access tokens).
+func adminAuditTarget(req adminRequest) string {
+	switch req.Cmd {
+	case "create-user", "delete-user", "set-password", "set-role", "enable-user", "disable-user", "magic-link":
+		return "email=" + req.Email
+	case "add-member", "remove-member":
+		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
+	case "backup", "incremental-backup", "restore":
+		return "path=" + req.Path
+	case "revoke-invite":
+		return "invite_token=" + req.InviteToken
+	case "revoke-session":
+		return fmt.Sprintf("session_id=%d", req.SessionID)
+	case "smtp-set", "smtp-set-password":
+		return "smtp_host=" + req.SMTPHost
+	case "telegram-set":
+		return "telegram_bot_name=" + req.TelegramBotName
+	case "matrix-set", "matrix-login":
+		return fmt.Sprintf("matrix_homeserver=%s matrix_username=%s", req.MatrixHomeserver, req.MatrixUsername)
+	case "heartbeat-set":
+		return fmt.Sprintf("interval_mins=%d", req.HeartbeatIntervalMins)
+	case "delete-event":
+		return fmt.Sprintf("event_id=%d", req.EventID)
+	default:
+		return "-"
+	}
+}
+
 func dispatchAdminCmd(req adminRequest) adminResponse {
+	resp := dispatchAdminCmdInner(req)
+	if mutatingAdminCmds[req.Cmd] {
+		outcome := "ok"
+		if !resp.OK {
+			outcome = "error: " + resp.Error
+		}
+		log.Printf("admin-audit: cmd=%s target=%s result=%s", req.Cmd, adminAuditTarget(req), outcome)
+	}
+	return resp
+}
+
+func dispatchAdminCmdInner(req adminRequest) adminResponse {
 	switch req.Cmd {
 	case "list-users":
 		return adminListUsers()

@@ -413,14 +413,29 @@ func main() {
 	log.Println("web server stopped")
 }
 
+// baselineCSP allows 'unsafe-inline' scripts/styles (most templates rely on
+// inline onclick=/<style>/<script>) plus https://unpkg.com, which serves
+// Leaflet (maps) and its plugins. img-src allows https: for map tiles
+// (OpenStreetMap/CARTO) and data: for inline SVG/icons.
+const baselineCSP = "default-src 'self'; " +
+	"img-src 'self' data: https:; " +
+	"font-src 'self' data:; " +
+	"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
+	"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
+	"object-src 'none'; base-uri 'self'; "
+
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
 		// Embed pages must be iframeable by any origin; all other pages restrict to same-origin.
-		if !strings.HasPrefix(r.URL.Path, "/embed/") {
+		if strings.HasPrefix(r.URL.Path, "/embed/") {
+			w.Header().Set("Content-Security-Policy", baselineCSP+"frame-ancestors *")
+		} else {
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+			w.Header().Set("Content-Security-Policy", baselineCSP+"frame-ancestors 'self'")
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -5,7 +5,7 @@
 {{with .Location}}
 <div class="loc-page-header">
   <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
-  {{if $.User}}<a href="/admin/locations/{{.ID}}/edit" class="btn-edit-loc">{{$.Strings.T "admin_edit"}}</a>{{end}}
+  {{if $.User}}<a href="/admin/locations/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
 </div>
 
 <div class="loc-meta">
@@ -75,8 +75,6 @@
 <style>
 .loc-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
 .loc-page-header h1{margin:0}
-.btn-edit-loc{display:inline-block;padding:.25rem .7rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;color:var(--fg-2);text-decoration:none}
-.btn-edit-loc:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
 .loc-meta{margin-bottom:1rem;display:flex;flex-direction:column;gap:.35rem}
 .loc-addr{font-size:.92rem;color:var(--fg-dim);line-height:1.5}
 .loc-website{font-size:.88rem}

@@ -30,13 +30,13 @@
     <td class="col-num">{{len .FetchSources}}</td>
     <td class="col-actions" style="white-space:nowrap">
       {{if .CanEdit}}
-      <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-sm btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       {{if .FetchSources}}
       <form method="post" action="/admin/organizations/{{.Org.ID}}/run-feeds" style="display:inline">
-        <button type="submit" class="btn-sm btn-icon btn-run" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}">🔄</button>
+        <button type="submit" class="btn-icon btn-run" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}">🔄</button>
       </form>
       {{end}}
-      <button type="button" class="btn-sm btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">🗑️</button>
+      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">🗑️</button>
       {{end}}
     </td>
   </tr>
@@ -64,7 +64,6 @@
 .btn-run:hover{background:#c5e3ff;color:#0d4a80}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
-.btn-icon{font-size:1rem;line-height:1;padding:.2rem .4rem}
 </style>
 <div id="ctd-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:440px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">

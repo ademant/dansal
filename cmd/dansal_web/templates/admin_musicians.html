@@ -25,9 +25,9 @@
       {{if .MBID}}<a href="https://musicbrainz.org/artist/{{.MBID}}" target="_blank" rel="noopener" title="{{.MBID}}" class="btn-sm">MB ↗</a>{{end}}
     </td>
     <td class="col-actions">
-      <a href="/admin/musicians/{{.ID}}/edit" class="btn-sm btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      <a href="/admin/musicians/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       {{if .Internetsite}}<a href="{{.Internetsite}}" target="_blank" rel="noopener" class="btn-sm">{{$.Strings.T "musician_website"}} ↗</a>{{end}}
-      <button type="button" class="btn-sm btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
               onclick="if(confirm('{{$.Strings.T "musician_confirm_delete"}}'))delMusician({{.ID}})">🗑️</button>
     </td>
   </tr>
@@ -61,6 +61,5 @@ function delMusician(id) {
 .btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
-.btn-icon{font-size:1rem;line-height:1;padding:.2rem .4rem}
 </style>
 {{end}}

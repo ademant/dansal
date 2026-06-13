@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,6 +22,23 @@ const (
 	cookieToken = "dsw_token"
 	cookieUser  = "dsw_user"
 )
+
+// sessionHMACKey is generated once at startup and used to sign the dsw_user
+// cookie so its fields (especially Role) can't be forged by a client.
+var sessionHMACKey []byte
+
+func init() {
+	sessionHMACKey = make([]byte, 32)
+	if _, err := rand.Read(sessionHMACKey); err != nil {
+		log.Fatal("session: generate HMAC key: ", err)
+	}
+}
+
+func sessionMAC(payload []byte) string {
+	mac := hmac.New(sha256.New, sessionHMACKey)
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 type SessionUser struct {
 	ID          int    `json:"id"`
@@ -37,7 +60,11 @@ func getSessionUser(r *http.Request) *SessionUser {
 	if err != nil {
 		return nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(c.Value)
+	payload, mac, ok := strings.Cut(c.Value, ".")
+	if !ok || !hmac.Equal([]byte(mac), []byte(sessionMAC([]byte(payload)))) {
+		return nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
 		return nil
 	}
@@ -58,7 +85,8 @@ func getSessionToken(r *http.Request) string {
 
 func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
 	userJSON, _ := json.Marshal(user)
-	userEncoded := base64.StdEncoding.EncodeToString(userJSON)
+	payload := base64.StdEncoding.EncodeToString(userJSON)
+	userEncoded := payload + "." + sessionMAC([]byte(payload))
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieToken,
 		Value:    token,

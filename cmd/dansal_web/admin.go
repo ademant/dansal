@@ -13,7 +13,17 @@ import (
 // redirecting back to after an admin edit (e.g. the page the user came from).
 // Returns "" if raw is empty or not a safe same-site path.
 func safeReturnPath(raw string) string {
-	if raw == "" || raw[0] != '/' || strings.HasPrefix(raw, "//") || strings.Contains(raw, "://") {
+	if raw == "" || raw[0] != '/' {
+		return ""
+	}
+	if strings.HasPrefix(raw, "//") || strings.HasPrefix(raw, "/\\") {
+		return ""
+	}
+	if strings.ContainsAny(raw, "\\\t\r\n") {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" {
 		return ""
 	}
 	return raw

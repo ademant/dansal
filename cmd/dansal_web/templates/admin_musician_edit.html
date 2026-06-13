@@ -28,11 +28,9 @@
   <div class="mb-tabs">
     <button type="button" class="mb-tab active" data-svc="mb">MusicBrainz</button>
     <button type="button" class="mb-tab" data-svc="discogs">Discogs</button>
-    <button type="button" class="mb-tab" data-svc="bandcamp">Bandcamp</button>
   </div>
   <ul id="mb-results" class="mb-results"></ul>
   <ul id="discogs-results" class="mb-results" style="display:none"></ul>
-  <ul id="bandcamp-results" class="mb-results" style="display:none"></ul>
   <div id="match-hint" class="match-hint" style="display:none"></div>
 </div>
 
@@ -200,7 +198,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   var searchBtn   = document.getElementById('mb-btn');
   var mbResults   = document.getElementById('mb-results');
   var discogsRes  = document.getElementById('discogs-results');
-  var bcRes       = document.getElementById('bandcamp-results');
   var matchHint   = document.getElementById('match-hint');
   var mbidInp     = document.getElementById('mbid');
   var wikidataInp = document.getElementById('wikidata_id');
@@ -225,14 +222,12 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       activeSvc = tab.dataset.svc;
       mbResults.style.display  = activeSvc === 'mb'       ? '' : 'none';
       discogsRes.style.display = activeSvc === 'discogs'  ? '' : 'none';
-      bcRes.style.display      = activeSvc === 'bandcamp' ? '' : 'none';
     });
   });
 
   // Store raw results for cross-service matching
   var mbData      = [];
   var discogsData = [];
-  var bcData      = [];
 
   function normName(s){ return s.toLowerCase().replace(/[^a-z0-9]/g,''); }
 
@@ -244,26 +239,20 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   function highlightMatches(){
     matchHint.style.display = 'none';
     // Check if the currently shown service has matches in others
-    var visibleList = activeSvc === 'mb' ? mbResults : activeSvc === 'discogs' ? discogsRes : bcRes;
+    var visibleList = activeSvc === 'mb' ? mbResults : discogsRes;
     visibleList.querySelectorAll('li').forEach(function(li){
       li.classList.remove('match-row');
     });
     if (activeSvc === 'mb' && mbData.length && discogsData.length){
       mbData.forEach(function(a, i){
-        var matches = findMatches(a.name, discogsData).length + findMatches(a.name, bcData).length;
+        var matches = findMatches(a.name, discogsData).length;
         if (matches > 0) mbResults.children[i] && mbResults.children[i].classList.add('match-row');
       });
     }
     if (activeSvc === 'discogs' && discogsData.length && mbData.length){
       discogsData.forEach(function(a, i){
-        var matches = findMatches(a.name, mbData).length + findMatches(a.name, bcData).length;
+        var matches = findMatches(a.name, mbData).length;
         if (matches > 0) discogsRes.children[i] && discogsRes.children[i].classList.add('match-row');
-      });
-    }
-    if (activeSvc === 'bandcamp' && bcData.length && mbData.length){
-      bcData.forEach(function(a, i){
-        var matches = findMatches(a.name, mbData).length + findMatches(a.name, discogsData).length;
-        if (matches > 0) bcRes.children[i] && bcRes.children[i].classList.add('match-row');
       });
     }
   }
@@ -342,7 +331,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
             }).catch(function(){ btn.textContent='▶'; loaded=false; });
         });
       })(a.id, li, expBtn);
-      li.appendChild(info); li.appendChild(meta); li.insertBefore(expBtn, btn); li.appendChild(btn);
+      li.appendChild(info); li.appendChild(meta); li.appendChild(btn); li.insertBefore(expBtn, btn);
       mbResults.appendChild(li);
     });
     highlightMatches();
@@ -376,36 +365,13 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
     highlightMatches();
   }
 
-  function renderBandcamp(results){
-    bcData = results.map(function(r){ return {name: r.name, url: r.url||''}; });
-    bcRes.innerHTML = '';
-    if (!results.length){ bcRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; return; }
-    results.forEach(function(r){
-      var li   = document.createElement('li');
-      var info = document.createElement('span');
-      info.textContent = r.name;
-      var meta = document.createElement('span');
-      meta.className = 'mb-meta';
-      if (r.url) meta.textContent = r.url.replace(/^https?:\/\//, '');
-      var btn = makePickBtn(function(){
-        if (r.name) nameInp.value = r.name;
-        if (r.url) siteInp.value = r.url;
-        bcRes.innerHTML = '';
-      });
-      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
-      bcRes.appendChild(li);
-    });
-    highlightMatches();
-  }
-
   function doSearch(){
     var q = searchInput.value.trim() || nameInp.value.trim();
     if (!q) return;
     searchBtn.disabled = true;
-    mbData = []; discogsData = []; bcData = [];
+    mbData = []; discogsData = [];
     mbResults.innerHTML      = '<li style="color:#666">…</li>';
     discogsRes.innerHTML     = '<li style="color:#666">…</li>';
-    bcRes.innerHTML          = '<li style="color:#666">…</li>';
     matchHint.style.display  = 'none';
 
     // MusicBrainz
@@ -420,15 +386,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       .then(function(data){ renderDiscogs(data.results||[]); })
       .catch(function(){ discogsRes.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; })
       .finally(function(){ searchBtn.disabled = false; });
-
-    // Bandcamp
-    fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic?q=' + encodeURIComponent(q) + '&obj_type=band')
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var items = (data.results||[]).filter(function(r){ return r.type==='b'; }).slice(0,8);
-        renderBandcamp(items);
-      })
-      .catch(function(){ bcRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; });
   }
 
   function fetchMBDetails(mbid){

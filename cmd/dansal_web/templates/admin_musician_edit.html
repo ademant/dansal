@@ -138,9 +138,11 @@
 .mb-tab{padding:.25rem .7rem;border:1px solid #b3d4f5;border-radius:4px;background:#fff;color:#1a6eb5;font-size:.82rem;cursor:pointer}
 .mb-tab.active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
 .mb-results{list-style:none;padding:0;margin-top:.5rem}
-.mb-results li{padding:.4rem .5rem;border-bottom:1px solid #ddeeff;font-size:.85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem}
+.mb-results li{padding:.4rem .5rem;border-bottom:1px solid #ddeeff;font-size:.85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
 .mb-results li:hover{background:#ddeeff}
-.mb-results li .mb-meta{color:#666;font-size:.8rem;white-space:nowrap;text-align:right;flex-shrink:0}
+.mb-results li .mb-left{display:flex;align-items:baseline;gap:.5rem;flex:1;min-width:0}
+.mb-results li .mb-right{display:flex;align-items:center;gap:.3rem;flex-shrink:0}
+.mb-results li .mb-meta{color:#666;font-size:.8rem;white-space:nowrap;flex-shrink:0}
 .mb-results li button{background:#ba2025;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
 .mb-results li.match-row{border-left:3px solid #1a6eb5}
 .match-hint{font-size:.8rem;color:#1a6eb5;margin-top:.25rem;padding:.2rem .4rem;background:#e8f3ff;border-radius:3px}
@@ -297,13 +299,14 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       expBtn.title = 'Show releases';
       expBtn.style.cssText = 'background:#555;color:#fff;border:none;border-radius:3px;padding:.15rem .4rem;font-size:.75rem;cursor:pointer;flex-shrink:0';
       (function(mbid, li, btn){
-        var loaded = false;
+        var sub = null;
+        var loading = false;
         btn.addEventListener('click', function(e){
           e.stopPropagation();
-          var sub = li.querySelector('.mb-releases');
-          if (sub) { sub.remove(); btn.textContent='▶'; return; }
-          if (loaded) return;
-          loaded = true;
+          if (sub && sub.parentNode) { sub.remove(); btn.textContent='▶'; return; }
+          if (sub) { li.appendChild(sub); btn.textContent='▼'; return; }
+          if (loading) return;
+          loading = true;
           btn.textContent = '…';
           fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=release-groups&fmt=json',
             {headers:{'Accept':'application/json'}})
@@ -313,7 +316,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
                 .filter(function(rg){ return rg['primary-type']==='Album'; })
                 .sort(function(a,b){ return (a['first-release-date']||'').localeCompare(b['first-release-date']||''); })
                 .slice(0,5);
-              var sub = document.createElement('ul');
+              sub = document.createElement('ul');
               sub.className = 'mb-releases';
               sub.style.cssText = 'margin:.3rem 0 0 0;padding:0 0 0 .5rem;list-style:none;font-size:.78rem;color:#555;border-left:2px solid #b3d4f5;width:100%';
               if (!rgs.length) {
@@ -328,10 +331,17 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
               li.style.flexWrap='wrap';
               li.appendChild(sub);
               btn.textContent='▼';
-            }).catch(function(){ btn.textContent='▶'; loaded=false; });
+              loading = false;
+            }).catch(function(){ btn.textContent='▶'; loading=false; });
         });
       })(a.id, li, expBtn);
-      li.appendChild(info); li.appendChild(meta); li.appendChild(btn); li.insertBefore(expBtn, btn);
+      var left  = document.createElement('span');
+      left.className = 'mb-left';
+      left.appendChild(info); left.appendChild(meta);
+      var right = document.createElement('span');
+      right.className = 'mb-right';
+      right.appendChild(expBtn); right.appendChild(btn);
+      li.appendChild(left); li.appendChild(right);
       mbResults.appendChild(li);
     });
     highlightMatches();
@@ -359,7 +369,13 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
         discogsRes.innerHTML = '';
         discogsIdInp.focus();
       });
-      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
+      var left  = document.createElement('span');
+      left.className = 'mb-left';
+      left.appendChild(info); left.appendChild(meta);
+      var right = document.createElement('span');
+      right.className = 'mb-right';
+      right.appendChild(btn);
+      li.appendChild(left); li.appendChild(right);
       discogsRes.appendChild(li);
     });
     highlightMatches();

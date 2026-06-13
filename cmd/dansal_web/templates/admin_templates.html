@@ -23,7 +23,7 @@
       <td class="tpl-actions">
         <button type="button" class="btn-preview" onclick="togglePreview({{.ID}})">&#9656; {{$.Strings.T "admin_template_preview"}}</button>
         <form method="post" action="/admin/templates/{{.ID}}/delete" style="display:inline">
-          <button type="submit" class="btn-del-small" onclick="return confirm('{{$.Strings.T "admin_template_confirm_delete"}}')">{{$.Strings.T "admin_delete"}}</button>
+          <button type="submit" class="btn-icon btn-del-small" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirm('{{$.Strings.T "admin_template_confirm_delete"}}')">🗑️</button>
         </form>
       </td>
     </tr>
@@ -118,7 +118,7 @@ function escHtml(s) {
 .admin-table th{text-align:left;padding:.4rem .6rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:2px solid #ddd}
 .admin-table td{padding:.4rem .6rem;border-bottom:1px solid #f0f0f0;vertical-align:middle}
 .tpl-actions{white-space:nowrap}
-.btn-del-small{background:none;border:1px solid #ddd;color:#999;cursor:pointer;font-size:.8rem;padding:.2rem .5rem;border-radius:3px}
+.btn-del-small{background:none;border-color:transparent;color:var(--fg-faint)}
 .btn-del-small:hover{color:#c0392b;border-color:#c0392b}
 .btn-preview{background:none;border:none;color:var(--fg-dim);cursor:pointer;font-size:.82rem;padding:.2rem .4rem;margin-right:.4rem}
 .btn-preview:hover{color:var(--fg)}

@@ -18,8 +18,8 @@
   <tr>
     <td>{{.Name}}</td>
     <td class="col-actions">
-      <button type="button" class="btn-sm btn-del"
-              onclick="if(confirm({{$.Strings.T "admin_dance_confirm_delete"}}))deleteDance({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
+      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+              onclick="if(confirm({{$.Strings.T "admin_dance_confirm_delete"}}))deleteDance({{.ID}})">🗑️</button>
     </td>
   </tr>
   {{end}}
@@ -40,8 +40,6 @@
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
 .col-actions{white-space:nowrap}
-.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
-.btn-sm:hover{background:#f0f0f0}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
 .add-section{margin-top:2rem}

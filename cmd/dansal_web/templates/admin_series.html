@@ -23,10 +23,10 @@
     <td class="muted">{{if .OrganizationID}}{{.OrganizationID}}{{end}}</td>
     <td class="col-num">{{.EventCount}}</td>
     <td class="col-actions" style="white-space:nowrap">
-      <a href="/admin/series/{{.ID}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <a href="/admin/series/{{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       <form method="post" action="/admin/series/{{.ID}}/delete" style="display:inline"
             onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Title}}»?')">
-        <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
+        <button type="submit" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}">🗑️</button>
       </form>
     </td>
   </tr>

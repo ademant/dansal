@@ -81,9 +81,9 @@
       {{with index $.Data.EventCounts .ID}}<span class="evt-count" title="{{$.Strings.T "loc_event_count"}}">{{.}}</span>{{end}}
     </td>
     <td class="col-actions">
-      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
-      <button type="button" class="btn-sm btn-del"
-              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
+      <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">🗑️</button>
     </td>
   </tr>
   {{end}}
@@ -184,7 +184,7 @@ main:has(.loc-table-wrap){max-width:none}
 .bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .col-cb{width:2rem;text-align:center}
 .col-actions{white-space:nowrap}
-.col-actions .btn-sm+.btn-sm{margin-left:.3rem}
+.col-actions .btn-icon+.btn-icon{margin-left:.3rem}
 .ind-cell{white-space:nowrap}
 .ind{font-size:.85rem;opacity:.25}
 .ind-ok{opacity:1;color:#1a7f37}

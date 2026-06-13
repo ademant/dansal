@@ -54,11 +54,11 @@
     <td class="date-cell" data-val="{{.LastFetchedAt}}">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
     <td class="result-cell">{{if .LastResult}}<span class="{{if hasPrefix .LastResult "error:"}}result-err{{else}}result-ok{{end}}" title="{{.LastResult}}">{{.LastResult}}</span>{{end}}</td>
     <td class="col-actions">
-      <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
-      <button type="button" class="btn-sm btn-run"
-              data-run-url="/admin/fetchurls/{{.ID}}/run">{{$.Strings.T "fetch_run"}}</button>
-      <button type="button" class="btn-sm btn-del"
-              onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">{{$.Strings.T "admin_delete"}}</button>
+      <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      <button type="button" class="btn-icon btn-run" title="{{$.Strings.T "fetch_run"}}" aria-label="{{$.Strings.T "fetch_run"}}"
+              data-run-url="/admin/fetchurls/{{.ID}}/run">🔄</button>
+      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+              onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">🗑️</button>
     </td>
   </tr>
   {{end}}

@@ -81,7 +81,7 @@ func getInstructor(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/instructors
 func createInstructor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, callerRole := callerFromRequest(r)
+	callerID, callerRole := callerFromRequest(r)
 	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -101,8 +101,8 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inst, err := scanInstructor(db.QueryRow(
-		"INSERT INTO instructors (name, bio, website, email) VALUES (?,?,?,?) RETURNING "+instructorCols,
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email,
+		"INSERT INTO instructors (name, bio, website, email, created_by_id) VALUES (?,?,?,?,?) RETURNING "+instructorCols,
+		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, callerID,
 	))
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -115,12 +115,28 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 // PUT /api/v1/instructors/{id}
 func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, callerRole := callerFromRequest(r)
+	callerID, callerRole := callerFromRequest(r)
 	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id := r.PathValue("id")
+
+	if callerRole != RoleAdmin {
+		var createdBy sql.NullInt64
+		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
+			writeError(w, "Instructor not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !createdBy.Valid || int(createdBy.Int64) != callerID {
+			writeError(w, "Forbidden: you can only edit instructors you created", http.StatusForbidden)
+			return
+		}
+	}
+
 	var req InstructorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
@@ -149,12 +165,28 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/instructors/{id}
 func deleteInstructor(w http.ResponseWriter, r *http.Request) {
-	_, callerRole := callerFromRequest(r)
+	callerID, callerRole := callerFromRequest(r)
 	if callerRole != RoleAdmin && callerRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id := r.PathValue("id")
+
+	if callerRole != RoleAdmin {
+		var createdBy sql.NullInt64
+		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
+			writeError(w, "Instructor not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !createdBy.Valid || int(createdBy.Int64) != callerID {
+			writeError(w, "Forbidden: you can only delete instructors you created", http.StatusForbidden)
+			return
+		}
+	}
+
 	result, err := db.Exec("DELETE FROM instructors WHERE id=?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

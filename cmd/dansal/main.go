@@ -1265,6 +1265,15 @@ func migrateDB() {
 			db.Exec("ALTER TABLE musicians ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
 		}
 	}
+	// Safety net: ensure instructors.created_by_id exists even if v8 was
+	// pre-marked before this ALTER TABLE was added to the v8 block.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('instructors') WHERE name='created_by_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE instructors ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
+		}
+	}
 
 	db.Exec("ALTER TABLE invite_links ADD COLUMN invite_type TEXT NOT NULL DEFAULT 'link'")
 	db.Exec("ALTER TABLE pending_registrations ADD COLUMN org_actor_name TEXT DEFAULT ''")
@@ -1349,6 +1358,7 @@ func migrateDB() {
 			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 			FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE CASCADE
 		)`)
+		db.Exec("ALTER TABLE instructors ADD COLUMN created_by_id INTEGER REFERENCES users(id)")
 		mark(8)
 	}
 	// v9: entry_type column on timetable_entries (bal/workshop).
@@ -1852,7 +1862,8 @@ func createTables() error {
 		bio TEXT,
 		website TEXT,
 		email TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_by_id INTEGER REFERENCES users(id)
 	);
 	CREATE TABLE IF NOT EXISTS event_instructors (
 		event_id INTEGER NOT NULL,

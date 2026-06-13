@@ -1432,6 +1432,9 @@ func migrateDB() {
 	// Index for location_organizations(location_id), used by syncLocationOrgs
 	// deletes and location merge/lookup queries.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
+	// Index for the display_name fallback lookup in login(), hit on every
+	// login attempt whose email doesn't match any user.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_users_display_name_nocase ON users(display_name COLLATE NOCASE)")
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts

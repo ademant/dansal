@@ -515,11 +515,11 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	}
 	// Task D: pricing=free filter
 	if v := q.Get("pricing"); v == "free" {
-		*query += ` AND e.pricing LIKE '%"type":"free"%'`
+		*query += ` AND json_extract(e.pricing,'$.type')='free'`
 	}
 	// Task D: wheelchair filter
 	if q.Get("wheelchair") == "1" {
-		*query += ` AND e.attributes LIKE '%"wheelchair":true%'`
+		*query += ` AND json_extract(e.attributes,'$.wheelchair')=1`
 	}
 	// Task D: bookable filter
 	if q.Get("bookable") == "1" {

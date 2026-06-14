@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -25,6 +26,32 @@ func webauthnProxy(cfg *Config, client *DansalClient, apiPath string) http.Handl
 	}
 }
 
+// doProxyPost reads at most 1MB from body, POSTs it as JSON to
+// client.BaseURL+apiPath (with rawQuery appended if non-empty), optionally
+// setting an Authorization: Bearer header when token is non-empty, and
+// returns the upstream response (body already drained into respBody).
+func doProxyPost(ctx context.Context, client *DansalClient, apiPath, rawQuery, token string, body []byte) (*http.Response, []byte, error) {
+	apiURL := client.BaseURL + apiPath
+	if rawQuery != "" {
+		apiURL += "?" + rawQuery
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	return resp, respBody, nil
+}
+
 // webauthnAuthedProxyDo is like webauthnProxyDo but forwards a Bearer token so
 // the API endpoint can verify the caller's identity.
 func webauthnAuthedProxyDo(cfg *Config, client *DansalClient, apiPath string, token string, w http.ResponseWriter, r *http.Request) {
@@ -33,24 +60,11 @@ func webauthnAuthedProxyDo(cfg *Config, client *DansalClient, apiPath string, to
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
-	apiURL := client.BaseURL + apiPath
-	if q := r.URL.RawQuery; q != "" {
-		apiURL += "?" + q
-	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, apiURL, bytes.NewReader(body))
+	resp, respBody, err := doProxyPost(r.Context(), client, apiPath, r.URL.RawQuery, token, body)
 	if err != nil {
 		http.Error(w, "proxy error", http.StatusBadGateway)
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.HTTP.Do(req)
-	if err != nil {
-		http.Error(w, "proxy error", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
@@ -63,24 +77,11 @@ func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.R
 		return
 	}
 
-	apiURL := client.BaseURL + apiPath
-	if q := r.URL.RawQuery; q != "" {
-		apiURL += "?" + q
-	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, apiURL, bytes.NewReader(body))
+	resp, respBody, err := doProxyPost(r.Context(), client, apiPath, r.URL.RawQuery, "", body)
 	if err != nil {
 		http.Error(w, "proxy error", http.StatusBadGateway)
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTP.Do(req)
-	if err != nil {
-		http.Error(w, "proxy error", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		var result struct {

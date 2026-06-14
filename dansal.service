@@ -35,13 +35,21 @@ ProtectKernelModules=true
 ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
 LockPersonality=true
 RestrictRealtime=true
 RestrictNamespaces=true
+RestrictSUIDSGID=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 SystemCallFilter=@system-service
 SystemCallArchitectures=native
 MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+DeviceAllow=
+RemoveIPC=true
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target

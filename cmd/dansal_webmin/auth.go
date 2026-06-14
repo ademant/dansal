@@ -3,44 +3,21 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ademant/dansal/internal/websession"
 )
 
 type contextKey int
 
 const ctxSessionUser contextKey = 1
 
-const (
-	cookieToken = "dwm_token"
-	cookieUser  = "dwm_user"
-)
-
-// sessionHMACKey is generated once at startup and used to sign the dwm_user
-// cookie so its fields (especially Role) can't be forged by a client.
-var sessionHMACKey []byte
-
-func init() {
-	sessionHMACKey = make([]byte, 32)
-	if _, err := rand.Read(sessionHMACKey); err != nil {
-		log.Fatal("session: generate HMAC key: ", err)
-	}
-}
-
-func sessionMAC(payload []byte) string {
-	mac := hmac.New(sha256.New, sessionHMACKey)
-	mac.Write(payload)
-	return hex.EncodeToString(mac.Sum(nil))
-}
+var sessionCookies = websession.New("dwm_token", "dwm_user")
 
 type SessionUser struct {
 	ID          int    `json:"id"`
@@ -55,20 +32,8 @@ func getSessionUser(r *http.Request) *SessionUser {
 	if u, ok := r.Context().Value(ctxSessionUser).(*SessionUser); ok && u != nil {
 		return u
 	}
-	c, err := r.Cookie(cookieUser)
-	if err != nil {
-		return nil
-	}
-	payload, mac, ok := strings.Cut(c.Value, ".")
-	if !ok || !hmac.Equal([]byte(mac), []byte(sessionMAC([]byte(payload)))) {
-		return nil
-	}
-	decoded, err := base64.StdEncoding.DecodeString(payload)
-	if err != nil {
-		return nil
-	}
 	var u SessionUser
-	if json.Unmarshal(decoded, &u) != nil {
+	if !sessionCookies.GetUser(r, &u) {
 		return nil
 	}
 	return &u
@@ -102,47 +67,15 @@ func certAuthUser(cfg *Config, cn string) *SessionUser {
 }
 
 func getSessionToken(r *http.Request) string {
-	c, err := r.Cookie(cookieToken)
-	if err != nil {
-		return ""
-	}
-	return c.Value
+	return sessionCookies.GetToken(r)
 }
 
 func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
-	userJSON, _ := json.Marshal(user)
-	payload := base64.StdEncoding.EncodeToString(userJSON)
-	userEncoded := payload + "." + sessionMAC([]byte(payload))
-	http.SetCookie(w, &http.Cookie{
-		Name:     cookieToken,
-		Value:    token,
-		Path:     "/",
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     cookieUser,
-		Value:    userEncoded,
-		Path:     "/",
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	sessionCookies.Set(w, token, user, expiresAt)
 }
 
 func clearSession(w http.ResponseWriter) {
-	for _, name := range []string{cookieToken, cookieUser} {
-		http.SetCookie(w, &http.Cookie{
-			Name:    name,
-			Value:   "",
-			Path:    "/",
-			MaxAge:  -1,
-			Expires: time.Unix(0, 0),
-		})
-	}
+	sessionCookies.Clear(w)
 }
 
 func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {

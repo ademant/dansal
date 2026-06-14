@@ -33,6 +33,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Vulnerability scan
+        run: make vulncheck
+
       - name: Test
         run: go test ./...
 

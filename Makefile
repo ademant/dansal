@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
-        run fmt vet clean install install-web install-webmin install-units setup-instance \
+        run fmt vet vulncheck clean install install-web install-webmin install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-full
 
 build:
@@ -35,6 +35,9 @@ fmt:
 
 vet:
 	go vet ./...
+
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 run: build-dansal
 	./dansal --config ./config.yaml

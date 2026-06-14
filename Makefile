@@ -13,7 +13,7 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
         run fmt vet vulncheck clean install install-web install-webmin install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-full
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-default deploy-full
 
 build:
 	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
@@ -319,9 +319,12 @@ endif
 	    -e "s/\bdansal_web\b/dansal_web_$(INSTANCE)/g" \
 	    -e "s/zone=api_limit/zone=api_limit_$(INSTANCE)/g" \
 	    -e "s/zone=auth_limit/zone=auth_limit_$(INSTANCE)/g" \
+	    -e "s/zone=conn_limit/zone=conn_limit_$(INSTANCE)/g" \
 	    deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal-$(INSTANCE).conf
 	nginx -t || { rm -f /etc/nginx/conf.d/dansal-$(INSTANCE).conf; exit 1; }; systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-$(INSTANCE).conf"
+	grep -qE '^\s*server_tokens\s+off\s*;' /etc/nginx/nginx.conf 2>/dev/null || \
+	    echo "Warning: 'server_tokens off;' not found in /etc/nginx/nginx.conf — add it to the http{} block to hide the nginx version"
 
 # Deploy nginx configuration for dansal-webmin for a specific instance.
 # Usage: sudo make deploy-nginx-webmin INSTANCE=prod
@@ -356,6 +359,7 @@ endif
 	    -e "s/webmin\.example\.com/$$WEBMIN_DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8090/127.0.0.1:$$WEBMIN_PORT/g" \
 	    -e "s/\bdansal_webmin\b/dansal_webmin_$(INSTANCE)/g" \
+	    -e "s/zone=conn_limit/zone=conn_limit_$(INSTANCE)/g" \
 	    -e "s|/etc/dansal/mtls/ca\.crt|$$CA_CERT|g" \
 	    deploy/nginx/dansal-webmin.conf > /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf
 	if [ ! -f "$$CA_CERT" ]; then \
@@ -369,6 +373,19 @@ endif
 	nginx -t || { rm -f /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf; exit 1; }
 	systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf"
+
+# Install the global catch-all server block that rejects requests with an
+# unrecognized Host header. One-time, independent of INSTANCE.
+# Usage: sudo make deploy-nginx-default
+.ONESHELL:
+deploy-nginx-default:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx-default requires root"; exit 1; }
+	set -e
+	install -d -m 755 /etc/nginx/conf.d
+	install -m 644 deploy/nginx/00-default-catchall.conf /etc/nginx/conf.d/00-default-catchall.conf
+	nginx -t || { rm -f /etc/nginx/conf.d/00-default-catchall.conf; exit 1; }
+	systemctl reload nginx
+	echo "Deployed /etc/nginx/conf.d/00-default-catchall.conf"
 
 # Deploy both web application and nginx configuration for an instance.
 # Usage: sudo make deploy-full INSTANCE=prod

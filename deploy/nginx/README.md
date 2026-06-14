@@ -421,10 +421,44 @@ limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=5r/s;
 
 Change `10r/s` and `5r/s` to your desired rates, and adjust burst values in the `location` blocks.
 
+### Connection Limiting and Timeouts
+
+In addition to `limit_req` (request rate), the templates set:
+
+- **`limit_conn_zone`/`limit_conn`**: caps each client IP to 20 concurrent
+  connections per proxied `location` block. This mitigates slow-loris-style
+  attacks, which use many slow/idle connections rather than a high request
+  rate (and so aren't caught by `limit_req`).
+- **Timeouts**: `client_body_timeout`, `client_header_timeout`,
+  `keepalive_timeout`, and `send_timeout` are all set to 10–30s, much
+  tighter than nginx's defaults (60s+), further narrowing the slow-loris
+  window.
+
+`deploy-nginx`/`deploy-nginx-webmin` namespace the `conn_limit` shared-memory
+zone per instance, same as `api_limit`/`auth_limit`.
+
+### server_tokens
+
+`deploy-nginx` warns if `server_tokens off;` is not present in
+`/etc/nginx/nginx.conf`'s `http {}` block. This is a global nginx setting
+(not part of the per-instance templates) that hides the nginx version from
+the `Server` response header and default error pages, reducing
+fingerprinting. Add it manually:
+
+```nginx
+http {
+    server_tokens off;
+    ...
+}
+```
+
+then `sudo nginx -t && sudo systemctl reload nginx`.
+
 ### Security
 
 - **HSTS**: Enforced with 2-year max-age
-- **TLS**: TLS 1.2+ (TLS 1.3 required for HTTP/3)
+- **TLS**: TLS 1.2+ (TLS 1.3 required for HTTP/3), explicit AEAD-only cipher
+  list for the TLS 1.2 fallback, OCSP stapling, session tickets disabled
 - **Headers**: XSS protection, frame options, referrer policy
 - **Proxy headers**: Proper forwarding of client IP and protocol
 
@@ -434,6 +468,28 @@ Change `10r/s` and `5r/s` to your desired rates, and adjust burst values in the 
 - **Web frontend**: `/` → `http://dansal_web` (127.0.0.1:8080)
 - **Client max body size**: 10MB for file uploads
 - **Keepalive**: 16 connections per upstream
+
+### Default Catch-All Server (one-time, global)
+
+Without a `default_server`, nginx serves requests with an unrecognized
+`Host` header (or direct-IP requests) using the first configured `server`
+block — useful for scanners doing vhost enumeration or cert fingerprinting.
+
+`deploy/nginx/00-default-catchall.conf` adds a global `default_server` for
+ports 80/443 that closes the connection (`444`) for any unrecognized
+Host/SNI. Install it once, independent of `INSTANCE`:
+
+```bash
+sudo make deploy-nginx-default
+```
+
+This is separate from `deploy-nginx INSTANCE=<name>` because every instance
+regenerates its own config file — only one `default_server` per
+listen address/port is allowed, so it can't live in the per-instance
+template. Run it once on the host, before or after deploying instances.
+
+If HTTP/3 is enabled, uncomment the `listen 443 quic default_server;` block
+in `00-default-catchall.conf`.
 
 ## Troubleshooting
 

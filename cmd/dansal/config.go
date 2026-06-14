@@ -26,7 +26,6 @@ type ServerConfig struct {
 	DBPath                  string   `yaml:"db_path"`
 	DBMaxConns              int      `yaml:"db_max_conns"`
 	LoginRateLimit          int      `yaml:"login_rate_limit"`
-	LoginTarpitSecs         int      `yaml:"login_tarpit_secs"`
 	LoginMaxFailures        int      `yaml:"login_max_failures"`
 	LoginFailureWindowSecs  int      `yaml:"login_failure_window_secs"`
 	InviteExpiryHours       int      `yaml:"invite_expiry_hours"`
@@ -43,7 +42,6 @@ type ServerConfig struct {
 	HeartbeatIntervalMins   int      `yaml:"heartbeat_interval_mins"`
 	SessionIdleTimeoutMins  int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
 	SessionMaxConcurrent    int      `yaml:"session_max_concurrent"`    // 0 = unlimited
-	ReservedUsernames       []string `yaml:"reserved_usernames"`
 	AllowedOrigins          []string `yaml:"allowed_origins"`
 	MetricsPort             int      `yaml:"metrics_port"`
 	MetricsAllowedIPs       []string `yaml:"metrics_allowed_ips"`
@@ -54,7 +52,6 @@ type ServerConfig struct {
 	// dansal-web's backend calls, which otherwise share dansal-web's whole
 	// visitor traffic under a single loopback rate-limit bucket.
 	InternalSharedSecret     string `yaml:"internal_shared_secret"`
-	PKIDir                   string `yaml:"pki_dir"`
 	WebAuthnRPName           string `yaml:"webauthn_rp_name"`           // display name, default "Dansal"
 	WebAuthnUserVerification string `yaml:"webauthn_user_verification"` // "preferred" (default) | "required" | "discouraged"
 	ImageFormat              string `yaml:"image_format"`               // "avif" | "jpeg", default "avif"
@@ -187,9 +184,6 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5
 	}
-	if cfg.Server.LoginTarpitSecs == 0 {
-		cfg.Server.LoginTarpitSecs = 10
-	}
 	if cfg.Server.LoginMaxFailures == 0 {
 		cfg.Server.LoginMaxFailures = 10
 	}
@@ -216,11 +210,6 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.HeartbeatIntervalMins == 0 {
 		cfg.Server.HeartbeatIntervalMins = 5
-	}
-	if len(cfg.Server.ReservedUsernames) == 0 {
-		cfg.Server.ReservedUsernames = []string{
-			"admin", "administrator", "root", "superuser", "sysadmin", "system", "su",
-		}
 	}
 }
 

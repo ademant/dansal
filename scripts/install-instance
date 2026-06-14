@@ -229,11 +229,9 @@ fi
 # ── patch webmin.yaml ─────────────────────────────────────────────────────────
 
 WEBMIN="${CONFDIR}/webmin.yaml"
-SESSION_SECRET=$(openssl rand -hex 32)
 
 sed -i "s|^listen: \"127.0.0.1:8090\"|listen: \"127.0.0.1:${WEBMIN_PORT}\"|" "$WEBMIN"
 sed -i "s|^dansal_url: \"http://127.0.0.1:8000\"|dansal_url: \"http://127.0.0.1:${API_PORT}\"|" "$WEBMIN"
-sed -i "s|session_secret: \"\"|session_secret: \"${SESSION_SECRET}\"|" "$WEBMIN"
 if [[ -n $WEBMIN_DOMAIN ]]; then
     sed -i "s|# webmin_domain: \"webmin.example.com\"|webmin_domain: \"${WEBMIN_DOMAIN}\"|" "$WEBMIN"
 fi

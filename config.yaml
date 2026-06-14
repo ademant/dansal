@@ -6,15 +6,6 @@ server:
     - "::1"
   rate_limit: 100
   login_rate_limit: 5
-  login_tarpit_secs: 10
-  reserved_usernames:
-    - admin
-    - administrator
-    - root
-    - superuser
-    - sysadmin
-    - system
-    - su
   max_body_bytes: 1048576  # 1 MiB
   read_timeout_secs: 10
   write_timeout_secs: 30

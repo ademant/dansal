@@ -18,7 +18,6 @@ type Config struct {
 	Listen                string `yaml:"listen"`
 	DansalURL             string `yaml:"dansal_url"`
 	AdminSocket           string `yaml:"admin_socket"`
-	SessionSecret         string `yaml:"session_secret"`
 	SiteName              string `yaml:"site_name"`
 	Instance              string `yaml:"instance"`
 	WebDBPath             string `yaml:"web_db_path"` // path to web.db for site-config editing
@@ -72,9 +71,6 @@ func loadConfigFrom(path string) *Config {
 	if cfg.AdminSocket == "" {
 		cfg.AdminSocket = "/run/dansal/dansal.sock"
 	}
-	if cfg.SessionSecret == "" {
-		log.Fatal("session_secret must be set in webmin.yaml")
-	}
 	if cfg.SiteName == "" {
 		cfg.SiteName = "Dansal Webmin"
 	}
@@ -87,9 +83,6 @@ func loadConfigFrom(path string) *Config {
 func applyWebminEnvOverrides(cfg *Config) {
 	if v := os.Getenv("DANSAL_WEBMIN_LISTEN"); v != "" {
 		cfg.Listen = v
-	}
-	if v := os.Getenv("DANSAL_WEBMIN_SESSION_SECRET"); v != "" {
-		cfg.SessionSecret = v
 	}
 	if v := os.Getenv("DANSAL_WEBMIN_DANSAL_URL"); v != "" {
 		cfg.DansalURL = strings.TrimRight(v, "/")

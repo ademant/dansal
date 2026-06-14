@@ -55,9 +55,6 @@ server:
   # Login attempts per minute per IP.
   login_rate_limit: 5
 
-  # Seconds to delay a response after a failed login (tarpit).
-  login_tarpit_secs: 10
-
   # Failed logins within login_failure_window_secs before the account is locked.
   login_max_failures: 10
 
@@ -90,16 +87,6 @@ server:
   # trusted frontends/embeds) to restrict it.
   # Example: ["https://dansal.example.com"]
   allowed_origins: []
-
-  # Usernames that cannot be registered.
-  reserved_usernames:
-    - admin
-    - administrator
-    - root
-    - superuser
-    - sysadmin
-    - system
-    - su
 
   # --- Metrics ---
 

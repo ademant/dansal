@@ -22,16 +22,13 @@ func callerUserID(r *http.Request) int {
 	return id
 }
 
-// totpGenerate generates a 6-digit TOTP code per RFC 6238 / RFC 4226.
-func totpGenerate(secretBase32 string, t time.Time) (string, error) {
-	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(secretBase32))
-	if err != nil {
-		return "", err
-	}
+// totpGenerateFromKey generates a 6-digit TOTP code per RFC 6238 / RFC 4226
+// from an already-decoded key.
+func totpGenerateFromKey(key []byte, t time.Time) string {
 	counter := uint64(t.Unix()) / 30
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, counter)
-	h := hmac.New(sha1.New, secret)
+	h := hmac.New(sha1.New, key)
 	h.Write(buf)
 	sum := h.Sum(nil)
 	offset := sum[len(sum)-1] & 0x0f
@@ -39,15 +36,27 @@ func totpGenerate(secretBase32 string, t time.Time) (string, error) {
 		(int(sum[offset+1])&0xff)<<16 |
 		(int(sum[offset+2])&0xff)<<8 |
 		(int(sum[offset+3]) & 0xff)
-	return fmt.Sprintf("%06d", code%1_000_000), nil
+	return fmt.Sprintf("%06d", code%1_000_000)
+}
+
+// totpGenerate generates a 6-digit TOTP code per RFC 6238 / RFC 4226.
+func totpGenerate(secretBase32 string, t time.Time) (string, error) {
+	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(secretBase32))
+	if err != nil {
+		return "", err
+	}
+	return totpGenerateFromKey(secret, t), nil
 }
 
 // totpValid checks code against ±1 time window (30 s each) to tolerate clock skew.
 func totpValid(secretBase32, code string, t time.Time) bool {
 	code = strings.TrimSpace(code)
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(secretBase32))
+	if err != nil {
+		return false
+	}
 	for _, offsetSecs := range []int64{-30, 0, 30} {
-		got, err := totpGenerate(secretBase32, t.Add(time.Duration(offsetSecs)*time.Second))
-		if err == nil && got == code {
+		if totpGenerateFromKey(key, t.Add(time.Duration(offsetSecs)*time.Second)) == code {
 			return true
 		}
 	}

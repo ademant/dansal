@@ -19,12 +19,12 @@ type Config struct {
 	// to the dansal API, exempting it from dansal's per-IP rate limiting.
 	// Must match server.internal_shared_secret in dansal's config.yaml.
 	InternalSharedSecret string `yaml:"internal_shared_secret"`
-	DBPath    string `yaml:"db_path"`
-	PollSecs  int    `yaml:"poll_secs"`
-	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
-	PagesFile string `yaml:"pages_file"` // optional path to impressum/contact YAML
-	LegalDir  string `yaml:"legal_dir"`  // optional directory for legal markdown files (impressum.md, privacy.md, terms.md, contact.md)
-	HelpDir   string `yaml:"help_dir"`   // optional path to per-language help markdown overrides, e.g. /etc/dansal/help
+	DBPath               string `yaml:"db_path"`
+	PollSecs             int    `yaml:"poll_secs"`
+	I18nFile             string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
+	PagesFile            string `yaml:"pages_file"` // optional path to impressum/contact YAML
+	LegalDir             string `yaml:"legal_dir"`  // optional directory for legal markdown files (impressum.md, privacy.md, terms.md, contact.md)
+	HelpDir              string `yaml:"help_dir"`   // optional path to per-language help markdown overrides, e.g. /etc/dansal/help
 
 	// NodeInfo metadata (served at /nodeinfo/2.1)
 	NodeInfoDescription     string `yaml:"nodeinfo_description"`

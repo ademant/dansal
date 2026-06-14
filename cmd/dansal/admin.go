@@ -1295,4 +1295,3 @@ func insertLocation(loc Location) error {
 	)
 	return err
 }
-

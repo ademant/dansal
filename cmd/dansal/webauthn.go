@@ -160,28 +160,20 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.PathValue("token")
 
-	var invite struct {
-		ID          int
-		Role        string
-		OrgID       sql.NullInt64
-		ExpiresAt   string
-		UsedAt      string
-		PresetEmail string
-	}
-	err := db.QueryRow(
-		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
-		 FROM invite_links WHERE token=?`, token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
-	if err == sql.ErrNoRows {
+	invite, err := loadValidInvite(token)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
-	}
-	if invite.UsedAt != "" {
+	case err == errInviteUsed:
 		writeError(w, "Invite link already used", http.StatusGone)
 		return
-	}
-	if exp, err2 := parseTokenExpiration(invite.ExpiresAt); err2 != nil || time.Now().After(exp) {
+	case err == errInviteExpired:
 		writeError(w, "Invite link expired", http.StatusGone)
+		return
+	default:
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -281,26 +273,20 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var invite struct {
-		ID        int
-		Role      string
-		OrgID     sql.NullInt64
-		ExpiresAt string
-		UsedAt    string
-	}
-	err := db.QueryRow(
-		"SELECT id, role, org_id, expires_at, COALESCE(used_at,'') FROM invite_links WHERE token=?", token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt)
-	if err == sql.ErrNoRows {
+	invite, err := loadValidInvite(token)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
 		writeError(w, "Invalid invite link", http.StatusNotFound)
 		return
-	}
-	if invite.UsedAt != "" {
+	case err == errInviteUsed:
 		writeError(w, "Invite link already used", http.StatusGone)
 		return
-	}
-	if exp, err2 := parseTokenExpiration(invite.ExpiresAt); err2 != nil || time.Now().After(exp) {
+	case err == errInviteExpired:
 		writeError(w, "Invite link expired", http.StatusGone)
+		return
+	default:
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 

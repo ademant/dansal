@@ -3,10 +3,50 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 )
+
+// inviteRecord holds the invite_links columns needed to validate and redeem
+// an invite.
+type inviteRecord struct {
+	ID          int
+	Role        string
+	OrgID       sql.NullInt64
+	ExpiresAt   string
+	UsedAt      string
+	PresetEmail string
+}
+
+var (
+	errInviteUsed    = errors.New("invite link already used")
+	errInviteExpired = errors.New("invite link expired")
+)
+
+// loadValidInvite looks up an invite by token and validates it has not been
+// used or expired. Returns sql.ErrNoRows if no invite exists for token,
+// errInviteUsed or errInviteExpired if found but no longer redeemable, or
+// another error on a DB failure. Callers map these to the appropriate HTTP
+// status and message.
+func loadValidInvite(token string) (inviteRecord, error) {
+	var invite inviteRecord
+	err := db.QueryRow(
+		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
+		 FROM invite_links WHERE token=?`, token,
+	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
+	if err != nil {
+		return inviteRecord{}, err
+	}
+	if invite.UsedAt != "" {
+		return inviteRecord{}, errInviteUsed
+	}
+	if exp, err2 := parseTokenExpiration(invite.ExpiresAt); err2 != nil || time.Now().After(exp) {
+		return inviteRecord{}, errInviteExpired
+	}
+	return invite, nil
+}
 
 // roleRank returns a numeric rank for role comparison (higher = more privileged).
 func roleRank(role string) int {
@@ -243,34 +283,20 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 
 	token := r.PathValue("token")
 
-	var invite struct {
-		ID          int
-		Role        string
-		OrgID       sql.NullInt64
-		ExpiresAt   string
-		UsedAt      string
-		PresetEmail string
-	}
-	err := db.QueryRow(
-		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
-		 FROM invite_links WHERE token=?`,
-		token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
-	if err == sql.ErrNoRows {
+	invite, err := loadValidInvite(token)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
 		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
-	}
-	if err != nil {
-		writeError(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	if invite.UsedAt != "" {
+	case err == errInviteUsed:
 		writeError(w, "Invite link has already been used", http.StatusGone)
 		return
-	}
-	exp, err := parseTokenExpiration(invite.ExpiresAt)
-	if err != nil || time.Now().After(exp) {
+	case err == errInviteExpired:
 		writeError(w, "Invite link has expired", http.StatusGone)
+		return
+	default:
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 

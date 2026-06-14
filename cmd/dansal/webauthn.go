@@ -258,6 +258,29 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// issueSessionResponse creates a session token for userID and writes the
+// standard {token, expires_at, user_id, email, role} JSON response with the
+// given status code. On token-creation failure, onErr is called to write an
+// alternate response — each call site has its own fallback behavior.
+func issueSessionResponse(w http.ResponseWriter, r *http.Request, status int, userID int, email, role string, onErr func()) {
+	sessionToken, expiresAt, err := createTokenInDB(userID, r.UserAgent(), getClientIP(r), "")
+	if err != nil {
+		onErr()
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"token":      sessionToken,
+		"expires_at": expiresAt.Format(time.RFC3339),
+		"user_id":    userID,
+		"email":      email,
+		"role":       role,
+	})
+}
+
 // POST /api/v1/invites/{token}/webauthn/finish?session_id=…
 // Body: PublicKeyCredential JSON from navigator.credentials.create()
 // Returns: {"token":"…","user_id":…,"role":"…"}
@@ -348,21 +371,9 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", identifier, invite.Role, invite.ID)
 
-	sessionToken, expiresAt, err := createTokenInDB(stored.UserID, r.UserAgent(), getClientIP(r), "")
-	if err != nil {
+	issueSessionResponse(w, r, http.StatusCreated, stored.UserID, stored.Email, invite.Role, func() {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"status": "created"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
-		"token":      sessionToken,
-		"expires_at": expiresAt.Format(time.RFC3339),
-		"user_id":    stored.UserID,
-		"email":      stored.Email,
-		"role":       invite.Role,
 	})
 }
 
@@ -491,18 +502,8 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 			"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
 			credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), discUserID, credential.ID,
 		)
-		sessionToken, expiresAt, err := createTokenInDB(discUserID, r.UserAgent(), getClientIP(r), "")
-		if err != nil {
+		issueSessionResponse(w, r, http.StatusOK, discUserID, discEmail, discRole, func() {
 			writeError(w, "Could not create session", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"token":      sessionToken,
-			"expires_at": expiresAt.Format(time.RFC3339),
-			"user_id":    discUserID,
-			"email":      discEmail,
-			"role":       discRole,
 		})
 		return
 	}
@@ -551,19 +552,8 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), stored.UserID, credential.ID,
 	)
 
-	sessionToken, expiresAt, err := createTokenInDB(stored.UserID, r.UserAgent(), getClientIP(r), "")
-	if err != nil {
+	issueSessionResponse(w, r, http.StatusOK, stored.UserID, userEmail, role, func() {
 		writeError(w, "Could not create session", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"token":      sessionToken,
-		"expires_at": expiresAt.Format(time.RFC3339),
-		"user_id":    stored.UserID,
-		"email":      userEmail,
-		"role":       role,
 	})
 }
 

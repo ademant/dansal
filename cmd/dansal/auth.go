@@ -421,6 +421,56 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// resolveCaller validates the Authorization header (Bearer token or API
+// key) and, on success, sets X-User-ID/X-User-Role/X-Session-ID on r for
+// downstream handlers.
+//
+// ok=true means a valid credential was resolved and the request headers
+// were set. ok=false has two cases, distinguished by noAuth:
+//   - noAuth=true: no Authorization header was present. resolveCaller wrote
+//     nothing; the caller decides how to proceed (reject or continue
+//     unauthenticated).
+//   - noAuth=false: the header was present but malformed/invalid/expired.
+//     resolveCaller has already written a 401 TokenError response.
+func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return false, true
+	}
+
+	// Extract token from "Bearer <token>" format
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid authorization header format. Use 'Bearer <token>'"})
+		return false, false
+	}
+
+	token := parts[1]
+
+	// Validate token, fall back to API key
+	userID, userRole, tokenID, err := validateToken(token)
+	if err != nil {
+		var apiErr error
+		userID, userRole, apiErr = validateAPIKey(token)
+		if apiErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
+			return false, false
+		}
+	} else {
+		updateLastSeen(token)
+		r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
+	}
+
+	// Store userID and role in request header for later use
+	r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
+	r.Header.Set("X-User-Role", userRole)
+	return true, false
+}
+
 // TokenMiddleware validates the token in the Authorization header
 func TokenMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -430,44 +480,15 @@ func TokenMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "Authorization header missing"})
-			return
-		}
-
-		// Extract token from "Bearer <token>" format
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid authorization header format. Use 'Bearer <token>'"})
-			return
-		}
-
-		token := parts[1]
-
-		// Validate token, fall back to API key
-		userID, userRole, tokenID, err := validateToken(token)
-		if err != nil {
-			var apiErr error
-			userID, userRole, apiErr = validateAPIKey(token)
-			if apiErr != nil {
+		ok, noAuth := resolveCaller(w, r)
+		if !ok {
+			if noAuth {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
-				return
+				json.NewEncoder(w).Encode(TokenError{Error: "Authorization header missing"})
 			}
-		} else {
-			updateLastSeen(token)
-			r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
+			return
 		}
-
-		// Store userID and role in request header for later use
-		r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
-		r.Header.Set("X-User-Role", userRole)
 
 		next.ServeHTTP(w, r)
 	})
@@ -483,35 +504,11 @@ func OptionalTokenMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			next.ServeHTTP(w, r)
+		ok, noAuth := resolveCaller(w, r)
+		if !ok && !noAuth {
+			// resolveCaller already wrote a 401 response
 			return
 		}
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid authorization header format. Use 'Bearer <token>'"})
-			return
-		}
-		token := parts[1]
-		userID, userRole, tokenID, err := validateToken(token)
-		if err != nil {
-			var apiErr error
-			userID, userRole, apiErr = validateAPIKey(token)
-			if apiErr != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
-				return
-			}
-		} else {
-			updateLastSeen(token)
-			r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
-		}
-		r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
-		r.Header.Set("X-User-Role", userRole)
 		next.ServeHTTP(w, r)
 	})
 }

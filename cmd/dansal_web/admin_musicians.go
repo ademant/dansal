@@ -185,6 +185,9 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if from != "" {
 			target = from
 		}
+		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+			target = "/admin/musicians"
+		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }

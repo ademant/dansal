@@ -127,6 +127,9 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if from != "" {
 			target = from
 		}
+		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+			target = "/admin/instructors"
+		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }

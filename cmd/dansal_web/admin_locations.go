@@ -35,7 +35,7 @@ type AdminLocationEditData struct {
 // Falls back to /admin/locations for anything else (empty, absolute URL,
 // protocol-relative URL, or unrelated path).
 func safeLocationsReturnURL(raw string) string {
-	if raw == "" || raw[0] != '/' || strings.HasPrefix(raw, "//") {
+	if raw == "" || raw[0] != '/' || strings.HasPrefix(raw, "//") || strings.HasPrefix(raw, "/\\") {
 		return "/admin/locations"
 	}
 	if raw != "/admin/locations" && !strings.HasPrefix(raw, "/admin/locations/") && !strings.HasPrefix(raw, "/admin/locations?") {
@@ -416,6 +416,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if from != "" {
 			target = from
 		}
+		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+			target = "/admin/locations"
+		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
@@ -432,7 +435,11 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		_ = client.DeleteLocation(r.Context(), id, getSessionToken(r))
-		http.Redirect(w, r, safeLocationsReturnURL(r.FormValue("return")), http.StatusSeeOther)
+		target := safeLocationsReturnURL(r.FormValue("return"))
+		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+			target = "/admin/locations"
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

@@ -871,6 +871,7 @@ type Templates struct {
 	embedEvent                *template.Template
 	embedOrg                  *template.Template
 	embedNext                 *template.Template
+	embedCalendar             *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -889,7 +890,11 @@ func loadTemplates() *Templates {
 		if err != nil {
 			log.Fatalf("load embed template %s: %v", page, err)
 		}
-		return t
+		named := t.Lookup(page + ".html")
+		if named == nil {
+			log.Fatalf("load embed template %s: no template named %q", page, page+".html")
+		}
+		return named
 	}
 	return &Templates{
 		index:                     load("index"),
@@ -947,6 +952,7 @@ func loadTemplates() *Templates {
 		embedEvent:                loadEmbed("embed_event"),
 		embedOrg:                  loadEmbed("embed_org"),
 		embedNext:                 loadEmbed("embed_next"),
+		embedCalendar:             loadEmbed("embed_calendar"),
 	}
 }
 
@@ -981,6 +987,15 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
+// renderEmbed renders a standalone embed template (no base.html wrapper).
+func renderEmbed(w http.ResponseWriter, tmpl *template.Template, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}

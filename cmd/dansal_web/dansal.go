@@ -571,6 +571,13 @@ func (c *DansalClient) GetAllEvents(ctx context.Context) ([]Event, error) {
 	return events, c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &events)
 }
 
+// GetEventsFiltered fetches published events from /api/v1/events with arbitrary
+// additional query parameters (e.g. start_time_after/before, tag, include_past).
+func (c *DansalClient) GetEventsFiltered(ctx context.Context, params url.Values) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, "/api/v1/events?"+params.Encode(), &events)
+}
+
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)

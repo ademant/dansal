@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"html/template"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,11 +56,30 @@ func resolveOrgSlugs(orgs []Organization, slugs []string) map[int]bool {
 	return m
 }
 
+// resolveLocationIDs maps a list of ?location= query params to a set of
+// location IDs. Returns nil map (= all locations) if none were requested.
+func resolveLocationIDs(values []string) map[int]bool {
+	if len(values) == 0 {
+		return nil
+	}
+	m := make(map[int]bool)
+	for _, v := range values {
+		if id, err := strconv.Atoi(v); err == nil {
+			m[id] = true
+		}
+	}
+	if len(m) == 0 {
+		return nil
+	}
+	return m
+}
+
 // embedEventsHandler serves GET /embed/events — filterable upcoming event list.
 func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := embedLang(r, i18n)
 		orgSlugs := r.URL.Query()["org"]
+		locIDs := r.URL.Query()["location"]
 		mode := r.URL.Query().Get("mode")
 		if mode == "" {
 			mode = "agenda"
@@ -70,12 +92,22 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		allOrgs, _ := client.GetOrganizations(r.Context())
 		orgFilter := resolveOrgSlugs(allOrgs, orgSlugs)
+		locFilter := resolveLocationIDs(locIDs)
 
 		events := upcomingEvents(allEvents)
 		if orgFilter != nil {
 			var filtered []Event
 			for _, e := range events {
 				if e.OrganizationID != nil && orgFilter[*e.OrganizationID] {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
+		if locFilter != nil {
+			var filtered []Event
+			for _, e := range events {
+				if e.LocationID != nil && locFilter[*e.LocationID] {
 					filtered = append(filtered, e)
 				}
 			}
@@ -89,7 +121,7 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 
 		strs := i18n.Strings(lang)
-		renderTemplate(w, tmpls.embedEvents, map[string]any{
+		renderEmbed(w, tmpls.embedEvents, map[string]any{
 			"Lang":     lang,
 			"Mode":     mode,
 			"Events":   events,
@@ -123,7 +155,7 @@ func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		}
 
 		strs := i18n.Strings(lang)
-		renderTemplate(w, tmpls.embedEvent, map[string]any{
+		renderEmbed(w, tmpls.embedEvent, map[string]any{
 			"Lang":    lang,
 			"Event":   event,
 			"OrgName": orgName,
@@ -175,7 +207,7 @@ func embedOrgHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 		}
 
 		strs := i18n.Strings(lang)
-		renderTemplate(w, tmpls.embedOrg, map[string]any{
+		renderEmbed(w, tmpls.embedOrg, map[string]any{
 			"Lang":    lang,
 			"Org":     org,
 			"Events":  events,
@@ -190,6 +222,7 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := embedLang(r, i18n)
 		orgSlugs := r.URL.Query()["org"]
+		locIDs := r.URL.Query()["location"]
 
 		count := 5
 		if n, err := strconv.Atoi(r.URL.Query().Get("count")); err == nil && n > 0 {
@@ -203,6 +236,7 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		}
 		allOrgs, _ := client.GetOrganizations(r.Context())
 		orgFilter := resolveOrgSlugs(allOrgs, orgSlugs)
+		locFilter := resolveLocationIDs(locIDs)
 
 		events := upcomingEvents(allEvents)
 		if orgFilter != nil {
@@ -214,16 +248,135 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			}
 			events = filtered
 		}
+		if locFilter != nil {
+			var filtered []Event
+			for _, e := range events {
+				if e.LocationID != nil && locFilter[*e.LocationID] {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
 		if count < len(events) {
 			events = events[:count]
 		}
 
 		strs := i18n.Strings(lang)
-		renderTemplate(w, tmpls.embedNext, map[string]any{
+		renderEmbed(w, tmpls.embedNext, map[string]any{
 			"Lang":    lang,
 			"Events":  events,
 			"Strings": strs,
 			"BaseURL": cfg.BaseURL,
+		})
+	}
+}
+
+// calEvent is the compact per-event shape sent to the /embed/calendar client
+// for map markers and client-side date/tag filtering.
+type calEvent struct {
+	ID        int      `json:"id"`
+	Title     string   `json:"t"`
+	Start     string   `json:"s"`
+	End       string   `json:"e,omitempty"`
+	Location  string   `json:"loc,omitempty"`
+	Town      string   `json:"town,omitempty"`
+	Lat       float64  `json:"lat,omitempty"`
+	Lng       float64  `json:"lng,omitempty"`
+	URL       string   `json:"url,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	Org       string   `json:"org,omitempty"`
+	Cancelled bool     `json:"x,omitempty"`
+}
+
+// embedCalendarHandler serves GET /embed/calendar — map + filterable event list
+// with a client-side date-range and event-type (tag) filter.
+func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := embedLang(r, i18n)
+		q := r.URL.Query()
+
+		now := time.Now().UTC()
+		from := now.Truncate(24 * time.Hour)
+		to := from.AddDate(0, 0, 180)
+		if v, err := time.Parse("2006-01-02", q.Get("from")); err == nil {
+			from = v
+		}
+		if v, err := time.Parse("2006-01-02", q.Get("to")); err == nil {
+			to = v
+		}
+		if !to.After(from) || to.Sub(from) > 366*24*time.Hour {
+			to = from.AddDate(0, 0, 180)
+		}
+
+		params := url.Values{}
+		params.Set("is_published", "true")
+		params.Set("start_time_after", strconv.FormatInt(from.Add(-time.Second).Unix(), 10))
+		params.Set("start_time_before", strconv.FormatInt(to.AddDate(0, 0, 1).Unix(), 10))
+		if !from.After(now) {
+			params.Set("include_past", "true")
+		}
+
+		allEvents, err := client.GetEventsFiltered(r.Context(), params)
+		if err != nil {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		sort.Slice(allEvents, func(i, j int) bool { return allEvents[i].StartTime < allEvents[j].StartTime })
+
+		allOrgs, _ := client.GetOrganizations(r.Context())
+		orgFilter := resolveOrgSlugs(allOrgs, q["org"])
+		locFilter := resolveLocationIDs(q["location"])
+		orgNames := make(map[int]string, len(allOrgs))
+		for _, o := range allOrgs {
+			orgNames[o.ID] = o.Name
+		}
+
+		events := make([]Event, 0, len(allEvents))
+		for _, e := range allEvents {
+			if orgFilter != nil && (e.OrganizationID == nil || !orgFilter[*e.OrganizationID]) {
+				continue
+			}
+			if locFilter != nil && (e.LocationID == nil || !locFilter[*e.LocationID]) {
+				continue
+			}
+			events = append(events, e)
+		}
+
+		cal := make([]calEvent, 0, len(events))
+		for _, e := range events {
+			ce := calEvent{
+				ID: e.ID, Title: e.Title, Start: e.StartTime, End: e.EndTime,
+				URL: e.URL, Tags: e.Tags, Cancelled: e.IsCancelled,
+			}
+			if e.Location != nil {
+				ce.Location = e.Location.Location
+				ce.Town = e.Location.Town
+				if e.Location.Latitude != nil && e.Location.Longitude != nil {
+					ce.Lat = *e.Location.Latitude
+					ce.Lng = *e.Location.Longitude
+				}
+			}
+			if e.OrganizationID != nil {
+				ce.Org = orgNames[*e.OrganizationID]
+			}
+			cal = append(cal, ce)
+		}
+		calJSON, _ := json.Marshal(cal)
+
+		allTags, _ := client.GetTags(r.Context())
+
+		strs := i18n.Strings(lang)
+		renderEmbed(w, tmpls.embedCalendar, map[string]any{
+			"Lang":        lang,
+			"Events":      events,
+			"CalData":     template.JS(calJSON),
+			"Tags":        allTags,
+			"OrgNames":    orgNames,
+			"From":        from.Format("2006-01-02"),
+			"To":          to.Format("2006-01-02"),
+			"SelectedTag": q.Get("tag"),
+			"Strings":     strs,
+			"BaseURL":     cfg.BaseURL,
 		})
 	}
 }

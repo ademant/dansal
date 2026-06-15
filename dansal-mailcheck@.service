@@ -11,6 +11,7 @@ ExecStart=/usr/lib/dansal/%i/dansal_admin --socket /var/lib/dansal/%i/dansal.soc
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
+ReadOnlyPaths=/var/log/mail.log
 ProtectHome=true
 PrivateDevices=true
 ProtectKernelTunables=true

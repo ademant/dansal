@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"gopkg.in/yaml.v2"
@@ -179,7 +180,7 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.DBMaxConns = 10
 	}
 	if cfg.Server.BackupDir == "" {
-		cfg.Server.BackupDir = "/var/lib/dansal/backups"
+		cfg.Server.BackupDir = filepath.Join(filepath.Dir(cfg.Server.DBPath), "backups")
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

@@ -11,6 +11,7 @@ ExecStart=/usr/bin/dansal_admin mail-bounces
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
+ReadOnlyPaths=/var/log/mail.log
 ProtectHome=true
 PrivateDevices=true
 ProtectKernelTunables=true

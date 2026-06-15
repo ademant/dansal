@@ -26,6 +26,10 @@ server:
   # Placed in StateDirectory so it survives mount namespace quirks.
   admin_socket: /var/lib/dansal/dansal.sock
 
+  # Directory where database backups are written by `dansal_admin backup`.
+  # Defaults to a "backups" subdirectory next to db_path if unset.
+  backup_dir: /var/lib/dansal/backups
+
   # Public base URL of the API, used in email links and iCal feeds.
   # Required. Example: https://api.dansal.example.com
   base_url: ""

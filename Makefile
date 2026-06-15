@@ -188,6 +188,8 @@ endif
 	$(MAKE) install-units
 	# Allow dansal to submit mail via sendmail (needs postdrop group for maildrop write access)
 	getent group postdrop >/dev/null && usermod -aG postdrop $(SERVICE) || true
+	# Allow dansal to read /var/log/mail.log (needed by dansal-mailcheck@)
+	getent group adm >/dev/null && usermod -aG adm $(SERVICE) || true
 	# Binary directory for this instance
 	install -d -m 755 /usr/lib/dansal/$(INSTANCE)
 	# Config directory (770: group-writable so dansal-webmin can save configs)
@@ -195,6 +197,7 @@ endif
 	# State directories
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/images
+	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/backups
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
 	# Template configs — installed only if not already present (or empty from a failed prior run)
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
@@ -202,6 +205,7 @@ endif
 		    -e 's|/var/lib/dansal/dansal.sock|/var/lib/dansal/$(INSTANCE)/dansal.sock|' \
 		    -e 's|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|' \
 		    -e 's|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
+		    -e 's|/var/lib/dansal/backups|/var/lib/dansal/$(INSTANCE)/backups|' \
 		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \

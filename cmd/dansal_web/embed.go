@@ -271,6 +271,69 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 	}
 }
 
+// locMarker is the compact per-location shape sent to the /embed/locations
+// client for map markers.
+type locMarker struct {
+	ID     int     `json:"id"`
+	Name   string  `json:"name"`
+	Town   string  `json:"town,omitempty"`
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
+	Future int     `json:"future"`
+	Past   int     `json:"past"`
+}
+
+// embedLocationsHandler serves GET /embed/locations — a map of all locations
+// with future/past event counts, linking to each location's public page.
+// Optional ?org= filters to locations associated with the given org slug(s).
+func embedLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := embedLang(r, i18n)
+		q := r.URL.Query()
+
+		allLocations, err := client.GetLocationsWithEventCounts(r.Context())
+		if err != nil {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		allOrgs, _ := client.GetOrganizations(r.Context())
+		orgFilter := resolveOrgSlugs(allOrgs, q["org"])
+
+		markers := make([]locMarker, 0, len(allLocations))
+		for _, l := range allLocations {
+			if l.Latitude == nil || l.Longitude == nil {
+				continue
+			}
+			if orgFilter != nil {
+				match := false
+				for _, oid := range l.OrganizationIDs {
+					if orgFilter[oid] {
+						match = true
+						break
+					}
+				}
+				if !match {
+					continue
+				}
+			}
+			markers = append(markers, locMarker{
+				ID: l.ID, Name: l.Location, Town: l.Town,
+				Lat: *l.Latitude, Lng: *l.Longitude,
+				Future: l.FutureEventCount, Past: l.PastEventCount,
+			})
+		}
+		locJSON, _ := json.Marshal(markers)
+
+		strs := i18n.Strings(lang)
+		renderEmbed(w, tmpls.embedLocations, map[string]any{
+			"Lang":    lang,
+			"LocData": template.JS(locJSON),
+			"Strings": strs,
+			"BaseURL": cfg.BaseURL,
+		})
+	}
+}
+
 // calEvent is the compact per-event shape sent to the /embed/calendar client
 // for map markers and client-side date/tag filtering.
 type calEvent struct {

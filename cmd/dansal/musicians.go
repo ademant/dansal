@@ -34,6 +34,9 @@ type Musician struct {
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
+
+	FutureEventCount int `json:"future_event_count,omitempty"`
+	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
 type MusicianCreateRequest struct {
@@ -66,12 +69,15 @@ const musicianCols = `id, bandname,
 	COALESCE(facebook,''), COALESCE(soundcloud,''),
 	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at, COALESCE(updated_at,0)`
 
-func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
+// scanMusician scans a musicianCols row into a Musician. Extra destination
+// pointers (e.g. for appended event-count columns) can be passed via extra.
+func scanMusician(row interface{ Scan(...any) error }, extra ...any) (Musician, error) {
 	var m Musician
-	err := row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
+	dest := []any{&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
 		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
 		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud,
-		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt)
+		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt}
+	err := row.Scan(append(dest, extra...)...)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
 	}
@@ -81,7 +87,22 @@ func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 // GET /api/v1/musicians - List all musicians; optional filters
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query := "SELECT " + musicianCols + " FROM musicians"
+	withCounts := q.Get("with_event_counts") == "true"
+
+	query := "SELECT " + musicianCols
+	if withCounts {
+		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0)`
+	}
+	query += " FROM musicians"
+	if withCounts {
+		query += ` LEFT JOIN (
+			SELECT em.musician_id,
+				SUM(CASE WHEN e.start_time > strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN e.start_time <= strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM event_musicians em JOIN events e ON e.id = em.event_id
+			GROUP BY em.musician_id
+		) ec ON ec.musician_id = musicians.id`
+	}
 	var args []any
 	where := false
 
@@ -128,10 +149,19 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 
 	musicians := []Musician{}
 	for rows.Next() {
-		m, err := scanMusician(rows)
+		var extra []any
+		var futureCount, pastCount int
+		if withCounts {
+			extra = append(extra, &futureCount, &pastCount)
+		}
+		m, err := scanMusician(rows, extra...)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if withCounts {
+			m.FutureEventCount = futureCount
+			m.PastEventCount = pastCount
 		}
 		musicians = append(musicians, m)
 	}

@@ -27,6 +27,11 @@ type Organization struct {
 	ImageURL      string `json:"image_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
+
+	FutureEventCount int      `json:"future_event_count,omitempty"`
+	PastEventCount   int      `json:"past_event_count,omitempty"`
+	Latitude         *float64 `json:"latitude,omitempty"`
+	Longitude        *float64 `json:"longitude,omitempty"`
 }
 
 type OrganizationMember struct {
@@ -119,9 +124,12 @@ func isOrgMember(userID, orgID int) bool {
 
 const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,'')`
 
-func scanOrg(row interface{ Scan(...any) error }) (Organization, error) {
+// scanOrg scans an orgSelectCols row into an Organization. Extra destination
+// pointers (e.g. for appended event-count/location columns) can be passed via extra.
+func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, error) {
 	var o Organization
-	if err := row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd); err != nil {
+	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd}
+	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return o, err
 	}
 	o.ImageURL = orgImageURL(o.ID)
@@ -164,7 +172,37 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/organizations
 func getOrganizations(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT " + orgSelectCols + " FROM organizations ORDER BY id")
+	q := r.URL.Query()
+	withCounts := q.Get("with_event_counts") == "true"
+	withLocation := q.Get("with_location") == "true"
+
+	query := "SELECT " + orgSelectCols
+	if withCounts {
+		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0)`
+	}
+	if withLocation {
+		query += `, loc.avg_lat, loc.avg_lng`
+	}
+	query += ` FROM organizations`
+	if withCounts {
+		query += ` LEFT JOIN (
+			SELECT organization_id,
+				SUM(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM events WHERE organization_id IS NOT NULL GROUP BY organization_id
+		) ec ON ec.organization_id = organizations.id`
+	}
+	if withLocation {
+		query += ` LEFT JOIN (
+			SELECT lo.organization_id, AVG(l.latitude) AS avg_lat, AVG(l.longitude) AS avg_lng
+			FROM location_organizations lo JOIN locations l ON l.id = lo.location_id
+			WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+			GROUP BY lo.organization_id
+		) loc ON loc.organization_id = organizations.id`
+	}
+	query += ` ORDER BY organizations.id`
+
+	rows, err := db.Query(query)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -172,10 +210,27 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	orgs := []Organization{}
 	for rows.Next() {
-		o, err := scanOrg(rows)
+		var futureCount, pastCount int
+		var lat, lng *float64
+		var extra []any
+		if withCounts {
+			extra = append(extra, &futureCount, &pastCount)
+		}
+		if withLocation {
+			extra = append(extra, &lat, &lng)
+		}
+		o, err := scanOrg(rows, extra...)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if withCounts {
+			o.FutureEventCount = futureCount
+			o.PastEventCount = pastCount
+		}
+		if withLocation {
+			o.Latitude = lat
+			o.Longitude = lng
 		}
 		orgs = append(orgs, o)
 	}

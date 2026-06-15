@@ -17,6 +17,9 @@ type Instructor struct {
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
 	CreatedAt string `json:"created_at"`
+
+	FutureEventCount int `json:"future_event_count,omitempty"`
+	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
 type InstructorRequest struct {
@@ -28,16 +31,34 @@ type InstructorRequest struct {
 
 const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), created_at"
 
-func scanInstructor(row interface{ Scan(...any) error }) (Instructor, error) {
+// scanInstructor scans an instructorCols row into an Instructor. Extra
+// destination pointers (e.g. for appended event-count columns) can be passed via extra.
+func scanInstructor(row interface{ Scan(...any) error }, extra ...any) (Instructor, error) {
 	var i Instructor
-	err := row.Scan(&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt)
+	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt}
+	err := row.Scan(append(dest, extra...)...)
 	return i, err
 }
 
 // GET /api/v1/instructors
 func getInstructors(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query := "SELECT " + instructorCols + " FROM instructors"
+	withCounts := q.Get("with_event_counts") == "true"
+
+	query := "SELECT " + instructorCols
+	if withCounts {
+		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0)`
+	}
+	query += " FROM instructors"
+	if withCounts {
+		query += ` LEFT JOIN (
+			SELECT ei.instructor_id,
+				SUM(CASE WHEN e.start_time > strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN e.start_time <= strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM event_instructors ei JOIN events e ON e.id = ei.event_id
+			GROUP BY ei.instructor_id
+		) ec ON ec.instructor_id = instructors.id`
+	}
 	var args []any
 
 	if name := q.Get("name"); name != "" {
@@ -54,10 +75,19 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	instructors := []Instructor{}
 	for rows.Next() {
-		inst, err := scanInstructor(rows)
+		var extra []any
+		var futureCount, pastCount int
+		if withCounts {
+			extra = append(extra, &futureCount, &pastCount)
+		}
+		inst, err := scanInstructor(rows, extra...)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if withCounts {
+			inst.FutureEventCount = futureCount
+			inst.PastEventCount = pastCount
 		}
 		instructors = append(instructors, inst)
 	}

@@ -39,6 +39,8 @@ type Location struct {
 	FloorCondition  string          `json:"floor_condition,omitempty"`
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
+	FutureEventCount int           `json:"future_event_count,omitempty"`
+	PastEventCount   int           `json:"past_event_count,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -90,13 +92,16 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
 	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE(l.aliases,'[]')`
 
-func scanLocation(s scanner, loc *Location) error {
+// scanLocation scans a locationCols row into loc. Extra destination pointers
+// (e.g. for appended future/past event count columns) can be passed via extra.
+func scanLocation(s scanner, loc *Location, extra ...any) error {
 	var orgIDsStr, attrsJSON, aliasesJSON string
-	if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+	dest := []any{&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON); err != nil {
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON}
+	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
@@ -262,7 +267,21 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := `SELECT ` + locationCols + ` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
+	withCounts := q.Get("with_event_counts") == "true"
+
+	query := `SELECT ` + locationCols
+	if withCounts {
+		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0)`
+	}
+	query += ` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id`
+	if withCounts {
+		query += ` LEFT JOIN (
+			SELECT location_id,
+				SUM(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM events WHERE location_id IS NOT NULL GROUP BY location_id
+		) ec ON ec.location_id = l.id`
+	}
 	var args []any
 	where := false
 
@@ -334,7 +353,12 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	locations := []Location{}
 	for rows.Next() {
 		var location Location
-		if err := scanLocation(rows, &location); err != nil {
+		if withCounts {
+			if err := scanLocation(rows, &location, &location.FutureEventCount, &location.PastEventCount); err != nil {
+				writeError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if err := scanLocation(rows, &location); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -345,6 +345,9 @@ type Location struct {
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
+
+	FutureEventCount int `json:"future_event_count,omitempty"`
+	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
 type FetchSource struct {
@@ -1104,6 +1107,13 @@ func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 		var locs []Location
 		return locs, c.get(ctx, "/api/v1/locations", &locs)
 	})
+}
+
+// GetLocationsWithEventCounts fetches all locations with future/past event
+// counts; used by the /embed/locations map.
+func (c *DansalClient) GetLocationsWithEventCounts(ctx context.Context) ([]Location, error) {
+	var locs []Location
+	return locs, c.get(ctx, "/api/v1/locations?with_event_counts=true", &locs)
 }
 
 func (c *DansalClient) GetLocationEventCounts(ctx context.Context, token string) (map[int]int, error) {

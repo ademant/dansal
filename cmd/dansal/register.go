@@ -462,6 +462,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			 pr.verified, pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
 			 LEFT JOIN organizations o ON o.id = pr.org_id
+			 WHERE pr.approved=0
 			 ORDER BY pr.created_at ASC`,
 		)
 	} else {
@@ -473,7 +474,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			 FROM pending_registrations pr
 			 LEFT JOIN organizations o ON o.id = pr.org_id
 			 JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			 WHERE pr.reg_type='join_org' ORDER BY pr.created_at ASC`,
+			 WHERE pr.reg_type='join_org' AND pr.approved=0 ORDER BY pr.created_at ASC`,
 			callerID,
 		)
 	}

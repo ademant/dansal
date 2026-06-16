@@ -60,7 +60,7 @@
 
     <div class="form-group">
       <label for="field-email">{{$.Strings.T "register_email"}} <span class="hint-recommended">{{$.Strings.T "register_contact_recommended"}}</span></label>
-      <input type="email" id="field-email" name="email" autocomplete="email" class="form-input">
+      <input type="email" id="field-email" name="email" autocomplete="email" class="form-input" placeholder="folkinneustadt@havefun.dance">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
     <div class="form-group">
@@ -118,6 +118,7 @@
       <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
     </div>
 
+    <p class="form-hint" style="margin-bottom:.75rem">{{$.Strings.T "register_data_notice"}}</p>
     <button type="button" class="btn-primary" onclick="checkContactBeforeSubmit()">{{$.Strings.T "register_submit"}}</button>
   </form>
 

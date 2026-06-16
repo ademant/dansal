@@ -1076,7 +1076,7 @@ func migrateDB() {
 		org_website        TEXT DEFAULT '',
 		org_contact_email  TEXT DEFAULT '',
 		org_actor_name     TEXT DEFAULT '',
-		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
+		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram','none')),
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
@@ -1476,6 +1476,52 @@ func migrateDB() {
 	// Index for the display_name fallback lookup in login(), hit on every
 	// login attempt whose email doesn't match any user.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_users_display_name_nocase ON users(display_name COLLATE NOCASE)")
+
+	// Extend verification_channel CHECK constraint to allow 'none' for contact-free
+	// registrations. SQLite can't ALTER a constraint, so recreate the table when needed.
+	{
+		var schema string
+		db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='pending_registrations'").Scan(&schema)
+		if !strings.Contains(schema, "'none'") {
+			db.Exec(`CREATE TABLE IF NOT EXISTS pending_registrations_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				verification_token TEXT UNIQUE NOT NULL,
+				approval_token     TEXT UNIQUE NOT NULL,
+				email              TEXT NOT NULL,
+				reg_type           TEXT NOT NULL CHECK(reg_type IN ('join_org','new_org')),
+				org_id             INTEGER,
+				org_name           TEXT DEFAULT '',
+				org_description    TEXT DEFAULT '',
+				org_website        TEXT DEFAULT '',
+				org_contact_email  TEXT DEFAULT '',
+				verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram','none')),
+				telegram           TEXT DEFAULT '',
+				telegram_chat_id   TEXT DEFAULT '',
+				verified           INTEGER DEFAULT 0,
+				created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+				expires_at         DATETIME NOT NULL,
+				description        TEXT DEFAULT '',
+				message_id         TEXT NOT NULL DEFAULT '',
+				org_actor_name     TEXT DEFAULT '',
+				approved           INTEGER DEFAULT 0,
+				approved_invite_url TEXT DEFAULT '',
+				user_id            INTEGER REFERENCES users(id),
+				FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+			)`)
+			db.Exec(`INSERT INTO pending_registrations_new
+				SELECT id, verification_token, approval_token, email, reg_type, org_id, org_name,
+				       org_description, org_website, org_contact_email, verification_channel,
+				       telegram, telegram_chat_id, verified, created_at, expires_at, description,
+				       message_id, org_actor_name, approved, approved_invite_url, user_id
+				FROM pending_registrations`)
+			db.Exec("DROP TABLE pending_registrations")
+			db.Exec("ALTER TABLE pending_registrations_new RENAME TO pending_registrations")
+			// Fix existing contact-free registrations that got 'email' as a placeholder.
+			db.Exec(`UPDATE pending_registrations SET verification_channel='none'
+				WHERE (email='' OR email IS NULL) AND (telegram='' OR telegram IS NULL)
+				AND verification_channel='email'`)
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1989,7 +2035,7 @@ func createTables() error {
 		org_website        TEXT DEFAULT '',
 		org_contact_email  TEXT DEFAULT '',
 		org_actor_name     TEXT DEFAULT '',
-		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram')),
+		verification_channel TEXT NOT NULL CHECK(verification_channel IN ('email','telegram','none')),
 		telegram           TEXT DEFAULT '',
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,

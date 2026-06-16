@@ -141,7 +141,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		channel = "email" // placeholder to satisfy NOT NULL constraint
+		channel = "none"
 	}
 
 	// Uniqueness checks — only when email is non-empty to avoid matching all
@@ -456,16 +456,22 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if callerRole == RoleAdmin {
 		rows, err = db.Query(
-			`SELECT id, email, COALESCE(description,''), reg_type, org_id, org_name, org_description, org_website,
-			 org_contact_email, verification_channel, telegram, COALESCE(telegram_chat_id,''), verified, created_at, expires_at
-			 FROM pending_registrations ORDER BY created_at ASC`,
+			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id,
+			 COALESCE(NULLIF(pr.org_name,''), o.name, ''), pr.org_description, pr.org_website,
+			 pr.org_contact_email, pr.verification_channel, pr.telegram, COALESCE(pr.telegram_chat_id,''),
+			 pr.verified, pr.created_at, pr.expires_at
+			 FROM pending_registrations pr
+			 LEFT JOIN organizations o ON o.id = pr.org_id
+			 ORDER BY pr.created_at ASC`,
 		)
 	} else {
 		rows, err = db.Query(
-			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id, pr.org_name, pr.org_description,
-			 pr.org_website, pr.org_contact_email, pr.verification_channel, pr.telegram,
+			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id,
+			 COALESCE(NULLIF(pr.org_name,''), o.name, ''), pr.org_description, pr.org_website,
+			 pr.org_contact_email, pr.verification_channel, pr.telegram,
 			 COALESCE(pr.telegram_chat_id,''), pr.verified, pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
+			 LEFT JOIN organizations o ON o.id = pr.org_id
 			 JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
 			 WHERE pr.reg_type='join_org' ORDER BY pr.created_at ASC`,
 			callerID,

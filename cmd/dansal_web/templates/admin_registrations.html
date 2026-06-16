@@ -30,7 +30,7 @@
     <td class="reg-desc">{{.Description}}</td>
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
-    <td>{{if .VerificationChannel}}{{.VerificationChannel}}{{end}}</td>
+    <td>{{if $noContact}}—{{else if eq .VerificationChannel "telegram"}}Telegram{{else if eq .VerificationChannel "none"}}—{{else}}{{$.Strings.T "register_email"}}{{end}}</td>
     <td>{{if .Verified}}<span title="{{$.Strings.T "settings_email_verified"}}">✓</span>{{else}}<span class="unverified">pending</span>{{end}}</td>
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td style="white-space:nowrap">

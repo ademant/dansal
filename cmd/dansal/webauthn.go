@@ -201,6 +201,10 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	if req.Email != "" {
 		emailVal = req.Email
 	}
+	if isDisplayNameTaken(req.DisplayName, 0) {
+		writeError(w, "Display name is already taken", http.StatusConflict)
+		return
+	}
 	result, err := db.Exec(
 		"INSERT INTO users (email, display_name, password_hash, role, email_verified) VALUES (?, ?, '', ?, ?)",
 		emailVal, req.DisplayName, invite.Role, emailVerified,

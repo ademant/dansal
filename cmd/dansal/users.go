@@ -149,6 +149,21 @@ func getUserByEmail(email string) (User, error) {
 	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE email=?", email))
 }
 
+// isDisplayNameTaken reports whether another user already holds name
+// (case-insensitively). excludeID is the current user's ID for updates; pass 0
+// for new insertions (no user has id=0 in an AUTOINCREMENT table).
+func isDisplayNameTaken(name string, excludeID int64) bool {
+	if name == "" {
+		return false
+	}
+	var count int
+	db.QueryRow(
+		"SELECT COUNT(*) FROM users WHERE display_name=? COLLATE NOCASE AND id!=?",
+		name, excludeID,
+	).Scan(&count)
+	return count > 0
+}
+
 // GET /api/v1/users - List all users
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -329,6 +344,10 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		user.EmailVerified = false
 	}
 	if req.DisplayName != "" {
+		if req.DisplayName != user.DisplayName && isDisplayNameTaken(req.DisplayName, int64(targetID)) {
+			writeError(w, "Display name is already taken", http.StatusConflict)
+			return
+		}
 		user.DisplayName = req.DisplayName
 	}
 	if req.Role != "" {

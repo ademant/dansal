@@ -1522,6 +1522,48 @@ func migrateDB() {
 				AND verification_channel='email'`)
 		}
 	}
+
+	// Enforce case-insensitive uniqueness on display_name. Suffix any existing
+	// duplicates with #ID (keeping the lowest-id entry unchanged), then create
+	// the partial unique index. The CREATE INDEX is idempotent via IF NOT EXISTS.
+	{
+		rows, err := db.Query(`
+			SELECT id, display_name FROM users
+			WHERE display_name IS NOT NULL AND display_name != ''
+			AND LOWER(display_name) IN (
+				SELECT LOWER(display_name) FROM users
+				WHERE display_name IS NOT NULL AND display_name != ''
+				GROUP BY display_name COLLATE NOCASE
+				HAVING COUNT(*) > 1
+			)
+			ORDER BY LOWER(display_name), id`)
+		if err == nil {
+			type dupRow struct {
+				id   int64
+				name string
+			}
+			var dups []dupRow
+			for rows.Next() {
+				var d dupRow
+				rows.Scan(&d.id, &d.name)
+				dups = append(dups, d)
+			}
+			rows.Close()
+			seen := map[string]bool{}
+			for _, d := range dups {
+				key := strings.ToLower(d.name)
+				if seen[key] {
+					db.Exec("UPDATE users SET display_name=? WHERE id=?",
+						fmt.Sprintf("%s#%d", d.name, d.id), d.id)
+				} else {
+					seen[key] = true
+				}
+			}
+		}
+		db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
+			ON users(display_name COLLATE NOCASE)
+			WHERE display_name IS NOT NULL AND display_name != ''`)
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -2088,6 +2130,9 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(7)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)")
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
+		ON users(display_name COLLATE NOCASE)
+		WHERE display_name IS NOT NULL AND display_name != ''`)
 	return nil
 }
 

@@ -55,12 +55,12 @@
     <div class="form-group">
       <label>{{$.Strings.T "register_channel"}}</label>
       <div class="radio-group">
-        <label><input type="radio" name="channel" value="none" checked onchange="updateChannelFields()"> {{$.Strings.T "register_channel_none"}}</label>
-        <label><input type="radio" name="channel" value="email" onchange="updateChannelFields()"> {{$.Strings.T "register_email"}}</label>
+        <label><input type="radio" name="channel" value="none" onchange="updateChannelFields()"> {{$.Strings.T "register_channel_none"}}</label>
+        <label><input type="radio" name="channel" value="email" checked onchange="updateChannelFields()"> {{$.Strings.T "register_email"}}</label>
         {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram" onchange="updateChannelFields()"> Telegram</label>{{end}}
       </div>
     </div>
-    <div id="email-field" hidden class="form-group">
+    <div id="email-field" class="form-group">
       <label for="field-email">{{$.Strings.T "register_email"}}</label>
       <input type="email" id="field-email" name="email" autocomplete="email" class="form-input" placeholder="folkinneustadt@havefun.dance">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
@@ -69,7 +69,7 @@
       <label for="field-telegram">{{$.Strings.T "register_channel_address"}}</label>
       <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
     </div>
-    <div id="anon-hint" class="form-hint anon-notice">{{$.Strings.T "register_anon_cookie_hint"}}</div>
+    <div id="anon-hint" hidden class="form-hint anon-notice">{{$.Strings.T "register_anon_cookie_hint"}}</div>
 
     <div id="validation-error" hidden class="form-error" role="alert">{{$.Strings.T "register_validation_hint"}}</div>
 
@@ -120,7 +120,6 @@
     <button type="button" class="btn-primary" onclick="submitRegForm()">{{$.Strings.T "register_submit"}}</button>
   </form>
   {{end}}{{/* end if PendingID else */}}
-  {{end}}
 </div>
 <style>
 .suggest-wrap{max-width:540px;margin:2rem auto}
@@ -182,6 +181,8 @@ function submitRegForm() {
   errEl.hidden = true;
   document.querySelector('form[action="/register"]').submit();
 }
+
+document.addEventListener('DOMContentLoaded', updateChannelFields);
 
 // Show passkey bind box only when WebAuthn is available.
 (function(){
@@ -258,4 +259,5 @@ function submitRegForm() {
 })();
 {{end}}
 </script>
-{{end}}
+  {{end}}{{/* end with .Data */}}
+{{end}}{{/* end define "content" */}}

@@ -646,14 +646,17 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	if lookupErr == sql.ErrNoRows {
 		const threeHours = int64(3 * 60 * 60)
 		if locationID > 0 {
+			// Tier 3: title + known location + time.
 			lookupErr = q.QueryRow(
 				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
 				title, locationID, startTime, threeHours,
 			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
-		} else {
-			// Tier 4: feed location name didn't resolve to a DB location — fall back to
-			// title + start_time only to catch manually-entered events whose location was
-			// named differently than what the feed provides (e.g. city vs venue name).
+		}
+		if lookupErr == sql.ErrNoRows {
+			// Tier 4: title + time only. Fires when locationID == 0 (feed provided no
+			// resolvable location name) or when tier 3 missed (feed location name didn't
+			// match the DB name of the event's stored location, e.g. after HTML-entity
+			// decoding or a venue rename that caused ensureLocation to create a new row).
 			lookupErr = q.QueryRow(
 				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
 				title, startTime, threeHours,

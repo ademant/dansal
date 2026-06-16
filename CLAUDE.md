@@ -125,7 +125,7 @@ For table population (e.g. seed data), use a COUNT-based check:
 3. **title + location_id + start_time ±3h** — when `locationID > 0`
 4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location)
 
-Tier 4 exists because feeds often use city-level location names while the DB has venue names. Only fires when `locationID == 0` to avoid false positives between distinct events at different known venues.
+Tier 4 always fires as a final fallback when tiers 1–3 all miss. This catches: (a) feeds using city-level location names vs. DB venue names, (b) location name mismatches caused by HTML-entity decoding or venue renames that make `ensureLocation` create a new location row (giving a new `locationID` that tier 3 can't match against the event's old `location_id`).
 
 ## Location aliases
 

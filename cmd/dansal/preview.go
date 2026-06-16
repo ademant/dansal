@@ -162,6 +162,7 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 				db.QueryRow("SELECT id FROM locations WHERE location=?", composite).Scan(&locID)
 			}
 			if locID > 0 {
+				// Tier 3: title + known location + time.
 				found, lookupErr = scan(db.QueryRow(
 					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE title=? AND location_id=? AND ABS(start_time-?)<? ",
 					req.Title, locID, startEpoch, threeHours,
@@ -169,10 +170,11 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 				if lookupErr != nil && lookupErr != sql.ErrNoRows {
 					return "new"
 				}
-			} else {
-				// Tier 4: feed location name didn't match any DB location — fall back to
-				// title + start_time only to catch manually-entered events whose location
-				// was named differently than what the feed provides (e.g. city vs venue).
+			}
+			if lookupErr == sql.ErrNoRows {
+				// Tier 4: title + time only. Fires when the feed location name didn't
+				// match any DB location, or when tier 3 missed (location name mismatch
+				// between feed and stored event, e.g. after entity-decoding or rename).
 				found, lookupErr = scan(db.QueryRow(
 					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE title=? AND ABS(start_time-?)<? ",
 					req.Title, startEpoch, threeHours,

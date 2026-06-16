@@ -417,12 +417,13 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 		// userID stays 0 as sentinel for the discoverable path in finish.
 	} else {
 		var userEmail string
+		var userDisabled int
 		if err := db.QueryRow(
-			"SELECT id, COALESCE(email,'') FROM users WHERE email=? AND disabled=0", req.Email,
-		).Scan(&userID, &userEmail); err != nil {
+			"SELECT id, COALESCE(email,''), COALESCE(disabled,0) FROM users WHERE email=?", req.Email,
+		).Scan(&userID, &userEmail, &userDisabled); err != nil {
 			// Fall back to display_name for users registered without an email address.
 			rows, err2 := db.Query(
-				"SELECT id, COALESCE(email,'') FROM users WHERE display_name=? COLLATE NOCASE AND disabled=0 LIMIT 2",
+				"SELECT id, COALESCE(email,''), COALESCE(disabled,0) FROM users WHERE display_name=? COLLATE NOCASE LIMIT 2",
 				req.Email,
 			)
 			if err2 != nil {
@@ -433,7 +434,7 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 			var matched int
 			for rows.Next() {
 				matched++
-				rows.Scan(&userID, &userEmail)
+				rows.Scan(&userID, &userEmail, &userDisabled)
 			}
 			if matched == 0 {
 				writeError(w, "No passkeys found for this user", http.StatusNotFound)
@@ -443,6 +444,10 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 				writeError(w, "Multiple accounts share that username; please use your email address", http.StatusConflict)
 				return
 			}
+		}
+		if userDisabled != 0 {
+			writeError(w, "This account has been disabled. Please contact the administrator.", http.StatusForbidden)
+			return
 		}
 		user := loadWebAuthnUser(userID, userEmail)
 		if len(user.credentials) == 0 {
@@ -535,10 +540,15 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 	// Non-discoverable path: email was specified at begin time.
 	var userEmail, role string
+	var finishDisabled int
 	if err := db.QueryRow(
-		"SELECT COALESCE(email,''), role FROM users WHERE id=? AND disabled=0", stored.UserID,
-	).Scan(&userEmail, &role); err != nil {
+		"SELECT COALESCE(email,''), role, COALESCE(disabled,0) FROM users WHERE id=?", stored.UserID,
+	).Scan(&userEmail, &role, &finishDisabled); err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+	if finishDisabled != 0 {
+		writeError(w, "This account has been disabled. Please contact the administrator.", http.StatusForbidden)
 		return
 	}
 

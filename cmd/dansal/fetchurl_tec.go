@@ -9,24 +9,38 @@ import (
 	"time"
 )
 
+// tecVenueData holds the fields we care about from a TEC venue object.
+type tecVenueData struct {
+	Venue   string `json:"venue"`
+	Address string `json:"address"`
+	City    string `json:"city"`
+	Zip     string `json:"zip"`
+}
+
+// tecVenueField handles the WordPress TEC API quirk where "venue" is an empty
+// JSON array [] when unset, and an object when set.
+type tecVenueField struct{ tecVenueData }
+
+func (v *tecVenueField) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '[' {
+		return nil // empty array — no venue set
+	}
+	return json.Unmarshal(b, &v.tecVenueData)
+}
+
 type tecEvent struct {
 	ID       int    `json:"id"`
 	GlobalID string `json:"global_id"`
 	Title    string `json:"title"`
 	// Description is HTML; stripped to plain text before storage.
-	Description string `json:"description"`
-	URL         string `json:"url"`
-	StartDate   string `json:"start_date"` // "2026-05-31 19:00:00"
-	EndDate     string `json:"end_date"`
-	Timezone    string `json:"timezone"`
-	Cost        string `json:"cost"`
-	Venue       struct {
-		Venue   string `json:"venue"`
-		Address string `json:"address"`
-		City    string `json:"city"`
-		Zip     string `json:"zip"`
-	} `json:"venue"`
-	Categories []struct {
+	Description string       `json:"description"`
+	URL         string       `json:"url"`
+	StartDate   string       `json:"start_date"` // "2026-05-31 19:00:00"
+	EndDate     string       `json:"end_date"`
+	Timezone    string       `json:"timezone"`
+	Cost        string       `json:"cost"`
+	Venue       tecVenueField `json:"venue"`
+	Categories  []struct {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	} `json:"categories"`
@@ -74,6 +88,101 @@ func parseTECTime(dateStr, timezone string) (string, error) {
 	return t.UTC().Format(time.RFC3339), nil
 }
 
+// tecEventToRequest converts a single tecEvent to an EventCreateRequest.
+// orgID overrides organizer lookup when non-nil (used during actual import).
+// For preview (no DB), pass orgID=src.OrganizationID and allowOrgLookup=false.
+func tecEventToRequest(te tecEvent, src FetchSource, allowOrgLookup bool) (EventCreateRequest, bool) {
+	if te.Title == "" || te.StartDate == "" {
+		return EventCreateRequest{}, false
+	}
+	startTime, err := parseTECTime(te.StartDate, te.Timezone)
+	if err != nil {
+		return EventCreateRequest{}, false
+	}
+	endTime := startTime
+	if te.EndDate != "" {
+		if et, err2 := parseTECTime(te.EndDate, te.Timezone); err2 == nil {
+			endTime = et
+		}
+	}
+
+	tags := make([]string, 0, len(te.Categories)+len(src.Tags))
+	seen := make(map[string]bool)
+	for _, c := range te.Categories {
+		slug := c.Slug
+		if slug == "" {
+			slug = strings.ToLower(strings.ReplaceAll(c.Name, " ", "-"))
+		}
+		if slug != "" && !seen[slug] {
+			seen[slug] = true
+			tags = append(tags, slug)
+		}
+	}
+	for _, t := range src.Tags {
+		if t != "" && !seen[t] {
+			seen[t] = true
+			tags = append(tags, t)
+		}
+	}
+
+	var orgID *int
+	if src.OrganizationID != nil {
+		orgID = src.OrganizationID
+	} else if allowOrgLookup && len(te.Organizer) > 0 && te.Organizer[0].Organizer != "" {
+		orgID = ensureOrgByName(te.Organizer[0].Organizer)
+	}
+
+	uid := te.GlobalID
+	if uid == "" {
+		host := strings.TrimPrefix(strings.TrimPrefix(src.URL, "https://"), "http://")
+		uid = fmt.Sprintf("tec-%d@%s", te.ID, host)
+	}
+
+	return EventCreateRequest{
+		UID:           uid,
+		Source:        src.URL,
+		FetchSourceID: src.ID,
+		EventWriteRequest: EventWriteRequest{
+			Title:          te.Title,
+			Description:    tecStripHTML(te.Description),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			URL:            te.URL,
+			Tags:           tags,
+			OrganizationID: orgID,
+			Dances:         src.DanceIDs,
+			Location: EventLocationRequest{
+				Location: tecStripHTML(te.Venue.Venue),
+				Address:  tecStripHTML(te.Venue.Address),
+				Town:     tecStripHTML(te.Venue.City),
+				Zipcode:  te.Venue.Zip,
+			},
+		},
+	}, true
+}
+
+// parseTECJSONToRequests converts a single-page TEC JSON body to EventCreateRequests
+// without touching the database. Used by the preview endpoint.
+func parseTECJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
+	var payload tecResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("parse TEC JSON: %w", err)
+	}
+	now := time.Now().UTC()
+	var reqs []EventCreateRequest
+	for _, te := range payload.Events {
+		req, ok := tecEventToRequest(te, src, false)
+		if !ok {
+			continue
+		}
+		if et, err := time.Parse(time.RFC3339, req.EndTime); err == nil && et.Before(now) {
+			continue
+		}
+		reqs = append(reqs, req)
+	}
+	return reqs, nil
+}
+
 func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 	var allTECEvents []tecEvent
 	for page := 1; ; page++ {
@@ -117,78 +226,13 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 	allCreated := true
 
 	for _, te := range allTECEvents {
-		if te.Title == "" || te.StartDate == "" {
+		req, ok := tecEventToRequest(te, src, true)
+		if !ok {
 			continue
 		}
-
-		startTime, err := parseTECTime(te.StartDate, te.Timezone)
-		if err != nil {
+		if et, err2 := time.Parse(time.RFC3339, req.EndTime); err2 == nil && et.Before(now) {
 			continue
 		}
-		endTime := startTime
-		if te.EndDate != "" {
-			if et, err2 := parseTECTime(te.EndDate, te.Timezone); err2 == nil {
-				endTime = et
-			}
-		}
-		if et, err2 := time.Parse(time.RFC3339, endTime); err2 == nil && et.Before(now) {
-			continue
-		}
-
-		tags := make([]string, 0, len(te.Categories)+len(src.Tags))
-		seen := make(map[string]bool)
-		for _, c := range te.Categories {
-			slug := c.Slug
-			if slug == "" {
-				slug = strings.ToLower(strings.ReplaceAll(c.Name, " ", "-"))
-			}
-			if slug != "" && !seen[slug] {
-				seen[slug] = true
-				tags = append(tags, slug)
-			}
-		}
-		for _, t := range src.Tags {
-			if t != "" && !seen[t] {
-				seen[t] = true
-				tags = append(tags, t)
-			}
-		}
-
-		var orgID *int
-		if src.OrganizationID != nil {
-			orgID = src.OrganizationID
-		} else if len(te.Organizer) > 0 && te.Organizer[0].Organizer != "" {
-			orgID = ensureOrgByName(te.Organizer[0].Organizer)
-		}
-
-		uid := te.GlobalID
-		if uid == "" {
-			host := strings.TrimPrefix(strings.TrimPrefix(src.URL, "https://"), "http://")
-			uid = fmt.Sprintf("tec-%d@%s", te.ID, host)
-		}
-
-		req := EventCreateRequest{
-			UID:           uid,
-			Source:        src.URL,
-			FetchSourceID: src.ID,
-			EventWriteRequest: EventWriteRequest{
-				Title:          te.Title,
-				Description:    tecStripHTML(te.Description),
-				StartTime:      startTime,
-				EndTime:        endTime,
-				URL:            te.URL,
-				Tags:           tags,
-				OrganizationID: orgID,
-				Dances:         src.DanceIDs,
-				Location: EventLocationRequest{
-					Location: te.Venue.Venue,
-					Address:  te.Venue.Address,
-					Town:     te.Venue.City,
-					Zipcode:  te.Venue.Zip,
-				},
-			},
-		}
-
 		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
 			return nil, false, err
 		}

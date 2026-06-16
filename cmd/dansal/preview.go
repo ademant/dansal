@@ -254,6 +254,9 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 		if gancioJSONProbe(src.URL) {
 			return parseGancioJSONToRequests(body, src)
 		}
+		if tecJSONProbe(src.URL) {
+			return parseTECJSONToRequests(body, src)
+		}
 		return parseFolkdanceJSONToRequests(body, src)
 	case "folkdance-json":
 		return parseFolkdanceJSONToRequests(body, src)

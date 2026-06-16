@@ -732,6 +732,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		if body.Reason != "" {
 			rejectMsg += "\n\nReason: " + body.Reason
 		}
+		rejectMsg += "\n\nAll submitted data has been deleted. You are welcome to register again at any time using the same email address."
 		go notifyUser(pr.TelegramChatID, pr.Email, "Registration not approved", rejectMsg)
 	}
 

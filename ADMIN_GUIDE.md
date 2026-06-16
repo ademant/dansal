@@ -1,510 +1,388 @@
-# 🛠️ Admin Guide - System Administration
+# Admin Guide - System Administration
 
 Complete guide for installing, configuring, and maintaining dansal instances.
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [System Requirements](#-system-requirements)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Deployment Options](#-deployment-options)
-- [User Management](#-user-management)
-- [System Maintenance](#-system-maintenance)
-- [Monitoring & Logging](#-monitoring--logging)
-- [Security](#-security)
-- [Troubleshooting](#-troubleshooting)
-- [Backup & Recovery](#-backup--recovery)
+- [System Requirements](#system-requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Updating an Existing Instance](#updating-an-existing-instance)
+- [User Management](#user-management)
+- [Backup and Recovery](#backup-and-recovery)
+- [System Maintenance](#system-maintenance)
+- [Troubleshooting](#troubleshooting)
 
-## 💻 System Requirements
+## System Requirements
 
-### Minimum Requirements
-- **OS**: Linux (recommended), macOS, or Windows (WSL)
-- **CPU**: 2 cores
-- **RAM**: 2GB
-- **Storage**: 10GB (grows with event data and images)
-- **Go**: 1.22+
-- **SQLite**: 3.35+
+- **OS**: Linux with systemd (Debian/Ubuntu recommended)
+- **Go**: 1.26+ (for building from source)
+- **nginx**: Reverse proxy for TLS termination
+- **certbot**: Let's Encrypt TLS certificates
+- **openssl**: Required by the installer for secret generation and mTLS certificates
 
-### Recommended Production Setup
-- **OS**: Ubuntu 22.04 LTS or Debian 11+
-- **CPU**: 4 cores
-- **RAM**: 4GB
-- **Storage**: 50GB SSD
-- **Reverse Proxy**: Nginx or Apache
-- **SSL**: Let's Encrypt certificates
+## Installation
 
-## 🚀 Installation
+### First-Time Setup
 
-### From Source
+Run the interactive installer as root from the source directory:
 
 ```bash
-# Clone repository
-git clone https://github.com/ademant/dansal.git
-cd dansal
-
-# Build
-go build -o dansal
-
-# Run
-./dansal
+sudo scripts/install-instance
 ```
 
-### Pre-built Binaries
+The installer prompts for:
+- **Instance name** (e.g. `dev`, `prod`) — used in all path and unit names
+- **Ports** for API (default 8000), web (default 8080), and webmin (default 8090); auto-scans for free ports
+- **Domains** for the web frontend, API, and optionally webmin
+- **Mail**: local MTA (postfix/sendmail) or remote SMTP server
+- **Instance identity**: description, maintainer name/email, security contact for federation metadata
+- **mTLS**: optionally generates a CA and client certificate for webmin access
+- **certbot**: optionally obtains Let's Encrypt certificates and configures nginx
 
-Download latest releases from [GitHub Releases](https://github.com/ademant/dansal/releases):
-- `dansal` - Main API server
-- `dansal_web` - Web frontend
-- `dansal_admin` - CLI administration tool
-- `dansal_webmin` - Admin web interface
-
-### Docker Installation
-
-See **[DOCKER.md](DOCKER.md)** for containerized deployment.
-
-### Branding Before Going Live
-
-dansal ships with default logo, banner and favicon images built into the
-`dansal_web` binary. Before announcing a new instance, drop your own
-`logo`, `banner` and `favicon` files (`.svg`, `.avif`, `.jpg` or `.gif`)
-into the instance's `images_dir` (configured in `web.yaml`, e.g.
-`/var/lib/dansal-web/<instance>/`) — these are served in place of the
-built-in defaults immediately, with no rebuild or restart required.
-
-## ⚙️ Configuration
-
-### Main Configuration File
-
-`config.yaml` - Primary configuration file:
-
-```yaml
-# Server settings
-server:
-  port: 8000
-  base_url: "https://your-domain.com"
-  db_path: "/var/lib/dansal/calendar.db"
-  admin_socket: "/var/run/dansal/admin.sock"
-
-# Database settings
-database:
-  max_open_conns: 50
-  max_idle_conns: 10
-  conn_max_lifetime: "1h"
-
-# Security settings
-security:
-  session_secret: "generate-a-strong-secret-here"
-  session_expiry: "720h"  # 30 days
-  login_max_failures: 5
-  login_failure_window: "15m"
-
-# Email settings (for notifications)
-email:
-  smtp_host: "smtp.example.com"
-  smtp_port: 587
-  smtp_username: "user@example.com"
-  smtp_password: "password"
-  from_address: "noreply@your-domain.com"
-
-# Telegram bot (optional)
-telegram:
-  bot_token: "123456789:AABBccDDeeFFggHH"
-  bot_name: "YourDansalBot"
-```
-
-### Environment Variables
-
-Override configuration with environment variables:
+After the installer completes:
 
 ```bash
-export DANSAL_PORT=8080
-export DANSAL_DB_PATH="/custom/path/database.db"
-export DANSAL_SESSION_SECRET="your-secret-key"
+# Review config files before starting
+sudo nano /etc/dansal/<instance>/config.yaml
+sudo nano /etc/dansal/<instance>/web.yaml
+sudo nano /etc/dansal/<instance>/webmin.yaml
+
+# Start timers when ready
+sudo systemctl start dansal-fetch@<instance>.timer dansal-backup@<instance>.timer
 ```
 
-### Configuration Reloading
-
-Reload configuration without restart:
+### Manual Setup (without the script)
 
 ```bash
-# Send SIGHUP to running process
-kill -HUP $(pidof dansal)
+# 1. Create directories, install template configs, enable systemd units
+sudo make setup-instance INSTANCE=prod
+
+# 2. Edit the three config files
+sudo nano /etc/dansal/prod/config.yaml
+sudo nano /etc/dansal/prod/web.yaml
+sudo nano /etc/dansal/prod/webmin.yaml
+
+# 3. Build and install binaries
+make build
+sudo make deploy INSTANCE=prod
+
+# 4. Set up nginx and TLS
+certbot certonly --nginx -d events.example.com
+certbot certonly --nginx -d api.example.com
+sudo make deploy-nginx INSTANCE=prod
+
+# 5. Start timers
+sudo systemctl start dansal-fetch@prod.timer dansal-backup@prod.timer
 ```
 
-**Note**: Some settings (port, db_path) require full restart.
+### First Admin User
 
-## 🌐 Deployment Options
-
-### Single Binary Deployment
+There is no auto-created admin account. Create the first admin via `dansal_admin`:
 
 ```bash
-# Build
-GOOS=linux GOARCH=amd64 go build -o dansal
-
-# Create systemd service
-cp dansal.service /etc/systemd/system/
-systemctl enable dansal
-systemctl start dansal
+/usr/lib/dansal/<instance>/dansal_admin \
+  --config /etc/dansal/<instance>/config.yaml \
+  create-user --email admin@example.com --role admin
 ```
 
-### Systemd Service Files
+Add a password with `set-password`, or the user can set one via magic-link login.
 
-Included service files:
-- `dansal.service` - Main API service
-- `dansal-web.service` - Web frontend
-- `dansal-webmin.service` - Admin interface
-- `dansal-*.timer` - Scheduled tasks (backups, etc.)
+### Branding
 
-### Reverse Proxy Configuration
+Before going live, drop custom `logo`, `banner`, and `favicon` files (`.svg`, `.avif`, `.jpg`, or `.gif`) into the instance's images directory (`/var/lib/dansal-web/<instance>/`). These are served immediately without a restart.
 
-**Nginx example:**
+## Configuration
 
-```nginx
-server {
-    listen 80;
-    server_name dansal.example.com;
-    return 301 https://$host$request_uri;
-}
+Each instance has three config files under `/etc/dansal/<instance>/`.
 
-server {
-    listen 443 ssl;
-    server_name dansal.example.com;
+### API server: `config.yaml`
 
-    ssl_certificate /etc/letsencrypt/live/dansal.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dansal.example.com/privkey.pem;
+Key settings (all others have sensible defaults):
 
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+| Key | Description |
+|---|---|
+| `server.port` | TCP port the API listens on (default 8000) |
+| `server.listen` | Bind address (default `127.0.0.1:<port>`) |
+| `server.db_path` | SQLite database path |
+| `server.images_dir` | Directory for uploaded event/musician/org images |
+| `server.admin_socket` | Unix socket used by `dansal_admin` and `dansal-webmin` |
+| `server.backup_dir` | Directory for database backups |
+| `server.base_url` | Public API URL, used in emails and iCal feeds (required) |
+| `server.token_expiration_hours` | Session lifetime in hours (default 24) |
+| `server.invite_expiry_hours` | Invite link lifetime (default 48) |
+| `server.rate_limit` | Requests per minute per IP (default 100) |
+| `server.login_rate_limit` | Login attempts per minute per IP (default 5) |
+| `server.login_max_failures` | Failed logins before account lock (default 10) |
+| `server.login_failure_window_secs` | Rolling window for failure counting (default 600) |
+| `server.admin_allowed_ips` | IPs allowed to reach `/api/v1/admin/*` (default loopback) |
+| `server.allowed_origins` | CORS origins allowed to call the API (default: all) |
+| `server.metrics_port` | Prometheus `/metrics` port (default 9090; 0 to disable) |
+| `server.internal_shared_secret` | Shared secret with `dansal-web` to exempt it from rate limiting |
+| `server.telegram_bot_token` | Telegram bot for event notifications (optional) |
+| `server.matrix_homeserver` | Matrix bot for event notifications (optional) |
+| `smtp.host` | Remote SMTP server hostname |
+| `smtp.port` | SMTP port (default 587) |
+| `smtp.username` | SMTP username |
+| `smtp.password` | SMTP password (plain text; prefer `password_key`) |
+| `smtp.password_key` | Path to file containing the SMTP password |
+| `smtp.sendmail` | Local MTA binary path (takes precedence over `host` when set) |
+| `smtp.from` | From address for outgoing email |
+| `smtp.tls` | TLS mode: `starttls` (default), `tls`, or `none` |
 
-    location /ws/ {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
+### Web frontend: `web.yaml`
+
+| Key | Description |
+|---|---|
+| `listen` | Bind address (default `127.0.0.1:8080`) |
+| `domain` | Public domain name (used for ActivityPub actor URLs) |
+| `dansal_url` | Internal URL of the dansal API |
+| `internal_shared_secret` | Must match `server.internal_shared_secret` in `config.yaml` |
+| `db_path` | SQLite database for ActivityPub keys and followers |
+| `poll_secs` | How often to push new events to fediverse followers (default 300) |
+| `pages_file` | Path to YAML file with per-language contact info and Impressum text |
+| `i18n_file` | Path to YAML file overriding built-in translations |
+| `relay_actor_name` | Name of the ActivityPub relay actor (default `relay`; set before first deploy) |
+| `show_federated_events` | Show events from followed organisations on the main page |
+| `nodeinfo_description` | Instance description for fediverse crawlers |
+| `nodeinfo_maintainer_name` | Maintainer name for NodeInfo |
+| `nodeinfo_maintainer_email` | Maintainer email for NodeInfo |
+| `security_contact` | `mailto:` or `https:` URL for `/.well-known/security.txt` |
+| `site_name` | Display name in navigation header (can also be set in the webmin UI) |
+| `banner_height_main` | Banner height in pixels on the main page (0 to hide) |
+| `dark_mode` | Colour scheme: `auto`, `light`, or `dark` |
+| `telegram_webhook_secret` | Token to validate Telegram webhook calls |
+| `telegram_bot_token` | Enable event suggestions with Telegram notification |
+| `smtp_host` / `smtp_sendmail` | Enable event suggestions with email verification |
+| `captcha_site_key` / `captcha_secret_key` | Cloudflare Turnstile for the suggestion form |
+
+### Webmin: `webmin.yaml`
+
+| Key | Description |
+|---|---|
+| `listen` | Bind address (default `127.0.0.1:8090`) |
+| `dansal_url` | Internal URL of the dansal API |
+| `admin_socket` | Must match `server.admin_socket` in `config.yaml` |
+| `web_db_path` | Path to dansal-web's `web.db` (for site-config editing) |
+| `instance` | Systemd instance name, used for the dashboard unit status |
+| `site_name` | Display name in the webmin navigation header |
+| `webmin_domain` | Public subdomain for `deploy-nginx-webmin` |
+
+## Updating an Existing Instance
+
+Always rebuild all four binaries together and deploy as a unit:
+
+```bash
+# Build (as regular user — sudo doesn't have go in PATH)
+make build
+
+# Deploy to a specific instance (installs binaries, restarts services)
+sudo make deploy INSTANCE=prod
 ```
 
-### Docker Compose
-
-See **[DOCKER.md](DOCKER.md)** for complete Docker setup.
-
-## 👥 User Management
-
-### First Admin Account
-
-On first run, dansal creates an admin account:
-
-```
-Admin user created — username: admin  password: <generated-password>
-```
-
-**IMMEDIATELY** change this password after first login!
+## User Management
 
 ### Creating Users
 
-#### Via Admin Interface
-1. Login as admin
-2. Go to **Admin → Users → Create User**
-3. Fill in username, email, password, and role
-4. Save
-
-#### Via CLI
-
 ```bash
-# Using dansal_admin tool
-./dansal_admin create-user \
-  --username "john_doe" \
-  --email "john@example.com" \
-  --password "secure-password" \
-  --role "publisher"
+# Create a user (passwordless — they set one via magic link)
+dansal_admin --config /etc/dansal/prod/config.yaml \
+  create-user --email user@example.com --role publisher
+
+# Create with a password
+dansal_admin --config /etc/dansal/prod/config.yaml \
+  create-user --email user@example.com --role admin --password <password>
 ```
 
 ### User Roles
 
 | Role | Description |
 |---|---|
-| **admin** | Full system access, can manage everything |
-| **publisher** | Can create/edit events, manage locations/musicians |
-| **user** | Can create events for their own organization only |
-| **viewer** | Read-only access, can see unpublished events |
+| `admin` | Full system access, can manage everything |
+| `publisher` | Can create/edit events, manage locations and musicians |
+| `user` | Can create events for their own organization only |
+
+### Other User Commands
+
+```bash
+dansal_admin list-users
+dansal_admin set-role     --email E --role R
+dansal_admin set-password --email E --password P
+dansal_admin disable-user --email E
+dansal_admin enable-user  --email E
+dansal_admin delete-user  --email E
+```
 
 ### Invite Links
 
-Safer alternative to direct account creation:
+Via the webmin interface: **Users → Create Invite**. Set the role and optional organization; the link expires after 48 hours (configurable via `server.invite_expiry_hours`).
 
-1. Go to **Admin → Invites → Create Invite**
-2. Set role and optional organization
-3. Set expiry time (default 48 hours)
-4. Share the generated link
-5. Recipient registers through the link with pre-set role
+Via CLI:
+```bash
+dansal_admin list-invites
+dansal_admin revoke-invite --token TOKEN
+```
 
-### Account Security
-
-- **Password Policies**: Enforce minimum length and complexity
-- **Failed Login Lockout**: Automatic after 5 failures in 15 minutes
-- **Session Management**: View and revoke active sessions
-- **2FA**: WebAuthn and TOTP support
-- **Magic Links**: Passwordless login via email
-
-## 🔧 System Maintenance
-
-### Database Maintenance
+### Session Management
 
 ```bash
-# Vacuum database (optimize storage)
-./dansal_admin vacuum
-
-# Analyze database (update statistics)
-./dansal_admin analyze
-
-# Backup database
-./dansal_admin backup --output backup.db
+dansal_admin list-sessions  --email E
+dansal_admin revoke-session --id SESSION_ID
 ```
 
-### Log Rotation
+### mTLS Certificates for Webmin
 
-Configure logrotate for dansal logs:
+After initial setup, issue additional client certificates:
 
 ```bash
-# /etc/logrotate.d/dansal
-/var/log/dansal/*.log {
-    daily
-    missingok
-    rotate 30
-    compress
-    delaycompress
-    notifempty
-    create 640 dansal dansal
-}
+dansal_admin --config /etc/dansal/prod/config.yaml \
+  mtls-issue --email admin@example.com --days 1095
+dansal_admin mtls-list
+dansal_admin mtls-revoke --email user@example.com
 ```
 
-### Regular Maintenance Tasks
-
-1. **Daily**: Database backup
-2. **Weekly**: Log rotation, temporary file cleanup
-3. **Monthly**: Database vacuum and analyze
-4. **Quarterly**: Review user accounts and permissions
-
-## 📊 Monitoring & Logging
-
-### Logging Configuration
-
-```yaml
-# In config.yaml
-logging:
-  level: "info"  # debug, info, warn, error
-  file: "/var/log/dansal/api.log"
-  max_size: 100  # MB
-  max_backups: 7
-  max_age: 30  # days
-```
-
-### Log Levels
-
-- **DEBUG**: Detailed operational information
-- **INFO**: Normal operation messages
-- **WARN**: Potential issues
-- **ERROR**: Problems that need attention
-
-### Monitoring Endpoints
-
-```
-GET /healthz        - Health check
-GET /readyz         - Readiness check
-GET /metrics        - Prometheus metrics
-GET /status         - Detailed system status
-```
-
-### Alerting
-
-Set up alerts for:
-- Failed logins (potential brute force attacks)
-- Database connection issues
-- High error rates
-- Storage capacity warnings
-
-## 🔒 Security
-
-### Security Best Practices
-
-1. **Keep Updated**: Regularly update dansal and dependencies
-2. **Use HTTPS**: Always use TLS encryption
-3. **Strong Passwords**: Enforce password policies
-4. **Principle of Least Privilege**: Only grant necessary permissions
-5. **Regular Audits**: Review user accounts and access logs
-6. **Backup Regularly**: Test restoration process
-
-### Security Features
-
-- **CSRF Protection**: Enabled by default
-- **CORS**: Configurable origins
-- **Rate Limiting**: Prevent abuse
-- **SQL Injection Protection**: Prepared statements
-- **XSS Protection**: Content security policies
-- **Security Headers**: Strict transport security
-
-### Telegram Integration Security
-
-- Verification tokens expire after 24 hours
-- Webhook validates all incoming requests
-- No sensitive data stored in Telegram
-- Users can revoke Telegram access anytime
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-#### Database Connection Errors
-- **Symptoms**: "Failed to connect to database"
-- **Solutions**:
-  - Check database file permissions
-  - Verify db_path in config.yaml
-  - Check disk space
-  - Run `sqlite3 /path/to/db "PRAGMA integrity_check;"`
-
-#### Performance Issues
-- **Symptoms**: Slow response times
-- **Solutions**:
-  - Run `dansal_admin analyze`
-  - Check for missing indexes
-  - Review slow query logs
-  - Increase database connection pool
-
-#### Login Problems
-- **Symptoms**: "Invalid credentials"
-- **Solutions**:
-  - Check failed login attempts
-  - Verify account isn't locked
-  - Reset password via magic link
-  - Check session secret configuration
-
-### Debugging
+### SMTP Configuration
 
 ```bash
-# Increase log level
-./dansal_admin config set logging.level debug
-
-# View real-time logs
-tail -f /var/log/dansal/api.log
-
-# Check running processes
-ps aux | grep dansal
-
-# Test API endpoints
-curl -v http://localhost:8000/healthz
+dansal_admin smtp-show
+dansal_admin smtp-set --host smtp.example.com --port 587 --username u@example.com
+dansal_admin smtp-set-password
+dansal_admin smtp-test --to test@example.com
 ```
 
-## 💾 Backup & Recovery
+## Backup and Recovery
 
-### Backup Strategy
+### Automated Backups
+
+The `dansal-backup@<instance>.timer` systemd timer runs `dansal_admin backup` on a schedule. Enable it during setup:
 
 ```bash
-# Full backup (database + config + uploads)
-./dansal_admin backup --full --output /backups/dansal-$(date +%Y-%m-%d).tar.gz
-
-# Database only backup
-./dansal_admin backup --db-only --output /backups/db-$(date +%Y-%m-%d).db
-
-# Automated backup (cron)
-0 2 * * * /usr/local/bin/dansal_admin backup --full --output /backups/dansal-$(date +\%Y-\%m-\%d).tar.gz
+sudo systemctl enable --now dansal-backup@prod.timer
+sudo systemctl status dansal-backup@prod.timer
 ```
 
-### Recovery Process
+Backups are written to `server.backup_dir` (default `/var/lib/dansal/<instance>/backups/`).
+
+### Manual Backup
 
 ```bash
-# Stop dansal service
-systemctl stop dansal
+# Full backup: config + database + images (tar.gz)
+dansal_admin --config /etc/dansal/prod/config.yaml backup
 
-# Restore from backup
-./dansal_admin restore --input /backups/dansal-2024-01-01.tar.gz
+# Specify output path
+dansal_admin --config /etc/dansal/prod/config.yaml backup --output /tmp/dansal-backup.tar.gz
 
-# Verify database integrity
-sqlite3 /var/lib/dansal/calendar.db "PRAGMA integrity_check;"
+# Encrypted backup (AES-256-GCM)
+dansal_admin --config /etc/dansal/prod/config.yaml password-backup
 
-# Start service
-systemctl start dansal
+# Incremental backup since a given time
+dansal_admin --config /etc/dansal/prod/config.yaml \
+  incremental-backup --since 2025-01-01T00:00:00Z
 ```
 
-### Disaster Recovery Plan
-
-1. **Immediate**: Restore from latest backup
-2. **Verify**: Check data integrity and consistency
-3. **Communicate**: Notify users of any data loss
-4. **Investigate**: Determine cause to prevent recurrence
-5. **Document**: Update procedures based on lessons learned
-
-## 📈 Scaling & Performance
-
-### Vertical Scaling
-- Increase CPU/RAM resources
-- Optimize SQLite configuration
-- Tune database connection pool
-
-### Horizontal Scaling (Advanced)
-- Use read replicas for reporting
-- Implement caching layer (Redis)
-- Consider PostgreSQL for very large deployments
-
-### Performance Tuning
-
-```yaml
-# Database performance settings
-database:
-  max_open_conns: 100
-  max_idle_conns: 20
-  conn_max_lifetime: "30m"
-  
-  # SQLite-specific settings
-  sqlite:
-    busy_timeout: "5000"
-    journal_mode: "WAL"
-    synchronous: "NORMAL"
-```
-
-## 🔄 Upgrading dansal
-
-### Upgrade Process
+### Restore
 
 ```bash
-# Backup current installation
-./dansal_admin backup --full --output upgrade-backup.tar.gz
+# Restore from a backup archive (database restored live, no restart needed)
+dansal_admin --config /etc/dansal/prod/config.yaml restore --input /path/to/backup.tar.gz
 
-# Stop services
-systemctl stop dansal dansal-web dansal-webmin
-
-# Replace binaries
-cp new-binaries/* /usr/local/bin/
-
-# Run migrations
-./dansal_admin migrate
-
-# Start services
-systemctl start dansal dansal-web dansal-webmin
-
-# Verify
-./dansal_admin status
+# Restore encrypted backup
+dansal_admin --config /etc/dansal/prod/config.yaml password-restore --input /path/to/backup.enc
 ```
 
-### Version Compatibility
+### Verifying Database Integrity
 
-- **Major versions** (1.x → 2.x): May require manual intervention
-- **Minor versions** (1.2 → 1.3): Automatic migrations
-- **Patch versions** (1.2.1 → 1.2.2): Drop-in replacements
+```bash
+sqlite3 /var/lib/dansal/<instance>/calendar.db "PRAGMA integrity_check;"
+```
 
-## 📚 Additional Resources
+## System Maintenance
 
-- **[User Guide](USER_GUIDE.md)** - For event organizers
-- **[Visitor Guide](VISITOR_GUIDE.md)** - For dance enthusiasts
-- **[Developer Guide](DEVELOPER_GUIDE.md)** - API and development
-- **[Docker Guide](DOCKER.md)** - Container deployment
+### Database Vacuum
+
+```bash
+dansal_admin --config /etc/dansal/prod/config.yaml vacuum
+```
+
+### Feed Fetching
+
+```bash
+# Manually trigger a fetch of all configured feed sources
+dansal_admin --config /etc/dansal/prod/config.yaml fetch-all
+
+# Check the fetch timer
+sudo systemctl status dansal-fetch@prod.timer
+```
+
+### Pruning Orphaned Images
+
+```bash
+dansal_admin --config /etc/dansal/prod/config.yaml prune-images
+```
+
+### Location Data Maintenance
+
+```bash
+# Fill missing address/town fields by parsing location names (dry-run by default)
+dansal_admin --config /etc/dansal/prod/config.yaml fill-location-fields
+
+# Apply changes
+dansal_admin --config /etc/dansal/prod/config.yaml fill-location-fields --apply
+```
+
+### Logs
+
+Services log to the systemd journal:
+
+```bash
+journalctl -u dansal@prod -f
+journalctl -u dansal-web@prod -f
+journalctl -u dansal-webmin@prod -f
+```
+
+## Troubleshooting
+
+### Service Won't Start
+
+```bash
+# Check status and recent log output
+sudo systemctl status dansal@prod
+journalctl -u dansal@prod --since "5 min ago"
+```
+
+Common causes:
+- **Port already in use**: Another process is on the configured port. Check with `ss -tlnp`.
+- **Config file missing or malformed**: Confirm `/etc/dansal/prod/config.yaml` exists and has valid YAML; `server.base_url` must be set.
+- **Binary not installed**: Run `make build && sudo make deploy INSTANCE=prod`.
+
+### Database Issues
+
+```bash
+# Check disk space
+df -h /var/lib/dansal/prod/
+
+# Verify integrity
+sqlite3 /var/lib/dansal/prod/calendar.db "PRAGMA integrity_check;"
+```
+
+### Login Problems
+
+- **"Account disabled"**: Re-enable with `dansal_admin enable-user --email E`.
+- **Account locked after failed attempts**: Wait for the `login_failure_window_secs` window to expire, or revoke sessions with `dansal_admin revoke-session`.
+- **Passkey errors**: Verify `server.base_url` matches the actual origin (WebAuthn is origin-bound).
+
+### Feed Import Issues
+
+```bash
+# Test a manual fetch to see error output
+dansal_admin --config /etc/dansal/prod/config.yaml fetch-all
+
+# Check the fetch timer log
+journalctl -u dansal-fetch@prod -n 50
+```
 
 ---
 
-**Need help?** Open an issue on [GitHub](https://github.com/ademant/dansal/issues) or check our [discussions](https://github.com/ademant/dansal/discussions).
+**Need help?** Open an issue on [GitHub](https://github.com/ademant/dansal/issues).
 
-**Security issues?** Please report responsibly to security@dansal.example.com.
+**Security issues?** Use the contact set in `security_contact` in `web.yaml`, or open a private GitHub advisory.

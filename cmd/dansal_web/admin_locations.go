@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -22,12 +23,14 @@ type AdminLocationsData struct {
 }
 
 type AdminLocationEditData struct {
-	Location  Location
-	UserOrgs  []Organization
-	ReadOnly  bool
-	ErrorKey  string
-	ReturnURL string
-	From      string
+	Location       Location
+	UserOrgs       []Organization
+	AssignedOrgs   []Organization
+	AvailableOrgs  []Organization
+	ReadOnly       bool
+	ErrorKey       string
+	ReturnURL      string
+	From           string
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under
@@ -345,12 +348,28 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			}
 			readOnly = !editable
 		}
+		assignedSet := map[int]bool{}
+		for _, oid := range loc.OrganizationIDs {
+			assignedSet[oid] = true
+		}
+		allOrgs, _ := client.GetOrganizations(r.Context())
+		var assignedOrgs, availableOrgs []Organization
+		for _, o := range allOrgs {
+			if assignedSet[o.ID] {
+				assignedOrgs = append(assignedOrgs, o)
+			} else {
+				availableOrgs = append(availableOrgs, o)
+			}
+		}
+
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
-			Location:  loc,
-			ReadOnly:  readOnly,
-			ReturnURL: safeLocationsReturnURL(r.URL.Query().Get("return")),
-			From:      safeReturnPath(r.URL.Query().Get("from")),
+			Location:      loc,
+			ReadOnly:      readOnly,
+			ReturnURL:     safeLocationsReturnURL(r.URL.Query().Get("return")),
+			From:          safeReturnPath(r.URL.Query().Get("from")),
+			AssignedOrgs:  assignedOrgs,
+			AvailableOrgs: availableOrgs,
 		}))
 	}
 }
@@ -615,10 +634,15 @@ func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.Handl
 		}
 		orgID, err := strconv.Atoi(r.FormValue("org_id"))
 		if err != nil || orgID == 0 {
-			http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+			http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 			return
 		}
-		_ = client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, getSessionToken(r))
-		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+		token := getSessionToken(r)
+		if r.FormValue("action") == "remove" {
+			_ = client.UnassignLocationOrg(r.Context(), id, orgID, token)
+		} else {
+			_ = client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
 }

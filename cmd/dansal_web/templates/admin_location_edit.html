@@ -146,6 +146,53 @@
     {{end}}
   </div>
 </form>
+
+{{if .Location.ID}}
+<fieldset class="members-fieldset">
+  <legend>Organisations</legend>
+  {{if .AssignedOrgs}}
+  <table class="members-table">
+    <tbody>
+    {{range .AssignedOrgs}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>
+        <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0">
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="org_id" value="{{.ID}}">
+          <button type="submit" class="btn-sm btn-del">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No organisations assigned.</p>
+  {{end}}
+  {{if .AvailableOrgs}}
+  <details style="margin-top:.75rem">
+    <summary style="cursor:pointer;font-size:.88rem;color:#1a6eb5">Add organisation</summary>
+    <div style="margin-top:.5rem">
+      <input type="text" id="org-filter" placeholder="Filter…" oninput="filterOrgs(this.value)" style="width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;margin-bottom:.4rem">
+      <div id="org-list" style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:4px">
+      {{range .AvailableOrgs}}
+        <div class="org-row" data-name="{{lower .Name}}">
+          <span>{{.Name}}</span>
+          <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0;display:inline">
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="org_id" value="{{.ID}}">
+            <button type="submit" class="btn-sm btn-primary-sm">Add</button>
+          </form>
+        </div>
+      {{end}}
+      </div>
+    </div>
+  </details>
+  {{end}}
+</fieldset>
+{{end}}
+
 {{end}}
 </div>
 
@@ -185,6 +232,18 @@
 .btn-del:hover{background:#800016}
 .field-err{color:#b00020;font-size:.8rem;font-weight:normal}
 .loc-meta{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;font-size:.8rem;color:#555;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;padding:.4rem .75rem;margin:.2rem 0}
+.members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
+.members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
+.members-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.members-table td{padding:.3rem .4rem;vertical-align:middle}
+.members-table td:last-child{text-align:right;white-space:nowrap}
+.org-row{display:flex;align-items:center;justify-content:space-between;padding:.3rem .5rem;border-bottom:1px solid #f0f0f0;font-size:.88rem}
+.org-row:last-child{border-bottom:none}
+.btn-sm{padding:.2rem .6rem;font-size:.82rem;border:none;border-radius:3px;cursor:pointer}
+.btn-primary-sm{background:#1a6eb5;color:#fff}
+.btn-primary-sm:hover{background:#0d4a80}
+.btn-del{background:#b00020;color:#fff}
+.btn-del:hover{background:#800016}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
@@ -414,5 +473,13 @@
     ccInp.style.borderColor = ok ? '' : '#b00020';
   });
 })();
+</script>
+<script>
+function filterOrgs(q) {
+  var v = q.toLowerCase();
+  document.querySelectorAll('#org-list .org-row').forEach(function(el) {
+    el.style.display = el.dataset.name.indexOf(v) !== -1 ? '' : 'none';
+  });
+}
 </script>
 {{end}}

@@ -101,7 +101,7 @@
   <tr>
     <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
-    <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}</td>
     <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
     <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
     <td>
@@ -245,6 +245,8 @@
 .import-notice{font-size:.875rem;color:#155724;background:#d4edda;border:1px solid #c3e6cb;border-radius:4px;padding:.4rem .75rem;margin-bottom:.5rem}
 .result-count{font-size:.85rem;color:#666;margin:.25rem 0 .5rem}
 .table-wrap{overflow-x:auto}
+.ext-link{font-size:.75rem;color:#888;text-decoration:none;vertical-align:super;margin-left:.15rem}
+.ext-link:hover{color:#1a6eb5}
 .event-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
 .event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}

@@ -156,16 +156,30 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 		return 0, nil
 	}
 	var id int64
-	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
-	if err == sql.ErrNoRows && loc.Address != "" {
-		// Gancio's iCal export stores LOCATION as "name - address". When the
-		// same data arrives via the JSON API (name and address separate), the
-		// exact lookup above misses. Try the composite format as a fallback so
-		// that JSON imports match locations originally created from the iCal feed.
-		composite := loc.Location + " - " + loc.Address
-		err = q.QueryRow("SELECT id FROM locations WHERE location = ?", composite).Scan(&id)
+	var matchedByOSM bool
+
+	// Tier 1: OSM identity — most reliable, beats any name variation.
+	if loc.OsmID != nil && loc.OsmType != "" {
+		if q.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=?", loc.OsmType, *loc.OsmID).Scan(&id) == nil {
+			matchedByOSM = true
+		}
 	}
-	if err == nil {
+
+	// Tier 2/3: name-based lookups (existing behaviour).
+	var err error
+	if !matchedByOSM {
+		err = q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
+		if err == sql.ErrNoRows && loc.Address != "" {
+			// Gancio's iCal export stores LOCATION as "name - address". When the
+			// same data arrives via the JSON API (name and address separate), the
+			// exact lookup above misses. Try the composite format as a fallback so
+			// that JSON imports match locations originally created from the iCal feed.
+			composite := loc.Location + " - " + loc.Address
+			err = q.QueryRow("SELECT id FROM locations WHERE location = ?", composite).Scan(&id)
+		}
+	}
+
+	if matchedByOSM || err == nil {
 		// Update coordinates whenever the feed supplies them — not only when
 		// the DB has NULL. This lets corrected geodata flow in from the source.
 		if loc.Latitude != nil || loc.Longitude != nil {
@@ -184,6 +198,11 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 				region       = COALESCE(NULLIF(region,''),       ?)
 				WHERE id = ?`,
 				loc.ShortName, loc.Address, loc.Town, loc.Zipcode, loc.Country, loc.CountryCode, loc.Region, id)
+		}
+		// Name-matched row: backfill OSM identity so future lookups hit tier 1.
+		if !matchedByOSM && loc.OsmID != nil && loc.OsmType != "" {
+			q.Exec("UPDATE locations SET osm_id=?, osm_type=? WHERE id=? AND osm_id IS NULL",
+				*loc.OsmID, loc.OsmType, id)
 		}
 		return id, nil
 	}

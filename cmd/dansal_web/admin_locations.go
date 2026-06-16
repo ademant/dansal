@@ -361,6 +361,8 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 				availableOrgs = append(availableOrgs, o)
 			}
 		}
+		sort.Slice(assignedOrgs, func(i, j int) bool { return assignedOrgs[i].Name < assignedOrgs[j].Name })
+		sort.Slice(availableOrgs, func(i, j int) bool { return availableOrgs[i].Name < availableOrgs[j].Name })
 
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{

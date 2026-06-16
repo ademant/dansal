@@ -178,17 +178,24 @@
     <summary style="cursor:pointer;font-size:.88rem;color:#1a6eb5">Add organisation</summary>
     <div style="margin-top:.5rem">
       <input type="text" id="org-filter" placeholder="Filter…" oninput="filterOrgs(this.value)" style="width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;margin-bottom:.4rem">
-      <div id="org-list" style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:4px">
-      {{range .AvailableOrgs}}
-        <div class="org-row" data-name="{{lower .Name}}">
-          <span>{{.Name}}</span>
-          <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0;display:inline">
-            <input type="hidden" name="action" value="add">
-            <input type="hidden" name="org_id" value="{{.ID}}">
-            <button type="submit" class="btn-sm btn-primary-sm">Add</button>
-          </form>
-        </div>
-      {{end}}
+      <div id="org-list" style="max-height:260px;overflow-y:auto;border:1px solid #eee;border-radius:4px">
+      <table class="org-table">
+        <thead><tr><th>Organisation</th><th></th></tr></thead>
+        <tbody>
+        {{range .AvailableOrgs}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>
+            <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0">
+              <input type="hidden" name="action" value="add">
+              <input type="hidden" name="org_id" value="{{.ID}}">
+              <button type="submit" class="btn-sm btn-primary-sm">Add</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+        </tbody>
+      </table>
       </div>
     </div>
   </details>
@@ -243,8 +250,12 @@
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .members-table td{padding:.3rem .4rem;vertical-align:middle}
 .members-table td:last-child{text-align:right;white-space:nowrap}
-.org-row{display:flex;align-items:center;justify-content:space-between;padding:.3rem .5rem;border-bottom:1px solid #f0f0f0;font-size:.88rem}
-.org-row:last-child{border-bottom:none}
+.org-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.org-table thead tr{position:sticky;top:0;background:#f5f5f5}
+.org-table th{padding:.3rem .5rem;text-align:left;font-weight:600;border-bottom:1px solid #ddd;color:#555}
+.org-table td{padding:.3rem .5rem;border-bottom:1px solid #eee;vertical-align:middle}
+.org-table tr:last-child td{border-bottom:none}
+.org-table td:last-child{width:1%;white-space:nowrap}
 .btn-sm{padding:.2rem .6rem;font-size:.82rem;border:none;border-radius:3px;cursor:pointer}
 .btn-primary-sm{background:#1a6eb5;color:#fff}
 .btn-primary-sm:hover{background:#0d4a80}
@@ -483,8 +494,8 @@
 <script>
 function filterOrgs(q) {
   var v = q.toLowerCase();
-  document.querySelectorAll('#org-list .org-row').forEach(function(el) {
-    el.style.display = el.dataset.name.indexOf(v) !== -1 ? '' : 'none';
+  document.querySelectorAll('#org-list tbody tr').forEach(function(el) {
+    el.style.display = (!v || el.textContent.toLowerCase().indexOf(v) !== -1) ? '' : 'none';
   });
 }
 </script>

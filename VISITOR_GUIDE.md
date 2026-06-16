@@ -2,6 +2,8 @@
 
 Welcome to dansal! This guide helps you discover dance events and connect with the community.
 
+Your privacy is respected: No personal informations are stored. Cookies are only used if you want to change language of descriptors. For some action verification of email is required to ensure only interested persons are using this feature. But then only working email addresses are checked. You are encouraged to use anonymous mail addresses like happytomazurka@havefun.dance
+
 ## 🗺️ Browsing Events
 
 ### Interactive Map
@@ -29,13 +31,11 @@ Each event page includes:
 
 ### Understanding Event Status
 - **✅ Published**: Visible to everyone, appears on map
-- **🔒 Unpublished**: Only visible to logged-in users (draft events)
 - **❌ Cancelled**: Event was cancelled, shown with cancellation notice
 
 ### Pricing & Booking
-- Events may show pricing tiers (early bird, regular, door)
-- Booking links direct you to organizer's ticketing system
-- Some events offer on-site payment only
+- Events may show pricing tiers (free, donation, early bird, regular, door)
+- Booking links direct you to organizer's ticketing system (if provided)
 
 ## 🚗 Community Bulletin Board
 
@@ -43,6 +43,7 @@ Each event has a community board for:
 - **Ride-sharing**: Offer or request rides to the event
 - **Accommodation**: Find shared housing or local stays
 - **Ticket Exchange**: Buy/sell tickets safely
+- **Lost & Found**: After event search for lost items or offer found items
 
 **How it works:**
 1. Click "Post on Board" on any event page
@@ -59,7 +60,7 @@ Each event has a community board for:
 ## 🌍 Multi-Language Support
 
 dansal supports 8 languages. Change language via:
-- Language selector in the navigation bar
+- Language selector in the navigation bar (Cookie needed)
 - Browser language detection (automatic)
 - URL parameter (`?lang=en`, `?lang=de`, etc.)
 
@@ -78,28 +79,6 @@ Use the search bar to:
 - Search for specific musicians or bands
 - Filter by date ranges
 - Combine multiple criteria
-
-## 💡 Tips for First-Time Visitors
-
-1. **Check venue details**: Some locations have specific shoe requirements
-2. **Arrive early**: Many events have pre-dance workshops
-3. **Bring cash**: Some venues prefer cash payments
-4. **Respect dress codes**: Some balls have formal attire requirements
-5. **Ask about beginner sessions**: Many events offer beginner-friendly times
-
-## 📅 Saving Favorite Events
-
-(Requires free account)
-- Click the ⭐ star on any event to save it
-- Access your saved events from your profile
-- Get notifications about changes or cancellations
-
-## 🤝 Connecting with the Community
-
-- **Follow organizers**: Get updates from your favorite dance clubs
-- **Join discussions**: Participate in event comment sections
-- **Share events**: Use social sharing buttons to spread the word
-- **Provide feedback**: Help improve the platform
 
 ---
 

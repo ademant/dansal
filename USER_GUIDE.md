@@ -16,9 +16,18 @@ For event organizers, publishers, and regular users who create and manage conten
 
 ### Creating an Account
 
-1. **Self-registration**: Use an invite link from an admin
-2. **Admin creation**: Admins can create accounts directly
-3. **First login**: On first run, an admin account is created automatically
+Getting an account via
+1. **Self-registration**: Create a request, which is confirmed by admin
+2. **Invitation link**: Already existing user can provide you link or QR code for registration
+
+### Privacy authentications
+Users who want to manage events have several methods for authentication:
+- **Old shool passwords**: Use username and password like many other services
+- **TOTP**: Google authenticator can be used as second factor
+- **macic link**: When email / telegram / matrix is provided and verified, a login link is sent to this address
+- **Passkey**: Use modern Passkey, which is secure stored on your device.
+
+Only with Passkey it is possible to manage events without username.
 
 ### Account Types & Roles
 
@@ -27,7 +36,6 @@ For event organizers, publishers, and regular users who create and manage conten
 | **admin** | Full access to all features and settings |
 | **publisher** | Create/edit events, manage locations and musicians |
 | **user** | Create events for their own organization only |
-| **viewer** | Read-only access, can see unpublished events |
 
 ### Profile Settings
 
@@ -38,6 +46,15 @@ For event organizers, publishers, and regular users who create and manage conten
 - **Linked Accounts**: Connect Telegram, Matrix, etc.
 
 ## ✨ Event Creation
+
+### Major feature
+The data are stored in several structure to make management of new events as easy as possible:
+
+- Events are assigned to location and location based informations are bound to the event (adress, accessibility etc.)
+- Events are assigned to organization to filter easily for events of a specific organization
+- Events can be created using templates
+- Events can be grouped into series with easy methods for editing details of single event
+- Events can be imported automatic by iCal/JSON feeds
 
 ### Basic Event Creation
 
@@ -56,7 +73,7 @@ For event organizers, publishers, and regular users who create and manage conten
 ### Event Details
 
 - **Description**: Rich text with formatting options
-- **Pricing**: Add multiple pricing tiers (early bird, regular, door, etc.)
+- **Pricing**: Add multiple pricing tiers (free, donation, early bird, regular, door, etc.)
 - **Booking URL**: Link to ticketing system
 - **Tags**: Dance styles, themes, special features
 - **Featured Image**: Upload event poster or photo
@@ -80,27 +97,12 @@ Room B:
 - Link to MusicBrainz for automatic discography
 - Add social media links for each musician
 
-#### Accessibility Information
-- Wheelchair access
-- Parking availability
-- Dance floor surface
-- Seating options
-- Hearing loop availability
-
-### Publishing Workflow
-
-1. **Draft**: Event is saved but not visible to public
-2. **Review**: Check all details are correct
-3. **Publish**: Make event visible on map and search
-4. **Promote**: Share on social media (built-in sharing buttons)
-
 ### Event Management
 
 - **Edit**: Update any event details
 - **Cancel**: Mark event as cancelled (visible with notice)
 - **Duplicate**: Create copy for recurring events
 - **Export**: Download as iCal or JSON
-- **Statistics**: View attendance and engagement
 
 ## 🏢 Venue Management
 
@@ -114,13 +116,6 @@ Room B:
    - Accessibility features
    - Parking information
    - Dance floor details (size, surface, etc.)
-
-### Venue Features
-
-- **Multiple Rooms**: For venues with multiple dance spaces
-- **Regular Events**: Link recurring events to this venue
-- **Photos**: Upload venue images
-- **360° Tours**: Embed virtual tours
 
 ### Assigning Venues to Organizations
 
@@ -143,7 +138,7 @@ Room B:
 
 - **Multiple Venues**: Assign all venues used by this organization
 - **iCal Feeds**: Set up automatic event imports
-- **Members**: Add users who can create events
+- **Members**: Add users who can create/manage events
 - **Templates**: Create reusable event configurations
 
 ### iCal Feed Integration
@@ -195,48 +190,6 @@ Set up recurring events with:
 - Custom exceptions (e.g., skip holidays)
 - Automatic end dates
 - Variable pricing by date
-
-### Collaborative Features
-
-- **Co-organizers**: Add multiple users to manage an event
-- **Review Requests**: Request feedback before publishing
-- **Change Tracking**: See who made what changes
-
-## 🔐 User Roles & Permissions
-
-### Role Comparison
-
-| Action | admin | publisher | user | viewer |
-|---|---|---|---|---|
-| Create events | ✅ | ✅ | ✅* | ❌ |
-| Edit any event | ✅ | ✅ | ❌ | ❌ |
-| Publish events | ✅ | ✅ | ✅* | ❌ |
-| Delete events | ✅ | ✅ | ✅* | ❌ |
-| Manage locations | ✅ | ✅ | ❌ | ❌ |
-| Manage musicians | ✅ | ✅ | ❌ | ❌ |
-| Manage organizations | ✅ | ✅ | ❌ | ❌ |
-| User management | ✅ | ❌ | ❌ | ❌ |
-| System settings | ✅ | ❌ | ❌ | ❌ |
-| View unpublished | ✅ | ✅ | ✅ | ✅ |
-
-*Only for their own organization's events
-
-### Best Practices
-
-1. **Use publishers for trusted organizers** who manage multiple venues
-2. **Use users for individual organizers** who only need to manage their own events
-3. **Use viewers for team members** who need to see drafts but not edit
-4. **Regularly review permissions** especially when team members change roles
-
-## 📊 Tips for Effective Event Management
-
-1. **Complete all fields**: More information = better visibility
-2. **Use high-quality images**: Attract more attendees
-3. **Set up recurring imports**: Save time on regular events
-4. **Leverage templates**: Maintain consistency across events
-5. **Publish early**: Give attendees time to plan
-6. **Update regularly**: Keep information current
-7. **Engage with comments**: Build community around your events
 
 ---
 

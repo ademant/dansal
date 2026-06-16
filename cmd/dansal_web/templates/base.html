@@ -236,7 +236,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     <div class="user-section">
       <button onclick="cycleTheme()" class="user-menu-btn" title="Toggle colour scheme">Toggle Theme</button>
       <button onclick="openHelpModal()" class="user-menu-btn" title="Help">Help</button>
-      <button onclick="toggleInfoPopup(event)" class="user-menu-btn" title="About dansal">About</button>
+      <button onclick="toggleInfoPopup(this)" class="user-menu-btn" title="About dansal">About</button>
       <div class="nav-info-popup" id="info-popup" hidden>
         <a href="https://github.com/ademant/dansal" target="_blank" rel="noopener">dansal</a>
         <span class="info-ver">{{.AppVersion}}</span>
@@ -282,13 +282,6 @@ function toggleUserMenu(){
   dropdown.hidden=isOpen;
   // Close nav dropdown when opening user
   if(!isOpen) document.getElementById('nav-dropdown').hidden=true;
-}
-function toggleInfoPopup(evt){
-  var popup=document.getElementById('info-popup');
-  var isOpen=!popup.hidden;
-  popup.hidden=isOpen;
-  if(!isOpen) return;
-  evt.stopPropagation();
 }
 // Close dropdowns when clicking outside
 document.addEventListener('click',function(e){

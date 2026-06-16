@@ -20,6 +20,7 @@ type RegisterPageData struct {
 	PendingToken      string // verification token for resend
 	PendingHasPasskey bool   // true = passkey already bound to this pending registration
 	InviteURL         string // set when approved without contact info
+	TelegramAvailable bool   // true = telegram channel is configured on the API
 }
 
 type RegisterDoneData struct {
@@ -67,8 +68,13 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		}
 
 		orgs, _ := client.GetOrganizations(r.Context())
+		info, _ := client.GetServiceInfo(r.Context())
 		title := i18n.T(r, "register_title")
-		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{Orgs: orgs, FormToken: newFormToken()}))
+		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
+			Orgs:              orgs,
+			FormToken:         newFormToken(),
+			TelegramAvailable: info.TelegramChannelAvailable,
+		}))
 	}
 }
 

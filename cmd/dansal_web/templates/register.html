@@ -49,20 +49,30 @@
     <input type="hidden" name="_form_ts" value="{{.FormToken}}">
     <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
 
-    <div id="tab-join" class="reg-tab">
-      <input type="hidden" name="reg_type" value="join_org" form="reg-join-hidden">
-    </div>
-    <div id="tab-new" class="reg-tab" hidden>
-      <input type="hidden" name="reg_type" value="new_org" form="reg-new-hidden">
-    </div>
-
     <input type="hidden" id="field-reg-type" name="reg_type" value="join_org">
 
+    {{/* Verification channel */}}
     <div class="form-group">
-      <label for="field-email">{{$.Strings.T "register_email"}} <span class="hint-recommended">{{$.Strings.T "register_contact_recommended"}}</span></label>
+      <label>{{$.Strings.T "register_channel"}}</label>
+      <div class="radio-group">
+        <label><input type="radio" name="channel" value="none" checked onchange="updateChannelFields()"> {{$.Strings.T "register_channel_none"}}</label>
+        <label><input type="radio" name="channel" value="email" onchange="updateChannelFields()"> {{$.Strings.T "register_email"}}</label>
+        {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram" onchange="updateChannelFields()"> Telegram</label>{{end}}
+      </div>
+    </div>
+    <div id="email-field" hidden class="form-group">
+      <label for="field-email">{{$.Strings.T "register_email"}}</label>
       <input type="email" id="field-email" name="email" autocomplete="email" class="form-input" placeholder="folkinneustadt@havefun.dance">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
+    <div id="channel-address-field" hidden class="form-group">
+      <label for="field-telegram">{{$.Strings.T "register_channel_address"}}</label>
+      <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
+    </div>
+    <div id="anon-hint" class="form-hint anon-notice">{{$.Strings.T "register_anon_cookie_hint"}}</div>
+
+    <div id="validation-error" hidden class="form-error" role="alert">{{$.Strings.T "register_validation_hint"}}</div>
+
     <div class="form-group">
       <label for="field-description">{{$.Strings.T "register_description_label"}}</label>
       <textarea id="field-description" name="description" rows="3" class="form-input" maxlength="500" placeholder="{{$.Strings.T "register_description_placeholder"}}"></textarea>
@@ -105,56 +115,28 @@
       </div>
     </div>
 
-    {{/* Verification channel */}}
-    <div class="form-group">
-      <label>{{$.Strings.T "register_channel"}}</label>
-      <div class="radio-group">
-        <label><input type="radio" name="channel" value="email" checked onchange="updateChannelFields()"> {{$.Strings.T "register_email"}}</label>
-        <label><input type="radio" name="channel" value="telegram" onchange="updateChannelFields()"> Telegram</label>
-      </div>
-    </div>
-    <div id="telegram-field" hidden class="form-group">
-      <label for="field-telegram">{{$.Strings.T "register_telegram"}}</label>
-      <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
-    </div>
-
-    <p class="form-hint" style="margin-bottom:.75rem">{{$.Strings.T "register_data_notice"}}</p>
-    <button type="button" class="btn-primary" onclick="checkContactBeforeSubmit()">{{$.Strings.T "register_submit"}}</button>
+    <p class="form-hint" style="margin:.75rem 0">{{$.Strings.T "register_data_notice"}}</p>
+    <p class="form-hint" style="margin-bottom:.75rem">{{$.Strings.T "register_expiry_hint"}}</p>
+    <button type="button" class="btn-primary" onclick="submitRegForm()">{{$.Strings.T "register_submit"}}</button>
   </form>
-
-  <!-- No-contact confirmation modal -->
-  <div id="no-contact-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:480px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
-      <h3 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "register_no_contact_title"}}</h3>
-      <p style="font-size:.9rem;color:var(--fg-dim);margin-bottom:1rem">{{$.Strings.T "register_no_contact_body"}}</p>
-      <div class="form-group">
-        <label for="modal-email">{{$.Strings.T "register_email"}} <span class="hint-recommended">{{$.Strings.T "register_contact_recommended"}}</span></label>
-        <input type="email" id="modal-email" autocomplete="email" class="form-input">
-      </div>
-      <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
-        <button type="button" class="btn-primary" onclick="addContactFromModal()">{{$.Strings.T "register_no_contact_add"}}</button>
-        <button type="button" class="btn-secondary" onclick="submitWithoutContact()">{{$.Strings.T "register_no_contact_confirm"}}</button>
-        <button type="button" class="btn-link" onclick="document.getElementById('no-contact-modal').hidden=true">{{$.Strings.T "admin_magic_link_close"}}</button>
-      </div>
-    </div>
-  </div>
   {{end}}{{/* end if PendingID else */}}
   {{end}}
 </div>
 <style>
 .suggest-wrap{max-width:540px;margin:2rem auto}
 .tab-bar{display:flex;gap:.5rem;border-bottom:2px solid var(--border);padding-bottom:.5rem}
-.tab-btn{background:var(--btn-bg);border:1px solid var(--border);border-radius:4px 4px 0 0;padding:.4rem .9rem;cursor:pointer;color:var(--fg);font-size:.92rem}
-.tab-btn.active{background:var(--bg-hover);border-bottom-color:transparent;font-weight:600;color:var(--heading)}
+.tab-btn{background:var(--bg-body,#fff);border:2px solid var(--border-mid);border-bottom:none;border-radius:4px 4px 0 0;padding:.4rem .9rem;cursor:pointer;color:var(--fg-dim);font-size:.92rem}
+.tab-btn.active{background:var(--bg-card);border-color:var(--border);border-bottom-color:var(--bg-card);font-weight:600;color:var(--heading);position:relative;top:2px}
 .form-group{margin-bottom:1rem}
 .form-group label{display:block;font-weight:600;margin-bottom:.3rem;font-size:.9rem;color:var(--fg-dim)}
 .form-input{width:100%;padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.95rem}
-.radio-group{display:flex;gap:1.25rem}
+.radio-group{display:flex;gap:1.25rem;flex-wrap:wrap}
 .radio-group label{font-weight:normal;color:var(--fg)}
 .btn-primary{background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.5rem 1.25rem;font-size:1rem;cursor:pointer;margin-top:.5rem}
 .btn-primary:hover{background:#0d4a80}
 .form-error{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem}
 .form-hint{font-size:.82rem;color:var(--fg-muted);margin:.2rem 0 0}
+.anon-notice{margin:.5rem 0 .75rem;padding:.5rem .7rem;background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404);border-radius:4px;font-size:.82rem}
 .hp-field{display:none!important}
 .pending-reg-notice{background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404);border-radius:6px;padding:1rem 1.25rem;margin-bottom:1.25rem}
 .pending-reg-notice p{margin:0 0 .75rem}
@@ -168,42 +150,36 @@
 </style>
 <script>
 function switchTab(tab) {
-  document.getElementById('tab-join').hidden = tab !== 'join';
-  document.getElementById('tab-new').hidden = tab !== 'new';
   document.getElementById('join-fields').hidden = tab !== 'join';
   document.getElementById('new-fields').hidden = tab !== 'new';
   document.getElementById('field-reg-type').value = tab === 'join' ? 'join_org' : 'new_org';
   document.querySelectorAll('.tab-btn').forEach(function(b,i){b.classList.toggle('active', (i===0&&tab==='join')||(i===1&&tab==='new'));});
 }
 function updateChannelFields() {
-  var tg = document.querySelector('input[name="channel"]:checked').value === 'telegram';
-  document.getElementById('telegram-field').hidden = !tg;
+  var ch = document.querySelector('input[name="channel"]:checked').value;
+  document.getElementById('email-field').hidden = ch !== 'email';
+  document.getElementById('channel-address-field').hidden = ch !== 'telegram';
+  document.getElementById('anon-hint').hidden = ch !== 'none';
 }
-function hasContactInfo() {
-  var email = document.getElementById('field-email');
-  var channel = document.querySelector('input[name="channel"]:checked');
-  var tg = document.getElementById('field-telegram');
-  if (email && email.value.trim()) return true;
-  if (channel && channel.value === 'telegram' && tg && tg.value.trim()) return true;
-  return false;
-}
-function checkContactBeforeSubmit() {
-  if (hasContactInfo()) {
-    document.querySelector('form[action="/register"]').submit();
-  } else {
-    document.getElementById('no-contact-modal').hidden = false;
+function submitRegForm() {
+  var ch = document.querySelector('input[name="channel"]:checked').value;
+  var hasContact = false;
+  if (ch === 'email') {
+    var ev = document.getElementById('field-email');
+    hasContact = ev && ev.value.trim().length > 0;
+  } else if (ch === 'telegram') {
+    var tv = document.getElementById('field-telegram');
+    hasContact = tv && tv.value.trim().length > 0;
   }
-}
-function addContactFromModal() {
-  var v = document.getElementById('modal-email').value.trim();
-  if (v) {
-    document.getElementById('field-email').value = v;
-    document.getElementById('no-contact-modal').hidden = true;
-    document.querySelector('form[action="/register"]').submit();
+  var desc = document.getElementById('field-description');
+  var hasDesc = desc && desc.value.trim().length >= 10;
+  var errEl = document.getElementById('validation-error');
+  if (!hasContact && !hasDesc) {
+    errEl.hidden = false;
+    errEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+    return;
   }
-}
-function submitWithoutContact() {
-  document.getElementById('no-contact-modal').hidden = true;
+  errEl.hidden = true;
   document.querySelector('form[action="/register"]').submit();
 }
 

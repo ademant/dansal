@@ -20,7 +20,8 @@ type ServiceInfo struct {
 	BoardEntries            int    `json:"board_entries"`
 	DBSizeBytes             int64  `json:"db_size_bytes"`
 	ImagesSizeBytes         int64  `json:"images_size_bytes"`
-	SelfRegistrationEnabled bool   `json:"self_registration_enabled"`
+	SelfRegistrationEnabled    bool   `json:"self_registration_enabled"`
+	TelegramChannelAvailable   bool   `json:"telegram_channel_available"`
 }
 
 // GET /api/v1/info
@@ -69,7 +70,8 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 		BoardEntries:            boardEntries,
 		DBSizeBytes:             dbSize,
 		ImagesSizeBytes:         imagesSize,
-		SelfRegistrationEnabled: selfRegEnabled(),
+		SelfRegistrationEnabled:  selfRegEnabled(),
+		TelegramChannelAvailable: config.Server.TelegramBotToken != "",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

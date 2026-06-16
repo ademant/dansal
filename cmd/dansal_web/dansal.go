@@ -2463,7 +2463,8 @@ type DansalInfo struct {
 	BoardEntries            int    `json:"board_entries"`
 	DBSizeBytes             int64  `json:"db_size_bytes"`
 	ImagesSizeBytes         int64  `json:"images_size_bytes"`
-	SelfRegistrationEnabled bool   `json:"self_registration_enabled"`
+	SelfRegistrationEnabled  bool `json:"self_registration_enabled"`
+	TelegramChannelAvailable bool `json:"telegram_channel_available"`
 }
 
 func (c *DansalClient) GetServiceInfo(ctx context.Context) (DansalInfo, error) {

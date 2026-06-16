@@ -657,6 +657,7 @@ func adminPruneImages() adminResponse {
 }
 
 func adminVacuum() adminResponse {
+	db.Exec("DELETE FROM pending_registrations WHERE approved=0 AND expires_at < strftime('%s','now')")
 	if _, err := db.Exec("VACUUM"); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}

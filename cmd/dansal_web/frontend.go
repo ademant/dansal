@@ -47,7 +47,6 @@ type TemplateData struct {
 	RegistrationEnabled    bool
 	SessionIdleTimeoutMins int
 	PendingRegCount        int // verified pending registrations awaiting action (scoped to caller)
-	ShowCookieBanner       bool
 	Path                   string // current request path, for building "return to this page" links
 }
 
@@ -94,23 +93,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	if siteName == "" {
 		siteName = cfg.Domain
 	}
-	// Determine whether to show the cookie consent banner: show when there is
-	// no explicit consent cookie and the user hasn't signalled Do-Not-Track.
-	showCookieBanner := false
-	if _, err := r.Cookie("dsw_cookie_consent"); err == http.ErrNoCookie {
-		if !doNotTrack(r) {
-			showCookieBanner = true
-		}
-	}
-
-	// Ensure banner strings exist with sensible defaults when not provided in i18n.yaml
 	strs := i18n.Strings(lang)
-	if _, ok := strs["cookie_banner_text"]; !ok {
-		strs["cookie_banner_text"] = "This site uses cookies to improve your experience."
-	}
-	if _, ok := strs["accept_cookies"]; !ok {
-		strs["accept_cookies"] = "Accept"
-	}
 
 	return TemplateData{
 		Title:                  title,
@@ -137,8 +120,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 			}
 			return 0
 		}(),
-		ShowCookieBanner: showCookieBanner,
-		Path:             r.URL.Path,
+		Path: r.URL.Path,
 	}
 }
 

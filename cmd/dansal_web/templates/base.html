@@ -228,7 +228,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
         <a href="/login">{{.Strings.T "nav_login"}}</a>
       </div>
       <div class="user-section">
-        <select class="lang-select" aria-label="Language" onchange="location.href='/lang?code='+this.value">
+        <select class="lang-select" id="lang-select" aria-label="Language" onchange="handleLangChange(this)">
           {{range .Languages}}<option value="{{.Code}}"{{if .Active}} selected{{end}}>{{.Flag}} {{.Name}}</option>{{end}}
         </select>
       </div>
@@ -245,16 +245,16 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     </div>
   </div>
 </nav>
-{{if .ShowCookieBanner}}
-<div id="cookie-banner" style="background:#fff7e6;border-top:1px solid #e6d8c2;padding:.8rem;display:flex;gap:.8rem;align-items:center;justify-content:center;position:relative;z-index:600">
-  <div style="max-width:960px;display:flex;align-items:center;gap:.8rem;flex:1;padding:0 .5rem">
-    <div style="flex:1;color:#2a2a2a">{{.Strings.T "cookie_banner_text"}}</div>
-    <form id="cookie-form" method="post" action="/cookie-consent">
-      <button type="submit" style="background:#1a6eb5;color:#fff;border:none;padding:.45rem .8rem;border-radius:5px;cursor:pointer">{{.Strings.T "accept_cookies"}}</button>
-    </form>
+<div id="lang-consent-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:420px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 .75rem;font-size:1rem">{{.Strings.T "cookie_lang_title"}}</h3>
+    <p style="font-size:.9rem;color:var(--fg-dim);margin:0 0 1.25rem">{{.Strings.T "cookie_lang_text"}}</p>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <button type="button" onclick="langConsentAccept()" style="background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "accept_cookies"}}</button>
+      <button type="button" onclick="langConsentDeny()" style="background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "cookie_lang_deny"}}</button>
+    </div>
   </div>
 </div>
-{{end}}
 {{if gt .BannerHeight 0}}
 <div class="site-banner">
   <img src="/banner.avif" alt="">
@@ -384,6 +384,23 @@ function attachTileLayer(map){
   if(!btn||!nav)return;
   new IntersectionObserver(function(e){btn.classList.toggle('visible',!e[0].isIntersecting);}).observe(nav);
 })();
+var _langPending=null;
+function handleLangChange(sel){
+  var code=sel.value;
+  var hasCookie=document.cookie.split(';').some(function(c){return c.trim().startsWith('dsw_lang=');});
+  if(hasCookie){location.href='/lang?code='+code;return;}
+  _langPending=code;
+  document.getElementById('lang-consent-modal').hidden=false;
+}
+function langConsentAccept(){
+  document.getElementById('lang-consent-modal').hidden=true;
+  if(_langPending){location.href='/lang?code='+_langPending;}
+}
+function langConsentDeny(){
+  document.getElementById('lang-consent-modal').hidden=true;
+  var sel=document.getElementById('lang-select');
+  if(sel){var opts=sel.options;for(var i=0;i<opts.length;i++){if(opts[i].defaultSelected){sel.selectedIndex=i;break;}}}
+}
 </script>
 <main>
 {{block "content" .}}{{end}}

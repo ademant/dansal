@@ -107,7 +107,7 @@
       {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
       {{if index $ea "wheelchair"}}<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
       {{if index $ea "hearing_loop"}}<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>{{end}}
-      {{if .Location.NoStreetShoes}}<span class="food-icon" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫</span>{{end}}
+      {{if and .Location .Location.NoStreetShoes}}<span class="food-icon" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫</span>{{end}}
       {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
       {{if eq $floor "parquet"}}<span class="food-icon" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{end}}
       {{if eq $floor "stone"}}<span class="food-icon" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{end}}

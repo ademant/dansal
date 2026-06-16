@@ -87,6 +87,7 @@
           <option value="">—</option>
           {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
         </select>
+        <div id="org-error" hidden class="form-error" role="alert" style="margin-top:.5rem">{{$.Strings.T "register_error_no_org"}}</div>
       </div>
     </div>
 
@@ -161,6 +162,20 @@ function updateChannelFields() {
   document.getElementById('anon-hint').hidden = ch !== 'none';
 }
 function submitRegForm() {
+  // Validate org selection for join_org tab.
+  var regType = document.getElementById('field-reg-type').value;
+  var orgErr = document.getElementById('org-error');
+  if (regType === 'join_org') {
+    var orgSel = document.getElementById('field-org-id');
+    if (orgSel && !orgSel.value) {
+      orgErr.hidden = false;
+      orgErr.scrollIntoView({behavior:'smooth', block:'nearest'});
+      return;
+    }
+  }
+  if (orgErr) orgErr.hidden = true;
+
+  // Validate contact info or description for anonymous path.
   var ch = document.querySelector('input[name="channel"]:checked').value;
   var hasContact = false;
   if (ch === 'email') {

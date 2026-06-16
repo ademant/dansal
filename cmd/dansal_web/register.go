@@ -148,12 +148,16 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				errKey = "register_error_conflict"
 			} else if strings.Contains(msg, " 429") || strings.Contains(msg, "Rate limit") {
 				errKey = "register_error_rate"
+			} else if strings.Contains(msg, "org_id") {
+				errKey = "register_error_no_org"
 			}
 			orgs, _ := client.GetOrganizations(r.Context())
+			info, _ := client.GetServiceInfo(r.Context())
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-				Orgs:  orgs,
-				Error: errKey,
+				Orgs:              orgs,
+				Error:             errKey,
+				TelegramAvailable: info.TelegramChannelAvailable,
 			}))
 			return
 		}

@@ -3,7 +3,7 @@
 **Open-source calendar and event platform for dance communities**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.22%2B-blue)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-1.26%2B-blue)](https://go.dev/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue)](https://sqlite.org/)
 
 ## 🎯 Quick Overview
@@ -36,26 +36,9 @@ Installation, configuration, maintenance, and troubleshooting:
 API reference, architecture, and contribution guidelines:
 → **[Developer Guide](DEVELOPER_GUIDE.md)**
 
-## 🚀 Quick Start
+## 🔧 Installation & Deployment
 
-```bash
-# Run from source
-go run .
-
-# Or build and run
-go build -o dansal
-./dansal
-```
-
-The server starts on port 8000 (configurable). On first run, an admin account is created with credentials printed to console.
-
-## 🔧 Deployment Options
-
-- **Single binary**: Simple deployment with SQLite backend
-- **Docker**: Containerized deployment with `docker-compose`
-- **Systemd**: Service files included for production use
-
-See **[Admin Guide](ADMIN_GUIDE.md)** for detailed deployment instructions.
+See **[Admin Guide](ADMIN_GUIDE.md)** for installation, configuration, and deployment instructions.
 
 ## 📞 Support & Community
 

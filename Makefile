@@ -324,6 +324,7 @@ endif
 	    -e "s/zone=api_limit/zone=api_limit_$(INSTANCE)/g" \
 	    -e "s/zone=auth_limit/zone=auth_limit_$(INSTANCE)/g" \
 	    -e "s/zone=conn_limit/zone=conn_limit_$(INSTANCE)/g" \
+	    -e "s/limit_conn conn_limit/limit_conn conn_limit_$(INSTANCE)/g" \
 	    deploy/nginx/dansal.conf > /etc/nginx/conf.d/dansal-$(INSTANCE).conf
 	nginx -t || { rm -f /etc/nginx/conf.d/dansal-$(INSTANCE).conf; exit 1; }; systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-$(INSTANCE).conf"

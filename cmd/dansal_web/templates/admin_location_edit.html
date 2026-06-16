@@ -129,9 +129,12 @@
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>
   <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
 
-  <label for="aliases">{{$.Strings.T "loc_aliases"}}</label>
-  <textarea id="aliases" name="aliases" rows="3" placeholder="{{$.Strings.T "loc_aliases_hint"}}">{{range $i, $a := .Location.Aliases}}{{if $i}}
-{{end}}{{$a}}{{end}}</textarea>
+  {{if .Location.Aliases}}
+  <div class="aliases-display">
+    <span class="aliases-label">{{$.Strings.T "loc_aliases"}}</span>
+    {{range .Location.Aliases}}<span class="alias-chip">{{.}}</span>{{end}}
+  </div>
+  {{end}}
 
   <div class="form-actions">
     <div style="display:flex;gap:.75rem">
@@ -232,6 +235,9 @@
 .btn-del:hover{background:#800016}
 .field-err{color:#b00020;font-size:.8rem;font-weight:normal}
 .loc-meta{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;font-size:.8rem;color:#555;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;padding:.4rem .75rem;margin:.2rem 0}
+.aliases-display{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .5rem;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;padding:.4rem .75rem;margin:.2rem 0}
+.aliases-label{font-size:.8rem;font-weight:600;color:#555;flex-basis:100%}
+.alias-chip{font-size:.8rem;color:#444;background:#e8e8e8;border-radius:3px;padding:.1rem .4rem}
 .members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
 .members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}

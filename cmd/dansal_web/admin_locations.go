@@ -416,7 +416,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Parking:         r.FormValue("parking"),
 			FloorCondition:  r.FormValue("floor_condition"),
 			NoStreetShoes:   r.FormValue("no_street_shoes") == "1",
-			Aliases:         parseAliases(r.FormValue("aliases")),
+			Aliases:         existing.Aliases,
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		from := safeReturnPath(r.FormValue("from"))

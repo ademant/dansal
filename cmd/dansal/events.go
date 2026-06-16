@@ -138,6 +138,8 @@ type EventLocationRequest struct {
 	Latitude    *float64 `json:"latitude,omitempty"`
 	Longitude   *float64 `json:"longitude,omitempty"`
 	Eventsite   string   `json:"eventsite"`
+	OsmID       *int64   `json:"osm_id,omitempty"`
+	OsmType     string   `json:"osm_type,omitempty"`
 }
 
 // Price is one entry in a multi-tier pricing list.

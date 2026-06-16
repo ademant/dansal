@@ -190,9 +190,13 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	if err != sql.ErrNoRows {
 		return 0, err
 	}
+	gh := ""
+	if loc.Latitude != nil && loc.Longitude != nil {
+		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
+	}
 	result, err := q.Exec(
-		"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Eventsite,
+		"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Eventsite, loc.OsmID, loc.OsmType, gh,
 	)
 	if err != nil {
 		return 0, err

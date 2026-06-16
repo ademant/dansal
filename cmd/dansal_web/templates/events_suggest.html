@@ -102,6 +102,12 @@
         <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
       </label>
     </div>
+    <input type="hidden" id="sg-lat"      name="lat">
+    <input type="hidden" id="sg-lon"      name="lon">
+    <input type="hidden" id="sg-osm-id"   name="osm_id">
+    <input type="hidden" id="sg-osm-type" name="osm_type">
+    <input type="hidden" id="sg-address"  name="address">
+    <input type="hidden" id="sg-zipcode"  name="zipcode">
     <div class="form-row">
       <div class="check-row">
         <label class="check-label"><input type="checkbox" name="tags" value="bal-folk"> {{$.Strings.T "tag_ball"}}</label>
@@ -246,17 +252,22 @@ function validateEndTime() {
 (function(){
   var btn = document.getElementById('nominatim-btn');
   if (!btn) return;
+  function clearGeoFields() {
+    ['sg-lat','sg-lon','sg-osm-id','sg-osm-type','sg-address','sg-zipcode'].forEach(function(id){
+      document.getElementById(id).value = '';
+    });
+  }
   btn.addEventListener('click', function() {
     var q = document.getElementById('nominatim-q').value.trim();
     if (!q) return;
     btn.disabled = true;
+    clearGeoFields();
     var lang = document.documentElement.lang || 'en';
-    fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q) + '&limit=5&addressdetails=1', {
+    var fetchP = fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q) + '&limit=5&addressdetails=1', {
       headers: {'Accept-Language': lang}
     })
     .then(function(r){ return r.json(); })
     .then(function(results) {
-      btn.disabled = false;
       var ul = document.getElementById('nominatim-results');
       ul.innerHTML = '';
       if (!results.length) {
@@ -272,13 +283,24 @@ function validateEndTime() {
           document.getElementById('sg-location').value = res.name || a.amenity || a.building || a.house_number || '';
           document.getElementById('sg-town').value = a.city || a.town || a.village || a.municipality || a.suburb || '';
           document.getElementById('sg-country').value = (a.country_code || '').toUpperCase();
+          document.getElementById('sg-lat').value = res.lat || '';
+          document.getElementById('sg-lon').value = res.lon || '';
+          document.getElementById('sg-osm-id').value = res.osm_id || '';
+          document.getElementById('sg-osm-type').value = (res.osm_type || '').toLowerCase();
+          var road = a.road || a.pedestrian || a.path || '';
+          var hn   = a.house_number || '';
+          document.getElementById('sg-address').value = road && hn ? road + ' ' + hn : road || hn;
+          document.getElementById('sg-zipcode').value = a.postcode || '';
           ul.hidden = true;
         });
         ul.appendChild(li);
       });
       ul.hidden = false;
     })
-    .catch(function(){ btn.disabled = false; });
+    .catch(function(){});
+    Promise.all([fetchP, new Promise(function(r){ setTimeout(r, 2000); })])
+      .then(function(){ btn.disabled = false; })
+      .catch(function(){ btn.disabled = false; });
   });
   document.addEventListener('click', function(e) {
     if (!e.target.closest('#nominatim-results') && e.target !== document.getElementById('nominatim-q')) {

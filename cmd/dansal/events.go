@@ -622,6 +622,10 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var existingSourceLastModified int64
 	var existingChangedAt int64
 	var lookupErr error = sql.ErrNoRows
+	var uidArg any
+	if uid != "" {
+		uidArg = uid
+	}
 
 	if uid != "" {
 		lookupErr = q.QueryRow(
@@ -711,6 +715,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fsArg = fetchSourceID
 			}
 			_, err := q.Exec(`UPDATE events SET
+				uid=COALESCE(uid,?),
 				title=?,
 				description=CASE WHEN ?!='' THEN ? ELSE description END,
 				start_time=?, end_time=?,
@@ -723,6 +728,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fetch_source_id=COALESCE(?,fetch_source_id),
 				organization_id=COALESCE(organization_id,?)
 				WHERE id=?`,
+				uidArg,
 				title,
 				description, description,
 				startTime, endTime,
@@ -749,8 +755,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?) WHERE id=?",
-				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
+				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?) WHERE id=?",
+				uidArg, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
 				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, existingID,
 			)
 		} else {
@@ -765,10 +771,6 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		return existingID, existingShortCode, false, nil
 	}
 
-	var uidArg any
-	if uid != "" {
-		uidArg = uid
-	}
 	var slmArg any
 	if sourceLastModified > 0 {
 		slmArg = sourceLastModified

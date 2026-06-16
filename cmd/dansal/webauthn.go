@@ -416,8 +416,29 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 		if err := db.QueryRow(
 			"SELECT id, COALESCE(email,'') FROM users WHERE email=? AND disabled=0", req.Email,
 		).Scan(&userID, &userEmail); err != nil {
-			writeError(w, "No passkeys found for this user", http.StatusNotFound)
-			return
+			// Fall back to display_name for users registered without an email address.
+			rows, err2 := db.Query(
+				"SELECT id, COALESCE(email,'') FROM users WHERE display_name=? COLLATE NOCASE AND disabled=0 LIMIT 2",
+				req.Email,
+			)
+			if err2 != nil {
+				writeError(w, "No passkeys found for this user", http.StatusNotFound)
+				return
+			}
+			defer rows.Close()
+			var matched int
+			for rows.Next() {
+				matched++
+				rows.Scan(&userID, &userEmail)
+			}
+			if matched == 0 {
+				writeError(w, "No passkeys found for this user", http.StatusNotFound)
+				return
+			}
+			if matched > 1 {
+				writeError(w, "Multiple accounts share that username; please use your email address", http.StatusConflict)
+				return
+			}
 		}
 		user := loadWebAuthnUser(userID, userEmail)
 		if len(user.credentials) == 0 {

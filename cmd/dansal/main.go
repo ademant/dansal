@@ -45,7 +45,11 @@ func updateLastSeen(token string) {
 	}
 	lastSeenCache[token] = now
 	lastSeenMu.Unlock()
-	go db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), token)
+	go func() {
+		if _, err := db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), token); err != nil {
+			log.Printf("warn: update last_seen_at: %v", err)
+		}
+	}()
 }
 
 type ConnLimiter struct {
@@ -1564,6 +1568,43 @@ func migrateDB() {
 			ON users(display_name COLLATE NOCASE)
 			WHERE display_name IS NOT NULL AND display_name != ''`)
 	}
+
+	// #600: indexes on FK columns missing from original schema.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_tokens_user_id                    ON tokens(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_series_id                  ON events(series_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_by_id              ON events(created_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_changed_by_id              ON events(changed_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_user_id             ON contact_posts(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_verification_tokens_user_id       ON verification_tokens(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_user_id        ON magic_login_tokens(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_api_keys_user_id                  ON api_keys(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id      ON webauthn_credentials(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_invite_links_created_by           ON invite_links(created_by)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_invite_links_org_id               ON invite_links(org_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id     ON timetable_entries(location_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id     ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_location_id       ON event_locations(location_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_dance_id             ON event_dances(dance_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_instructors_event_id        ON event_instructors(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_instructors_instructor_id   ON event_instructors(instructor_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_musicians_created_by_id           ON musicians(created_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_instructors_created_by_id         ON instructors(created_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_requests_post_id          ON contact_requests(post_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_registrations_org_id      ON pending_registrations(org_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_pending_registrations_user_id     ON pending_registrations(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id     ON fetch_sources(organization_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id     ON fetch_source_dances(fetch_source_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_dance_id      ON fetch_source_dances(dance_id)")
+
+	// #603: replace non-selective (is_published, start_time) index with a partial
+	// index covering only published events, ordered by the columns the hot public
+	// feed query needs: end_time for range filtering, start_time for ORDER BY.
+	db.Exec("DROP INDEX IF EXISTS idx_events_published_start")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1")
+
+	// #603: index on active (email-verified, non-expired) contact posts for the
+	// board listing query and the startup cleanup DELETE.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_active ON contact_posts(expires_at, created_at) WHERE email_verified=1")
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -2052,7 +2093,7 @@ func createTables() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url             ON events(url) WHERE url IS NOT NULL;
-	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
+	CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1;
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL;
@@ -2090,6 +2131,32 @@ func createTables() error {
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);
+	CREATE INDEX IF NOT EXISTS idx_tokens_user_id                    ON tokens(user_id);
+	CREATE INDEX IF NOT EXISTS idx_events_series_id                  ON events(series_id);
+	CREATE INDEX IF NOT EXISTS idx_events_created_by_id              ON events(created_by_id);
+	CREATE INDEX IF NOT EXISTS idx_events_changed_by_id              ON events(changed_by_id);
+	CREATE INDEX IF NOT EXISTS idx_contact_posts_user_id             ON contact_posts(user_id);
+	CREATE INDEX IF NOT EXISTS idx_verification_tokens_user_id       ON verification_tokens(user_id);
+	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_user_id        ON magic_login_tokens(user_id);
+	CREATE INDEX IF NOT EXISTS idx_api_keys_user_id                  ON api_keys(user_id);
+	CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id      ON webauthn_credentials(user_id);
+	CREATE INDEX IF NOT EXISTS idx_invite_links_created_by           ON invite_links(created_by);
+	CREATE INDEX IF NOT EXISTS idx_invite_links_org_id               ON invite_links(org_id);
+	CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id     ON timetable_entries(location_id);
+	CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id     ON timetable_entries(musician_id);
+	CREATE INDEX IF NOT EXISTS idx_event_locations_location_id       ON event_locations(location_id);
+	CREATE INDEX IF NOT EXISTS idx_event_dances_dance_id             ON event_dances(dance_id);
+	CREATE INDEX IF NOT EXISTS idx_event_instructors_event_id        ON event_instructors(event_id);
+	CREATE INDEX IF NOT EXISTS idx_event_instructors_instructor_id   ON event_instructors(instructor_id);
+	CREATE INDEX IF NOT EXISTS idx_musicians_created_by_id           ON musicians(created_by_id);
+	CREATE INDEX IF NOT EXISTS idx_instructors_created_by_id         ON instructors(created_by_id);
+	CREATE INDEX IF NOT EXISTS idx_contact_requests_post_id          ON contact_requests(post_id);
+	CREATE INDEX IF NOT EXISTS idx_pending_registrations_org_id      ON pending_registrations(org_id);
+	CREATE INDEX IF NOT EXISTS idx_pending_registrations_user_id     ON pending_registrations(user_id);
+	CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id     ON fetch_sources(organization_id);
+	CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id     ON fetch_source_dances(fetch_source_id);
+	CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_dance_id      ON fetch_source_dances(dance_id);
+	CREATE INDEX IF NOT EXISTS idx_contact_posts_active              ON contact_posts(expires_at, created_at) WHERE email_verified=1;
 	CREATE TABLE IF NOT EXISTS tags (
 		slug     TEXT PRIMARY KEY,
 		name     TEXT NOT NULL,
@@ -2215,7 +2282,7 @@ func main() {
 		log.Printf("warning: server.allowed_origins is unset — CORS defaults to '*' (all origins)")
 	}
 
-	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_foreign_keys=ON&_cache_size=-8000&_temp_store=memory",
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_foreign_keys=ON&_cache_size=-8000&_temp_store=memory&_mmap_size=134217728",
 		config.Server.DBPath)
 	db, err = sql.Open("sqlite3", dsn)
 	if err != nil {

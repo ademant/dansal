@@ -3,7 +3,7 @@ module github.com/ademant/dansal
 go 1.26.4
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.45
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -20,6 +20,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -34,16 +35,16 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
-	software.sslmate.com/src/go-pkcs12 v0.7.1 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
+	software.sslmate.com/src/go-pkcs12 v0.7.2
 )
 
 require (
-	github.com/ebitengine/purego v0.8.3 // indirect
+	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/gen2brain/avif v0.4.4
-	github.com/tetratelabs/wazero v1.9.0 // indirect
-	golang.org/x/crypto v0.52.0
-	golang.org/x/image v0.40.0
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.43.0
+	github.com/tetratelabs/wazero v1.12.0 // indirect
+	golang.org/x/crypto v0.53.0
+	golang.org/x/image v0.42.0
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0
 )

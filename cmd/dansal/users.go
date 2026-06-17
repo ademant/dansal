@@ -412,6 +412,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
+	credentials.pruneByUserID(targetID)
 
 	json.NewEncoder(w).Encode(user)
 }

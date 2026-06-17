@@ -135,7 +135,7 @@ func (rl *RateLimiter) prune(times []time.Time, now time.Time) []time.Time {
 
 // sweepLoop periodically removes stale IP entries from the map.
 func (rl *RateLimiter) sweepLoop() {
-	ticker := time.NewTicker(rl.window)
+	ticker := time.NewTicker(rl.window / 2)
 	defer ticker.Stop()
 	for range ticker.C {
 		rl.mu.Lock()

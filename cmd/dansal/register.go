@@ -231,7 +231,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		channel, req.Telegram, verifiedInitial, expiresAt,
 	).Scan(&pendingID)
 	if dbErr != nil {
-		writeError(w, "db error: "+dbErr.Error(), http.StatusInternalServerError)
+		log.Printf("register: db error: %v", dbErr)
+		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 

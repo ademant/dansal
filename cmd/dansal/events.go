@@ -876,18 +876,32 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 		}
 
 		if len(req.Musicians) > 0 {
-			q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
-			batchInsertPairs(q, "event_musicians", "event_id", "musician_id", id, req.Musicians)
+			if _, err := q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id); err != nil {
+				return nil, false, err
+			}
+			if err := batchInsertPairs(q, "event_musicians", "event_id", "musician_id", id, req.Musicians); err != nil {
+				return nil, false, err
+			}
 		}
 		if len(req.Instructors) > 0 {
-			q.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
-			batchInsertPairs(q, "event_instructors", "event_id", "instructor_id", id, req.Instructors)
+			if _, err := q.Exec("DELETE FROM event_instructors WHERE event_id = ?", id); err != nil {
+				return nil, false, err
+			}
+			if err := batchInsertPairs(q, "event_instructors", "event_id", "instructor_id", id, req.Instructors); err != nil {
+				return nil, false, err
+			}
 		}
 		if len(req.Dances) > 0 {
-			q.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
-			batchInsertPairs(q, "event_dances", "event_id", "dance_id", id, req.Dances)
+			if _, err := q.Exec("DELETE FROM event_dances WHERE event_id = ?", id); err != nil {
+				return nil, false, err
+			}
+			if err := batchInsertPairs(q, "event_dances", "event_id", "dance_id", id, req.Dances); err != nil {
+				return nil, false, err
+			}
 		}
-		syncEventTags(q, id, req.Tags)
+		if err := syncEventTags(q, id, req.Tags); err != nil {
+			return nil, false, err
+		}
 
 		event, err := fetchEventByID(q, id)
 		if err != nil {
@@ -1009,9 +1023,9 @@ func syncEventTypeTags(w *EventWriteRequest) {
 
 // batchInsertPairs inserts (leftID, rightVal) rows into a junction table with
 // a single multi-row INSERT, avoiding one query per row.
-func batchInsertPairs[T any](q querier, table, leftCol, rightCol string, leftID int, rightVals []T) {
+func batchInsertPairs[T any](q querier, table, leftCol, rightCol string, leftID int, rightVals []T) error {
 	if len(rightVals) == 0 {
-		return
+		return nil
 	}
 	placeholders := make([]string, len(rightVals))
 	args := make([]any, 0, len(rightVals)*2)
@@ -1019,19 +1033,22 @@ func batchInsertPairs[T any](q querier, table, leftCol, rightCol string, leftID 
 		placeholders[i] = "(?, ?)"
 		args = append(args, leftID, v)
 	}
-	q.Exec("INSERT OR IGNORE INTO "+table+" ("+leftCol+", "+rightCol+") VALUES "+strings.Join(placeholders, ","), args...)
+	_, err := q.Exec("INSERT OR IGNORE INTO "+table+" ("+leftCol+", "+rightCol+") VALUES "+strings.Join(placeholders, ","), args...)
+	return err
 }
 
 // syncEventTags replaces all event_tags rows for eventID with the given tags.
-func syncEventTags(q querier, eventID int, tags []string) {
-	q.Exec("DELETE FROM event_tags WHERE event_id = ?", eventID)
+func syncEventTags(q querier, eventID int, tags []string) error {
+	if _, err := q.Exec("DELETE FROM event_tags WHERE event_id = ?", eventID); err != nil {
+		return err
+	}
 	clean := make([]string, 0, len(tags))
 	for _, tag := range tags {
 		if t := strings.TrimSpace(tag); t != "" {
 			clean = append(clean, t)
 		}
 	}
-	batchInsertPairs(q, "event_tags", "event_id", "tag", eventID, clean)
+	return batchInsertPairs(q, "event_tags", "event_id", "tag", eventID, clean)
 }
 
 // fetchEventLocation returns the primary location for an event as a full
@@ -1626,13 +1643,34 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
-	batchInsertPairs(tx, "event_musicians", "event_id", "musician_id", id, req.Musicians)
-	tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", id)
-	batchInsertPairs(tx, "event_instructors", "event_id", "instructor_id", id, req.Instructors)
-	tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
-	batchInsertPairs(tx, "event_dances", "event_id", "dance_id", id, req.Dances)
-	syncEventTags(tx, id, req.Tags)
+	if _, err := tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id); err != nil {
+		writeError(w, "failed to update musicians", http.StatusInternalServerError)
+		return
+	}
+	if err := batchInsertPairs(tx, "event_musicians", "event_id", "musician_id", id, req.Musicians); err != nil {
+		writeError(w, "failed to update musicians", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", id); err != nil {
+		writeError(w, "failed to update instructors", http.StatusInternalServerError)
+		return
+	}
+	if err := batchInsertPairs(tx, "event_instructors", "event_id", "instructor_id", id, req.Instructors); err != nil {
+		writeError(w, "failed to update instructors", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id); err != nil {
+		writeError(w, "failed to update dances", http.StatusInternalServerError)
+		return
+	}
+	if err := batchInsertPairs(tx, "event_dances", "event_id", "dance_id", id, req.Dances); err != nil {
+		writeError(w, "failed to update dances", http.StatusInternalServerError)
+		return
+	}
+	if err := syncEventTags(tx, id, req.Tags); err != nil {
+		writeError(w, "failed to update tags", http.StatusInternalServerError)
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -33,6 +34,9 @@ func openWebDB(path string) *sql.DB {
 		log.Printf("open web db %s: %v", path, err)
 		return nil
 	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(time.Hour)
 	return db
 }
 
@@ -217,6 +221,11 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		var callerID int
+		if u := getSessionUser(r); u != nil {
+			callerID = u.ID
+		}
+
 		setSiteSetting(db, "site_name", strings.TrimSpace(r.FormValue("site_name")))
 		setSiteSetting(db, "contact", strings.TrimSpace(r.FormValue("contact")))
 		setSiteSetting(db, "holiday_country", strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country"))))
@@ -234,6 +243,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		j, _ := json.Marshal(defaultDanceIDs)
 		setSiteSetting(db, "default_dance_ids", string(j))
 
+		var uploadedAssets []string
 		if cfg.ImagesDir != "" {
 			for _, key := range []string{"logo", "banner", "favicon"} {
 				f, _, err := r.FormFile(key)
@@ -254,9 +264,16 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 				}
 				if err := saveSiteAsset(cfg.ImagesDir, key, data); err != nil {
 					log.Printf("save site asset %s: %v", key, err)
+				} else {
+					uploadedAssets = append(uploadedAssets, key)
 				}
 			}
 		}
+
+		if len(uploadedAssets) > 0 {
+			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
+		}
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

@@ -91,7 +91,7 @@ type exportEvent struct {
 // ── helpers ────────────────────────────────────────────────────────────────
 
 func openDB(path string) *sql.DB {
-	db, err := sql.Open("sqlite3", path+"?_foreign_keys=ON&_journal_mode=WAL")
+	db, err := sql.Open("sqlite3", path+"?_foreign_keys=ON&_journal_mode=WAL&_busy_timeout=500")
 	if err != nil {
 		die("open db: %v", err)
 	}
@@ -347,6 +347,15 @@ func cmdImport(args []string) {
 
 	db := openDB(*dbPath)
 	defer db.Close()
+
+	if *apply {
+		if _, lockErr := db.Exec("BEGIN IMMEDIATE"); lockErr != nil {
+			fmt.Fprintln(os.Stderr, "warning: could not acquire exclusive lock on calendar.db — dansal may be running.")
+			fmt.Fprintln(os.Stderr, "         Proceeding anyway; concurrent writes may conflict.")
+		} else {
+			db.Exec("ROLLBACK")
+		}
+	}
 
 	switch *table {
 	case "fetchurl", "fetch_sources":

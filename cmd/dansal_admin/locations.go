@@ -62,11 +62,19 @@ func cmdFillLocationFields(args []string) {
 	apply := fs.Bool("apply", false, "write changes (default is dry-run)")
 	fs.Parse(args)
 
-	db, err := sql.Open("sqlite3", *dbPath+"?_foreign_keys=ON")
+	db, err := sql.Open("sqlite3", *dbPath+"?_foreign_keys=ON&_busy_timeout=500")
 	if err != nil {
 		die("open db: %v", err)
 	}
 	defer db.Close()
+
+	// Warn if dansal is running and calendar.db appears to be write-locked.
+	if _, lockErr := db.Exec("BEGIN IMMEDIATE"); lockErr != nil {
+		fmt.Fprintln(os.Stderr, "warning: could not acquire exclusive lock on calendar.db — dansal may be running.")
+		fmt.Fprintln(os.Stderr, "         Proceeding anyway; concurrent writes may conflict.")
+	} else {
+		db.Exec("ROLLBACK")
+	}
 
 	rows, err := db.Query(`
 		SELECT id, location, COALESCE(address,''), COALESCE(zipcode,''), COALESCE(town,'')

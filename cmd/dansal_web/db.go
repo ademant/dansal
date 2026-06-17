@@ -4,15 +4,25 @@ import (
 	"database/sql"
 	"log"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func migrationApplied(db *sql.DB, version int) bool {
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version=?", version).Scan(&n)
+	return n > 0
+}
 
 func initDB(path string) *sql.DB {
 	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(time.Hour)
 	if _, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS actors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,18 +99,24 @@ CREATE TABLE IF NOT EXISTS delivery_failures (
     next_attempt_at INTEGER NOT NULL,
     UNIQUE(activity_id, org_id, inbox_url)
 );
+CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
-	// Idempotent column additions for schema evolution
-	db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
-	db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
-	db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
 
-	// Idempotent additions for delivered transfer/update tracking columns
-	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_to INTEGER")
-	db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
-	db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
+	// Migration v1: add description/image_url/tags to federated_events and
+	// transfer/update tracking columns to delivered.
+	// Safety-net ALTERs run unconditionally (idempotent on existing columns);
+	// the migration record prevents re-running expensive operations in future.
+	if !migrationApplied(db, 1) {
+		db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
+		db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
+		db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
+		db.Exec("ALTER TABLE delivered ADD COLUMN transferred_to INTEGER")
+		db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
+		db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (1)")
+	}
 
 	return db
 }

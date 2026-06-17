@@ -1,24 +1,10 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>Admin Users</h1>
+<p style="color:var(--fg-muted);font-size:.9rem">To create or delete admin accounts, or to reset passwords, use the <code>dansal_admin</code> CLI.</p>
 {{with .Data}}
 {{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
 {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
-
-<div class="card">
-  <div class="card-title">Create admin user</div>
-  <form method="POST" action="/users/new" style="display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;align-items:end">
-    <div>
-      <label for="new-email">Email address</label>
-      <input type="email" id="new-email" name="email" required autocomplete="off">
-    </div>
-    <div>
-      <label for="new-password">Password</label>
-      <input type="password" id="new-password" name="password" required autocomplete="new-password">
-    </div>
-    <button type="submit" class="btn">Create</button>
-  </form>
-</div>
 
 <div class="card">
   <div class="card-title">Admin accounts</div>
@@ -42,24 +28,6 @@
         <a href="/users/{{$emailEsc}}/sessions" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem">Sessions</a>
         <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
           onclick="showMagicLink('{{.Email}}')">Magic Link</button>
-        <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
-          onclick="document.getElementById('reset-{{.ID}}').style.display='block'">Reset PW</button>
-        <form method="POST" action="/users/{{$emailEsc}}/delete"
-          style="display:inline"
-          onsubmit="return confirm('Delete {{.Email}}? This cannot be undone.')">
-          <button type="submit" class="btn btn-danger" style="font-size:.8rem;padding:.25rem .6rem">Delete</button>
-        </form>
-      </td>
-    </tr>
-    <tr id="reset-{{.ID}}" style="display:none;background:var(--bg-subtle)">
-      <td colspan="5" style="padding:.5rem .75rem">
-        <form method="POST" action="/users/{{$emailEsc}}/reset-password"
-          style="display:flex;gap:.5rem;align-items:center">
-          <input type="password" name="password" placeholder="New password" required autocomplete="new-password" style="width:220px">
-          <button type="submit" class="btn">Set password</button>
-          <button type="button" class="btn btn-secondary"
-            onclick="document.getElementById('reset-{{.ID}}').style.display='none'">Cancel</button>
-        </form>
       </td>
     </tr>
     {{end}}

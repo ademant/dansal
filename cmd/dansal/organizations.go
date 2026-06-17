@@ -487,13 +487,18 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/organizations/{id}/members
 func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
-		return
-	}
 	orgID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && !isOrgMember(callerID, orgID) {
+		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
 	var req AddMemberRequest
@@ -542,13 +547,23 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/organizations/{id}/members/{user_id}
 func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
+	orgID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if callerRole != RoleAdmin && !isOrgMember(callerID, orgID) {
+		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
 	result, err := db.Exec(
 		"DELETE FROM organization_members WHERE organization_id = ? AND user_id = ?",
-		r.PathValue("id"), r.PathValue("user_id"),
+		orgID, r.PathValue("user_id"),
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

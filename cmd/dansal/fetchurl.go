@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -988,7 +990,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
 func importFromICalSource(src FetchSource) ([]Event, bool, error) {
-	resp, err := fetchClient.Get(src.URL)
+	resp, err := safeClient.Get(src.URL)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch: %w", err)
 	}
@@ -998,7 +1000,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("remote returned %d", resp.StatusCode)
 	}
 
-	cal, err := ics.ParseCalendar(resp.Body)
+	cal, err := ics.ParseCalendar(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, false, fmt.Errorf("parse iCal: %w", err)
 	}
@@ -1202,10 +1204,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
 		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)
+		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(allEvents)), src.ID)
+	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if allCreated && len(allEvents) > 0 {
@@ -1417,10 +1421,12 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
 		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)
+		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(allEvents)), src.ID)
+	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if allCreated && len(allEvents) > 0 {

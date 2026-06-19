@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -172,7 +173,7 @@ func parseGancioJSONToRequests(body []byte, src FetchSource) ([]EventCreateReque
 }
 
 func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
-	resp, err := fetchClient.Get(src.URL)
+	resp, err := safeClient.Get(src.URL)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch: %w", err)
 	}
@@ -182,7 +183,7 @@ func importFromGancioJSON(src FetchSource) ([]Event, bool, error) {
 	}
 
 	var events []gancioEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&events); err != nil {
 		return nil, false, fmt.Errorf("parse gancio JSON: %w", err)
 	}
 

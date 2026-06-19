@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -225,7 +226,7 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 }
 
 func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
-	resp, err := fetchClient.Get(src.URL)
+	resp, err := safeClient.Get(src.URL)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch: %w", err)
 	}
@@ -237,7 +238,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 	var payload struct {
 		Events []folkdanceEvent `json:"events"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&payload); err != nil {
 		return nil, false, fmt.Errorf("parse JSON: %w", err)
 	}
 

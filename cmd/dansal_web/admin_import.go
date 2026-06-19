@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -45,7 +46,7 @@ func adminImportEventsPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) htt
 
 func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -88,6 +89,8 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			mw.WriteField("organization_id", orgID)
 		}
 
+		source := feedURL
+		var size int64
 		if feedURL != "" {
 			mw.WriteField("url", feedURL)
 		} else {
@@ -99,15 +102,19 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			defer file.Close()
 			part, _ := mw.CreateFormFile("file", hdr.Filename)
 			io.Copy(part, file)
+			source = hdr.Filename
+			size = hdr.Size
 		}
 		mw.Close()
 
 		token := getSessionToken(r)
 		events, err := client.PreviewEvents(r.Context(), &buf, mw.FormDataContentType(), token)
 		if err != nil {
+			log.Printf("import: source=%q size=%d type=%s result=error caller=%d err=%v", source, size, feedType, su.ID, err)
 			renderErr(err.Error(), feedURL, feedType)
 			return
 		}
+		log.Printf("import: source=%q size=%d type=%s result=ok events=%d caller=%d", source, size, feedType, len(events), su.ID)
 
 		if len(events) == 0 {
 			renderErr(i18n.T(r, "admin_import_none_found"), feedURL, feedType)

@@ -114,7 +114,7 @@ func rssEventDates(startStr, endStr string) (time.Time, time.Time, bool) {
 }
 
 func importFromRSSSource(src FetchSource) ([]Event, bool, error) {
-	resp, err := fetchClient.Get(src.URL)
+	resp, err := safeClient.Get(src.URL)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch: %w", err)
 	}
@@ -123,7 +123,7 @@ func importFromRSSSource(src FetchSource) ([]Event, bool, error) {
 		return nil, false, fmt.Errorf("remote returned %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, false, fmt.Errorf("read body: %w", err)
 	}

@@ -292,9 +292,11 @@ func adminFetchAll() adminResponse {
 		if fetchErr != nil {
 			r.Error = fetchErr.Error()
 			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+fetchErr.Error(), src.ID)
+			log.Printf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
 		} else {
 			r.Events = len(events)
 			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(events)), src.ID)
+			log.Printf("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
 		}
 		results = append(results, r)
 	}

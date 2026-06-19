@@ -90,8 +90,50 @@ func generateInviteToken() (string, error) {
 	return generateToken(24)
 }
 
+// createInviteRecord generates a token and inserts the invite_links row.
+// Shared by the public createInvite HTTP handler (always role=user) and the
+// admin-socket invite-admin command (role=admin, sysadmin-only).
+func createInviteRecord(creatorID int, role, inviteType string, orgID *int) (InviteLink, error) {
+	if inviteType != "qr" && inviteType != "link" {
+		inviteType = "link"
+	}
+	var expiresAt time.Time
+	if inviteType == "qr" {
+		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteQRExpiryMinutes) * time.Minute)
+	} else {
+		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
+	}
+
+	token, err := generateInviteToken()
+	if err != nil {
+		return InviteLink{}, err
+	}
+
+	var orgVal any
+	if orgID != nil {
+		orgVal = *orgID
+	}
+	_, err = db.Exec(
+		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at, invite_type) VALUES (?, ?, ?, ?, ?, ?)",
+		token, creatorID, role, orgVal, expiresAt.Unix(), inviteType,
+	)
+	if err != nil {
+		return InviteLink{}, err
+	}
+
+	return InviteLink{
+		Token:      token,
+		Role:       role,
+		InviteType: inviteType,
+		OrgID:      orgID,
+		ExpiresAt:  expiresAt.Format(time.RFC3339),
+	}, nil
+}
+
 // POST /api/v1/invites — create an invite link.
-// Requires role admin or user. Invited role must be ≤ creator's role.
+// Requires role admin or user. Role is always forced to "user" — this is the
+// public web UI path and must never be able to mint an admin invite. See
+// adminCreateAdminInvite for the sysadmin-only path that can.
 func createInvite(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -128,45 +170,14 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine TTL from invite type.
-	inviteType := req.InviteType
-	if inviteType != "qr" && inviteType != "link" {
-		inviteType = "link"
-	}
-	var expiresAt time.Time
-	if inviteType == "qr" {
-		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteQRExpiryMinutes) * time.Minute)
-	} else {
-		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
-	}
-
-	token, err := generateInviteToken()
-	if err != nil {
-		writeError(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-
-	var orgVal any
-	if orgID != nil {
-		orgVal = *orgID
-	}
-	_, err = db.Exec(
-		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at, invite_type) VALUES (?, ?, ?, ?, ?, ?)",
-		token, callerID, req.Role, orgVal, expiresAt.Unix(), inviteType,
-	)
+	link, err := createInviteRecord(callerID, req.Role, req.InviteType, orgID)
 	if err != nil {
 		writeError(w, "Failed to create invite link", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(InviteLink{
-		Token:      token,
-		Role:       req.Role,
-		InviteType: inviteType,
-		OrgID:      orgID,
-		ExpiresAt:  expiresAt.Format(time.RFC3339),
-	})
+	json.NewEncoder(w).Encode(link)
 }
 
 // GET /api/v1/invites — list invite links.

@@ -161,6 +161,8 @@ func main() {
 		cmdSetPassword(rest)
 	case "set-role":
 		cmdSetRole(rest)
+	case "invite-admin":
+		cmdInviteAdmin(rest)
 	case "list-invites":
 		cmdListInvites(rest)
 	case "revoke-invite":
@@ -377,6 +379,17 @@ Change the role of a user account.
 Flags:
   --email  Email address of the target account (required)
   --role   New role: admin, user, publisher (required)`,
+
+	"invite-admin": `Usage: dansal_admin invite-admin --email STR [--org-id N]
+
+Create a business-admin (role=admin) invite link. Unlike invites created via
+the web UI (always role=user), this mints a link that, once redeemed on the
+normal self-registration page, creates a new admin user. Only available via
+this CLI or dansal-webmin — never via the public HTTP API.
+
+Flags:
+  --email   Email of an existing admin user to attribute the invite to (required)
+  --org-id  Organization ID to add the new admin to (optional)`,
 
 	"list-invites": `Usage: dansal_admin list-invites [--email STR]
 
@@ -1104,6 +1117,25 @@ func cmdListInvites(args []string) {
 		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", l.ID, l.Role, orgID, l.ExpiresAt, used, l.Token)
 	}
 	w.Flush()
+}
+
+func cmdInviteAdmin(args []string) {
+	fs := flag.NewFlagSet("invite-admin", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["invite-admin"]) }
+	email := fs.String("email", "", "email of an existing admin to attribute the invite to")
+	orgID := fs.Int("org-id", 0, "organization ID to add the new admin to")
+	fs.Parse(args)
+	if *email == "" {
+		die("--email is required")
+	}
+	resp := send(socketPath, request{Cmd: "invite-admin", Email: *email, OrgID: *orgID})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var data map[string]string
+	json.Unmarshal(resp.Data, &data)
+	fmt.Printf("invite link: %s\n", data["url"])
+	fmt.Printf("expires:     %s\n", data["expires_at"])
 }
 
 func cmdRevokeInvite(args []string) {

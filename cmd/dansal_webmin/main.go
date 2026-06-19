@@ -83,6 +83,7 @@ func main() {
 		mux.HandleFunc("POST /users/{email}/reset-password", requireLogin(cfg, userResetPasswordHandler(cfg)))
 		mux.HandleFunc("POST /users/{email}/delete", requireLogin(cfg, userDeleteHandler(cfg)))
 		mux.HandleFunc("POST /users/{email}/magic-link", requireLogin(cfg, userMagicLinkHandler(cfg)))
+		mux.HandleFunc("POST /users/{email}/invite-admin", requireLogin(cfg, userInviteAdminHandler(cfg)))
 		mux.HandleFunc("GET /notifications", requireLogin(cfg, notificationsPageHandler(cfg, tmpls)))
 		mux.HandleFunc("POST /notifications/smtp", requireLogin(cfg, notificationsSMTPSaveHandler(cfg)))
 		mux.HandleFunc("POST /notifications/smtp-test", requireLogin(cfg, notificationsSMTPTestHandler(cfg)))

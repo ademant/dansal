@@ -63,67 +63,6 @@ func usersPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	}
 }
 
-func userCreateHandler(cfg *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		email := r.FormValue("email")
-		password := r.FormValue("password")
-		if email == "" || password == "" {
-			http.Redirect(w, r, "/users?flash=missing+fields", http.StatusSeeOther)
-			return
-		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
-			Cmd:      "create-user",
-			Email:    email,
-			Password: password,
-			Role:     "admin",
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("create admin user %q: %v / %s", email, err, msg)
-			http.Redirect(w, r, "/users?flash="+url.QueryEscape("Error: "+msg), http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/users?flash="+url.QueryEscape("Created "+email), http.StatusSeeOther)
-	}
-}
-
-func userResetPasswordHandler(cfg *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		email := r.PathValue("email")
-		password := r.FormValue("password")
-		if email == "" || password == "" {
-			http.Redirect(w, r, "/users?flash=missing+fields", http.StatusSeeOther)
-			return
-		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
-			Cmd:      "set-password",
-			Email:    email,
-			Password: password,
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("reset password %q: %v / %s", email, err, msg)
-			http.Redirect(w, r, "/users?flash="+url.QueryEscape("Error: "+msg), http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/users?flash="+url.QueryEscape("Password reset for "+email), http.StatusSeeOther)
-	}
-}
-
 func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
@@ -170,11 +109,35 @@ func userRevokeSessionHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+// userMagicLinkHandler generates a magic login link, restricted to
+// role=admin targets — webmin's only user-management capability besides
+// session listing/revocation, per the dansal-webmin sysadmin/business-admin
+// boundary (#614).
 func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "magic-link", Email: email})
 		w.Header().Set("Content-Type", "application/json")
+
+		admins, err := listAdminUsers(cfg.AdminSocket)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		isAdmin := false
+		for _, u := range admins {
+			if u.Email == email {
+				isAdmin = true
+				break
+			}
+		}
+		if !isAdmin {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{"error": "magic links are only available for admin accounts"})
+			return
+		}
+
+		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "magic-link", Email: email})
 		if err != nil || !resp.OK {
 			msg := "socket error"
 			if err == nil {
@@ -207,28 +170,5 @@ func userInviteAdminHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		w.Write(resp.Data)
-	}
-}
-
-func userDeleteHandler(cfg *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		email := r.PathValue("email")
-		// safety: don't allow deleting yourself
-		self := getSessionUser(r)
-		if self != nil && self.Email == email {
-			http.Redirect(w, r, "/users?flash="+url.QueryEscape("Cannot delete your own account"), http.StatusSeeOther)
-			return
-		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "delete-user", Email: email})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("delete user %q: %v / %s", email, err, msg)
-			http.Redirect(w, r, "/users?flash="+url.QueryEscape("Error: "+msg), http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/users?flash="+url.QueryEscape("Deleted "+email), http.StatusSeeOther)
 	}
 }

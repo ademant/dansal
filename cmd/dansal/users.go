@@ -412,6 +412,9 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
+	// Evict cached credentials immediately so a role change or disable takes
+	// effect on the next request instead of lingering for credCacheTTL.
+	credentials.pruneByUserID(targetID)
 
 	json.NewEncoder(w).Encode(user)
 }

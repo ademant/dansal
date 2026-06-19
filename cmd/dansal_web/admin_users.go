@@ -151,30 +151,6 @@ func adminGenerateMagicLinkHandler(cfg *Config, client *DansalClient) http.Handl
 	}
 }
 
-func adminUserDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteUser(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("admin delete user %d: %v", id, err)
-			http.Error(w, "delete failed: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
-	}
-}
-
 func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -253,10 +229,6 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		orgID := parseFormOptionalInt(r.Form, "org_id")
 		for _, id := range parseFormIDs(r.Form, "user_ids") {
 			switch action {
-			case "delete":
-				if err := client.DeleteUser(r.Context(), id, token); err != nil {
-					log.Printf("bulk delete user %d: %v", id, err)
-				}
 			case "org":
 				if orgID != nil {
 					_ = client.AddOrgMember(r.Context(), *orgID, id, token)
@@ -296,57 +268,6 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 	}
 }
 
-func adminUserCreateDirectHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		email := r.FormValue("email")
-		password := r.FormValue("password")
-		role := r.FormValue("role")
-		if role == "" {
-			role = "user"
-		}
-		_, _ = client.CreateUserDirect(r.Context(), email, password, role, getSessionToken(r))
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
-	}
-}
-
-func adminUserPasswordResetHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		password := r.FormValue("password")
-		if password != "" {
-			_ = client.SetUserPassword(r.Context(), id, password, getSessionToken(r))
-		}
-		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
-	}
-}
 
 func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

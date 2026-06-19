@@ -51,18 +51,6 @@ func (u User) DisplayOrEmail() string {
 	return u.Email
 }
 
-type UserCreateRequest struct {
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	Password    string `json:"password"`
-	Role        string `json:"role"`
-	Description string `json:"description"`
-	Telegram    string `json:"telegram"`
-	Matrix      string `json:"matrix"`
-	Mastodon    string `json:"mastodon"`
-	Website     string `json:"website"`
-}
-
 type UserUpdateRequest struct {
 	Email            string `json:"email"`
 	DisplayName      string `json:"display_name"`
@@ -141,6 +129,31 @@ func scanUser(s userScanner) (User, error) {
 	return u, nil
 }
 
+// publicUser strips PII fields that only the user themselves (or, for the
+// list endpoint, no one but the user) should see. Only id, display_name,
+// role, description, website, and created_at survive.
+func publicUser(u User) User {
+	return User{
+		ID:          u.ID,
+		DisplayName: u.DisplayName,
+		Role:        u.Role,
+		Description: u.Description,
+		Website:     u.Website,
+		CreatedAt:   u.CreatedAt,
+	}
+}
+
+// listUser strips the subset of PII that must never appear in the bulk
+// listing endpoint, even to admins. Full PII remains available via
+// getUser when the caller is requesting their own record.
+func listUser(u User) User {
+	u.Email = ""
+	u.Telegram = ""
+	u.TelegramChatID = ""
+	u.Matrix = ""
+	return u
+}
+
 func getUserByID(id int) (User, error) {
 	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id=?", id))
 }
@@ -164,9 +177,15 @@ func isDisplayNameTaken(name string, excludeID int64) bool {
 	return count > 0
 }
 
-// GET /api/v1/users - List all users
+// GET /api/v1/users - List all users (admin only; PII stripped even for admins)
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	_, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin {
+		writeError(w, "Forbidden: admin only", http.StatusForbidden)
+		return
+	}
 
 	rows, err := db.Query("SELECT " + userSelectCols + " FROM users")
 	if err != nil {
@@ -182,69 +201,23 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		users = append(users, user)
+		users = append(users, listUser(user))
 	}
 
 	json.NewEncoder(w).Encode(users)
 }
 
-// POST /api/v1/users - Create a new user (admin only)
-func createUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may create users directly; use invite links instead", http.StatusForbidden)
-		return
-	}
-
-	var req UserCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Email == "" {
-		writeError(w, "Email is required", http.StatusBadRequest)
-		return
-	}
-
-	if req.Role == "" {
-		req.Role = RoleUser
-	}
-	if !validateRole(req.Role) {
-		writeError(w, "Invalid role. Allowed values: admin, user, publisher", http.StatusBadRequest)
-		return
-	}
-
-	result, err := db.Exec(
-		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
-		req.Email, req.DisplayName, hashPassword(req.Password), req.Role, req.Telegram, req.Matrix,
-	)
-	if err != nil {
-		writeError(w, "Email already exists", http.StatusConflict)
-		return
-	}
-
-	id, _ := result.LastInsertId()
-	user := User{
-		ID:          int(id),
-		Email:       req.Email,
-		DisplayName: req.DisplayName,
-		Role:        req.Role,
-		Telegram:    req.Telegram,
-		Matrix:      req.Matrix,
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
-}
-
-// GET /api/v1/users/{id} - Get a specific user
+// GET /api/v1/users/{id} - Get a specific user. Callers requesting their own
+// record get full PII; everyone else gets only the public subset.
 func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	id := r.PathValue("id")
-	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", id))
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", targetID))
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
@@ -252,6 +225,9 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if callerID, _ := callerFromRequest(r); callerID != targetID {
+		user = publicUser(user)
 	}
 	json.NewEncoder(w).Encode(user)
 }
@@ -332,6 +308,12 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Email != "" && req.Email != user.Email {
+		// Only self-service email changes go through the API; an admin
+		// changing someone else's email is not exposed here (#613).
+		if requesterID != targetID {
+			writeError(w, "Forbidden: only the account owner may change their email", http.StatusForbidden)
+			return
+		}
 		if !isValidEmail(req.Email) {
 			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
 			return
@@ -420,61 +402,6 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /api/v1/users/{id} - Delete a user (admin only)
-func deleteUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	callerID, callerRole := callerFromRequest(r)
-	if callerRole != RoleAdmin && callerRole != RoleUser {
-		writeError(w, "Forbidden: only admins or users may delete users", http.StatusForbidden)
-		return
-	}
-
-	id := r.PathValue("id")
-	var targetID int
-	var targetRole string
-	err := db.QueryRow("SELECT id, role FROM users WHERE id = ?", id).Scan(&targetID, &targetRole)
-	if err == sql.ErrNoRows {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if targetRole == RoleAdmin {
-		writeError(w, "Forbidden: admin users may not be deleted", http.StatusForbidden)
-		return
-	}
-
-	if callerRole != RoleAdmin {
-		// User may only delete publishers in their own organization.
-		if targetRole != RolePublisher {
-			writeError(w, "Forbidden: users may only delete publishers", http.StatusForbidden)
-			return
-		}
-		var shared int
-		db.QueryRow(`
-			SELECT COUNT(*) FROM organization_members om1
-			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
-			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
-		if shared == 0 {
-			writeError(w, "Forbidden: publisher does not share an organization with you", http.StatusForbidden)
-			return
-		}
-	}
-
-	result, err := db.Exec("DELETE FROM users WHERE id = ?", id)
-	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // DELETE /api/v1/users/me - Self-deletion by the authenticated user.
 func deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := callerFromRequest(r)
@@ -492,40 +419,6 @@ func deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("DELETE FROM users WHERE id=?", callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// POST /api/v1/users/{id}/password - Admin sets a user's password directly
-func setUserPassword(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may set passwords", http.StatusForbidden)
-		return
-	}
-
-	id := r.PathValue("id")
-	var req struct {
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	if req.Password == "" {
-		writeError(w, "Password is required", http.StatusBadRequest)
-		return
-	}
-
-	result, err := db.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(req.Password), id)
-	if err != nil {
-		writeError(w, "Failed to update password", http.StatusInternalServerError)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

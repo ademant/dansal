@@ -417,6 +417,9 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		token := parts[1]
 		db.Exec("DELETE FROM tokens WHERE token = ?", token)
 		credentials.invalidate(token)
+		lastSeenMu.Lock()
+		delete(lastSeenCache, token)
+		lastSeenMu.Unlock()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

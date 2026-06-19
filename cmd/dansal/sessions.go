@@ -90,5 +90,8 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 
 	db.Exec("DELETE FROM tokens WHERE id=?", sessionID)
 	credentials.invalidate(token)
+	lastSeenMu.Lock()
+	delete(lastSeenCache, token)
+	lastSeenMu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -1581,9 +1581,17 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden: publishers may only edit events they created", http.StatusForbidden)
 			return
 		}
+		if req.OrganizationID == nil || !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+			return
+		}
 	default:
 		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
 			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if req.OrganizationID == nil || !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
 			return
 		}
 	}

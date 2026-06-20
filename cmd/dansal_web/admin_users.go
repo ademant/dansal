@@ -386,3 +386,25 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 		json.NewEncoder(w).Encode(map[string]any{"api_key": newKey, "key_id": keyID})
 	}
 }
+
+func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if err := client.DeletePublisher(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete publisher %d: %v", id, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

@@ -2584,6 +2584,18 @@ func (c *DansalClient) RegeneratePublisherKey(ctx context.Context, publisherID i
 	return r.APIKey, r.KeyID, nil
 }
 
+func (c *DansalClient) DeletePublisher(ctx context.Context, publisherID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/publishers/%d", publisherID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, token string) error {
 	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/user/password", token, body)

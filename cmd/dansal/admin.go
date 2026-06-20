@@ -18,6 +18,7 @@ import (
 type adminRequest struct {
 	Cmd                   string `json:"cmd"`
 	Email                 string `json:"email,omitempty"`
+	NewEmail              string `json:"new_email,omitempty"`
 	Password              string `json:"password,omitempty"`
 	Role                  string `json:"role,omitempty"`
 	OrgID                 int    `json:"org_id,omitempty"`
@@ -98,6 +99,7 @@ var mutatingAdminCmds = map[string]bool{
 	"delete-user":              true,
 	"set-password":             true,
 	"set-role":                 true,
+	"set-email":                true,
 	"add-member":               true,
 	"remove-member":            true,
 	"vacuum":                   true,
@@ -130,6 +132,8 @@ func adminAuditTarget(req adminRequest) string {
 	switch req.Cmd {
 	case "create-user", "delete-user", "set-password", "set-role", "enable-user", "disable-user", "magic-link", "invite-admin":
 		return "email=" + req.Email
+	case "set-email":
+		return "email=" + req.Email + " new_email=" + req.NewEmail
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
 	case "backup", "incremental-backup", "restore":
@@ -177,6 +181,8 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminSetPassword(req)
 	case "set-role":
 		return adminSetRole(req)
+	case "set-email":
+		return adminSetEmail(req)
 	case "list-orgs":
 		return adminListOrgs()
 	case "list-members":
@@ -577,6 +583,23 @@ func adminSetRole(req adminRequest) adminResponse {
 	result, err := db.Exec("UPDATE users SET role = ? WHERE email = ?", req.Role, req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	return adminResponse{OK: true}
+}
+
+func adminSetEmail(req adminRequest) adminResponse {
+	if req.Email == "" || req.NewEmail == "" {
+		return adminResponse{OK: false, Error: "email and new_email are required"}
+	}
+	if !isValidEmail(req.NewEmail) {
+		return adminResponse{OK: false, Error: "invalid email address"}
+	}
+	result, err := db.Exec("UPDATE users SET email = ?, email_verified = 0 WHERE email = ?", req.NewEmail, req.Email)
+	if err != nil {
+		return adminResponse{OK: false, Error: "email already in use"}
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
 		return adminResponse{OK: false, Error: "user not found"}

@@ -119,6 +119,7 @@
       <td>{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
       <td style="white-space:nowrap">
         <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
+        <button type="button" class="btn-sm btn-del" onclick="deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
       </td>
     </tr>
     {{end}}{{end}}
@@ -307,6 +308,14 @@ async function regenerateKey(id) {
       '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
       ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
       '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_key_once_hint"}}</p>';
+  } catch(e) { alert(e.message); }
+}
+async function deletePublisher(id) {
+  if (!confirm('{{$.Strings.T "admin_publisher_confirm_delete"}}')) return;
+  try {
+    var r = await fetch('/admin/publishers/'+id+'/delete', {method:'POST'});
+    if (!r.ok) { var d = await r.json().catch(function(){return {};}); alert(d.error||r.statusText); return; }
+    location.reload();
   } catch(e) { alert(e.message); }
 }
 async function createInvite(type) {

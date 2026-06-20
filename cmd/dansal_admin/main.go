@@ -39,6 +39,7 @@ type request struct {
 	Cmd                   string `json:"cmd"`
 	Username              string `json:"username,omitempty"`
 	Email                 string `json:"email,omitempty"`
+	NewEmail              string `json:"new_email,omitempty"`
 	Password              string `json:"password,omitempty"`
 	Role                  string `json:"role,omitempty"`
 	OrgID                 int    `json:"org_id,omitempty"`
@@ -161,6 +162,8 @@ func main() {
 		cmdSetPassword(rest)
 	case "set-role":
 		cmdSetRole(rest)
+	case "set-email":
+		cmdSetEmail(rest)
 	case "invite-admin":
 		cmdInviteAdmin(rest)
 	case "list-invites":
@@ -265,6 +268,7 @@ User management:
   delete-user  --email STR                           Delete a user
   set-password --email STR --password STR            Change a user's password
   set-role     --email STR --role STR                Change a user's role
+  set-email    --email STR --new-email STR           Change a user's email address
   enable-user  --email STR                           Re-enable a disabled user
   disable-user --email STR                           Disable a user account
 
@@ -379,6 +383,14 @@ Change the role of a user account.
 Flags:
   --email  Email address of the target account (required)
   --role   New role: admin, user, publisher (required)`,
+
+	"set-email": `Usage: dansal_admin set-email --email STR --new-email STR
+
+Change the email address of a user account. Resets email_verified to false.
+
+Flags:
+  --email      Current email address of the target account (required)
+  --new-email  New email address (required)`,
 
 	"invite-admin": `Usage: dansal_admin invite-admin --email STR [--org-id N]
 
@@ -829,6 +841,22 @@ func cmdSetRole(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Printf("role updated: %s → %s\n", *email, *role)
+}
+
+func cmdSetEmail(args []string) {
+	fs := flag.NewFlagSet("set-email", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["set-email"]) }
+	email := fs.String("email", "", "current email address")
+	newEmail := fs.String("new-email", "", "new email address")
+	fs.Parse(args)
+	if *email == "" || *newEmail == "" {
+		die("--email and --new-email are required")
+	}
+	resp := send(socketPath, request{Cmd: "set-email", Email: *email, NewEmail: *newEmail})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("email updated: %s → %s\n", *email, *newEmail)
 }
 
 func cmdListOrgs(args []string) {

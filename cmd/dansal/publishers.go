@@ -211,3 +211,61 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 		"api_key": newKey,
 	})
 }
+
+// DELETE /api/v1/publishers/{id} — delete a publisher service account.
+// Admin may act on any publisher; user may only act on publishers in their org.
+func deletePublisher(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+
+	targetID, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var targetRole string
+	if err := db.QueryRow("SELECT role FROM users WHERE id=?", targetID).Scan(&targetRole); err != nil {
+		writeError(w, "publisher not found", http.StatusNotFound)
+		return
+	}
+	if targetRole != RolePublisher {
+		writeError(w, "target is not a publisher", http.StatusBadRequest)
+		return
+	}
+
+	if callerRole != RoleAdmin {
+		if callerRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var shared int
+		db.QueryRow(`
+			SELECT COUNT(*) FROM organization_members om1
+			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
+			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
+		if shared == 0 {
+			writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
+			return
+		}
+	}
+
+	rows, _ := db.Query("SELECT api_key FROM api_keys WHERE user_id=?", targetID)
+	var oldKeys []string
+	for rows.Next() {
+		var k string
+		rows.Scan(&k)
+		oldKeys = append(oldKeys, k)
+	}
+	rows.Close()
+
+	if _, err := db.Exec("DELETE FROM users WHERE id=?", targetID); err != nil {
+		writeError(w, "failed to delete publisher", http.StatusInternalServerError)
+		return
+	}
+
+	for _, k := range oldKeys {
+		credentials.invalidate(k)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

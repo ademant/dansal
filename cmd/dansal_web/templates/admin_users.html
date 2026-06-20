@@ -21,8 +21,6 @@
     <option value="admin">admin</option>
   </select>
   <button type="button" class="btn-sm" onclick="bulkChangeRole()">{{$.Strings.T "users_bulk_change_role"}}</button>
-  <button type="button" id="bulk-del-btn" class="btn-sm btn-del"
-          onclick="return confirmTypedDelete('DELETE',function(){bulkDelete();})">{{$.Strings.T "admin_users_bulk_delete"}}</button>
 </div>
 {{end}}
 
@@ -31,8 +29,7 @@
   <thead>
     <tr>
       {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
-      <th data-sort="str">Email</th>
-      {{if $.Data.IsAdmin}}<th data-sort="str">Display name</th>{{end}}
+      <th data-sort="str">{{$.Strings.T "admin_publisher_name"}}</th>
       <th data-sort="str">{{$.Strings.T "settings_role"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       {{if $.Data.IsAdmin}}<th></th>{{end}}
@@ -43,8 +40,7 @@
   {{$uid := .ID}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td>{{if .Email}}{{.Email}}{{else if not .DisplayName}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
-    {{if $.Data.IsAdmin}}<td>{{if .DisplayName}}{{.DisplayName}}{{else if not .Email}}<span class="muted">user #{{$uid}}</span>{{end}}</td>{{end}}
+    <td>{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
       <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)">
@@ -79,14 +75,7 @@
       <button type="button" class="btn-sm"
               onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
-      {{if or .Email .DisplayName}}
-      <button type="button" class="btn-sm" onclick="openPasswordModal({{$uid}})">{{$.Strings.T "admin_user_password_reset"}}</button>
-      {{else}}
-      <button type="button" class="btn-sm" disabled title="{{$.Strings.T "admin_user_password_reset_na"}}" style="opacity:.4;cursor:default">{{$.Strings.T "admin_user_password_reset"}}</button>
-      {{end}}
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
-      <button type="button" class="btn-sm btn-del"
-              onclick="return confirmTypedDelete('{{if .Email}}{{js .Email}}{{else if .DisplayName}}{{js .DisplayName}}{{else}}#{{$uid}}{{end}}',function(){delUser({{$uid}});})">{{$.Strings.T "admin_delete"}}</button>
     </td>
     {{end}}
   </tr>
@@ -130,7 +119,6 @@
       <td>{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
       <td style="white-space:nowrap">
         <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
-        <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_publisher_confirm_delete"}}'))delUser({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
       </td>
     </tr>
     {{end}}{{end}}
@@ -219,7 +207,6 @@
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd;flex-wrap:wrap}
 .bulk-bar select,.bulk-role-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .inline-select{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
-.email-cell{font-size:.85rem}
 .org-tag{display:inline-flex;align-items:center;gap:.2rem;background:#e8eef7;border-radius:4px;padding:.1rem .4rem;font-size:.82rem;margin:.1rem .2rem .1rem 0}
 .rm-org-btn{background:none;border:none;cursor:pointer;color:#888;font-size:.9rem;padding:0;line-height:1}
 .rm-org-btn:hover{color:#b00020}
@@ -229,8 +216,6 @@
 .invite-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .invite-create-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap}
 .invite-create-row select{padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
-.create-user-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
-.create-user-form input,.create-user-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
 .invite-link-cell code{word-break:break-all}
 .invite-banner{background:#d4edda;border:1px solid #a3d9a5;border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
@@ -242,24 +227,8 @@
 .user-disabled-row td{opacity:.6}
 </style>
 
-<div id="ctd-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
-  <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:440px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
-    <p id="ctd-prompt" style="margin:0 0 .75rem;font-size:.95rem;color:var(--fg,#333)"></p>
-    <input id="ctd-input" type="text" autocomplete="off" style="width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;box-sizing:border-box;margin-bottom:.75rem">
-    <div style="display:flex;gap:.5rem">
-      <button id="ctd-ok" class="btn-del btn-sm" disabled onclick="ctdConfirm()">{{$.Strings.T "admin_delete"}}</button>
-      <button class="btn-sm" onclick="ctdClose()">{{$.Strings.T "admin_magic_link_close"}}</button>
-    </div>
-  </div>
-</div>
-
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
-function delUser(id) {
-  var f = document.createElement('form');
-  f.method = 'post'; f.action = '/admin/users/' + id + '/delete';
-  document.body.appendChild(f); f.submit();
-}
 function rmOrg(userID, orgID) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/users/' + userID + '/org';
@@ -418,33 +387,6 @@ function copyMagicLink() {
 function closeMagicModal() {
   document.getElementById('magic-link-modal').hidden = true;
 }
-var _ctdCb=null,_ctdExpected='';
-function confirmTypedDelete(name,cb){
-  _ctdExpected=name;_ctdCb=cb;
-  document.getElementById('ctd-prompt').textContent='{{$.Strings.T "admin_confirm_type_hint"}}: "'+name+'"';
-  var inp=document.getElementById('ctd-input');
-  inp.value='';document.getElementById('ctd-ok').disabled=true;
-  document.getElementById('ctd-modal').hidden=false;
-  setTimeout(function(){inp.focus();},50);
-  return false;
-}
-document.getElementById('ctd-input').addEventListener('input',function(){
-  document.getElementById('ctd-ok').disabled=(this.value!==_ctdExpected);
-});
-function ctdConfirm(){if(_ctdCb)_ctdCb();ctdClose();}
-function ctdClose(){document.getElementById('ctd-modal').hidden=true;_ctdCb=null;}
-function bulkDelete(){
-  var ids=[];
-  document.querySelectorAll('.user-cb:checked').forEach(function(cb){ids.push(cb.value);});
-  if(!ids.length)return;
-  var body='action=delete'+ids.map(function(id){return '&user_ids='+encodeURIComponent(id);}).join('');
-  fetch('/admin/users/bulk',{
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    credentials:'same-origin',
-    body:body
-  }).then(function(){location.href='/admin/users';}).catch(function(e){alert('Delete failed: '+e);});
-}
 (function(){
   var cbAll = document.getElementById('cb-all');
   if (!cbAll) return;
@@ -468,23 +410,6 @@ function toggleDisable(id, disabled) {
   var d = document.createElement('input'); d.name = 'disabled'; d.value = disabled ? '1' : '0'; f.appendChild(d);
   document.body.appendChild(f); f.submit();
 }
-var _pwUID = 0;
-function openPasswordModal(uid) {
-  _pwUID = uid;
-  document.getElementById('pw-input').value = '';
-  document.getElementById('pw-modal').hidden = false;
-  setTimeout(function(){ document.getElementById('pw-input').focus(); }, 50);
-}
-function submitPassword() {
-  var pw = document.getElementById('pw-input').value;
-  if (!pw) return;
-  var f = document.createElement('form');
-  f.method = 'post'; f.action = '/admin/users/' + _pwUID + '/password';
-  var p = document.createElement('input'); p.name = 'password'; p.value = pw; f.appendChild(p);
-  document.body.appendChild(f); f.submit();
-}
-function closePwModal() { document.getElementById('pw-modal').hidden = true; }
-
 function toggleQR(containerId, sourceId) {
   var el = document.getElementById(containerId);
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
@@ -499,17 +424,4 @@ function toggleQR(containerId, sourceId) {
 }
 </script>
 <script src="/static/qrcode.min.js"></script>
-
-<div id="pw-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
-  <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
-    <h3 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "admin_user_password_reset"}}</h3>
-    <input id="pw-input" type="password" autocomplete="new-password"
-           placeholder="{{$.Strings.T "admin_user_new_password"}}"
-           style="width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;box-sizing:border-box;margin-bottom:.75rem">
-    <div style="display:flex;gap:.5rem">
-      <button class="btn-sm btn-del" onclick="submitPassword()">{{$.Strings.T "admin_user_password_reset"}}</button>
-      <button class="btn-sm" onclick="closePwModal()">{{$.Strings.T "admin_magic_link_close"}}</button>
-    </div>
-  </div>
-</div>
 {{end}}

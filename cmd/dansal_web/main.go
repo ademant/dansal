@@ -232,11 +232,8 @@ func main() {
 
 		r.HandleFunc("GET /admin/users", adminUsersHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/users/bulk", adminRateLimit(adminUsersBulkHandler(cfg, client)))
-		r.HandleFunc("POST /admin/users/new", adminRateLimit(adminUserCreateDirectHandler(cfg, client)))
-		r.HandleFunc("POST /admin/users/{id}/delete", adminRateLimit(adminUserDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/disable", adminRateLimit(adminUserDisableHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/magic-link", adminRateLimit(adminGenerateMagicLinkHandler(cfg, client)))
-		r.HandleFunc("POST /admin/users/{id}/password", adminRateLimit(adminUserPasswordResetHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/role", adminRateLimit(adminUserRoleHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/org", adminRateLimit(adminUserOrgHandler(cfg, client)))
 		r.HandleFunc("POST /admin/invites/new", adminRateLimit(adminInviteCreateHandler(cfg, client)))

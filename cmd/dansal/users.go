@@ -113,21 +113,6 @@ func validateRole(role string) bool {
 
 const userSelectCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, CASE WHEN totp_secret IS NOT NULL AND totp_secret != '' THEN 1 ELSE 0 END, created_at"
 
-// stripUserPII zeroes PII fields for responses returned to non-owners / non-admins.
-func stripUserPII(u *User) {
-	u.Email = ""
-	u.Telegram = ""
-	u.TelegramChatID = ""
-	u.Matrix = ""
-	u.Mastodon = ""
-	u.EmailVerified = false
-	u.TelegramVerified = false
-	u.MatrixVerified = false
-	u.Disabled = false
-	u.HasPassword = false
-	u.TOTPEnabled = false
-}
-
 type userScanner interface{ Scan(...any) error }
 
 func scanUser(s userScanner) (User, error) {
@@ -143,6 +128,31 @@ func scanUser(s userScanner) (User, error) {
 	u.MatrixVerified = matrixVer == 1
 	u.Disabled = disabled == 1
 	return u, nil
+}
+
+// publicUser strips PII fields that only the user themselves (or, for the
+// list endpoint, no one but the user) should see. Only id, display_name,
+// role, description, website, and created_at survive.
+func publicUser(u User) User {
+	return User{
+		ID:          u.ID,
+		DisplayName: u.DisplayName,
+		Role:        u.Role,
+		Description: u.Description,
+		Website:     u.Website,
+		CreatedAt:   u.CreatedAt,
+	}
+}
+
+// listUser strips the subset of PII that must never appear in the bulk
+// listing endpoint, even to admins. Full PII remains available via
+// getUser when the caller is requesting their own record.
+func listUser(u User) User {
+	u.Email = ""
+	u.Telegram = ""
+	u.TelegramChatID = ""
+	u.Matrix = ""
+	return u
 }
 
 func getUserByID(id int) (User, error) {
@@ -168,12 +178,13 @@ func isDisplayNameTaken(name string, excludeID int64) bool {
 	return count > 0
 }
 
-// GET /api/v1/users - List all users (admin only)
+// GET /api/v1/users - List all users (admin only; PII stripped even for admins)
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may list users", http.StatusForbidden)
+	_, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin {
+		writeError(w, "Forbidden: admin only", http.StatusForbidden)
 		return
 	}
 
@@ -193,13 +204,14 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		users = append(users, user)
+		users = append(users, listUser(user))
 	}
 
 	json.NewEncoder(w).Encode(users)
 }
 
-// GET /api/v1/users/{id} - Get a specific user
+// GET /api/v1/users/{id} - Get a specific user. Callers requesting their own
+// record get full PII; everyone else gets only the public subset.
 func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -208,7 +220,6 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
-
 	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", targetID))
 	if err == sql.ErrNoRows {
 		writeError(w, "User not found", http.StatusNotFound)
@@ -219,10 +230,8 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	callerID, callerRole := callerFromRequest(r)
-	if callerRole != RoleAdmin && callerID != targetID {
-		stripUserPII(&user)
+	if callerID, _ := callerFromRequest(r); callerID != targetID {
+		user = publicUser(user)
 	}
 	json.NewEncoder(w).Encode(user)
 }
@@ -302,9 +311,23 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email != "" {
-		writeError(w, "Forbidden: email changes must be made via the dansal-admin CLI", http.StatusForbidden)
-		return
+	if req.Email != "" && req.Email != user.Email {
+		// Only self-service email changes go through the API; an admin
+		// changing someone else's email is not exposed here (#613).
+		if requesterID != targetID {
+			writeError(w, "Forbidden: only the account owner may change their email", http.StatusForbidden)
+			return
+		}
+		if !isValidEmail(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+		if err := validateEmailDomain(r.Context(), req.Email); err != nil {
+			writeError(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		user.Email = req.Email
+		user.EmailVerified = false
 	}
 	if req.DisplayName != "" {
 		if req.DisplayName != user.DisplayName && isDisplayNameTaken(req.DisplayName, int64(targetID)) {
@@ -375,6 +398,8 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
+	// Evict cached credentials immediately so a role change or disable takes
+	// effect on the next request instead of lingering for credCacheTTL.
 	credentials.pruneByUserID(targetID)
 
 	json.NewEncoder(w).Encode(user)

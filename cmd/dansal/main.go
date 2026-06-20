@@ -2462,7 +2462,8 @@ func main() {
 	smux.Handle("POST /api/v1/org-images/{id}", auth(uploadOrgImage))
 	smux.Handle("DELETE /api/v1/org-images/{id}", auth(deleteOrgImage))
 
-	// User endpoints (protected)
+	// User endpoints (protected). create-user, delete-user, and set-password
+	// are intentionally CLI-only (dansal_admin) — not exposed via this API.
 	smux.Handle("GET /api/v1/users", auth(getUsers))
 	smux.Handle("DELETE /api/v1/users/me", auth(deleteOwnAccount))
 	smux.Handle("GET /api/v1/users/{id}", auth(getUser))

@@ -105,6 +105,7 @@ var mutatingAdminCmds = map[string]bool{
 	"incremental-backup":       true,
 	"restore":                  true,
 	"magic-link":               true,
+	"invite-admin":             true,
 	"revoke-invite":            true,
 	"revoke-session":           true,
 	"enable-user":              true,
@@ -127,7 +128,7 @@ var mutatingAdminCmds = map[string]bool{
 // logging. It must never include secrets (passwords, tokens, access tokens).
 func adminAuditTarget(req adminRequest) string {
 	switch req.Cmd {
-	case "create-user", "delete-user", "set-password", "set-role", "enable-user", "disable-user", "magic-link":
+	case "create-user", "delete-user", "set-password", "set-role", "enable-user", "disable-user", "magic-link", "invite-admin":
 		return "email=" + req.Email
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
@@ -196,6 +197,8 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminListBackups(req)
 	case "magic-link":
 		return adminMagicLink(req)
+	case "invite-admin":
+		return adminCreateAdminInvite(req)
 	case "list-invites":
 		return adminListInvites(req)
 	case "revoke-invite":
@@ -289,9 +292,11 @@ func adminFetchAll() adminResponse {
 		if fetchErr != nil {
 			r.Error = fetchErr.Error()
 			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+fetchErr.Error(), src.ID)
+			log.Printf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
 		} else {
 			r.Events = len(events)
 			db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(events)), src.ID)
+			log.Printf("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
 		}
 		results = append(results, r)
 	}
@@ -388,6 +393,39 @@ func adminMagicLink(req adminRequest) adminResponse {
 	}
 	url := base + "/login/magic/" + token
 	return adminResponse{OK: true, Data: map[string]string{"url": url}}
+}
+
+// adminCreateAdminInvite creates an invite link with role=admin. Only
+// reachable via the local admin socket (dansal_admin CLI / dansal_webmin),
+// never via the public HTTP API — see createInvite, which always forces
+// role=user. req.Email identifies the existing admin user the invite is
+// attributed to (the invite_links.created_by FK requires a real user id);
+// it is not the invitee's email, since the invitee doesn't exist yet.
+func adminCreateAdminInvite(req adminRequest) adminResponse {
+	if req.Email == "" {
+		return adminResponse{OK: false, Error: "email is required (existing admin to attribute the invite to)"}
+	}
+	u, err := getUserByEmail(req.Email)
+	if err != nil {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	if u.Role != RoleAdmin {
+		return adminResponse{OK: false, Error: "user is not an admin"}
+	}
+	var orgID *int
+	if req.OrgID != 0 {
+		orgID = &req.OrgID
+	}
+	link, err := createInviteRecord(u.ID, RoleAdmin, "link", orgID)
+	if err != nil {
+		return adminResponse{OK: false, Error: "failed to create invite: " + err.Error()}
+	}
+	base := config.Server.BaseURL
+	if base == "" {
+		base = fmt.Sprintf("http://localhost%s", getPort())
+	}
+	url := base + "/invites/" + link.Token
+	return adminResponse{OK: true, Data: map[string]string{"url": url, "expires_at": link.ExpiresAt}}
 }
 
 func adminListSessions(req adminRequest) adminResponse {

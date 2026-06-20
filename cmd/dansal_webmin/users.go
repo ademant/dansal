@@ -109,6 +109,10 @@ func userRevokeSessionHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+// userMagicLinkHandler generates a magic login link, restricted to
+// role=admin targets — webmin's only user-management capability besides
+// session listing/revocation, per the dansal-webmin sysadmin/business-admin
+// boundary (#614).
 func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
@@ -135,6 +139,28 @@ func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
 		}
 
 		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "magic-link", Email: email})
+		if err != nil || !resp.OK {
+			msg := "socket error"
+			if err == nil {
+				msg = resp.Error
+			}
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": msg})
+			return
+		}
+		w.Write(resp.Data)
+	}
+}
+
+// userInviteAdminHandler creates an invite link with role=admin, attributed
+// to the admin whose row the button was clicked on. Only reachable from
+// dansal-webmin (mTLS-gated) — the public /admin/users UI in dansal_web can
+// only ever create role=user invites.
+func userInviteAdminHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		email := r.PathValue("email")
+		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "invite-admin", Email: email})
+		w.Header().Set("Content-Type", "application/json")
 		if err != nil || !resp.OK {
 			msg := "socket error"
 			if err == nil {

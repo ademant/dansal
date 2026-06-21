@@ -39,6 +39,45 @@
 <!-- Region selector -->
 <div id="region-bar" class="region-bar"></div>
 
+<!-- Search filter form -->
+<div class="search-trigger-bar">
+  <button type="button" id="search-events-btn" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</button>
+</div>
+
+<dialog id="search-modal" class="search-modal">
+  <form method="dialog">
+    <h2>{{$.Strings.T "search_events_btn"}}</h2>
+
+    <div class="search-modal-row">
+      <label class="sm-field">{{$.Strings.T "filter_from_label"}}<input type="date" id="sm-date-from"></label>
+      <label class="sm-field">{{$.Strings.T "filter_to_label"}}<input type="date" id="sm-date-to"></label>
+    </div>
+
+    <div class="search-modal-row">
+      <label class="sm-field sm-town-field">{{$.Strings.T "col_location"}}
+        <input type="text" id="sm-town" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off">
+        <div id="sm-town-suggest" class="sm-town-suggest" hidden></div>
+      </label>
+      <button type="button" id="sm-geo-btn" class="sm-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
+    </div>
+
+    <div class="search-modal-row">
+      <fieldset class="sm-type-group">
+        <label><input type="checkbox" id="sm-type-ball" data-type="ball">{{$.Strings.T "filter_type_ball"}}</label>
+        <label><input type="checkbox" id="sm-type-workshop" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</label>
+        <label><input type="checkbox" id="sm-type-festival" data-type="festival">{{$.Strings.T "filter_type_festival"}}</label>
+      </fieldset>
+      <select id="sm-dance" class="sm-field" aria-label="All dance styles"></select>
+    </div>
+
+    <div class="search-modal-actions">
+      <button type="button" id="sm-clear-btn">{{$.Strings.T "filter_clear"}}</button>
+      <button type="button" id="sm-cancel-btn">{{$.Strings.T "admin_cancel"}}</button>
+      <button type="button" id="sm-apply-btn" class="btn-primary">{{$.Strings.T "filter_apply"}}</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Event table -->
 <div class="table-wrap">
 <table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
@@ -203,6 +242,27 @@
 .filter-row button{padding:.35rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:.9rem;color:var(--fg)}
 .filter-row button:hover{background:var(--btn-bg-h)}
 .filter-info{font-size:.85rem;color:var(--fg-muted)}
+.search-trigger-bar{margin:1rem 0}
+.search-events-btn{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.92rem}
+.search-events-btn:hover{background:var(--link);color:#fff}
+.search-modal{border:1px solid var(--border-mid);border-radius:8px;padding:0;min-width:320px;max-width:480px;width:90vw;background:var(--bg-card);color:var(--fg)}
+.search-modal::backdrop{background:rgba(0,0,0,.4)}
+.search-modal form{padding:1.25rem}
+.search-modal h2{margin:0 0 1rem;font-size:1.1rem}
+.search-modal-row{display:flex;gap:.75rem;margin-bottom:.9rem;flex-wrap:wrap;align-items:flex-end}
+.sm-field{display:flex;flex-direction:column;gap:.25rem;font-size:.85rem;color:var(--fg-2);flex:1;min-width:0}
+.sm-field input,.sm-field select{padding:.35rem .5rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem}
+.sm-town-field{position:relative}
+.sm-town-suggest{position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:4px;max-height:160px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.sm-town-suggest div{padding:.35rem .5rem;cursor:pointer;font-size:.85rem}
+.sm-town-suggest div:hover{background:var(--bg-hover)}
+.sm-geo-btn{padding:.35rem .7rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem;white-space:nowrap}
+.sm-geo-btn:hover{background:var(--link);color:#fff}
+.sm-type-group{display:flex;gap:.75rem;flex-wrap:wrap;border:none;padding:0;margin:0;font-size:.85rem;flex:1}
+.sm-type-group label{display:flex;align-items:center;gap:.3rem;font-weight:normal}
+.search-modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.5rem}
+.search-modal-actions button{padding:.4rem .9rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg);cursor:pointer;font-size:.88rem}
+.search-modal-actions button.btn-primary{background:var(--heading);color:#fff;border-color:var(--heading)}
 .table-wrap{overflow-x:auto}
 .event-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border-lite);vertical-align:top}
@@ -328,6 +388,38 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     allStates: "{{$.Strings.T "filter_all_states"}}",
     allTowns: "{{$.Strings.T "filter_all_towns"}}"
   };
+
+  // ── Search filter form state (issue #625) ──────────────────────────────────
+  var smParams  = new URLSearchParams(window.location.search);
+  var fltDateFrom = smParams.get('df') || '';
+  var fltDateTo   = smParams.get('dt') || '';
+  var fltTown     = smParams.get('town') || '';
+  var fltBBox     = null;
+  (function(){
+    var glat=parseFloat(smParams.get('glat')), glng=parseFloat(smParams.get('glng'));
+    if(!isNaN(glat) && !isNaN(glng)) fltBBox = radiusToBoundingBox(glat, glng, 50);
+  })();
+
+  function radiusToBoundingBox(lat,lng,radiusKm){
+    var latDeg = radiusKm/111;
+    var lngDeg = radiusKm/(111*Math.cos(lat*Math.PI/180));
+    return {minLat:lat-latDeg, maxLat:lat+latDeg, minLng:lng-lngDeg, maxLng:lng+lngDeg};
+  }
+
+  function syncFilterURL(){
+    var p = new URLSearchParams(window.location.search);
+    fltDateFrom ? p.set('df',fltDateFrom) : p.delete('df');
+    fltDateTo   ? p.set('dt',fltDateTo)   : p.delete('dt');
+    fltTown     ? p.set('town',fltTown)   : p.delete('town');
+    if(fltBBox){
+      p.set('glat', ((fltBBox.minLat+fltBBox.maxLat)/2).toFixed(5));
+      p.set('glng', ((fltBBox.minLng+fltBBox.maxLng)/2).toFixed(5));
+    } else {
+      p.delete('glat'); p.delete('glng');
+    }
+    var qs = p.toString();
+    history.replaceState(history.state,'',window.location.pathname+(qs?'?'+qs:''));
+  }
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -637,6 +729,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
   // ── Map ───────────────────────────────────────────────────────────────────
   var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);
+  var geoById = {};
+  eventsGeo.forEach(function(e){ geoById[e.id] = {lat:e.lat, lng:e.lng}; });
   var map = null, clusterGroup = null, allMarkers = {};
   var mapFitted = false;
 
@@ -892,6 +986,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if(fc) fc.value = '';
     updateStateDropdown();
     updateTownDropdown();
+    fltDateFrom = ''; fltDateTo = ''; fltTown = ''; fltBBox = null;
+    syncFilterURL();
     mapFitted=false;
     applyFilters();
   }
@@ -918,12 +1014,100 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
       if(regionState   && (r.dataset.region||'')!==regionState)   return false;
       if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
+      if(fltDateFrom && r.dataset.date < fltDateFrom) return false;
+      if(fltDateTo   && (r.dataset.endDate||r.dataset.date) > fltDateTo) return false;
+      if(fltTown){
+        var town=(r.dataset.town||'').toLowerCase();
+        if(town.indexOf(fltTown.toLowerCase())<0) return false;
+      }
+      if(fltBBox){
+        var g=geoById[r.dataset.id];
+        if(!g || g.lat<fltBBox.minLat || g.lat>fltBBox.maxLat || g.lng<fltBBox.minLng || g.lng>fltBBox.maxLng) return false;
+      }
       return true;
     });
 
     shown = 0;
     applySort();
   }
+
+  // ── Search filter form (issue #625) ─────────────────────────────────────────
+  (function(){
+    var modal      = document.getElementById('search-modal');
+    var dateFrom   = document.getElementById('sm-date-from');
+    var dateTo     = document.getElementById('sm-date-to');
+    var townInput  = document.getElementById('sm-town');
+    var suggestBox = document.getElementById('sm-town-suggest');
+    var danceSel   = document.getElementById('sm-dance');
+    var pendingBBox = null;
+    var allTowns = Array.from(new Set(rows.map(function(r){ return r.dataset.town; }).filter(Boolean))).sort();
+
+    function openModal(){
+      dateFrom.value = fltDateFrom;
+      dateTo.value   = fltDateTo;
+      townInput.value = fltTown;
+      pendingBBox = fltBBox;
+      suggestBox.hidden = true;
+      ['ball','workshop','festival'].forEach(function(t){
+        document.getElementById('sm-type-'+t).checked = typeFilter[t];
+      });
+      danceSel.innerHTML = document.getElementById('f-dance').innerHTML;
+      danceSel.value = document.getElementById('f-dance').value;
+      modal.showModal();
+    }
+
+    document.getElementById('search-events-btn').addEventListener('click', openModal);
+    document.getElementById('sm-cancel-btn').addEventListener('click', function(){ modal.close(); });
+
+    townInput.addEventListener('input', function(){
+      pendingBBox = null;
+      var q = this.value.trim().toLowerCase();
+      if(q.length<3){ suggestBox.hidden=true; suggestBox.innerHTML=''; return; }
+      var matches = allTowns.filter(function(t){ return t.toLowerCase().indexOf(q)>=0; }).slice(0,8);
+      if(matches.length===0){ suggestBox.hidden=true; suggestBox.innerHTML=''; return; }
+      suggestBox.innerHTML = matches.map(function(t){ return '<div>'+escHtml(t)+'</div>'; }).join('');
+      suggestBox.hidden = false;
+    });
+    suggestBox.addEventListener('click', function(e){
+      if(e.target && e.target.tagName==='DIV'){
+        townInput.value = e.target.textContent;
+        suggestBox.hidden = true;
+      }
+    });
+
+    document.getElementById('sm-geo-btn').addEventListener('click', function(){
+      if(!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(function(pos){
+        pendingBBox = radiusToBoundingBox(pos.coords.latitude, pos.coords.longitude, 50);
+        townInput.value = '';
+        suggestBox.hidden = true;
+      });
+    });
+
+    document.getElementById('sm-clear-btn').addEventListener('click', function(){
+      clear();
+      modal.close();
+    });
+
+    document.getElementById('sm-apply-btn').addEventListener('click', function(){
+      fltDateFrom = dateFrom.value || '';
+      fltDateTo   = dateTo.value || '';
+      fltTown     = pendingBBox ? '' : (townInput.value.trim() || '');
+      fltBBox     = pendingBBox;
+
+      ['ball','workshop','festival'].forEach(function(t){
+        var checked = document.getElementById('sm-type-'+t).checked;
+        typeFilter[t] = checked;
+        document.querySelector('.type-btn[data-type="'+t+'"]').classList.toggle('type-active', checked);
+      });
+      document.getElementById('f-dance').value = danceSel.value;
+
+      syncFilterURL();
+      mapFitted = false;
+      applyFilters();
+      modal.close();
+    });
+  })();
 
   function applySort(){
     visible.sort(function(a,b){

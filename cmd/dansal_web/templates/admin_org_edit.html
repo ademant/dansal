@@ -22,49 +22,70 @@
     </div>
   </fieldset>
 
-  {{if .IsAdmin}}
-  <label for="name">{{$.Strings.T "org_name"}}</label>
-  <input id="name" type="text" name="name" value="{{.Org.Name}}" required>
-  {{else}}
-  <input type="hidden" name="name" value="{{.Org.Name}}">
-  {{end}}
-
-  <label for="description">{{$.Strings.T "org_description"}}</label>
-  <textarea id="description" name="description" rows="4">{{.Org.Description}}</textarea>
-
   <input type="hidden" id="org-id" value="{{.Org.ID}}">
-  {{if .IsAdmin}}
-  <label for="actor_name">{{$.Strings.T "org_actor_name"}}</label>
-  <input id="actor_name" type="text" name="actor_name" value="{{.Org.ActorName}}" placeholder="my-org">
-  <span id="actor-name-status" style="font-size:.82rem;margin-top:-.2rem"></span>
-  <p class="field-hint">{{$.Strings.T "org_actor_name_hint"}}</p>
-  {{if .HasActorWithFollowers}}
-  <div class="warning-box" style="margin-top: 0.5rem; padding: 0.5rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
-    <strong>⚠️ {{$.Strings.T "admin_actor_name_change_warning"}}</strong>
-  </div>
-  {{end}}
-  {{else}}
-  <input type="hidden" name="actor_name" value="{{.Org.ActorName}}">
-  {{end}}
 
-  <label for="website">{{$.Strings.T "org_website"}}</label>
-  <input id="website" type="url" name="website" value="{{.Org.Website}}" placeholder="https://example.org">
+  <div class="org-edit-layout">
+  <button type="button" class="org-nav-toggle" id="org-nav-toggle">☰ {{$.Strings.T "evt_sections"}}</button>
+  <aside class="org-nav" id="org-nav">
+    <button type="button" class="org-nav-item org-nav-fixed" data-target="sec-base">{{$.Strings.T "org_section_base"}}</button>
+    <hr class="org-nav-sep">
+    <button type="button" class="org-nav-item" data-target="sec-wikidata"><span class="org-nav-dot"></span>{{$.Strings.T "org_wikidata"}}</button>
+    <button type="button" class="org-nav-item" data-target="sec-contact"><span class="org-nav-dot"></span>{{$.Strings.T "org_section_contact"}}</button>
+    <button type="button" class="org-nav-item" data-target="sec-social"><span class="org-nav-dot"></span>{{$.Strings.T "org_social"}}</button>
+    <button type="button" class="org-nav-item" data-target="sec-additional"><span class="org-nav-dot"></span>{{$.Strings.T "org_notes"}}</button>
+  </aside>
+  <div class="org-main">
 
-  <label for="wikidata_id">{{$.Strings.T "org_wikidata"}}</label>
-  <div style="display:flex;gap:.5rem;align-items:center">
-    <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Org.WikidataID}}" placeholder="Q12345" style="flex:1">
-    {{with .Org.WikidataID}}<a href="https://www.wikidata.org/wiki/{{.}}" target="_blank" rel="noopener" class="btn-sm mb-open" style="flex-shrink:0">↗ Wikidata</a>{{end}}
-  </div>
+  <section class="form-section" id="sec-base">
+    <h2>{{$.Strings.T "org_section_base"}}</h2>
+    {{if .IsAdmin}}
+    <label for="name">{{$.Strings.T "org_name"}}</label>
+    <input id="name" type="text" name="name" value="{{.Org.Name}}" required>
+    {{else}}
+    <input type="hidden" name="name" value="{{.Org.Name}}">
+    {{end}}
 
-  <label for="contact_name">{{$.Strings.T "org_contact_name"}}</label>
-  <input id="contact_name" type="text" name="contact_name" value="{{.Org.ContactName}}">
+    <label for="description">{{$.Strings.T "org_description"}}</label>
+    <textarea id="description" name="description" rows="4">{{.Org.Description}}</textarea>
 
-  <label for="contact_email">{{$.Strings.T "org_contact_email"}}</label>
-  <input id="contact_email" type="email" name="contact_email" value="{{.Org.ContactEmail}}">
+    {{if .IsAdmin}}
+    <label for="actor_name">{{$.Strings.T "org_actor_name"}} ({{$.Strings.T "register_org_actor_name"}})</label>
+    <input id="actor_name" type="text" name="actor_name" value="{{.Org.ActorName}}" placeholder="my-org">
+    <span id="actor-name-status" style="font-size:.82rem;margin-top:-.2rem"></span>
+    <p class="field-hint">{{$.Strings.T "org_actor_name_hint"}}</p>
+    {{if .HasActorWithFollowers}}
+    <div class="warning-box" style="margin-top: 0.5rem; padding: 0.5rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+      <strong>⚠️ {{$.Strings.T "admin_actor_name_change_warning"}}</strong>
+    </div>
+    {{end}}
+    {{else}}
+    <input type="hidden" name="actor_name" value="{{.Org.ActorName}}">
+    {{end}}
+  </section>
 
-  <fieldset class="social-fieldset">
-    <legend>{{$.Strings.T "org_social"}}</legend>
+  <section class="form-section" id="sec-wikidata">
+    <h2>{{$.Strings.T "org_wikidata"}}</h2>
+    <label for="wikidata_id">{{$.Strings.T "org_wikidata"}}</label>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Org.WikidataID}}" placeholder="Q12345" style="flex:1">
+      {{with .Org.WikidataID}}<a href="https://www.wikidata.org/wiki/{{.}}" target="_blank" rel="noopener" class="btn-sm mb-open" style="flex-shrink:0">↗ Wikidata</a>{{end}}
+    </div>
+  </section>
 
+  <section class="form-section" id="sec-contact">
+    <h2>{{$.Strings.T "org_section_contact"}}</h2>
+    <label for="website">{{$.Strings.T "org_website"}}</label>
+    <input id="website" type="url" name="website" value="{{.Org.Website}}" placeholder="https://example.org">
+
+    <label for="contact_name">{{$.Strings.T "org_contact_name"}}</label>
+    <input id="contact_name" type="text" name="contact_name" value="{{.Org.ContactName}}">
+
+    <label for="contact_email">{{$.Strings.T "org_contact_email"}}</label>
+    <input id="contact_email" type="email" name="contact_email" value="{{.Org.ContactEmail}}">
+  </section>
+
+  <section class="form-section" id="sec-social">
+    <h2>{{$.Strings.T "org_social"}}</h2>
     <label for="mastodon">{{$.Strings.T "org_mastodon"}}</label>
     <input id="mastodon" type="text" name="mastodon" value="{{.Org.Mastodon}}" placeholder="@org@mastodon.social">
 
@@ -73,10 +94,16 @@
 
     <label for="facebook">{{$.Strings.T "org_facebook"}}</label>
     <input id="facebook" type="text" name="facebook" value="{{.Org.Facebook}}" placeholder="myorg">
-  </fieldset>
+  </section>
 
-  <label for="notes_md">{{$.Strings.T "org_notes"}}</label>
-  <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Org.NotesMd}}</textarea>
+  <section class="form-section" id="sec-additional">
+    <h2>{{$.Strings.T "org_notes"}}</h2>
+    <label for="notes_md">{{$.Strings.T "org_notes"}}</label>
+    <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Org.NotesMd}}</textarea>
+  </section>
+
+  </div><!-- org-main -->
+  </div><!-- org-edit-layout -->
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
@@ -198,7 +225,28 @@
 </div>
 
 <style>
-.edit-wrap{max-width:560px}
+.edit-wrap{max-width:1100px}
+.org-edit-layout{display:grid;grid-template-columns:200px 1fr;gap:1.25rem;align-items:start}
+.org-nav{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.15rem}
+.org-nav-item{text-align:left;background:none;border:none;padding:.4rem .6rem;border-radius:4px;font-size:.88rem;color:#444;cursor:pointer;display:flex;align-items:center;gap:.4rem}
+.org-nav-item:hover{background:#f0f2f8}
+.org-nav-item.is-active{background:#e8eaf6;font-weight:600}
+.org-nav-fixed{font-weight:600}
+.org-nav-sep{border:none;border-top:1px solid #ddd;margin:.4rem 0}
+.org-nav-dot{width:.5rem;height:.5rem;border-radius:50%;border:1.5px solid #aaa;flex-shrink:0}
+.org-nav-dot.filled{background:#1a6eb5;border-color:#1a6eb5}
+.org-nav-toggle{display:none;width:100%;text-align:left;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #ddd;border-radius:4px;font-size:.9rem;cursor:pointer;margin-bottom:.5rem}
+.org-main{min-width:0}
+.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem;scroll-margin-top:1rem;display:flex;flex-direction:column;gap:.5rem}
+.form-section h2{margin:0 0 .25rem;font-size:1.05rem;color:#333}
+.form-section:not(#sec-base){display:none}
+.form-section:not(#sec-base).is-open{display:flex}
+@media(max-width:880px){
+  .org-edit-layout{display:block}
+  .org-nav-toggle{display:block}
+  .org-nav{display:none;position:static;border:1px solid #ddd;border-radius:6px;padding:.5rem;margin-bottom:.75rem;background:#f9f9fb}
+  .org-nav.is-open-drawer{display:flex}
+}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .edit-form{display:flex;flex-direction:column;gap:.5rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
 .edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.25rem}
@@ -302,6 +350,52 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       showPreview(f);
     }
   });
+})();
+(function(){
+  var nav=document.getElementById('org-nav');
+  if(!nav) return;
+  var toggle=document.getElementById('org-nav-toggle');
+  if(toggle) toggle.addEventListener('click',function(){nav.classList.toggle('is-open-drawer');});
+
+  var hasData={
+    'sec-wikidata':function(){return !!document.getElementById('wikidata_id').value.trim();},
+    'sec-contact':function(){
+      return !!(document.getElementById('website').value.trim()||document.getElementById('contact_name').value.trim()||document.getElementById('contact_email').value.trim());
+    },
+    'sec-social':function(){
+      return !!(document.getElementById('mastodon').value.trim()||document.getElementById('instagram').value.trim()||document.getElementById('facebook').value.trim());
+    },
+    'sec-additional':function(){return !!document.getElementById('notes_md').value.trim();}
+  };
+  function refreshDots(){
+    nav.querySelectorAll('.org-nav-item').forEach(function(btn){
+      var id=btn.dataset.target, check=hasData[id], dot=btn.querySelector('.org-nav-dot');
+      if(!dot||!check) return;
+      dot.classList.toggle('filled',check());
+    });
+  }
+  nav.querySelectorAll('.org-nav-item').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=btn.dataset.target, sec=document.getElementById(id);
+      if(!sec) return;
+      if(!btn.classList.contains('org-nav-fixed')){
+        var open=sec.classList.toggle('is-open');
+        btn.classList.toggle('is-active',open);
+      }
+      sec.scrollIntoView({behavior:'smooth',block:'start'});
+      nav.classList.remove('is-open-drawer');
+    });
+  });
+  Object.keys(hasData).forEach(function(id){
+    if(hasData[id]()){
+      var sec=document.getElementById(id);
+      var btn=nav.querySelector('[data-target="'+id+'"]');
+      if(sec) sec.classList.add('is-open');
+      if(btn) btn.classList.add('is-active');
+    }
+  });
+  refreshDots();
+  document.querySelector('.org-main').addEventListener('input',refreshDots);
 })();
 (function(){
   var websiteInp = document.getElementById('website');

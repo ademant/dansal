@@ -105,45 +105,89 @@
   <!-- Organisation -->
   <section class="form-section" id="sec-org">
     <h2>{{$.Strings.T "evt_organisation"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
-    <label for="org_choice">{{$.Strings.T "evt_org_select"}}</label>
-    <select id="org_choice" name="org_choice" onchange="toggleOrgNew()">
-      <option value="">— {{$.Strings.T "evt_none"}} —</option>
-      <option value="existing">{{$.Strings.T "evt_org_existing"}}</option>
-      <option value="new">{{$.Strings.T "evt_org_new"}}</option>
+
+    <input type="hidden" id="org_choice" name="org_choice" value="">
+    <select id="org_id" name="org_id" hidden>
+      <option value="">—</option>
+      {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
 
-    <div id="org-existing" hidden>
-      <label for="org_id">{{$.Strings.T "evt_org_select_existing"}}</label>
-      <select id="org_id" name="org_id">
-        <option value="">—</option>
-        {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-      </select>
+    <div id="org-assigned-chip" class="assign-chip" hidden>
+      <span class="assign-chip-name" id="org-assigned-name"></span>
+      <button type="button" class="btn-sm btn-del" onclick="removeOrgAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
+    </div>
+
+    <button type="button" id="org-add-btn" class="btn-secondary btn-sm-secondary" onclick="openOrgPicker()">{{$.Strings.T "evt_org_add_btn"}}</button>
+
+    <div id="org-picker-panel" class="assign-picker-panel" hidden>
+      <input type="text" class="assign-picker-filter" id="org-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('org-picker-table', this.value)">
+      <div class="assign-picker-list">
+        <table class="assign-table" id="org-picker-table" data-sortable>
+          <thead><tr><th data-sort="str">{{$.Strings.T "org_name"}}</th><th></th></tr></thead>
+          <tbody>
+          {{range .Organizations}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td><button type="button" class="btn-primary-sm" onclick="assignOrg({{.ID}}, {{.Name | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      <div class="assign-picker-actions">
+        <button type="button" class="btn-sm-secondary" onclick="closeOrgPicker()">{{$.Strings.T "admin_cancel"}}</button>
+        <button type="button" class="btn-sm-secondary" onclick="openOrgCreateNew()">{{$.Strings.T "evt_org_new"}}</button>
+      </div>
     </div>
 
     <div id="org-new" hidden>
       <label for="new_org_name">{{$.Strings.T "org_name"}}</label>
       <input id="new_org_name" type="text" name="new_org_name" placeholder="{{$.Strings.T "org_name"}}">
+      <button type="button" class="btn-sm-secondary" style="margin-top:.4rem" onclick="cancelOrgCreateNew()">{{$.Strings.T "admin_cancel"}}</button>
     </div>
   </section>
 
   <!-- Location -->
   <section class="form-section" id="sec-location">
     <h2>{{$.Strings.T "evt_location"}} <a href="/help#location-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
-    <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
-    <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
-      <option value="existing" {{if and .Prefill .Prefill.Location}}{{else}}selected{{end}}>{{$.Strings.T "evt_loc_existing"}}</option>
-      <option value="new" {{if and .Prefill .Prefill.Location}}selected{{end}}>{{$.Strings.T "evt_loc_new"}}</option>
+
+    <input type="hidden" id="loc_choice" name="loc_choice" value="{{if and .Prefill .Prefill.Location}}new{{end}}">
+    <select id="loc_id" name="loc_id" hidden>
+      <option value="">—</option>
+      {{range .Locations}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
     </select>
 
-    <div id="loc-existing" {{if and .Prefill .Prefill.Location}}hidden{{end}}>
-      <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
-      <select id="loc_id" name="loc_id">
-        <option value="">—</option>
-        {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
-      </select>
+    <div id="loc-assigned-chip" class="assign-chip" hidden>
+      <span class="assign-chip-name" id="loc-assigned-name"></span>
+      <button type="button" class="btn-sm btn-del" onclick="removeLocAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
-    <div id="loc-new" {{if not (and .Prefill .Prefill.Location)}}hidden{{end}} class="loc-new-fields">
+    <button type="button" id="loc-add-btn" class="btn-secondary btn-sm-secondary"{{if and .Prefill .Prefill.Location}} hidden{{end}} onclick="openLocPicker()">{{$.Strings.T "evt_loc_add_btn"}}</button>
+
+    <div id="loc-picker-panel" class="assign-picker-panel" hidden>
+      <input type="text" class="assign-picker-filter" id="loc-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('loc-picker-table', this.value)">
+      <div class="assign-picker-list">
+        <table class="assign-table" id="loc-picker-table" data-sortable>
+          <thead><tr><th data-sort="str">{{$.Strings.T "loc_name"}}</th><th data-sort="str">{{$.Strings.T "loc_town"}}</th><th></th></tr></thead>
+          <tbody>
+          {{range .Locations}}
+          <tr>
+            <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
+            <td>{{.Town}}</td>
+            <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      <div class="assign-picker-actions">
+        <button type="button" class="btn-sm-secondary" onclick="closeLocPicker()">{{$.Strings.T "admin_cancel"}}</button>
+        <button type="button" class="btn-sm-secondary" onclick="openLocCreateNew()">{{$.Strings.T "evt_loc_new"}}</button>
+      </div>
+    </div>
+
+    <div id="loc-new" style="display:{{if and .Prefill .Prefill.Location}}flex{{else}}none{{end}}" class="loc-new-fields">
+      <button type="button" class="btn-sm-secondary" style="align-self:flex-start" onclick="cancelLocCreateNew()">{{$.Strings.T "admin_cancel"}}</button>
       <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
       <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}" value="{{if .Prefill}}{{.Prefill.Location}}{{end}}">
       <label for="new_loc_short_name">{{$.Strings.T "loc_short_name"}}</label>
@@ -527,6 +571,21 @@
 .tpl-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
 .tpl-label{font-weight:600;font-size:.88rem;color:#444;white-space:nowrap}
 .tpl-bar select{padding:.38rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+/* org/location assign picker */
+.assign-chip{display:flex;align-items:center;gap:.6rem;background:#e8eaf6;border-radius:20px;padding:.35rem .5rem .35rem 1rem;margin-top:.5rem;width:fit-content}
+.assign-chip .assign-chip-name{font-size:.92rem;font-weight:600;color:#1a1a2e}
+.assign-picker-panel{border:1px solid #ddd;border-radius:6px;padding:.75rem;margin-top:.5rem;background:#fafafa}
+.assign-picker-filter{width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;margin-bottom:.5rem}
+.assign-picker-list{max-height:240px;overflow-y:auto;border:1px solid #eee;border-radius:4px;background:#fff}
+.assign-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.assign-table thead tr{position:sticky;top:0;background:#f5f5f5}
+.assign-table th{padding:.3rem .5rem;text-align:left;font-weight:600;border-bottom:1px solid #ddd;color:#555}
+.assign-table td{padding:.3rem .5rem;border-bottom:1px solid #eee;vertical-align:middle}
+.assign-table tr:last-child td{border-bottom:none}
+.assign-table td:last-child{width:1%;white-space:nowrap}
+.assign-picker-actions{display:flex;gap:.5rem;margin-top:.5rem}
+.btn-primary-sm{padding:.2rem .6rem;background:#1a6eb5;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:.8rem;white-space:nowrap}
+.btn-primary-sm:hover{background:#0d4a80}
 </style>
 
 <script>
@@ -541,16 +600,111 @@ function toggleDifficulty(){
   var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden=!show;
 }
-function toggleOrgNew(){
-  var v=document.getElementById('org_choice').value;
-  document.getElementById('org-existing').hidden=(v!=='existing');
-  document.getElementById('org-new').hidden=(v!=='new');
+document.querySelectorAll('#org-picker-table,#loc-picker-table').forEach(initSortable);
+function filterAssignTable(tableID,q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#'+tableID+' tbody tr').forEach(function(row){
+    row.style.display=(!q||row.textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+  });
 }
-function toggleLocNew(){
-  var v=document.getElementById('loc_choice').value;
-  document.getElementById('loc-existing').hidden=(v!=='existing');
-  document.getElementById('loc-new').hidden=(v!=='new');
+function orgNameByID(id){
+  var sel=document.getElementById('org_id');
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===String(id)) return sel.options[i].textContent; }
+  return '';
 }
+function syncOrgUI(){
+  var id=document.getElementById('org_id').value;
+  document.getElementById('org-assigned-chip').hidden=!id;
+  document.getElementById('org-add-btn').hidden=!!id;
+  if(id) document.getElementById('org-assigned-name').textContent=orgNameByID(id);
+}
+function openOrgPicker(){
+  document.getElementById('org-picker-panel').hidden=false;
+  document.getElementById('org-add-btn').hidden=true;
+}
+function closeOrgPicker(){
+  document.getElementById('org-picker-panel').hidden=true;
+  syncOrgUI();
+}
+function assignOrg(id,name){
+  var sel=document.getElementById('org_id');
+  sel.value=String(id);
+  sel.dispatchEvent(new Event('change'));
+  document.getElementById('org_choice').value='existing';
+  document.getElementById('org-picker-panel').hidden=true;
+  document.getElementById('org-assigned-name').textContent=name;
+  syncOrgUI();
+}
+function removeOrgAssignment(){
+  var sel=document.getElementById('org_id');
+  sel.value='';
+  sel.dispatchEvent(new Event('change'));
+  document.getElementById('org_choice').value='';
+  syncOrgUI();
+}
+function openOrgCreateNew(){
+  document.getElementById('org-picker-panel').hidden=true;
+  document.getElementById('org-add-btn').hidden=true;
+  document.getElementById('org-new').hidden=false;
+  document.getElementById('org_choice').value='new';
+}
+function cancelOrgCreateNew(){
+  document.getElementById('org-new').hidden=true;
+  document.getElementById('new_org_name').value='';
+  document.getElementById('org_choice').value=document.getElementById('org_id').value?'existing':'';
+  syncOrgUI();
+}
+function locLabelByID(id){
+  var sel=document.getElementById('loc_id');
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===String(id)) return sel.options[i].textContent; }
+  return '';
+}
+function syncLocUI(){
+  var id=document.getElementById('loc_id').value;
+  document.getElementById('loc-assigned-chip').hidden=!id;
+  document.getElementById('loc-add-btn').hidden=!!id;
+  if(id) document.getElementById('loc-assigned-name').textContent=locLabelByID(id);
+}
+function openLocPicker(){
+  document.getElementById('loc-picker-panel').hidden=false;
+  document.getElementById('loc-add-btn').hidden=true;
+}
+function closeLocPicker(){
+  document.getElementById('loc-picker-panel').hidden=true;
+  syncLocUI();
+}
+function assignLoc(id,name,town){
+  var sel=document.getElementById('loc_id');
+  sel.value=String(id);
+  sel.dispatchEvent(new Event('change'));
+  document.getElementById('loc_choice').value='existing';
+  document.getElementById('loc-picker-panel').hidden=true;
+  document.getElementById('loc-assigned-name').textContent=town?name+', '+town:name;
+  syncLocUI();
+  document.getElementById('loc-new').style.display='none';
+}
+function removeLocAssignment(){
+  var sel=document.getElementById('loc_id');
+  sel.value='';
+  sel.dispatchEvent(new Event('change'));
+  document.getElementById('loc_choice').value='';
+  syncLocUI();
+}
+function openLocCreateNew(){
+  document.getElementById('loc-picker-panel').hidden=true;
+  document.getElementById('loc-add-btn').hidden=true;
+  document.getElementById('loc-new').style.display='flex';
+  document.getElementById('loc_choice').value='new';
+}
+function cancelLocCreateNew(){
+  document.getElementById('loc-new').style.display='none';
+  document.getElementById('loc_choice').value=document.getElementById('loc_id').value?'existing':'';
+  syncLocUI();
+}
+(function(){
+  syncOrgUI();
+  syncLocUI();
+})();
 function togglePricing(){
   var v=document.getElementById('pricing_type').value;
   document.getElementById('pricing-single').hidden=(v!=='single');
@@ -743,16 +897,16 @@ function applyTemplateData(d){
   var etEl=document.getElementById('end_time');
   if(etEl&&d.end_time) etEl.value=d.end_time;
   if(d.org_id){
-    var oc=document.getElementById('org_choice');
-    oc.value='existing';toggleOrgNew();
+    document.getElementById('org_choice').value='existing';
     var os=document.getElementById('org_id');
-    if(os) os.value=d.org_id;
+    if(os){ os.value=d.org_id; os.dispatchEvent(new Event('change')); }
+    syncOrgUI();
   }
   if(d.loc_id){
-    var lc=document.getElementById('loc_choice');
-    lc.value='existing';toggleLocNew();
+    document.getElementById('loc_choice').value='existing';
     var ls=document.getElementById('loc_id');
-    if(ls) ls.value=d.loc_id;
+    if(ls){ ls.value=d.loc_id; ls.dispatchEvent(new Event('change')); }
+    syncLocUI();
   }
   var ptEl=document.getElementById('pricing_type');
   if(ptEl&&d.pricing_type){ptEl.value=d.pricing_type;togglePricing();}
@@ -808,16 +962,16 @@ function applyTemplateData(d){
   var prefillLoc=parseInt(form.dataset.prefillLoc)||0;
   var prefillPt=form.dataset.prefillPricingType||'';
   if(prefillOrg){
-    var oc=document.getElementById('org_choice');
-    if(oc){oc.value='existing';toggleOrgNew();}
+    document.getElementById('org_choice').value='existing';
     var os=document.getElementById('org_id');
-    if(os) os.value=prefillOrg;
+    if(os){ os.value=prefillOrg; os.dispatchEvent(new Event('change')); }
+    syncOrgUI();
   }
   if(prefillLoc){
-    var lc=document.getElementById('loc_choice');
-    if(lc){lc.value='existing';toggleLocNew();}
+    document.getElementById('loc_choice').value='existing';
     var ls=document.getElementById('loc_id');
-    if(ls) ls.value=prefillLoc;
+    if(ls){ ls.value=prefillLoc; ls.dispatchEvent(new Event('change')); }
+    syncLocUI();
   }
   if(prefillPt){
     var ptEl=document.getElementById('pricing_type');

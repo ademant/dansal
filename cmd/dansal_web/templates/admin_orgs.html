@@ -24,7 +24,7 @@
   <tr>
     <td><a href="/org/{{.Slug}}">{{.Org.Name}}</a></td>
     <td class="muted">{{.MainTown}}</td>
-    <td class="desc-cell" title="{{.Org.Description}}">{{.Org.Description}}</td>
+    <td class="desc-cell md-content" title="{{.Org.Description}}">{{markdownHTML .Org.Description}}</td>
     <td class="col-num">{{.EventCount}}</td>
     <td class="col-num">{{.LocationCount}}</td>
     <td class="col-num">{{len .FetchSources}}</td>

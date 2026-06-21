@@ -32,7 +32,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     <div class="org-name">{{.Org.Name}}</div>
   </div>
 </div>
-{{if .Org.Description}}<p class="org-desc">{{.Org.Description}}</p>{{end}}
+{{if .Org.Description}}<div class="org-desc md-content">{{markdownHTML .Org.Description}}</div>{{end}}
 {{if or .Org.Website .Org.Facebook .Org.Instagram}}
 <div class="org-links">
   {{if .Org.Website}}<a href="{{.Org.Website}}" target="_blank" rel="noopener">{{.Org.Website}}</a>{{end}}

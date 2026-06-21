@@ -5,7 +5,7 @@
 
 <h1>{{$series.Title}}</h1>
 {{if $series.Description}}
-<p style="color:#555;margin-bottom:1rem">{{$series.Description}}</p>
+<div class="md-content" style="color:#555;margin-bottom:1rem">{{markdownHTML $series.Description}}</div>
 {{end}}
 
 {{if $series.DefaultStartTime}}

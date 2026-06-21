@@ -106,7 +106,7 @@
         <div class="evt-instructor-tile">
           <span class="evt-instructor-name">{{.Name}}</span>
           {{if .Website}}<a href="{{.Website}}" class="evt-instructor-link" target="_blank" rel="noopener">↗</a>{{end}}
-          {{with .Bio}}<p class="evt-instructor-bio">{{.}}</p>{{end}}
+          {{with .Bio}}<div class="evt-instructor-bio md-content">{{markdownHTML .}}</div>{{end}}
         </div>
         {{end}}
       </div>
@@ -132,7 +132,7 @@
             {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
             {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
             {{if .MusicianName}}<div class="tt-meta">{{.MusicianName}}</div>{{end}}
-            {{if .Description}}<div class="tt-desc">{{.Description}}</div>{{end}}
+            {{if .Description}}<div class="tt-desc md-content">{{markdownHTML .Description}}</div>{{end}}
           </div>
         </div>
         {{end}}

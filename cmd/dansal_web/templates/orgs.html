@@ -17,7 +17,7 @@
 <a href="/org/{{.Slug}}" class="org-card">
   <div class="org-card-name">{{.Org.Name}}</div>
   {{if .FirstTown}}<div class="org-card-town">{{.FirstTown}}</div>{{end}}
-  {{if .Org.Description}}<p class="org-card-desc">{{.Org.Description}}</p>{{end}}
+  {{if .Org.Description}}<div class="org-card-desc md-content">{{markdownHTML .Org.Description}}</div>{{end}}
   {{if .FedHandle}}<div class="org-card-handle">{{.FedHandle}}</div>{{end}}
   <div class="org-card-meta">
     {{if .EventCount}}<span class="chip">{{.EventCount}} {{$.Strings.T "org_events_title"}}</span>{{end}}

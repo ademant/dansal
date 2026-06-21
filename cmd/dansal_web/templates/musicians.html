@@ -19,7 +19,7 @@
       {{if .Country}}<span class="chip">{{.Country}}</span>{{end}}
       {{if .BeginYear}}<span class="chip">{{.BeginYear}}</span>{{end}}
     </div>
-    {{if .Biography}}<p class="mcard-desc">{{.Biography}}</p>{{else if .Description}}<p class="mcard-desc">{{.Description}}</p>{{end}}
+    {{if .Biography}}<div class="mcard-desc md-content">{{markdownHTML .Biography}}</div>{{else if .Description}}<div class="mcard-desc md-content">{{markdownHTML .Description}}</div>{{end}}
   </div>
 </a>
 {{end}}

@@ -8,6 +8,19 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 
+<div class="loc-action-bar">
+  {{if not .ReadOnly}}<button type="submit" id="save-btn" class="btn-primary" form="loc-edit-form">{{$.Strings.T "admin_save"}}</button>{{end}}
+  <a href="{{if .From}}{{.From}}{{else if .ReturnURL}}{{.ReturnURL}}{{else}}/admin/locations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  {{if .Location.ID}}
+  <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
+    <input type="hidden" name="return" value="{{.ReturnURL}}">
+    <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
+  </form>
+  {{end}}
+</div>
+
+<button type="button" id="geo-toggle-btn" class="geo-toggle-btn">📍 {{$.Strings.T "loc_geocode_search"}}</button>
+<div id="geo-collapsible">
 <!-- Nominatim geocoding widget -->
 <div class="geo-widget">
   <label for="geo-search">{{$.Strings.T "loc_geocode_search"}}</label>
@@ -23,89 +36,115 @@
 </div>
 
 <div id="map" class="geo-map"></div>
+</div>
 
-<form method="post" class="edit-form">
+<form method="post" class="edit-form" id="loc-edit-form">
   <input type="hidden" name="return" value="{{.ReturnURL}}">
   <input type="hidden" name="from" value="{{.From}}">
-  <label for="location">{{$.Strings.T "loc_name"}}</label>
-  <input id="location" type="text" name="location" value="{{.Location.Location}}" required>
 
-  <label for="short_name">{{$.Strings.T "loc_short_name"}}</label>
-  <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
+  <div class="loc-edit-layout">
+  <button type="button" class="loc-nav-toggle" id="loc-nav-toggle">☰ {{$.Strings.T "evt_sections"}}</button>
+  <aside class="loc-nav" id="loc-nav">
+    <button type="button" class="loc-nav-item loc-nav-fixed" data-target="sec-base">{{$.Strings.T "org_section_base"}}</button>
+    <hr class="loc-nav-sep">
+    <button type="button" class="loc-nav-item" data-target="sec-website"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_website"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-access"><span class="loc-nav-dot"></span>{{$.Strings.T "access_label"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-kitchenbar"><span class="loc-nav-dot"></span>{{$.Strings.T "section_kitchen_bar"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
+  </aside>
+  <div class="loc-main">
 
-  <label for="address">{{$.Strings.T "loc_address"}}</label>
-  <input id="address" type="text" name="address" value="{{.Location.Address}}">
+  <section class="form-section" id="sec-base">
+    <h2>{{$.Strings.T "org_section_base"}}</h2>
+    <label for="location">{{$.Strings.T "loc_name"}}</label>
+    <input id="location" type="text" name="location" value="{{.Location.Location}}" required>
 
-  <div class="form-row">
-    <div>
-      <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
-      <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}">
+    <label for="short_name">{{$.Strings.T "loc_short_name"}}</label>
+    <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
+
+    <label for="address">{{$.Strings.T "loc_address"}}</label>
+    <input id="address" type="text" name="address" value="{{.Location.Address}}">
+
+    <div class="form-row">
+      <div>
+        <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
+        <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}">
+      </div>
+      <div style="flex:2">
+        <label for="town">{{$.Strings.T "loc_town"}}</label>
+        <input id="town" type="text" name="town" value="{{.Location.Town}}" required>
+      </div>
     </div>
-    <div style="flex:2">
-      <label for="town">{{$.Strings.T "loc_town"}}</label>
-      <input id="town" type="text" name="town" value="{{.Location.Town}}" required>
+
+    <label for="country">{{$.Strings.T "loc_country"}}</label>
+    <input id="country" type="text" name="country" value="{{.Location.Country}}">
+
+    <div class="form-row">
+      <div>
+        <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
+        <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off">
+        <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
+      </div>
+      <div style="flex:3">
+        <label for="region">{{$.Strings.T "loc_region"}}</label>
+        <input id="region" type="text" name="region" value="{{.Location.Region}}">
+      </div>
     </div>
-  </div>
 
-  <label for="country">{{$.Strings.T "loc_country"}}</label>
-  <input id="country" type="text" name="country" value="{{.Location.Country}}">
-
-  <div class="form-row">
-    <div>
-      <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
-      <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off">
-      <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
+    <div class="form-row">
+      <div>
+        <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
+        <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
+      </div>
+      <div>
+        <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
+        <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050">
+      </div>
     </div>
-    <div style="flex:3">
-      <label for="region">{{$.Strings.T "loc_region"}}</label>
-      <input id="region" type="text" name="region" value="{{.Location.Region}}">
+
+    <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
+    <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
+
+    <div class="loc-meta">
+      <span><strong>ID</strong> {{.Location.ID}}</span>
+      {{if .Location.OsmID}}
+      <span><strong>OSM</strong>
+        {{if .Location.OsmType}}<a href="https://www.openstreetmap.org/{{.Location.OsmType}}/{{int64Val .Location.OsmID}}" target="_blank" rel="noopener">{{int64Val .Location.OsmID}} ({{.Location.OsmType}})</a>{{else}}{{int64Val .Location.OsmID}}{{end}}
+      </span>
+      {{end}}
+      {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
     </div>
-  </div>
 
-  <div class="form-row">
-    <div>
-      <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
-      <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
-    </div>
-    <div>
-      <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
-      <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050">
-    </div>
-  </div>
-
-  <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
-  <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
-
-  <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
-  <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
-
-  <div class="loc-meta">
-    <span><strong>ID</strong> {{.Location.ID}}</span>
-    {{if .Location.OsmID}}
-    <span><strong>OSM</strong>
-      {{if .Location.OsmType}}<a href="https://www.openstreetmap.org/{{.Location.OsmType}}/{{int64Val .Location.OsmID}}" target="_blank" rel="noopener">{{int64Val .Location.OsmID}} ({{.Location.OsmType}})</a>{{else}}{{int64Val .Location.OsmID}}{{end}}
-    </span>
+    {{if and (not .Location.ID) .UserOrgs}}
+    <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
+    <select id="organization_id" name="organization_id">
+      {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
     {{end}}
-    {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
-  </div>
+  </section>
 
-  {{if and (not .Location.ID) .UserOrgs}}
-  <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
-  <select id="organization_id" name="organization_id">
-    {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-  </select>
-  {{end}}
+  <section class="form-section" id="sec-website">
+    <h2>{{$.Strings.T "loc_website"}}</h2>
+    <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
+    <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
+  </section>
 
-  <fieldset class="access-fieldset">
-    <legend>{{$.Strings.T "access_label"}}</legend>
+  <section class="form-section" id="sec-access">
+    <h2>{{$.Strings.T "access_label"}}</h2>
     <label class="check-label"><input type="checkbox" name="attr_wheelchair" value="1"{{if index .Location.Attributes "wheelchair"}} checked{{end}}> {{$.Strings.T "access_wheelchair"}}</label>
     <label class="check-label"><input type="checkbox" name="attr_hearing_loop" value="1"{{if index .Location.Attributes "hearing_loop"}} checked{{end}}> {{$.Strings.T "access_hearing_loop"}}</label>
     <label class="check-label"><input type="checkbox" name="attr_visual_support" value="1"{{if index .Location.Attributes "visual_support"}} checked{{end}}> {{$.Strings.T "access_visual_support"}}</label>
-  </fieldset>
-  <fieldset class="access-fieldset">
-    <legend>{{$.Strings.T "venue_label"}}</legend>
+  </section>
+
+  <section class="form-section" id="sec-kitchenbar">
+    <h2>{{$.Strings.T "section_kitchen_bar"}}</h2>
     <label class="check-label"><input type="checkbox" name="attr_bar" value="1"{{if index .Location.Attributes "bar"}} checked{{end}}> {{$.Strings.T "attr_bar"}}</label>
     <label class="check-label"><input type="checkbox" name="attr_kitchen" value="1"{{if index .Location.Attributes "kitchen"}} checked{{end}}> {{$.Strings.T "attr_kitchen"}}</label>
+  </section>
+
+  <section class="form-section" id="sec-parking">
+    <h2>{{$.Strings.T "parking_label"}}</h2>
     <label for="parking">{{$.Strings.T "parking_label"}}</label>
     <select id="parking" name="parking">
       <option value="">{{$.Strings.T "parking_unknown"}}</option>
@@ -113,6 +152,10 @@
       <option value="free"{{if eq .Location.Parking "free"}} selected{{end}}>{{$.Strings.T "parking_free"}}</option>
       <option value="paid"{{if eq .Location.Parking "paid"}} selected{{end}}>{{$.Strings.T "parking_paid"}}</option>
     </select>
+  </section>
+
+  <section class="form-section" id="sec-floor">
+    <h2>{{$.Strings.T "section_floor_shoes"}}</h2>
     <label for="floor_condition">{{$.Strings.T "floor_label"}}</label>
     <select id="floor_condition" name="floor_condition">
       <option value="">{{$.Strings.T "floor_unknown"}}</option>
@@ -124,7 +167,10 @@
       <option value="pavement"{{if eq .Location.FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
     </select>
     <label class="check-label"><input type="checkbox" name="no_street_shoes" value="1"{{if .Location.NoStreetShoes}} checked{{end}}> {{$.Strings.T "no_street_shoes_label"}}</label>
-  </fieldset>
+  </section>
+
+  </div><!-- loc-main -->
+  </div><!-- loc-edit-layout -->
 
   <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>
   <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
@@ -135,19 +181,6 @@
     {{range .Location.Aliases}}<span class="alias-chip">{{.}}</span>{{end}}
   </div>
   {{end}}
-
-  <div class="form-actions">
-    <div style="display:flex;gap:.75rem">
-      {{if not .ReadOnly}}<button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>{{end}}
-      <a href="{{if .From}}{{.From}}{{else if .ReturnURL}}{{.ReturnURL}}{{else}}/admin/locations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-    </div>
-    {{if .Location.ID}}
-    <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
-      <input type="hidden" name="return" value="{{.ReturnURL}}">
-      <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
-    </form>
-    {{end}}
-  </div>
 </form>
 
 {{if .Location.ID}}
@@ -207,9 +240,33 @@
 </div>
 
 <style>
-.edit-wrap{max-width:600px}
+.edit-wrap{max-width:1100px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.loc-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
+.geo-toggle-btn{display:block;width:100%;text-align:left;padding:.5rem .75rem;background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;font-size:.9rem;color:#1a6eb5;cursor:pointer;margin-bottom:.75rem}
+.geo-toggle-btn:hover{background:#e3f0ff}
+.loc-edit-layout{display:grid;grid-template-columns:200px 1fr;gap:1.25rem;align-items:start}
+.loc-nav{position:sticky;top:4rem;display:flex;flex-direction:column;gap:.15rem}
+.loc-nav-item{text-align:left;background:none;border:none;padding:.4rem .6rem;border-radius:4px;font-size:.88rem;color:#444;cursor:pointer;display:flex;align-items:center;gap:.4rem}
+.loc-nav-item:hover{background:#f0f2f8}
+.loc-nav-item.is-active{background:#e8eaf6;font-weight:600}
+.loc-nav-fixed{font-weight:600}
+.loc-nav-sep{border:none;border-top:1px solid #ddd;margin:.4rem 0}
+.loc-nav-dot{width:.5rem;height:.5rem;border-radius:50%;border:1.5px solid #aaa;flex-shrink:0}
+.loc-nav-dot.filled{background:#1a6eb5;border-color:#1a6eb5}
+.loc-nav-toggle{display:none;width:100%;text-align:left;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #ddd;border-radius:4px;font-size:.9rem;cursor:pointer;margin-bottom:.5rem}
+.loc-main{min-width:0}
+.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem;scroll-margin-top:4rem;display:flex;flex-direction:column;gap:.6rem}
+.form-section h2{margin:0 0 .25rem;font-size:1.05rem;color:#333}
+.form-section:not(#sec-base){display:none}
+.form-section:not(#sec-base).is-open{display:flex}
+@media(max-width:880px){
+  .loc-edit-layout{display:block}
+  .loc-nav-toggle{display:block}
+  .loc-nav{display:none;position:static;border:1px solid #ddd;border-radius:6px;padding:.5rem;margin-bottom:.75rem;background:#f9f9fb}
+  .loc-nav.is-open-drawer{display:flex}
+}
 .geo-widget{background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:.75rem}
 .geo-widget label{font-weight:600;font-size:.9rem;color:#444;display:block;margin-bottom:.4rem}
 .geo-row{display:flex;gap:.5rem}
@@ -229,7 +286,6 @@
 .edit-form input:focus,.edit-form select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .form-row{display:flex;gap:.75rem}
 .form-row>div{display:flex;flex-direction:column;gap:.3rem;flex:1}
-.form-actions{display:flex;gap:.75rem;margin-top:.5rem;justify-content:space-between;align-items:center}
 .access-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:.5rem 0}
 .access-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .check-label{display:flex;align-items:center;gap:.4rem;font-weight:normal;cursor:pointer;margin:.2rem 0}
@@ -469,10 +525,23 @@
   /* ── initialise map from existing coords ── */
   var initLat = parseFloat(latInp.value);
   var initLon = parseFloat(lonInp.value);
-  if (!isNaN(initLat) && !isNaN(initLon) && (initLat || initLon)) {
+  var hasCoords = !isNaN(initLat) && !isNaN(initLon) && (initLat || initLon);
+  if (hasCoords) {
     initMap(initLat, initLon, 15);
     placeSelected(initLat, initLon);
   }
+
+  /* ── collapse the search widget by default once coords already exist ── */
+  var geoCollapsible = document.getElementById('geo-collapsible');
+  var geoToggleBtn = document.getElementById('geo-toggle-btn');
+  function setGeoVisible(v) {
+    geoCollapsible.style.display = v ? '' : 'none';
+    if (v && map) setTimeout(function(){ map.invalidateSize(); }, 0);
+  }
+  setGeoVisible(!hasCoords);
+  geoToggleBtn.addEventListener('click', function(){
+    setGeoVisible(geoCollapsible.style.display === 'none');
+  });
 })();
 
 /* ── country_code blur validation ── */
@@ -489,6 +558,56 @@
     ccErr.style.display = ok ? 'none' : 'inline';
     ccInp.style.borderColor = ok ? '' : '#b00020';
   });
+})();
+(function(){
+  var nav=document.getElementById('loc-nav');
+  if(!nav) return;
+  var toggle=document.getElementById('loc-nav-toggle');
+  if(toggle) toggle.addEventListener('click',function(){nav.classList.toggle('is-open-drawer');});
+
+  var hasData={
+    'sec-website':function(){return !!document.getElementById('internetsite').value.trim();},
+    'sec-access':function(){
+      return document.querySelector('#sec-access input[type=checkbox]:checked')!==null;
+    },
+    'sec-kitchenbar':function(){
+      return document.querySelector('#sec-kitchenbar input[type=checkbox]:checked')!==null;
+    },
+    'sec-parking':function(){return !!document.getElementById('parking').value;},
+    'sec-floor':function(){
+      return !!document.getElementById('floor_condition').value || document.querySelector('#sec-floor input[type=checkbox]:checked')!==null;
+    }
+  };
+  function refreshDots(){
+    nav.querySelectorAll('.loc-nav-item').forEach(function(btn){
+      var id=btn.dataset.target, check=hasData[id], dot=btn.querySelector('.loc-nav-dot');
+      if(!dot||!check) return;
+      dot.classList.toggle('filled',check());
+    });
+  }
+  nav.querySelectorAll('.loc-nav-item').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=btn.dataset.target, sec=document.getElementById(id);
+      if(!sec) return;
+      if(!btn.classList.contains('loc-nav-fixed')){
+        var open=sec.classList.toggle('is-open');
+        btn.classList.toggle('is-active',open);
+      }
+      sec.scrollIntoView({behavior:'smooth',block:'start'});
+      nav.classList.remove('is-open-drawer');
+    });
+  });
+  Object.keys(hasData).forEach(function(id){
+    if(hasData[id]()){
+      var sec=document.getElementById(id);
+      var btn=nav.querySelector('[data-target="'+id+'"]');
+      if(sec) sec.classList.add('is-open');
+      if(btn) btn.classList.add('is-active');
+    }
+  });
+  refreshDots();
+  document.querySelector('.loc-main').addEventListener('input',refreshDots);
+  document.querySelector('.loc-main').addEventListener('change',refreshDots);
 })();
 </script>
 <script>

@@ -5,6 +5,18 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
+<div class="evt-action-bar">
+  <button type="submit" id="save-btn" class="btn-primary" form="evt-edit-form" disabled>{{$.Strings.T "admin_save"}}</button>
+  <a href="/events/{{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  {{if and .Event.Cancelable (not .Event.IsCancelled)}}<form method="post" action="/admin/events/{{.Event.ID}}/cancel" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">
+    <button type="submit" class="btn-secondary">{{$.Strings.T "admin_event_cancel"}}</button>
+  </form>{{end}}
+  <a href="/admin/events/new?clone_from={{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_clone"}}</a>
+  {{if eq $.User.Role "admin"}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
+    <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
+  </form>{{end}}
+</div>
+
 <div class="evt-edit-layout">
 <button type="button" class="evt-nav-toggle" id="evt-nav-toggle">☰ {{$.Strings.T "evt_sections"}}</button>
 <aside class="evt-nav" id="evt-nav">
@@ -575,21 +587,7 @@
   </section>
   {{end}}
 
-  <div class="form-actions">
-    <div style="display:flex;gap:.75rem">
-      <button type="submit" id="save-btn" class="btn-primary" disabled>{{$.Strings.T "admin_save"}}</button>
-      <a href="/events/{{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-      <a href="/admin/events/new?clone_from={{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_clone"}}</a>
-    </div>
-    {{if eq $.User.Role "admin"}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
-      <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
-    </form>{{end}}
-    {{if and .Event.Cancelable (not .Event.IsCancelled)}}<form method="post" action="/admin/events/{{.Event.ID}}/cancel" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">
-      <button type="submit" class="btn-secondary">{{$.Strings.T "admin_event_cancel"}}</button>
-    </form>{{end}}
-  </div>
 </form>
-
 </div>
 </div>
 
@@ -670,7 +668,7 @@
 
 <style>
 .evt-edit-layout{display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start;max-width:1280px}
-.evt-nav{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.15rem}
+.evt-nav{position:sticky;top:4rem;display:flex;flex-direction:column;gap:.15rem}
 .evt-nav-group{display:flex;flex-direction:column;gap:.15rem}
 .evt-nav-sep{border:none;border-top:1px solid #ddd;margin:.5rem 0}
 .evt-nav-item{display:flex;align-items:center;gap:.5rem;text-align:left;background:none;border:none;padding:.45rem .6rem;border-radius:4px;font-size:.86rem;color:#444;cursor:pointer}
@@ -689,7 +687,7 @@
   .evt-nav.is-expanded{display:flex}
 }
 .evt-form{display:flex;flex-direction:column;gap:0}
-.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem}
+.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem;scroll-margin-top:4rem}
 .form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:.4rem}
 .help-badge{display:inline-flex;align-items:center;justify-content:center;width:1.1em;height:1.1em;border-radius:50%;background:var(--bg-subtle,#eee);color:var(--fg-muted,#888);font-size:.72rem;font-weight:700;text-decoration:none;flex-shrink:0;line-height:1}
 .help-badge:hover{background:var(--link,#1a6eb5);color:#fff}
@@ -734,7 +732,8 @@
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .meta-value{font-size:.88rem;color:#333;padding:.25rem 0;word-break:break-all}
 .uid-value{font-family:monospace;font-size:.82rem;color:#555}
-.form-actions{display:flex;gap:.75rem;margin-top:.5rem;justify-content:space-between;align-items:center}
+.evt-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
+.evt-action-bar .btn-del{padding:.45rem 1.2rem;font-size:.95rem;border-radius:4px}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}

@@ -76,8 +76,14 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .nav-menu-wrap,.user-menu-wrap{position:relative}
 .nav-hamburger{background:#2a2a4a;border:1px solid #4a4a7a;border-radius:4px;color:#fff;font-size:1.4rem;cursor:pointer;padding:.2rem .5rem;line-height:1;min-width:40px}
 .nav-hamburger:hover{background:#3a3a5a;border-color:#c0c8ff}
-.nav-user-btn{background:#2a2a4a;border:1px solid #4a4a7a;border-radius:4px;color:#fff;font-size:1.4rem;cursor:pointer;padding:.2rem .5rem;line-height:1;min-width:40px}
-.nav-user-btn:hover{background:#3a3a5a;border-color:#c0c8ff}
+.nav-user-btn{background:#5a5a5a;border:1px solid #7a7a7a;border-radius:4px;color:#fff;font-size:1.4rem;cursor:pointer;padding:.2rem .5rem;line-height:1;min-width:40px}
+.nav-user-btn:hover{background:#6a6a6a;border-color:#c0c8ff}
+.nav-user-btn.nav-user-loggedin{background:#1e7d32;border-color:#3fa356}
+.nav-user-btn.nav-user-loggedin:hover{background:#259140}
+.nav-user-btn.nav-user-publisher{background:#1a5fb4;border-color:#4a90e2}
+.nav-user-btn.nav-user-publisher:hover{background:#2070d6}
+.nav-user-btn.nav-user-admin{background:#a4243b;border-color:#d6536d}
+.nav-user-btn.nav-user-admin:hover{background:#c22e49}
 .pending-badge{display:inline-block;background:#e05c00;color:#fff;border-radius:10px;padding:0 .45rem;font-size:.72rem;font-weight:700;margin-left:.3rem;vertical-align:middle;line-height:1.5}
 
 /* Dropdown menus */
@@ -211,7 +217,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
   <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}"></a>
   
   <div class="user-menu-wrap">
-    <button class="nav-user-btn" onclick="toggleUserMenu()" aria-label="User menu">👤</button>
+    <button class="nav-user-btn{{if .User}}{{if eq .User.Role "admin"}} nav-user-admin{{else if eq .User.Role "publisher"}} nav-user-publisher{{else}} nav-user-loggedin{{end}}{{end}}" onclick="toggleUserMenu()" aria-label="User menu">👤</button>
     <!-- User Dropdown Menu -->
     <div class="user-dropdown" id="user-dropdown" hidden>
     {{if .User}}

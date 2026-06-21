@@ -285,14 +285,25 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 .mc-dot{display:block;width:4px;height:4px;border-radius:50%;background:var(--link);margin:.15rem auto 0}
 .mc-weekend{background:var(--cal-weekend)!important}
 .mc-weekend.mc-today{background:var(--cal-today)!important}
+.week-mobile{display:none}
+.week-mobile-range{font-weight:600;font-size:.95rem;text-align:center;margin-bottom:.5rem}
+.week-mobile-days{display:flex;justify-content:space-around;gap:.25rem;margin-bottom:.75rem}
+.week-mobile-days .day-code{display:inline-block;padding:.3rem .5rem;border-radius:4px;font-size:.85rem;font-weight:500;color:var(--fg-muted);cursor:pointer;user-select:none}
+.week-mobile-days .day-code.wt-weekend{background:var(--cal-weekend)}
+.week-mobile-days .day-code.active{background:var(--cal-today);color:var(--heading);font-weight:700}
+.week-mobile-content{display:flex;flex-direction:column;gap:.4rem}
+.week-mobile-empty{color:var(--fg-muted);font-size:.88rem;text-align:center;padding:1rem 0}
+.week-mobile-evt{font-size:.9rem;padding:.5rem .6rem}
 @media(max-width:640px){
   .filter-row input[type=date]{display:none}
   #map-container{height:280px}
   #week-mini-cal{display:none}
-  .week-nav button{display:none}
+  .week-nav{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
   .table-wrap{display:none}
   #event-tiles{display:block}
+  .week-table-wrap{display:none}
+  .week-mobile{display:block}
 }
 </style>
 
@@ -329,8 +340,22 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     return Math.round((t-getWeekStart(0))/(7*86400000));
   }
 
+  function todayDayIndex(){
+    var day=new Date().getDay();
+    return day===0?6:day-1;
+  }
+
+  function urlToDayIndex(){
+    var d=new URLSearchParams(window.location.search).get('day');
+    var n=parseInt(d,10);
+    if(!isNaN(n)&&n>=0&&n<=6) return n;
+    return weekOffset===0?todayDayIndex():0;
+  }
+
+  var currentDayIndex = urlToDayIndex();
+
   function pushWeekState(){
-    history.pushState({wo:weekOffset},'','?week='+dateToIso(getWeekStart(weekOffset)));
+    history.pushState({wo:weekOffset,di:currentDayIndex},'','?week='+dateToIso(getWeekStart(weekOffset))+'&day='+currentDayIndex);
   }
 
   // ── Week view ─────────────────────────────────────────────────────────────
@@ -452,10 +477,47 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
     html += '</tr></tbody></table></div>';
 
+    // ── Mobile single-day view ──────────────────────────────────────────────
+    var fmtWeekday = new Intl.DateTimeFormat(lang,{weekday:'narrow'});
+    html += '<div class="week-mobile">';
+    html += '<div class="week-mobile-range">'+escHtml(fmtRange.format(days[0]))+' – '+escHtml(fmtRangeY.format(days[6]))+'</div>';
+    html += '<div class="week-mobile-days">';
+    days.forEach(function(d,i){
+      var cls='day-code'+(i===currentDayIndex?' active':'')+((d.getDay()===0||HOLIDAYS.has(keys[i]))?' wt-weekend':'');
+      html += '<span class="'+cls+'" data-day="'+i+'">'+escHtml(fmtWeekday.format(d))+'</span>';
+    });
+    html += '</div>';
+
+    var dk = keys[currentDayIndex];
+    var dayEvents = byDay[dk].slice();
+    multiDay.forEach(function(ev){ if(ev.s<=dk && ev.e>=dk) dayEvents.unshift(ev.r); });
+    html += '<div class="week-mobile-content">';
+    if(dayEvents.length===0){
+      html += '<div class="week-mobile-empty">'+escHtml(I18N.noEventsDay)+'</div>';
+    }
+    dayEvents.forEach(function(r){
+      var start=r.dataset.start||'';
+      var time=start.length>=16?start.slice(11,16):'';
+      var town=r.dataset.town||'';
+      var fs=feeSym(r);
+      html += '<a href="'+(r.dataset.href||('/events/'+r.dataset.id))+'" class="'+evtCls(r)+' week-mobile-evt">'+
+        '<b>'+escHtml(r.dataset.title)+'</b>'+
+        (time||fs?'<small>'+(time?escHtml(time):'')+(fs?' '+fs:'')+'</small>':'')+
+        (town?'<small class="cal-town">'+escHtml(town)+'</small>':'')+
+        '</a>';
+    });
+    html += '</div></div>';
+
     var wv = document.getElementById('week-main');
     wv.innerHTML = html;
     document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
     document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    wv.querySelectorAll('.day-code').forEach(function(el){
+      el.addEventListener('click',function(){
+        currentDayIndex=+this.dataset.day;
+        pushWeekState(); renderWeek();
+      });
+    });
   }
 
   // ── Mini monthly calendar ─────────────────────────────────────────────────
@@ -554,8 +616,19 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       if(sx===null)return;
       var dx=e.changedTouches[0].clientX-sx; sx=null;
       if(Math.abs(dx)>50){
-        weekOffset+=dx<0?1:-1;
-        pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+        if(window.matchMedia('(max-width:640px)').matches){
+          var crossedWeek=false;
+          if(dx<0){
+            if(++currentDayIndex>6){ currentDayIndex=0; weekOffset++; crossedWeek=true; }
+          } else {
+            if(--currentDayIndex<0){ currentDayIndex=6; weekOffset--; crossedWeek=true; }
+          }
+          pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal();
+          if(crossedWeek) updateMapMarkers(true);
+        } else {
+          weekOffset+=dx<0?1:-1;
+          pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+        }
       }
     },{passive:true});
   })();
@@ -928,12 +1001,13 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   buildRegionBar();
   initMap();
   // Record initial week in history so back-button works from within the page.
-  history.replaceState({wo:weekOffset},'',window.location.href);
+  history.replaceState({wo:weekOffset,di:currentDayIndex},'',window.location.href);
   applyFilters();
 
   // Restore week when the user navigates back/forward within this page.
   window.addEventListener('popstate',function(ev){
     weekOffset=(ev.state&&typeof ev.state.wo==='number')?ev.state.wo:urlToWeekOffset();
+    currentDayIndex=(ev.state&&typeof ev.state.di==='number')?ev.state.di:urlToDayIndex();
     syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(false);
   });
 })();

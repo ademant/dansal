@@ -19,6 +19,27 @@
 </div>
 {{end}}
 
+<div class="evt-edit-layout">
+<button type="button" class="evt-nav-toggle" id="evt-nav-toggle">☰ {{$.Strings.T "evt_sections"}}</button>
+<aside class="evt-nav" id="evt-nav">
+  <div class="evt-nav-group">
+    <button type="button" class="evt-nav-item evt-nav-fixed" data-target="sec-basic">{{$.Strings.T "evt_basic_info"}}</button>
+    <button type="button" class="evt-nav-item evt-nav-fixed" data-target="sec-org">{{$.Strings.T "evt_organisation"}}</button>
+    <button type="button" class="evt-nav-item evt-nav-fixed" data-target="sec-location">{{$.Strings.T "evt_location"}}</button>
+  </div>
+  <hr class="evt-nav-sep">
+  <div class="evt-nav-group">
+    <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-pricing"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_admission"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-timetable"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_timetable"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-musicians"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_musicians"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-instructors"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_instructors"}}</button>
+    {{if .Dances}}<button type="button" class="evt-nav-item" data-target="sec-dances"><span class="evt-nav-dot"></span>Dance styles</button>{{end}}
+    <button type="button" class="evt-nav-item" data-target="sec-contact"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_contact_override"}}</button>
+  </div>
+</aside>
+<div class="evt-main">
+
 <form method="post" enctype="multipart/form-data" class="evt-form"
   {{if .Prefill}}
   data-prefill-org="{{.Prefill.OrgID}}"
@@ -29,21 +50,8 @@
   {{end}}
 >
 
-  <!-- Image -->
-  <section class="form-section">
-    <h2>{{$.Strings.T "evt_image"}}</h2>
-    <div id="drop-zone" class="drop-zone">
-      <input type="file" id="image" name="image" accept="image/*" style="display:none">
-      <div id="drop-label" class="drop-label">
-        <span>{{$.Strings.T "evt_image_hint"}}</span>
-        <button type="button" onclick="document.getElementById('image').click()" class="btn-secondary btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
-      </div>
-      <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
-    </div>
-  </section>
-
   <!-- Basic info -->
-  <section class="form-section">
+  <section class="form-section" id="sec-basic">
     <h2>{{$.Strings.T "evt_basic_info"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
 
     <label for="title">{{$.Strings.T "evt_title"}} *</label>
@@ -97,7 +105,7 @@
   </section>
 
   <!-- Organisation -->
-  <section class="form-section">
+  <section class="form-section" id="sec-org">
     <h2>{{$.Strings.T "evt_organisation"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
     <label for="org_choice">{{$.Strings.T "evt_org_select"}}</label>
     <select id="org_choice" name="org_choice" onchange="toggleOrgNew()">
@@ -121,7 +129,7 @@
   </section>
 
   <!-- Location -->
-  <section class="form-section">
+  <section class="form-section" id="sec-location">
     <h2>{{$.Strings.T "evt_location"}} <a href="/help#location-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
     <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
     <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
@@ -207,18 +215,21 @@
     </div>
   </section>
 
-  <!-- Contact override -->
-  <section class="form-section">
-    <h2>{{$.Strings.T "evt_contact_override"}}</h2>
-    <p class="field-hint">{{$.Strings.T "evt_contact_override_hint"}}</p>
-    <label for="evt_contact_name">{{$.Strings.T "evt_contact_name"}}</label>
-    <input id="evt_contact_name" type="text" name="contact_name">
-    <label for="evt_contact_email">{{$.Strings.T "evt_contact_email"}}</label>
-    <input id="evt_contact_email" type="email" name="contact_email">
+  <!-- Image -->
+  <section class="form-section optional-section" id="sec-image">
+    <h2>{{$.Strings.T "evt_image"}}</h2>
+    <div id="drop-zone" class="drop-zone">
+      <input type="file" id="image" name="image" accept="image/*" style="display:none">
+      <div id="drop-label" class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('image').click()" class="btn-secondary btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+    </div>
   </section>
 
   <!-- Pricing -->
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-pricing">
     <h2>{{$.Strings.T "evt_admission"}}</h2>
     <label for="pricing_type">{{$.Strings.T "evt_pricing_type"}}</label>
     <select id="pricing_type" name="pricing_type" onchange="togglePricing()">
@@ -254,7 +265,7 @@
   </section>
 
   <!-- Timetable -->
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-timetable">
     <h2>{{$.Strings.T "evt_timetable"}}</h2>
     <table class="growing-table" id="tt-table">
       <thead>
@@ -285,7 +296,7 @@
   </section>
 
   <!-- Musicians -->
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-musicians">
     <h2>{{$.Strings.T "evt_musicians"}} <a href="/help#musicians" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
     <div id="selected-musicians"></div>
     <div class="ac-wrap">
@@ -348,7 +359,7 @@
   </section>
 
   <!-- Instructors -->
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-instructors">
     <h2>{{$.Strings.T "evt_instructors"}}</h2>
     <div id="selected-instructors"></div>
     <div class="ac-wrap">
@@ -400,7 +411,7 @@
   </section>
 
   {{if .Dances}}
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-dances">
     <h2>Dance styles</h2>
     <div class="dance-checkboxes">
       {{range .Dances}}
@@ -410,14 +421,46 @@
   </section>
   {{end}}
 
+  <!-- Contact override -->
+  <section class="form-section optional-section" id="sec-contact">
+    <h2>{{$.Strings.T "evt_contact_override"}}</h2>
+    <p class="field-hint">{{$.Strings.T "evt_contact_override_hint"}}</p>
+    <label for="evt_contact_name">{{$.Strings.T "evt_contact_name"}}</label>
+    <input id="evt_contact_name" type="text" name="contact_name">
+    <label for="evt_contact_email">{{$.Strings.T "evt_contact_email"}}</label>
+    <input id="evt_contact_email" type="email" name="contact_email">
+  </section>
+
   <div class="form-actions">
     <button type="submit" id="save-btn" class="btn-primary" disabled>{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
+
+</div>
+</div>
 {{end}}
 
 <style>
+.evt-edit-layout{display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start;max-width:1280px}
+.evt-nav{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.15rem}
+.evt-nav-group{display:flex;flex-direction:column;gap:.15rem}
+.evt-nav-sep{border:none;border-top:1px solid #ddd;margin:.5rem 0}
+.evt-nav-item{display:flex;align-items:center;gap:.5rem;text-align:left;background:none;border:none;padding:.45rem .6rem;border-radius:4px;font-size:.86rem;color:#444;cursor:pointer}
+.evt-nav-item:hover{background:#f0f4ff}
+.evt-nav-item.is-active{background:#e8eaf6;color:#1a1a2e;font-weight:600}
+.evt-nav-item.evt-nav-fixed{font-weight:600;color:#1a1a2e}
+.evt-nav-dot{width:.5rem;height:.5rem;border-radius:50%;background:#ddd;flex-shrink:0}
+.evt-nav-dot.filled{background:#1a6eb5}
+.optional-section{display:none}
+.optional-section.is-open{display:block}
+.evt-nav-toggle{display:none;width:100%;padding:.5rem .75rem;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;font-size:.88rem;font-weight:600;cursor:pointer;text-align:left;margin-bottom:.75rem}
+@media(max-width:880px){
+  .evt-edit-layout{display:block}
+  .evt-nav-toggle{display:block}
+  .evt-nav{position:static;display:none;margin-bottom:1rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.5rem}
+  .evt-nav.is-expanded{display:flex}
+}
 .evt-form{display:flex;flex-direction:column;gap:0}
 .form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem}
 .form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:.4rem}
@@ -799,6 +842,81 @@ function applyTemplateData(d){
   form.addEventListener('input',check);
   form.addEventListener('change',check);
   check();
+})();
+
+// Sidebar section nav: accordion open/close + live "has data" indicator dots.
+(function(){
+  var nav=document.getElementById('evt-nav');
+  if(!nav) return;
+  var toggle=document.getElementById('evt-nav-toggle');
+  if(toggle) toggle.addEventListener('click',function(){ nav.classList.toggle('is-expanded'); });
+
+  var hasData={
+    'sec-image':function(){
+      var preview=document.getElementById('image-preview');
+      var inp=document.getElementById('image');
+      return !!(preview && preview.style.display==='block') || !!(inp && inp.files && inp.files.length>0);
+    },
+    'sec-pricing':function(){
+      var t=document.getElementById('pricing_type');
+      return !!(t && t.value!=='none');
+    },
+    'sec-timetable':function(){
+      var rows=document.querySelectorAll('#tt-body .tt-row');
+      for(var i=0;i<rows.length;i++){
+        var title=rows[i].querySelector('[name="tt_title"]');
+        if(title && title.value.trim()!=='') return true;
+      }
+      return false;
+    },
+    'sec-musicians':function(){ return document.querySelectorAll('#selected-musicians .musician-chip').length>0; },
+    'sec-instructors':function(){ return document.querySelectorAll('#selected-instructors .musician-chip').length>0; },
+    'sec-dances':function(){ return document.querySelectorAll('input[name="dance_ids"]:checked').length>0; },
+    'sec-contact':function(){
+      var n=document.getElementById('evt_contact_name'), e=document.getElementById('evt_contact_email');
+      return !!((n&&n.value.trim())||(e&&e.value.trim()));
+    }
+  };
+
+  function updateDot(id){
+    var btn=nav.querySelector('.evt-nav-item[data-target="'+id+'"]');
+    if(!btn) return;
+    var dot=btn.querySelector('.evt-nav-dot');
+    if(!dot) return;
+    dot.classList.toggle('filled', !!(hasData[id] && hasData[id]()));
+  }
+  function setOpen(id,open){
+    var sec=document.getElementById(id);
+    var btn=nav.querySelector('.evt-nav-item[data-target="'+id+'"]');
+    if(!sec||!btn) return;
+    sec.classList.toggle('is-open',open);
+    btn.classList.toggle('is-active',open);
+  }
+
+  Object.keys(hasData).forEach(function(id){
+    var sec=document.getElementById(id);
+    if(!sec) return;
+    setOpen(id, hasData[id]());
+    updateDot(id);
+    sec.addEventListener('input',function(){ updateDot(id); });
+    sec.addEventListener('change',function(){ updateDot(id); });
+  });
+
+  nav.querySelectorAll('.evt-nav-item').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=btn.dataset.target;
+      var sec=document.getElementById(id);
+      if(!sec) return;
+      if(btn.classList.contains('evt-nav-fixed')){
+        sec.scrollIntoView({behavior:'smooth',block:'start'});
+      } else {
+        var open=!sec.classList.contains('is-open');
+        setOpen(id,open);
+        if(open) sec.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+      if(nav.classList.contains('is-expanded') && window.innerWidth<=880) nav.classList.remove('is-expanded');
+    });
+  });
 })();
 </script>
 {{end}}

@@ -17,6 +17,7 @@
   <div class="evt-nav-group">
     <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-pricing"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_admission"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-tickets"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_tickets_section"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-timetable"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_timetable"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-musicians"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_musicians"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-instructors"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_instructors"}}</button>
@@ -82,22 +83,6 @@
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
     <input id="url" type="url" name="url" value="{{.Event.URL}}" placeholder="https://...">
-
-    <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
-    <input id="booking_url" type="url" name="booking_url" value="{{.Event.BookingURL}}" placeholder="https://...">
-
-    <label for="availability">{{$.Strings.T "evt_availability"}}</label>
-    <select id="availability" name="availability">
-      <option value=""{{if eq .Event.Availability ""}} selected{{end}}>{{$.Strings.T "avail_normal"}}</option>
-      <option value="limited"{{if eq .Event.Availability "limited"}} selected{{end}}>{{$.Strings.T "avail_limited"}}</option>
-      <option value="sold_out"{{if eq .Event.Availability "sold_out"}} selected{{end}}>{{$.Strings.T "avail_sold_out"}}</option>
-    </select>
-
-    <label for="tickets_total">{{$.Strings.T "evt_tickets_total"}}</label>
-    <input id="tickets_total" type="number" name="tickets_total" value="{{.Event.TicketsTotal}}" min="0" placeholder="0">
-
-    <label class="check-label"><input type="checkbox" name="booking_enabled"{{if .Event.BookingEnabled}} checked{{end}}> {{$.Strings.T "evt_booking_enabled"}}</label>
-    <span class="field-hint">{{$.Strings.T "evt_booking_enabled_hint"}}</span>
   </section>
 
   <!-- Organisation -->
@@ -271,6 +256,26 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <!-- Tickets -->
+  <section class="form-section optional-section" id="sec-tickets">
+    <h2>{{$.Strings.T "evt_tickets_section"}}</h2>
+    <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
+    <input id="booking_url" type="url" name="booking_url" value="{{.Event.BookingURL}}" placeholder="https://...">
+
+    <label for="availability">{{$.Strings.T "evt_availability"}}</label>
+    <select id="availability" name="availability">
+      <option value=""{{if eq .Event.Availability ""}} selected{{end}}>{{$.Strings.T "avail_normal"}}</option>
+      <option value="limited"{{if eq .Event.Availability "limited"}} selected{{end}}>{{$.Strings.T "avail_limited"}}</option>
+      <option value="sold_out"{{if eq .Event.Availability "sold_out"}} selected{{end}}>{{$.Strings.T "avail_sold_out"}}</option>
+    </select>
+
+    <label for="tickets_total">{{$.Strings.T "evt_tickets_total"}}</label>
+    <input id="tickets_total" type="number" name="tickets_total" value="{{.Event.TicketsTotal}}" min="0" placeholder="0">
+
+    <label class="check-label"><input type="checkbox" name="booking_enabled"{{if .Event.BookingEnabled}} checked{{end}}> {{$.Strings.T "evt_booking_enabled"}}</label>
+    <span class="field-hint">{{$.Strings.T "evt_booking_enabled_hint"}}</span>
   </section>
 
   <!-- Timetable -->
@@ -1065,6 +1070,11 @@ function showGeoMap(lat,lon){
     'sec-pricing':function(){
       var t=document.getElementById('pricing_type');
       return !!(t && t.value!=='none');
+    },
+    'sec-tickets':function(){
+      var u=document.getElementById('booking_url'), a=document.getElementById('availability');
+      var n=document.getElementById('tickets_total'), b=document.querySelector('#sec-tickets input[name="booking_enabled"]');
+      return !!((u&&u.value.trim())||(a&&a.value!=='')||(n&&n.value.trim()!=='')||(b&&b.checked));
     },
     'sec-timetable':function(){
       var rows=document.querySelectorAll('#tt-body .tt-row');

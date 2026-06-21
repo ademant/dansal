@@ -31,6 +31,7 @@
   <div class="evt-nav-group">
     <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-pricing"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_admission"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-tickets"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_tickets_section"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-timetable"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_timetable"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-musicians"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_musicians"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-instructors"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_instructors"}}</button>
@@ -99,9 +100,6 @@
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
     <input id="url" type="url" name="url" placeholder="https://..." value="{{if .Prefill}}{{.Prefill.URL}}{{end}}">
-
-    <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
-    <input id="booking_url" type="url" name="booking_url" placeholder="https://...">
   </section>
 
   <!-- Organisation -->
@@ -262,6 +260,13 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <!-- Tickets -->
+  <section class="form-section optional-section" id="sec-tickets">
+    <h2>{{$.Strings.T "evt_tickets_section"}}</h2>
+    <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
+    <input id="booking_url" type="url" name="booking_url" placeholder="https://...">
   </section>
 
   <!-- Timetable -->
@@ -860,6 +865,10 @@ function applyTemplateData(d){
     'sec-pricing':function(){
       var t=document.getElementById('pricing_type');
       return !!(t && t.value!=='none');
+    },
+    'sec-tickets':function(){
+      var u=document.getElementById('booking_url');
+      return !!(u && u.value.trim());
     },
     'sec-timetable':function(){
       var rows=document.querySelectorAll('#tt-body .tt-row');

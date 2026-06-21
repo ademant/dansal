@@ -42,6 +42,7 @@
 <!-- Search filter form -->
 <div class="search-trigger-bar">
   <button type="button" id="search-events-btn" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</button>
+  <button type="button" id="reset-filters-btn" class="reset-filters-btn">{{$.Strings.T "clear_filters"}}</button>
 </div>
 
 <dialog id="search-modal" class="search-modal">
@@ -242,9 +243,11 @@
 .filter-row button{padding:.35rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:.9rem;color:var(--fg)}
 .filter-row button:hover{background:var(--btn-bg-h)}
 .filter-info{font-size:.85rem;color:var(--fg-muted)}
-.search-trigger-bar{margin:1rem 0}
+.search-trigger-bar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin:1rem 0}
 .search-events-btn{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.92rem}
 .search-events-btn:hover{background:var(--link);color:#fff}
+.reset-filters-btn{padding:.4rem 1rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.92rem}
+.reset-filters-btn:hover{background:var(--btn-bg-h)}
 .search-modal{border:1px solid var(--border-mid);border-radius:8px;padding:0;min-width:320px;max-width:480px;width:90vw;background:var(--bg-card);color:var(--fg)}
 .search-modal::backdrop{background:rgba(0,0,0,.4)}
 .search-modal form{padding:1.25rem}
@@ -1057,6 +1060,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     }
 
     document.getElementById('search-events-btn').addEventListener('click', openModal);
+    document.getElementById('reset-filters-btn').addEventListener('click', clear);
     document.getElementById('sm-cancel-btn').addEventListener('click', function(){ modal.close(); });
 
     townInput.addEventListener('input', function(){

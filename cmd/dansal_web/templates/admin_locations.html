@@ -18,7 +18,8 @@
 
 {{if .IsAdmin}}
 <form method="post" action="/admin/locations/bulk-assign" id="bulk-form">
-<div class="bulk-bar">
+<div class="bulk-edit-layout">
+<aside class="bulk-side">
   <span id="bulk-count"></span>
   <select name="organization_id">
     <option value="">{{$.Strings.T "loc_no_org"}}</option>
@@ -27,7 +28,8 @@
   <button type="submit" class="btn-sm loc-bulk-action-btn" disabled>{{$.Strings.T "loc_bulk_assign_btn"}}</button>
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge loc-bulk-action-btn" disabled
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
-</div>
+</aside>
+<div class="bulk-main">
 {{end}}
 
 <div class="table-wrap">
@@ -89,7 +91,11 @@
   </tbody>
 </table>
 </div>
-{{if .IsAdmin}}</form>{{end}}
+{{if .IsAdmin}}
+</div>
+</div>
+</form>
+{{end}}
 {{end}}
 
 <style>
@@ -100,12 +106,16 @@
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:middle}
 .event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
 .event-table tbody tr:hover{background:#f9f9ff}
-.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
-.bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .loc-bulk-action-btn:disabled{opacity:.45;cursor:default}
-@media(min-width:1300px){
-  .bulk-bar{flex-direction:column;align-items:stretch;position:fixed;left:.75rem;top:7rem;width:140px;z-index:10}
-  .bulk-bar #bulk-count{text-align:center;font-size:.85rem;color:#555}
+.bulk-edit-layout{display:grid;grid-template-columns:170px 1fr;gap:1.25rem;align-items:start}
+.bulk-side{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.5rem;background:#f4f6fb;padding:.6rem;border-radius:6px;border:1px solid #ddd}
+.bulk-side select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem;width:100%}
+.bulk-side #bulk-count{text-align:center;font-size:.85rem;color:#555}
+@media(max-width:900px){
+  .bulk-edit-layout{display:block}
+  .bulk-side{position:static;flex-direction:row;flex-wrap:wrap;margin-bottom:.75rem}
+  .bulk-side select{width:auto}
+  .bulk-side #bulk-count{text-align:left}
 }
 .col-cb{width:2rem;text-align:center}
 .col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}

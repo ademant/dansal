@@ -102,6 +102,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
+		if looksLikeGmailDotSpam(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	if len(req.Description) > 500 {
+		writeError(w, "description must be 500 characters or fewer", http.StatusUnprocessableEntity)
+		return
 	}
 	if req.RegType != "join_org" && req.RegType != "new_org" {
 		writeError(w, "reg_type must be 'join_org' or 'new_org'", http.StatusBadRequest)

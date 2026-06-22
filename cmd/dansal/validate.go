@@ -64,6 +64,35 @@ func validateEmailDomain(ctx context.Context, email string) error {
 	return nil
 }
 
+// looksLikeGmailDotSpam flags Gmail/Googlemail addresses with an unusually
+// choppy dot pattern in the local part (e.g. "u.d.i.ja.x.i.r.u17@gmail.com").
+// Gmail and Googlemail ignore dots in the local part, so this is a common
+// trick to mint many "unique" addresses that all land in one inbox, used to
+// dodge per-email duplicate checks. Legitimate addresses rarely have more
+// than 2-3 dot-separated segments (e.g. "j.r.tolkien@gmail.com"), so the bar
+// here — 5+ segments, most of them 1-2 chars — is set well above that.
+func looksLikeGmailDotSpam(email string) bool {
+	at := strings.LastIndex(email, "@")
+	if at < 0 {
+		return false
+	}
+	local, domain := email[:at], strings.ToLower(email[at+1:])
+	if domain != "gmail.com" && domain != "googlemail.com" {
+		return false
+	}
+	parts := strings.Split(local, ".")
+	if len(parts) < 5 {
+		return false
+	}
+	short := 0
+	for _, p := range parts {
+		if len(p) <= 2 {
+			short++
+		}
+	}
+	return short*10 >= len(parts)*6 // ≥60% of segments are ≤2 chars
+}
+
 // isValidMatrixID checks that s is a fully-qualified Matrix user ID: @localpart:server
 func isValidMatrixID(s string) bool {
 	if !strings.HasPrefix(s, "@") {

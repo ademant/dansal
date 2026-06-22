@@ -257,6 +257,7 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 func maybeServePrecompressed(w http.ResponseWriter, r *http.Request, path, contentType string) bool {
 	// Set Vary so caches know content varies by Accept-Encoding
 	w.Header().Set("Vary", "Accept-Encoding")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 
 	// If client prefers brotli and a .br file exists, serve it
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "br") {
@@ -305,6 +306,7 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Cache-Control", "public, max-age=86400")
 			http.ServeFile(w, r, smallPath)
 			return
 		}
@@ -316,6 +318,7 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeFile(w, r, imgPath)
 }
 

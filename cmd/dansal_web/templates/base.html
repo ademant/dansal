@@ -13,6 +13,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — {{.SiteName}}</title>
+<meta name="description" content="{{.Strings.T "meta_description"}}">
 <link rel="icon" href="/favicon.svg">
 <link rel="manifest" href="/manifest.json">
 <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="{{.SiteName}}">
@@ -217,7 +218,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     </div>
   </div>
   
-  <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}"></a>
+  <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}" width="36" height="36"></a>
   
   <div class="user-menu-wrap">
     <button class="nav-user-btn{{if .User}}{{if eq .User.Role "admin"}} nav-user-admin{{else if eq .User.Role "publisher"}} nav-user-publisher{{else}} nav-user-loggedin{{end}}{{end}}" onclick="toggleUserMenu()" aria-label="User menu">👤</button>
@@ -266,7 +267,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 </div>
 {{if gt .BannerHeight 0}}
 <div class="site-banner">
-  <img src="/banner.avif" alt="">
+  <img src="/banner.avif" alt="" width="960" height="{{.BannerHeight}}" style="aspect-ratio:960/{{.BannerHeight}}">
 </div>
 {{end}}
 <style>

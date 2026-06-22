@@ -87,6 +87,7 @@ func getOrgImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeFile(w, r, imgPath)
 }
 

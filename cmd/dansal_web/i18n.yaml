@@ -11,6 +11,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Veranstaltungen"
+      meta_description: "Veranstaltungskalender für Bal-Folk, Fest-Noz und Volkstanz-Events."
       nav_musicians: "Musiker"
       nav_instructors: "Lehrkräfte"
       nav_orgs: "Organisationen"
@@ -967,6 +968,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Darvoudoù"
+      meta_description: "Deiziadur darvoudoù evit bal-folk, fest-noz hag obererezhioù dañs hengounel."
       nav_musicians: "Sonerien"
       nav_instructors: "Kelennerien"
       nav_orgs: "Gevredigezhioù"
@@ -1921,6 +1923,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Events"
+      meta_description: "Community calendar for bal-folk, fest-noz, and folk dance events."
       nav_musicians: "Musicians"
       nav_instructors: "Instructors"
       nav_orgs: "Organizations"
@@ -2877,6 +2880,7 @@ languages:
     name: "Español"
     strings:
       nav_events: "Eventos"
+      meta_description: "Calendario comunitario de eventos de bal-folk, fest-noz y danza folk."
       nav_musicians: "Músicos"
       nav_instructors: "Instructores"
       nav_orgs: "Organizaciones"
@@ -3822,6 +3826,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Événements"
+      meta_description: "Agenda communautaire des bals folk, fest-noz et événements de danse traditionnelle."
       nav_musicians: "Musiciens"
       nav_instructors: "Intervenant·e·s"
       nav_orgs: "Organisations"
@@ -4777,6 +4782,7 @@ languages:
     name: "Italiano"
     strings:
       nav_events: "Eventi"
+      meta_description: "Calendario della comunità per eventi di bal-folk, fest-noz e danza popolare."
       nav_musicians: "Musicisti"
       nav_instructors: "Insegnanti"
       nav_orgs: "Organizzazioni"
@@ -5721,6 +5727,7 @@ languages:
     name: "Nederlands"
     strings:
       nav_events: "Evenementen"
+      meta_description: "Communitykalender voor bal-folk, fest-noz en volksdansevenementen."
       nav_musicians: "Muzikanten"
       nav_instructors: "Instructeurs"
       nav_orgs: "Organisaties"
@@ -6665,6 +6672,7 @@ languages:
     name: "Українська"
     strings:
       nav_events: "Події"
+      meta_description: "Громадський календар подій бал-фолк, фест-ноз і народних танців."
       nav_musicians: "Музиканти"
       nav_instructors: "Викладачі"
       nav_orgs: "Організації"
@@ -7124,6 +7132,7 @@ languages:
     name: "Català"
     strings:
       nav_events: "Esdeveniments"
+      meta_description: "Calendari comunitari d'esdeveniments de bal-folk, fest-noz i dansa folk."
       nav_musicians: "Músics"
       nav_instructors: "Instructors"
       nav_orgs: "Organitzacions"
@@ -7222,6 +7231,7 @@ languages:
     name: "Português"
     strings:
       nav_events: "Eventos"
+      meta_description: "Calendário comunitário de eventos de bal-folk, fest-noz e dança folk."
       nav_musicians: "Músicos"
       nav_instructors: "Instrutores"
       nav_orgs: "Organizações"
@@ -7320,6 +7330,7 @@ languages:
     name: "Polski"
     strings:
       nav_events: "Wydarzenia"
+      meta_description: "Społecznościowy kalendarz wydarzeń bal-folk, fest-noz i tańca ludowego."
       nav_musicians: "Muzycy"
       nav_instructors: "Instruktorzy"
       nav_orgs: "Organizacje"
@@ -7418,6 +7429,7 @@ languages:
     name: "Čeština"
     strings:
       nav_events: "Události"
+      meta_description: "Komunitní kalendář akcí bal-folk, fest-noz a lidového tance."
       nav_musicians: "Hudebníci"
       nav_instructors: "Instruktoři"
       nav_orgs: "Organizace"

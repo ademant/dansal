@@ -94,3 +94,85 @@ func dntStatusHandler(cfg *Config) http.HandlerFunc {
 		fmt.Fprintf(w, `{"tracking":"N","compliance":["https://www.w3.org/TR/tracking-dnt/"],"policy":"%s/.well-known/dnt-policy.txt"}`+"\n", base)
 	}
 }
+
+// llmsTxtHandler serves /llms.txt — a Markdown summary of the site for LLM
+// tools, per the community llms.txt convention.
+func llmsTxtHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		base := cfg.publicBaseURL()
+		siteName := cfg.SiteName
+		if siteName == "" {
+			siteName = "dansal"
+		}
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, `# %s
+
+> A community calendar for bal-folk, fest-noz, and folk dance/music events,
+> locations, and organizations.
+
+## Pages
+
+- [Events and locations](%s/): upcoming events with map and weekly/daily calendar views
+- [Site map](%s/sitemap.xml): full list of indexable pages
+
+## Feeds
+
+- [All upcoming events (iCal)](%s/feed/events.ics)
+- [All upcoming events (RSS)](%s/feed/events.rss)
+`, siteName, base, base, base, base)
+	}
+}
+
+// manifestHandler serves /manifest.json, a minimal PWA web app manifest.
+func manifestHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		siteName := cfg.SiteName
+		if siteName == "" {
+			siteName = "dansal"
+		}
+		w.Header().Set("Content-Type", "application/manifest+json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, `{
+  "name": %q,
+  "short_name": %q,
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1a6eb5",
+  "background_color": "#fafafa",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}
+`, siteName, siteName)
+	}
+}
+
+// opensearchHandler serves /opensearch.xml, an OpenSearch description
+// document letting browsers register the site's event search as a custom
+// address-bar search provider.
+func opensearchHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		base := cfg.publicBaseURL()
+		siteName := cfg.SiteName
+		if siteName == "" {
+			siteName = "dansal"
+		}
+		w.Header().Set("Content-Type", "application/opensearchdescription+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>%s</ShortName>
+  <Description>Search %s events by town</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Url type="text/html" template="%s/?town={searchTerms}"/>
+  <Image height="16" width="16" type="image/svg+xml">%s/favicon.svg</Image>
+</OpenSearchDescription>
+`, siteName, siteName, base, base)
+	}
+}

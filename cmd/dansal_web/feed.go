@@ -232,6 +232,9 @@ func feedAddEventToCalendar(cal *ics.Calendar, domain string, e Event) {
 		if loc != "" {
 			vevent.SetLocation(loc)
 		}
+		if l.Latitude != nil && l.Longitude != nil {
+			ics.SetGeo(vevent, *l.Latitude, *l.Longitude)
+		}
 	}
 	if e.URL != "" {
 		vevent.SetProperty(ics.ComponentPropertyUrl, e.URL)
@@ -251,6 +254,7 @@ func serveJSONFeed(w http.ResponseWriter, events []Event) {
 type feedRSSRoot struct {
 	XMLName xml.Name       `xml:"rss"`
 	Version string         `xml:"version,attr"`
+	Georss  string         `xml:"xmlns:georss,attr"`
 	Channel feedRSSChannel `xml:"channel"`
 }
 
@@ -270,6 +274,7 @@ type feedRSSItem struct {
 	EventStart string   `xml:"eventStart,omitempty"`
 	EventEnd   string   `xml:"eventEnd,omitempty"`
 	Location   string   `xml:"location,omitempty"`
+	GeoPoint   string   `xml:"georss:point,omitempty"`
 	Categories []string `xml:"category"`
 }
 
@@ -285,11 +290,14 @@ func serveRSSFeed(w http.ResponseWriter, cfg *Config, title, selfURL string, eve
 		if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
 			pubDate = t.UTC().Format(time.RFC1123Z)
 		}
-		var loc string
+		var loc, geoPoint string
 		if l := e.Location; l != nil {
 			loc = l.Location
 			if loc == "" {
 				loc = l.Town
+			}
+			if l.Latitude != nil && l.Longitude != nil {
+				geoPoint = fmt.Sprintf("%v %v", *l.Latitude, *l.Longitude)
 			}
 		}
 		items = append(items, feedRSSItem{
@@ -301,12 +309,14 @@ func serveRSSFeed(w http.ResponseWriter, cfg *Config, title, selfURL string, eve
 			EventStart: e.StartTime,
 			EventEnd:   e.EndTime,
 			Location:   loc,
+			GeoPoint:   geoPoint,
 			Categories: e.Tags,
 		})
 	}
 
 	root := feedRSSRoot{
 		Version: "2.0",
+		Georss:  "http://www.georss.org/georss",
 		Channel: feedRSSChannel{
 			Title:       title,
 			Link:        selfURL,

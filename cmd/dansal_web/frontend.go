@@ -46,7 +46,7 @@ type TemplateData struct {
 	SuggestAvailable       bool
 	RegistrationEnabled    bool
 	SessionIdleTimeoutMins int
-	PendingRegCount        int // verified pending registrations awaiting action (scoped to caller)
+	PendingRegCount        int    // verified pending registrations awaiting action (scoped to caller)
 	Path                   string // current request path, for building "return to this page" links
 }
 
@@ -443,6 +443,7 @@ var tmplFuncMap = template.FuncMap{
 		type locItem struct {
 			ID     int    `json:"id"`
 			Label  string `json:"label"`
+			Town   string `json:"town"`
 			OrgIDs []int  `json:"orgIDs"`
 		}
 		items := make([]locItem, len(locs))
@@ -458,7 +459,7 @@ var tmplFuncMap = template.FuncMap{
 			if orgIDs == nil {
 				orgIDs = []int{}
 			}
-			items[i] = locItem{ID: l.ID, Label: label, OrgIDs: orgIDs}
+			items[i] = locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs}
 		}
 		b, _ := json.Marshal(items)
 		return template.JS(b)

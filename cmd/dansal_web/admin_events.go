@@ -43,7 +43,9 @@ type AdminEventsData struct {
 	Series             []EventSeries
 	FilterIncludePast  bool
 	FilterOrgID        int // -1 = no org assigned
+	FilterOrgName      string
 	FilterLocationID   int
+	FilterLocationName string
 	FilterCity         string
 	FilterDateFrom     string
 	FilterDateTo       string
@@ -922,6 +924,17 @@ func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[
 	}
 }
 
+func locationDisplayName(l Location) string {
+	name := l.ShortName
+	if name == "" {
+		name = l.Location
+	}
+	if l.Town != "" {
+		name += ", " + l.Town
+	}
+	return name
+}
+
 func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -1068,6 +1081,21 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		for _, o := range orgs {
 			orgMap[o.ID] = o.Name
 		}
+		var filterOrgName string
+		if orgID == -1 {
+			filterOrgName = i18n.T(r, "filter_no_org")
+		} else if orgID != 0 {
+			filterOrgName = orgMap[orgID]
+		}
+		var filterLocationName string
+		if locationID != 0 {
+			for _, l := range locs {
+				if l.ID == locationID {
+					filterLocationName = locationDisplayName(l)
+					break
+				}
+			}
+		}
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
 			Events:             events,
 			Organizations:      orgs,
@@ -1079,7 +1107,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Series:             series,
 			FilterIncludePast:  includePast,
 			FilterOrgID:        orgID,
+			FilterOrgName:      filterOrgName,
 			FilterLocationID:   locationID,
+			FilterLocationName: filterLocationName,
 			FilterCity:         filterCity,
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,

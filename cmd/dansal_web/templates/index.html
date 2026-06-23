@@ -60,6 +60,13 @@
         <div id="sm-town-suggest" class="sm-town-suggest" hidden></div>
       </label>
       <button type="button" id="sm-geo-btn" class="sm-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
+      <select id="sm-radius" class="sm-field" aria-label="{{$.Strings.T "filter_radius"}}">
+        <option value="10" selected>10 km</option>
+        <option value="50">50 km</option>
+        <option value="100">100 km</option>
+        <option value="200">200 km</option>
+        <option value="500">500 km</option>
+      </select>
     </div>
 
     <div class="search-modal-row">
@@ -398,9 +405,14 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var fltDateTo   = smParams.get('dt') || '';
   var fltTown     = smParams.get('town') || '';
   var fltBBox     = null;
+  var fltRadius   = parseInt(smParams.get('gr'), 10) || 10;
+  var fltGeo      = null;
   (function(){
     var glat=parseFloat(smParams.get('glat')), glng=parseFloat(smParams.get('glng'));
-    if(!isNaN(glat) && !isNaN(glng)) fltBBox = radiusToBoundingBox(glat, glng, 50);
+    if(!isNaN(glat) && !isNaN(glng)){
+      fltGeo = {lat:glat, lng:glng};
+      fltBBox = radiusToBoundingBox(glat, glng, fltRadius);
+    }
   })();
 
   function radiusToBoundingBox(lat,lng,radiusKm){
@@ -414,11 +426,12 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     fltDateFrom ? p.set('df',fltDateFrom) : p.delete('df');
     fltDateTo   ? p.set('dt',fltDateTo)   : p.delete('dt');
     fltTown     ? p.set('town',fltTown)   : p.delete('town');
-    if(fltBBox){
-      p.set('glat', ((fltBBox.minLat+fltBBox.maxLat)/2).toFixed(5));
-      p.set('glng', ((fltBBox.minLng+fltBBox.maxLng)/2).toFixed(5));
+    if(fltBBox && fltGeo){
+      p.set('glat', fltGeo.lat.toFixed(5));
+      p.set('glng', fltGeo.lng.toFixed(5));
+      p.set('gr', fltRadius);
     } else {
-      p.delete('glat'); p.delete('glng');
+      p.delete('glat'); p.delete('glng'); p.delete('gr');
     }
     var qs = p.toString();
     history.replaceState(history.state,'',window.location.pathname+(qs?'?'+qs:''));
@@ -989,7 +1002,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     if(fc) fc.value = '';
     updateStateDropdown();
     updateTownDropdown();
-    fltDateFrom = ''; fltDateTo = ''; fltTown = ''; fltBBox = null;
+    fltDateFrom = ''; fltDateTo = ''; fltTown = ''; fltBBox = null; fltGeo = null; fltRadius = 10;
     syncFilterURL();
     mapFitted=false;
     applyFilters();
@@ -1042,7 +1055,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     var townInput  = document.getElementById('sm-town');
     var suggestBox = document.getElementById('sm-town-suggest');
     var danceSel   = document.getElementById('sm-dance');
+    var radiusSel  = document.getElementById('sm-radius');
     var pendingBBox = null;
+    var pendingGeo = null;
     var allTowns = Array.from(new Set(rows.map(function(r){ return r.dataset.town; }).filter(Boolean))).sort();
 
     function openModal(){
@@ -1050,6 +1065,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       dateTo.value   = fltDateTo;
       townInput.value = fltTown;
       pendingBBox = fltBBox;
+      pendingGeo = fltGeo;
+      radiusSel.value = fltRadius;
       suggestBox.hidden = true;
       ['ball','workshop','festival'].forEach(function(t){
         document.getElementById('sm-type-'+t).checked = typeFilter[t];
@@ -1065,6 +1082,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     townInput.addEventListener('input', function(){
       pendingBBox = null;
+      pendingGeo = null;
       var q = this.value.trim().toLowerCase();
       if(q.length<3){ suggestBox.hidden=true; suggestBox.innerHTML=''; return; }
       var matches = allTowns.filter(function(t){ return t.toLowerCase().indexOf(q)>=0; }).slice(0,8);
@@ -1082,10 +1100,15 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     document.getElementById('sm-geo-btn').addEventListener('click', function(){
       if(!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(function(pos){
-        pendingBBox = radiusToBoundingBox(pos.coords.latitude, pos.coords.longitude, 50);
+        pendingGeo = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+        pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
         townInput.value = '';
         suggestBox.hidden = true;
       });
+    });
+
+    radiusSel.addEventListener('change', function(){
+      if(pendingGeo) pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
     });
 
     document.getElementById('sm-clear-btn').addEventListener('click', function(){
@@ -1098,6 +1121,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       fltDateTo   = dateTo.value || '';
       fltTown     = pendingBBox ? '' : (townInput.value.trim() || '');
       fltBBox     = pendingBBox;
+      fltGeo      = pendingGeo;
+      fltRadius   = parseInt(radiusSel.value, 10);
 
       ['ball','workshop','festival'].forEach(function(t){
         var checked = document.getElementById('sm-type-'+t).checked;

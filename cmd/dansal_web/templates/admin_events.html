@@ -35,22 +35,20 @@
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
   </label>
-  <select name="org_id" onchange="this.form.submit()">
-    <option value="">{{$.Strings.T "filter_all_orgs"}}</option>
-    <option value="-1" {{if eq .FilterOrgID -1}}selected{{end}}>{{$.Strings.T "filter_no_org"}}</option>
-    {{range .Organizations}}
-    <option value="{{.ID}}" {{if eq .ID $.Data.FilterOrgID}}selected{{end}}>{{.Name}}</option>
-    {{end}}
-  </select>
-  <select id="city-filter" name="city" onchange="this.form.submit()" data-active="{{.FilterCity}}">
-    <option value="">{{$.Strings.T "filter_all_towns"}}</option>
-  </select>
-  <select name="location_id" id="loc-select" onchange="this.form.submit()">
-    <option value="">{{$.Strings.T "filter_all_locations"}}</option>
-    {{range .Locations}}
-    <option value="{{.ID}}" {{if eq .ID $.Data.FilterLocationID}}selected{{end}} data-town="{{.Town}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
-    {{end}}
-  </select>
+  <div class="af-field" id="org-filter-wrap">
+    <input type="text" id="org-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_orgs"}}" autocomplete="off" value="{{.FilterOrgName}}">
+    <input type="hidden" name="org_id" id="org-filter-id" value="{{if .FilterOrgID}}{{.FilterOrgID}}{{end}}">
+    <div id="org-filter-suggest" class="af-suggest" hidden></div>
+  </div>
+  <div class="af-field" id="city-filter-wrap">
+    <input type="text" name="city" id="city-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_towns"}}" autocomplete="off" value="{{.FilterCity}}">
+    <div id="city-filter-suggest" class="af-suggest" hidden></div>
+  </div>
+  <div class="af-field" id="loc-filter-wrap">
+    <input type="text" id="loc-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_locations"}}" autocomplete="off" value="{{.FilterLocationName}}">
+    <input type="hidden" name="location_id" id="loc-filter-id" value="{{if .FilterLocationID}}{{.FilterLocationID}}{{end}}">
+    <div id="loc-filter-suggest" class="af-suggest" hidden></div>
+  </div>
   <select name="musician_id" onchange="this.form.submit()">
     <option value="">{{$.Strings.T "filter_all_musicians"}}</option>
     {{range .Musicians}}
@@ -240,7 +238,11 @@
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .event-filters select,.event-filters input[type=date]{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
 .filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
-#city-filter,#loc-select{max-width:11rem}
+.af-field{position:relative}
+.af-input{max-width:11rem;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
+.af-suggest{position:absolute;top:100%;left:0;min-width:100%;z-index:10;background:#fff;border:1px solid #ccc;border-radius:4px;max-height:200px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap}
+.af-suggest div{padding:.35rem .6rem;cursor:pointer;font-size:.85rem}
+.af-suggest div:hover,.af-suggest div.af-active{background:#f0f4fb}
 .btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:#555;text-decoration:none;background:#fff}
 .btn-reset:hover{background:#f0f0f0;border-color:#888}
 .import-notice{font-size:.875rem;color:#155724;background:#d4edda;border:1px solid #c3e6cb;border-radius:4px;padding:.4rem .75rem;margin-bottom:.5rem}
@@ -295,43 +297,95 @@
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+var _afOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
+var _afLocs = {{locationsJSON $.Data.Locations}};
 (function(){
-  var locSel  = document.getElementById('loc-select');
-  var citySel = document.getElementById('city-filter');
-  if (!locSel || !citySel) return;
+  var noOrgLabel = {{$.Strings.T "filter_no_org" | jsStr}};
 
-  // Collect unique sorted city names from location options.
+  // Collect unique sorted city names from locations.
   var cities = [];
   var seen = {};
-  Array.prototype.forEach.call(locSel.options, function(o) {
-    var t = o.dataset.town || '';
-    if (t && !seen[t]) { seen[t] = true; cities.push(t); }
+  _afLocs.forEach(function(l){
+    if (l.town && !seen[l.town]) { seen[l.town] = true; cities.push(l.town); }
   });
   cities.sort(function(a,b){ return a.localeCompare(b); });
-  cities.forEach(function(c) {
-    var o = document.createElement('option');
-    o.value = c; o.textContent = c;
-    citySel.appendChild(o);
-  });
 
-  // Pre-select city from server-side filter value.
-  var activeCity = citySel.dataset.active || '';
-  if (activeCity) citySel.value = activeCity;
+  function setupSuggest(opts) {
+    var input  = document.getElementById(opts.inputId);
+    var hidden = opts.hiddenId ? document.getElementById(opts.hiddenId) : null;
+    var box    = document.getElementById(opts.suggestId);
+    if (!input || !box) return;
 
-  function applyCity(city) {
-    Array.prototype.forEach.call(locSel.options, function(o) {
-      if (!o.value) return;
-      o.hidden = city ? (o.dataset.town || '') !== city : false;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+
+    input.addEventListener('input', function() {
+      if (hidden) hidden.value = '';
+      var q = input.value.trim().toLowerCase();
+      if (q.length < 1) { hide(); return; }
+      var matches = opts.items().filter(function(it) {
+        return it.label.toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 10);
+      if (!matches.length) { hide(); return; }
+      box.innerHTML = matches.map(function(it, i) {
+        return '<div data-idx="'+i+'">'+it.label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      }).join('');
+      box._matches = matches;
+      box.hidden = false;
     });
-    // If current selection is now hidden, clear it.
-    var cur = locSel.options[locSel.selectedIndex];
-    if (cur && cur.value && cur.hidden) locSel.value = '';
+
+    box.addEventListener('mousedown', function(e) {
+      if (e.target && e.target.dataset.idx !== undefined) {
+        e.preventDefault();
+        var it = box._matches[+e.target.dataset.idx];
+        input.value = it.label;
+        if (hidden) hidden.value = it.id;
+        hide();
+        input.form.submit();
+      }
+    });
+
+    input.addEventListener('blur', function() {
+      setTimeout(hide, 150);
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var first = box._matches && box._matches[0];
+        if (first && !box.hidden) {
+          input.value = first.label;
+          if (hidden) hidden.value = first.id;
+        } else if (!input.value.trim() && hidden) {
+          hidden.value = '';
+        }
+        hide();
+        input.form.submit();
+      }
+    });
   }
 
-  applyCity(activeCity);
+  setupSuggest({
+    inputId: 'org-filter-input', hiddenId: 'org-filter-id', suggestId: 'org-filter-suggest',
+    items: function() {
+      return [{id:-1, label: noOrgLabel}].concat(_afOrgs.map(function(o){ return {id:o.id, label:o.name}; }));
+    }
+  });
 
-  // Also filter the location dropdown on city change (before form submits).
-  citySel.addEventListener('change', function() { applyCity(this.value); });
+  setupSuggest({
+    inputId: 'city-filter-input', suggestId: 'city-filter-suggest',
+    items: function() {
+      return cities.map(function(c){ return {id:c, label:c}; });
+    }
+  });
+
+  setupSuggest({
+    inputId: 'loc-filter-input', hiddenId: 'loc-filter-id', suggestId: 'loc-filter-suggest',
+    items: function() {
+      var cityVal = document.getElementById('city-filter-input').value.trim();
+      var pool = cityVal ? _afLocs.filter(function(l){ return l.town === cityVal; }) : _afLocs;
+      return pool.map(function(l){ return {id:l.id, label:l.label}; });
+    }
+  });
 })();
 function openBulkAttrsModal() {
   var checked = document.querySelectorAll('.event-cb:checked');

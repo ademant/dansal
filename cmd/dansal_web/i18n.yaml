@@ -268,6 +268,7 @@ languages:
       tt_musician: "Musiker"
       # View toggle
       map_locate: "Meinen Standort verwenden"
+      filter_radius: "Umkreis"
       map_no_coords: "Keine Kartenposition für diese Veranstaltungen."
       # Locations
       admin_musicians_title: "Musiker"
@@ -1201,6 +1202,7 @@ languages:
       tt_musician: "Muzisian"
       # View toggle
       map_locate: "Implij ma lec'hiañ"
+      filter_radius: "Skin"
       map_no_coords: "Kordinadoù ebet evit ar c'hartenn."
       # Locations
       admin_musicians_title: "Sonerien"
@@ -2180,6 +2182,7 @@ languages:
       tt_musician: "Musician"
       # View toggle
       map_locate: "Use my location"
+      filter_radius: "Radius"
       map_no_coords: "No map coordinates for these events."
       # Locations
       admin_musicians_title: "Musicians"
@@ -3130,6 +3133,7 @@ languages:
       tt_location: "Lugar"
       tt_musician: "Músico"
       map_locate: "Usar mi ubicación"
+      filter_radius: "Radio"
       map_no_coords: "No hay coordenadas de mapa para estos eventos."
       admin_musicians_title: "Músicos"
       admin_musician_new_title: "Nuevo músico"
@@ -4083,6 +4087,7 @@ languages:
       tt_musician: "Musicien"
       # View toggle
       map_locate: "Utiliser ma position"
+      filter_radius: "Rayon"
       map_no_coords: "Pas de coordonnées cartographiques pour ces événements."
       # Locations
       admin_musicians_title: "Musiciens"
@@ -5032,6 +5037,7 @@ languages:
       tt_location: "Luogo"
       tt_musician: "Musicista"
       map_locate: "Usa la mia posizione"
+      filter_radius: "Raggio"
       map_no_coords: "Nessuna coordinata mappa per questi eventi."
       admin_musicians_title: "Musicisti"
       admin_musician_new_title: "Nuovo musicista"
@@ -5977,6 +5983,7 @@ languages:
       tt_location: "Locatie"
       tt_musician: "Muzikant"
       map_locate: "Mijn locatie gebruiken"
+      filter_radius: "Straal"
       map_no_coords: "Geen kaartcoördinaten voor deze evenementen."
       admin_musicians_title: "Muzikanten"
       admin_musician_new_title: "Nieuwe muzikant"

@@ -100,7 +100,33 @@
     </div>
 
     <label for="description">{{$.Strings.T "evt_description"}}</label>
-    <textarea id="description" name="description" rows="5">{{.Event.Description}}</textarea>
+    <div class="desc-row">
+      <textarea id="description" name="description" rows="10">{{.Event.Description}}</textarea>
+      <aside class="md-help">
+        <p class="md-help-title">{{$.Strings.T "md_help_title"}}</p>
+        <ul>
+          <li><code>**{{$.Strings.T "md_help_bold"}}**</code> → <strong>{{$.Strings.T "md_help_bold"}}</strong></li>
+          <li><code>*{{$.Strings.T "md_help_italic"}}*</code> → <em>{{$.Strings.T "md_help_italic"}}</em></li>
+          <li><code># {{$.Strings.T "md_help_heading"}}</code></li>
+          <li><code>- {{$.Strings.T "md_help_list_item"}}</code></li>
+          <li><code>1. {{$.Strings.T "md_help_list_item"}}</code></li>
+          <li><code>[{{$.Strings.T "md_help_link"}}](https://...)</code></li>
+          <li><code>&gt; {{$.Strings.T "md_help_quote"}}</code></li>
+        </ul>
+      </aside>
+    </div>
+    <details class="md-help-details">
+      <summary>{{$.Strings.T "md_help_title"}}</summary>
+      <ul>
+        <li><code>**{{$.Strings.T "md_help_bold"}}**</code> → <strong>{{$.Strings.T "md_help_bold"}}</strong></li>
+        <li><code>*{{$.Strings.T "md_help_italic"}}*</code> → <em>{{$.Strings.T "md_help_italic"}}</em></li>
+        <li><code># {{$.Strings.T "md_help_heading"}}</code></li>
+        <li><code>- {{$.Strings.T "md_help_list_item"}}</code></li>
+        <li><code>1. {{$.Strings.T "md_help_list_item"}}</code></li>
+        <li><code>[{{$.Strings.T "md_help_link"}}](https://...)</code></li>
+        <li><code>&gt; {{$.Strings.T "md_help_quote"}}</code></li>
+      </ul>
+    </details>
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
     <input id="url" type="url" name="url" value="{{.Event.URL}}" placeholder="https://...">
@@ -676,7 +702,7 @@
 {{end}}
 
 <style>
-.evt-edit-layout{display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start;max-width:1280px}
+.evt-edit-layout{display:grid;grid-template-columns:160px 1fr;gap:1.5rem;align-items:start;max-width:1500px}
 .evt-nav{position:sticky;top:4rem;display:flex;flex-direction:column;gap:.15rem}
 .evt-nav-group{display:flex;flex-direction:column;gap:.15rem}
 .evt-nav-sep{border:none;border-top:1px solid #ddd;margin:.5rem 0}
@@ -696,6 +722,22 @@
   .evt-nav.is-expanded{display:flex}
 }
 .evt-form{display:flex;flex-direction:column;gap:0}
+.desc-row{display:flex;gap:1rem;align-items:flex-start}
+.desc-row textarea{flex:1 1 auto;min-width:0}
+.md-help{flex:0 0 13rem;background:#f7f8fb;border:1px solid #ddd;border-radius:6px;padding:.6rem .75rem;font-size:.78rem;color:#555}
+.md-help-title{font-weight:600;margin:0 0 .35rem;color:#1a1a2e}
+.md-help ul{margin:0;padding-left:1.1rem}
+.md-help li{margin-bottom:.25rem}
+.md-help code{background:#eceef3;padding:0 .2rem;border-radius:3px}
+.md-help-details{display:none;margin-top:.5rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.6rem .9rem}
+.md-help-details summary{font-weight:600;font-size:.86rem;cursor:pointer;color:#1a6eb5}
+.md-help-details ul{margin:.5rem 0 0;padding-left:1.2rem;font-size:.82rem;color:#555}
+.md-help-details code{background:#eceef3;padding:0 .2rem;border-radius:3px}
+@media(max-width:1000px){
+  .desc-row{display:block}
+  .md-help{display:none}
+  .md-help-details{display:block}
+}
 .form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem;scroll-margin-top:4rem}
 .form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:.4rem}
 .help-badge{display:inline-flex;align-items:center;justify-content:center;width:1.1em;height:1.1em;border-radius:50%;background:var(--bg-subtle,#eee);color:var(--fg-muted,#888);font-size:.72rem;font-weight:700;text-decoration:none;flex-shrink:0;line-height:1}

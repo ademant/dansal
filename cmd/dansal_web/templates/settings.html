@@ -287,6 +287,7 @@
 
   {{/* Delete account */}}
   {{with .Data}}
+  {{if ne .User.Role "admin"}}
   <div class="settings-card" style="border-color:#dc3545">
     <h2 style="color:#dc3545">{{$.Strings.T "settings_delete_account"}}</h2>
     <form method="post" action="/settings/delete" style="display:flex;flex-direction:column;gap:.5rem"
@@ -296,6 +297,12 @@
       <button type="submit" style="padding:.4rem .9rem;background:#dc3545;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.9rem">{{$.Strings.T "settings_delete_btn"}}</button>
     </form>
   </div>
+  {{else}}
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_delete_account"}}</h2>
+    <p class="hint" style="margin:0">{{$.Strings.T "settings_delete_admin_error"}}</p>
+  </div>
+  {{end}}
   {{end}}
 </div>
 

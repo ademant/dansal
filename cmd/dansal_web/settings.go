@@ -258,6 +258,18 @@ func settingsDeleteAccountHandler(cfg *Config, tmpls *Templates, client *DansalC
 			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
+		if su.Role == "admin" {
+			title := i18n.T(r, "settings_title")
+			keys, _ := client.ListAPIKeys(r.Context(), token)
+			sessions, _ := client.GetSessions(r.Context(), token)
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_delete_admin_error",
+				APIKeys:  keys,
+				Sessions: sessions,
+			}))
+			return
+		}
 		confirmEmail := r.FormValue("confirm_email")
 		if confirmEmail != u.Email {
 			title := i18n.T(r, "settings_title")

@@ -1,18 +1,19 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "admin_event_edit_title"}}</h1>
+<h1>{{if .Data.IsNew}}{{.Strings.T "admin_event_new_title"}}{{else}}{{.Strings.T "admin_event_edit_title"}}{{end}}</h1>
 
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
+{{if .Prefill}}{{if .Prefill.CloneMode}}
+<div class="clone-notice">{{$.Strings.T "admin_clone_notice"}}</div>
+{{end}}{{end}}
+
 <div class="evt-action-bar">
-  <button type="submit" id="save-btn" class="btn-primary" form="evt-edit-form" disabled>{{$.Strings.T "admin_save"}}</button>
-  <a href="/events/{{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-  {{if and .Event.Cancelable (not .Event.IsCancelled)}}<form method="post" action="/admin/events/{{.Event.ID}}/cancel" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">
-    <button type="submit" class="btn-secondary">{{$.Strings.T "admin_event_cancel"}}</button>
-  </form>{{end}}
-  <a href="/admin/events/new?clone_from={{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_clone"}}</a>
-  {{if eq $.User.Role "admin"}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
+  <button type="submit" id="save-btn" class="btn-primary" form="evt-form" disabled>{{$.Strings.T "admin_save"}}</button>
+  <button type="button" class="btn-secondary" onclick="goBackOrEvents()">{{$.Strings.T "admin_cancel"}}</button>
+  <button type="submit" name="intent" value="clone" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_clone"}}</button>
+  {{if and (not .IsNew) (eq $.User.Role "admin")}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
 </div>
@@ -40,7 +41,15 @@
 </aside>
 <div class="evt-main">
 
-<form id="evt-edit-form" method="post" enctype="multipart/form-data" class="evt-form">
+<form id="evt-form" method="post" enctype="multipart/form-data" class="evt-form"
+  {{if .Prefill}}
+  data-prefill-org="{{.Prefill.OrgID}}"
+  data-prefill-loc="{{.Prefill.LocID}}"
+  data-prefill-pricing-type="{{.Prefill.PricingType}}"
+  data-clone-mode="{{if .Prefill.CloneMode}}1{{end}}"
+  data-original-date="{{.Prefill.OriginalDate}}"
+  {{end}}
+>
 
   <!-- Basic info -->
   <section class="form-section" id="sec-basic">
@@ -52,7 +61,7 @@
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)">
+        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value)">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
@@ -64,7 +73,7 @@
       </div>
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
-        <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}">
+        <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}" onchange="this.removeAttribute('data-auto')">
       </div>
     </div>
 
@@ -326,6 +335,7 @@
     <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
     <input id="booking_url" type="url" name="booking_url" value="{{.Event.BookingURL}}" placeholder="https://...">
 
+    {{if not .IsNew}}
     <label for="availability">{{$.Strings.T "evt_availability"}}</label>
     <select id="availability" name="availability">
       <option value=""{{if eq .Event.Availability ""}} selected{{end}}>{{$.Strings.T "avail_normal"}}</option>
@@ -338,6 +348,9 @@
 
     <label class="check-label"><input type="checkbox" name="booking_enabled"{{if .Event.BookingEnabled}} checked{{end}}> {{$.Strings.T "evt_booking_enabled"}}</label>
     <span class="field-hint">{{$.Strings.T "evt_booking_enabled_hint"}}</span>
+    {{else}}
+    <p class="field-hint">{{$.Strings.T "evt_tickets_save_first_hint"}}</p>
+    {{end}}
   </section>
 
   <!-- Timetable -->
@@ -596,22 +609,18 @@
   <div style="font-weight:600;font-size:.9rem;color:#1a6eb5;margin-bottom:.6rem">{{$.Strings.T "evt_series_section"}}</div>
   {{if .CurrentSeries}}
   <p style="margin:0 0 .5rem;font-size:.9rem">{{$.Strings.T "evt_series_current"}}: <a href="/admin/series/{{.CurrentSeries.ID}}" style="font-weight:600">{{.CurrentSeries.Title}}</a></p>
-  <form method="post" action="/admin/events/{{.Event.ID}}/remove-from-series" style="display:inline">
-    <button class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "evt_series_remove_confirm"}}')">{{$.Strings.T "evt_series_remove_btn"}}</button>
-  </form>
+  <button type="submit" name="intent" value="remove-series" form="evt-form" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "evt_series_remove_confirm"}}')">{{$.Strings.T "evt_series_remove_btn"}}</button>
   {{else}}
-  <form method="post" action="/admin/events/{{.Event.ID}}/assign-series" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
-    <select name="series_id" class="assign-select" required>
+  {{if not .IsNew}}
+  <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
+    <select name="series_id" form="evt-form" class="assign-select">
       <option value="">— {{$.Strings.T "evt_series_select"}} —</option>
       {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
     </select>
-    <button type="submit" class="btn-sm" {{if not .Series}}disabled{{end}}>{{$.Strings.T "evt_series_assign_btn"}}</button>
-  </form>
-  {{with .Event.OrganizationID}}
-  <a href="/admin/series/new?ids={{$.Data.Event.ID}}&prefill_event_id={{$.Data.Event.ID}}&org_id={{.}}" class="btn-sm" style="text-decoration:none">+ {{$.Strings.T "evt_series_create_btn"}}</a>
-  {{else}}
-  <a href="/admin/series/new?ids={{.Event.ID}}&prefill_event_id={{.Event.ID}}" class="btn-sm" style="text-decoration:none">+ {{$.Strings.T "evt_series_create_btn"}}</a>
+    <button type="submit" name="intent" value="assign-series" form="evt-form" class="btn-sm" {{if not .Series}}disabled{{end}}>{{$.Strings.T "evt_series_assign_btn"}}</button>
+  </div>
   {{end}}
+  <button type="submit" name="intent" value="create-series" form="evt-form" class="btn-sm">+ {{$.Strings.T "evt_series_create_btn"}}</button>
   {{end}}
 </div>
 
@@ -620,7 +629,7 @@
   <summary>{{$.Strings.T "admin_suggestion_apply_template"}}</summary>
   <div class="save-tpl-form">
     <label class="assign-label" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.4rem">{{$.Strings.T "admin_template_assign_select"}}</label>
-    <select name="tpl_id" form="evt-edit-form" class="assign-select">
+    <select name="tpl_id" form="evt-form" class="assign-select">
       <option value="">— {{$.Strings.T "admin_template_select_hint"}} —</option>
       {{range .Templates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
@@ -630,17 +639,17 @@
       <a href="#" class="tpl-sel-none" style="font-size:.8rem">{{$.Strings.T "loc_select_none"}}</a>
     </div>
     <div class="field-grid">
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timing" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_timing"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="org" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_org"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="loc" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_loc"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="type_flags" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_type_flags"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="url" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_url"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="pricing" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_pricing"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="tags" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_tags"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="dances" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_dances"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="food_drink" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_food_drink"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="booking" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_booking"}}</label>
-      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timetable" form="evt-edit-form"> {{$.Strings.T "admin_template_assign_field_timetable"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timing" form="evt-form"> {{$.Strings.T "admin_template_assign_field_timing"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="org" form="evt-form"> {{$.Strings.T "admin_template_assign_field_org"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="loc" form="evt-form"> {{$.Strings.T "admin_template_assign_field_loc"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="type_flags" form="evt-form"> {{$.Strings.T "admin_template_assign_field_type_flags"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="url" form="evt-form"> {{$.Strings.T "admin_template_assign_field_url"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="pricing" form="evt-form"> {{$.Strings.T "admin_template_assign_field_pricing"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="tags" form="evt-form"> {{$.Strings.T "admin_template_assign_field_tags"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="dances" form="evt-form"> {{$.Strings.T "admin_template_assign_field_dances"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="food_drink" form="evt-form"> {{$.Strings.T "admin_template_assign_field_food_drink"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="booking" form="evt-form"> {{$.Strings.T "admin_template_assign_field_booking"}}</label>
+      <label class="field-check"><input type="checkbox" name="tpl_fields" value="timetable" form="evt-form"> {{$.Strings.T "admin_template_assign_field_timetable"}}</label>
     </div>
   </div>
 </details>
@@ -649,18 +658,18 @@
 {{if .UserOrgs}}
 <details class="save-tpl-details" style="margin-top:1rem">
   <summary>{{$.Strings.T "admin_save_as_template"}}</summary>
-  <form method="post" action="/admin/events/{{.Event.ID}}/save-template" class="save-tpl-form">
+  <div class="save-tpl-form">
     <label for="tpl-name" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_name_label"}}</label>
-    <input id="tpl-name" type="text" name="name" required placeholder="{{$.Strings.T "admin_template_name_placeholder"}}" style="width:100%;max-width:320px;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
+    <input id="tpl-name" type="text" name="tpl_name" form="evt-form" placeholder="{{$.Strings.T "admin_template_name_placeholder"}}" style="width:100%;max-width:320px;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
     <label for="tpl-org" style="margin-top:.5rem;display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_org_label"}}</label>
-    <select id="tpl-org" name="org_id" style="padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
+    <select id="tpl-org" name="tpl_org_id" form="evt-form" style="padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
       <option value="">{{$.Strings.T "admin_template_personal"}}</option>
       {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
     <div style="margin-top:.75rem">
-      <button type="submit" class="btn-secondary">{{$.Strings.T "admin_template_save_btn"}}</button>
+      <button type="submit" name="intent" value="save-template" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_template_save_btn"}}</button>
     </div>
-  </form>
+  </div>
 </details>
 {{end}}
 
@@ -730,6 +739,7 @@
 .tt-mus-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
 .tt-mus-suggest li:hover{background:#e8f0fe}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.clone-notice{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem;color:#856404}
 .meta-value{font-size:.88rem;color:#333;padding:.25rem 0;word-break:break-all}
 .uid-value{font-family:monospace;font-size:.82rem;color:#555}
 .evt-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
@@ -784,7 +794,10 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
 
 function onStartDateChange(v){
   var ed=document.getElementById('end_date');
-  if(ed&&!ed.value) ed.value=v;
+  if(ed&&(!ed.value||ed.hasAttribute('data-auto'))){
+    ed.value=v;
+    ed.setAttribute('data-auto','1');
+  }
 }
 function toggleDifficulty(){
   var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
@@ -1192,16 +1205,52 @@ function showGeoMap(lat,lon){
   });
 })();
 
+function goBackOrEvents(){
+  if(window.history.length>1){ history.back(); } else { location.href='/admin/events'; }
+}
+
+// Apply prefill for org/loc/pricing on page load (clone mode).
+(function(){
+  var form=document.querySelector('.evt-form');
+  if(!form) return;
+  var prefillOrg=parseInt(form.dataset.prefillOrg)||0;
+  var prefillLoc=parseInt(form.dataset.prefillLoc)||0;
+  var prefillPt=form.dataset.prefillPricingType||'';
+  if(prefillOrg){
+    document.getElementById('org_choice').value='existing';
+    var os=document.getElementById('org_id');
+    if(os){ os.value=prefillOrg; os.dispatchEvent(new Event('change')); }
+    syncOrgUI();
+  }
+  if(prefillLoc){
+    document.getElementById('loc_choice').value='existing';
+    var ls=document.getElementById('loc_id');
+    if(ls){ ls.value=prefillLoc; ls.dispatchEvent(new Event('change')); }
+    syncLocUI();
+  }
+  if(prefillPt){
+    var ptEl=document.getElementById('pricing_type');
+    if(ptEl){ptEl.value=prefillPt;togglePricing();}
+  }
+})();
+
 // Required-field gate: enable save button only when all [required] inputs are non-empty.
+// In clone mode, also require the date to differ from the original.
 (function(){
   var form=document.querySelector('.evt-form');
   var btn=document.getElementById('save-btn');
   if(!form||!btn) return;
+  var cloneMode=form.dataset.cloneMode==='1';
+  var origDate=form.dataset.originalDate||'';
   function check(){
     var ok=true;
     form.querySelectorAll('[required]').forEach(function(el){
       if(!el.value.trim()) ok=false;
     });
+    if(cloneMode){
+      var dateEl=document.getElementById('date');
+      if(dateEl&&dateEl.value===origDate) ok=false;
+    }
     btn.disabled=!ok;
   }
   form.addEventListener('input',check);

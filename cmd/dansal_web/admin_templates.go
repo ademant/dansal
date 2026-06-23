@@ -45,6 +45,16 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 	}
 }
 
+// saveEventAsTemplate builds a template from ev's current field values and
+// persists it. Shared by adminTemplateSaveHandler (event.html's standalone
+// "save as template" action, operating on an already-fully-saved event) and
+// the unified event form's intent=save-template path (which saves the main
+// form first, then calls this against the freshly-saved event).
+func saveEventAsTemplate(db *sql.DB, userID int, orgID *int, name string, ev Event) (int64, error) {
+	data, _ := json.Marshal(templateDataFromEvent(ev))
+	return saveTemplate(db, userID, orgID, name, string(data))
+}
+
 func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -86,8 +96,7 @@ func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 				json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": errMsg})
 			}
 		}
-		data, _ := json.Marshal(templateDataFromEvent(ev))
-		if _, err := saveTemplate(db, su.ID, orgID, name, string(data)); err != nil {
+		if _, err := saveEventAsTemplate(db, su.ID, orgID, name, ev); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				if wantsJSON {
 					jsonResp(http.StatusConflict, false, "a template with that name already exists")

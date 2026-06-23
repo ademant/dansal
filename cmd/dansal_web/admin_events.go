@@ -121,17 +121,78 @@ func buildGroupedTags(tags []Tag, checked map[string]bool) []TagGroup {
 	return groups
 }
 
-type AdminEventNewData struct {
+// AdminEventFormData backs the unified admin_event_form.html template used
+// by both the new-event and edit-event pages. IsNew gates the handful of
+// fields/sections that genuinely differ (Delete, series assign-vs-create,
+// import source/UID, ticket fields that the create API doesn't support yet).
+type AdminEventFormData struct {
+	IsNew              bool
+	Event              Event
+	Org                *Organization
 	Organizations      []Organization
 	Locations          []Location
+	LocOrgFirst        []Location
+	LocOthers          []Location
 	Musicians          []Musician
 	Instructors        []Instructor
 	Dances             []Dance
-	GroupedTags        []TagGroup
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
-	Prefill            *EventPrefill
+	UserOrgs           []Organization
 	Templates          []EventTemplate
+	Series             []EventSeries
+	CurrentSeries      *EventSeries
+	Prefill            *EventPrefill // new-event only: clone/suggestion prefill metadata for JS
+}
+
+// eventFromPrefill synthesizes an Event from prefill data so the unified
+// new/edit template can read form values uniformly via .Event.X regardless
+// of mode. pf may be nil (a blank new-event form).
+func eventFromPrefill(pf *EventPrefill) Event {
+	ev := Event{}
+	if pf == nil {
+		return ev
+	}
+	ev.Title = pf.Title
+	ev.Description = pf.Description
+	ev.URL = pf.URL
+	ev.BookingURL = pf.BookingURL
+	ev.HasBall = pf.HasBall
+	ev.HasWorkshop = pf.HasWorkshop
+	ev.HasFestival = pf.HasFestival
+	ev.WorkshopDifficulty = pf.WorkshopDifficulty
+	if pf.Date != "" && pf.StartTime != "" {
+		ev.StartTime = pf.Date + "T" + pf.StartTime + ":00"
+	}
+	endDate := pf.EndDate
+	if endDate == "" {
+		endDate = pf.Date
+	}
+	if endDate != "" && pf.EndTime != "" {
+		ev.EndTime = endDate + "T" + pf.EndTime + ":00"
+	}
+	if pf.Location != "" {
+		ev.Location = &Location{Location: pf.Location, Town: pf.Town, Country: pf.Country}
+	}
+	if pf.OrgID > 0 {
+		oid := pf.OrgID
+		ev.OrganizationID = &oid
+	}
+	if pf.LocID > 0 {
+		lid := pf.LocID
+		ev.LocationID = &lid
+	}
+	if pf.PricingType != "" && pf.PricingType != "none" {
+		p := &Pricing{Type: pf.PricingType, Amount: pf.PricingAmount, Currency: pf.PricingCurrency, Prices: pf.PricingLines}
+		ev.Pricing = p
+	}
+	ev.Tags = pf.Tags
+	ev.Food = pf.Food
+	ev.Drink = pf.Drink
+	ev.TicketsTotal = pf.TicketsTotal
+	ev.BookingEnabled = pf.BookingEnabled
+	ev.Timetable = pf.Timetable
+	return ev
 }
 
 func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
@@ -925,6 +986,71 @@ func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[
 	}
 }
 
+// applyTemplateFieldsCreate mirrors applyTemplateFields for the create path.
+// EventCreateReq has no BookingEnabled/TicketsTotal fields (the create API
+// doesn't support them yet), so the "booking" field set is a no-op here.
+func applyTemplateFieldsCreate(req *EventCreateReq, td *templateEventData, fields map[string]bool, locations []Location) {
+	if fields["timing"] {
+		req.StartTime = mergeTemplateTime(req.StartTime, td.StartTime)
+		req.EndTime = mergeTemplateTime(req.EndTime, td.EndTime)
+	}
+	if fields["org"] && td.OrgID > 0 {
+		oid := td.OrgID
+		req.OrganizationID = &oid
+	}
+	if fields["loc"] && td.LocID > 0 {
+		for _, l := range locations {
+			if l.ID == td.LocID {
+				req.Location = EventLocReq{
+					Location:  l.Location,
+					Address:   l.Address,
+					Town:      l.Town,
+					Country:   l.Country,
+					Latitude:  l.Latitude,
+					Longitude: l.Longitude,
+				}
+				break
+			}
+		}
+	}
+	if fields["type_flags"] {
+		req.HasBall = td.HasBall
+		req.HasWorkshop = td.HasWorkshop
+		req.HasFestival = td.HasFestival
+		req.WorkshopDifficulty = td.WorkshopDifficulty
+	}
+	if fields["url"] {
+		req.URL = td.URL
+		req.BookingURL = td.BookingURL
+	}
+	if fields["pricing"] {
+		if td.PricingType != "" && td.PricingType != "none" {
+			p := &Pricing{Type: td.PricingType}
+			switch td.PricingType {
+			case "single":
+				p.Amount = td.PricingAmount
+				p.Currency = td.PricingCurrency
+			case "multiple":
+				p.Prices = td.PricingLines
+			}
+			req.Pricing = p
+		} else {
+			req.Pricing = nil
+		}
+	}
+	if fields["tags"] {
+		req.Tags = td.Tags
+	}
+	if fields["dances"] {
+		req.Dances = td.DanceIDs
+	}
+	if fields["food_drink"] {
+		req.Food = td.Food
+		req.Drink = td.Drink
+		req.FloorCondition = td.FloorCondition
+	}
+}
+
 func locationDisplayName(l Location) string {
 	name := l.ShortName
 	if name == "" {
@@ -1211,23 +1337,56 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 		tmpls2, _ := listTemplates(db, su.ID, getUserOrgs())
 
+		var userOrgs []Organization
+		if su.Role == "admin" {
+			userOrgs = bundle.Orgs
+		} else {
+			orgIDSet := make(map[int]bool)
+			for _, oid := range getUserOrgs() {
+				orgIDSet[oid] = true
+			}
+			for _, o := range bundle.Orgs {
+				if orgIDSet[o.ID] {
+					userOrgs = append(userOrgs, o)
+				}
+			}
+		}
+
+		event := eventFromPrefill(prefill)
+		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+		var eventOrg *Organization
+		if event.OrganizationID != nil {
+			for i := range bundle.Orgs {
+				if bundle.Orgs[i].ID == *event.OrganizationID {
+					eventOrg = &bundle.Orgs[i]
+					break
+				}
+			}
+		}
+
 		title := i18n.T(r, "admin_event_new_title")
-		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
+		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+			IsNew:              true,
+			Event:              event,
+			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
 			Locations:          bundle.Locations,
+			LocOrgFirst:        locOrgFirst,
+			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
 			Instructors:        bundle.Instructors,
 			Dances:             bundle.Dances,
 			SelectedDanceNames: selected,
-			Prefill:            prefill,
+			UserOrgs:           userOrgs,
 			Templates:          tmpls2,
+			Prefill:            prefill,
 		}))
 	}
 }
 
 func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -1239,7 +1398,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		bundle := client.FetchRefBundle(r.Context())
 		renderErr := func(errKey string) {
 			title := i18n.T(r, "admin_event_new_title")
-			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:         true,
 				Organizations: bundle.Orgs,
 				Locations:     bundle.Locations,
 				Musicians:     bundle.Musicians,
@@ -1248,6 +1408,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				ErrorKey:      errKey,
 			}))
 		}
+
+		intent := r.FormValue("intent")
 
 		date := r.FormValue("date")
 		endDate := r.FormValue("end_date")
@@ -1401,6 +1563,22 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Dances:         danceIDs,
 		}
 
+		// Apply template overrides if submitted (suggestion acceptance flow).
+		if tplIDStr := r.FormValue("tpl_id"); tplIDStr != "" {
+			if tplID, err2 := strconv.Atoi(tplIDStr); err2 == nil && tplID > 0 {
+				if tpl, err2 := getTemplate(db, tplID); err2 == nil {
+					var td templateEventData
+					if err2 := json.Unmarshal([]byte(tpl.Data), &td); err2 == nil {
+						fieldsSet := make(map[string]bool)
+						for _, f := range r.MultipartForm.Value["tpl_fields"] {
+							fieldsSet[f] = true
+						}
+						applyTemplateFieldsCreate(&req, &td, fieldsSet, bundle.Locations)
+					}
+				}
+			}
+		}
+
 		if req.Title == "" {
 			renderErr("evt_title_required")
 			return
@@ -1508,27 +1686,35 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
-		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+		switch intent {
+		case "clone":
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/new?clone_from=%d", event.ID), http.StatusSeeOther)
+		case "save-template":
+			name := strings.TrimSpace(r.FormValue("tpl_name"))
+			if name != "" {
+				var tplOrgID *int
+				if v := strings.TrimSpace(r.FormValue("tpl_org_id")); v != "" {
+					if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
+						tplOrgID = &n
+					}
+				}
+				if saved, gerr := client.GetEvent(r.Context(), event.ID); gerr == nil {
+					if _, terr := saveEventAsTemplate(db, su.ID, tplOrgID, name, saved); terr != nil {
+						log.Printf("save as template error: %v", terr)
+					}
+				}
+			}
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", event.ID), http.StatusSeeOther)
+		case "create-series":
+			seriesURL := fmt.Sprintf("/admin/series/new?ids=%d&prefill_event_id=%d", event.ID, event.ID)
+			if orgID != nil {
+				seriesURL += fmt.Sprintf("&org_id=%d", *orgID)
+			}
+			http.Redirect(w, r, seriesURL, http.StatusSeeOther)
+		default:
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", event.ID), http.StatusSeeOther)
+		}
 	}
-}
-
-type AdminEventEditData struct {
-	Event              Event
-	Org                *Organization
-	Organizations      []Organization
-	Locations          []Location // all locations (used for timetable rows)
-	LocOrgFirst        []Location // location dropdown: same-org locations first
-	LocOthers          []Location // location dropdown: remaining locations
-	Musicians          []Musician
-	Instructors        []Instructor
-	Dances             []Dance
-	GroupedTags        []TagGroup
-	SelectedDanceNames map[string]bool
-	ErrorKey           string
-	UserOrgs           []Organization
-	Templates          []EventTemplate
-	Series             []EventSeries // series the user can assign to
-	CurrentSeries      *EventSeries  // set when event already belongs to a series
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -1645,7 +1831,8 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			}
 		}
 		title := i18n.T(r, "admin_event_edit_title")
-		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
+		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+			IsNew:              false,
 			Event:              event,
 			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
@@ -1666,7 +1853,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 
 func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -1682,6 +1869,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 
 		bundle := client.FetchRefBundle(r.Context())
 		saveTok := getSessionToken(r)
+		intent := r.FormValue("intent")
 		renderErr := func(errKey string) {
 			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
 			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
@@ -1695,7 +1883,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				}
 			}
 			title := i18n.T(r, "admin_event_edit_title")
-			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:              false,
 				Event:              event,
 				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
@@ -1986,6 +2175,42 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if req.IsPublished {
 			go deliverUpdateToFollowers(cfg, db, client, id)
 		}
-		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+
+		switch intent {
+		case "clone":
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/new?clone_from=%d", id), http.StatusSeeOther)
+		case "save-template":
+			name := strings.TrimSpace(r.FormValue("tpl_name"))
+			if name != "" {
+				var tplOrgID *int
+				if v := strings.TrimSpace(r.FormValue("tpl_org_id")); v != "" {
+					if n, err2 := strconv.Atoi(v); err2 == nil && n > 0 {
+						tplOrgID = &n
+					}
+				}
+				if saved, gerr := client.GetEvent(r.Context(), id); gerr == nil {
+					if _, terr := saveEventAsTemplate(db, su.ID, tplOrgID, name, saved); terr != nil {
+						log.Printf("save as template error: %v", terr)
+					}
+				}
+			}
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+		case "assign-series":
+			if seriesID, serr := strconv.Atoi(r.FormValue("series_id")); serr == nil && seriesID > 0 {
+				_ = client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, getSessionToken(r))
+			}
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+		case "remove-series":
+			_ = client.RemoveEventFromSeries(r.Context(), id, getSessionToken(r))
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+		case "create-series":
+			seriesURL := fmt.Sprintf("/admin/series/new?ids=%d&prefill_event_id=%d", id, id)
+			if req.OrganizationID != nil {
+				seriesURL += fmt.Sprintf("&org_id=%d", *req.OrganizationID)
+			}
+			http.Redirect(w, r, seriesURL, http.StatusSeeOther)
+		default:
+			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+		}
 	}
 }

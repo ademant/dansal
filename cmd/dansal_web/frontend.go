@@ -825,8 +825,7 @@ type Templates struct {
 	adminInstructors          *template.Template
 	adminInstructorEdit       *template.Template
 	adminEvents               *template.Template
-	adminEventNew             *template.Template
-	adminEventEdit            *template.Template
+	adminEventForm            *template.Template
 	adminEventsImport         *template.Template
 	adminTemplates            *template.Template
 	adminTemplateAssign       *template.Template
@@ -907,8 +906,7 @@ func loadTemplates() *Templates {
 		adminInstructors:          load("admin_instructors"),
 		adminInstructorEdit:       load("admin_instructor_edit"),
 		adminEvents:               load("admin_events"),
-		adminEventNew:             load("admin_event_new"),
-		adminEventEdit:            load("admin_event_edit"),
+		adminEventForm:            load("admin_event_form"),
 		adminEventsImport:         load("admin_events_import"),
 		adminTemplates:            load("admin_templates"),
 		adminTemplateAssign:       load("admin_template_assign"),

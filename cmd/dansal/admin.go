@@ -786,7 +786,7 @@ func adminSMTPTest(req adminRequest) adminResponse {
 	if req.SMTPTo == "" {
 		return adminResponse{OK: false, Error: "smtp_to is required"}
 	}
-	if _, err := SendEmail(req.SMTPTo, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration."); err != nil {
+	if _, err := SendEmail(req.SMTPTo, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration.", false); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}

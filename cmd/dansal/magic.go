@@ -195,7 +195,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default: // "email"
-		if _, err := SendEmail(user.Email, "Your passwordless login link", msgText); err != nil {
+		if _, err := SendEmail(user.Email, "Your passwordless login link", msgText, false); err != nil {
 			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
 			log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Email, err)
 			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)

@@ -262,7 +262,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
 				verifyURL,
 			)
-			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg); err != nil {
+			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg, false); err != nil {
 				log.Printf("register: send verify email: %v", err)
 			} else {
 				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, verificationToken)
@@ -389,7 +389,7 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
 				verifyURL,
 			)
-			if _, err := SendEmail(email, "Confirm your registration", msg); err != nil {
+			if _, err := SendEmail(email, "Confirm your registration", msg, false); err != nil {
 				log.Printf("register resend: send verify email: %v", err)
 			}
 		}()

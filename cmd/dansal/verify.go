@@ -211,7 +211,7 @@ func sendEmailVerification(user User, verifyURL string) (string, error) {
 		"Hello %s,\n\nplease verify your email address:\n\n%s\n\nThis link expires in %d hours.\n",
 		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,
 	)
-	return SendEmail(user.Email, "Verify your email address", body)
+	return SendEmail(user.Email, "Verify your email address", body, false)
 }
 
 func sendTelegramVerification(user User, verifyURL string) error {

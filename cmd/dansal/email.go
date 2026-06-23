@@ -94,21 +94,26 @@ func generateMessageID() string {
 }
 
 // securityHeaders returns the common security/RFC-compliance headers for automated mail.
-func securityHeaders(msgID, fromHeader, to, subject string) string {
-	return "MIME-Version: 1.0\r\n" +
+// bulk controls whether Precedence: bulk is set: it must be false for time-sensitive
+// transactional mail (verification codes, magic login links) so receiving servers don't
+// deprioritize or bulk-fold it, and true for secondary notification mail that can wait.
+func securityHeaders(msgID, fromHeader, to, subject string, bulk bool) string {
+	h := "MIME-Version: 1.0\r\n" +
 		"Date: " + time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 +0000") + "\r\n" +
 		"Message-ID: " + msgID + "\r\n" +
 		"From: " + fromHeader + "\r\n" +
 		"To: " + to + "\r\n" +
 		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
-		"Auto-Submitted: auto-generated\r\n" +
-		"Precedence: bulk\r\n" +
-		"X-Auto-Response-Suppress: All\r\n" +
+		"Auto-Submitted: auto-generated\r\n"
+	if bulk {
+		h += "Precedence: bulk\r\n"
+	}
+	return h + "X-Auto-Response-Suppress: All\r\n" +
 		"Content-Type: text/plain; charset=UTF-8\r\n\r\n"
 }
 
 // sendMailLocal delivers a message by piping it to the configured sendmail binary.
-func sendMailLocal(cfg SMTPConfig, to, subject, body string) (string, error) {
+func sendMailLocal(cfg SMTPConfig, to, subject, body string, bulk bool) (string, error) {
 	from := cfg.From
 	if from == "" {
 		return "", fmt.Errorf("smtp.from is required when using sendmail")
@@ -118,7 +123,7 @@ func sendMailLocal(cfg SMTPConfig, to, subject, body string) (string, error) {
 		fromHeader = mime.QEncoding.Encode("utf-8", cfg.FromName) + " <" + from + ">"
 	}
 	msgID := generateMessageID()
-	msg := securityHeaders(msgID, stripCRLF(fromHeader), stripCRLF(to), subject) + body
+	msg := securityHeaders(msgID, stripCRLF(fromHeader), stripCRLF(to), subject, bulk) + body
 	cmd := exec.Command(cfg.Sendmail, "-t", "-i")
 	cmd.Stdin = strings.NewReader(msg)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -129,10 +134,10 @@ func sendMailLocal(cfg SMTPConfig, to, subject, body string) (string, error) {
 
 // SendEmail sends a plain-text email and returns the generated Message-ID.
 // If smtp.sendmail is set, the local MTA is used; otherwise the configured SMTP server is used.
-func SendEmail(to, subject, body string) (string, error) {
+func SendEmail(to, subject, body string, bulk bool) (string, error) {
 	cfg := config.SMTP
 	if cfg.Sendmail != "" {
-		return sendMailLocal(cfg, to, subject, body)
+		return sendMailLocal(cfg, to, subject, body, bulk)
 	}
 	if cfg.Host == "" {
 		return "", fmt.Errorf("SMTP not configured")
@@ -171,7 +176,7 @@ func SendEmail(to, subject, body string) (string, error) {
 	fromHeader = stripCRLF(fromHeader)
 
 	msgID := generateMessageID()
-	msg := []byte(securityHeaders(msgID, fromHeader, to, subject) + body)
+	msg := []byte(securityHeaders(msgID, fromHeader, to, subject, bulk) + body)
 
 	portStr := strconv.Itoa(port)
 

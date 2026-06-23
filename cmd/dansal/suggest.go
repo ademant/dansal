@@ -227,7 +227,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\nIf you did not submit this suggestion, you can ignore this email.",
 				verifyURL,
 			)
-			if _, err := SendEmail(req.Email, "Confirm your event suggestion", msg); err != nil {
+			if _, err := SendEmail(req.Email, "Confirm your event suggestion", msg, false); err != nil {
 				log.Printf("suggest: send verify email: %v", err)
 			}
 		}()

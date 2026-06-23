@@ -116,16 +116,17 @@ For table population (e.g. seed data), use a COUNT-based check:
 }
 ```
 
-## Event deduplication (4 tiers)
+## Event deduplication (5 tiers)
 
-`previewDuplicateStatus()` in `cmd/dansal/preview.go` and `insertEvent()` in `cmd/dansal/events.go` both use the same 4-tier hierarchy:
+`previewDuplicateStatus()` in `cmd/dansal/preview.go` and `insertEvent()` in `cmd/dansal/events.go` both use the same hierarchy:
 
 1. **UID** — exact match on feed UID
 2. **URL** — exact match on event URL
-3. **title + location_id + start_time ±3h** — when `locationID > 0`
-4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location)
+3. **location_id + start_time ±3h** — when `locationID > 0`, no title check. Titles get rewritten over an event's lifetime (placeholder → confirmed lineup → cancellation notice → backup act), so once UID/URL have both missed, same venue + same slot is already a strong enough signal to auto-merge on its own.
+4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location). Title is still required here since, without a location signal, time-only matching would be far too promiscuous.
+5. **(insertEvent only) fetch_source_id + start_time ±3h + fuzzy title overlap** — when tiers 1–4 all miss (e.g. the venue *also* changed and the feed regenerated the UID). Too low-confidence to auto-merge, so instead of guessing it inserts as new and flags both rows via `needs_duplicate_review`/`duplicate_of_id`, notifying admins to resolve via the existing `/admin/events` bulk-merge UI.
 
-Tier 4 always fires as a final fallback when tiers 1–3 all miss. This catches: (a) feeds using city-level location names vs. DB venue names, (b) location name mismatches caused by HTML-entity decoding or venue renames that make `ensureLocation` create a new location row (giving a new `locationID` that tier 3 can't match against the event's old `location_id`).
+Tier 4 fires as a fallback when tiers 1–3 all miss. This catches: (a) feeds using city-level location names vs. DB venue names, (b) location name mismatches caused by HTML-entity decoding or venue renames that make `ensureLocation` create a new location row (giving a new `locationID` that tier 3 can't match against the event's old `location_id`).
 
 ## Location aliases
 

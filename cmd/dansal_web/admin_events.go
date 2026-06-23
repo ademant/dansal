@@ -55,6 +55,7 @@ type AdminEventsData struct {
 	FilterCreatedAfter string
 	FilterSource       string
 	FilterUnpublished  bool
+	FilterFlagged      bool
 }
 
 type EventPrefill struct {
@@ -955,6 +956,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		createdAfter := q.Get("created_after")
 		filterSource := q.Get("source")
 		filterUnpublished := q.Get("unpublished") == "1"
+		filterFlagged := q.Get("flagged") == "1"
 
 		params := url.Values{}
 		if includePast {
@@ -987,6 +989,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			if !includePast {
 				params.Set("include_past", "true")
 			}
+		}
+		if filterFlagged && !includePast {
+			params.Set("include_past", "true")
 		}
 
 		token := getSessionToken(r)
@@ -1049,6 +1054,15 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			filtered := events[:0]
 			for _, e := range events {
 				if e.Location != nil && e.Location.Town == filterCity {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
+		if filterFlagged {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.NeedsDuplicateReview {
 					filtered = append(filtered, e)
 				}
 			}
@@ -1119,6 +1133,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterCreatedAfter: createdAfter,
 			FilterSource:       filterSource,
 			FilterUnpublished:  filterUnpublished,
+			FilterFlagged:      filterFlagged,
 		}))
 	}
 }

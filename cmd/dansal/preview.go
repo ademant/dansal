@@ -162,10 +162,11 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 				db.QueryRow("SELECT id FROM locations WHERE location=?", composite).Scan(&locID)
 			}
 			if locID > 0 {
-				// Tier 3: title + known location + time.
+				// Tier 3: known location + time, no title check — mirrors insertEvent's
+				// loosened tier 3 (titles get rewritten over an event's lifetime).
 				found, lookupErr = scan(db.QueryRow(
-					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE title=? AND location_id=? AND ABS(start_time-?)<? ",
-					req.Title, locID, startEpoch, threeHours,
+					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE location_id=? AND ABS(start_time-?)<? ",
+					locID, startEpoch, threeHours,
 				))
 				if lookupErr != nil && lookupErr != sql.ErrNoRows {
 					return "new"

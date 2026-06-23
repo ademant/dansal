@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -21,56 +22,59 @@ import (
 // participate in a caller-managed transaction without changing their signature.
 type querier interface {
 	QueryRow(query string, args ...any) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
 type Event struct {
-	ID                 int              `json:"id"`
-	UID                string           `json:"uid,omitempty"`
-	Title              string           `json:"title"`
-	Description        string           `json:"description"`
-	StartTime          string           `json:"start_time"`
-	EndTime            string           `json:"end_time"`
-	HasBall            bool             `json:"has_ball"`
-	HasWorkshop        bool             `json:"has_workshop"`
-	HasFestival        bool             `json:"has_festival"`
-	WorkshopDifficulty string           `json:"workshop_difficulty,omitempty"`
-	IsCancelled        bool             `json:"is_cancelled"`
-	Tags               []string         `json:"tags"`
-	IsPublished        bool             `json:"is_published"`
-	ShortCode          string           `json:"short_code"`
-	URL                string           `json:"url,omitempty"`
-	Source             string           `json:"source,omitempty"`
-	CreatedAt          string           `json:"created_at"`
-	ImageURL           string           `json:"image_url,omitempty"`
-	OrganizationID     *int             `json:"organization_id,omitempty"`
-	Editable           *bool            `json:"editable,omitempty"`
-	Cancelable         *bool            `json:"cancelable,omitempty"`
-	CreatedByID        *int             `json:"created_by_id,omitempty"`
-	Timetable          []TimetableEntry `json:"timetable,omitempty"`
-	Pricing            *Pricing         `json:"pricing,omitempty"`
-	Locations          []Location       `json:"locations,omitempty"`
-	Musicians          []Musician       `json:"musicians,omitempty"`
-	Instructors        []Instructor     `json:"instructors,omitempty"`
-	LocationID         *int             `json:"location_id,omitempty"`
-	Location           *Location        `json:"location,omitempty"`
-	Attributes         map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition     string           `json:"floor_condition,omitempty"`
-	ContactName        string           `json:"contact_name,omitempty"`
-	ContactEmail       string           `json:"contact_email,omitempty"`
-	BookingURL         string           `json:"booking_url,omitempty"`
-	Availability       string           `json:"availability,omitempty"`
-	TicketsTotal       int              `json:"tickets_total,omitempty"`
-	BookingEnabled     bool             `json:"booking_enabled,omitempty"`
-	Food               string           `json:"food,omitempty"`
-	Drink              string           `json:"drink,omitempty"`
-	DanceNames         []string         `json:"dance_names,omitempty"`
-	ChangedAt          string           `json:"changed_at,omitempty"`
-	ChangedBy          string           `json:"changed_by,omitempty"`
-	FetchSourceID      int              `json:"fetch_source_id,omitempty"`
-	SeriesID           *int             `json:"series_id,omitempty"`
-	TagsJSON           string           `json:"-"`
-	PricingJSON        string           `json:"-"`
+	ID                   int              `json:"id"`
+	UID                  string           `json:"uid,omitempty"`
+	Title                string           `json:"title"`
+	Description          string           `json:"description"`
+	StartTime            string           `json:"start_time"`
+	EndTime              string           `json:"end_time"`
+	HasBall              bool             `json:"has_ball"`
+	HasWorkshop          bool             `json:"has_workshop"`
+	HasFestival          bool             `json:"has_festival"`
+	WorkshopDifficulty   string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled          bool             `json:"is_cancelled"`
+	Tags                 []string         `json:"tags"`
+	IsPublished          bool             `json:"is_published"`
+	ShortCode            string           `json:"short_code"`
+	URL                  string           `json:"url,omitempty"`
+	Source               string           `json:"source,omitempty"`
+	CreatedAt            string           `json:"created_at"`
+	ImageURL             string           `json:"image_url,omitempty"`
+	OrganizationID       *int             `json:"organization_id,omitempty"`
+	Editable             *bool            `json:"editable,omitempty"`
+	Cancelable           *bool            `json:"cancelable,omitempty"`
+	CreatedByID          *int             `json:"created_by_id,omitempty"`
+	Timetable            []TimetableEntry `json:"timetable,omitempty"`
+	Pricing              *Pricing         `json:"pricing,omitempty"`
+	Locations            []Location       `json:"locations,omitempty"`
+	Musicians            []Musician       `json:"musicians,omitempty"`
+	Instructors          []Instructor     `json:"instructors,omitempty"`
+	LocationID           *int             `json:"location_id,omitempty"`
+	Location             *Location        `json:"location,omitempty"`
+	Attributes           map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition       string           `json:"floor_condition,omitempty"`
+	ContactName          string           `json:"contact_name,omitempty"`
+	ContactEmail         string           `json:"contact_email,omitempty"`
+	BookingURL           string           `json:"booking_url,omitempty"`
+	Availability         string           `json:"availability,omitempty"`
+	TicketsTotal         int              `json:"tickets_total,omitempty"`
+	BookingEnabled       bool             `json:"booking_enabled,omitempty"`
+	Food                 string           `json:"food,omitempty"`
+	Drink                string           `json:"drink,omitempty"`
+	DanceNames           []string         `json:"dance_names,omitempty"`
+	ChangedAt            string           `json:"changed_at,omitempty"`
+	ChangedBy            string           `json:"changed_by,omitempty"`
+	FetchSourceID        int              `json:"fetch_source_id,omitempty"`
+	SeriesID             *int             `json:"series_id,omitempty"`
+	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
+	TagsJSON             string           `json:"-"`
+	PricingJSON          string           `json:"-"`
 }
 
 type EventDate struct {
@@ -183,7 +187,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -240,7 +244,8 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	var danceNamesCSV string
 	var locLat, locLng sql.NullFloat64
-	var createdByID, seriesID sql.NullInt64
+	var createdByID, seriesID, duplicateOfID sql.NullInt64
+	var needsDuplicateReviewInt int
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
@@ -252,8 +257,14 @@ func scanEventRow(s scanner) (Event, error) {
 		&locAttrsJSON, &evtAttrsJSON,
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
-		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID); err != nil {
+		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
+		&needsDuplicateReviewInt, &duplicateOfID); err != nil {
 		return Event{}, err
+	}
+	event.NeedsDuplicateReview = needsDuplicateReviewInt == 1
+	if duplicateOfID.Valid {
+		v := int(duplicateOfID.Int64)
+		event.DuplicateOfID = &v
 	}
 	if seriesID.Valid {
 		v := int(seriesID.Int64)
@@ -611,6 +622,31 @@ func urlVal(s string) any {
 	return s
 }
 
+// titlesFuzzyOverlap reports whether one title is a case-insensitive substring
+// of the other (e.g. "ABGESAGT - Tanzabend" contains "Tanzabend"). Used only
+// for the low-confidence duplicate-review tier; titles shorter than 8
+// characters are excluded since short substrings would match too broadly.
+func titlesFuzzyOverlap(a, b string) bool {
+	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
+	if len(a) < 8 || len(b) < 8 {
+		return false
+	}
+	return strings.Contains(a, b) || strings.Contains(b, a)
+}
+
+// flagDuplicateReview marks two events as needing admin review for a possible
+// merge, and notifies admin users. Best-effort: errors are logged, not fatal,
+// since the events themselves were already inserted/updated successfully.
+func flagDuplicateReview(q querier, newID, candidateID int, title string) {
+	if _, err := q.Exec("UPDATE events SET needs_duplicate_review = 1, duplicate_of_id = ? WHERE id = ?", candidateID, newID); err != nil {
+		log.Printf("flagDuplicateReview: update new event %d: %v", newID, err)
+	}
+	if _, err := q.Exec("UPDATE events SET needs_duplicate_review = 1, duplicate_of_id = ? WHERE id = ?", newID, candidateID); err != nil {
+		log.Printf("flagDuplicateReview: update candidate event %d: %v", candidateID, err)
+	}
+	go notifyAdminsDuplicateReview(title)
+}
+
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
@@ -646,14 +682,18 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		}
 	}
 
+	const threeHours = int64(3 * 60 * 60)
+
 	// Fuzzy fallback: fires when both uid and url lookups missed.
 	if lookupErr == sql.ErrNoRows {
-		const threeHours = int64(3 * 60 * 60)
 		if locationID > 0 {
-			// Tier 3: title + known location + time.
+			// Tier 3: known location + time, no title check. Titles get rewritten
+			// over an event's lifetime (placeholder -> lineup -> cancellation
+			// notice), so once uid/url have both missed, same venue + same slot
+			// is already a strong enough signal to auto-merge on its own.
 			lookupErr = q.QueryRow(
-				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
-				title, locationID, startTime, threeHours,
+				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?",
+				locationID, startTime, threeHours,
 			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		}
 		if lookupErr == sql.ErrNoRows {
@@ -661,6 +701,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			// resolvable location name) or when tier 3 missed (feed location name didn't
 			// match the DB name of the event's stored location, e.g. after HTML-entity
 			// decoding or a venue rename that caused ensureLocation to create a new row).
+			// Title is still required here since, without a location signal, matching
+			// on time alone would be far too promiscuous.
 			lookupErr = q.QueryRow(
 				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
 				title, startTime, threeHours,
@@ -670,6 +712,31 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 	if lookupErr != nil && lookupErr != sql.ErrNoRows {
 		return 0, "", false, lookupErr
+	}
+
+	// Tier 5: low-confidence review candidate. Fires only when tiers 1-4 all
+	// missed (e.g. the venue changed AND the feed regenerated the uid AND the
+	// title was rewritten to announce the move). Same originating feed + same
+	// time window + fuzzy title overlap is too weak a signal to auto-merge on,
+	// so instead of guessing we insert as new and flag both rows for an admin
+	// to resolve via the existing merge UI.
+	var duplicateReviewCandidateID int
+	if lookupErr == sql.ErrNoRows && fetchSourceID > 0 && title != "" {
+		rows, err := q.Query(
+			"SELECT id, title FROM events WHERE fetch_source_id = ? AND ABS(start_time - ?) < ?",
+			fetchSourceID, startTime, threeHours,
+		)
+		if err == nil {
+			for rows.Next() {
+				var candID int
+				var candTitle string
+				if rows.Scan(&candID, &candTitle) == nil && titlesFuzzyOverlap(title, candTitle) {
+					duplicateReviewCandidateID = candID
+					break
+				}
+			}
+			rows.Close()
+		}
 	}
 
 	var pricingArg any
@@ -817,6 +884,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	}
 	id, _ := result.LastInsertId()
 	syncEventLocationGeohash(int(id))
+	if duplicateReviewCandidateID > 0 {
+		flagDuplicateReview(q, int(id), duplicateReviewCandidateID, title)
+	}
 	return int(id), shortCode, true, nil
 }
 

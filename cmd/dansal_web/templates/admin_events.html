@@ -20,12 +20,16 @@
   <a href="/admin/events/import" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#217a3c;color:#fff;border-radius:4px;font-size:.9rem">↑ {{.Strings.T "admin_import_title"}}</a>
   <a href="/admin/events?source=suggestion&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#856404;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_suggestions"}}</a>
   <a href="/admin/events?unpublished=1" style="text-decoration:none;padding:.4rem 1rem;background:#6c5ce7;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_unpublished"}}</a>
+  <a href="/admin/events?flagged=1&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#c0392b;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_duplicates"}}</a>
 </div>
 {{with .Data}}{{if .FilterCreatedAfter}}
 <p class="import-notice">{{$.Strings.T "admin_import_recent_filter"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
 {{end}}
 {{if eq .FilterSource "suggestion"}}
 <p class="import-notice" style="background:#fff3cd;color:#856404;border-color:#ffc107">{{$.Strings.T "admin_suggestions_notice"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
+{{end}}
+{{if .FilterFlagged}}
+<p class="import-notice" style="background:#fde2e1;color:#c0392b;border-color:#c0392b">{{$.Strings.T "admin_duplicates_notice"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
 {{end}}
 {{end}}
 
@@ -98,7 +102,7 @@
   <tr>
     <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
-    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}</td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
     <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
     <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
     <td>

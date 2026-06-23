@@ -185,50 +185,52 @@ func apiErr(resp *http.Response) error {
 }
 
 type Event struct {
-	ID                 int              `json:"id"`
-	Title              string           `json:"title"`
-	Description        string           `json:"description"`
-	StartTime          string           `json:"start_time"`
-	EndTime            string           `json:"end_time"`
-	HasBall            bool             `json:"has_ball"`
-	HasWorkshop        bool             `json:"has_workshop"`
-	HasFestival        bool             `json:"has_festival"`
-	WorkshopDifficulty string           `json:"workshop_difficulty,omitempty"`
-	IsCancelled        bool             `json:"is_cancelled"`
-	Tags               []string         `json:"tags"`
-	IsPublished        bool             `json:"is_published"`
-	ShortCode          string           `json:"short_code"`
-	URL                string           `json:"url,omitempty"`
-	ImageURL           string           `json:"image_url,omitempty"`
-	OrganizationID     *int             `json:"organization_id,omitempty"`
-	LocationID         *int             `json:"location_id,omitempty"`
-	Location           *Location        `json:"location,omitempty"`
-	Attributes         map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition     string           `json:"floor_condition,omitempty"`
-	ContactName        string           `json:"contact_name,omitempty"`
-	ContactEmail       string           `json:"contact_email,omitempty"`
-	BookingURL         string           `json:"booking_url,omitempty"`
-	Availability       string           `json:"availability,omitempty"`
-	TicketsTotal       int              `json:"tickets_total,omitempty"`
-	BookingEnabled     bool             `json:"booking_enabled,omitempty"`
-	Food               string           `json:"food,omitempty"`
-	Drink              string           `json:"drink,omitempty"`
-	Pricing            *Pricing         `json:"pricing,omitempty"`
-	Locations          []Location       `json:"locations,omitempty"`
-	Musicians          []Musician       `json:"musicians,omitempty"`
-	Instructors        []Instructor     `json:"instructors,omitempty"`
-	DanceNames         []string         `json:"dance_names,omitempty"`
-	Timetable          []TimetableEntry `json:"timetable,omitempty"`
-	CreatedAt          string           `json:"created_at"`
-	Source             string           `json:"source,omitempty"`
-	SourceURL          string           `json:"source_url,omitempty"`
-	ChangedAt          string           `json:"changed_at,omitempty"`
-	ChangedBy          string           `json:"changed_by,omitempty"`
-	FetchSourceID      int              `json:"fetch_source_id,omitempty"`
-	Editable           bool             `json:"editable,omitempty"`
-	Cancelable         bool             `json:"cancelable,omitempty"`
-	CreatedByID        *int             `json:"created_by_id,omitempty"`
-	SeriesID           *int             `json:"series_id,omitempty"`
+	ID                   int              `json:"id"`
+	Title                string           `json:"title"`
+	Description          string           `json:"description"`
+	StartTime            string           `json:"start_time"`
+	EndTime              string           `json:"end_time"`
+	HasBall              bool             `json:"has_ball"`
+	HasWorkshop          bool             `json:"has_workshop"`
+	HasFestival          bool             `json:"has_festival"`
+	WorkshopDifficulty   string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled          bool             `json:"is_cancelled"`
+	Tags                 []string         `json:"tags"`
+	IsPublished          bool             `json:"is_published"`
+	ShortCode            string           `json:"short_code"`
+	URL                  string           `json:"url,omitempty"`
+	ImageURL             string           `json:"image_url,omitempty"`
+	OrganizationID       *int             `json:"organization_id,omitempty"`
+	LocationID           *int             `json:"location_id,omitempty"`
+	Location             *Location        `json:"location,omitempty"`
+	Attributes           map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition       string           `json:"floor_condition,omitempty"`
+	ContactName          string           `json:"contact_name,omitempty"`
+	ContactEmail         string           `json:"contact_email,omitempty"`
+	BookingURL           string           `json:"booking_url,omitempty"`
+	Availability         string           `json:"availability,omitempty"`
+	TicketsTotal         int              `json:"tickets_total,omitempty"`
+	BookingEnabled       bool             `json:"booking_enabled,omitempty"`
+	Food                 string           `json:"food,omitempty"`
+	Drink                string           `json:"drink,omitempty"`
+	Pricing              *Pricing         `json:"pricing,omitempty"`
+	Locations            []Location       `json:"locations,omitempty"`
+	Musicians            []Musician       `json:"musicians,omitempty"`
+	Instructors          []Instructor     `json:"instructors,omitempty"`
+	DanceNames           []string         `json:"dance_names,omitempty"`
+	Timetable            []TimetableEntry `json:"timetable,omitempty"`
+	CreatedAt            string           `json:"created_at"`
+	Source               string           `json:"source,omitempty"`
+	SourceURL            string           `json:"source_url,omitempty"`
+	ChangedAt            string           `json:"changed_at,omitempty"`
+	ChangedBy            string           `json:"changed_by,omitempty"`
+	FetchSourceID        int              `json:"fetch_source_id,omitempty"`
+	Editable             bool             `json:"editable,omitempty"`
+	Cancelable           bool             `json:"cancelable,omitempty"`
+	CreatedByID          *int             `json:"created_by_id,omitempty"`
+	SeriesID             *int             `json:"series_id,omitempty"`
+	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
 }
 
 type Dance struct {
@@ -2190,7 +2192,6 @@ func (c *DansalClient) DeleteOwnAccount(ctx context.Context, token string) error
 	return nil
 }
 
-
 func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, token string) error {
 	body, _ := json.Marshal(map[string]int{"user_id": userID})
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/organizations/%d/members", orgID), token, body)
@@ -2411,18 +2412,18 @@ func (c *DansalClient) MatrixLogin(ctx context.Context, token, homeserver, usern
 
 // DansalInfo mirrors the ServiceInfo struct from the dansal API.
 type DansalInfo struct {
-	Service                 string `json:"service"`
-	Version                 string `json:"version"`
-	BuildTime               string `json:"build_time"`
-	TotalEvents             int    `json:"total_events"`
-	PublishedEvents         int    `json:"published_events"`
-	UpcomingEvents          int    `json:"upcoming_events"`
-	TotalUsers              int    `json:"total_users"`
-	BoardEntries            int    `json:"board_entries"`
-	DBSizeBytes             int64  `json:"db_size_bytes"`
-	ImagesSizeBytes         int64  `json:"images_size_bytes"`
-	SelfRegistrationEnabled  bool `json:"self_registration_enabled"`
-	TelegramChannelAvailable bool `json:"telegram_channel_available"`
+	Service                  string `json:"service"`
+	Version                  string `json:"version"`
+	BuildTime                string `json:"build_time"`
+	TotalEvents              int    `json:"total_events"`
+	PublishedEvents          int    `json:"published_events"`
+	UpcomingEvents           int    `json:"upcoming_events"`
+	TotalUsers               int    `json:"total_users"`
+	BoardEntries             int    `json:"board_entries"`
+	DBSizeBytes              int64  `json:"db_size_bytes"`
+	ImagesSizeBytes          int64  `json:"images_size_bytes"`
+	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`
+	TelegramChannelAvailable bool   `json:"telegram_channel_available"`
 }
 
 func (c *DansalClient) GetServiceInfo(ctx context.Context) (DansalInfo, error) {

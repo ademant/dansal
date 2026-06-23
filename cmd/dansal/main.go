@@ -1605,6 +1605,18 @@ func migrateDB() {
 	// #603: index on active (email-verified, non-expired) contact posts for the
 	// board listing query and the startup cleanup DELETE.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_active ON contact_posts(expires_at, created_at) WHERE email_verified=1")
+
+	// #639: flag low-confidence dedup matches for admin review instead of
+	// silently auto-merging or silently creating duplicates.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='needs_duplicate_review'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN needs_duplicate_review INTEGER NOT NULL DEFAULT 0")
+			db.Exec("ALTER TABLE events ADD COLUMN duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL")
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_needs_duplicate_review ON events(needs_duplicate_review) WHERE needs_duplicate_review=1")
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1808,6 +1820,8 @@ func createTables() error {
 		location_geohash TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL,
+		needs_duplicate_review INTEGER NOT NULL DEFAULT 0,
+		duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);

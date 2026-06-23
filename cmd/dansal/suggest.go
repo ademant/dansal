@@ -261,6 +261,26 @@ func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// notifyAdminsDuplicateReview notifies admins that two events were flagged as
+// a possible duplicate pair needing manual merge review.
+func notifyAdminsDuplicateReview(title string) {
+	msg := fmt.Sprintf("Possible duplicate event detected: %q — review and merge if needed in the admin panel (Events, \"flagged\" filter).", title)
+
+	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
+	if err != nil {
+		log.Printf("duplicate review: notify admins: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var email, chatID string
+		if err := rows.Scan(&email, &chatID); err != nil {
+			continue
+		}
+		notifyUser(chatID, email, "Possible duplicate event", msg)
+	}
+}
+
 // notifyAdminsSuggestion sends a notification to admin users via Telegram and/or email.
 func notifyAdminsSuggestion(title, startTime string) {
 	msg := "A new event suggestion is waiting for review in the admin panel."

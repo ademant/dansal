@@ -54,9 +54,13 @@ func adminRecentChangesHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				if ts == 0 {
 					continue
 				}
+				name := ev.Title
+				if t, ok := parseTime(ev.StartTime); ok {
+					name = ev.Title + " (" + t.Format("2006-01-02") + ")"
+				}
 				changes = append(changes, RecentChange{
 					Kind:      "events",
-					Name:      ev.Title,
+					Name:      name,
 					EditURL:   "/admin/events/" + strconv.Itoa(ev.ID) + "/edit",
 					ChangedBy: ev.ChangedBy,
 					ChangedAt: ts,

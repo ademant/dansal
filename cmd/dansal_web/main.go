@@ -432,7 +432,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
-		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
+		w.Header().Set("Permissions-Policy", "geolocation=(self), camera=(), microphone=(), usb=()")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		// Embed pages must be iframeable by any origin; all other pages restrict to same-origin.
 		if strings.HasPrefix(r.URL.Path, "/embed/") {

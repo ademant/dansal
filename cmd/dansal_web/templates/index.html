@@ -105,9 +105,9 @@
 <table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
   <thead>
     <tr>
-      <th data-col="date"      class="sortable sorted-asc" tabindex="0" aria-sort="ascending">{{$.Strings.T "col_date"}}</th>
-      <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_title"}}</th>
-      <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_location"}}</th>
+      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
       <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
     </tr>
@@ -141,11 +141,7 @@
       data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
       data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
       data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
-    <td class="col-date">
-      <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
-      {{with isoTime .StartTime}}<span class="date-time">{{.}}</span>{{end}}
-      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
-    </td>
+    <td class="col-time">{{isoTime .StartTime}}</td>
     <td>
       <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
       {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
@@ -196,7 +192,7 @@
       data-start="{{.StartTime}}"
       data-town=""
       data-availability="">
-    <td class="col-date"><span class="date-main">{{formatDate $.LangCode .StartTime}}</span></td>
+    <td class="col-time">{{isoTime .StartTime}}</td>
     <td>
       <a href="/federated-events/{{.ID}}">{{.Name}}</a>
       <span class="fed-source">↗ {{sourceDomain .ActorID}}</span>
@@ -293,15 +289,13 @@
 .event-table thead th{background:var(--bg-subtle);font-weight:600;color:var(--fg-2);white-space:nowrap;position:sticky;top:0;z-index:1}
 .event-table tbody tr:hover{background:var(--bg-hover)}
 .event-table tbody tr.row-filtered{display:none}
-th.sortable{cursor:pointer;user-select:none}
-th.sortable::after{content:" ↕";color:var(--fg-hint);font-size:.8em}
-th.sorted-asc::after{content:" ↑";color:var(--link)}
-th.sorted-desc::after{content:" ↓";color:var(--link)}
-.col-date{min-width:90px}
+.col-time{min-width:55px;color:var(--fg-muted)}
 .col-venue .venue{display:block}
 .col-venue .town{display:block;color:var(--fg-muted);font-size:.85em}
 .col-type{min-width:90px}
 .col-attr{text-align:center;white-space:nowrap}
+.date-sep td{background:var(--bg-subtle);font-weight:600;font-size:.85rem;color:var(--fg-2);padding:.4rem .6rem}
+.date-sep{font-size:.85rem;font-weight:600;color:var(--fg-2);background:var(--bg-subtle);padding:.4rem .6rem;border-radius:4px;margin:.5rem 0 .25rem}
 .food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
 .region-bar{display:flex;align-items:center;gap:.4rem;margin:.75rem 0 .5rem;flex-wrap:wrap}
 .region-bar select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
@@ -319,7 +313,6 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .badge.avail-limited{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.avail-sold-out{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
 .is-cancelled td a.title-cancelled{text-decoration:line-through;color:var(--fg-hint)}
-.date-main{display:block}.date-time{display:block;font-size:.8rem;color:var(--fg-muted)}
 .pagination-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
 #page-info{color:var(--fg-muted);font-size:.9rem}
 #load-more{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.9rem}
@@ -385,7 +378,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .week-mobile-days .day-code.active{background:var(--cal-today);color:var(--heading);font-weight:700}
 .week-mobile-content{display:flex;flex-direction:column;gap:.4rem}
 .week-mobile-empty{color:var(--fg-muted);font-size:.88rem;text-align:center;padding:1rem 0}
-.week-mobile-evt{font-size:.9rem;padding:.5rem .6rem}
 .wp-dialog{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0 auto;width:100%;max-width:480px;border:none;background:var(--bg-card);padding:0;border-radius:12px 12px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.35)}
 .wp-dialog[open]{display:flex;flex-direction:column}
 .wp-dialog::backdrop{background:rgba(0,0,0,.45)}
@@ -424,7 +416,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   var rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
   var visible = [];
   var shown = 0;
-  var sortCol = 'date', sortDir = 1;
   var weekOffset = urlToWeekOffset();
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
@@ -646,17 +637,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(dayEvents.length===0){
       html += '<div class="week-mobile-empty">'+escHtml(I18N.noEventsDay)+'</div>';
     }
-    dayEvents.forEach(function(r){
-      var start=r.dataset.start||'';
-      var time=start.length>=16?start.slice(11,16):'';
-      var town=r.dataset.town||'';
-      var fs=feeSym(r);
-      html += '<a href="'+(r.dataset.href||('/events/'+r.dataset.id))+'" class="'+evtCls(r)+' week-mobile-evt">'+
-        '<b>'+escHtml(r.dataset.title)+'</b>'+
-        (time||fs?'<small>'+(time?escHtml(time):'')+(fs?' '+fs:'')+'</small>':'')+
-        (town?'<small class="cal-town">'+escHtml(town)+'</small>':'')+
-        '</a>';
-    });
+    dayEvents.forEach(function(r){ html += buildTile(r); });
     html += '</div></div>';
 
     var wv = document.getElementById('week-main');
@@ -1025,15 +1006,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function buildTile(r){
     var d=r.dataset;
     var detailUrl=d.href||'/events/'+d.id;
-    var dateStr='';
-    if(d.start){
-      try{ dateStr=new Intl.DateTimeFormat(lang,{day:'numeric',month:'short',year:'numeric'}).format(new Date(d.start)); }
-      catch(_){ dateStr=(d.date||'').slice(0,10); }
-    }
+    var start=d.start||'';
+    var timeStr=start.length>=16?start.slice(11,16):'';
+    var cancelled=r.classList.contains('is-cancelled');
     var loc=d.location||'', town=d.town||'';
     var place=(loc&&town&&loc!==town)?loc+', '+town:(loc||town);
     var badges='';
-    if(r.classList.contains('is-cancelled')) badges+='<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>';
     if(d.ball==='1') badges+='<span class="badge" style="margin-right:.2rem">{{$.Strings.T "filter_type_ball"}}</span>';
     if(d.workshop==='1') badges+='<span class="badge workshop" style="margin-right:.2rem">{{$.Strings.T "filter_type_workshop"}}</span>';
     if(d.festival==='1') badges+='<span class="badge festival" style="margin-right:.2rem">Festival</span>';
@@ -1043,18 +1021,32 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(d.fee==='free') feeHtml='<span class="fee-sym fee-free">0€</span>';
     else if(d.fee==='donation') feeHtml='<span class="fee-sym fee-donation">♥</span>';
     else if(d.fee==='paid') feeHtml='<span class="fee-sym fee-paid">€</span>';
+    // Reuse the desktop table's already-rendered attribute icons (floor,
+    // food/drink, accessibility) instead of re-deriving the icon logic here.
+    var attrCell=r.querySelector('.col-attr');
+    var attrHtml=attrCell?attrCell.innerHTML.trim():'';
+    var titleStyle='font-size:.95rem;font-weight:bold;margin-bottom:.25rem'+(cancelled?';text-decoration:line-through;color:var(--fg-hint)':'');
     return '<a href="'+detailUrl+'" class="event-tile">'+
-      '<div style="font-size:.95rem;font-weight:bold;margin-bottom:.25rem">'+escHtml(d.title||'')+'</div>'+
-      (dateStr?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(dateStr)+'</div>':'')+
+      '<div style="'+titleStyle+'">'+(timeStr?'<span style="color:var(--fg-muted);font-weight:600">'+escHtml(timeStr)+'</span> ':'')+escHtml(d.title||'')+'</div>'+
       (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
       (badges||feeHtml?'<div>'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
+      (attrHtml?'<div style="margin-top:.3rem">'+attrHtml+'</div>':'')+
       '</a>';
   }
 
   function renderTiles(){
     var container=document.getElementById('event-tiles');
-    var html='';
-    visible.slice(0,shown).forEach(function(r){ html+=buildTile(r); });
+    var lang=document.documentElement.lang||'de';
+    var fmtSep=new Intl.DateTimeFormat(lang,{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+    var html='', lastDate=null;
+    visible.slice(0,shown).forEach(function(r){
+      var d=r.dataset.date;
+      if(d && d!==lastDate){
+        lastDate=d;
+        html+='<div class="date-sep">'+escHtml(fmtSep.format(new Date(d)))+'</div>';
+      }
+      html+=buildTile(r);
+    });
     container.innerHTML=html;
   }
 
@@ -1266,7 +1258,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
 
     shown = 0;
-    applySort();
+    render();
   }
 
   // ── Search filter form (issue #625) ─────────────────────────────────────────
@@ -1360,12 +1352,30 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
   })();
 
-  function applySort(){
-    visible.sort(function(a,b){
-      var av=a.dataset[sortCol]||'', bv=b.dataset[sortCol]||'';
-      return av<bv?-sortDir:av>bv?sortDir:0;
+  // Insert a date-separator row before the first visible row of each new
+  // date. Walks the table's actual DOM row order (not the `visible` array),
+  // since clicking a sort header doesn't reorder rows -- they always stay in
+  // the server-rendered date-ascending order; only which subset is shown
+  // changes. That makes this correct regardless of filtering.
+  function insertDateSeparators(){
+    document.querySelectorAll('#event-tbody tr.date-sep').forEach(function(tr){ tr.remove(); });
+    var lang=document.documentElement.lang||'de';
+    var fmtSep=new Intl.DateTimeFormat(lang,{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+    var lastDate=null;
+    rows.forEach(function(r){
+      if(r.classList.contains('row-filtered')) return;
+      var d=r.dataset.date;
+      if(d && d!==lastDate){
+        lastDate=d;
+        var tr=document.createElement('tr');
+        tr.className='date-sep';
+        var td=document.createElement('td');
+        td.colSpan=5;
+        td.textContent=fmtSep.format(new Date(d));
+        tr.appendChild(td);
+        r.parentNode.insertBefore(tr, r);
+      }
     });
-    render();
   }
 
   function render(){
@@ -1391,30 +1401,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     document.getElementById('empty-state').hidden  = visible.length>0;
     document.getElementById('event-table').hidden  = visible.length===0;
     document.getElementById('pagination-bar').hidden = visible.length===0;
+    insertDateSeparators();
 
     // Mobile tiles
     renderTiles();
   }
-
-  document.querySelectorAll('th.sortable').forEach(function(th){
-    function doSort(){
-      var col=th.dataset.col;
-      sortDir=(sortCol===col)?-sortDir:1;
-      sortCol=col;
-      document.querySelectorAll('th.sortable').forEach(function(t){
-        t.classList.remove('sorted-asc','sorted-desc');
-        t.setAttribute('aria-sort','none');
-      });
-      th.classList.add(sortDir===1?'sorted-asc':'sorted-desc');
-      th.setAttribute('aria-sort',sortDir===1?'ascending':'descending');
-      shown=0;
-      applySort();
-    }
-    th.addEventListener('click',doSort);
-    th.addEventListener('keydown',function(e){
-      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); doSort(); }
-    });
-  });
 
   ['f-dance'].forEach(function(id){
     var el=document.getElementById(id);
@@ -1431,6 +1422,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     document.getElementById('page-info').textContent =
       I18N.showing+' '+shown+' '+I18N.of+' '+visible.length;
     this.disabled=shown>=visible.length;
+    insertDateSeparators();
     renderTiles();
   });
 

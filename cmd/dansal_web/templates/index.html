@@ -34,6 +34,20 @@
   <div id="week-mini-cal"></div>
 </div>
 
+<!-- Mobile week-selector popup -->
+<dialog id="wp-dialog" class="wp-dialog">
+  <div class="wp-title" id="wp-title"></div>
+  <div class="wp-weekdays" id="wp-weekdays"></div>
+  <div class="wp-viewport" id="wp-viewport">
+    <div class="wp-list" id="wp-list"></div>
+    <div class="wp-center-frame"></div>
+  </div>
+  <div class="wp-actions">
+    <button type="button" id="wp-cancel"></button>
+    <button type="button" id="wp-select" class="wp-select"></button>
+  </div>
+</dialog>
+
 <hr class="week-divider">
 
 <!-- Region selector -->
@@ -349,16 +363,22 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .mc-grid th{font-size:.72rem;color:var(--fg-muted);text-align:center;padding:.15rem 0;font-weight:400}
 .mc-grid td{text-align:center;padding:.18rem .1rem;font-size:.78rem;color:var(--fg-2)}
 tr.mc-week{cursor:pointer}
-tr.mc-week:hover td{background:var(--bg-hover)}
-tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
+tr.mc-week:hover td{box-shadow:inset 0 0 0 1px var(--border-mid)}
+tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid var(--link);font-weight:600}
 .mc-other{color:var(--fg-hint)!important;font-weight:400!important}
 .mc-today{color:var(--link)!important;font-weight:700!important}
 .mc-grid td{line-height:1.1;vertical-align:top}
-.mc-dot{display:block;width:4px;height:4px;border-radius:50%;background:var(--link);margin:.15rem auto 0}
-.mc-weekend{background:var(--cal-weekend)!important}
-.mc-weekend.mc-today{background:var(--cal-today)!important}
+.mc-weekend{border-bottom:2px solid var(--cal-weekend)}
+.heat-1{background:var(--heat-1)}
+.heat-2{background:var(--heat-2)}
+.heat-3{background:var(--heat-3)}
+.heat-4{background:var(--heat-4);color:#fff!important}
 .week-mobile{display:none}
-.week-mobile-range{font-weight:600;font-size:.95rem;text-align:center;margin-bottom:.5rem}
+.week-mobile-nav{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.wm-arrow{padding:.25rem .65rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:1.05rem;line-height:1;color:var(--fg)}
+.wm-arrow:hover{background:var(--btn-bg-h)}
+.week-mobile-range{flex:1;background:none;border:none;font-weight:600;font-size:.95rem;color:var(--fg);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.3rem;padding:.3rem 0}
+.wm-chevron{font-size:.7rem;color:var(--fg-muted)}
 .week-mobile-days{display:flex;justify-content:space-around;gap:.25rem;margin-bottom:.75rem}
 .week-mobile-days .day-code{display:inline-block;padding:.3rem .5rem;border-radius:4px;font-size:.85rem;font-weight:500;color:var(--fg-muted);cursor:pointer;user-select:none}
 .week-mobile-days .day-code.wt-weekend{background:var(--cal-weekend)}
@@ -366,6 +386,23 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 .week-mobile-content{display:flex;flex-direction:column;gap:.4rem}
 .week-mobile-empty{color:var(--fg-muted);font-size:.88rem;text-align:center;padding:1rem 0}
 .week-mobile-evt{font-size:.9rem;padding:.5rem .6rem}
+.wp-dialog{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0 auto;width:100%;max-width:480px;border:none;background:var(--bg-card);padding:0;border-radius:12px 12px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.35)}
+.wp-dialog[open]{display:flex;flex-direction:column}
+.wp-dialog::backdrop{background:rgba(0,0,0,.45)}
+.wp-title{text-align:center;font-weight:600;font-size:.95rem;padding:.7rem 0 .35rem;color:var(--fg)}
+.wp-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:.72rem;color:var(--fg-muted);padding:0 .5rem}
+.wp-viewport{position:relative;overflow:hidden;height:220px;margin:.25rem 0;touch-action:none}
+.wp-viewport::before,.wp-viewport::after{content:'';position:absolute;left:0;right:0;height:38px;pointer-events:none;z-index:2}
+.wp-viewport::before{top:0;background:linear-gradient(var(--bg-card),transparent)}
+.wp-viewport::after{bottom:0;background:linear-gradient(transparent,var(--bg-card))}
+.wp-center-frame{position:absolute;left:.5rem;right:.5rem;top:50%;height:44px;margin-top:-22px;border-top:2px solid var(--link);border-bottom:2px solid var(--link);pointer-events:none;z-index:1}
+.wp-list{position:absolute;left:0;right:0;top:0}
+.wp-row{height:44px;display:grid;grid-template-columns:repeat(7,1fr);align-items:center;text-align:center;padding:0 .5rem}
+.wp-day{font-size:.8rem;border-radius:4px;margin:2px;padding:.3rem 0;color:var(--fg-2)}
+.wp-day.mc-today{color:var(--link);font-weight:700}
+.wp-actions{display:flex;gap:.5rem;padding:.6rem .75rem;border-top:1px solid var(--border-lite)}
+.wp-actions button{flex:1;padding:.55rem 0;border-radius:6px;font-size:.92rem;border:1px solid var(--border-mid);background:var(--btn-bg);color:var(--fg);cursor:pointer}
+.wp-actions .wp-select{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
 @media(max-width:640px){
   .filter-row input[type=date]{display:none}
   #map-container{height:280px}
@@ -590,7 +627,11 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     // ── Mobile single-day view ──────────────────────────────────────────────
     var fmtWeekday = new Intl.DateTimeFormat(lang,{weekday:'narrow'});
     html += '<div class="week-mobile">';
-    html += '<div class="week-mobile-range">'+escHtml(fmtRange.format(days[0]))+' – '+escHtml(fmtRangeY.format(days[6]))+'</div>';
+    html += '<div class="week-mobile-nav">'+
+      '<button type="button" class="wm-arrow" id="wm-prev" aria-label="'+escHtml(I18N.prevWeek)+'">&#8592;</button>'+
+      '<button type="button" class="week-mobile-range" id="wm-range-btn">'+escHtml(fmtRange.format(days[0]))+' – '+escHtml(fmtRangeY.format(days[6]))+' <span class="wm-chevron">&#9662;</span></button>'+
+      '<button type="button" class="wm-arrow" id="wm-next" aria-label="'+escHtml(I18N.nextWeek)+'">&#8594;</button>'+
+      '</div>';
     html += '<div class="week-mobile-days">';
     days.forEach(function(d,i){
       var cls='day-code'+(i===currentDayIndex?' active':'')+((d.getDay()===0||HOLIDAYS.has(keys[i]))?' wt-weekend':'');
@@ -622,6 +663,9 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     wv.innerHTML = html;
     document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
     document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('wm-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('wm-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('wm-range-btn').addEventListener('click', openWeekPicker);
     wv.querySelectorAll('.day-code').forEach(function(el){
       el.addEventListener('click',function(){
         currentDayIndex=+this.dataset.day;
@@ -639,17 +683,31 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     miniCalYear=thu.getFullYear(); miniCalMonth=thu.getMonth();
   }
 
-  function getEventDates(){
+  // ── Daily event counts + heatmap bucketing (global scale, computed once) ──
+  var dayCountsCache = null, maxDailyCount = 0;
+  function getEventCounts(){
+    if(dayCountsCache) return dayCountsCache;
     var s={};
     rows.forEach(function(r){
-      var d=r.dataset.date; if(d) s[d]=1;
-      var e=r.dataset.endDate; if(e&&e>d){
-        var cur=new Date(d); var end=new Date(e);
-        cur.setDate(cur.getDate()+1);
-        while(cur<=end){s[dateToIso(cur)]=1;cur.setDate(cur.getDate()+1);}
-      }
+      var d=r.dataset.date; if(!d) return;
+      var e=r.dataset.endDate||d;
+      var cur=new Date(d), end=new Date(e);
+      while(cur<=end){ var k=dateToIso(cur); s[k]=(s[k]||0)+1; cur.setDate(cur.getDate()+1); }
     });
+    dayCountsCache = s;
+    maxDailyCount = 0;
+    Object.keys(s).forEach(function(k){ if(s[k]>maxDailyCount) maxDailyCount=s[k]; });
     return s;
+  }
+  // Global scale: bucket relative to the busiest day across all loaded events,
+  // so a given color always means the same thing regardless of which month/week is shown.
+  function heatClass(count){
+    if(!count || !maxDailyCount) return '';
+    var frac = count/maxDailyCount;
+    if(frac<=0.25) return 'heat-1';
+    if(frac<=0.5)  return 'heat-2';
+    if(frac<=0.75) return 'heat-3';
+    return 'heat-4';
   }
 
   function renderMiniCal(){
@@ -658,7 +716,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     var wsIso=dateToIso(ws);
     var weIso=dateToIso(new Date(ws.getTime()+6*86400000));
     var today=todayIso();
-    var evtDates=getEventDates();
+    var evtCounts=getEventCounts();
     var monthDate=new Date(miniCalYear,miniCalMonth,1);
     var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
     var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
@@ -688,8 +746,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
         var iso=dateToIso(cur);
         var cls=(cur.getMonth()!==miniCalMonth?'mc-other':'')+(iso===today?' mc-today':'');
         if(col===6||HOLIDAYS.has(iso)) cls=(cls?cls+' ':'')+'mc-weekend';
-        var dot=evtDates[iso]?'<span class="mc-dot"></span>':'';
-        html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+dot+'</td>';
+        var hc=heatClass(evtCounts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
+        html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+'</td>';
         cur.setDate(cur.getDate()+1);
       }
       html+='</tr>';
@@ -742,6 +800,170 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       }
     },{passive:true});
   })();
+
+  // ── Mobile week-selector popup ──────────────────────────────────────────────
+  // Bottom-sheet calendar: drag follows the finger continuously and snaps to
+  // the nearest week-row on release; single tap recenters a row; double tap
+  // (anywhere, not just the centered row) selects it and closes immediately.
+  var WP_ROW_H = 44, WP_VIEW_H = 220, WP_CENTER_Y = WP_VIEW_H/2, WP_RANGE_WEEKS = 52;
+  var wpWeeks = [], wpBaseIndex = 0, wpOffsetPx = 0;
+  var wpDragStartY = null, wpDragStartOffset = 0, wpDragMoved = false, wpTouchStartAt = 0;
+  var wpLastTapIndex = -1, wpLastTapAt = 0;
+  var wpWired = false;
+
+  function wpBuildWeeks(centerMonday){
+    wpWeeks = [];
+    for(var i=-WP_RANGE_WEEKS;i<=WP_RANGE_WEEKS;i++){
+      var d=new Date(centerMonday); d.setDate(d.getDate()+i*7);
+      wpWeeks.push(d);
+    }
+    wpBaseIndex = WP_RANGE_WEEKS;
+  }
+
+  function wpRowHtml(monday){
+    var today=todayIso();
+    var counts=getEventCounts();
+    var html='<div class="wp-row">';
+    for(var i=0;i<7;i++){
+      var d=new Date(monday); d.setDate(d.getDate()+i);
+      var iso=dateToIso(d);
+      var cls=(iso===today?'mc-today':'');
+      var hc=heatClass(counts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
+      html+='<div class="wp-day'+(cls?' '+cls:'')+'">'+d.getDate()+'</div>';
+    }
+    html+='</div>';
+    return html;
+  }
+
+  function wpLayout(animate){
+    var list=document.getElementById('wp-list');
+    if(!list) return;
+    var y = WP_CENTER_Y - WP_ROW_H/2 - wpBaseIndex*WP_ROW_H - wpOffsetPx;
+    list.style.transition = animate ? 'transform .18s ease-out' : 'none';
+    list.style.transform = 'translateY('+y+'px)';
+  }
+
+  function wpCenteredIndex(){
+    return Math.max(0, Math.min(wpWeeks.length-1, wpBaseIndex + Math.round(wpOffsetPx/WP_ROW_H)));
+  }
+
+  function wpIndexAtClientY(clientY){
+    var vp=document.getElementById('wp-viewport');
+    var rect=vp.getBoundingClientRect();
+    var yInViewport = clientY - rect.top;
+    var listTop = WP_CENTER_Y - WP_ROW_H/2 - wpBaseIndex*WP_ROW_H - wpOffsetPx;
+    var i = Math.floor((yInViewport - listTop) / WP_ROW_H);
+    return Math.max(0, Math.min(wpWeeks.length-1, i));
+  }
+
+  function wpUpdateTitle(){
+    var lang=document.documentElement.lang||'de';
+    var d=wpWeeks[wpCenteredIndex()];
+    if(!d) return;
+    var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
+    document.getElementById('wp-title').textContent = fmtMY.format(d);
+  }
+
+  function wpClampOffset(){
+    var minOffset = (0 - wpBaseIndex) * WP_ROW_H;
+    var maxOffset = (wpWeeks.length-1 - wpBaseIndex) * WP_ROW_H;
+    if(wpOffsetPx<minOffset) wpOffsetPx=minOffset;
+    if(wpOffsetPx>maxOffset) wpOffsetPx=maxOffset;
+  }
+
+  function wpRecenterTo(idx, animate){
+    idx = Math.max(0, Math.min(wpWeeks.length-1, idx));
+    wpOffsetPx = (idx - wpBaseIndex) * WP_ROW_H;
+    wpLayout(animate!==false);
+    wpUpdateTitle();
+  }
+
+  function wpApplyAndClose(idx){
+    var monday = wpWeeks[idx];
+    if(!monday) return;
+    weekOffset = Math.round((monday - getWeekStart(0)) / (7*86400000));
+    pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+    document.getElementById('wp-dialog').close();
+  }
+
+  function wpRenderRows(){
+    var html='';
+    wpWeeks.forEach(function(monday){ html+=wpRowHtml(monday); });
+    document.getElementById('wp-list').innerHTML = html;
+  }
+
+  function wpRenderWeekdayHeader(){
+    var lang=document.documentElement.lang||'de';
+    var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
+    var cur=new Date(); var dow=cur.getDay();
+    cur.setDate(cur.getDate()-(dow===0?6:dow-1));
+    var html='';
+    for(var i=0;i<7;i++){ html+='<div>'+escHtml(fmtWd.format(cur))+'</div>'; cur.setDate(cur.getDate()+1); }
+    document.getElementById('wp-weekdays').innerHTML = html;
+  }
+
+  function wpWireEvents(){
+    if(wpWired) return;
+    wpWired = true;
+    var vp=document.getElementById('wp-viewport');
+
+    vp.addEventListener('touchstart',function(e){
+      wpDragStartY = e.touches[0].clientY;
+      wpDragStartOffset = wpOffsetPx;
+      wpDragMoved = false;
+      wpTouchStartAt = Date.now();
+    },{passive:true});
+
+    vp.addEventListener('touchmove',function(e){
+      if(wpDragStartY===null) return;
+      var dy = wpDragStartY - e.touches[0].clientY;
+      if(Math.abs(dy)>6) wpDragMoved = true;
+      wpOffsetPx = wpDragStartOffset + dy;
+      wpClampOffset();
+      wpLayout(false);
+    },{passive:true});
+
+    vp.addEventListener('touchend',function(e){
+      if(wpDragStartY===null) return;
+      var elapsed = Date.now()-wpTouchStartAt;
+      var endY = e.changedTouches[0].clientY;
+      wpDragStartY = null;
+
+      if(!wpDragMoved && elapsed<300){
+        var idx = wpIndexAtClientY(endY);
+        var now = Date.now();
+        if(idx===wpLastTapIndex && (now-wpLastTapAt)<350){
+          wpLastTapIndex = -1;
+          wpApplyAndClose(idx);
+          return;
+        }
+        wpLastTapIndex = idx; wpLastTapAt = now;
+        wpRecenterTo(idx, true);
+      } else {
+        wpRecenterTo(wpCenteredIndex(), true);
+      }
+    },{passive:true});
+
+    document.getElementById('wp-cancel').addEventListener('click',function(){
+      document.getElementById('wp-dialog').close();
+    });
+    document.getElementById('wp-select').addEventListener('click',function(){
+      wpApplyAndClose(wpCenteredIndex());
+    });
+  }
+
+  function openWeekPicker(){
+    document.getElementById('wp-cancel').textContent = I18N.cancel;
+    document.getElementById('wp-select').textContent = I18N.select;
+    wpRenderWeekdayHeader();
+    wpBuildWeeks(getWeekStart(weekOffset));
+    wpOffsetPx = 0;
+    wpRenderRows();
+    wpWireEvents();
+    wpLayout(false);
+    wpUpdateTitle();
+    document.getElementById('wp-dialog').showModal();
+  }
 
   // ── Map ───────────────────────────────────────────────────────────────────
   var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);

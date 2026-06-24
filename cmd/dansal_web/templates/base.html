@@ -31,6 +31,7 @@
   --code-bg:#f0f4ff;--blockquote-border:#c8d4f5;
   --btn-bg:#f5f5f5;--btn-bg-h:#e8e8e8;
   --cal-today:#e8f0fe;--cal-evt-bg:#fff;--cal-evt-border:#b3d4f5;--cal-weekend:#fdf0f0;
+  --heat-1:#fff3c4;--heat-2:#ffd27a;--heat-3:#ff9d42;--heat-4:#e8482c;
   --site-banner-bg:#f7f2e8;
   --badge-ok-bg:#d4edda;--badge-ok-fg:#155724;
   --badge-warn-bg:#fff3cd;--badge-warn-fg:#856404;
@@ -46,6 +47,7 @@
   --code-bg:#141425;--blockquote-border:#2a3060;
   --btn-bg:#1e1e35;--btn-bg-h:#28283a;
   --cal-today:#141c38;--cal-evt-bg:#1e1e30;--cal-evt-border:#1e3050;--cal-weekend:#2a1a1a;
+  --heat-1:#4a3b1a;--heat-2:#6b4a1a;--heat-3:#8a4a1a;--heat-4:#a8341a;
   --site-banner-bg:#1a1520;
   --badge-ok-bg:#152818;--badge-ok-fg:#68c080;
   --badge-warn-bg:#252010;--badge-warn-fg:#d0a840;
@@ -62,6 +64,7 @@
     --code-bg:#141425;--blockquote-border:#2a3060;
     --btn-bg:#1e1e35;--btn-bg-h:#28283a;
     --cal-today:#141c38;--cal-evt-bg:#1e1e30;--cal-evt-border:#1e3050;--cal-weekend:#2a1a1a;
+    --heat-1:#4a3b1a;--heat-2:#6b4a1a;--heat-3:#8a4a1a;--heat-4:#a8341a;
     --site-banner-bg:#1a1520;
     --badge-ok-bg:#152818;--badge-ok-fg:#68c080;
     --badge-warn-bg:#252010;--badge-warn-fg:#d0a840;
@@ -277,7 +280,7 @@ th.sortable-th:hover{background:#e8eef7}
 .sort-ind{font-size:.75em;opacity:.6}
 </style>
 <script>
-var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}"};
+var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}",cancel:"{{.Strings.T "js_cancel"}}",select:"{{.Strings.T "js_select"}}",prevWeek:"{{.Strings.T "js_prev_week"}}",nextWeek:"{{.Strings.T "js_next_week"}}"};
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){

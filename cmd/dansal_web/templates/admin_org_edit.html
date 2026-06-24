@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>{{.Strings.T "admin_edit"}}{{with .Data.Org.Name}} — {{.}}{{end}}</h1>
+{{if .Data.Org.UpdatedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix .Data.Org.UpdatedAt}}</p>{{end}}
 
 <div class="edit-wrap">
 {{with .Data}}

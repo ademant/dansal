@@ -163,6 +163,19 @@ func getUserByEmail(email string) (User, error) {
 	return scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE email=?", email))
 }
 
+// resolveDisplayName returns callerID's display name (falling back to the
+// email local-part, then the numeric ID) for "last updated by" attribution
+// on events/locations/organizations/musicians/instructors.
+func resolveDisplayName(callerID int) string {
+	var name string
+	if err := db.QueryRow(
+		"SELECT COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id = ?", callerID,
+	).Scan(&name); err != nil || name == "" {
+		return strconv.Itoa(callerID)
+	}
+	return name
+}
+
 // isDisplayNameTaken reports whether another user already holds name
 // (case-insensitively). excludeID is the current user's ID for updates; pass 0
 // for new insertions (no user has id=0 in an AUTOINCREMENT table).

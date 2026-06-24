@@ -385,6 +385,7 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return time.Unix(ts, 0).UTC().Format("2006-01-02")
 	},
+	"parseChangedAt": parseChangedAt,
 	"isoTime": func(s string) string {
 		if t, ok := parseTime(s); ok {
 			return t.Format("15:04")
@@ -842,6 +843,7 @@ type Templates struct {
 	registerVerified          *template.Template
 	adminRegistrations        *template.Template
 	adminManagement           *template.Template
+	adminRecentChanges        *template.Template
 	help                      *template.Template
 	contactManage             *template.Template
 	board                     *template.Template
@@ -923,6 +925,7 @@ func loadTemplates() *Templates {
 		registerVerified:          load("register_verified"),
 		adminRegistrations:        load("admin_registrations"),
 		adminManagement:           load("admin_management"),
+		adminRecentChanges:        load("admin_recent_changes"),
 		help:                      load("help"),
 		contactManage:             load("contact_manage"),
 		board:                     load("board"),

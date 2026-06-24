@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>{{if .Data.IsNew}}{{.Strings.T "admin_event_new_title"}}{{else}}{{.Strings.T "admin_event_edit_title"}}{{end}}</h1>
+{{if .Data.Event.ChangedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix (parseChangedAt .Data.Event.ChangedAt)}}{{if eq .Data.Event.ChangedBy "fetch"}} ({{.Strings.T "recent_changes_via_fetch"}}){{end}}</p>{{end}}
 
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}

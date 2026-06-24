@@ -31,6 +31,7 @@ type Location struct {
 	MBPlaceID       string          `json:"mb_place_id,omitempty"`
 	CreatedAt       string          `json:"created_at"`
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
+	UpdatedBy       string          `json:"updated_by,omitempty"`
 	DistanceKm      *float64        `json:"distance_km,omitempty"`
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`
 	NotesMd         string          `json:"notes_md,omitempty"`
@@ -90,7 +91,7 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE(l.aliases,'[]')`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE(l.aliases,'[]'), COALESCE(l.updated_by,'')`
 
 // scanLocation scans a locationCols row into loc. Extra destination pointers
 // (e.g. for appended future/past event count columns) can be passed via extra.
@@ -100,7 +101,7 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON}
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON, &loc.UpdatedBy}
 	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -699,8 +700,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		loc.Geohash = gh
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now') WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, aliasesJSON(loc.Aliases), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, aliasesJSON(loc.Aliases), resolveDisplayName(callerID), loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

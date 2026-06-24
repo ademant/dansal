@@ -265,6 +265,8 @@ type Instructor struct {
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt int64  `json:"updated_at,omitempty"`
+	UpdatedBy string `json:"updated_by,omitempty"`
 }
 
 type Organization struct {
@@ -280,6 +282,8 @@ type Organization struct {
 	ContactName   string `json:"contact_name,omitempty"`
 	WikidataID    string `json:"wikidata_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at,omitempty"`
+	UpdatedBy     string `json:"updated_by,omitempty"`
 	ImageURL      string `json:"image_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
@@ -320,6 +324,8 @@ type Musician struct {
 	Genre        string `json:"genre,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
+	UpdatedAt    int64  `json:"updated_at,omitempty"`
+	UpdatedBy    string `json:"updated_by,omitempty"`
 }
 
 type Location struct {
@@ -347,6 +353,7 @@ type Location struct {
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
+	UpdatedBy       string          `json:"updated_by,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`

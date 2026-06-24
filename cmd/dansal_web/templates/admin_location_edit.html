@@ -114,6 +114,7 @@
       </span>
       {{end}}
       {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
+      {{if .Location.UpdatedAt}}<span><strong>{{$.Strings.T "last_updated_label"}}</strong> {{fmtUnix .Location.UpdatedAt}}</span>{{end}}
     </div>
 
     {{if and (not .Location.ID) .UserOrgs}}

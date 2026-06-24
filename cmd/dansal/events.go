@@ -1703,12 +1703,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrganizationID
 	}
 
-	var changedByUser string
-	if err := db.QueryRow(
-		"SELECT COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id = ?", callerID,
-	).Scan(&changedByUser); err != nil || changedByUser == "" {
-		changedByUser = strconv.Itoa(callerID)
-	}
+	changedByUser := resolveDisplayName(callerID)
 
 	var callerIDArg any
 	if callerID > 0 {

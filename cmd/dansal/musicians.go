@@ -34,6 +34,7 @@ type Musician struct {
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
+	UpdatedBy    string `json:"updated_by,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
@@ -67,7 +68,7 @@ const musicianCols = `id, bandname,
 	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
 	COALESCE(mastodon,''), COALESCE(instagram,''),
 	COALESCE(facebook,''), COALESCE(soundcloud,''),
-	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at, COALESCE(updated_at,0)`
+	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')`
 
 // scanMusician scans a musicianCols row into a Musician. Extra destination
 // pointers (e.g. for appended event-count columns) can be passed via extra.
@@ -76,7 +77,7 @@ func scanMusician(row interface{ Scan(...any) error }, extra ...any) (Musician, 
 	dest := []any{&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
 		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
 		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud,
-		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt}
+		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt, &m.UpdatedBy}
 	err := row.Scan(append(dest, extra...)...)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
@@ -283,7 +284,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 func updateMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	requesterRole := r.Header.Get("X-User-Role")
+	callerID, requesterRole := callerFromRequest(r)
 	if requesterRole != RoleAdmin && requesterRole != RoleUser {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
@@ -301,11 +302,11 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
 		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?,
-		 updated_at=strftime('%s','now') WHERE id=?`,
+		 updated_at=strftime('%s','now'), updated_by=? WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 		req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
-		req.Spotify, req.Deezer, req.Genre, id,
+		req.Spotify, req.Deezer, req.Genre, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

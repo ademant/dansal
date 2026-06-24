@@ -1,0 +1,31 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "recent_changes_title"}}</h1>
+
+{{with .Data}}
+{{if .Changes}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "recent_changes_col_item"}}</th>
+      <th>{{$.Strings.T "recent_changes_col_changed_by"}}</th>
+      <th>{{$.Strings.T "recent_changes_col_changed_at"}}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Changes}}
+    <tr>
+      <td><a href="{{.EditURL}}">{{.Name}}</a></td>
+      <td class="muted">{{if .ViaFetch}}{{$.Strings.T "recent_changes_via_fetch"}}{{else}}{{.ChangedBy}}{{end}}</td>
+      <td class="muted">{{fmtUnix .ChangedAt}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="entity-meta">{{$.Strings.T "recent_changes_empty"}}</p>
+{{end}}
+{{end}}
+{{end}}

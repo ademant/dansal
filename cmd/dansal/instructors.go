@@ -17,6 +17,8 @@ type Instructor struct {
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
 	CreatedAt string `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at,omitempty"`
+	UpdatedBy string `json:"updated_by,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
@@ -29,13 +31,13 @@ type InstructorRequest struct {
 	Email   string `json:"email"`
 }
 
-const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), created_at"
+const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')"
 
 // scanInstructor scans an instructorCols row into an Instructor. Extra
 // destination pointers (e.g. for appended event-count columns) can be passed via extra.
 func scanInstructor(row interface{ Scan(...any) error }, extra ...any) (Instructor, error) {
 	var i Instructor
-	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt}
+	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt, &i.UpdatedAt, &i.UpdatedBy}
 	err := row.Scan(append(dest, extra...)...)
 	return i, err
 }
@@ -173,8 +175,8 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := db.Exec(
-		"UPDATE instructors SET name=?, bio=?, website=?, email=? WHERE id=?",
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, id,
+		"UPDATE instructors SET name=?, bio=?, website=?, email=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

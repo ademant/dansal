@@ -24,6 +24,7 @@ type Organization struct {
 	WikidataID    string `json:"wikidata_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
+	UpdatedBy     string `json:"updated_by,omitempty"`
 	ImageURL      string `json:"image_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
@@ -122,13 +123,13 @@ func isOrgMember(userID, orgID int) bool {
 	return n > 0
 }
 
-const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,'')`
+const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,''), COALESCE(updated_by,'')`
 
 // scanOrg scans an orgSelectCols row into an Organization. Extra destination
 // pointers (e.g. for appended event-count/location columns) can be passed via extra.
 func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, error) {
 	var o Organization
-	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd}
+	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd, &o.UpdatedBy}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return o, err
 	}
@@ -429,8 +430,8 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
 	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now') WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, id,
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return

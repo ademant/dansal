@@ -1617,6 +1617,26 @@ func migrateDB() {
 		}
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_needs_duplicate_review ON events(needs_duplicate_review) WHERE needs_duplicate_review=1")
 	}
+
+	// #643: unified "last updated by" tracking across locations, organizations,
+	// musicians (which already had updated_at) and instructors (which had neither).
+	// Events already track changed_at/changed_by via updateEvent, no change needed.
+	for _, t := range []string{"locations", "organizations", "musicians"} {
+		var n int
+		db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name='updated_by'", t)).Scan(&n)
+		if n == 0 {
+			db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN updated_by TEXT DEFAULT ''", t))
+		}
+	}
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('instructors') WHERE name='updated_at'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE instructors ADD COLUMN updated_at INTEGER")
+			db.Exec("ALTER TABLE instructors ADD COLUMN updated_by TEXT DEFAULT ''")
+			db.Exec("UPDATE instructors SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1874,7 +1894,8 @@ func createTables() error {
 		floor_condition TEXT,
 		aliases TEXT NOT NULL DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at INTEGER
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1899,6 +1920,7 @@ func createTables() error {
 		genre TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
+		updated_by TEXT DEFAULT '',
 		created_by_id INTEGER REFERENCES users(id)
 	);
 	CREATE TABLE IF NOT EXISTS dances (
@@ -1955,7 +1977,8 @@ func createTables() error {
 		notes_md TEXT,
 		wikidata_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at INTEGER
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS organization_members (
 		organization_id INTEGER NOT NULL,
@@ -2037,7 +2060,9 @@ func createTables() error {
 		website TEXT,
 		email TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		created_by_id INTEGER REFERENCES users(id)
+		created_by_id INTEGER REFERENCES users(id),
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS event_instructors (
 		event_id INTEGER NOT NULL,

@@ -186,6 +186,7 @@ func main() {
 		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("GET /api/events-more", eventsMoreHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/{id}/assign-org", eventAssignOrgHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))

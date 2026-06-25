@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,7 @@ type DansalClient struct {
 	musiciansCache cacheEntry[[]Musician]
 	locationsCache cacheEntry[[]Location]
 	eventsCache    cacheEntry[[]Event]
+	eventsTotal    int // total future published events server-side, from X-Total-Count; see EventsTotal
 	infoCache      cacheEntry[DansalInfo]
 }
 
@@ -441,11 +443,11 @@ func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 }
 
 // getConditional makes a GET with an optional If-None-Match header.
-// Returns (newETag, notModified, error). When notModified is true, out is not written.
-func (c *DansalClient) getConditional(ctx context.Context, path, etag string, out any) (string, bool, error) {
+// Returns (newETag, notModified, responseHeaders, error). When notModified is true, out is not written.
+func (c *DansalClient) getConditional(ctx context.Context, path, etag string, out any) (string, bool, http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
-		return etag, false, err
+		return etag, false, nil, err
 	}
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
@@ -453,7 +455,7 @@ func (c *DansalClient) getConditional(ctx context.Context, path, etag string, ou
 	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return etag, false, err
+		return etag, false, nil, err
 	}
 	defer resp.Body.Close()
 	newETag := resp.Header.Get("Etag")
@@ -461,12 +463,12 @@ func (c *DansalClient) getConditional(ctx context.Context, path, etag string, ou
 		newETag = etag
 	}
 	if resp.StatusCode == http.StatusNotModified {
-		return newETag, true, nil
+		return newETag, true, resp.Header, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return newETag, false, apiErr(resp)
+		return newETag, false, resp.Header, apiErr(resp)
 	}
-	return newETag, false, json.NewDecoder(resp.Body).Decode(out)
+	return newETag, false, resp.Header, json.NewDecoder(resp.Body).Decode(out)
 }
 
 // ErrTOTPRequired is returned by Login when the credentials are valid but a
@@ -619,7 +621,7 @@ func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, er
 		c.mu.Unlock()
 
 		var events []Event
-		newETag, notModified, err := c.getConditional(ctx, "/api/v1/events?is_published=true", cachedETag, &events)
+		newETag, notModified, hdr, err := c.getConditional(ctx, "/api/v1/events?is_published=true", cachedETag, &events)
 		if err != nil {
 			if hasStale {
 				return stale, nil
@@ -633,6 +635,11 @@ func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, er
 			c.eventsCache.val = events
 			c.eventsCache.etag = newETag
 			c.eventsCache.fetchedAt = time.Now()
+			// ETag is a fingerprint of (count, max created_at), so an unchanged
+			// ETag means the total is unchanged too; only update on a real refetch.
+			if total, err := strconv.Atoi(hdr.Get("X-Total-Count")); err == nil {
+				c.eventsTotal = total
+			}
 		}
 		v := c.eventsCache.val
 		c.mu.Unlock()
@@ -644,6 +651,14 @@ func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, er
 		return nil, err
 	}
 	return events, nil
+}
+
+// EventsTotal returns the total number of future published events server-side,
+// as of the last GetEvents(ctx, "") call. Call GetEvents first to populate it.
+func (c *DansalClient) EventsTotal() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.eventsTotal
 }
 
 func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {

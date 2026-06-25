@@ -1236,6 +1236,13 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Total count ignoring LIMIT/OFFSET, so clients (e.g. the index page) can tell
+	// pagination truncated the result. Doesn't account for the in-Go geo radius
+	// post-filter below, since that can't be expressed in the count query.
+	var totalCount int
+	db.QueryRow("SELECT COUNT(*) FROM ("+query+")", args...).Scan(&totalCount)
+
 	applyPagination(r, &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -1286,6 +1293,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeEventsAtom(w, r, events)
 	} else {
+		w.Header().Set("X-Total-Count", strconv.Itoa(totalCount))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(events)
 	}

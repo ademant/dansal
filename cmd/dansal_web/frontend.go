@@ -126,6 +126,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 
 type IndexData struct {
 	Events          []Event
+	TotalEvents     int // true server-side count; may exceed len(Events) when the API's pagination cap truncated the result
 	OrgMap          map[int]Organization
 	TagMap          map[string]Tag
 	FederatedEvents []FederatedEvent
@@ -349,6 +350,88 @@ func displayNameOrEmail(u UserInfo) string {
 	return emailLocal(u.Email)
 }
 
+// geoEvent is the compact event projection used for map markers, both in the
+// initial page's #events-geo script tag and the /api/events-more incremental fetch.
+// Excludes fields the map doesn't need (geohash, osm_id, notes_md, aliases, contact_*, etc).
+type geoEvent struct {
+	ID                 int     `json:"id"`
+	Title              string  `json:"t"`
+	Start              string  `json:"s"`
+	End                string  `json:"e,omitempty"`
+	Location           string  `json:"loc,omitempty"`
+	ShortName          string  `json:"sn,omitempty"`
+	Town               string  `json:"town,omitempty"`
+	Country            string  `json:"c,omitempty"`
+	Lat                float64 `json:"lat"`
+	Lng                float64 `json:"lng"`
+	URL                string  `json:"url,omitempty"`
+	Ball               bool    `json:"ball,omitempty"`
+	Workshop           bool    `json:"ws,omitempty"`
+	WorkshopDifficulty string  `json:"wd,omitempty"`
+	Festival           bool    `json:"fest,omitempty"`
+	Cancelled          bool    `json:"x,omitempty"`
+	Availability       string  `json:"av,omitempty"`
+	BookingEnabled     bool    `json:"book,omitempty"`
+	Fee                string  `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
+	Food               string  `json:"food,omitempty"`
+	Drink              string  `json:"drink,omitempty"`
+	Wheelchair         bool    `json:"wc,omitempty"`
+	HearingLoop        bool    `json:"hl,omitempty"`
+}
+
+// eventsToGeo projects events to geoEvent, skipping any without coordinates.
+func eventsToGeo(events []Event) []geoEvent {
+	var geo []geoEvent
+	for _, e := range events {
+		if e.Location == nil || e.Location.Latitude == nil || e.Location.Longitude == nil || (*e.Location.Latitude == 0 && *e.Location.Longitude == 0) {
+			continue
+		}
+		lat := *e.Location.Latitude
+		lng := *e.Location.Longitude
+		fee := ""
+		if e.Pricing != nil {
+			switch e.Pricing.Type {
+			case "free":
+				fee = "free"
+			case "donation":
+				fee = "donation"
+			case "single", "multiple":
+				fee = "paid"
+			}
+		}
+		end := ""
+		if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
+			end = t.Format("2006-01-02")
+		}
+		// Merge location + event attributes for accessibility flags (event overrides location).
+		merged := map[string]bool{}
+		if e.Location != nil {
+			for k, v := range e.Location.Attributes {
+				merged[k] = v
+			}
+		}
+		for k, v := range e.Attributes {
+			merged[k] = v
+		}
+		var locName, locShortName, locTown, locCountry string
+		if l := e.Location; l != nil {
+			locName, locShortName, locTown, locCountry = l.Location, l.ShortName, l.Town, l.Country
+		}
+		geo = append(geo, geoEvent{
+			ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
+			Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
+			Lat: lat, Lng: lng, URL: e.URL,
+			Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
+			Festival:  e.HasFestival,
+			Cancelled: e.IsCancelled, Availability: e.Availability,
+			BookingEnabled: e.BookingEnabled,
+			Fee:            fee, Food: e.Food, Drink: e.Drink,
+			Wheelchair: merged["wheelchair"], HearingLoop: merged["hearing_loop"],
+		})
+	}
+	return geo
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, s string) string {
 		t, ok := parseTime(s)
@@ -494,79 +577,7 @@ var tmplFuncMap = template.FuncMap{
 		return handle
 	},
 	"eventsGeoJSON": func(events []Event) template.JS {
-		type geoEvent struct {
-			ID                 int     `json:"id"`
-			Title              string  `json:"t"`
-			Start              string  `json:"s"`
-			End                string  `json:"e,omitempty"`
-			Location           string  `json:"loc,omitempty"`
-			ShortName          string  `json:"sn,omitempty"`
-			Town               string  `json:"town,omitempty"`
-			Country            string  `json:"c,omitempty"`
-			Lat                float64 `json:"lat"`
-			Lng                float64 `json:"lng"`
-			URL                string  `json:"url,omitempty"`
-			Ball               bool    `json:"ball,omitempty"`
-			Workshop           bool    `json:"ws,omitempty"`
-			WorkshopDifficulty string  `json:"wd,omitempty"`
-			Festival           bool    `json:"fest,omitempty"`
-			Cancelled          bool    `json:"x,omitempty"`
-			Availability       string  `json:"av,omitempty"`
-			BookingEnabled     bool    `json:"book,omitempty"`
-			Fee                string  `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
-			Food               string  `json:"food,omitempty"`
-			Drink              string  `json:"drink,omitempty"`
-			Wheelchair         bool    `json:"wc,omitempty"`
-			HearingLoop        bool    `json:"hl,omitempty"`
-		}
-		var geo []geoEvent
-		for _, e := range events {
-			if e.Location == nil || e.Location.Latitude == nil || e.Location.Longitude == nil || (*e.Location.Latitude == 0 && *e.Location.Longitude == 0) {
-				continue
-			}
-			lat := *e.Location.Latitude
-			lng := *e.Location.Longitude
-			fee := ""
-			if e.Pricing != nil {
-				switch e.Pricing.Type {
-				case "free":
-					fee = "free"
-				case "donation":
-					fee = "donation"
-				case "single", "multiple":
-					fee = "paid"
-				}
-			}
-			end := ""
-			if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
-				end = t.Format("2006-01-02")
-			}
-			// Merge location + event attributes for accessibility flags (event overrides location).
-			merged := map[string]bool{}
-			if e.Location != nil {
-				for k, v := range e.Location.Attributes {
-					merged[k] = v
-				}
-			}
-			for k, v := range e.Attributes {
-				merged[k] = v
-			}
-			var locName, locShortName, locTown, locCountry string
-			if l := e.Location; l != nil {
-				locName, locShortName, locTown, locCountry = l.Location, l.ShortName, l.Town, l.Country
-			}
-			geo = append(geo, geoEvent{
-				ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
-				Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
-				Lat: lat, Lng: lng, URL: e.URL,
-				Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
-				Festival:  e.HasFestival,
-				Cancelled: e.IsCancelled, Availability: e.Availability,
-				BookingEnabled: e.BookingEnabled,
-				Fee:            fee, Food: e.Food, Drink: e.Drink,
-				Wheelchair: merged["wheelchair"], HearingLoop: merged["hearing_loop"],
-			})
-		}
+		geo := eventsToGeo(events)
 		if geo == nil {
 			return template.JS("[]")
 		}
@@ -1045,7 +1056,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				holidayDates = template.JS("[" + strings.Join(dates, ",") + "]")
 			}
 		}
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates}))
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates}))
 	}
 }
 

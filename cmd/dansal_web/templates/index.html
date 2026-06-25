@@ -1,4 +1,59 @@
 {{template "base" .}}
+{{/* event-row renders one <tr> for an event. Takes a dict: Event, OrgMap, TagMap, Strings.
+     Shared between the initial page render and the /api/events-more incremental fetch so
+     rows added after the initial 100-event cap never drift from the server-rendered ones. */}}
+{{define "event-row"}}
+{{$org := orgName .OrgMap .Event.OrganizationID}}
+{{with .Event}}
+<tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
+    data-date="{{isoDate .StartTime}}"
+    data-end-date="{{isoDate .EndTime}}"
+    data-title="{{.Title}}"
+    data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
+    data-country="{{if .Location}}{{.Location.Country}}{{end}}"
+    data-region="{{if .Location}}{{.Location.Region}}{{end}}"
+    data-ball="{{if .HasBall}}1{{else}}0{{end}}"
+    data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
+    data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
+    data-organizer="{{$org}}"
+    data-tags="{{range .Tags}}{{.}} {{end}}"
+    data-dances="{{range .DanceNames}}{{.}} {{end}}"
+    data-id="{{.ID}}"
+    data-start="{{.StartTime}}"
+    data-town="{{if .Location}}{{.Location.Town}}{{end}}"
+    data-availability="{{.Availability}}"
+    data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
+    data-food="{{.Food}}"
+    data-drink="{{.Drink}}"
+    {{- $ea := mergeAttrs (locAttrs .Location) .Attributes}}
+    data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
+    data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
+    data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
+    data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
+    data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
+  <td class="col-time">{{isoTime .StartTime}}</td>
+  <td>
+    <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
+    {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
+    {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
+  </td>
+  <td class="col-venue">
+    {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
+    {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
+  </td>
+  <td class="col-type">
+    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
+    {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
+  </td>
+  <td class="col-attr">
+    {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}
+  </td>
+</tr>
+{{end}}
+{{end}}
 {{define "content"}}
 <h1>{{.Strings.T "events_title"}}</h1>
 
@@ -116,54 +171,7 @@
   </thead>
   <tbody id="event-tbody">
   {{range .Events}}
-  {{$org := orgName $orgMap .OrganizationID}}
-  <tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
-      data-date="{{isoDate .StartTime}}"
-      data-end-date="{{isoDate .EndTime}}"
-      data-title="{{.Title}}"
-      data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
-      data-country="{{if .Location}}{{.Location.Country}}{{end}}"
-      data-region="{{if .Location}}{{.Location.Region}}{{end}}"
-      data-ball="{{if .HasBall}}1{{else}}0{{end}}"
-      data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
-      data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
-      data-organizer="{{$org}}"
-      data-tags="{{range .Tags}}{{.}} {{end}}"
-      data-dances="{{range .DanceNames}}{{.}} {{end}}"
-      data-id="{{.ID}}"
-      data-start="{{.StartTime}}"
-      data-town="{{if .Location}}{{.Location.Town}}{{end}}"
-      data-availability="{{.Availability}}"
-      data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
-      data-food="{{.Food}}"
-      data-drink="{{.Drink}}"
-      {{- $ea := mergeAttrs (locAttrs .Location) .Attributes}}
-      data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
-      data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
-      data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
-      data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
-      data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
-    <td class="col-time">{{isoTime .StartTime}}</td>
-    <td>
-      <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
-      {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
-      {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
-    </td>
-    <td class="col-venue">
-      {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
-      {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
-    </td>
-    <td class="col-type">
-      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-      {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-      {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
-      {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.Data.TagMap .}}</span>{{end}}
-      {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
-    </td>
-    <td class="col-attr">
-      {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}
-    </td>
-  </tr>
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
   {{end}}
   {{range $.Data.FederatedEvents}}
   <tr class="event-row federated-event"
@@ -402,6 +410,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   var rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
   var visible = [];
   var shown = 0;
+  // True server-side total (may exceed rows.length: see "allLoaded" below, the
+  // initial fetch is capped at 100 events).
+  var total = {{.Data.TotalEvents}};
   var weekOffset = urlToWeekOffset();
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
@@ -517,6 +528,13 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   function renderWeek(){
     var ws = getWeekStart(weekOffset);
+    // Week navigation (prev/next, mini calendar, swipe) can move past what's
+    // loaded, same as Load More / date filters. Render optimistically with
+    // what's available now, then refilter+rerender once the fetch lands.
+    var weekEndMs = ws.getTime() + 7*86400000 - 1;
+    if(!allLoaded && weekEndMs > maxLoadedStartMs()){
+      ensureLoadedUntil(weekEndMs).then(refilterKeepShown);
+    }
     var days=[], keys=[];
     for(var i=0;i<7;i++){
       var d=new Date(ws); d.setDate(d.getDate()+i);
@@ -1131,6 +1149,68 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     }
   }
 
+  // ── Loading events beyond the initial page-load cap (issue #650) ───────────
+  // The initial fetch is capped server-side at 100 future events for payload
+  // size. Load More, date-range filtering, and week/calendar navigation can all
+  // run past that cap; when they do, fetch the next batch from the server
+  // instead of silently showing nothing past whatever happened to load first.
+  var allLoaded = total > 0 && nativeRows().length >= total;
+  var loadMorePromise = null;
+
+  function startMs(s){ return s ? new Date(s).getTime() : 0; }
+  // Federated-event rows are always appended last in #event-tbody regardless of
+  // date (a separate, unsorted block), so the date-ascending invariant only
+  // holds among native rows -- exclude federated rows when finding the max.
+  function nativeRows(){ return rows.filter(function(r){ return !r.classList.contains('federated-event'); }); }
+  function maxLoadedStartMs(){ var nr=nativeRows(); return nr.length ? startMs(nr[nr.length-1].dataset.start) : 0; }
+
+  function mergeMoreEvents(data){
+    if(data.rows_html){
+      var tbody = document.getElementById('event-tbody');
+      var firstFederated = tbody.querySelector('.federated-event');
+      if(firstFederated){
+        firstFederated.insertAdjacentHTML('beforebegin', data.rows_html);
+      } else {
+        tbody.insertAdjacentHTML('beforeend', data.rows_html);
+      }
+      rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
+    }
+    (data.geo||[]).forEach(function(e){
+      geoById[e.id] = {lat:e.lat, lng:e.lng};
+      eventsGeo.push(e);
+      if(!allMarkers[e.id]){
+        var m = L.marker([e.lat, e.lng], {icon: eventIcon(e)});
+        m.bindPopup(buildPopup(e),{maxWidth:300});
+        allMarkers[e.id] = m;
+      }
+    });
+    if(typeof data.total === 'number') total = data.total;
+    if(data.done) allLoaded = true;
+  }
+
+  // Fetches additional batches (each up to 100 events) until either targetMs is
+  // covered by what's loaded, or the server reports no more events left.
+  // Pass Infinity to mean "just fetch one more batch, whatever it covers"
+  // (used by Load More, which doesn't know a target date in advance).
+  function ensureLoadedUntil(targetMs){
+    function step(){
+      if(allLoaded || !targetMs || targetMs <= maxLoadedStartMs()){
+        return Promise.resolve();
+      }
+      var afterUnix = Math.floor(maxLoadedStartMs()/1000);
+      return fetch('/api/events-more?after='+afterUnix, {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          mergeMoreEvents(data);
+          if(targetMs === Infinity) return;
+          return step();
+        })
+        .catch(function(){ allLoaded = true; });
+    }
+    loadMorePromise = loadMorePromise ? loadMorePromise.then(step) : step();
+    return loadMorePromise;
+  }
+
   // ── Type selector ─────────────────────────────────────────────────────────
   document.querySelectorAll('.type-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
@@ -1229,43 +1309,52 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     applyFilters();
   }
 
-  function applyFilters(){
-    var dance          = document.getElementById('f-dance').value.toLowerCase();
+  // matchesFilters holds the single source of truth for which rows pass the
+  // active filters. Shared by applyFilters() (full refilter, resets paging)
+  // and refilterKeepShown() (refilter after a background fetch added rows,
+  // without resetting how much the user has already paged/scrolled through).
+  function matchesFilters(r){
+    var dance  = document.getElementById('f-dance').value.toLowerCase();
     var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
     var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
+    if(!allOn && !noneOn){
+      var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1';
+      if(typed){
+        var match = (typeFilter.ball      && r.dataset.ball     ==='1') ||
+                    (typeFilter.workshop  && r.dataset.workshop ==='1') ||
+                    (typeFilter.festival  && r.dataset.festival ==='1');
+        if(!match) return false;
+      }
+    }
+    if(dance){
+      var dances = (r.dataset.dances||'').toLowerCase();
+      if(dances.indexOf(dance)<0) return false;
+    }
+    if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
+    if(regionState   && (r.dataset.region||'')!==regionState)   return false;
+    if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
+    if(fltDateFrom && r.dataset.date < fltDateFrom) return false;
+    if(fltDateTo   && (r.dataset.endDate||r.dataset.date) > fltDateTo) return false;
+    if(fltTown){
+      var town=(r.dataset.town||'').toLowerCase();
+      if(town.indexOf(fltTown.toLowerCase())<0) return false;
+    }
+    if(fltBBox){
+      var g=geoById[r.dataset.id];
+      if(!g || g.lat<fltBBox.minLat || g.lat>fltBBox.maxLat || g.lng<fltBBox.minLng || g.lng>fltBBox.maxLng) return false;
+    }
+    return true;
+  }
 
-    visible = rows.filter(function(r){
-      if(!allOn && !noneOn){
-        var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1';
-        if(typed){
-          var match = (typeFilter.ball      && r.dataset.ball     ==='1') ||
-                      (typeFilter.workshop  && r.dataset.workshop ==='1') ||
-                      (typeFilter.festival  && r.dataset.festival ==='1');
-          if(!match) return false;
-        }
-      }
-      if(dance){
-        var dances = (r.dataset.dances||'').toLowerCase();
-        if(dances.indexOf(dance)<0) return false;
-      }
-      if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
-      if(regionState   && (r.dataset.region||'')!==regionState)   return false;
-      if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
-      if(fltDateFrom && r.dataset.date < fltDateFrom) return false;
-      if(fltDateTo   && (r.dataset.endDate||r.dataset.date) > fltDateTo) return false;
-      if(fltTown){
-        var town=(r.dataset.town||'').toLowerCase();
-        if(town.indexOf(fltTown.toLowerCase())<0) return false;
-      }
-      if(fltBBox){
-        var g=geoById[r.dataset.id];
-        if(!g || g.lat<fltBBox.minLat || g.lat>fltBBox.maxLat || g.lng<fltBBox.minLng || g.lng>fltBBox.maxLng) return false;
-      }
-      return true;
-    });
-
+  function applyFilters(){
+    visible = rows.filter(matchesFilters);
     shown = 0;
     render();
+  }
+
+  function refilterKeepShown(){
+    visible = rows.filter(matchesFilters);
+    renderAll();
   }
 
   // ── Search filter form (issue #625) ─────────────────────────────────────────
@@ -1351,7 +1440,8 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
       syncFilterURL();
       mapFitted = false;
-      applyFilters();
+      var targetMs = fltDateTo ? new Date(fltDateTo+'T23:59:59').getTime() : 0;
+      ensureLoadedUntil(targetMs).then(applyFilters);
       modal.close();
     });
   })();
@@ -1382,7 +1472,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
   }
 
-  function render(){
+  // renderAll redraws everything (week/minical/map/table/tiles) from the
+  // current `visible`/`shown` without changing `shown` itself. Used both by
+  // render() (after advancing shown by one PAGE) and by refilterKeepShown()
+  // (after a background fetch grew `rows`, where shown must stay as-is).
+  function renderAll(){
     // Update count label
     document.getElementById('f-info').textContent =
       visible.length+' '+(visible.length!==1?I18N.events:I18N.event);
@@ -1396,12 +1490,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
     // Table
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
-
-    shown = Math.min(shown+PAGE, visible.length);
     visible.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
     document.getElementById('page-info').textContent =
       I18N.showing+' '+shown+' '+I18N.of+' '+visible.length;
-    document.getElementById('load-more').disabled = shown>=visible.length;
+    document.getElementById('load-more').disabled = shown>=visible.length && allLoaded;
     document.getElementById('empty-state').hidden  = visible.length>0;
     document.getElementById('event-table').hidden  = visible.length===0;
     document.getElementById('pagination-bar').hidden = visible.length===0;
@@ -1409,6 +1501,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
     // Mobile tiles
     renderTiles();
+  }
+
+  function render(){
+    shown = Math.min(shown+PAGE, visible.length);
+    renderAll();
   }
 
   ['f-dance'].forEach(function(id){
@@ -1420,14 +1517,16 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   document.getElementById('clear-filters-empty').addEventListener('click',clear);
 
   document.getElementById('load-more').addEventListener('click',function(){
-    var prev=shown;
+    if(shown>=visible.length && !allLoaded){
+      ensureLoadedUntil(Infinity).then(function(){
+        visible = rows.filter(matchesFilters);
+        shown = Math.min(shown+PAGE, visible.length);
+        renderAll();
+      });
+      return;
+    }
     shown=Math.min(shown+PAGE,visible.length);
-    visible.slice(prev,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
-    document.getElementById('page-info').textContent =
-      I18N.showing+' '+shown+' '+I18N.of+' '+visible.length;
-    this.disabled=shown>=visible.length;
-    insertDateSeparators();
-    renderTiles();
+    renderAll();
   });
 
   // Initialise map and first render

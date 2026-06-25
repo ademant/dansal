@@ -403,6 +403,30 @@
     return true;
   }
 
+  // Mirrors index.html's insertDateSeparators(): walks the table's actual DOM
+  // row order (server-rendered date-ascending), not the filtered subset, so
+  // it stays correct regardless of which rows are currently hidden.
+  function insertDateSeparators(){
+    document.querySelectorAll('#sf-event-tbody tr.date-sep').forEach(function(tr){ tr.remove(); });
+    var lang=document.documentElement.lang||'de';
+    var fmtSep=new Intl.DateTimeFormat(lang,{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+    var lastDate=null;
+    rows.forEach(function(r){
+      if(r.hidden) return;
+      var d=r.dataset.date;
+      if(d && d!==lastDate){
+        lastDate=d;
+        var tr=document.createElement('tr');
+        tr.className='date-sep';
+        var td=document.createElement('td');
+        td.colSpan=5;
+        td.textContent=fmtSep.format(new Date(d));
+        tr.appendChild(td);
+        r.parentNode.insertBefore(tr, r);
+      }
+    });
+  }
+
   function render(){
     var visible = rows.filter(matchesFilters);
     rows.forEach(function(r){ r.hidden = true; });
@@ -410,6 +434,7 @@
     document.getElementById('sf-info').textContent = visible.length+' '+(visible.length!==1?I18N.events:I18N.event);
     document.getElementById('sf-empty-state').hidden = visible.length>0;
     document.getElementById('sf-event-table').hidden = visible.length===0;
+    insertDateSeparators();
   }
 
   function fetchResults(){

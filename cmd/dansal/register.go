@@ -843,8 +843,16 @@ func startAutoDeclineJob() {
 		t := time.NewTicker(time.Hour)
 		for range t.C {
 			processExpiredRegistrations()
+			processExpiredInviteLinks()
 		}
 	}()
+}
+
+// processExpiredInviteLinks deletes invite_links that have expired without
+// being used, so the admin "awaiting setup" list doesn't show stale rows
+// indefinitely.
+func processExpiredInviteLinks() {
+	db.Exec("DELETE FROM invite_links WHERE used_at IS NULL AND expires_at < strftime('%s','now')")
 }
 
 func processExpiredRegistrations() {

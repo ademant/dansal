@@ -1313,6 +1313,22 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // active filters. Shared by applyFilters() (full refilter, resets paging)
   // and refilterKeepShown() (refilter after a background fetch added rows,
   // without resetting how much the user has already paged/scrolled through).
+  // True when no filter narrows the result set, i.e. the visible set is
+  // "all future events" rather than some subset. In that case the count to
+  // show the user is the true server-side total, not just how many rows
+  // happen to be loaded yet (which is capped at 100 until ensureLoadedUntil
+  // fetches more) -- otherwise the page misleadingly says "of 100" even
+  // though e.g. 146 events actually exist (see #650 follow-up).
+  function isUnfiltered(){
+    var dance = document.getElementById('f-dance').value.toLowerCase();
+    var allOn = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
+    return !dance && allOn && !regionCountry && !regionState && !regionTown &&
+           !fltDateFrom && !fltDateTo && !fltTown && !fltBBox;
+  }
+  function displayTotal(){
+    return isUnfiltered() ? Math.max(total, visible.length) : visible.length;
+  }
+
   function matchesFilters(r){
     var dance  = document.getElementById('f-dance').value.toLowerCase();
     var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
@@ -1478,8 +1494,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // (after a background fetch grew `rows`, where shown must stay as-is).
   function renderAll(){
     // Update count label
+    var dispTotal = displayTotal();
     document.getElementById('f-info').textContent =
-      visible.length+' '+(visible.length!==1?I18N.events:I18N.event);
+      dispTotal+' '+(dispTotal!==1?I18N.events:I18N.event);
 
     // Week view first so weekKeys is populated before the map reads it
     renderWeek();
@@ -1492,7 +1509,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
     visible.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
     document.getElementById('page-info').textContent =
-      I18N.showing+' '+shown+' '+I18N.of+' '+visible.length;
+      I18N.showing+' '+shown+' '+I18N.of+' '+dispTotal;
     document.getElementById('load-more').disabled = shown>=visible.length && allLoaded;
     document.getElementById('empty-state').hidden  = visible.length>0;
     document.getElementById('event-table').hidden  = visible.length===0;

@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 {{with .Data}}
+{{$allMusicians := .AllMusicians}}
 
 <div class="page-header">
   <h1>Enrich from folkdance.page</h1>
@@ -70,7 +71,7 @@
             <div class="musician-select-row">
               <select name="musician_{{$row.Event.ID}}" class="enrich-sel">
                 <option value="new:{{$opt.Name}}" {{if eq $opt.SelectedID 0}}selected{{end}}>+ Create: {{$opt.Name}}</option>
-                {{range $.AllMusicians}}
+                {{range $allMusicians}}
                 <option value="{{.ID}}" {{if eq .ID $opt.SelectedID}}selected{{end}}>{{.Bandname}}</option>
                 {{end}}
               </select>

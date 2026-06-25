@@ -350,6 +350,12 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/delete", adminRateLimit(adminLocationDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/assign-org", adminRateLimit(adminLocationAssignOrgHandler(cfg, client)))
 
+		r.HandleFunc("GET /admin/enrich", adminEnrichPageHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/enrich/preview", adminRateLimit(adminEnrichPreviewHandler(cfg, tmpls, db, client, i18n)))
+		r.HandleFunc("POST /admin/enrich/apply", adminRateLimit(adminEnrichApplyHandler(cfg, client)))
+		r.HandleFunc("POST /admin/enrich/city-aliases/new", adminRateLimit(adminEnrichAliasNewHandler(db)))
+		r.HandleFunc("POST /admin/enrich/city-aliases/{id}/delete", adminRateLimit(adminEnrichAliasDeleteHandler(db)))
+
 		r.HandleFunc("GET /embed/events", embedEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/event/{id}", embedEventHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/org/{slug}", embedOrgHandler(cfg, tmpls, client, i18n))

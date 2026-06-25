@@ -118,6 +118,37 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (1)")
 	}
 
+	// Migration v2: city alias table for folkdance.page enrichment
+	if !migrationApplied(db, 2) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS city_aliases (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			alias     TEXT    NOT NULL COLLATE NOCASE,
+			canonical TEXT    NOT NULL,
+			UNIQUE(alias)
+		)`)
+		// Pre-seed common English↔German (and a few other European) pairs.
+		seeds := [][2]string{
+			{"Cologne", "Köln"},
+			{"Munich", "München"},
+			{"Nuremberg", "Nürnberg"},
+			{"Vienna", "Wien"},
+			{"Ghent", "Gent"},
+			{"Bruges", "Brugge"},
+			{"Brussels", "Bruxelles"},
+			{"Antwerp", "Antwerpen"},
+			{"The Hague", "Den Haag"},
+			{"Gothenburg", "Göteborg"},
+			{"Zurich", "Zürich"},
+			{"Berne", "Bern"},
+			{"Basle", "Basel"},
+			{"Freiburg", "Freiburg im Breisgau"},
+		}
+		for _, s := range seeds {
+			db.Exec("INSERT OR IGNORE INTO city_aliases(alias, canonical) VALUES(?,?)", s[0], s[1])
+		}
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (2)")
+	}
+
 	return db
 }
 

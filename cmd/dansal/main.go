@@ -2466,6 +2466,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
+	smux.Handle("POST /api/v1/events/{id}/enrich", auth(http.HandlerFunc(enrichEvent)))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 

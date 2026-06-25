@@ -1,0 +1,178 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+
+<div class="page-header">
+  <h1>Enrich from folkdance.page</h1>
+</div>
+
+{{if .FeedFetched}}
+  {{if .Error}}
+  <div class="enrich-error">{{.Error}}</div>
+  {{else if not .Rows}}
+  <p class="empty-msg">No enrichment proposals — no matching events found with new musicians or pricing.</p>
+  {{else}}
+
+  <form method="post" action="/admin/enrich/apply">
+    {{range $ri, $row := .Rows}}
+    {{/* hidden fields for the apply handler */}}
+    <input type="hidden" name="fdp_price_{{$row.Event.ID}}" value="{{$row.FDPEvent.Price}}">
+    {{end}}
+
+    <div class="table-wrap">
+    <table class="event-table enrich-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="sel-all" title="Select all"></th>
+          <th>Dansal event</th>
+          <th>folkdance.page</th>
+          <th>Match</th>
+          <th>Musicians</th>
+          <th>Pricing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range $ri, $row := .Rows}}
+        <tr>
+          <td class="col-check">
+            <input type="checkbox" name="include" value="{{$row.Event.ID}}" checked>
+          </td>
+          <td>
+            <a href="/events/{{$row.Event.ShortCode}}">{{$row.Event.Title}}</a>
+            {{with $row.Event.Location}}<br><small class="muted">{{.Town}}</small>{{end}}
+            <br><small class="muted">{{$row.StartDate}}</small>
+          </td>
+          <td>
+            <span class="enrich-fdp-name">{{$row.FDPEvent.Name}}</span>
+            <br><small class="muted">{{$row.FDPEvent.City}}, {{$row.FDPEvent.Country}}</small>
+          </td>
+          <td><span class="badge enrich-match-{{$row.MatchType}}">{{$row.MatchType}}</span></td>
+          <td class="col-musicians">
+            {{if $row.Musicians}}
+            {{range $mi, $opt := $row.Musicians}}
+            <div class="musician-select-row">
+              <select name="musician_{{$row.Event.ID}}" class="enrich-sel">
+                <option value="new:{{$opt.Name}}" {{if eq $opt.SelectedID 0}}selected{{end}}>+ Create: {{$opt.Name}}</option>
+                {{range $.AllMusicians}}
+                <option value="{{.ID}}" {{if eq .ID $opt.SelectedID}}selected{{end}}>{{.Bandname}}</option>
+                {{end}}
+              </select>
+            </div>
+            {{end}}
+            {{else}}<span class="muted">—</span>{{end}}
+          </td>
+          <td class="col-pricing">
+            {{if $row.HasPricing}}
+              <span class="muted">already set</span>
+            {{else if $row.ProposedPricing}}
+              <label>
+                <input type="checkbox" name="apply_pricing_{{$row.Event.ID}}" value="1" checked>
+                <span class="enrich-price">{{$row.PricingStr}}</span>
+              </label>
+            {{else}}
+              <span class="muted">—</span>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary enrich-apply-btn">Apply selected enrichments</button>
+    </div>
+  </form>
+
+  <script>
+  document.getElementById('sel-all').addEventListener('change', function() {
+    document.querySelectorAll('input[name="include"]').forEach(function(cb) { cb.checked = this.checked; }, this);
+  });
+  </script>
+
+  {{end}}{{/* .Error / .Rows */}}
+{{end}}{{/* .FeedFetched */}}
+
+<div class="enrich-sections">
+
+  <div class="enrich-section">
+    <h2>Fetch & preview</h2>
+    <p class="enrich-desc">Fetches the folkdance.page balfolk feed and finds events that already exist in dansal. Matched events are shown above for review before anything is changed.</p>
+    <form method="post" action="/admin/enrich/preview">
+      <button type="submit" class="btn-primary">Fetch &amp; preview enrichments</button>
+    </form>
+  </div>
+
+  <div class="enrich-section">
+    <h2>City name aliases</h2>
+    <p class="enrich-desc">folkdance.page uses English city names. These aliases map them to the names stored in dansal locations.</p>
+    <table class="event-table alias-table">
+      <thead>
+        <tr><th>External name</th><th>Dansal name</th><th></th></tr>
+      </thead>
+      <tbody>
+        {{if .CityAliases}}
+        {{range .CityAliases}}
+        <tr>
+          <td>{{.Alias}}</td>
+          <td>{{.Canonical}}</td>
+          <td class="col-actions">
+            <form method="post" action="/admin/enrich/city-aliases/{{.ID}}/delete" style="display:inline">
+              <button type="submit" class="btn-icon btn-del" title="Delete alias" aria-label="Delete alias">🗑️</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+        {{else}}
+        <tr><td colspan="3" class="muted">No aliases yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    <form method="post" action="/admin/enrich/city-aliases/new" class="alias-add-form">
+      <input name="alias" placeholder="External name (e.g. Cologne)" required class="alias-input">
+      <span class="alias-arrow">→</span>
+      <input name="canonical" placeholder="Dansal name (e.g. Köln)" required class="alias-input">
+      <button type="submit" class="btn-primary">Add</button>
+    </form>
+  </div>
+
+</div>
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:1rem}
+.page-header h1{margin:0}
+.enrich-error{padding:.75rem 1rem;background:#fde8e8;color:#a00;border-radius:4px;margin-bottom:1rem}
+.enrich-sections{display:flex;flex-direction:column;gap:2rem;margin-top:2rem}
+.enrich-section h2{margin:0 0 .35rem}
+.enrich-desc{color:var(--fg-dim);font-size:.9rem;margin:.25rem 0 .75rem}
+.table-wrap{overflow-x:auto;margin-bottom:1rem}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+.event-table thead th{background:var(--table-head-bg,#f4f6fb);font-weight:600;white-space:nowrap}
+.event-table tbody tr:hover{background:var(--row-hover,#f9f9ff)}
+.enrich-table .col-check{width:2rem}
+.enrich-table .col-musicians{min-width:14rem}
+.enrich-table .col-pricing{min-width:9rem}
+.enrich-table .col-actions{white-space:nowrap}
+.musician-select-row{margin-bottom:.3rem}
+.enrich-sel{font-size:.85rem;max-width:22rem;width:100%;padding:.2rem .3rem;border:1px solid var(--border-mid);border-radius:3px;background:var(--input-bg,#fff);color:var(--fg)}
+.enrich-fdp-name{font-size:.9rem}
+.enrich-match-url{background:#d1fae5;color:#065f46}
+.enrich-match-city\+date{background:#e0e7ff;color:#3730a3}
+.enrich-price{font-size:.85rem;font-weight:600}
+.muted{color:var(--fg-faint);font-size:.88rem}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:10px;font-size:.78rem;font-weight:600}
+.form-actions{margin:1rem 0}
+.enrich-apply-btn,.btn-primary{display:inline-block;padding:.45rem 1.1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;text-decoration:none}
+.enrich-apply-btn:hover,.btn-primary:hover{background:#0d4a80}
+.alias-table{max-width:30rem;margin-bottom:.75rem}
+.alias-add-form{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.alias-input{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.9rem;width:12rem;background:var(--input-bg,#fff);color:var(--fg)}
+.alias-arrow{color:var(--fg-faint);font-size:1.1rem}
+.btn-icon{background:none;border:1px solid var(--border-mid);border-radius:4px;padding:.2rem .4rem;cursor:pointer;font-size:.85rem;color:var(--fg-dim)}
+.btn-del:hover{background:#fee2e2;border-color:#f87171}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+</style>
+
+{{end}}{{/* .Data */}}
+{{end}}{{/* content */}}

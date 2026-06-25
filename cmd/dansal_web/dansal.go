@@ -1648,6 +1648,25 @@ func (c *DansalClient) DeleteEvent(ctx context.Context, id int, token string) er
 	return nil
 }
 
+type EnrichEventReq struct {
+	AddMusicianIDs []int    `json:"add_musician_ids,omitempty"`
+	Pricing        *Pricing `json:"pricing,omitempty"`
+}
+
+func (c *DansalClient) EnrichEvent(ctx context.Context, eventID int, req EnrichEventReq, token string) error {
+	body, _ := json.Marshal(req)
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/enrich", eventID), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateEvents()
+	return nil
+}
+
 func (c *DansalClient) DeleteEventImage(ctx context.Context, eventID int, token string) error {
 	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/images/%d", eventID), token, nil)
 	if err != nil {

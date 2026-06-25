@@ -14,10 +14,6 @@
   <button type="button" class="type-btn type-active" data-type="ball">{{$.Strings.T "filter_type_ball"}}</button>
   <button type="button" class="type-btn type-active" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</button>
   <button type="button" class="type-btn type-active" data-type="festival">{{$.Strings.T "filter_type_festival"}}</button>
-  <select id="f-dance" aria-label="All dance styles">
-    <option value="">All dance styles</option>
-    {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
-  </select>
 </div>
 
 <!-- Map -->
@@ -29,7 +25,7 @@
   <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
 </div>
 
-<!-- Week view -->
+<!-- Week view + mini-cal in a shared card so the selection link is obvious -->
 <div id="week-outer">
   <div id="week-main"></div>
   <div id="week-mini-cal"></div>
@@ -51,12 +47,13 @@
 
 <hr class="week-divider">
 
-<!-- Region selector -->
-<div id="region-bar" class="region-bar"></div>
-
-<!-- Search filter form -->
+<!-- Table header: search link + week/all toggle + clear filters -->
 <div class="search-trigger-bar">
   <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
+  <div class="tmt" id="tmt">
+    <button type="button" class="tmt-btn tmt-active" id="tmt-week">{{$.Strings.T "table_mode_week"}}</button>
+    <button type="button" class="tmt-btn" id="tmt-all">{{$.Strings.T "table_mode_all"}}</button>
+  </div>
   <button type="button" id="reset-filters-btn" class="reset-filters-btn">{{$.Strings.T "clear_filters"}}</button>
 </div>
 
@@ -162,11 +159,16 @@
 .filter-row button{padding:.35rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:.9rem;color:var(--fg)}
 .filter-row button:hover{background:var(--btn-bg-h)}
 .filter-info{font-size:.85rem;color:var(--fg-muted)}
-.search-trigger-bar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin:1rem 0}
-.search-events-btn{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.92rem}
+.search-trigger-bar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin:1rem 0;flex-wrap:wrap}
+.search-events-btn{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.92rem;text-decoration:none}
 .search-events-btn:hover{background:var(--link);color:#fff}
 .reset-filters-btn{padding:.4rem 1rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.92rem}
 .reset-filters-btn:hover{background:var(--btn-bg-h)}
+.tmt{display:flex;border:1px solid var(--border-mid);border-radius:4px;overflow:hidden}
+.tmt-btn{padding:.35rem .85rem;border:none;border-right:1px solid var(--border-mid);background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.88rem;line-height:1.4}
+.tmt-btn:last-child{border-right:none}
+.tmt-btn:hover{background:var(--btn-bg-h)}
+.tmt-btn.tmt-active{background:var(--heading);color:#fff}
 .table-wrap{overflow-x:auto}
 .event-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border-lite);vertical-align:top}
@@ -180,9 +182,6 @@
 .col-attr{text-align:center;white-space:nowrap}
 .date-sep td{background:var(--bg-subtle);font-weight:600;font-size:.85rem;color:var(--fg-2);padding:.4rem .6rem}
 .date-sep{font-size:.85rem;font-weight:600;color:var(--fg-2);background:var(--bg-subtle);padding:.4rem .6rem;border-radius:4px;margin:.5rem 0 .25rem}
-.region-bar{display:flex;align-items:center;gap:.4rem;margin:.75rem 0 .5rem;flex-wrap:wrap}
-.region-bar select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
-.region-sep{color:var(--fg-faint);font-size:1.1rem;line-height:1}
 .event-tile{display:block;padding:.75rem 1rem;border:1px solid var(--border-lite);border-radius:.4rem;margin-bottom:.5rem;text-decoration:none;color:inherit;background:var(--bg)}
 .event-tile:hover{background:var(--bg-hover)}
 #event-tiles{display:none}
@@ -198,7 +197,7 @@
 #load-more[disabled]{display:none}
 .empty-state{text-align:center;padding:2rem;color:var(--fg-muted)}
 .empty-state button{margin-left:.75rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;color:var(--fg)}
-#week-outer{display:flex;gap:1rem;align-items:flex-start;margin-top:1.5rem}
+#week-outer{display:flex;gap:1rem;align-items:flex-start;margin-top:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem}
 .week-divider{border:none;border-top:2px solid var(--border-mid);margin:1.5rem 0}
 #week-main{flex:1;min-width:0}
 #week-mini-cal{flex:0 0 210px;font-size:.82rem}
@@ -275,7 +274,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .wp-actions button{flex:1;padding:.55rem 0;border-radius:6px;font-size:.92rem;border:1px solid var(--border-mid);background:var(--btn-bg);color:var(--fg);cursor:pointer}
 .wp-actions .wp-select{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
 @media(max-width:640px){
-  .filter-row input[type=date]{display:none}
   #map-container{height:280px}
   #week-mini-cal{display:none}
   .week-nav{display:none}
@@ -284,6 +282,8 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   #event-tiles{display:block}
   .week-table-wrap{display:none}
   .week-mobile{display:block}
+  .tmt{display:none}
+  #week-outer{padding:.6rem}
 }
 </style>
 
@@ -302,12 +302,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   var weekKeys = [];
   var typeFilter = {ball:true, workshop:true, festival:true};
   var HOLIDAYS = new Set({{.Data.HolidayDates}});
-  var regionCountry = '', regionState = '', regionTown = '';
-  var REGION = {
-    allCountries: "{{$.Strings.T "filter_all_countries"}}",
-    allStates: "{{$.Strings.T "filter_all_states"}}",
-    allTowns: "{{$.Strings.T "filter_all_towns"}}"
-  };
+  // 'week' = table shows only current-week events in sync with the calendar;
+  // 'all'  = table shows all future events with pagination (classic view).
+  var tableMode = new URLSearchParams(window.location.search).get('mode') === 'all' ? 'all' : 'week';
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -517,10 +514,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
     var wv = document.getElementById('week-main');
     wv.innerHTML = html;
-    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
-    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
-    document.getElementById('wm-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
-    document.getElementById('wm-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); });
+    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); if(tableMode==='week'){ shown=0; renderAll(); } });
+    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); if(tableMode==='week'){ shown=0; renderAll(); } });
+    document.getElementById('wm-prev').addEventListener('click',function(){ weekOffset--; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); if(tableMode==='week'){ shown=0; renderAll(); } });
+    document.getElementById('wm-next').addEventListener('click',function(){ weekOffset++; pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true); if(tableMode==='week'){ shown=0; renderAll(); } });
     document.getElementById('wm-range-btn').addEventListener('click', openWeekPicker);
     wv.querySelectorAll('.day-code').forEach(function(el){
       el.addEventListener('click',function(){
@@ -637,6 +634,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
         var rowMon=new Date(+p[0],+p[1]-1,+p[2]);
         weekOffset=Math.round((rowMon-getWeekStart(0))/(7*86400000));
         pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+        if(tableMode==='week'){ shown=0; renderAll(); }
       });
     });
   }
@@ -748,6 +746,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(!monday) return;
     weekOffset = Math.round((monday - getWeekStart(0)) / (7*86400000));
     pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+    if(tableMode==='week'){ shown=0; renderAll(); }
     document.getElementById('wp-dialog').close();
   }
 
@@ -1079,93 +1078,44 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
   });
 
-  // ── Region selector ───────────────────────────────────────────────────────
-  function buildRegionBar(){
-    var countries = {};
-    rows.forEach(function(r){ var c=r.dataset.country||''; if(c) countries[c]=1; });
-    var sortedC = Object.keys(countries).sort();
-    var bar = document.getElementById('region-bar');
-    if(sortedC.length === 0){ bar.hidden=true; return; }
-    var html = '<select id="f-country"><option value="">'+escHtml(REGION.allCountries)+'</option>';
-    sortedC.forEach(function(c){ html+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; });
-    html += '</select>';
-    html += '<span id="region-state-wrap" hidden><span class="region-sep"> ›</span> <select id="f-state"><option value="">'+escHtml(REGION.allStates)+'</option></select></span>';
-    html += '<span id="region-town-wrap" hidden><span class="region-sep"> ›</span> <select id="f-town"><option value="">'+escHtml(REGION.allTowns)+'</option></select></span>';
-    bar.innerHTML = html;
-    document.getElementById('f-country').addEventListener('change', function(){
-      regionCountry = this.value;
-      regionState = '';
-      regionTown = '';
-      updateStateDropdown();
-      updateTownDropdown();
-      mapFitted = false;
-      applyFilters();
-    });
+  // ── Table mode toggle ─────────────────────────────────────────────────────
+  // Updates button states and persists the mode to the URL without a reload.
+  function setTableMode(mode){
+    tableMode = mode;
+    document.getElementById('tmt-week').classList.toggle('tmt-active', mode==='week');
+    document.getElementById('tmt-all').classList.toggle('tmt-active', mode==='all');
+    var sp = new URLSearchParams(window.location.search);
+    if(mode === 'all') sp.set('mode','all'); else sp.delete('mode');
+    var newUrl = window.location.pathname + (sp.toString() ? '?'+sp.toString() : '');
+    history.replaceState(history.state, '', newUrl);
+    renderAll();
   }
+  document.getElementById('tmt-week').addEventListener('click', function(){ setTableMode('week'); });
+  document.getElementById('tmt-all').addEventListener('click',  function(){ setTableMode('all');  });
 
-  function updateStateDropdown(){
-    var wrap = document.getElementById('region-state-wrap');
-    if(!regionCountry){ wrap.hidden=true; return; }
-    var states = {};
-    rows.forEach(function(r){
-      if((r.dataset.country||'')===regionCountry){ var s=r.dataset.region||''; if(s) states[s]=1; }
-    });
-    var sorted = Object.keys(states).sort();
-    if(sorted.length === 0){ wrap.hidden=true; return; }
-    var sel = document.getElementById('f-state');
-    var html = '<option value="">'+escHtml(REGION.allStates)+'</option>';
-    sorted.forEach(function(s){ html+='<option value="'+escHtml(s)+'">'+escHtml(s)+'</option>'; });
-    sel.innerHTML = html;
-    sel.value = regionState;
-    wrap.hidden = false;
-    sel.addEventListener('change', function(){
-      regionState = this.value;
-      regionTown = '';
-      updateTownDropdown();
-      mapFitted = false;
-      applyFilters();
-    });
-  }
-
-  function updateTownDropdown(){
-    var wrap = document.getElementById('region-town-wrap');
-    if(!regionCountry){ wrap.hidden=true; return; }
-    var towns = {};
-    rows.forEach(function(r){
-      if((r.dataset.country||'')!==regionCountry) return;
-      if(regionState && (r.dataset.region||'')!==regionState) return;
-      var t=r.dataset.town||''; if(t) towns[t]=1;
-    });
-    var sorted = Object.keys(towns).sort();
-    var sel = document.getElementById('f-town');
-    var html = '<option value="">'+escHtml(REGION.allTowns)+'</option>';
-    sorted.forEach(function(t){ html+='<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>'; });
-    sel.innerHTML = html;
-    sel.value = regionTown;
-    wrap.hidden = false;
-    sel.addEventListener('change', function(){
-      regionTown = this.value;
-      mapFitted = false;
-      applyFilters();
+  // Returns the rows to display in the table: all visible in 'all' mode,
+  // only those overlapping the current week in 'week' mode.
+  function tableRows(){
+    if(tableMode !== 'week') return visible;
+    var ws = weekKeys.length ? weekKeys[0] : '';
+    var we = weekKeys.length ? weekKeys[weekKeys.length-1] : '';
+    return visible.filter(function(r){
+      var s = r.dataset.date || '';
+      var e = r.dataset.endDate || s;
+      return s <= we && e >= ws;
     });
   }
 
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
-    document.getElementById('f-dance').value    = '';
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
-    regionCountry = ''; regionState = ''; regionTown = '';
-    var fc = document.getElementById('f-country');
-    if(fc) fc.value = '';
-    updateStateDropdown();
-    updateTownDropdown();
     mapFitted=false;
     applyFilters();
   }
 
   // matchesFilters holds the single source of truth for which rows pass the
-  // active filters. Shared by applyFilters() (full refilter, resets paging)
+  // active type filter. Shared by applyFilters() (full refilter, resets paging)
   // and refilterKeepShown() (refilter after a background fetch added rows,
   // without resetting how much the user has already paged/scrolled through).
   // True when no filter narrows the result set, i.e. the visible set is
@@ -1175,16 +1125,14 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // fetches more) -- otherwise the page misleadingly says "of 100" even
   // though e.g. 146 events actually exist (see #650 follow-up).
   function isUnfiltered(){
-    var dance = document.getElementById('f-dance').value.toLowerCase();
-    var allOn = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
-    return !dance && allOn && !regionCountry && !regionState && !regionTown;
+    return typeFilter.ball && typeFilter.workshop && typeFilter.festival;
   }
   function displayTotal(){
+    if(tableMode === 'week') return tableRows().length;
     return isUnfiltered() ? Math.max(total, visible.length) : visible.length;
   }
 
   function matchesFilters(r){
-    var dance  = document.getElementById('f-dance').value.toLowerCase();
     var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
     var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
     if(!allOn && !noneOn){
@@ -1196,13 +1144,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
         if(!match) return false;
       }
     }
-    if(dance){
-      var dances = (r.dataset.dances||'').toLowerCase();
-      if(dances.indexOf(dance)<0) return false;
-    }
-    if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
-    if(regionState   && (r.dataset.region||'')!==regionState)   return false;
-    if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
     return true;
   }
 
@@ -1250,71 +1191,79 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // render() (after advancing shown by one PAGE) and by refilterKeepShown()
   // (after a background fetch grew `rows`, where shown must stay as-is).
   function renderAll(){
+    // Week view first so weekKeys is populated before tableRows() reads it
+    renderWeek();
+    renderMiniCal();
+
+    // Map always shows current-week events regardless of table mode
+    updateMapMarkers();
+
+    // Table — use tableRows() so week mode shows only the current week
+    var tRows = tableRows();
+    // In week mode show everything at once (no pagination needed for one week)
+    if(tableMode === 'week') shown = tRows.length;
+
     // Update count label
     var dispTotal = displayTotal();
     document.getElementById('f-info').textContent =
       dispTotal+' '+(dispTotal!==1?I18N.events:I18N.event);
 
-    // Week view first so weekKeys is populated before the map reads it
-    renderWeek();
-    renderMiniCal();
-
-    // Map
-    updateMapMarkers();
-
-    // Table
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
-    visible.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
+    tRows.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
     document.getElementById('page-info').textContent =
       I18N.showing+' '+shown+' '+I18N.of+' '+dispTotal;
-    document.getElementById('load-more').disabled = shown>=visible.length && allLoaded;
-    document.getElementById('empty-state').hidden  = visible.length>0;
-    document.getElementById('event-table').hidden  = visible.length===0;
-    document.getElementById('pagination-bar').hidden = visible.length===0;
+    document.getElementById('load-more').disabled = shown>=tRows.length && allLoaded;
+    document.getElementById('empty-state').hidden  = tRows.length>0;
+    document.getElementById('event-table').hidden  = tRows.length===0;
+    // Pagination only relevant in 'all' mode
+    document.getElementById('pagination-bar').hidden = tableMode==='week' || tRows.length===0;
     insertDateSeparators();
 
-    // Mobile tiles
+    // Mobile tiles (not affected by table mode — always show all visible events)
     renderTiles();
   }
 
   function render(){
-    shown = Math.min(shown+PAGE, visible.length);
+    var tRows = tableRows();
+    shown = Math.min(shown+PAGE, tRows.length);
     renderAll();
   }
-
-  ['f-dance'].forEach(function(id){
-    var el=document.getElementById(id);
-    el.addEventListener('input',  applyFilters);
-    el.addEventListener('change', applyFilters);
-  });
 
   document.getElementById('clear-filters-empty').addEventListener('click',clear);
 
   document.getElementById('load-more').addEventListener('click',function(){
-    if(shown>=visible.length && !allLoaded){
+    var tRows = tableRows();
+    if(shown>=tRows.length && !allLoaded){
       ensureLoadedUntil(Infinity).then(function(){
         visible = rows.filter(matchesFilters);
-        shown = Math.min(shown+PAGE, visible.length);
+        shown = Math.min(shown+PAGE, tableRows().length);
         renderAll();
       });
       return;
     }
-    shown=Math.min(shown+PAGE,visible.length);
+    shown=Math.min(shown+PAGE,tRows.length);
     renderAll();
   });
 
+  // Set initial toggle button appearance from URL param (no render yet — applyFilters() below does that)
+  document.getElementById('tmt-week').classList.toggle('tmt-active', tableMode==='week');
+  document.getElementById('tmt-all').classList.toggle('tmt-active',  tableMode==='all');
+
   // Initialise map and first render
-  buildRegionBar();
   initMap();
   // Record initial week in history so back-button works from within the page.
   history.replaceState({wo:weekOffset,di:currentDayIndex},'',window.location.href);
   applyFilters();
 
-  // Restore week when the user navigates back/forward within this page.
+  // Restore week and table mode when the user navigates back/forward.
   window.addEventListener('popstate',function(ev){
     weekOffset=(ev.state&&typeof ev.state.wo==='number')?ev.state.wo:urlToWeekOffset();
     currentDayIndex=(ev.state&&typeof ev.state.di==='number')?ev.state.di:urlToDayIndex();
-    syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(false);
+    tableMode = new URLSearchParams(window.location.search).get('mode')==='all' ? 'all' : 'week';
+    document.getElementById('tmt-week').classList.toggle('tmt-active', tableMode==='week');
+    document.getElementById('tmt-all').classList.toggle('tmt-active',  tableMode==='all');
+    syncMiniCalToWeek();
+    shown=0; renderAll(); updateMapMarkers(false);
   });
 })();
 </script>

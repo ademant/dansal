@@ -92,7 +92,9 @@
 .sf-field label{font-size:.8rem}
 .sf-field input,.sf-field select{padding:.35rem .5rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem}
 .sf-date-btn{padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);cursor:pointer;font-size:.88rem;white-space:nowrap}
-.sf-date-popup{position:absolute;top:100%;left:0;z-index:20;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:.6rem;margin-top:.25rem;width:260px}
+/* z-index above Leaflet's own panes/controls (up to ~1000), so the popup
+   doesn't render underneath the map below it on the page. */
+.sf-date-popup{position:absolute;top:100%;left:0;z-index:1001;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:.6rem;margin-top:.25rem;width:260px}
 .sf-cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;font-weight:600}
 .sf-cal-header button{border:none;background:none;cursor:pointer;font-size:1rem;color:var(--fg)}
 .sf-cal-grid{width:100%;border-collapse:collapse;font-size:.85rem}

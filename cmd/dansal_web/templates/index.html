@@ -725,6 +725,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var wsIso=dateToIso(ws);
     var weIso=dateToIso(new Date(ws.getTime()+6*86400000));
     var today=todayIso();
+
+    // Month navigation can move past what's loaded, same as week navigation /
+    // Load More / date filters -- fetch the rest of the displayed month on
+    // demand instead of silently showing no events past the loaded cap.
+    var monthEndMs = new Date(miniCalYear, miniCalMonth+1, 0, 23, 59, 59).getTime();
+    if(!allLoaded && monthEndMs > maxLoadedStartMs()){
+      ensureLoadedUntil(monthEndMs).then(refilterKeepShown);
+    }
+
     var evtCounts=getEventCounts();
     var monthDate=new Date(miniCalYear,miniCalMonth,1);
     var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
@@ -1186,6 +1195,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
     if(typeof data.total === 'number') total = data.total;
     if(data.done) allLoaded = true;
+    dayCountsCache = null; // rows grew -- mini-calendar heatmap must recompute
   }
 
   // Fetches additional batches (each up to 100 events) until either targetMs is

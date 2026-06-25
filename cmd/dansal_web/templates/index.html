@@ -161,21 +161,7 @@
       {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
     </td>
     <td class="col-attr">
-      {{if eq .Food "sold"}}<span class="food-icon" title="{{$.Strings.T "food_sold"}}">🍽️</span>{{end}}
-      {{if eq .Food "potluck"}}<span class="food-icon" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{end}}
-      {{if eq .Drink "alcohol"}}<span class="food-icon" title="{{$.Strings.T "drink_alcohol"}}">🍷</span>{{end}}
-      {{if eq .Drink "soft"}}<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{end}}
-      {{if index $ea "wheelchair"}}<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
-      {{if index $ea "hearing_loop"}}<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>{{end}}
-      {{if and .Location .Location.NoStreetShoes}}<span class="food-icon" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫</span>{{end}}
-      {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
-      {{if eq $floor "parquet"}}<span class="food-icon" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{end}}
-      {{if eq $floor "stone"}}<span class="food-icon" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{end}}
-      {{if eq $floor "tiles"}}<span class="food-icon" title="{{$.Strings.T "floor_tiles"}}">🔲</span>{{end}}
-      {{if eq $floor "grass"}}<span class="food-icon" title="{{$.Strings.T "floor_grass"}}">🌿</span>{{end}}
-      {{if eq $floor "sand"}}<span class="food-icon" title="{{$.Strings.T "floor_sand"}}">🏖</span>{{end}}
-      {{if eq $floor "pavement"}}<span class="food-icon" title="{{$.Strings.T "floor_pavement"}}">🛣</span>{{end}}
-      {{if .Pricing}}{{if eq .Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$.Strings.T "filter_fee_free"}}">0€</span>{{else if eq .Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$.Strings.T "filter_fee_donation"}}">♥</span>{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$.Strings.T "filter_fee_paid"}}">€</span>{{end}}{{end}}
+      {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}
     </td>
   </tr>
   {{end}}
@@ -301,14 +287,9 @@
 .col-attr{text-align:center;white-space:nowrap}
 .date-sep td{background:var(--bg-subtle);font-weight:600;font-size:.85rem;color:var(--fg-2);padding:.4rem .6rem}
 .date-sep{font-size:.85rem;font-weight:600;color:var(--fg-2);background:var(--bg-subtle);padding:.4rem .6rem;border-radius:4px;margin:.5rem 0 .25rem}
-.food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
 .region-bar{display:flex;align-items:center;gap:.4rem;margin:.75rem 0 .5rem;flex-wrap:wrap}
 .region-bar select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
 .region-sep{color:var(--fg-faint);font-size:1.1rem;line-height:1}
-.fee-sym{display:inline-block;padding:.1rem .35rem;border-radius:3px;font-size:.78rem;font-weight:600}
-.fee-free{background:#d1fae5;color:#065f46}
-.fee-donation{background:#fef3c7;color:#92400e}
-.fee-paid{background:#e5e7eb;color:#374151}
 .event-tile{display:block;padding:.75rem 1rem;border:1px solid var(--border-lite);border-radius:.4rem;margin-bottom:.5rem;text-decoration:none;color:inherit;background:var(--bg)}
 .event-tile:hover{background:var(--bg-hover)}
 #event-tiles{display:none}

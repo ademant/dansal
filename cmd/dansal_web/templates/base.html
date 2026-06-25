@@ -190,6 +190,13 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .btn-icon{display:inline-block;padding:.25rem .5rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:1rem;line-height:1;color:var(--fg-2);text-decoration:none;cursor:pointer;vertical-align:middle}
 .btn-icon:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
 .entity-meta{font-size:.8rem;color:var(--fg-muted)}
+.food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
+.fee-sym{display:inline-block;padding:.1rem .35rem;border-radius:3px;font-size:.78rem;font-weight:600}
+.fee-free{background:#d1fae5;color:#065f46}
+.fee-donation{background:#fef3c7;color:#92400e}
+.fee-paid{background:#e5e7eb;color:#374151}
+.event-attr-row:empty{display:none}
+.event-attr-row{margin:.25rem 0}
 </style>
 </head>
 <body>
@@ -466,3 +473,25 @@ document.addEventListener('keydown',function(e){
 </script>
 </body>
 </html>{{end}}
+{{/* Shared event attribute icons (food/drink, accessibility, floor, fee) —
+     used by event tiles across index.html, org.html, location.html and
+     musician.html. Call with {{template "event-attr-icons" (dict "Event" $ev "Strings" $.Strings)}}. */}}
+{{define "event-attr-icons"}}
+{{- $ev := .Event}}{{$s := .Strings -}}
+{{- $ea := mergeAttrs (locAttrs $ev.Location) $ev.Attributes -}}
+{{- if eq $ev.Food "sold"}}<span class="food-icon" title="{{$s.T "food_sold"}}">🍽️</span>{{end -}}
+{{- if eq $ev.Food "potluck"}}<span class="food-icon" title="{{$s.T "food_potluck"}}">🥘</span>{{end -}}
+{{- if eq $ev.Drink "alcohol"}}<span class="food-icon" title="{{$s.T "drink_alcohol"}}">🍷</span>{{end -}}
+{{- if eq $ev.Drink "soft"}}<span class="food-icon" title="{{$s.T "drink_soft"}}">🥤</span>{{end -}}
+{{- if index $ea "wheelchair"}}<span class="food-icon" title="{{$s.T "access_wheelchair"}}">♿</span>{{end -}}
+{{- if index $ea "hearing_loop"}}<span class="food-icon" title="{{$s.T "access_hearing_loop"}}">🦻</span>{{end -}}
+{{- if and $ev.Location $ev.Location.NoStreetShoes}}<span class="food-icon" title="{{$s.T "no_street_shoes_label"}}">👟🚫</span>{{end -}}
+{{- $floor := $ev.FloorCondition}}{{if not $floor}}{{if $ev.Location}}{{$floor = $ev.Location.FloorCondition}}{{end}}{{end -}}
+{{- if eq $floor "parquet"}}<span class="food-icon" title="{{$s.T "floor_parquet"}}">🪵</span>{{end -}}
+{{- if eq $floor "stone"}}<span class="food-icon" title="{{$s.T "floor_stone"}}">🪨</span>{{end -}}
+{{- if eq $floor "tiles"}}<span class="food-icon" title="{{$s.T "floor_tiles"}}">🔲</span>{{end -}}
+{{- if eq $floor "grass"}}<span class="food-icon" title="{{$s.T "floor_grass"}}">🌿</span>{{end -}}
+{{- if eq $floor "sand"}}<span class="food-icon" title="{{$s.T "floor_sand"}}">🏖</span>{{end -}}
+{{- if eq $floor "pavement"}}<span class="food-icon" title="{{$s.T "floor_pavement"}}">🛣</span>{{end -}}
+{{- if $ev.Pricing}}{{if eq $ev.Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$s.T "filter_fee_free"}}">0€</span>{{else if eq $ev.Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$s.T "filter_fee_donation"}}">♥</span>{{else if or (eq $ev.Pricing.Type "single") (eq $ev.Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$s.T "filter_fee_paid"}}">€</span>{{end}}{{end -}}
+{{end}}

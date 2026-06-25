@@ -386,6 +386,20 @@ var tmplFuncMap = template.FuncMap{
 		return time.Unix(ts, 0).UTC().Format("2006-01-02")
 	},
 	"parseChangedAt": parseChangedAt,
+	"dict": func(pairs ...interface{}) (map[string]interface{}, error) {
+		if len(pairs)%2 != 0 {
+			return nil, fmt.Errorf("dict: odd number of arguments")
+		}
+		m := make(map[string]interface{}, len(pairs)/2)
+		for i := 0; i < len(pairs); i += 2 {
+			key, ok := pairs[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("dict: key %v is not a string", pairs[i])
+			}
+			m[key] = pairs[i+1]
+		}
+		return m, nil
+	},
 	"isoTime": func(s string) string {
 		if t, ok := parseTime(s); ok {
 			return t.Format("15:04")

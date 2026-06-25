@@ -296,7 +296,11 @@
           var iso = this.dataset.iso;
           if(!pendingStart){
             pendingStart = iso;
-            renderCal();
+            // Defer: re-rendering the grid now would destroy this <td> while
+            // the click is still bubbling to the document "click outside
+            // closes the popup" listener below, which would then find the
+            // (now-detached) target isn't inside the popup and close it.
+            setTimeout(renderCal, 0);
           } else {
             var start = pendingStart, end = iso;
             if(end < start){ var t=start; start=end; end=t; }

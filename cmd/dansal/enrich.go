@@ -15,6 +15,11 @@ type EnrichEventReq struct {
 // It is deliberately not transactional — partial success is acceptable here
 // (musicians get linked even if the pricing update fails or is skipped).
 func enrichEvent(w http.ResponseWriter, r *http.Request) {
+	_, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
 		writeError(w, "invalid event id", http.StatusBadRequest)

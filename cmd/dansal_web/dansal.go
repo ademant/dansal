@@ -661,6 +661,32 @@ func (c *DansalClient) EventsTotal() int {
 	return c.eventsTotal
 }
 
+// maxEventsPages caps how many 1000-event pages GetAllFutureEvents will fetch,
+// so a data anomaly (e.g. a buggy importer flooding the table) can't turn one
+// feed request into an unbounded fetch loop.
+const maxEventsPages = 50
+
+// GetAllFutureEvents fetches every future published event by looping through
+// the API's offset pagination, deliberately bypassing GetEvents's shared,
+// 100-event-capped cache (eventsCache) used by the index page, embeds, and
+// the actor outbox. Used by feed handlers, where subscribers expect every
+// upcoming event, not just the index page's first page.
+func (c *DansalClient) GetAllFutureEvents(ctx context.Context) ([]Event, error) {
+	var all []Event
+	for page := 0; page < maxEventsPages; page++ {
+		params := url.Values{"is_published": {"true"}, "limit": {"1000"}, "offset": {strconv.Itoa(page * 1000)}}
+		batch, err := c.GetEventsFiltered(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < 1000 {
+			break
+		}
+	}
+	return all, nil
+}
+
 func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {
 	var event Event
 	if err := c.get(ctx, fmt.Sprintf("/api/v1/events/%d", id), &event); err != nil {

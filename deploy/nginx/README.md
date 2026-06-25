@@ -245,6 +245,25 @@ curl -I https://events.example.com/api/v1/info
 sudo tail -f /var/log/nginx/error.log | grep limit
 ```
 
+## Feed usage analytics
+
+`/feed/*` (iCal/RSS/JSON subscriptions) is logged to its own file, using a
+format that omits the client IP — just enough to gauge how often feeds are
+actually polled before deciding whether it's worth raising their event cap
+past what the index page loads (see issues #650/#651):
+
+```bash
+sudo tail -f /var/log/nginx/events.example.com-feed.log
+# "$time_local "$request" $status $body_bytes_sent "$http_user_agent""
+
+# Requests per day, most recent log file
+awk '{print $1}' /var/log/nginx/events.example.com-feed.log | sort | uniq -c
+```
+
+This file isn't covered by nginx's default logrotate config unless your
+distro's `/etc/logrotate.d/nginx` already globs `/var/log/nginx/*.log` (most
+do); otherwise add a logrotate stanza for it explicitly.
+
 ## Configuration Details
 
 ### Dual Server Setup

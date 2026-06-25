@@ -35,10 +35,12 @@ func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	}
 }
 
-// feedMainHandler serves all upcoming events.
+// feedMainHandler serves all upcoming events. Uses GetAllFutureEvents rather
+// than GetEvents(ctx, "") so subscribers get every future event, not just the
+// index page's first 100 (see #650/#651).
 func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		events, err := client.GetEvents(r.Context(), "")
+		events, err := client.GetAllFutureEvents(r.Context())
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return

@@ -24,6 +24,7 @@
 <div id="map-container"></div>
 <div class="map-toolbar">
   <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
+  <span id="map-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
   <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
   <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
 </div>
@@ -74,6 +75,7 @@
         <div id="sm-town-suggest" class="sm-town-suggest" hidden></div>
       </label>
       <button type="button" id="sm-geo-btn" class="sm-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
+      <span id="sm-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
       <select id="sm-radius" class="sm-field" aria-label="{{$.Strings.T "filter_radius"}}">
         <option value="10" selected>10 km</option>
         <option value="50">50 km</option>
@@ -251,6 +253,9 @@
 .map-toolbar button{padding:.3rem .9rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem}
 .map-toolbar button:hover{background:var(--link);color:#fff}
 #map-no-coords{color:var(--fg-faint);font-size:.85rem}
+.geo-hint{color:var(--badge-danger-fg);font-size:.85rem}
+.geo-denied{opacity:.55;border-color:var(--fg-faint)!important;color:var(--fg-faint)!important}
+.geo-denied:hover{background:none!important;color:var(--fg-faint)!important}
 .filters{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem}
 .filter-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .filter-row input,.filter-row select{padding:.35rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
@@ -469,6 +474,30 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function todayIso(){ return dateToIso(new Date()); }
   function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // Hides the locate button entirely when the Geolocation API is unavailable
+  // (no API, or insecure context). When permission is already denied, marks
+  // the button visually inactive and shows an inline hint on click instead of
+  // silently doing nothing.
+  function setupGeoButton(btn, hint, onSuccess){
+    if(!navigator.geolocation || !window.isSecureContext){ btn.hidden = true; return; }
+    function markDenied(denied){
+      btn.classList.toggle('geo-denied', denied);
+      hint.hidden = !denied;
+    }
+    if(navigator.permissions && navigator.permissions.query){
+      navigator.permissions.query({name:'geolocation'}).then(function(result){
+        markDenied(result.state === 'denied');
+        result.onchange = function(){ markDenied(result.state === 'denied'); };
+      }).catch(function(){});
+    }
+    btn.addEventListener('click', function(){
+      if(btn.classList.contains('geo-denied')){ hint.hidden = false; return; }
+      navigator.geolocation.getCurrentPosition(onSuccess, function(err){
+        if(err.code === err.PERMISSION_DENIED) markDenied(true);
+      });
+    });
+  }
 
   function urlToWeekOffset(){
     var w=new URLSearchParams(window.location.search).get('week');
@@ -1084,11 +1113,8 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });
-    document.getElementById('map-locate-btn').addEventListener('click',function(){
-      if(!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(function(pos){
-        map.setView([pos.coords.latitude, pos.coords.longitude], 10);
-      });
+    setupGeoButton(document.getElementById('map-locate-btn'), document.getElementById('map-geo-hint'), function(pos){
+      map.setView([pos.coords.latitude, pos.coords.longitude], 10);
     });
   }
 
@@ -1311,14 +1337,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       }
     });
 
-    document.getElementById('sm-geo-btn').addEventListener('click', function(){
-      if(!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(function(pos){
-        pendingGeo = {lat:pos.coords.latitude, lng:pos.coords.longitude};
-        pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
-        townInput.value = '';
-        suggestBox.hidden = true;
-      });
+    setupGeoButton(document.getElementById('sm-geo-btn'), document.getElementById('sm-geo-hint'), function(pos){
+      pendingGeo = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+      pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
+      townInput.value = '';
+      suggestBox.hidden = true;
     });
 
     radiusSel.addEventListener('change', function(){

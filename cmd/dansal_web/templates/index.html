@@ -1,59 +1,4 @@
 {{template "base" .}}
-{{/* event-row renders one <tr> for an event. Takes a dict: Event, OrgMap, TagMap, Strings.
-     Shared between the initial page render and the /api/events-more incremental fetch so
-     rows added after the initial 100-event cap never drift from the server-rendered ones. */}}
-{{define "event-row"}}
-{{$org := orgName .OrgMap .Event.OrganizationID}}
-{{with .Event}}
-<tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
-    data-date="{{isoDate .StartTime}}"
-    data-end-date="{{isoDate .EndTime}}"
-    data-title="{{.Title}}"
-    data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
-    data-country="{{if .Location}}{{.Location.Country}}{{end}}"
-    data-region="{{if .Location}}{{.Location.Region}}{{end}}"
-    data-ball="{{if .HasBall}}1{{else}}0{{end}}"
-    data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
-    data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
-    data-organizer="{{$org}}"
-    data-tags="{{range .Tags}}{{.}} {{end}}"
-    data-dances="{{range .DanceNames}}{{.}} {{end}}"
-    data-id="{{.ID}}"
-    data-start="{{.StartTime}}"
-    data-town="{{if .Location}}{{.Location.Town}}{{end}}"
-    data-availability="{{.Availability}}"
-    data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
-    data-food="{{.Food}}"
-    data-drink="{{.Drink}}"
-    {{- $ea := mergeAttrs (locAttrs .Location) .Attributes}}
-    data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
-    data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
-    data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
-    data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
-    data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
-  <td class="col-time">{{isoTime .StartTime}}</td>
-  <td>
-    <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
-    {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
-    {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
-  </td>
-  <td class="col-venue">
-    {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
-    {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
-  </td>
-  <td class="col-type">
-    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-    {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
-    {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
-    {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
-  </td>
-  <td class="col-attr">
-    {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}
-  </td>
-</tr>
-{{end}}
-{{end}}
 {{define "content"}}
 <h1>{{.Strings.T "events_title"}}</h1>
 
@@ -111,51 +56,9 @@
 
 <!-- Search filter form -->
 <div class="search-trigger-bar">
-  <button type="button" id="search-events-btn" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</button>
+  <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
   <button type="button" id="reset-filters-btn" class="reset-filters-btn">{{$.Strings.T "clear_filters"}}</button>
 </div>
-
-<dialog id="search-modal" class="search-modal">
-  <form method="dialog">
-    <h2>{{$.Strings.T "search_events_btn"}}</h2>
-
-    <div class="search-modal-row">
-      <label class="sm-field">{{$.Strings.T "filter_from_label"}}<input type="date" id="sm-date-from"></label>
-      <label class="sm-field">{{$.Strings.T "filter_to_label"}}<input type="date" id="sm-date-to"></label>
-    </div>
-
-    <div class="search-modal-row">
-      <label class="sm-field sm-town-field">{{$.Strings.T "col_location"}}
-        <input type="text" id="sm-town" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off">
-        <div id="sm-town-suggest" class="sm-town-suggest" hidden></div>
-      </label>
-      <button type="button" id="sm-geo-btn" class="sm-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
-      <span id="sm-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
-      <select id="sm-radius" class="sm-field" aria-label="{{$.Strings.T "filter_radius"}}">
-        <option value="10" selected>10 km</option>
-        <option value="50">50 km</option>
-        <option value="100">100 km</option>
-        <option value="200">200 km</option>
-        <option value="500">500 km</option>
-      </select>
-    </div>
-
-    <div class="search-modal-row">
-      <fieldset class="sm-type-group">
-        <label><input type="checkbox" id="sm-type-ball" data-type="ball">{{$.Strings.T "filter_type_ball"}}</label>
-        <label><input type="checkbox" id="sm-type-workshop" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</label>
-        <label><input type="checkbox" id="sm-type-festival" data-type="festival">{{$.Strings.T "filter_type_festival"}}</label>
-      </fieldset>
-      <select id="sm-dance" class="sm-field" aria-label="All dance styles"></select>
-    </div>
-
-    <div class="search-modal-actions">
-      <button type="button" id="sm-clear-btn">{{$.Strings.T "filter_clear"}}</button>
-      <button type="button" id="sm-cancel-btn">{{$.Strings.T "admin_cancel"}}</button>
-      <button type="button" id="sm-apply-btn" class="btn-primary">{{$.Strings.T "filter_apply"}}</button>
-    </div>
-  </form>
-</dialog>
 
 <!-- Event table -->
 <div class="table-wrap">
@@ -264,24 +167,6 @@
 .search-events-btn:hover{background:var(--link);color:#fff}
 .reset-filters-btn{padding:.4rem 1rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.92rem}
 .reset-filters-btn:hover{background:var(--btn-bg-h)}
-.search-modal{border:1px solid var(--border-mid);border-radius:8px;padding:0;min-width:320px;max-width:480px;width:90vw;background:var(--bg-card);color:var(--fg)}
-.search-modal::backdrop{background:rgba(0,0,0,.4)}
-.search-modal form{padding:1.25rem}
-.search-modal h2{margin:0 0 1rem;font-size:1.1rem}
-.search-modal-row{display:flex;gap:.75rem;margin-bottom:.9rem;flex-wrap:wrap;align-items:flex-end}
-.sm-field{display:flex;flex-direction:column;gap:.25rem;font-size:.85rem;color:var(--fg-2);flex:1;min-width:0}
-.sm-field input,.sm-field select{padding:.35rem .5rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem}
-.sm-town-field{position:relative}
-.sm-town-suggest{position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:4px;max-height:160px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.sm-town-suggest div{padding:.35rem .5rem;cursor:pointer;font-size:.85rem}
-.sm-town-suggest div:hover{background:var(--bg-hover)}
-.sm-geo-btn{padding:.35rem .7rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem;white-space:nowrap}
-.sm-geo-btn:hover{background:var(--link);color:#fff}
-.sm-type-group{display:flex;gap:.75rem;flex-wrap:wrap;border:none;padding:0;margin:0;font-size:.85rem;flex:1}
-.sm-type-group label{display:flex;align-items:center;gap:.3rem;font-weight:normal}
-.search-modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.5rem}
-.search-modal-actions button{padding:.4rem .9rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg);cursor:pointer;font-size:.88rem}
-.search-modal-actions button.btn-primary{background:var(--heading);color:#fff;border-color:var(--heading)}
 .table-wrap{overflow-x:auto}
 .event-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border-lite);vertical-align:top}
@@ -423,44 +308,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     allStates: "{{$.Strings.T "filter_all_states"}}",
     allTowns: "{{$.Strings.T "filter_all_towns"}}"
   };
-
-  // ── Search filter form state (issue #625) ──────────────────────────────────
-  var smParams  = new URLSearchParams(window.location.search);
-  var fltDateFrom = smParams.get('df') || '';
-  var fltDateTo   = smParams.get('dt') || '';
-  var fltTown     = smParams.get('town') || '';
-  var fltBBox     = null;
-  var fltRadius   = parseInt(smParams.get('gr'), 10) || 10;
-  var fltGeo      = null;
-  (function(){
-    var glat=parseFloat(smParams.get('glat')), glng=parseFloat(smParams.get('glng'));
-    if(!isNaN(glat) && !isNaN(glng)){
-      fltGeo = {lat:glat, lng:glng};
-      fltBBox = radiusToBoundingBox(glat, glng, fltRadius);
-    }
-  })();
-
-  function radiusToBoundingBox(lat,lng,radiusKm){
-    var latDeg = radiusKm/111;
-    var lngDeg = radiusKm/(111*Math.cos(lat*Math.PI/180));
-    return {minLat:lat-latDeg, maxLat:lat+latDeg, minLng:lng-lngDeg, maxLng:lng+lngDeg};
-  }
-
-  function syncFilterURL(){
-    var p = new URLSearchParams(window.location.search);
-    fltDateFrom ? p.set('df',fltDateFrom) : p.delete('df');
-    fltDateTo   ? p.set('dt',fltDateTo)   : p.delete('dt');
-    fltTown     ? p.set('town',fltTown)   : p.delete('town');
-    if(fltBBox && fltGeo){
-      p.set('glat', fltGeo.lat.toFixed(5));
-      p.set('glng', fltGeo.lng.toFixed(5));
-      p.set('gr', fltRadius);
-    } else {
-      p.delete('glat'); p.delete('glng'); p.delete('gr');
-    }
-    var qs = p.toString();
-    history.replaceState(history.state,'',window.location.pathname+(qs?'?'+qs:''));
-  }
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -1313,8 +1160,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(fc) fc.value = '';
     updateStateDropdown();
     updateTownDropdown();
-    fltDateFrom = ''; fltDateTo = ''; fltTown = ''; fltBBox = null; fltGeo = null; fltRadius = 10;
-    syncFilterURL();
     mapFitted=false;
     applyFilters();
   }
@@ -1332,8 +1177,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function isUnfiltered(){
     var dance = document.getElementById('f-dance').value.toLowerCase();
     var allOn = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
-    return !dance && allOn && !regionCountry && !regionState && !regionTown &&
-           !fltDateFrom && !fltDateTo && !fltTown && !fltBBox;
+    return !dance && allOn && !regionCountry && !regionState && !regionTown;
   }
   function displayTotal(){
     return isUnfiltered() ? Math.max(total, visible.length) : visible.length;
@@ -1359,16 +1203,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(regionCountry && (r.dataset.country||'')!==regionCountry) return false;
     if(regionState   && (r.dataset.region||'')!==regionState)   return false;
     if(regionTown    && (r.dataset.town||'')!==regionTown)    return false;
-    if(fltDateFrom && r.dataset.date < fltDateFrom) return false;
-    if(fltDateTo   && (r.dataset.endDate||r.dataset.date) > fltDateTo) return false;
-    if(fltTown){
-      var town=(r.dataset.town||'').toLowerCase();
-      if(town.indexOf(fltTown.toLowerCase())<0) return false;
-    }
-    if(fltBBox){
-      var g=geoById[r.dataset.id];
-      if(!g || g.lat<fltBBox.minLat || g.lat>fltBBox.maxLat || g.lng<fltBBox.minLng || g.lng>fltBBox.maxLng) return false;
-    }
     return true;
   }
 
@@ -1383,94 +1217,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     renderAll();
   }
 
-  // ── Search filter form (issue #625) ─────────────────────────────────────────
-  (function(){
-    var modal      = document.getElementById('search-modal');
-    var dateFrom   = document.getElementById('sm-date-from');
-    var dateTo     = document.getElementById('sm-date-to');
-    var townInput  = document.getElementById('sm-town');
-    var suggestBox = document.getElementById('sm-town-suggest');
-    var danceSel   = document.getElementById('sm-dance');
-    var radiusSel  = document.getElementById('sm-radius');
-    var pendingBBox = null;
-    var pendingGeo = null;
-    var allTowns = Array.from(new Set(rows.map(function(r){ return r.dataset.town; }).filter(Boolean))).sort();
-
-    function openModal(){
-      dateFrom.value = fltDateFrom;
-      dateTo.value   = fltDateTo;
-      townInput.value = fltTown;
-      pendingBBox = fltBBox;
-      pendingGeo = fltGeo;
-      radiusSel.value = fltRadius;
-      suggestBox.hidden = true;
-      ['ball','workshop','festival'].forEach(function(t){
-        document.getElementById('sm-type-'+t).checked = typeFilter[t];
-      });
-      danceSel.innerHTML = document.getElementById('f-dance').innerHTML;
-      danceSel.value = document.getElementById('f-dance').value;
-      modal.showModal();
-    }
-
-    document.getElementById('search-events-btn').addEventListener('click', openModal);
-    document.getElementById('reset-filters-btn').addEventListener('click', clear);
-    document.getElementById('sm-cancel-btn').addEventListener('click', function(){ modal.close(); });
-
-    townInput.addEventListener('input', function(){
-      pendingBBox = null;
-      pendingGeo = null;
-      var q = this.value.trim().toLowerCase();
-      if(q.length<3){ suggestBox.hidden=true; suggestBox.innerHTML=''; return; }
-      var matches = allTowns.filter(function(t){ return t.toLowerCase().indexOf(q)>=0; }).slice(0,8);
-      if(matches.length===0){ suggestBox.hidden=true; suggestBox.innerHTML=''; return; }
-      suggestBox.innerHTML = matches.map(function(t){ return '<div>'+escHtml(t)+'</div>'; }).join('');
-      suggestBox.hidden = false;
-    });
-    suggestBox.addEventListener('click', function(e){
-      if(e.target && e.target.tagName==='DIV'){
-        townInput.value = e.target.textContent;
-        suggestBox.hidden = true;
-      }
-    });
-
-    setupGeoButton(document.getElementById('sm-geo-btn'), document.getElementById('sm-geo-hint'), function(pos){
-      pendingGeo = {lat:pos.coords.latitude, lng:pos.coords.longitude};
-      pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
-      townInput.value = '';
-      suggestBox.hidden = true;
-    });
-
-    radiusSel.addEventListener('change', function(){
-      if(pendingGeo) pendingBBox = radiusToBoundingBox(pendingGeo.lat, pendingGeo.lng, parseInt(radiusSel.value,10));
-    });
-
-    document.getElementById('sm-clear-btn').addEventListener('click', function(){
-      clear();
-      modal.close();
-    });
-
-    document.getElementById('sm-apply-btn').addEventListener('click', function(){
-      fltDateFrom = dateFrom.value || '';
-      fltDateTo   = dateTo.value || '';
-      fltTown     = pendingBBox ? '' : (townInput.value.trim() || '');
-      fltBBox     = pendingBBox;
-      fltGeo      = pendingGeo;
-      fltRadius   = parseInt(radiusSel.value, 10);
-
-      ['ball','workshop','festival'].forEach(function(t){
-        var checked = document.getElementById('sm-type-'+t).checked;
-        typeFilter[t] = checked;
-        document.querySelector('.type-btn[data-type="'+t+'"]').classList.toggle('type-active', checked);
-      });
-      document.getElementById('f-dance').value = danceSel.value;
-
-      syncFilterURL();
-      mapFitted = false;
-      var targetMs = fltDateTo ? new Date(fltDateTo+'T23:59:59').getTime() : 0;
-      ensureLoadedUntil(targetMs).then(applyFilters);
-      modal.close();
-    });
-  })();
+  document.getElementById('reset-filters-btn').addEventListener('click', clear);
 
   // Insert a date-separator row before the first visible row of each new
   // date. Walks the table's actual DOM row order (not the `visible` array),

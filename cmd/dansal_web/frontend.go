@@ -432,6 +432,41 @@ func eventsToGeo(events []Event) []geoEvent {
 	return geo
 }
 
+// fetchAndRenderEventRows fetches events via fetchEvents (run concurrently with
+// the org/tag lookups needed to render them) and renders each one as an
+// "event-row" <tr> through tmpl, so any handler producing incremental event
+// batches (cmd/dansal_web/events_more.go, search.go) renders identically to the
+// page's initial server-rendered rows.
+func fetchAndRenderEventRows(r *http.Request, tmpl *template.Template, i18n *I18n, client *DansalClient, fetchEvents func() ([]Event, error)) ([]Event, string, error) {
+	var events []Event
+	var orgs []Organization
+	var tagMap map[string]Tag
+	var fetchErr error
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); events, fetchErr = fetchEvents() }()
+	go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
+	go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
+	wg.Wait()
+	if fetchErr != nil {
+		return nil, "", fetchErr
+	}
+
+	orgMap := make(map[int]Organization, len(orgs))
+	for _, o := range orgs {
+		orgMap[o.ID] = o
+	}
+	strs := i18n.Strings(i18n.detectLang(r))
+
+	var rowsHTML strings.Builder
+	for _, e := range events {
+		tmpl.ExecuteTemplate(&rowsHTML, "event-row", map[string]any{
+			"Event": e, "OrgMap": orgMap, "TagMap": tagMap, "Strings": strs,
+		})
+	}
+	return events, rowsHTML.String(), nil
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, s string) string {
 		t, ok := parseTime(s)
@@ -826,6 +861,7 @@ var tmplFuncMap = template.FuncMap{
 
 type Templates struct {
 	index                     *template.Template
+	search                    *template.Template
 	event                     *template.Template
 	org                       *template.Template
 	location                  *template.Template
@@ -908,6 +944,7 @@ func loadTemplates() *Templates {
 	}
 	return &Templates{
 		index:                     load("index"),
+		search:                    load("search"),
 		event:                     load("event"),
 		org:                       load("org"),
 		location:                  load("location"),

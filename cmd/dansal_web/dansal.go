@@ -592,6 +592,51 @@ func (c *DansalClient) GetEventsFiltered(ctx context.Context, params url.Values)
 	return events, c.get(ctx, "/api/v1/events?"+params.Encode(), &events)
 }
 
+// GetEventsFilteredWithTotal is GetEventsFiltered plus the server's X-Total-Count
+// header, so callers (e.g. /search) can tell whether the result was truncated by
+// the limit param without guessing from len(events) alone.
+func (c *DansalClient) GetEventsFilteredWithTotal(ctx context.Context, params url.Values) ([]Event, int, error) {
+	var events []Event
+	total, err := c.getWithTotal(ctx, "/api/v1/events?"+params.Encode(), &events)
+	return events, total, err
+}
+
+// getWithTotal mirrors get's retry behaviour but also returns X-Total-Count.
+func (c *DansalClient) getWithTotal(ctx context.Context, path string, out any) (int, error) {
+	const maxAttempts = 2
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			jitter := time.Duration(50+rand.Intn(100)) * time.Millisecond
+			select {
+			case <-time.After(jitter):
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+		if err != nil {
+			return 0, err
+		}
+		c.setInternalHeader(req)
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			return 0, fmt.Errorf("not found")
+		}
+		if resp.StatusCode != http.StatusOK {
+			return 0, apiErr(resp)
+		}
+		total, _ := strconv.Atoi(resp.Header.Get("X-Total-Count"))
+		return total, json.NewDecoder(resp.Body).Decode(out)
+	}
+	return 0, lastErr
+}
+
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)

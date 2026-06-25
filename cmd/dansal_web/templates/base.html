@@ -495,3 +495,59 @@ document.addEventListener('keydown',function(e){
 {{- if eq $floor "pavement"}}<span class="food-icon" title="{{$s.T "floor_pavement"}}">🛣</span>{{end -}}
 {{- if $ev.Pricing}}{{if eq $ev.Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$s.T "filter_fee_free"}}">0€</span>{{else if eq $ev.Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$s.T "filter_fee_donation"}}">♥</span>{{else if or (eq $ev.Pricing.Type "single") (eq $ev.Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$s.T "filter_fee_paid"}}">€</span>{{end}}{{end -}}
 {{end}}
+
+{{/* event-row renders one <tr> for an event. Takes a dict: Event, OrgMap, TagMap, Strings.
+     Shared across index.html (initial render + /api/events-more) and search.html
+     (/search/results), so rows can never drift between the pages that render them. */}}
+{{define "event-row"}}
+{{$org := orgName .OrgMap .Event.OrganizationID}}
+{{with .Event}}
+<tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
+    data-date="{{isoDate .StartTime}}"
+    data-end-date="{{isoDate .EndTime}}"
+    data-title="{{.Title}}"
+    data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
+    data-country="{{if .Location}}{{.Location.Country}}{{end}}"
+    data-region="{{if .Location}}{{.Location.Region}}{{end}}"
+    data-ball="{{if .HasBall}}1{{else}}0{{end}}"
+    data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
+    data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
+    data-organizer="{{$org}}"
+    data-tags="{{range .Tags}}{{.}} {{end}}"
+    data-dances="{{range .DanceNames}}{{.}} {{end}}"
+    data-id="{{.ID}}"
+    data-start="{{.StartTime}}"
+    data-town="{{if .Location}}{{.Location.Town}}{{end}}"
+    data-availability="{{.Availability}}"
+    data-fee="{{if .Pricing}}{{if eq .Pricing.Type "free"}}free{{else if eq .Pricing.Type "donation"}}donation{{else if or (eq .Pricing.Type "single") (eq .Pricing.Type "multiple")}}paid{{end}}{{end}}"
+    data-food="{{.Food}}"
+    data-drink="{{.Drink}}"
+    {{- $ea := mergeAttrs (locAttrs .Location) .Attributes}}
+    data-wheelchair="{{if index $ea "wheelchair"}}1{{else}}0{{end}}"
+    data-hearing-loop="{{if index $ea "hearing_loop"}}1{{else}}0{{end}}"
+    data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
+    data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
+    data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
+  <td class="col-time">{{isoTime .StartTime}}</td>
+  <td>
+    <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
+    {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
+    {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
+  </td>
+  <td class="col-venue">
+    {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
+    {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
+  </td>
+  <td class="col-type">
+    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
+    {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
+  </td>
+  <td class="col-attr">
+    {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}
+  </td>
+</tr>
+{{end}}
+{{end}}

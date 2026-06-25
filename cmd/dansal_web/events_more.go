@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
-	"sync"
 )
 
 // eventsMoreResponse is the payload for GET /api/events-more.
@@ -31,40 +29,17 @@ func eventsMoreHandler(tmpls *Templates, i18n *I18n, client *DansalClient) http.
 			return
 		}
 
-		var events []Event
-		var orgs []Organization
-		var tagMap map[string]Tag
-		var fetchErr error
-		var wg sync.WaitGroup
-		wg.Add(3)
-		go func() {
-			defer wg.Done()
-			events, fetchErr = client.GetEvents(r.Context(), strconv.FormatInt(after, 10))
-		}()
-		go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
-		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
-		wg.Wait()
-		if fetchErr != nil {
+		events, rowsHTML, err := fetchAndRenderEventRows(r, tmpls.index, i18n, client, func() ([]Event, error) {
+			return client.GetEvents(r.Context(), strconv.FormatInt(after, 10))
+		})
+		if err != nil {
 			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
 			return
 		}
 
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
-		strs := i18n.Strings(i18n.detectLang(r))
-
-		var rowsHTML strings.Builder
-		for _, e := range events {
-			tmpls.index.ExecuteTemplate(&rowsHTML, "event-row", map[string]any{
-				"Event": e, "OrgMap": orgMap, "TagMap": tagMap, "Strings": strs,
-			})
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(eventsMoreResponse{
-			RowsHTML: rowsHTML.String(),
+			RowsHTML: rowsHTML,
 			Geo:      eventsToGeo(events),
 			Total:    client.EventsTotal(),
 			Done:     len(events) == 0,

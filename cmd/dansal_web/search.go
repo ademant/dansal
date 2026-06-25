@@ -1,0 +1,117 @@
+package main
+
+import (
+	"encoding/json"
+	"html/template"
+	"net/http"
+	"net/url"
+	"strconv"
+	"sync"
+	"time"
+)
+
+// searchMaxResults is the threshold past which /search/results asks the user
+// to narrow their filters instead of rendering a huge map+list. Matches the
+// API's default pagination limit (applyPagination in cmd/dansal/events.go),
+// so it's consistent with the cap visitors already see on the main page.
+const searchMaxResults = 100
+
+// SearchData carries the initial-load defaults for the /search page.
+type SearchData struct {
+	DateFrom string // ISO date, defaults to the start of the current week
+	DateTo   string // ISO date, defaults to the end of the current week
+	Dances   []Dance
+	Locs     template.JS // locationsJSON output, for the town-suggest source
+}
+
+func currentWeekRange() (string, string) {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7 // Monday-based week
+	}
+	monday := now.AddDate(0, 0, -(weekday - 1))
+	sunday := monday.AddDate(0, 0, 6)
+	return monday.Format("2006-01-02"), sunday.Format("2006-01-02")
+}
+
+func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var dances []Dance
+		var locs []Location
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); dances, _ = client.GetDances(r.Context()) }()
+		go func() { defer wg.Done(); locs, _ = client.GetLocations(r.Context()) }()
+		wg.Wait()
+
+		dateFrom, dateTo := currentWeekRange()
+		title := i18n.T(r, "search_title")
+		renderTemplate(w, tmpls.search, tmplData(r, cfg, i18n, title, SearchData{
+			DateFrom: dateFrom,
+			DateTo:   dateTo,
+			Dances:   dances,
+			Locs:     tmplFuncMap["locationsJSON"].(func([]Location) template.JS)(locs),
+		}))
+	}
+}
+
+// searchResultsResponse is the payload for GET /search/results.
+type searchResultsResponse struct {
+	RowsHTML string     `json:"rows_html"`
+	Geo      []geoEvent `json:"geo"`
+	Total    int        `json:"total"`
+	TooMany  bool       `json:"too_many"`
+}
+
+// searchResultsHandler answers the /search page's date-range fetch. Events are
+// matched by overlap with [from,to] -- end_time_after (event hasn't already
+// ended before the range starts) combined with start_time_before (event
+// hasn't started after the range ends) -- so multi-day events that only
+// partially fall inside the selected range are still included. Town, geo
+// radius, event type, dance, and map-viewport filtering all happen client-side
+// against this one fetched batch (see discussion in #650-adjacent issues).
+func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		from, err1 := time.Parse("2006-01-02", r.URL.Query().Get("from"))
+		to, err2 := time.Parse("2006-01-02", r.URL.Query().Get("to"))
+		if err1 != nil || err2 != nil || to.Before(from) {
+			http.Error(w, "from/to are required ISO dates with to >= from", http.StatusBadRequest)
+			return
+		}
+		rangeStart := from.Unix()
+		rangeEnd := to.AddDate(0, 0, 1).Unix() // end of the "to" day
+
+		params := url.Values{
+			"is_published":      {"true"},
+			"end_time_after":    {strconv.FormatInt(rangeStart-1, 10)},
+			"start_time_before": {strconv.FormatInt(rangeEnd+1, 10)},
+			"limit":             {"150"},
+		}
+		events, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
+		if err != nil {
+			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if total > searchMaxResults {
+			json.NewEncoder(w).Encode(searchResultsResponse{Total: total, TooMany: true})
+			return
+		}
+
+		_, rowsHTML, err := fetchAndRenderEventRows(r, tmpls.search, i18n, client, func() ([]Event, error) {
+			return events, nil
+		})
+		if err != nil {
+			logHTTPError(w, r, "could not render events", http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(searchResultsResponse{
+			RowsHTML: rowsHTML,
+			Geo:      eventsToGeo(events),
+			Total:    total,
+		})
+	}
+}

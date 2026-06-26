@@ -297,8 +297,15 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Aliases:       parseAliases(r.FormValue("aliases")),
 			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
 		}
+		// Non-admin callers must send organization_ids in the create request itself
+		// so the API can authorize the call. Populate it from the form before POSTing.
+		if orgIDStr := r.FormValue("organization_id"); orgIDStr != "" {
+			if orgID, err2 := strconv.Atoi(orgIDStr); err2 == nil && orgID > 0 {
+				loc.OrganizationIDs = []int{orgID}
+			}
+		}
 		token := getSessionToken(r)
-		created, err := client.CreateLocation(r.Context(), loc, token)
+		_, err := client.CreateLocation(r.Context(), loc, token)
 		if err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
@@ -306,11 +313,6 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				ErrorKey: "admin_save_error",
 			}))
 			return
-		}
-		if orgIDStr := r.FormValue("organization_id"); orgIDStr != "" {
-			if orgID, err2 := strconv.Atoi(orgIDStr); err2 == nil && orgID > 0 {
-				_ = client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, &orgID, token)
-			}
 		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}

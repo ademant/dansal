@@ -459,6 +459,51 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/v1/organizations/{id}/members
+// GET /api/v1/organizations/members?org_ids=1,2,3
+// Returns all members for the given org IDs in a single query, grouped by org_id.
+func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	raw := r.URL.Query().Get("org_ids")
+	if raw == "" {
+		json.NewEncoder(w).Encode(map[int][]OrganizationMember{})
+		return
+	}
+	var ids []any
+	placeholders := []string{}
+	for _, s := range strings.Split(raw, ",") {
+		s = strings.TrimSpace(s)
+		if id, err := strconv.Atoi(s); err == nil {
+			ids = append(ids, id)
+			placeholders = append(placeholders, "?")
+		}
+	}
+	if len(ids) == 0 {
+		json.NewEncoder(w).Encode(map[int][]OrganizationMember{})
+		return
+	}
+	rows, err := db.Query(`
+		SELECT om.organization_id, om.user_id, COALESCE(u.email,''), COALESCE(u.display_name,''), u.role, om.created_at
+		FROM organization_members om
+		JOIN users u ON om.user_id = u.id
+		WHERE om.organization_id IN (`+strings.Join(placeholders, ",")+`)
+		ORDER BY om.organization_id, om.created_at`, ids...)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	result := map[int][]OrganizationMember{}
+	for rows.Next() {
+		var m OrganizationMember
+		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Email, &m.DisplayName, &m.Role, &m.CreatedAt); err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		result[m.OrganizationID] = append(result[m.OrganizationID], m)
+	}
+	json.NewEncoder(w).Encode(result)
+}
+
 func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id := r.PathValue("id")

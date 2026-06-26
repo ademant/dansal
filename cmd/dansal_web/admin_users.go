@@ -39,14 +39,16 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			orgMap[o.ID] = o
 		}
 
+		orgIDs := make([]int, len(orgs))
+		for i, o := range orgs {
+			orgIDs[i] = o.ID
+		}
+		bulkMembers, _ := client.GetOrganizationMembersBulk(r.Context(), orgIDs, token)
+
 		userOrgs := make(map[int][]int)
-		for _, o := range orgs {
-			members, err := client.GetOrganizationMembers(r.Context(), o.ID, token)
-			if err != nil {
-				continue
-			}
+		for orgID, members := range bulkMembers {
 			for _, m := range members {
-				userOrgs[m.UserID] = append(userOrgs[m.UserID], o.ID)
+				userOrgs[m.UserID] = append(userOrgs[m.UserID], orgID)
 			}
 		}
 
@@ -56,8 +58,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		} else {
 			seen := make(map[int]bool)
 			for _, orgID := range userOrgs[su.ID] {
-				members, _ := client.GetOrganizationMembers(r.Context(), orgID, token)
-				for _, m := range members {
+				for _, m := range bulkMembers[orgID] {
 					if !seen[m.UserID] {
 						seen[m.UserID] = true
 						users = append(users, UserInfo{ID: m.UserID, Email: m.Email, DisplayName: m.DisplayName})

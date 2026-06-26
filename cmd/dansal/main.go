@@ -2423,6 +2423,7 @@ func main() {
 	smux.Handle("GET /api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation)))
 	smux.Handle("GET /api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations)))
 	smux.Handle("GET /api/v1/organizations/stats", optAuth(http.HandlerFunc(getOrganizationStats)))
+	smux.Handle("GET /api/v1/organizations/members", auth(getOrganizationMembersBulk))
 	smux.Handle("GET /api/v1/organizations/{id}", optAuth(http.HandlerFunc(getOrganization)))
 	smux.Handle("GET /api/v1/musicians", optAuth(http.HandlerFunc(getMusicians)))
 	smux.Handle("GET /api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician)))

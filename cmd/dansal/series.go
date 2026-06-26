@@ -770,6 +770,10 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 			continue // org mismatch — skip silently
 		}
 		db.Exec("UPDATE events SET series_id=? WHERE id=?", series.ID, id)
+		// Propagate series org to event, matching the behaviour of addSeriesDate for new dates.
+		if series.OrganizationID != nil {
+			db.Exec("UPDATE events SET organization_id=? WHERE id=?", *series.OrganizationID, id)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

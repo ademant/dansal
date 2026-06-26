@@ -3,43 +3,39 @@
 <h1>{{if .Data.IsNew}}{{.Strings.T "admin_new"}}{{else}}{{.Strings.T "admin_edit"}}{{with .Data.Musician.Bandname}} — {{.}}{{end}}{{end}}</h1>
 {{if .Data.Musician.UpdatedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix .Data.Musician.UpdatedAt}}</p>{{end}}
 
-<div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
-<!-- Multi-service search widget -->
-<div class="mb-widget">
-  <label>{{$.Strings.T "musician_search_label"}}</label>
-  <div class="mb-row">
-    <input id="mb-search" type="text" placeholder="{{.Musician.Bandname}}" autocomplete="off">
-    <button type="button" id="mb-btn">{{$.Strings.T "musician_mb_btn"}}</button>
-  </div>
-  {{if .Musician.MBID}}
-  <p class="mb-current">
-    {{$.Strings.T "musician_mb_linked"}}:
-    <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener"><code>{{.Musician.MBID}}</code></a>
-  </p>
-  {{end}}
-  {{if .Musician.DiscogsID}}
-  <p class="mb-current">
-    {{$.Strings.T "musician_discogs_linked"}}:
-    <a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener"><code>{{.Musician.DiscogsID}}</code></a>
-  </p>
-  {{end}}
-  <div class="mb-tabs">
-    <button type="button" class="mb-tab active" data-svc="mb">MusicBrainz</button>
-    <button type="button" class="mb-tab" data-svc="discogs">Discogs</button>
-  </div>
-  <ul id="mb-results" class="mb-results"></ul>
-  <ul id="discogs-results" class="mb-results" style="display:none"></ul>
-  <div id="match-hint" class="match-hint" style="display:none"></div>
+<div class="evt-action-bar">
+  <button type="submit" form="mus-form" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+  <a href="{{if .From}}{{.From}}{{else}}/admin/musicians{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  {{if and (not .IsNew) (eq $.User.Role "admin")}}<form method="post" action="/admin/musicians/{{.Musician.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "musician_confirm_delete"}}')">
+    <button type="submit" class="btn-del" style="padding:.45rem 1.2rem;font-size:.95rem;border-radius:4px">{{$.Strings.T "admin_delete"}}</button>
+  </form>{{end}}
 </div>
 
-<form method="post" enctype="multipart/form-data" class="edit-form">
+<div class="evt-edit-layout">
+<button type="button" class="evt-nav-toggle" id="mus-nav-toggle">☰ {{$.Strings.T "evt_sections"}}</button>
+<aside class="evt-nav" id="mus-nav">
+  <div class="evt-nav-group">
+    <button type="button" class="evt-nav-item evt-nav-fixed" data-target="sec-basic">{{$.Strings.T "musician_bandname"}}</button>
+  </div>
+  <hr class="evt-nav-sep">
+  <div class="evt-nav-group">
+    <button type="button" class="evt-nav-item" data-target="sec-description"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_description"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-biography"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_biography"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-links"><span class="evt-nav-dot"></span>Links &amp; IDs</button>
+    <button type="button" class="evt-nav-item" data-target="sec-social"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_social"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_image"}}</button>
+  </div>
+</aside>
+<div class="evt-main">
+
+<form id="mus-form" method="post" enctype="multipart/form-data" class="evt-form">
   <input type="hidden" name="from" value="{{.From}}">
 
-  <div class="sec-head"><h3>{{$.Strings.T "musician_bandname"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section" id="sec-basic">
+    <h2>{{$.Strings.T "musician_bandname"}}</h2>
     <label for="bandname">{{$.Strings.T "musician_bandname"}}</label>
     <input id="bandname" type="text" name="bandname" value="{{.Musician.Bandname}}" required>
     <label for="short_name">{{$.Strings.T "musician_short_name"}}</label>
@@ -48,28 +44,57 @@
     <input id="country" type="text" name="country" value="{{.Musician.Country}}" placeholder="DE, FR, …">
     <label for="begin_year">{{$.Strings.T "musician_begin_year"}}</label>
     <input id="begin_year" type="number" name="begin_year" value="{{if .Musician.BeginYear}}{{.Musician.BeginYear}}{{end}}" min="1900" max="2099" placeholder="1985">
-  </div>
+  </section>
 
-  <div class="sec-head"><h3>{{$.Strings.T "musician_description"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section optional-section" id="sec-description">
+    <h2>{{$.Strings.T "musician_description"}}</h2>
     <label for="description">{{$.Strings.T "musician_description"}}</label>
     <textarea id="description" name="description" rows="3">{{.Musician.Description}}</textarea>
     <label for="genre">Genre</label>
     <input id="genre" type="text" name="genre" value="{{.Musician.Genre}}" placeholder="Folk, Balfolk, Celtic…">
-  </div>
+  </section>
 
-  <div class="sec-head"><h3>{{$.Strings.T "musician_biography"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section optional-section" id="sec-biography">
+    <h2>{{$.Strings.T "musician_biography"}}</h2>
     <label for="biography">{{$.Strings.T "musician_biography"}}</label>
     <textarea id="biography" name="biography" rows="5">{{.Musician.Biography}}</textarea>
-    <label for="members">{{$.Strings.T "musician_members"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+    <label for="members">{{$.Strings.T "musician_members"}} <span class="field-hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
     <textarea id="members" name="members" rows="3">{{jsonLines .Musician.MembersJSON}}</textarea>
-    <label for="albums">{{$.Strings.T "musician_albums"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+    <label for="albums">{{$.Strings.T "musician_albums"}} <span class="field-hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
     <textarea id="albums" name="albums" rows="3">{{jsonLines .Musician.AlbumsJSON}}</textarea>
-  </div>
+  </section>
 
-  <div class="sec-head"><h3>Links &amp; IDs</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section optional-section" id="sec-links">
+    <h2>Links &amp; IDs</h2>
+
+    <!-- MusicBrainz / Discogs search widget -->
+    <div class="mb-widget">
+      <label>{{$.Strings.T "musician_search_label"}}</label>
+      <div class="mb-row">
+        <input id="mb-search" type="text" placeholder="{{.Musician.Bandname}}" autocomplete="off">
+        <button type="button" id="mb-btn">{{$.Strings.T "musician_mb_btn"}}</button>
+      </div>
+      {{if .Musician.MBID}}
+      <p class="mb-current">
+        {{$.Strings.T "musician_mb_linked"}}:
+        <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener"><code>{{.Musician.MBID}}</code></a>
+      </p>
+      {{end}}
+      {{if .Musician.DiscogsID}}
+      <p class="mb-current">
+        {{$.Strings.T "musician_discogs_linked"}}:
+        <a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener"><code>{{.Musician.DiscogsID}}</code></a>
+      </p>
+      {{end}}
+      <div class="mb-tabs">
+        <button type="button" class="mb-tab active" data-svc="mb">MusicBrainz</button>
+        <button type="button" class="mb-tab" data-svc="discogs">Discogs</button>
+      </div>
+      <ul id="mb-results" class="mb-results"></ul>
+      <ul id="discogs-results" class="mb-results" style="display:none"></ul>
+      <div id="match-hint" class="match-hint" style="display:none"></div>
+    </div>
+
     <label for="internetsite">{{$.Strings.T "musician_website"}}</label>
     <input id="internetsite" type="url" name="internetsite" value="{{.Musician.Internetsite}}" placeholder="https://…">
     <label for="mbid">{{$.Strings.T "musician_mbid"}}</label>
@@ -86,10 +111,10 @@
       <input id="discogs_id" type="text" name="discogs_id" value="{{.Musician.DiscogsID}}" placeholder="12345">
       {{if .Musician.DiscogsID}}<a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ Discogs</a>{{end}}
     </div>
-  </div>
+  </section>
 
-  <div class="sec-head"><h3>{{$.Strings.T "musician_social"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section optional-section" id="sec-social">
+    <h2>{{$.Strings.T "musician_social"}}</h2>
     <label for="mastodon">{{$.Strings.T "musician_mastodon"}}</label>
     <input id="mastodon" type="text" name="mastodon" value="{{.Musician.Mastodon}}" placeholder="@band@mastodon.social">
     <label for="instagram">{{$.Strings.T "musician_instagram"}}</label>
@@ -102,12 +127,12 @@
     <input id="spotify" type="url" name="spotify" value="{{.Musician.Spotify}}" placeholder="https://open.spotify.com/artist/…">
     <label for="deezer">Deezer</label>
     <input id="deezer" type="url" name="deezer" value="{{.Musician.Deezer}}" placeholder="https://www.deezer.com/artist/…">
-  </div>
+  </section>
 
-  <div class="sec-head"><h3>{{$.Strings.T "musician_image"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
-  <div class="sec-body" hidden>
+  <section class="form-section optional-section" id="sec-image">
+    <h2>{{$.Strings.T "musician_image"}}</h2>
     {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
-    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/musicians/{{$.Data.Musician.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <button type="button" class="btn-sm" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/musicians/{{$.Data.Musician.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
@@ -116,19 +141,50 @@
       </div>
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
     </div>
-  </div>
+  </section>
 
-  <div class="form-actions">
-    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="{{if .From}}{{.From}}{{else}}/admin/musicians{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-  </div>
 </form>
-{{end}}
+</div>
 </div>
 
+{{end}}
+
 <style>
-.edit-wrap{max-width:560px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.evt-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+.btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
+.btn-secondary:hover{background:#e8e8e8}
+.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
+.btn-del:hover{background:#800016}
+.evt-edit-layout{display:grid;grid-template-columns:160px 1fr;gap:1.5rem;align-items:start;max-width:1100px}
+.evt-nav{position:sticky;top:4rem;display:flex;flex-direction:column;gap:.15rem}
+.evt-nav-group{display:flex;flex-direction:column;gap:.15rem}
+.evt-nav-sep{border:none;border-top:1px solid #ddd;margin:.5rem 0}
+.evt-nav-item{display:flex;align-items:center;gap:.5rem;text-align:left;background:none;border:none;padding:.45rem .6rem;border-radius:4px;font-size:.86rem;color:#444;cursor:pointer}
+.evt-nav-item:hover{background:#f0f4ff}
+.evt-nav-item.is-active{background:#e8eaf6;color:#1a1a2e;font-weight:600}
+.evt-nav-item.evt-nav-fixed{font-weight:600;color:#1a1a2e}
+.evt-nav-dot{width:.5rem;height:.5rem;border-radius:50%;background:#ddd;flex-shrink:0}
+.evt-nav-dot.filled{background:#1a6eb5}
+.optional-section{display:none}
+.optional-section.is-open{display:block}
+.evt-nav-toggle{display:none;width:100%;padding:.5rem .75rem;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;font-size:.88rem;font-weight:600;cursor:pointer;text-align:left;margin-bottom:.75rem}
+@media(max-width:880px){
+  .evt-edit-layout{display:block}
+  .evt-nav-toggle{display:block}
+  .evt-nav{position:static;display:none;margin-bottom:1rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.5rem}
+  .evt-nav.is-expanded{display:flex}
+}
+.evt-form{display:flex;flex-direction:column;gap:0}
+.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem;scroll-margin-top:4rem}
+.form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em}
+.form-section label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-top:.6rem;margin-bottom:.2rem}
+.form-section input[type=text],.form-section input[type=url],.form-section input[type=number],
+.form-section textarea{width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem}
+.form-section input:focus,.form-section textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.field-hint{font-weight:400;color:#888;font-size:.82rem}
 .mb-widget{background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:1.25rem}
 .mb-widget label{font-weight:600;font-size:.9rem;color:#444;display:block;margin-bottom:.4rem}
 .mb-row{display:flex;gap:.5rem}
@@ -148,53 +204,18 @@
 .mb-results li button{background:#ba2025;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
 .mb-results li.match-row{border-left:3px solid #1a6eb5}
 .match-hint{font-size:.8rem;color:#1a6eb5;margin-top:.25rem;padding:.2rem .4rem;background:#e8f3ff;border-radius:3px}
-.edit-form{display:flex;flex-direction:column;gap:.25rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
-.edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.2rem}
-.edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
-.edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
-.sec-head{display:flex;align-items:center;gap:.5rem;border-top:1px solid #eee;padding-top:.6rem;margin-top:.25rem}
-.sec-head h3{margin:0;font-size:.92rem;font-weight:700;color:#333;flex:1}
-.sec-head:first-of-type{border-top:none;padding-top:0;margin-top:0}
-.btn-sec-edit{background:none;border:1px solid #ccc;border-radius:3px;cursor:pointer;font-size:.82rem;padding:.1rem .4rem;color:#666;line-height:1.4}
-.btn-sec-edit:hover{background:#f0f4ff;border-color:#1a6eb5;color:#1a6eb5}
-.sec-body{display:flex;flex-direction:column;gap:.35rem;padding:.5rem 0;margin-bottom:.25rem}
-.drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
-.drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
-.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
-.btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
-.btn-sm-secondary:hover{background:#e8e8e8}
-.hint{font-weight:400;font-size:.78rem;color:#888}
 .mbid-row{display:flex;gap:.5rem;align-items:center}
 .mbid-row input{flex:1}
 .mb-open{flex-shrink:0}
-.social-fieldset,.image-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
-.social-fieldset legend,.image-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
-.musician-thumb{max-width:160px;max-height:160px;border-radius:4px;margin-bottom:.5rem;object-fit:cover}
-.form-actions{display:flex;gap:.75rem;margin-top:.75rem}
-.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
-.btn-primary:hover{background:#0d4a80}
-.btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
-.btn-secondary:hover{background:#e8e8e8}
-.upcoming-events{max-width:560px;margin-top:2rem}
-.upcoming-events h2{font-size:1.1rem;margin-bottom:.75rem;color:#333}
-.badge.unpublished{background:#fff3cd;color:#856404}
-.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
-.btn-del:hover{background:#800016}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
+.btn-sm:hover{background:#f0f0f0}
+.btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
+.btn-sm-secondary:hover{background:#e8e8e8}
+.drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
+.drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
 </style>
 
-<script>
-function toggleSec(btn){
-  var body=btn.closest('.sec-head').nextElementSibling;
-  if(body&&body.classList.contains('sec-body')){
-    body.hidden=!body.hidden;
-    btn.textContent=body.hidden?'✎':'✕';
-  }
-}
-if ({{if .Data.IsNew}}true{{else}}false{{end}}) {
-  document.querySelectorAll('.sec-body').forEach(function(b){ b.hidden=false; });
-  document.querySelectorAll('.btn-sec-edit').forEach(function(b){ b.textContent='✕'; });
-}
-</script>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
@@ -229,7 +250,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
     });
   });
 
-  // Store raw results for cross-service matching
   var mbData      = [];
   var discogsData = [];
 
@@ -242,7 +262,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
 
   function highlightMatches(){
     matchHint.style.display = 'none';
-    // Check if the currently shown service has matches in others
     var visibleList = activeSvc === 'mb' ? mbResults : discogsRes;
     visibleList.querySelectorAll('li').forEach(function(li){
       li.classList.remove('match-row');
@@ -392,13 +411,11 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
     discogsRes.innerHTML     = '<li style="color:#666">…</li>';
     matchHint.style.display  = 'none';
 
-    // MusicBrainz
     fetch('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=8', {headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
       .then(function(data){ renderMB(data.artists||[]); })
       .catch(function(){ mbResults.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; });
 
-    // Discogs
     fetch('https://api.discogs.com/database/search?q=' + encodeURIComponent(q) + '&type=artist&per_page=8', {headers:{'User-Agent':'dansal/1.0','Accept':'application/json'}})
       .then(function(r){ return r.json(); })
       .then(function(data){ renderDiscogs(data.results||[]); })
@@ -427,7 +444,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
             if (m) facebookInp.value = m[1];
           }
         });
-        // Show top albums
         var albumsDiv = document.getElementById('mb-albums');
         if (albumsDiv && d['release-groups']) {
           var rgs = (d['release-groups'])
@@ -454,7 +470,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   searchBtn.addEventListener('click', doSearch);
   searchInput.addEventListener('keydown', function(e){ if (e.key==='Enter'){ e.preventDefault(); doSearch(); } });
 
-  // Auto-fetch Wikidata QID if MBID is set but wikidata_id is empty
   (function(){
     var mbid = mbidInp && mbidInp.value.trim();
     var wid  = wikidataInp && wikidataInp.value.trim();
@@ -495,6 +510,80 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
       showPreview(f);
     }
+  });
+})();
+
+// Sidebar section nav
+(function(){
+  var nav=document.getElementById('mus-nav');
+  if(!nav) return;
+  var toggle=document.getElementById('mus-nav-toggle');
+  if(toggle) toggle.addEventListener('click',function(){ nav.classList.toggle('is-expanded'); });
+
+  var hasData={
+    'sec-description':function(){
+      var d=document.getElementById('description'), g=document.getElementById('genre');
+      return !!((d&&d.value.trim())||(g&&g.value.trim()));
+    },
+    'sec-biography':function(){
+      var b=document.getElementById('biography'), m=document.getElementById('members'), a=document.getElementById('albums');
+      return !!((b&&b.value.trim())||(m&&m.value.trim())||(a&&a.value.trim()));
+    },
+    'sec-links':function(){
+      var s=document.getElementById('internetsite'), mb=document.getElementById('mbid'),
+          w=document.getElementById('wikidata_id'), d=document.getElementById('discogs_id');
+      return !!((s&&s.value.trim())||(mb&&mb.value.trim())||(w&&w.value.trim())||(d&&d.value.trim()));
+    },
+    'sec-social':function(){
+      var ids=['mastodon','instagram','facebook','soundcloud','spotify','deezer'];
+      return ids.some(function(id){ var el=document.getElementById(id); return !!(el&&el.value.trim()); });
+    },
+    'sec-image':function(){
+      var existing=document.getElementById('existing-image');
+      var preview=document.getElementById('image-preview');
+      var inp=document.getElementById('image');
+      return !!(existing)||(preview&&preview.style.display==='block')||(inp&&inp.files&&inp.files.length>0);
+    }
+  };
+
+  function updateDot(id){
+    var btn=nav.querySelector('.evt-nav-item[data-target="'+id+'"]');
+    if(!btn) return;
+    var dot=btn.querySelector('.evt-nav-dot');
+    if(!dot) return;
+    dot.classList.toggle('filled', !!(hasData[id] && hasData[id]()));
+  }
+  function setOpen(id,open){
+    var sec=document.getElementById(id);
+    var btn=nav.querySelector('.evt-nav-item[data-target="'+id+'"]');
+    if(!sec||!btn) return;
+    sec.classList.toggle('is-open',open);
+    btn.classList.toggle('is-active',open);
+  }
+
+  Object.keys(hasData).forEach(function(id){
+    var sec=document.getElementById(id);
+    if(!sec) return;
+    setOpen(id, hasData[id]());
+    updateDot(id);
+    sec.addEventListener('input',function(){ updateDot(id); });
+    sec.addEventListener('change',function(){ updateDot(id); });
+  });
+
+  nav.querySelectorAll('.evt-nav-item').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=btn.dataset.target;
+      var sec=document.getElementById(id);
+      if(!sec) return;
+      if(btn.classList.contains('evt-nav-fixed')){
+        sec.scrollIntoView({behavior:'smooth',block:'start'});
+      } else {
+        var open=!sec.classList.contains('is-open');
+        setOpen(id,open);
+        if(open) sec.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+      if(nav.classList.contains('is-expanded') && window.innerWidth<=880) nav.classList.remove('is-expanded');
+    });
   });
 })();
 </script>

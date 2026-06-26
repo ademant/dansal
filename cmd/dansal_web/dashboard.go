@@ -78,7 +78,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			}
 			evtWg.Wait()
 			sort.Slice(events, func(i, j int) bool {
-				return events[i].StartTime > events[j].StartTime
+				return events[i].StartTime < events[j].StartTime
 			})
 		}
 

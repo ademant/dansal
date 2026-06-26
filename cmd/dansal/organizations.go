@@ -461,25 +461,60 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/organizations/{id}/members
 // GET /api/v1/organizations/members?org_ids=1,2,3
 // Returns all members for the given org IDs in a single query, grouped by org_id.
+// Non-admin callers may only request orgs they belong to; unknown IDs are silently dropped.
 func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	callerID, callerRole := callerFromRequest(r)
+
 	raw := r.URL.Query().Get("org_ids")
 	if raw == "" {
 		json.NewEncoder(w).Encode(map[int][]OrganizationMember{})
 		return
 	}
-	var ids []any
-	placeholders := []string{}
+	requested := map[int]bool{}
 	for _, s := range strings.Split(raw, ",") {
 		s = strings.TrimSpace(s)
-		if id, err := strconv.Atoi(s); err == nil {
-			ids = append(ids, id)
-			placeholders = append(placeholders, "?")
+		if id, err := strconv.Atoi(s); err == nil && id > 0 {
+			requested[id] = true
 		}
 	}
-	if len(ids) == 0 {
+	if len(requested) == 0 {
 		json.NewEncoder(w).Encode(map[int][]OrganizationMember{})
 		return
+	}
+
+	// Non-admins may only see orgs they belong to.
+	if callerRole != RoleAdmin {
+		memberRows, err := db.Query(
+			"SELECT organization_id FROM organization_members WHERE user_id = ?", callerID)
+		if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		allowed := map[int]bool{}
+		for memberRows.Next() {
+			var oid int
+			memberRows.Scan(&oid)
+			allowed[oid] = true
+		}
+		memberRows.Close()
+		for id := range requested {
+			if !allowed[id] {
+				delete(requested, id)
+			}
+		}
+	}
+
+	if len(requested) == 0 {
+		json.NewEncoder(w).Encode(map[int][]OrganizationMember{})
+		return
+	}
+
+	var ids []any
+	var placeholders []string
+	for id := range requested {
+		ids = append(ids, id)
+		placeholders = append(placeholders, "?")
 	}
 	rows, err := db.Query(`
 		SELECT om.organization_id, om.user_id, COALESCE(u.email,''), COALESCE(u.display_name,''), u.role, om.created_at

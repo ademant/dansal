@@ -31,6 +31,11 @@
   <div id="week-mini-cal"></div>
 </div>
 
+<div id="mobile-mode-bar" class="mobile-mode-bar">
+  <button type="button" id="mobile-show-all" class="mobile-mode-btn">{{$.Strings.T "table_mode_all"}} →</button>
+  <button type="button" id="mobile-show-week" class="mobile-mode-btn" hidden>← {{$.Strings.T "table_mode_week"}}</button>
+</div>
+
 <!-- Mobile week-selector popup -->
 <dialog id="wp-dialog" class="wp-dialog">
   <div class="wp-title" id="wp-title"></div>
@@ -256,6 +261,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .week-mobile-days .day-code.active{background:var(--cal-today);color:var(--heading);font-weight:700}
 .week-mobile-content{display:flex;flex-direction:column;gap:.4rem}
 .week-mobile-empty{color:var(--fg-muted);font-size:.88rem;text-align:center;padding:1rem 0}
+.mobile-mode-bar{display:none}
+.mobile-mode-btn{padding:.4rem 1.2rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);color:var(--link);font-size:.88rem;cursor:pointer}
+.tile-span-first{border-radius:.4rem 0 0 .4rem;margin-right:-.6rem;padding-right:1.2rem;border-right:none}
+.tile-span-last{border-radius:0 .4rem .4rem 0;margin-left:-.6rem;padding-left:1.2rem;border-left:none}
+.tile-span-mid{border-radius:0;margin:0 -.6rem;padding-left:1.2rem;padding-right:1.2rem;border-left:none;border-right:none}
 .wp-dialog{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0 auto;width:100%;max-width:480px;border:none;background:var(--bg-card);padding:0;border-radius:12px 12px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.35)}
 .wp-dialog[open]{display:flex;flex-direction:column}
 .wp-dialog::backdrop{background:rgba(0,0,0,.45)}
@@ -279,11 +289,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   .week-nav{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
   .table-wrap{display:none}
-  #event-tiles{display:block}
+  #event-tiles{display:none}
   .week-table-wrap{display:none}
   .week-mobile{display:block}
   .tmt{display:none}
-  #week-outer{padding:.6rem}
+  #week-outer{padding:.6rem;overflow:hidden}
+  .mobile-mode-bar{display:flex;justify-content:center;padding:.4rem 0}
 }
 </style>
 
@@ -496,20 +507,28 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       '<button type="button" class="wm-arrow" id="wm-next" aria-label="'+escHtml(I18N.nextWeek)+'">&#8594;</button>'+
       '</div>';
     html += '<div class="week-mobile-days">';
+    var evtCounts = getEventCounts();
     days.forEach(function(d,i){
-      var cls='day-code'+(i===currentDayIndex?' active':'')+((d.getDay()===0||HOLIDAYS.has(keys[i]))?' wt-weekend':'');
+      var isActive = i===currentDayIndex;
+      var cls='day-code'+(isActive?' active':'')+((d.getDay()===0||HOLIDAYS.has(keys[i]))?' wt-weekend':'');
+      if(!isActive){ var hc=heatClass(evtCounts[keys[i]]); if(hc) cls+=' '+hc; }
       html += '<span class="'+cls+'" data-day="'+i+'">'+escHtml(fmtWeekday.format(d))+'</span>';
     });
     html += '</div>';
 
     var dk = keys[currentDayIndex];
-    var dayEvents = byDay[dk].slice();
-    multiDay.forEach(function(ev){ if(ev.s<=dk && ev.e>=dk) dayEvents.unshift(ev.r); });
+    var dayEventsWithPos = byDay[dk].slice().map(function(r){ return {r:r,pos:null}; });
+    multiDay.forEach(function(ev){
+      if(ev.s<=dk && ev.e>=dk){
+        var pos = ev.s===dk ? 'first' : ev.e===dk ? 'last' : 'mid';
+        dayEventsWithPos.unshift({r:ev.r, pos:pos});
+      }
+    });
     html += '<div class="week-mobile-content">';
-    if(dayEvents.length===0){
+    if(dayEventsWithPos.length===0){
       html += '<div class="week-mobile-empty">'+escHtml(I18N.noEventsDay)+'</div>';
     }
-    dayEvents.forEach(function(r){ html += buildTile(r); });
+    dayEventsWithPos.forEach(function(item){ html += buildTile(item.r, item.pos); });
     html += '</div></div>';
 
     var wv = document.getElementById('week-main');
@@ -886,7 +905,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       '</div>';
   }
 
-  function buildTile(r){
+  function buildTile(r, spanPos){
     var d=r.dataset;
     var detailUrl=d.href||'/events/'+d.id;
     var start=d.start||'';
@@ -908,8 +927,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // food/drink, accessibility) instead of re-deriving the icon logic here.
     var attrCell=r.querySelector('.col-attr');
     var attrHtml=attrCell?attrCell.innerHTML.trim():'';
+    var tileCls='event-tile'+(spanPos?' tile-span-'+spanPos:'');
     var titleStyle='font-size:.95rem;font-weight:bold;margin-bottom:.25rem'+(cancelled?';text-decoration:line-through;color:var(--fg-hint)':'');
-    return '<a href="'+detailUrl+'" class="event-tile">'+
+    return '<a href="'+detailUrl+'" class="'+tileCls+'">'+
       '<div style="'+titleStyle+'">'+(timeStr?'<span style="color:var(--fg-muted);font-weight:600">'+escHtml(timeStr)+'</span> ':'')+escHtml(d.title||'')+'</div>'+
       (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
       (badges||feeHtml?'<div>'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
@@ -1092,6 +1112,8 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   }
   document.getElementById('tmt-week').addEventListener('click', function(){ setTableMode('week'); });
   document.getElementById('tmt-all').addEventListener('click',  function(){ setTableMode('all');  });
+  document.getElementById('mobile-show-all').addEventListener('click',  function(){ setTableMode('all');  });
+  document.getElementById('mobile-show-week').addEventListener('click', function(){ setTableMode('week'); });
 
   // Returns the rows to display in the table: all visible in 'all' mode,
   // only those overlapping the current week in 'week' mode.
@@ -1219,7 +1241,14 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     document.getElementById('pagination-bar').hidden = tableMode==='week' || tRows.length===0;
     insertDateSeparators();
 
-    // Mobile tiles (not affected by table mode — always show all visible events)
+    // Mobile: toggle between daily view and full tile list based on tableMode
+    if(window.matchMedia('(max-width:640px)').matches){
+      var inAll = tableMode==='all';
+      document.getElementById('week-outer').hidden = inAll;
+      document.getElementById('event-tiles').style.display = inAll ? 'block' : 'none';
+      document.getElementById('mobile-show-all').hidden = inAll;
+      document.getElementById('mobile-show-week').hidden = !inAll;
+    }
     renderTiles();
   }
 

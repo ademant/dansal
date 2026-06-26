@@ -8,9 +8,10 @@
 {{with .Data}}
 <div class="loc-filters">
   <input id="loc-search" type="search" placeholder="{{$.Strings.T "loc_search_placeholder"}}" autocomplete="off" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;min-width:180px">
-  <select id="filter-town">
-    <option value="">{{$.Strings.T "filter_all_towns"}}</option>
-  </select>
+  <div class="af-field" id="town-filter-wrap">
+    <input type="text" id="filter-town-input" class="af-input" placeholder="{{$.Strings.T "filter_all_towns"}}" autocomplete="off">
+    <div id="town-filter-suggest" class="af-suggest" hidden></div>
+  </div>
   <select id="filter-org">
     <option value="">{{$.Strings.T "filter_all_orgs"}}</option>
   </select>
@@ -264,24 +265,43 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
   function unique(arr){var s={},o=[];arr.forEach(function(v){if(v&&!s[v]){s[v]=true;o.push(v);}});return o.sort();}
   var towns=unique(rows.map(function(r){return r.dataset.town||'';}));
   var orgs =unique(rows.map(function(r){return r.dataset.org||'';}));
-  var tSel=document.getElementById('filter-town');
+  var townInput=document.getElementById('filter-town-input');
+  var townSuggest=document.getElementById('town-filter-suggest');
   var oSel=document.getElementById('filter-org');
   var searchEl=document.getElementById('loc-search');
-  towns.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;tSel.appendChild(o);});
   orgs.forEach(function(o){var el=document.createElement('option');el.value=o;el.textContent=o;oSel.appendChild(el);});
   function applyFilters(){
-    var t=tSel.value, o=oSel.value, q=searchEl.value.trim().toLowerCase();
+    var t=townInput.value.trim().toLowerCase(), o=oSel.value, q=searchEl.value.trim().toLowerCase();
     rows.forEach(function(r){
-      var matchT=!t||r.dataset.town===t;
+      var matchT=!t||(r.dataset.town||'').toLowerCase().indexOf(t)>=0;
       var matchO=!o||r.dataset.org===o;
       var matchQ=!q||(r.dataset.search||'').toLowerCase().indexOf(q)>=0;
       r.style.display=(matchT&&matchO&&matchQ)?'':'none';
     });
   }
-  tSel.addEventListener('change',applyFilters);
+  // Town autocomplete
+  townInput.addEventListener('input',function(){
+    var q=townInput.value.trim().toLowerCase();
+    applyFilters();
+    if(!q){townSuggest.hidden=true;townSuggest.innerHTML='';return;}
+    var matches=towns.filter(function(t){return t.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+    if(!matches.length){townSuggest.hidden=true;return;}
+    townSuggest.innerHTML=matches.map(function(t,i){return '<div data-idx="'+i+'">'+t.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>';}).join('');
+    townSuggest._matches=matches;
+    townSuggest.hidden=false;
+  });
+  townSuggest.addEventListener('mousedown',function(e){
+    if(e.target&&e.target.dataset.idx!==undefined){
+      e.preventDefault();
+      townInput.value=townSuggest._matches[+e.target.dataset.idx];
+      townSuggest.hidden=true;townSuggest.innerHTML='';
+      applyFilters();
+    }
+  });
+  townInput.addEventListener('blur',function(){setTimeout(function(){townSuggest.hidden=true;},150);});
   oSel.addEventListener('change',applyFilters);
   searchEl.addEventListener('input',applyFilters);
-  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';searchEl.value='';applyFilters();});
+  document.getElementById('filter-clear').addEventListener('click',function(){townInput.value='';townSuggest.hidden=true;oSel.value='';searchEl.value='';applyFilters();});
 })();
 
 function delLocation(id) {

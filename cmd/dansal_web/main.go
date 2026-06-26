@@ -190,7 +190,7 @@ func main() {
 		r.HandleFunc("GET /search", searchPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("POST /events/{id}/assign-org", eventAssignOrgHandler(cfg, client))
+		r.HandleFunc("POST /events/{id}/assign-org", adminRateLimit(eventAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))
 		r.HandleFunc("POST /events/{id}/board/{post_id}/delete", contactBoardDeleteHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/board/{post_id}/contact", contactBoardContactHandler(cfg, client))

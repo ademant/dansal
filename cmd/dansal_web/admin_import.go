@@ -240,7 +240,11 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		}
 
 		// Build location name override map: feed loc name → DB location.
-		var locByID map[int]Location
+		locs, _ := client.GetLocations(r.Context())
+		locByID := make(map[int]Location, len(locs))
+		for _, l := range locs {
+			locByID[l.ID] = l
+		}
 		feedLocOverride := map[string]Location{}
 		for i := 0; ; i++ {
 			feedName := r.FormValue("loc_feed_" + strconv.Itoa(i))
@@ -254,13 +258,6 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			dbLocID, err := strconv.Atoi(dbLocIDStr)
 			if err != nil || dbLocID == 0 {
 				continue
-			}
-			if locByID == nil {
-				locs, _ := client.GetLocations(r.Context())
-				locByID = make(map[int]Location, len(locs))
-				for _, l := range locs {
-					locByID[l.ID] = l
-				}
 			}
 			if dbLoc, found := locByID[dbLocID]; found {
 				feedLocOverride[feedName] = dbLoc

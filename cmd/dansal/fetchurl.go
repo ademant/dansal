@@ -772,12 +772,17 @@ func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableE
 			return
 		}
 	}
-	for _, e := range entries {
-		q.Exec(
-			"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room) VALUES (?, ?, ?, ?, ?, ?)",
-			eventID, e.StartTime, e.EndTime, e.Title, e.Description, e.Room,
-		)
+	placeholders := make([]string, len(entries))
+	args := make([]any, 0, len(entries)*6)
+	for i, e := range entries {
+		placeholders[i] = "(?, ?, ?, ?, ?, ?)"
+		args = append(args, eventID, e.StartTime, e.EndTime, e.Title, e.Description, e.Room)
 	}
+	q.Exec(
+		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room) VALUES "+
+			strings.Join(placeholders, ","),
+		args...,
+	)
 }
 
 // importSingleEvent applies template overrides, resolves the location, persists

@@ -1335,6 +1335,14 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		if prefill == nil {
+			if orgStr := r.URL.Query().Get("org_id"); orgStr != "" {
+				if oid, err := strconv.Atoi(orgStr); err == nil && oid > 0 {
+					prefill = &EventPrefill{OrgID: oid}
+				}
+			}
+		}
+
 		tmpls2, _ := listTemplates(db, su.ID, getUserOrgs())
 
 		var userOrgs []Organization

@@ -73,7 +73,7 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 					DisplayName: lr.User.DisplayName,
 					Role:        lr.User.Role,
 				}, expAt)
-				redirect = "/"
+				redirect = "/dashboard"
 			}
 		}
 

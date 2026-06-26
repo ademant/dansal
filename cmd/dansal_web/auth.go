@@ -22,7 +22,7 @@ type LoginPageData struct {
 // preventing open redirects.
 func safeNext(next string) string {
 	if next == "" {
-		return "/"
+		return "/dashboard"
 	}
 
 	// Some clients/browsers may treat backslashes as path separators.
@@ -46,7 +46,7 @@ func safeNext(next string) string {
 func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if getSessionUser(r) != nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 			return
 		}
 		title := i18n.T(r, "login_title")
@@ -148,7 +148,7 @@ func logoutHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			_ = client.Logout(r.Context(), token)
 		}
 		clearSession(w)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 	}
 }
 
@@ -206,6 +206,6 @@ func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			DisplayName: lr.User.DisplayName,
 			Role:        lr.User.Role,
 		}, expiresAt)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 	}
 }

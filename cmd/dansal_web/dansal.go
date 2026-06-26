@@ -1825,6 +1825,23 @@ func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, to
 	return members, json.NewDecoder(resp.Body).Decode(&members)
 }
 
+// MeStats holds the event counts for the authenticated user.
+type MeStats struct {
+	EventsCreated    int `json:"events_created"`
+	EventsLastEdited int `json:"events_last_edited"`
+}
+
+// GetMeStats returns event creation and last-edit counts for the authenticated user.
+func (c *DansalClient) GetMeStats(ctx context.Context, token string) (MeStats, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/me/stats", token, nil)
+	if err != nil {
+		return MeStats{}, err
+	}
+	defer resp.Body.Close()
+	var s MeStats
+	return s, json.NewDecoder(resp.Body).Decode(&s)
+}
+
 // GetOrganizationMembersBulk fetches members for multiple orgs in one request,
 // returning a map of org ID → member list.
 func (c *DansalClient) GetOrganizationMembersBulk(ctx context.Context, orgIDs []int, token string) (map[int][]OrgMember, error) {

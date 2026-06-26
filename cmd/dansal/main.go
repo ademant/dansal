@@ -2506,6 +2506,7 @@ func main() {
 	// User endpoints (protected). create-user, delete-user, and set-password
 	// are intentionally CLI-only (dansal_admin) — not exposed via this API.
 	smux.Handle("GET /api/v1/users", auth(getUsers))
+	smux.Handle("GET /api/v1/me/stats", auth(getMeStats))
 	smux.Handle("DELETE /api/v1/users/me", auth(deleteOwnAccount))
 	smux.Handle("GET /api/v1/users/{id}", auth(getUser))
 	smux.Handle("GET /api/v1/users/{id}/organizations", auth(getUserOrganizations))

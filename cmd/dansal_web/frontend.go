@@ -919,6 +919,7 @@ type Templates struct {
 	embedNext                 *template.Template
 	embedCalendar             *template.Template
 	embedLocations            *template.Template
+	dashboard                 *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -1003,6 +1004,7 @@ func loadTemplates() *Templates {
 		embedNext:                 loadEmbed("embed_next"),
 		embedCalendar:             loadEmbed("embed_calendar"),
 		embedLocations:            loadEmbed("embed_locations"),
+		dashboard:                 load("dashboard"),
 	}
 }
 

@@ -1,0 +1,84 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<h1>{{$.Strings.T "dashboard_title"}}</h1>
+
+<div class="dash-stats">
+  <div class="dash-stat">
+    <div class="dash-stat-n">{{.Stats.EventsCreated}}</div>
+    <div class="dash-stat-l">{{$.Strings.T "dashboard_stats_created"}}</div>
+  </div>
+  <div class="dash-stat">
+    <div class="dash-stat-n">{{.Stats.EventsLastEdited}}</div>
+    <div class="dash-stat-l">{{$.Strings.T "dashboard_stats_edited"}}</div>
+  </div>
+</div>
+
+{{if .UserOrgs}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "dashboard_your_orgs"}} ({{len .UserOrgs}})</summary>
+  <div class="dash-orgs-list">
+    {{range .UserOrgs}}
+    <div class="dash-org-row">
+      <a href="/org/{{.ActorName}}" class="dash-org-name">{{.Name}}</a>
+      <div class="dash-org-actions">
+        <a href="/admin/events/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+        <a href="/admin/series/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{end}}
+
+{{if .Events}}
+<div class="table-wrap" style="margin-top:1.5rem">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "col_date"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th>{{$.Strings.T "fetch_org"}}</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Events}}
+  <tr>
+    <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}</td>
+    <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
+    <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    <td>
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
+      {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+    </td>
+    <td style="white-space:nowrap">
+      {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<style>
+.dash-stats{display:flex;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap}
+.dash-stat{background:var(--card-bg,#fff);border:1px solid var(--border-mid,#ddd);border-radius:8px;padding:1rem 1.5rem;min-width:140px;text-align:center}
+.dash-stat-n{font-size:2rem;font-weight:700;line-height:1.1;color:var(--link,#1a6eb5)}
+.dash-stat-l{font-size:.85rem;color:var(--fg-2,#666);margin-top:.2rem}
+.dash-orgs{margin-bottom:1.5rem}
+.dash-orgs summary{cursor:pointer;font-size:1rem;font-weight:600;padding:.4rem 0}
+.dash-orgs-list{padding:.5rem 0}
+.dash-org-row{display:flex;align-items:center;gap:1rem;padding:.4rem 0;border-bottom:1px solid var(--border-low,#eee)}
+.dash-org-row:last-child{border-bottom:none}
+.dash-org-name{font-weight:500;flex:1}
+.dash-org-actions{display:flex;gap:.5rem;flex-shrink:0}
+@media(max-width:480px){.dash-org-row{flex-direction:column;align-items:flex-start}}
+</style>
+{{end}}
+{{end}}

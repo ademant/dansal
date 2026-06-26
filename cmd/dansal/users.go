@@ -418,6 +418,19 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
+// GET /api/v1/me/stats - Event counts for the authenticated user.
+func getMeStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	callerID, _ := callerFromRequest(r)
+	var created, lastEdited int
+	db.QueryRow("SELECT COUNT(*) FROM events WHERE created_by_id = ?", callerID).Scan(&created)
+	db.QueryRow("SELECT COUNT(*) FROM events WHERE changed_by_id = ?", callerID).Scan(&lastEdited)
+	json.NewEncoder(w).Encode(map[string]int{
+		"events_created":     created,
+		"events_last_edited": lastEdited,
+	})
+}
+
 // DELETE /api/v1/users/me - Self-deletion by the authenticated user.
 func deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := callerFromRequest(r)

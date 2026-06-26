@@ -239,6 +239,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     {{if .User}}
       <div class="user-name">{{if .User.DisplayName}}{{.User.DisplayName}}{{else}}{{emailLocal .User.Email}}{{end}}</div>
       <div class="user-section">
+        <a href="/dashboard">{{.Strings.T "dashboard_title"}}</a>
         <a href="/settings">{{.Strings.T "settings_title"}}</a>
         <form method="post" action="/logout" style="margin:0">
           <button type="submit" class="user-menu-btn">{{.Strings.T "nav_logout"}}</button>

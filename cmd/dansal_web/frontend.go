@@ -497,6 +497,18 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return s
 	},
+	// isoEndDate is like isoDate but treats times between 00:00–04:59 as
+	// belonging to the previous calendar day, so late-night event endings
+	// don't appear to span into the next day on the weekly calendar.
+	"isoEndDate": func(s string) string {
+		if t, ok := parseTime(s); ok {
+			if t.Hour() < 5 {
+				t = t.Add(-24 * time.Hour)
+			}
+			return t.Format("2006-01-02")
+		}
+		return s
+	},
 	"fmtUnix": func(ts int64) string {
 		if ts == 0 {
 			return ""

@@ -506,7 +506,7 @@ document.addEventListener('keydown',function(e){
 {{with .Event}}
 <tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
     data-date="{{isoDate .StartTime}}"
-    data-end-date="{{isoDate .EndTime}}"
+    data-end-date="{{isoEndDate .EndTime}}"
     data-title="{{.Title}}"
     data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
     data-country="{{if .Location}}{{.Location.Country}}{{end}}"

@@ -81,7 +81,7 @@
   {{range $.Data.FederatedEvents}}
   <tr class="event-row federated-event"
       data-date="{{isoDate .StartTime}}"
-      data-end-date="{{isoDate .EndTime}}"
+      data-end-date="{{isoEndDate .EndTime}}"
       data-title="{{.Name}}"
       data-location="{{.LocationName}}"
       data-country=""

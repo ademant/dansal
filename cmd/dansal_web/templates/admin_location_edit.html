@@ -118,10 +118,12 @@
     </div>
 
     {{if and (not .Location.ID) .UserOrgs}}
-    <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
-    <select id="organization_id" name="organization_id">
-      {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
+    <fieldset class="org-assign-new">
+      <legend>{{$.Strings.T "fetch_org"}}</legend>
+      {{range .UserOrgs}}
+      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"> {{.Name}}</label>
+      {{end}}
+    </fieldset>
     {{end}}
   </section>
 
@@ -302,6 +304,8 @@
 .aliases-display{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .5rem;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;padding:.4rem .75rem;margin:.2rem 0}
 .aliases-label{font-size:.8rem;font-weight:600;color:#555;flex-basis:100%}
 .alias-chip{font-size:.8rem;color:#444;background:#e8e8e8;border-radius:3px;padding:.1rem .4rem}
+.org-assign-new{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:.25rem 0}
+.org-assign-new legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
 .members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}

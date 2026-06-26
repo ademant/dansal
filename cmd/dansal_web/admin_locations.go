@@ -244,35 +244,44 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 	}
 }
 
+// newLocationUserOrgs returns the orgs selectable when creating a location:
+// all orgs for admin, the caller's own orgs for everyone else.
+func newLocationUserOrgs(r *http.Request, user *SessionUser, client *DansalClient) []Organization {
+	allOrgs, _ := client.GetOrganizations(r.Context())
+	if user.Role == "admin" {
+		return allOrgs
+	}
+	token := getSessionToken(r)
+	userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
+	set := make(map[int]bool, len(userOrgIDs))
+	for _, id := range userOrgIDs {
+		set[id] = true
+	}
+	var out []Organization
+	for _, o := range allOrgs {
+		if set[o.ID] {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
-		var userOrgs []Organization
-		if user.Role != "admin" {
-			token := getSessionToken(r)
-			orgs, _ := client.GetOrganizations(r.Context())
-			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
-			userOrgSet := map[int]bool{}
-			for _, id := range userOrgIDs {
-				userOrgSet[id] = true
-			}
-			for _, o := range orgs {
-				if userOrgSet[o.ID] {
-					userOrgs = append(userOrgs, o)
-				}
-			}
-		}
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{UserOrgs: userOrgs}))
+		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+			UserOrgs: newLocationUserOrgs(r, user, client),
+		}))
 	}
 }
 
 func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -297,11 +306,11 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Aliases:       parseAliases(r.FormValue("aliases")),
 			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
 		}
-		// Non-admin callers must send organization_ids in the create request itself
-		// so the API can authorize the call. Populate it from the form before POSTing.
-		if orgIDStr := r.FormValue("organization_id"); orgIDStr != "" {
-			if orgID, err2 := strconv.Atoi(orgIDStr); err2 == nil && orgID > 0 {
-				loc.OrganizationIDs = []int{orgID}
+		// Parse multi-value organization_ids checkboxes. Non-admin callers must
+		// include these so the API can authorize the create request.
+		for _, idStr := range r.Form["organization_ids"] {
+			if orgID, err2 := strconv.Atoi(idStr); err2 == nil && orgID > 0 {
+				loc.OrganizationIDs = append(loc.OrganizationIDs, orgID)
 			}
 		}
 		token := getSessionToken(r)
@@ -310,6 +319,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 				Location: loc,
+				UserOrgs: newLocationUserOrgs(r, user, client),
 				ErrorKey: "admin_save_error",
 			}))
 			return

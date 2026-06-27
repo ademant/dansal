@@ -240,7 +240,11 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 		if len(ids) > 0 {
 			client.BulkAssignLocationOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), getSessionToken(r))
 		}
-		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/locations"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
 	}
 }
 
@@ -627,7 +631,11 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 
 		client.invalidateLocations()
 		client.invalidateEvents()
-		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/admin/locations"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
 	}
 }
 

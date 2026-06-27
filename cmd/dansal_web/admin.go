@@ -9,6 +9,27 @@ import (
 	"strings"
 )
 
+// safeReferer extracts the path+query from the Referer header and validates it
+// as a same-site path. Returns fallback if the Referer is absent, points to a
+// different host, or fails safeReturnPath validation.
+func safeReferer(r *http.Request, fallback string) string {
+	raw := r.Header.Get("Referer")
+	if raw == "" {
+		return fallback
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fallback
+	}
+	if u.Host != "" && u.Host != r.Host {
+		return fallback
+	}
+	if p := safeReturnPath(u.RequestURI()); p != "" {
+		return p
+	}
+	return fallback
+}
+
 // safeReturnPath validates that raw is a same-site relative path suitable for
 // redirecting back to after an admin edit (e.g. the page the user came from).
 // Returns "" if raw is empty or not a safe same-site path.

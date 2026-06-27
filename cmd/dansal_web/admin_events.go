@@ -211,11 +211,7 @@ func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Error(w, "publish failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = "/admin/events?unpublished=1"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, "/admin/events?unpublished=1"), http.StatusSeeOther)
 	}
 }
 
@@ -235,11 +231,7 @@ func adminEventCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.Error(w, "cancel failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = fmt.Sprintf("/events/%d", id)
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, fmt.Sprintf("/events/%d", id)), http.StatusSeeOther)
 	}
 }
 
@@ -279,11 +271,7 @@ func adminEventBulkCancelHandler(cfg *Config, client *DansalClient) http.Handler
 				_ = client.CancelEvent(r.Context(), id, token)
 			}
 		}
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = "/admin/events"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
 
@@ -311,11 +299,7 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 				}
 			}
 		}
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = "/admin/events"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
 
@@ -384,11 +368,7 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 		if len(ids) > 0 {
 			_ = client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r))
 		}
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = "/admin/events"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
 
@@ -420,11 +400,7 @@ func adminEventBulkAssignSeriesHandler(cfg *Config, tmpls *Templates, client *Da
 		if seriesID > 0 {
 			// Path A: assign to existing series
 			_ = client.AssignEventsToSeries(r.Context(), seriesID, ids, token)
-			ref := r.Header.Get("Referer")
-			if ref == "" {
-				ref = "/admin/events"
-			}
-			http.Redirect(w, r, ref, http.StatusSeeOther)
+			http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 			return
 		}
 
@@ -547,11 +523,7 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 			payload["pricing_type"] = v
 		}
 		_ = client.BulkSetEventAttributes(r.Context(), payload, token)
-		ref := r.Header.Get("Referer")
-		if ref == "" {
-			ref = "/admin/events"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
 

@@ -4,7 +4,36 @@
   <button type="submit" class="btn-sm btn-merge bulk-action-btn" disabled
           onclick="return confirm('{{.Strings.T "evt_merge_confirm"}}')">{{.Strings.T "evt_merge_btn"}}</button>
   <button type="button" class="btn-sm event-bulk-tpl-btn bulk-action-btn" disabled>{{.Strings.T "evt_apply_template_btn"}}</button>
-  <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{.Strings.T "evt_bulk_attrs_btn"}}</button>
+  <span class="bulk-sep"></span>
+  <form id="bulk-quick-form" method="post" action="/admin/events/bulk-set-attributes">
+    <div id="bulk-quick-ids"></div>
+    <div class="bq-group">
+      <label class="bq-label">{{.Strings.T "evt_bulk_attrs_org"}}</label>
+      <div class="af-field bq-af">
+        <input type="text" id="bq-org-input" class="af-input bq-input" placeholder="—" autocomplete="off">
+        <div id="bq-org-suggest" class="af-suggest" hidden></div>
+      </div>
+      <input type="hidden" name="org_id" id="bq-org-id" value="">
+    </div>
+    <div class="bq-group">
+      <label class="bq-label">{{.Strings.T "evt_bulk_attrs_location"}}</label>
+      <div class="af-field bq-af">
+        <input type="text" id="bq-loc-input" class="af-input bq-input" placeholder="—" autocomplete="off">
+        <div id="bq-loc-suggest" class="af-suggest" hidden></div>
+      </div>
+      <input type="hidden" name="location_id" id="bq-loc-id" value="">
+    </div>
+    <div class="bq-group">
+      <label class="bq-label">{{.Strings.T "evt_bulk_attrs_series"}}</label>
+      <select name="series_id" id="bq-series" class="bq-select">
+        <option value="">—</option>
+        {{range .Data.Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+      </select>
+    </div>
+    <button type="submit" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply">{{.Strings.T "evt_bulk_attrs_apply"}}</button>
+  </form>
+  <span class="bulk-sep"></span>
+  <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{.Strings.T "evt_bulk_attrs_more"}}</button>
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled
           onclick="return confirm('{{.Strings.T "evt_bulk_confirm_cancel"}}')">{{.Strings.T "evt_bulk_cancel_btn"}}</button>
@@ -132,36 +161,6 @@
   <h3 style="margin:0 0 1rem;font-size:1rem">{{$.Strings.T "evt_bulk_attrs_title"}}</h3>
   <form id="bulk-attrs-form" method="post" action="/admin/events/bulk-set-attributes">
     <div id="bulk-attrs-ids"></div>
-
-    <div class="ba-group">
-      <label class="ba-group-toggle"><input type="checkbox" id="ba-org-enable"> {{$.Strings.T "evt_bulk_attrs_org"}}</label>
-      <div class="ba-group-body" id="ba-org-body" hidden>
-        <select name="org_id" class="ba-select">
-          <option value="0">— {{$.Strings.T "evt_bulk_attrs_unset"}} —</option>
-          {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-        </select>
-      </div>
-    </div>
-
-    <div class="ba-group">
-      <label class="ba-group-toggle"><input type="checkbox" id="ba-loc-enable"> {{$.Strings.T "evt_bulk_attrs_location"}}</label>
-      <div class="ba-group-body" id="ba-loc-body" hidden>
-        <select name="location_id" class="ba-select">
-          <option value="">—</option>
-          {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
-        </select>
-      </div>
-    </div>
-
-    <div class="ba-group">
-      <label class="ba-group-toggle"><input type="checkbox" id="ba-series-enable"> {{$.Strings.T "evt_bulk_attrs_series"}}</label>
-      <div class="ba-group-body" id="ba-series-body" hidden>
-        <select name="series_id" class="ba-select">
-          <option value="">—</option>
-          {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
-        </select>
-      </div>
-    </div>
 
     <div class="ba-group">
       <label class="ba-group-toggle"><input type="checkbox" id="ba-tags-enable"> {{$.Strings.T "evt_bulk_attrs_tags"}}</label>
@@ -298,6 +297,19 @@
 .ba-tristate-row{display:flex;align-items:center;gap:.5rem;width:100%;margin-bottom:.25rem}
 .ba-ts-label{font-size:.82rem;color:#555;min-width:7rem}
 .ba-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem;width:100%}
+#bulk-quick-form{display:contents}
+.bq-group{display:flex;flex-direction:column;gap:.2rem;width:100%}
+.bq-label{font-size:.78rem;font-weight:600;color:#555}
+.bq-af{width:100%}
+.bq-input{width:100%;max-width:none;box-sizing:border-box}
+.bq-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem;width:100%}
+.bq-apply{width:100%;justify-content:center;background:#1a6eb5;color:#fff;border:none;margin-top:.15rem}
+.bq-apply:hover:not(:disabled){background:#0d4a80}
+@media(max-width:900px){
+  #bulk-quick-form{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+  .bq-group{flex-direction:row;align-items:center;gap:.35rem;width:auto}
+  .bq-apply{width:auto}
+}
 </style>
 <script>
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
@@ -344,7 +356,7 @@ var _afLocs = {{locationsJSON $.Data.Locations}};
         input.value = it.label;
         if (hidden) hidden.value = it.id;
         hide();
-        input.form.submit();
+        if (!opts.noSubmit) input.form.submit();
       }
     });
 
@@ -363,7 +375,7 @@ var _afLocs = {{locationsJSON $.Data.Locations}};
           hidden.value = '';
         }
         hide();
-        input.form.submit();
+        if (!opts.noSubmit) input.form.submit();
       }
     });
   }
@@ -389,6 +401,37 @@ var _afLocs = {{locationsJSON $.Data.Locations}};
       var pool = cityVal ? _afLocs.filter(function(l){ return l.town === cityVal; }) : _afLocs;
       return pool.map(function(l){ return {id:l.id, label:l.label}; });
     }
+  });
+
+  // Quick-assign sidebar autocompletes (noSubmit — user clicks Apply)
+  setupSuggest({
+    inputId: 'bq-org-input', hiddenId: 'bq-org-id', suggestId: 'bq-org-suggest',
+    noSubmit: true,
+    items: function() {
+      return _afOrgs.map(function(o){ return {id:o.id, label:o.name}; });
+    }
+  });
+  setupSuggest({
+    inputId: 'bq-loc-input', hiddenId: 'bq-loc-id', suggestId: 'bq-loc-suggest',
+    noSubmit: true,
+    items: function() {
+      return _afLocs.map(function(l){ return {id:l.id, label:l.label}; });
+    }
+  });
+})();
+
+// Populate event_ids into the quick-assign form before submission
+(function() {
+  var qf = document.getElementById('bulk-quick-form');
+  if (!qf) return;
+  qf.addEventListener('submit', function() {
+    var container = document.getElementById('bulk-quick-ids');
+    container.innerHTML = '';
+    document.querySelectorAll('.event-cb:checked').forEach(function(cb) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'event_ids'; inp.value = cb.value;
+      container.appendChild(inp);
+    });
   });
 })();
 function openBulkAttrsModal() {

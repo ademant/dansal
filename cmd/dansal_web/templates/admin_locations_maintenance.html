@@ -6,6 +6,7 @@
 </div>
 
 {{with .Data}}
+<div class="maint-sticky">
 <div class="loc-filters">
   <input id="loc-search" type="search" placeholder="{{$.Strings.T "loc_search_placeholder"}}" autocomplete="off" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;min-width:180px">
   <div class="af-field" id="town-filter-wrap">
@@ -30,6 +31,7 @@
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge"
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
+</div>{{/* end .maint-sticky */}}
 
 <div class="table-wrap loc-table-wrap">
 <table class="event-table" id="loc-table" data-sortable>
@@ -181,7 +183,7 @@ main:has(.loc-table-wrap){max-width:none}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:middle}
 .event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
 .event-table tbody tr:hover{background:#f9f9ff}
-.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd;flex-wrap:wrap}
+.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:0;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd;flex-wrap:wrap}
 .bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .col-cb{width:2rem;text-align:center}
 .col-actions{white-space:nowrap}
@@ -189,7 +191,8 @@ main:has(.loc-table-wrap){max-width:none}
 .ind-cell{white-space:nowrap}
 .ind{font-size:.85rem;opacity:.25}
 .ind-ok{opacity:1;color:#1a7f37}
-.loc-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
+.maint-sticky{position:sticky;top:0;z-index:100;background:var(--bg,#fff);padding-bottom:.25rem;margin-bottom:.25rem}
+.loc-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .loc-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
 .btn-sm:hover{background:#f0f0f0}

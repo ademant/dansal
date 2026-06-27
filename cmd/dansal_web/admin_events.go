@@ -780,11 +780,23 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		}
 
 		client.invalidateEvents()
-		// Preserve query parameters from the original request
-		queryParams := r.URL.Query()
+		// Preserve filter params. They arrive as POST body fields (the JS on the
+		// listing page copies window.location.search into hidden inputs), so
+		// r.URL.Query() is empty — read from r.Form instead.
+		filterKeys := []string{
+			"include_past", "org_id", "city", "location_id", "musician_id",
+			"type", "dance", "date_from", "date_to", "source",
+			"unpublished", "flagged", "created_after",
+		}
+		q := url.Values{}
+		for _, k := range filterKeys {
+			if v := r.FormValue(k); v != "" {
+				q.Set(k, v)
+			}
+		}
 		redirectURL := "/admin/events"
-		if len(queryParams) > 0 {
-			redirectURL += "?" + queryParams.Encode()
+		if len(q) > 0 {
+			redirectURL += "?" + q.Encode()
 		}
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 	}

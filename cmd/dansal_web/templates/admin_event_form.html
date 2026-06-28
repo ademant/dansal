@@ -1267,6 +1267,7 @@ function _markDirty(){
   if(_formDirty) return;
   _formDirty=true;
   window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
     e.preventDefault();
     e.returnValue='';
   });

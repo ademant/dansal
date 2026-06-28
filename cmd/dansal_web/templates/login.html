@@ -45,7 +45,7 @@
       <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
       <label for="identifier">{{$.Strings.T "login_identifier"}}</label>
       <input id="identifier" type="text" name="email" value="{{.Email}}"
-             required{{if .ErrorKey}} autofocus{{end}} autocomplete="username">
+             inputmode="email" required{{if .ErrorKey}} autofocus{{end}} autocomplete="username">
       <label for="password">{{$.Strings.T "login_password"}}</label>
       <input id="password" type="password" name="password"
              required autocomplete="current-password">

@@ -236,7 +236,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
         </div>
         <div class="nav-divider"></div>
         <div class="nav-section">
-          {{if eq .User.Role "admin"}}<a href="/admin/templates">{{.Strings.T "nav_admin_templates"}}</a>{{end}}
+          <a href="/admin/templates">{{.Strings.T "nav_admin_templates"}}</a>
           <a href="/admin/series">{{.Strings.T "nav_admin_series"}}</a>
           <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
           <a href="/admin/users">{{.Strings.T "nav_admin_users"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>

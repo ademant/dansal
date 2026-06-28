@@ -519,11 +519,13 @@ function initDateRangePicker(opts){
     if(!opts.popup.hidden) render();
   });
   opts.prev.addEventListener('click',function(e){
+    e.preventDefault();
     e.stopPropagation();
     if(--calMonth<0){calMonth=11;calYear--;}
     render();
   });
   opts.next.addEventListener('click',function(e){
+    e.preventDefault();
     e.stopPropagation();
     if(++calMonth>11){calMonth=0;calYear++;}
     render();

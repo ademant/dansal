@@ -995,7 +995,9 @@ function filterLocsByOrg(){
 }
 function restoreLocOptions(){ /* order restored on next filterLocsByOrg call or page reload */ }
 // Location → Org: show only orgs that own the selected location.
-function filterOrgsByLoc(){
+// autoSelect=false suppresses auto-picking the org (used on page load to avoid
+// making it look like an org is already saved when it isn't).
+function filterOrgsByLoc(autoSelect){
   var locSel=document.getElementById('loc_id');
   var orgSel=document.getElementById('org_id');
   if(!locSel||!orgSel) return;
@@ -1010,9 +1012,10 @@ function filterOrgsByLoc(){
   });
   // If current org selection is now hidden, clear it.
   if(orgSel.selectedOptions.length&&orgSel.selectedOptions[0].hidden) orgSel.value='';
-  // Auto-select if exactly one org matches.
+  // Auto-select if exactly one org matches — but not when called on page load,
+  // where the event has no org yet; the user must consciously pick one.
   var visible=Array.prototype.filter.call(orgSel.options,function(o){return o.value&&!o.hidden;});
-  if(visible.length===1){
+  if(autoSelect!==false&&visible.length===1){
     orgSel.value=visible[0].value;
     document.getElementById('org_choice').value='existing';
   }
@@ -1029,8 +1032,8 @@ function restoreOrgOptions(){
   var locSel=document.getElementById('loc_id');
   if(orgSel) orgSel.addEventListener('change', filterLocsByOrg);
   if(locSel) locSel.addEventListener('change', filterOrgsByLoc);
-  // Apply on load if values are pre-selected.
-  if(locSel&&locSel.value) filterOrgsByLoc();
+  // Apply on load if values are pre-selected (filter list but don't auto-assign).
+  if(locSel&&locSel.value) filterOrgsByLoc(false);
   else if(orgSel&&orgSel.value) filterLocsByOrg();
   syncOrgUI();
   syncLocUI();

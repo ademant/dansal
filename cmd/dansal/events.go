@@ -2414,7 +2414,9 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 	for _, id := range req.IDs {
 		if role != RoleAdmin {
 			var existingOrg int
-			db.QueryRow("SELECT COALESCE(organization_id,0) FROM events WHERE id=?", id).Scan(&existingOrg)
+			if err := db.QueryRow("SELECT COALESCE(organization_id,0) FROM events WHERE id=?", id).Scan(&existingOrg); err != nil {
+				continue
+			}
 			if existingOrg != 0 && !isOrgMember(callerID, existingOrg) {
 				continue
 			}

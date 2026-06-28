@@ -216,7 +216,23 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
         </div>
         <div class="nav-divider"></div>
         <div class="nav-section">
-          <a href="/admin/management">{{.Strings.T "nav_admin_management"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>
+          <a href="/board">{{.Strings.T "nav_board"}}</a>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-section">
+          {{if eq .User.Role "admin"}}<a href="/admin/templates">{{.Strings.T "nav_admin_templates"}}</a>{{end}}
+          <a href="/admin/series">{{.Strings.T "nav_admin_series"}}</a>
+          <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
+          <a href="/admin/users">{{.Strings.T "nav_admin_users"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-section">
+          <a href="/admin/events">{{.Strings.T "nav_events"}}</a>
+          <a href="/admin/locations/maintenance">{{.Strings.T "admin_loc_maintenance_title"}}</a>
+          {{if eq .User.Role "admin"}}
+          {{if .RegistrationEnabled}}<a href="/admin/registrations">{{.Strings.T "nav_admin_registrations"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>{{end}}
+          <a href="/admin/dances">{{.Strings.T "nav_admin_dances"}}</a>
+          {{end}}
         </div>
       {{else}}
         <div class="nav-section">

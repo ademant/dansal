@@ -1,0 +1,373 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "admin_event_maintenance_title"}}</h1>
+  <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
+</div>
+
+{{with .Data}}
+<div class="maint-sticky">
+
+{{/* ── Filters (GET form) ────────────────────────────────────── */}}
+<form method="get" action="/admin/events/maintenance" class="em-filters" id="em-filter-form">
+  <label class="filter-check">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "filter_include_past"}}
+  </label>
+
+  <div class="dpr-wrap">
+    <button type="button" id="em-date-btn" class="dpr-btn"></button>
+    <input type="hidden" name="date_from" id="em-date-from" value="{{.FilterDateFrom}}">
+    <input type="hidden" name="date_to"   id="em-date-to"   value="{{.FilterDateTo}}">
+    <div id="em-date-popup" class="dpr-popup" hidden>
+      <div class="dpr-cal-header">
+        <button id="em-cal-prev">‹</button>
+        <span id="em-cal-title"></span>
+        <button id="em-cal-next">›</button>
+      </div>
+      <table class="dpr-cal-grid" id="em-cal-grid"></table>
+    </div>
+  </div>
+
+  <div class="af-field" id="em-org-filter-wrap">
+    <input type="text" id="em-org-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_orgs"}}" autocomplete="off" value="{{.FilterOrgName}}">
+    <input type="hidden" name="org_id" id="em-org-filter-id" value="{{if .FilterOrgID}}{{.FilterOrgID}}{{end}}">
+    <div id="em-org-filter-suggest" class="af-suggest" hidden></div>
+  </div>
+
+  <div class="af-field" id="em-city-filter-wrap">
+    <input type="text" name="city" id="em-city-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_towns"}}" autocomplete="off" value="{{.FilterCity}}">
+    <div id="em-city-filter-suggest" class="af-suggest" hidden></div>
+  </div>
+
+  <div class="af-field" id="em-loc-filter-wrap">
+    <input type="text" id="em-loc-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_locations"}}" autocomplete="off" value="{{.FilterLocationName}}">
+    <input type="hidden" name="location_id" id="em-loc-filter-id" value="{{if .FilterLocationID}}{{.FilterLocationID}}{{end}}">
+    <div id="em-loc-filter-suggest" class="af-suggest" hidden></div>
+  </div>
+
+  <a href="/admin/events/maintenance" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
+</form>
+
+{{/* ── Bulk actions (POST form wraps the table) ──────────────── */}}
+<form method="post" action="/admin/events/bulk-set-attributes" id="em-bulk-form">
+<input type="hidden" name="return_path" value="/admin/events/maintenance">
+
+<div class="em-bulk-bar">
+  <span id="em-bulk-count" class="em-bulk-count"></span>
+
+  {{/* Assign org */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "fetch_org"}}</label>
+    <div class="af-field">
+      <input type="text" id="em-bq-org-input" class="af-input em-bq-input" placeholder="—" autocomplete="off">
+      <input type="hidden" name="org_id" id="em-bq-org-id">
+      <div id="em-bq-org-suggest" class="af-suggest" hidden></div>
+    </div>
+  </div>
+
+  {{/* Assign location */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "col_location"}}</label>
+    <div class="af-field">
+      <input type="text" id="em-bq-loc-input" class="af-input em-bq-input" placeholder="—" autocomplete="off">
+      <input type="hidden" name="location_id" id="em-bq-loc-id">
+      <div id="em-bq-loc-suggest" class="af-suggest" hidden></div>
+    </div>
+  </div>
+
+  {{/* Assign series */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "nav_admin_series"}}</label>
+    <select name="series_id" id="em-bq-series" class="em-bq-select">
+      <option value="">—</option>
+      {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+    </select>
+  </div>
+
+  {{/* Assign event type (format tags) */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "filter_all_types"}}</label>
+    <select name="add_tags" id="em-bq-type" class="em-bq-select">
+      <option value="">—</option>
+      {{range .FormatTags}}<option value="{{.Slug}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+
+  {{/* Assign dance style */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "filter_all_dances"}}</label>
+    <select name="add_dances" id="em-bq-dance" class="em-bq-select">
+      <option value="">—</option>
+      {{range .Dances}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+
+  <div class="em-bulk-actions">
+    <button type="submit" class="btn-sm btn-assign" id="em-btn-assign">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+    <button type="submit" formaction="/admin/events/merge" class="btn-sm btn-merge" id="em-btn-merge"
+            onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
+    <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk" id="em-btn-cancel"
+            onclick="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+  </div>
+</div>
+{{/* end em-bulk-bar */}}
+
+</div>{{/* end .maint-sticky */}}
+
+<p class="result-count">{{len .Events}} {{$.Strings.T "admin_events_count"}}</p>
+
+<div class="table-wrap em-table-wrap">
+<table class="event-table em-table" id="em-table" data-sortable>
+  <thead>
+    <tr>
+      <th class="col-cb"><input type="checkbox" id="em-cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
+      <th class="col-id">ID</th>
+      <th data-sort="str" class="col-title">{{$.Strings.T "col_title"}}</th>
+      <th data-sort="str" class="col-time">{{$.Strings.T "col_date"}}</th>
+      <th class="col-desc">{{$.Strings.T "evt_description"}}</th>
+      <th data-sort="str" class="col-org">{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str" class="col-loc">{{$.Strings.T "col_location"}}</th>
+      <th class="col-type" title="{{$.Strings.T "filter_all_types"}}">⚑</th>
+      <th class="col-dances">{{$.Strings.T "filter_all_dances"}}</th>
+      <th class="col-series">~</th>
+      <th data-sort="str" class="col-changed">{{$.Strings.T "loc_updated"}}</th>
+      <th class="col-actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Events}}
+  {{$startDate := isoDate .StartTime}}
+  {{$endDate   := isoEndDate .EndTime}}
+  {{$startTime := isoTime .StartTime}}
+  {{$endTime   := isoTime .EndTime}}
+  {{$sameDay   := eq $startDate $endDate}}
+  {{$locName   := ""}}
+  {{if .Location}}{{if and .Location.ShortName .Location.Town}}{{$locName = printf "%s, %s" .Location.ShortName .Location.Town}}{{else if .Location.ShortName}}{{$locName = .Location.ShortName}}{{else if .Location.Location}}{{$locName = .Location.Location}}{{end}}{{end}}
+  <tr class="{{if .IsCancelled}}ev-cancelled{{end}}">
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="em-cb"></td>
+    <td class="col-id muted">{{.ID}}</td>
+    <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a></td>
+    <td class="col-time" style="white-space:nowrap" data-val="{{.StartTime}}">
+      {{if $sameDay}}
+        {{$startDate}} {{$startTime}}–{{$endTime}}
+      {{else}}
+        {{$startDate}}–{{$endDate}}
+      {{end}}
+    </td>
+    <td class="col-desc muted">{{.Description}}</td>
+    <td class="col-org muted">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    <td class="col-loc">{{$locName}}</td>
+    <td class="col-type">
+      {{if .HasBall}}<span title="{{$.Strings.T "filter_type_ball"}}">💃</span>{{end}}
+      {{if .HasWorkshop}}<span title="{{$.Strings.T "filter_type_workshop"}}">🎓</span>{{end}}
+      {{if .HasFestival}}<span title="{{$.Strings.T "filter_type_festival"}}">🎪</span>{{end}}
+    </td>
+    <td class="col-dances muted">{{join .DanceNames}}</td>
+    <td class="col-series">{{if .SeriesID}}<span title="{{index $.Data.SeriesMap (derefInt .SeriesID)}}">~</span>{{end}}</td>
+    <td class="col-changed muted">{{isoDate .ChangedAt}}</td>
+    <td class="col-actions" style="white-space:nowrap">
+      {{if .Editable}}<a href="/admin/events/{{.ID}}/edit?from={{$.Data.ReturnURL | urlquery}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</form>
+
+{{end}}
+
+<style>
+.em-table-wrap{overflow-x:auto;margin-top:.75rem}
+.em-table{width:100%;max-width:none;border-collapse:collapse;font-size:.85rem}
+.em-table th,.em-table td{padding:.4rem .55rem;text-align:left;border-bottom:1px solid var(--border,#eee);vertical-align:middle}
+.em-table thead th{background:var(--bg-card,#f4f6fb);font-weight:600;white-space:nowrap}
+.em-table tbody tr:hover{background:var(--bg-hover,#f9f9ff)}
+.em-table .col-id{color:var(--fg-2,#888);font-size:.78rem;min-width:2.5rem}
+.em-table .col-title{min-width:10rem}
+.em-table .col-time{min-width:10rem}
+.em-table .col-desc{max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.em-table .col-org{max-width:8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.em-table .col-loc{max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.em-table .col-type{white-space:nowrap;font-size:1rem}
+.em-table .col-dances{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.em-table .col-series{text-align:center}
+.em-table .col-changed{white-space:nowrap}
+.em-table .col-actions{text-align:right}
+.em-table tr.ev-cancelled td{opacity:.55;text-decoration:line-through}
+.em-table .ev-link{text-decoration:none;color:var(--fg,inherit)}
+.em-table .ev-link:hover{text-decoration:underline}
+
+.em-filters{display:flex;flex-wrap:wrap;gap:.4rem .6rem;align-items:center;padding:.5rem;background:var(--bg-card,#f4f6fb);border-bottom:1px solid var(--border,#e0e4ef)}
+.em-bulk-bar{display:flex;flex-wrap:wrap;gap:.4rem .75rem;align-items:flex-end;padding:.5rem;background:var(--bg-card,#f4f6fb);border-bottom:1px solid var(--border,#e0e4ef)}
+.em-bulk-group{display:flex;flex-direction:column;gap:.15rem}
+.em-bulk-label{font-size:.72rem;font-weight:600;color:var(--fg-2,#666)}
+.em-bq-input{max-width:10rem;padding:.3rem .45rem}
+.em-bq-select{padding:.28rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.82rem;max-width:9rem}
+.em-bulk-count{font-size:.82rem;color:var(--fg-2,#555);align-self:center}
+.em-bulk-actions{display:flex;gap:.35rem;align-items:flex-end;margin-left:auto}
+.muted{color:var(--fg-2,#666)}
+.result-count{font-size:.85rem;color:var(--fg-2,#666);margin:.4rem .5rem .1rem}
+
+.btn-assign{background:#1a6eb5;color:#fff;border:none}
+.btn-assign:hover{background:#0d4a80}
+.btn-merge{background:#856404;color:#fff;border:none}
+.btn-merge:hover{background:#664e03}
+.btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
+.btn-cancel-bulk:hover{background:#b85f00}
+.btn-icon{background:none;border:none;cursor:pointer;font-size:1rem;padding:.1rem .2rem;opacity:.75}
+.btn-icon:hover{opacity:1}
+
+@media(max-width:700px){
+  .em-bulk-actions{margin-left:0}
+}
+</style>
+
+<script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+
+var _emOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
+var _emLocs = {{locationsJSON $.Data.Locations}};
+
+(function(){
+  // Build city list
+  var cities = [];
+  var seenCity = {};
+  _emLocs.forEach(function(l){
+    if (l.town && !seenCity[l.town]) { seenCity[l.town] = true; cities.push(l.town); }
+  });
+  cities.sort(function(a,b){ return a.localeCompare(b); });
+
+  function setupSuggest(opts) {
+    var input  = document.getElementById(opts.inputId);
+    var hidden = opts.hiddenId ? document.getElementById(opts.hiddenId) : null;
+    var box    = document.getElementById(opts.suggestId);
+    if (!input || !box) return;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+    input.addEventListener('input', function() {
+      if (hidden) hidden.value = '';
+      var q = input.value.trim().toLowerCase();
+      if (q.length < 1) { hide(); return; }
+      var matches = opts.items().filter(function(it) {
+        return it.label.toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 10);
+      if (!matches.length) { hide(); return; }
+      box.innerHTML = matches.map(function(it, i) {
+        return '<div data-idx="'+i+'">'+it.label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      }).join('');
+      box._matches = matches;
+      box.hidden = false;
+    });
+    box.addEventListener('mousedown', function(e) {
+      if (e.target && e.target.dataset.idx !== undefined) {
+        e.preventDefault();
+        var it = box._matches[+e.target.dataset.idx];
+        input.value = it.label;
+        if (hidden) hidden.value = it.id;
+        hide();
+        if (!opts.noSubmit) input.form.submit();
+      }
+    });
+    input.addEventListener('blur', function() { setTimeout(hide, 150); });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var first = box._matches && box._matches[0];
+        if (first && !box.hidden) {
+          input.value = first.label;
+          if (hidden) hidden.value = first.id;
+        } else if (!input.value.trim() && hidden) {
+          hidden.value = '';
+        }
+        hide();
+        if (!opts.noSubmit) input.form.submit();
+      }
+    });
+  }
+
+  // Filter autocompletes
+  setupSuggest({
+    inputId: 'em-org-filter-input', hiddenId: 'em-org-filter-id', suggestId: 'em-org-filter-suggest',
+    items: function() { return _emOrgs.map(function(o){ return {id:o.id, label:o.name}; }); }
+  });
+  setupSuggest({
+    inputId: 'em-city-filter-input', suggestId: 'em-city-filter-suggest',
+    items: function() { return cities.map(function(c){ return {id:c, label:c}; }); }
+  });
+  setupSuggest({
+    inputId: 'em-loc-filter-input', hiddenId: 'em-loc-filter-id', suggestId: 'em-loc-filter-suggest',
+    items: function() {
+      var cityVal = document.getElementById('em-city-filter-input').value.trim();
+      var pool = cityVal ? _emLocs.filter(function(l){ return l.town === cityVal; }) : _emLocs;
+      return pool.map(function(l){ return {id:l.id, label:l.label}; });
+    }
+  });
+
+  // Bulk action autocompletes (noSubmit — user clicks Assign button)
+  setupSuggest({
+    inputId: 'em-bq-org-input', hiddenId: 'em-bq-org-id', suggestId: 'em-bq-org-suggest',
+    noSubmit: true,
+    items: function() { return _emOrgs.map(function(o){ return {id:o.id, label:o.name}; }); }
+  });
+  setupSuggest({
+    inputId: 'em-bq-loc-input', hiddenId: 'em-bq-loc-id', suggestId: 'em-bq-loc-suggest',
+    noSubmit: true,
+    items: function() { return _emLocs.map(function(l){ return {id:l.id, label:l.label}; }); }
+  });
+
+  // Checkbox select-all and count
+  var cbAll = document.getElementById('em-cb-all');
+  var countEl = document.getElementById('em-bulk-count');
+  function updateCount() {
+    var n = document.querySelectorAll('.em-cb:checked').length;
+    countEl.textContent = n ? n + ' ✓' : '';
+  }
+  if (cbAll) {
+    cbAll.addEventListener('change', function() {
+      document.querySelectorAll('.em-cb').forEach(function(cb){ cb.checked = cbAll.checked; });
+      updateCount();
+    });
+  }
+  document.querySelectorAll('.em-cb').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      if (!cb.checked && cbAll) cbAll.checked = false;
+      updateCount();
+    });
+  });
+
+  // Copy filter params into bulk form so merge handler can rebuild redirect URL
+  var filterForm = document.getElementById('em-filter-form');
+  var bulkForm   = document.getElementById('em-bulk-form');
+  if (filterForm && bulkForm) {
+    var filterParams = new URLSearchParams(window.location.search);
+    filterParams.forEach(function(val, key) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = key; inp.value = val;
+      bulkForm.appendChild(inp);
+    });
+  }
+})();
+
+// Date range picker for filter form
+(function(){
+  initDateRangePicker({
+    btn:       document.getElementById('em-date-btn'),
+    popup:     document.getElementById('em-date-popup'),
+    grid:      document.getElementById('em-cal-grid'),
+    title:     document.getElementById('em-cal-title'),
+    prevBtn:   document.getElementById('em-cal-prev'),
+    nextBtn:   document.getElementById('em-cal-next'),
+    from:      document.getElementById('em-date-from').value,
+    to:        document.getElementById('em-date-to').value,
+    placeholder: '📅 {{$.Strings.T "col_date"}}',
+    onSelect: function(f, t) {
+      document.getElementById('em-date-from').value = f;
+      document.getElementById('em-date-to').value   = t;
+      document.getElementById('em-filter-form').submit();
+    }
+  });
+})();
+</script>
+{{end}}

@@ -546,8 +546,9 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			return
 		}
 		ids := parseFormIDs(r.Form, "event_ids")
+		mergeBack := safeReferer(r, "/admin/events")
 		if len(ids) < 2 {
-			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			http.Redirect(w, r, mergeBack, http.StatusSeeOther)
 			return
 		}
 		// Remove duplicate IDs
@@ -560,7 +561,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			}
 		}
 		if len(uniqueIDs) < 2 {
-			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			http.Redirect(w, r, mergeBack, http.StatusSeeOther)
 			return
 		}
 		ids = uniqueIDs
@@ -597,7 +598,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			})
 		}
 		if len(evMetas) < 2 {
-			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			http.Redirect(w, r, mergeBack, http.StatusSeeOther)
 			return
 		}
 
@@ -637,7 +638,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 
 		base, err := client.GetEventAuthed(ctx, baseID, token)
 		if err != nil {
-			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+			http.Redirect(w, r, mergeBack, http.StatusSeeOther)
 			return
 		}
 
@@ -766,7 +767,13 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 				q.Set(k, v)
 			}
 		}
-		redirectURL := "/admin/events"
+		basePath := "/admin/events"
+		if rp := safeReturnPath(r.FormValue("return_path")); rp != "" {
+			if u, err := url.Parse(rp); err == nil {
+				basePath = u.Path
+			}
+		}
+		redirectURL := basePath
 		if len(q) > 0 {
 			redirectURL += "?" + q.Encode()
 		}

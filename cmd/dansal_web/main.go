@@ -265,6 +265,7 @@ func main() {
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminRateLimit(adminEventImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/musicians/{id}/image/delete", adminRateLimit(adminMusicianImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/image/delete", adminRateLimit(adminOrgImageDeleteHandler(cfg, client)))
+		r.HandleFunc("GET /admin/events/maintenance", adminEventsMaintenanceHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/events", adminEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/events/import", adminImportEventsPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /admin/events/import", adminRateLimit(adminImportEventsHandler(cfg, tmpls, client, i18n)))

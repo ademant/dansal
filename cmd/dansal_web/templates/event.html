@@ -22,6 +22,7 @@
 
 <div class="evt-header">
   <h1>{{.Title}}</h1>
+  <button type="button" class="btn-icon" onclick="history.back()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{else if not $.User}}<a href="/login?next=/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "dashboard_login_to_edit"}}" aria-label="{{$.Strings.T "dashboard_login_to_edit"}}">🔑</a>{{end}}
   {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon btn-cancel-event" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
   {{if $.User}}<a href="/admin/events/new?clone_from={{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_clone"}}" aria-label="{{$.Strings.T "admin_clone"}}">📋</a>{{end}}

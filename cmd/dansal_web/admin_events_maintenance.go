@@ -25,6 +25,7 @@ type AdminEventsMaintenanceData struct {
 	FilterCity         string
 	FilterDateFrom     string
 	FilterDateTo       string
+	FilterUnpublished  bool
 	ReturnURL          string
 	// paging
 	TotalCount    int
@@ -43,13 +44,14 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 
 		q := r.URL.Query()
 		includePast := q.Get("include_past") == "1"
+		filterUnpublished := q.Get("unpublished") == "1"
 		orgID, _ := strconv.Atoi(q.Get("org_id"))
 		locationID, _ := strconv.Atoi(q.Get("location_id"))
 		filterCity := q.Get("city")
 		dateFrom := q.Get("date_from")
 		dateTo := q.Get("date_to")
 
-		hasFilter := includePast || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != ""
+		hasFilter := includePast || filterUnpublished || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != ""
 
 		page := 1
 		if p, _ := strconv.Atoi(q.Get("page")); p > 1 {
@@ -60,6 +62,12 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		params := url.Values{}
 		if includePast {
 			params.Set("include_past", "true")
+		}
+		if filterUnpublished {
+			params.Set("is_published", "false")
+			if !includePast {
+				params.Set("include_past", "true")
+			}
 		}
 		if dateFrom != "" {
 			if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
@@ -189,6 +197,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			FilterCity:         filterCity,
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,
+			FilterUnpublished:  filterUnpublished,
 			ReturnURL:          r.URL.RequestURI(),
 			TotalCount:         total,
 			Page:               page,

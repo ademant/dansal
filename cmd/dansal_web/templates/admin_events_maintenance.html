@@ -46,6 +46,7 @@
     <div id="em-loc-filter-suggest" class="af-suggest" hidden></div>
   </div>
 
+  <a href="/admin/events/maintenance?unpublished=1" class="btn-reset{{if .FilterUnpublished}} btn-active{{end}}">{{$.Strings.T "admin_filter_unpublished"}}</a>
   <a href="/admin/events/maintenance" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
 
@@ -107,6 +108,8 @@
     <button type="submit" class="btn-sm btn-assign" id="em-btn-assign">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
     <button type="submit" formaction="/admin/events/merge" class="btn-sm btn-merge" id="em-btn-merge"
             onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+    <button type="submit" formaction="/admin/events/bulk-publish" class="btn-sm btn-publish-bulk" id="em-btn-publish"
+            onclick="return confirm('{{$.Strings.T "admin_event_confirm_publish"}}')">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk" id="em-btn-cancel"
             onclick="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
   </div>
@@ -148,10 +151,10 @@
   {{$sameDay   := eq $startDate $endDate}}
   {{$locName   := ""}}
   {{if .Location}}{{if and .Location.ShortName .Location.Town}}{{$locName = printf "%s, %s" .Location.ShortName .Location.Town}}{{else if .Location.ShortName}}{{$locName = .Location.ShortName}}{{else if .Location.Location}}{{$locName = .Location.Location}}{{end}}{{end}}
-  <tr class="{{if .IsCancelled}}ev-cancelled{{end}}">
+  <tr class="{{if .IsCancelled}}ev-cancelled{{else if not .IsPublished}}ev-unpublished{{end}}">
     <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="em-cb"></td>
     <td class="col-id muted">{{.ID}}</td>
-    <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a></td>
+    <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a>{{if not .IsPublished}}<span class="badge unpub" title="{{$.Strings.T "musician_unpublished"}}">⊘</span>{{end}}</td>
     <td class="col-time" style="white-space:nowrap" data-val="{{.StartTime}}">
       {{if $sameDay}}
         {{$startDate}} {{$startTime}}–{{$endTime}}
@@ -216,6 +219,8 @@ main:has(.em-table-wrap){max-width:none}
 .em-table .col-changed{white-space:nowrap}
 .em-table .col-actions{text-align:right}
 .em-table tr.ev-cancelled td{opacity:.55;text-decoration:line-through}
+.em-table tr.ev-unpublished td{opacity:.65}
+.em-table tr.ev-unpublished .col-title{font-style:italic}
 .em-table .ev-link{text-decoration:none;color:var(--fg,inherit)}
 .em-table .ev-link:hover{text-decoration:underline}
 
@@ -242,8 +247,11 @@ main:has(.em-table-wrap){max-width:none}
 .btn-assign:hover{background:#0d4a80}
 .btn-merge{background:#856404;color:#fff;border:none}
 .btn-merge:hover{background:#664e03}
+.btn-publish-bulk{background:#1a7a3c;color:#fff;border:none}
+.btn-publish-bulk:hover{background:#135c2c}
 .btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
 .btn-cancel-bulk:hover{background:#b85f00}
+.btn-active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
 .btn-icon{background:none;border:none;cursor:pointer;font-size:1rem;padding:.1rem .2rem;opacity:.75}
 .btn-icon:hover{opacity:1}
 

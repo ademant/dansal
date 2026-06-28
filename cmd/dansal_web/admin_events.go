@@ -256,6 +256,26 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 	}
 }
 
+func adminEventBulkPublishHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				_ = client.PublishEvent(r.Context(), id, token)
+			}
+		}
+		http.Redirect(w, r, safeReferer(r, "/admin/events/maintenance"), http.StatusSeeOther)
+	}
+}
+
 func adminEventBulkCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

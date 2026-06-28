@@ -434,7 +434,7 @@ const baselineCSP = "default-src 'self'; " +
 	"font-src 'self' data:; " +
 	"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
 	"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
-	"connect-src 'self' https://nominatim.openstreetmap.org; " +
+	"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
 	"object-src 'none'; base-uri 'self'; "
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

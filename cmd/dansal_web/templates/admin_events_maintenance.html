@@ -115,7 +115,11 @@
 
 </div>{{/* end .maint-sticky */}}
 
+{{if and (not .HasFilter) (gt .TotalCount (len .Events))}}
+<p class="result-hint">{{printf ($.Strings.T "admin_maint_page_hint") (len .Events) .TotalCount}}</p>
+{{else}}
 <p class="result-count">{{len .Events}} {{$.Strings.T "admin_events_count"}}</p>
+{{end}}
 
 <div class="table-wrap em-table-wrap">
 <table class="event-table em-table" id="em-table" data-sortable>
@@ -175,15 +179,30 @@
   </tbody>
 </table>
 </div>
+
+{{if gt .TotalPages 1}}
+<nav class="em-pager" aria-label="Pages">
+  {{if gt .Page 1}}<a href="{{.PagerBaseURL}}{{add .Page -1}}" class="em-pager-btn">‹</a>{{else}}<span class="em-pager-btn em-pager-dis">‹</span>{{end}}
+  {{range $p := pagerRange .Page .TotalPages}}
+    {{if eq $p -1}}<span class="em-pager-ellipsis">…</span>
+    {{else if eq $p $.Data.Page}}<span class="em-pager-btn em-pager-cur">{{$p}}</span>
+    {{else}}<a href="{{$.Data.PagerBaseURL}}{{$p}}" class="em-pager-btn">{{$p}}</a>{{end}}
+  {{end}}
+  {{if lt .Page .TotalPages}}<a href="{{.PagerBaseURL}}{{add .Page 1}}" class="em-pager-btn">›</a>{{else}}<span class="em-pager-btn em-pager-dis">›</span>{{end}}
+</nav>
+{{end}}
+
 </form>
 
 {{end}}
 
 <style>
+main:has(.em-table-wrap){max-width:none}
+.maint-sticky{position:sticky;top:0;z-index:100;background:var(--bg,#fff);padding-bottom:.25rem;margin-bottom:.25rem}
 .em-table-wrap{overflow-x:auto;margin-top:.75rem}
 .em-table{width:100%;max-width:none;border-collapse:collapse;font-size:.85rem}
 .em-table th,.em-table td{padding:.4rem .55rem;text-align:left;border-bottom:1px solid var(--border,#eee);vertical-align:middle}
-.em-table thead th{background:var(--bg-card,#f4f6fb);font-weight:600;white-space:nowrap}
+.em-table thead th{background:var(--bg-card,#f4f6fb);font-weight:600;white-space:nowrap;position:sticky;top:var(--thead-top,0);z-index:2}
 .em-table tbody tr:hover{background:var(--bg-hover,#f9f9ff)}
 .em-table .col-id{color:var(--fg-2,#888);font-size:.78rem;min-width:2.5rem}
 .em-table .col-title{min-width:10rem}
@@ -210,6 +229,14 @@
 .em-bulk-actions{display:flex;gap:.35rem;align-items:flex-end;margin-left:auto}
 .muted{color:var(--fg-2,#666)}
 .result-count{font-size:.85rem;color:var(--fg-2,#666);margin:.4rem .5rem .1rem}
+.result-hint{font-size:.85rem;color:var(--fg-2,#666);background:var(--bg-card,#f4f6fb);border:1px solid var(--border,#e0e4ef);border-radius:4px;padding:.35rem .65rem;margin:.4rem 0 .1rem}
+.em-pager{display:flex;gap:.25rem;align-items:center;justify-content:center;padding:.75rem 0;flex-wrap:wrap}
+.em-pager-btn{display:inline-block;min-width:2rem;padding:.3rem .55rem;border:1px solid var(--border,#ccc);border-radius:4px;text-align:center;text-decoration:none;color:var(--fg,#333);font-size:.875rem;background:var(--bg-card,#f9f9f9)}
+.em-pager-btn:hover{background:var(--bg-hover,#e8eaf0)}
+.em-pager-cur{background:#1a6eb5;color:#fff;border-color:#1a6eb5;font-weight:600}
+.em-pager-cur:hover{background:#1a6eb5}
+.em-pager-dis{color:var(--fg-2,#aaa);border-color:var(--border,#ddd);cursor:default}
+.em-pager-ellipsis{padding:.3rem .25rem;color:var(--fg-2,#888)}
 
 .btn-assign{background:#1a6eb5;color:#fff;border:none}
 .btn-assign:hover{background:#0d4a80}
@@ -226,6 +253,12 @@
 </style>
 
 <script>
+// Set CSS var so sticky thead clears the sticky filter/bulk bar above it.
+(function(){
+  var s = document.querySelector('.maint-sticky');
+  if (s) document.documentElement.style.setProperty('--thead-top', s.offsetHeight + 'px');
+})();
+
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 
 var _emOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];

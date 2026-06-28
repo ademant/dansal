@@ -56,6 +56,7 @@ type AdminEventsData struct {
 	FilterSource       string
 	FilterUnpublished  bool
 	FilterFlagged      bool
+	TotalCount         int
 }
 
 type EventPrefill struct {
@@ -1111,8 +1112,18 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			params.Set("include_past", "true")
 		}
 
+		// Fetch all events when any filter is active so in-memory filters
+		// (org, type, dance, city, flagged) operate on the full result set.
+		hasFilter := includePast || orgID != 0 || locationID != 0 || musicianID != 0 ||
+			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
+			filterCity != "" || createdAfter != "" || filterSource != "" ||
+			filterUnpublished || filterFlagged
+		if hasFilter {
+			params.Set("limit", "1000")
+		}
+
 		token := getSessionToken(r)
-		events, err := client.GetAdminEvents(r.Context(), token, params)
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -1251,6 +1262,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterSource:       filterSource,
 			FilterUnpublished:  filterUnpublished,
 			FilterFlagged:      filterFlagged,
+			TotalCount:         total,
 		}))
 	}
 }

@@ -869,6 +869,36 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ip
 	},
+	"add": func(a, b int) int { return a + b },
+	// pagerRange returns page numbers to display, using -1 as an ellipsis sentinel.
+	"pagerRange": func(current, total int) []int {
+		if total <= 7 {
+			pages := make([]int, total)
+			for i := range pages {
+				pages[i] = i + 1
+			}
+			return pages
+		}
+		show := map[int]bool{1: true, total: true}
+		for _, p := range []int{current - 1, current, current + 1} {
+			if p >= 1 && p <= total {
+				show[p] = true
+			}
+		}
+		var sorted []int
+		for p := range show {
+			sorted = append(sorted, p)
+		}
+		sort.Ints(sorted)
+		var out []int
+		for i, p := range sorted {
+			if i > 0 && p-sorted[i-1] > 1 {
+				out = append(out, -1)
+			}
+			out = append(out, p)
+		}
+		return out
+	},
 }
 
 type Templates struct {

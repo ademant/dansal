@@ -114,7 +114,7 @@
 </form>
 
 {{if .Events}}
-<p class="result-count">{{len .Events}} {{$.Strings.T "admin_events_count"}}</p>
+<p class="result-count">{{if and .TotalCount (gt .TotalCount (len .Events))}}{{.TotalCount}}{{else}}{{len .Events}}{{end}} {{$.Strings.T "admin_events_count"}}</p>
 <form method="post" action="/admin/events/merge" id="event-bulk-form">
 <div class="bulk-edit-layout">
 <aside class="bulk-side" id="event-bulk-side">

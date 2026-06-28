@@ -1616,6 +1616,24 @@ func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params 
 	return events, nil
 }
 
+func (c *DansalClient) GetAdminEventsWithTotal(ctx context.Context, token string, params url.Values) ([]Event, int, error) {
+	path := "/api/v1/events"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	total, _ := strconv.Atoi(resp.Header.Get("X-Total-Count"))
+	var events []Event
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, total, err
+	}
+	return events, total, nil
+}
+
 func (c *DansalClient) CreateEvent(ctx context.Context, req EventCreateReq, token string) (Event, error) {
 	body, _ := json.Marshal(req)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events", token, body)

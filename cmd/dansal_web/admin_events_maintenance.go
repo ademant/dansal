@@ -26,6 +26,12 @@ type AdminEventsMaintenanceData struct {
 	FilterDateFrom     string
 	FilterDateTo       string
 	ReturnURL          string
+	// paging
+	TotalCount    int
+	Page          int
+	TotalPages    int
+	HasFilter     bool
+	PagerBaseURL  string
 }
 
 func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -42,6 +48,14 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		filterCity := q.Get("city")
 		dateFrom := q.Get("date_from")
 		dateTo := q.Get("date_to")
+
+		hasFilter := includePast || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != ""
+
+		page := 1
+		if p, _ := strconv.Atoi(q.Get("page")); p > 1 {
+			page = p
+		}
+		const pageSize = 100
 
 		params := url.Values{}
 		if includePast {
@@ -60,13 +74,32 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if locationID != 0 {
 			params.Set("location_id", strconv.Itoa(locationID))
 		}
+		if hasFilter {
+			params.Set("limit", "1000")
+		} else {
+			params.Set("limit", strconv.Itoa(pageSize))
+			params.Set("offset", strconv.Itoa((page-1)*pageSize))
+		}
 
 		token := getSessionToken(r)
-		events, err := client.GetAdminEvents(r.Context(), token, params)
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
+
+		totalPages := 1
+		if !hasFilter && total > pageSize {
+			totalPages = (total + pageSize - 1) / pageSize
+		}
+		// Build pager base URL (all current filter params except page)
+		pagerQ := url.Values{}
+		for k, vs := range q {
+			if k != "page" {
+				pagerQ[k] = vs
+			}
+		}
+		pagerBaseURL := "/admin/events/maintenance?" + pagerQ.Encode() + "&page="
 
 		if orgID != 0 {
 			filtered := events[:0]
@@ -157,6 +190,11 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,
 			ReturnURL:          r.URL.RequestURI(),
+			TotalCount:         total,
+			Page:               page,
+			TotalPages:         totalPages,
+			HasFilter:          hasFilter,
+			PagerBaseURL:       pagerBaseURL,
 		}))
 	}
 }

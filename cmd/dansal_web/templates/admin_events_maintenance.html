@@ -202,7 +202,7 @@ main:has(.em-table-wrap){max-width:none}
 .em-table-wrap{overflow-x:auto;margin-top:.75rem}
 .em-table{width:100%;max-width:none;border-collapse:collapse;font-size:.85rem}
 .em-table th,.em-table td{padding:.4rem .55rem;text-align:left;border-bottom:1px solid var(--border,#eee);vertical-align:middle}
-.em-table thead th{background:var(--bg-card,#f4f6fb);font-weight:600;white-space:nowrap;position:sticky;top:var(--thead-top,0);z-index:2}
+.em-table thead th{background:var(--bg-card,#f4f6fb);font-weight:600;white-space:nowrap}
 .em-table tbody tr:hover{background:var(--bg-hover,#f9f9ff)}
 .em-table .col-id{color:var(--fg-2,#888);font-size:.78rem;min-width:2.5rem}
 .em-table .col-title{min-width:10rem}
@@ -253,12 +253,6 @@ main:has(.em-table-wrap){max-width:none}
 </style>
 
 <script>
-// Set CSS var so sticky thead clears the sticky filter/bulk bar above it.
-(function(){
-  var s = document.querySelector('.maint-sticky');
-  if (s) document.documentElement.style.setProperty('--thead-top', s.offsetHeight + 'px');
-})();
-
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 
 var _emOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];

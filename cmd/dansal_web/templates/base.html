@@ -197,6 +197,22 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .fee-paid{background:#e5e7eb;color:#374151}
 .event-attr-row:empty{display:none}
 .event-attr-row{margin:.25rem 0}
+/* ── Shared date-range picker (dpr) ── */
+.dpr-wrap{position:relative;display:inline-block}
+.dpr-btn{padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);cursor:pointer;font-size:.88rem;white-space:nowrap}
+.dpr-btn:hover{border-color:var(--link)}
+.dpr-popup{position:absolute;top:100%;left:0;z-index:500;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:.6rem;margin-top:.25rem;width:260px}
+.dpr-cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;font-weight:600;font-size:.9rem}
+.dpr-cal-header button{border:none;background:none;cursor:pointer;font-size:1rem;color:var(--fg);padding:.1rem .35rem;border-radius:3px}
+.dpr-cal-header button:hover{background:var(--bg-hover)}
+.dpr-cal-grid{width:100%;border-collapse:collapse;font-size:.85rem}
+.dpr-cal-grid td,.dpr-cal-grid th{text-align:center;padding:.25rem;color:var(--fg-2)}
+.dpr-cal-grid td{cursor:pointer;border-radius:0;user-select:none}
+.dpr-other{color:var(--fg-faint)}
+.dpr-in-range{background:var(--bg-hover)}
+.dpr-range-start{background:var(--heading);color:#fff!important;border-radius:50% 0 0 50%}
+.dpr-range-end{background:var(--heading);color:#fff!important;border-radius:0 50% 50% 0}
+.dpr-range-start.dpr-range-end{border-radius:50%}
 </style>
 </head>
 <body>
@@ -432,6 +448,90 @@ function langConsentDeny(){
   document.getElementById('lang-consent-modal').hidden=true;
   var sel=document.getElementById('lang-select');
   if(sel){var opts=sel.options;for(var i=0;i<opts.length;i++){if(opts[i].defaultSelected){sel.selectedIndex=i;break;}}}
+}
+
+// initDateRangePicker — reusable two-click date-range calendar popup.
+// opts: {btn, popup, grid, title, prev, next, from, to, placeholder, onSelect}
+// onSelect(fromISO, toISO) is called when the user completes a selection.
+// Same-day: first click = half-circle; second click on same date = full circle.
+function initDateRangePicker(opts){
+  var pendingStart=null;
+  var from=opts.from||'', to=opts.to||'';
+  var calYear, calMonth;
+  function pad(n){return n<10?'0'+n:''+n;}
+  function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+  function updateBtn(){
+    opts.btn.textContent = from&&to ? (from===to ? from : from+' → '+to) : (opts.placeholder||'📅');
+  }
+  updateBtn();
+  function render(){
+    var lang=document.documentElement.lang||'de';
+    var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
+    var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
+    opts.title.textContent=fmtMY.format(new Date(calYear,calMonth,1));
+    var cur=new Date(calYear,calMonth,1);
+    var dow=cur.getDay(); cur.setDate(cur.getDate()-(dow===0?6:dow-1));
+    var selS=pendingStart||from, selE=pendingStart?pendingStart:to;
+    if(selS>selE){var t=selS;selS=selE;selE=t;}
+    var h='<thead><tr>';
+    for(var i=0;i<7;i++){var hd=new Date(cur);hd.setDate(hd.getDate()+i);h+='<th>'+fmtWd.format(hd)+'</th>';}
+    h+='</tr></thead><tbody>';
+    for(var row=0;row<6;row++){
+      h+='<tr>';
+      for(var col=0;col<7;col++){
+        var d=iso(cur);
+        var cls=cur.getMonth()!==calMonth?'dpr-other':'';
+        if(!pendingStart&&d>=selS&&d<=selE) cls+=' dpr-in-range';
+        if(d===selS) cls+=' dpr-range-start';
+        if(d===selE&&!pendingStart) cls+=' dpr-range-end';
+        if(pendingStart&&d===pendingStart) cls+=' dpr-range-start dpr-range-end';
+        h+='<td class="'+cls.trim()+'" data-iso="'+d+'">'+cur.getDate()+'</td>';
+        cur.setDate(cur.getDate()+1);
+      }
+      h+='</tr>';
+      if(row>=3&&cur.getMonth()!==calMonth) break;
+    }
+    h+='</tbody>';
+    opts.grid.innerHTML=h;
+    opts.grid.querySelectorAll('td').forEach(function(td){
+      td.addEventListener('click',function(){
+        var d=this.dataset.iso;
+        if(!pendingStart){
+          pendingStart=d;
+          setTimeout(render,0);
+        } else {
+          var s=pendingStart,e=d;
+          if(e<s){var t=s;s=e;e=t;}
+          pendingStart=null;
+          from=s; to=e;
+          updateBtn();
+          opts.popup.hidden=true;
+          opts.onSelect(from,to);
+        }
+      });
+    });
+  }
+  opts.btn.addEventListener('click',function(){
+    var d=new Date((from||iso(new Date()))+'T00:00:00');
+    calYear=d.getFullYear(); calMonth=d.getMonth();
+    pendingStart=null;
+    opts.popup.hidden=!opts.popup.hidden;
+    if(!opts.popup.hidden) render();
+  });
+  opts.prev.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(--calMonth<0){calMonth=11;calYear--;}
+    render();
+  });
+  opts.next.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(++calMonth>11){calMonth=0;calYear++;}
+    render();
+  });
+  document.addEventListener('click',function(e){
+    if(!opts.popup.hidden&&!opts.popup.contains(e.target)&&e.target!==opts.btn)
+      opts.popup.hidden=true;
+  });
 }
 </script>
 <main>

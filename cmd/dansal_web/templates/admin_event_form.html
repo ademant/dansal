@@ -76,6 +76,17 @@
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
         <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}" onchange="this.removeAttribute('data-auto')">
       </div>
+      <div class="dpr-wrap" style="align-self:flex-end;padding-bottom:.05rem">
+        <button type="button" id="ef-date-btn" class="dpr-btn" title="Pick date range">📅</button>
+        <div id="ef-date-popup" class="dpr-popup" hidden>
+          <div class="dpr-cal-header">
+            <button id="ef-cal-prev">‹</button>
+            <span id="ef-cal-title"></span>
+            <button id="ef-cal-next">›</button>
+          </div>
+          <table class="dpr-cal-grid" id="ef-cal-grid"></table>
+        </div>
+      </div>
     </div>
 
     <div class="check-row">
@@ -1384,6 +1395,30 @@ function goBackOrEvents(){
       }
       if(nav.classList.contains('is-expanded') && window.innerWidth<=880) nav.classList.remove('is-expanded');
     });
+  });
+})();
+
+(function(){
+  var dateInp   = document.getElementById('date');
+  var endInp    = document.getElementById('end_date');
+  if(!dateInp || !endInp) return;
+  initDateRangePicker({
+    btn:   document.getElementById('ef-date-btn'),
+    popup: document.getElementById('ef-date-popup'),
+    grid:  document.getElementById('ef-cal-grid'),
+    title: document.getElementById('ef-cal-title'),
+    prev:  document.getElementById('ef-cal-prev'),
+    next:  document.getElementById('ef-cal-next'),
+    from:  dateInp.value,
+    to:    endInp.value,
+    onSelect: function(f, t){
+      dateInp.value = f;
+      // Let onStartDateChange auto-fill end_date (marks it data-auto),
+      // then immediately override with the explicitly chosen end date.
+      onStartDateChange(f);
+      endInp.value = t;
+      endInp.removeAttribute('data-auto');
+    }
   });
 })();
 </script>

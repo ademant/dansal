@@ -97,8 +97,19 @@
     <option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>
     {{end}}
   </select>
-  <input type="date" name="date_from" value="{{.FilterDateFrom}}" title="{{$.Strings.T "filter_from_label"}}" onchange="this.form.submit()">
-  <input type="date" name="date_to" value="{{.FilterDateTo}}" title="{{$.Strings.T "filter_to_label"}}" onchange="this.form.submit()">
+  <div class="dpr-wrap">
+    <button type="button" id="ae-date-btn" class="dpr-btn"></button>
+    <input type="hidden" name="date_from" id="ae-date-from" value="{{.FilterDateFrom}}">
+    <input type="hidden" name="date_to" id="ae-date-to" value="{{.FilterDateTo}}">
+    <div id="ae-date-popup" class="dpr-popup" hidden>
+      <div class="dpr-cal-header">
+        <button id="ae-cal-prev">‹</button>
+        <span id="ae-cal-title"></span>
+        <button id="ae-cal-next">›</button>
+      </div>
+      <table class="dpr-cal-grid" id="ae-cal-grid"></table>
+    </div>
+  </div>
   <a href="/admin/events" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
 
@@ -535,6 +546,27 @@ function pubEvent(id){
       });
     }
   })();
+})();
+
+(function(){
+  var filterForm = document.querySelector('form.event-filters');
+  if(!filterForm) return;
+  initDateRangePicker({
+    btn:         document.getElementById('ae-date-btn'),
+    popup:       document.getElementById('ae-date-popup'),
+    grid:        document.getElementById('ae-cal-grid'),
+    title:       document.getElementById('ae-cal-title'),
+    prev:        document.getElementById('ae-cal-prev'),
+    next:        document.getElementById('ae-cal-next'),
+    from:        document.getElementById('ae-date-from').value,
+    to:          document.getElementById('ae-date-to').value,
+    placeholder: '📅 Dates',
+    onSelect: function(f, t){
+      document.getElementById('ae-date-from').value = f;
+      document.getElementById('ae-date-to').value   = t;
+      filterForm.submit();
+    }
+  });
 })();
 </script>
 {{end}}

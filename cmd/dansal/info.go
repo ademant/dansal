@@ -10,18 +10,18 @@ import (
 )
 
 type ServiceInfo struct {
-	Service                 string `json:"service"`
-	Version                 string `json:"version"`
-	BuildTime               string `json:"build_time"`
-	TotalEvents             int    `json:"total_events"`
-	PublishedEvents         int    `json:"published_events"`
-	UpcomingEvents          int    `json:"upcoming_events"`
-	TotalUsers              int    `json:"total_users"`
-	BoardEntries            int    `json:"board_entries"`
-	DBSizeBytes             int64  `json:"db_size_bytes"`
-	ImagesSizeBytes         int64  `json:"images_size_bytes"`
-	SelfRegistrationEnabled    bool   `json:"self_registration_enabled"`
-	TelegramChannelAvailable   bool   `json:"telegram_channel_available"`
+	Service                  string `json:"service"`
+	Version                  string `json:"version"`
+	BuildTime                string `json:"build_time"`
+	TotalEvents              int    `json:"total_events"`
+	PublishedEvents          int    `json:"published_events"`
+	UpcomingEvents           int    `json:"upcoming_events"`
+	TotalUsers               int    `json:"total_users"`
+	BoardEntries             int    `json:"board_entries"`
+	DBSizeBytes              int64  `json:"db_size_bytes"`
+	ImagesSizeBytes          int64  `json:"images_size_bytes"`
+	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`
+	TelegramChannelAvailable bool   `json:"telegram_channel_available"`
 }
 
 // GET /api/v1/info
@@ -60,16 +60,16 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 	})
 
 	info := ServiceInfo{
-		Service:                 "dansal",
-		Version:                 Version,
-		BuildTime:               BuildTime,
-		TotalEvents:             total,
-		PublishedEvents:         published,
-		UpcomingEvents:          upcoming,
-		TotalUsers:              totalUsers,
-		BoardEntries:            boardEntries,
-		DBSizeBytes:             dbSize,
-		ImagesSizeBytes:         imagesSize,
+		Service:                  "dansal",
+		Version:                  Version,
+		BuildTime:                BuildTime,
+		TotalEvents:              total,
+		PublishedEvents:          published,
+		UpcomingEvents:           upcoming,
+		TotalUsers:               totalUsers,
+		BoardEntries:             boardEntries,
+		DBSizeBytes:              dbSize,
+		ImagesSizeBytes:          imagesSize,
 		SelfRegistrationEnabled:  selfRegEnabled(),
 		TelegramChannelAvailable: config.Server.TelegramBotToken != "",
 	}

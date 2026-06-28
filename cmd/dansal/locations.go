@@ -12,36 +12,36 @@ import (
 )
 
 type Location struct {
-	ID              int             `json:"id"`
-	Location        string          `json:"location"`
-	ShortName       string          `json:"short_name,omitempty"`
-	Address         string          `json:"address"`
-	Zipcode         string          `json:"zipcode"`
-	Town            string          `json:"town"`
-	Country         string          `json:"country,omitempty"`
-	CountryCode     string          `json:"country_code,omitempty"`
-	Region          string          `json:"region,omitempty"`
-	Latitude        *float64        `json:"latitude,omitempty"`
-	Longitude       *float64        `json:"longitude,omitempty"`
-	Geohash         string          `json:"geohash,omitempty"`
-	Internetsite    string          `json:"internetsite"`
-	OsmID           *int64          `json:"osm_id,omitempty"`
-	OsmType         string          `json:"osm_type,omitempty"`
-	WikidataID      string          `json:"wikidata_id,omitempty"`
-	MBPlaceID       string          `json:"mb_place_id,omitempty"`
-	CreatedAt       string          `json:"created_at"`
-	UpdatedAt       int64           `json:"updated_at,omitempty"`
-	UpdatedBy       string          `json:"updated_by,omitempty"`
-	DistanceKm      *float64        `json:"distance_km,omitempty"`
-	OrganizationIDs []int           `json:"organization_ids,omitempty"`
-	NotesMd         string          `json:"notes_md,omitempty"`
-	Attributes      map[string]bool `json:"attributes,omitempty"`
-	Parking         string          `json:"parking,omitempty"`
-	FloorCondition  string          `json:"floor_condition,omitempty"`
-	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
-	Aliases         []string        `json:"aliases,omitempty"`
-	FutureEventCount int           `json:"future_event_count,omitempty"`
-	PastEventCount   int           `json:"past_event_count,omitempty"`
+	ID               int             `json:"id"`
+	Location         string          `json:"location"`
+	ShortName        string          `json:"short_name,omitempty"`
+	Address          string          `json:"address"`
+	Zipcode          string          `json:"zipcode"`
+	Town             string          `json:"town"`
+	Country          string          `json:"country,omitempty"`
+	CountryCode      string          `json:"country_code,omitempty"`
+	Region           string          `json:"region,omitempty"`
+	Latitude         *float64        `json:"latitude,omitempty"`
+	Longitude        *float64        `json:"longitude,omitempty"`
+	Geohash          string          `json:"geohash,omitempty"`
+	Internetsite     string          `json:"internetsite"`
+	OsmID            *int64          `json:"osm_id,omitempty"`
+	OsmType          string          `json:"osm_type,omitempty"`
+	WikidataID       string          `json:"wikidata_id,omitempty"`
+	MBPlaceID        string          `json:"mb_place_id,omitempty"`
+	CreatedAt        string          `json:"created_at"`
+	UpdatedAt        int64           `json:"updated_at,omitempty"`
+	UpdatedBy        string          `json:"updated_by,omitempty"`
+	DistanceKm       *float64        `json:"distance_km,omitempty"`
+	OrganizationIDs  []int           `json:"organization_ids,omitempty"`
+	NotesMd          string          `json:"notes_md,omitempty"`
+	Attributes       map[string]bool `json:"attributes,omitempty"`
+	Parking          string          `json:"parking,omitempty"`
+	FloorCondition   string          `json:"floor_condition,omitempty"`
+	NoStreetShoes    bool            `json:"no_street_shoes,omitempty"`
+	Aliases          []string        `json:"aliases,omitempty"`
+	FutureEventCount int             `json:"future_event_count,omitempty"`
+	PastEventCount   int             `json:"past_event_count,omitempty"`
 }
 
 func validCountryCode(code string) bool {

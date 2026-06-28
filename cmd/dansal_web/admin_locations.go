@@ -23,14 +23,14 @@ type AdminLocationsData struct {
 }
 
 type AdminLocationEditData struct {
-	Location       Location
-	UserOrgs       []Organization
-	AssignedOrgs   []Organization
-	AvailableOrgs  []Organization
-	ReadOnly       bool
-	ErrorKey       string
-	ReturnURL      string
-	From           string
+	Location      Location
+	UserOrgs      []Organization
+	AssignedOrgs  []Organization
+	AvailableOrgs []Organization
+	ReadOnly      bool
+	ErrorKey      string
+	ReturnURL     string
+	From          string
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under

@@ -33,12 +33,12 @@ type tecEvent struct {
 	GlobalID string `json:"global_id"`
 	Title    string `json:"title"`
 	// Description is HTML; stripped to plain text before storage.
-	Description string       `json:"description"`
-	URL         string       `json:"url"`
-	StartDate   string       `json:"start_date"` // "2026-05-31 19:00:00"
-	EndDate     string       `json:"end_date"`
-	Timezone    string       `json:"timezone"`
-	Cost        string       `json:"cost"`
+	Description string        `json:"description"`
+	URL         string        `json:"url"`
+	StartDate   string        `json:"start_date"` // "2026-05-31 19:00:00"
+	EndDate     string        `json:"end_date"`
+	Timezone    string        `json:"timezone"`
+	Cost        string        `json:"cost"`
 	Venue       tecVenueField `json:"venue"`
 	Categories  []struct {
 		Name string `json:"name"`

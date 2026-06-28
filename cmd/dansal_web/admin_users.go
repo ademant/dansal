@@ -269,7 +269,6 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 	}
 }
 
-
 func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

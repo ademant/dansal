@@ -331,7 +331,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
           btn.textContent = '…';
           fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=release-groups&fmt=json',
             {headers:{'Accept':'application/json'}})
-            .then(function(r){ return r.json(); })
+            .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
             .then(function(d){
               var rgs = (d['release-groups']||[])
                 .filter(function(rg){ return rg['primary-type']==='Album'; })
@@ -412,20 +412,20 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
     matchHint.style.display  = 'none';
 
     fetch('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=8', {headers:{'Accept':'application/json'}})
-      .then(function(r){ return r.json(); })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(data){ renderMB(data.artists||[]); })
-      .catch(function(){ mbResults.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; });
+      .catch(function(e){ mbResults.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}: '+(e&&e.message||'')+'</li>'; });
 
     fetch('https://api.discogs.com/database/search?q=' + encodeURIComponent(q) + '&type=artist&per_page=8', {headers:{'User-Agent':'dansal/1.0','Accept':'application/json'}})
-      .then(function(r){ return r.json(); })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(data){ renderDiscogs(data.results||[]); })
-      .catch(function(){ discogsRes.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; })
+      .catch(function(e){ discogsRes.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}: '+(e&&e.message||'')+'</li>'; })
       .finally(function(){ searchBtn.disabled = false; });
   }
 
   function fetchMBDetails(mbid){
     fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=url-rels+genres+annotation+release-groups&fmt=json', {headers:{'Accept':'application/json'}})
-      .then(function(r){ return r.json(); })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(d){
         if (d.genres && d.genres.length && !genreInp.value)
           genreInp.value = d.genres.map(function(g){ return g.name; }).join(', ');

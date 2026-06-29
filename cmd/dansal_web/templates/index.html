@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
 
 <!-- Filters -->
+<p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
 <div class="type-selector">
   <button type="button" class="type-btn type-active" data-type="ball">💃 {{$.Strings.T "filter_type_ball"}}</button>
   <button type="button" class="type-btn type-active" data-type="workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</button>
@@ -144,6 +145,7 @@
 .feed-hint{color:var(--fg-hint)}
 .fed-source{font-size:.75rem;color:var(--fg-muted);margin-left:.35rem;white-space:nowrap}
 .federated-event td{color:var(--fg-2)}
+.travel-notice{font-size:.82rem;color:var(--fg-muted);margin:0 0 .4rem}
 .type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
 .type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}
 .type-btn:hover{background:var(--btn-bg-h)}

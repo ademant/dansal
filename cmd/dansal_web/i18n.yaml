@@ -12,6 +12,7 @@ languages:
       # Navigation
       nav_events: "Veranstaltungen"
       meta_description: "Veranstaltungskalender für Bal-Folk, Fest-Noz und Volkstanz-Events."
+      index_travel_notice: "Bitte vor der Anreise prüfen, ob die Veranstaltung noch stattfindet."
       nav_musicians: "Musiker"
       nav_instructors: "Lehrkräfte"
       nav_orgs: "Organisationen"
@@ -1012,6 +1013,7 @@ languages:
       # Navigation
       nav_events: "Darvoudoù"
       meta_description: "Deiziadur darvoudoù evit bal-folk, fest-noz hag obererezhioù dañs hengounel."
+      index_travel_notice: "Gwiriit ma c'hoarvez ar c'hoñversadenn a-raok degas war-zu an tu-se."
       nav_musicians: "Sonerien"
       nav_instructors: "Kelennerien"
       nav_orgs: "Gevredigezhioù"
@@ -2010,6 +2012,7 @@ languages:
       # Navigation
       nav_events: "Events"
       meta_description: "Community calendar for bal-folk, fest-noz, and folk dance events."
+      index_travel_notice: "Always check that an event is still happening before travelling."
       nav_musicians: "Musicians"
       nav_instructors: "Instructors"
       nav_orgs: "Organizations"
@@ -3010,6 +3013,7 @@ languages:
     strings:
       nav_events: "Eventos"
       meta_description: "Calendario comunitario de eventos de bal-folk, fest-noz y danza folk."
+      index_travel_notice: "Comprueba que el evento sigue adelante antes de desplazarte."
       nav_musicians: "Músicos"
       nav_instructors: "Instructores"
       nav_orgs: "Organizaciones"
@@ -3999,6 +4003,7 @@ languages:
       # Navigation
       nav_events: "Événements"
       meta_description: "Agenda communautaire des bals folk, fest-noz et événements de danse traditionnelle."
+      index_travel_notice: "Vérifiez que l'événement a bien lieu avant de vous déplacer."
       nav_musicians: "Musiciens"
       nav_instructors: "Intervenant·e·s"
       nav_orgs: "Organisations"
@@ -4998,6 +5003,7 @@ languages:
     strings:
       nav_events: "Eventi"
       meta_description: "Calendario della comunità per eventi di bal-folk, fest-noz e danza popolare."
+      index_travel_notice: "Verificate che l'evento si svolga ancora prima di mettervi in viaggio."
       nav_musicians: "Musicisti"
       nav_instructors: "Insegnanti"
       nav_orgs: "Organizzazioni"
@@ -5986,6 +5992,7 @@ languages:
     strings:
       nav_events: "Evenementen"
       meta_description: "Communitykalender voor bal-folk, fest-noz en volksdansevenementen."
+      index_travel_notice: "Controleer of het evenement doorgaat voordat u reist."
       nav_musicians: "Muzikanten"
       nav_instructors: "Instructeurs"
       nav_orgs: "Organisaties"
@@ -6974,6 +6981,7 @@ languages:
     strings:
       nav_events: "Події"
       meta_description: "Громадський календар подій бал-фолк, фест-ноз і народних танців."
+      index_travel_notice: "Перед поїздкою перевірте, чи відбудеться захід."
       nav_musicians: "Музиканти"
       nav_instructors: "Викладачі"
       nav_orgs: "Організації"
@@ -7469,6 +7477,7 @@ languages:
     strings:
       nav_events: "Esdeveniments"
       meta_description: "Calendari comunitari d'esdeveniments de bal-folk, fest-noz i dansa folk."
+      index_travel_notice: "Comproveu que l'esdeveniment es realitza abans de desplaçar-vos."
       nav_musicians: "Músics"
       nav_instructors: "Instructors"
       nav_orgs: "Organitzacions"
@@ -7602,6 +7611,7 @@ languages:
     strings:
       nav_events: "Eventos"
       meta_description: "Calendário comunitário de eventos de bal-folk, fest-noz e dança folk."
+      index_travel_notice: "Verifique se o evento ainda acontece antes de viajar."
       nav_musicians: "Músicos"
       nav_instructors: "Instrutores"
       nav_orgs: "Organizações"
@@ -7735,6 +7745,7 @@ languages:
     strings:
       nav_events: "Wydarzenia"
       meta_description: "Społecznościowy kalendarz wydarzeń bal-folk, fest-noz i tańca ludowego."
+      index_travel_notice: "Przed wyjazdem sprawdź, czy wydarzenie nadal się odbędzie."
       nav_musicians: "Muzycy"
       nav_instructors: "Instruktorzy"
       nav_orgs: "Organizacje"
@@ -7868,6 +7879,7 @@ languages:
     strings:
       nav_events: "Události"
       meta_description: "Komunitní kalendář akcí bal-folk, fest-noz a lidového tance."
+      index_travel_notice: "Před cestou ověřte, zda se akce stále koná."
       nav_musicians: "Hudebníci"
       nav_instructors: "Instruktoři"
       nav_orgs: "Organizace"

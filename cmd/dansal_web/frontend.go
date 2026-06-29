@@ -369,6 +369,8 @@ type geoEvent struct {
 	Workshop           bool    `json:"ws,omitempty"`
 	WorkshopDifficulty string  `json:"wd,omitempty"`
 	Festival           bool    `json:"fest,omitempty"`
+	Session            bool    `json:"sess,omitempty"`
+	Concert            bool    `json:"conc,omitempty"`
 	Cancelled          bool    `json:"x,omitempty"`
 	Availability       string  `json:"av,omitempty"`
 	BookingEnabled     bool    `json:"book,omitempty"`
@@ -417,12 +419,20 @@ func eventsToGeo(events []Event) []geoEvent {
 		if l := e.Location; l != nil {
 			locName, locShortName, locTown, locCountry = l.Location, l.ShortName, l.Town, l.Country
 		}
+		var hasSession, hasConcert bool
+		for _, tag := range e.Tags {
+			if tag == "session" {
+				hasSession = true
+			} else if tag == "concert" {
+				hasConcert = true
+			}
+		}
 		geo = append(geo, geoEvent{
 			ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
 			Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
 			Lat: lat, Lng: lng, URL: e.URL,
 			Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
-			Festival:  e.HasFestival,
+			Festival: e.HasFestival, Session: hasSession, Concert: hasConcert,
 			Cancelled: e.IsCancelled, Availability: e.Availability,
 			BookingEnabled: e.BookingEnabled,
 			Fee:            fee, Food: e.Food, Drink: e.Drink,

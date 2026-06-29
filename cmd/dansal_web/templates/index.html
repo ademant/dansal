@@ -11,9 +11,11 @@
 
 <!-- Filters -->
 <div class="type-selector">
-  <button type="button" class="type-btn type-active" data-type="ball">{{$.Strings.T "filter_type_ball"}}</button>
-  <button type="button" class="type-btn type-active" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</button>
-  <button type="button" class="type-btn type-active" data-type="festival">{{$.Strings.T "filter_type_festival"}}</button>
+  <button type="button" class="type-btn type-active" data-type="ball">💃 {{$.Strings.T "filter_type_ball"}}</button>
+  <button type="button" class="type-btn type-active" data-type="workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</button>
+  <button type="button" class="type-btn type-active" data-type="festival">🎪 {{$.Strings.T "filter_type_festival"}}</button>
+  <button type="button" class="type-btn type-active" data-type="session">🎶 {{$.Strings.T "tag_session"}}</button>
+  <button type="button" class="type-btn type-active" data-type="concert">🎸 {{$.Strings.T "tag_concert"}}</button>
 </div>
 
 <!-- Map -->
@@ -191,6 +193,8 @@
 .event-tile:hover{background:var(--bg-hover)}
 #event-tiles{display:none}
 .badge.workshop{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
+.badge.session{background:var(--badge-info-bg,#e0f0ff);color:var(--badge-info-fg,#0a5a9c)}
+.badge.concert{background:var(--badge-purple-bg,#f0e8ff);color:var(--badge-purple-fg,#5b21b6)}
 .badge.badge-difficulty{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.festival{background:var(--badge-ok-bg);color:var(--badge-ok-fg)}
 .badge.avail-limited{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
@@ -311,7 +315,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   var total = {{.Data.TotalEvents}};
   var weekOffset = urlToWeekOffset();
   var weekKeys = [];
-  var typeFilter = {ball:true, workshop:true, festival:true};
+  var typeFilter = {ball:true, workshop:true, festival:true, session:true, concert:true};
   var HOLIDAYS = new Set({{.Data.HolidayDates}});
   // 'week' = table shows only current-week events in sync with the calendar;
   // 'all'  = table shows all future events with pagination (classic view).
@@ -871,12 +875,14 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       place=[e.loc,e.town,e.c].filter(Boolean).map(escHtml).join(', ');
     }
     var badges='';
-    if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">Ball</span>';
+    if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">💃 {{$.Strings.T "filter_type_ball"}}</span>';
     if(e.ws){
-      badges+='<span class="badge workshop" style="margin-right:.2rem">{{$.Strings.T "filter_type_workshop"}}</span>';
+      badges+='<span class="badge workshop" style="margin-right:.2rem">🎓 {{$.Strings.T "filter_type_workshop"}}</span>';
       if(e.wd) badges+='<span class="badge badge-difficulty" style="margin-right:.2rem">'+escHtml(diffLabels[e.wd]||e.wd)+'</span>';
     }
-    if(e.fest) badges+='<span class="badge festival" style="margin-right:.2rem">Festival</span>';
+    if(e.fest) badges+='<span class="badge festival" style="margin-right:.2rem">🎪 {{$.Strings.T "filter_type_festival"}}</span>';
+    if(e.sess) badges+='<span class="badge session" style="margin-right:.2rem">🎶 {{$.Strings.T "tag_session"}}</span>';
+    if(e.conc) badges+='<span class="badge concert" style="margin-right:.2rem">🎸 {{$.Strings.T "tag_concert"}}</span>';
     if(e.x)    badges+='<span class="badge cancelled">Abgesagt</span>';
     if(e.av==='limited')  badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
     if(e.av==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
@@ -914,9 +920,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var loc=d.location||'', town=d.town||'';
     var place=(loc&&town&&loc!==town)?loc+', '+town:(loc||town);
     var badges='';
-    if(d.ball==='1') badges+='<span class="badge" style="margin-right:.2rem">{{$.Strings.T "filter_type_ball"}}</span>';
-    if(d.workshop==='1') badges+='<span class="badge workshop" style="margin-right:.2rem">{{$.Strings.T "filter_type_workshop"}}</span>';
-    if(d.festival==='1') badges+='<span class="badge festival" style="margin-right:.2rem">Festival</span>';
+    if(d.ball==='1') badges+='<span class="badge" style="margin-right:.2rem">💃 {{$.Strings.T "filter_type_ball"}}</span>';
+    if(d.workshop==='1') badges+='<span class="badge workshop" style="margin-right:.2rem">🎓 {{$.Strings.T "filter_type_workshop"}}</span>';
+    if(d.festival==='1') badges+='<span class="badge festival" style="margin-right:.2rem">🎪 {{$.Strings.T "filter_type_festival"}}</span>';
+    if(d.session==='1') badges+='<span class="badge session" style="margin-right:.2rem">🎶 {{$.Strings.T "tag_session"}}</span>';
+    if(d.concert==='1') badges+='<span class="badge concert" style="margin-right:.2rem">🎸 {{$.Strings.T "tag_concert"}}</span>';
     if(d.availability==='limited') badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
     if(d.availability==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
     var feeHtml='';
@@ -954,10 +962,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   }
 
   function eventIcon(e){
-    // Priority for mixed-type events: festival > workshop > ball
+    // Priority for mixed-type events: festival > workshop > concert > session > ball
     var color, shape;
     if      (e.fest) { color='#7c3aed'; shape='star';    }
     else if (e.ws)   { color='#d97706'; shape='diamond'; }
+    else if (e.conc) { color='#5b21b6'; shape='diamond'; }
+    else if (e.sess) { color='#0a5a9c'; shape='circle';  }
     else if (e.ball) { color='#1a6eb5'; shape='circle';  }
     else             { color='#6b7280'; shape='circle';  }
     if (e.x) color='#9e9e9e'; // cancelled → grey, keep shape
@@ -1130,7 +1140,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
-    typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
+    typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true; typeFilter.session=true; typeFilter.concert=true;
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
     mapFitted=false;
     applyFilters();
@@ -1147,7 +1157,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // fetches more) -- otherwise the page misleadingly says "of 100" even
   // though e.g. 146 events actually exist (see #650 follow-up).
   function isUnfiltered(){
-    return typeFilter.ball && typeFilter.workshop && typeFilter.festival;
+    return typeFilter.ball && typeFilter.workshop && typeFilter.festival && typeFilter.session && typeFilter.concert;
   }
   function displayTotal(){
     if(tableMode === 'week') return tableRows().length;
@@ -1155,14 +1165,16 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   }
 
   function matchesFilters(r){
-    var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
-    var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
+    var allOn  = isUnfiltered();
+    var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival && !typeFilter.session && !typeFilter.concert;
     if(!allOn && !noneOn){
-      var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1';
+      var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1' || r.dataset.session==='1' || r.dataset.concert==='1';
       if(typed){
-        var match = (typeFilter.ball      && r.dataset.ball     ==='1') ||
-                    (typeFilter.workshop  && r.dataset.workshop ==='1') ||
-                    (typeFilter.festival  && r.dataset.festival ==='1');
+        var match = (typeFilter.ball     && r.dataset.ball    ==='1') ||
+                    (typeFilter.workshop && r.dataset.workshop==='1') ||
+                    (typeFilter.festival && r.dataset.festival==='1') ||
+                    (typeFilter.session  && r.dataset.session ==='1') ||
+                    (typeFilter.concert  && r.dataset.concert ==='1');
         if(!match) return false;
       }
     }

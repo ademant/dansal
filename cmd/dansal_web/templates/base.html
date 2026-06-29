@@ -138,6 +138,8 @@ a:hover{color:var(--link-h)}
 .badge.cancelled{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
 .badge.avail-limited{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.avail-sold-out{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
+.badge.session{background:var(--badge-info-bg,#e0f0ff);color:var(--badge-info-fg,#0a5a9c)}
+.badge.concert{background:var(--badge-purple-bg,#f0e8ff);color:var(--badge-purple-fg,#5b21b6)}
 .detail-section{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem;margin-bottom:1rem}
 .detail-row{margin-bottom:.5rem}
 .detail-label{font-weight:600;min-width:120px;display:inline-block;color:var(--fg-dim)}
@@ -632,6 +634,8 @@ document.addEventListener('keydown',function(e){
     data-ball="{{if .HasBall}}1{{else}}0{{end}}"
     data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
     data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
+    data-session="{{if hasTag .Tags "session"}}1{{else}}0{{end}}"
+    data-concert="{{if hasTag .Tags "concert"}}1{{else}}0{{end}}"
     data-organizer="{{$org}}"
     data-tags="{{range .Tags}}{{.}} {{end}}"
     data-dances="{{range .DanceNames}}{{.}} {{end}}"
@@ -659,9 +663,11 @@ document.addEventListener('keydown',function(e){
     {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
   </td>
   <td class="col-type">
-    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-    {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{if .HasBall}}<span class="badge">💃 {{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if .HasFestival}}<span class="badge festival">🎪 {{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{if hasTag .Tags "session"}}<span class="badge session">🎶 {{$.Strings.T "tag_session"}}</span>{{end}}
+    {{if hasTag .Tags "concert"}}<span class="badge concert">🎸 {{$.Strings.T "tag_concert"}}</span>{{end}}
     {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
     {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
   </td>

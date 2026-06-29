@@ -72,15 +72,28 @@
         <textarea name="description" rows="4"></textarea>
       </label>
     </div>
-    <div class="form-row form-row-2col">
-      <label>{{$.Strings.T "evt_start"}} *
-        <input type="datetime-local" id="sg-start" name="start_time" required onchange="onStartChange()">
-      </label>
-      <label>{{$.Strings.T "evt_end"}}
-        <input type="datetime-local" id="sg-end" name="end_time" onchange="onEndChange()" data-err-msg="{{$.Strings.T "suggest_error_end_before_start"}}">
-      </label>
+    <div class="form-row">
+      <label class="form-label-sm">{{$.Strings.T "evt_start"}} / {{$.Strings.T "evt_end"}} *</label>
+      <div class="sg-date-time-row">
+        <div class="dpr-wrap">
+          <button type="button" id="sg-date-btn" class="dpr-btn"></button>
+          <div id="sg-date-popup" class="dpr-popup" hidden>
+            <div class="dpr-cal-header">
+              <button type="button" id="sg-cal-prev">&#8592;</button>
+              <span id="sg-cal-title"></span>
+              <button type="button" id="sg-cal-next">&#8594;</button>
+            </div>
+            <table class="dpr-cal-grid" id="sg-cal-grid"></table>
+          </div>
+        </div>
+        <input type="text" id="sg-time" class="sg-time-input" placeholder="20:00-23:00" autocomplete="off">
+      </div>
+      <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
     </div>
-    <p id="sg-end-err" class="form-error" style="display:none;margin-top:-.5rem"></p>
+    <input type="hidden" id="sg-date-from">
+    <input type="hidden" id="sg-date-to">
+    <input type="hidden" id="sg-start" name="start_time">
+    <input type="hidden" id="sg-end" name="end_time">
     <div class="form-row">
       <label class="form-label-sm">{{$.Strings.T "suggest_location_search"}}</label>
       <div style="display:flex;gap:.5rem">
@@ -195,7 +208,10 @@
 .form-error{color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem}
 .form-row{margin-bottom:1rem}
 .form-row label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
-.form-row input[type=text],.form-row input[type=email],.form-row input[type=datetime-local],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.form-row input[type=text],.form-row input[type=email],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.sg-date-time-row{display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap}
+.sg-date-time-row .dpr-wrap{flex:0 0 auto}
+.sg-time-input{flex:1;min-width:9rem;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem}
 .form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .check-row{display:flex;gap:1rem;flex-wrap:wrap;margin:.3rem 0}
 .form-label-sm{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.25rem}
@@ -224,30 +240,86 @@ function toggleDifficulty() {
   var show = document.getElementById('tag-dance-workshop').checked || document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden = !show;
 }
-function onStartChange() {
-  var st = document.getElementById('sg-start');
-  var et = document.getElementById('sg-end');
-  if (st.value && !et.value) {
-    et.value = st.value;
+
+// ── Date range picker ─────────────────────────────────────────────────────
+(function(){
+  var btn  = document.getElementById('sg-date-btn');
+  var popup = document.getElementById('sg-date-popup');
+  if (!btn || !popup) return;
+  initDateRangePicker({
+    btn: btn,
+    popup: popup,
+    grid: document.getElementById('sg-cal-grid'),
+    title: document.getElementById('sg-cal-title'),
+    prev: document.getElementById('sg-cal-prev'),
+    next: document.getElementById('sg-cal-next'),
+    from: '', to: '',
+    placeholder: '📅',
+    onSelect: function(f, t) {
+      document.getElementById('sg-date-from').value = f;
+      document.getElementById('sg-date-to').value   = t;
+    }
+  });
+  document.addEventListener('click', function(e) {
+    if (!popup.hidden && !popup.contains(e.target) && e.target !== btn) popup.hidden = true;
+  });
+})();
+
+// ── Time field: normalise "20" → "20:00", "20-23" → "20:00-23:00" ────────
+(function(){
+  var inp = document.getElementById('sg-time');
+  if (!inp) return;
+  function normPart(p) {
+    p = (p || '').trim();
+    if (!p) return '';
+    if (/^\d{1,2}$/.test(p))  return p.padStart(2,'0') + ':00';
+    if (/^\d{3}$/.test(p))    return '0' + p[0] + ':' + p.slice(1);
+    if (/^\d{4}$/.test(p))    return p.slice(0,2) + ':' + p.slice(2);
+    return p;
   }
-  validateEndTime();
-}
-function onEndChange() {
-  validateEndTime();
-}
-function validateEndTime() {
-  var st = document.getElementById('sg-start');
-  var et = document.getElementById('sg-end');
-  var err = document.getElementById('sg-end-err');
-  if (et.value && st.value && et.value <= st.value) {
-    err.textContent = et.dataset.errMsg;
-    err.style.display = '';
-    et.setCustomValidity(et.dataset.errMsg);
-  } else {
-    err.style.display = 'none';
-    et.setCustomValidity('');
+  function normalize() {
+    var v = inp.value;
+    if (!v.trim()) return;
+    var dash = v.indexOf('-', 2);
+    var normed = dash < 0
+      ? normPart(v)
+      : normPart(v.slice(0, dash)) + '-' + normPart(v.slice(dash + 1));
+    if (normed !== v) inp.value = normed;
   }
-}
+  inp.addEventListener('blur', normalize);
+  inp.addEventListener('keyup', function(e) {
+    if (e.key === '-') normalize();
+  });
+})();
+
+// ── Combine date + time into start_time / end_time before submit ──────────
+(function(){
+  var form = document.querySelector('#tab-manual form');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    var dateFrom = document.getElementById('sg-date-from').value;
+    var dateTo   = document.getElementById('sg-date-to').value || dateFrom;
+    var timeVal  = (document.getElementById('sg-time').value || '').trim();
+    var errEl    = document.getElementById('sg-time-err');
+    errEl.style.display = 'none';
+
+    if (!dateFrom) {
+      e.preventDefault();
+      errEl.textContent = '{{$.Strings.T "evt_start"}}';
+      errEl.style.display = '';
+      return;
+    }
+
+    var startTime = '', endTime = '';
+    if (timeVal) {
+      var dash = timeVal.indexOf('-', 2);
+      startTime = dash < 0 ? timeVal : timeVal.slice(0, dash).trim();
+      endTime   = dash < 0 ? timeVal : timeVal.slice(dash + 1).trim();
+    }
+    document.getElementById('sg-start').value = startTime ? (dateFrom + 'T' + startTime) : (dateFrom + 'T00:00');
+    document.getElementById('sg-end').value   = endTime   ? (dateTo   + 'T' + endTime)   : '';
+  });
+})();
 // Nominatim location search
 (function(){
   var btn = document.getElementById('nominatim-btn');

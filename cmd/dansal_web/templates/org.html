@@ -10,7 +10,7 @@
   <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
   <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" onclick="orgFetchNow({{.Org.FetchSourceID}})">🔄</button>
   {{end}}
-  {{else}}<a href="/login?next=/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "dashboard_login_to_edit"}}" aria-label="{{$.Strings.T "dashboard_login_to_edit"}}">🔑</a>{{end}}
+  {{end}}
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}

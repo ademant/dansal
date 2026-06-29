@@ -86,9 +86,7 @@ nodeinfo_maintainer_email: ""
 # site_name: "My Dance Events"
 
 # Directory for uploaded site assets (logo, banner, favicon).
-# Defaults to /var/lib/dansal-web (the service state directory).
-# Override only if you want to store assets elsewhere.
-# images_dir: /var/lib/dansal-web
+images_dir: /var/lib/dansal-web
 
 # Banner height in pixels on the main page (0 = hidden).
 banner_height_main: 200

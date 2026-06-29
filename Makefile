@@ -214,7 +214,9 @@ endif
 		echo "$(SYSCONFDIR)/$(INSTANCE)/config.yaml already exists — not overwriting"; \
 	fi
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/web.yaml ]; then \
-		sed 's|/var/lib/dansal-web/web.db|/var/lib/dansal-web/$(INSTANCE)/web.db|' \
+		sed \
+		    -e 's|/var/lib/dansal-web/web.db|/var/lib/dansal-web/$(INSTANCE)/web.db|' \
+		    -e 's|images_dir: /var/lib/dansal-web$$|images_dir: /var/lib/dansal-web/$(INSTANCE)|' \
 		    packaging/web.yaml > $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \
 		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/web.yaml; \

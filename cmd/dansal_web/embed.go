@@ -373,6 +373,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		params := url.Values{}
 		params.Set("is_published", "true")
+		params.Set("limit", "1000")
 		params.Set("start_time_after", strconv.FormatInt(from.Add(-time.Second).Unix(), 10))
 		params.Set("start_time_before", strconv.FormatInt(to.AddDate(0, 0, 1).Unix(), 10))
 		if !from.After(now) {

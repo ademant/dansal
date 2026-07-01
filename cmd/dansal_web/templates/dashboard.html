@@ -3,6 +3,20 @@
 {{with .Data}}
 <h1>{{$.Strings.T "dashboard_title"}}</h1>
 
+{{if or .Attention.PendingRegistrations .Attention.PendingEventSuggestions .Attention.PossibleDuplicates}}
+<div class="dash-hints">
+  {{if .Attention.PendingRegistrations}}
+  <a href="/admin/registrations" class="dash-hint dash-hint-warn">⚠ {{$.Strings.TF "dashboard_hint_registrations" .Attention.PendingRegistrations}}</a>
+  {{end}}
+  {{if .Attention.PendingEventSuggestions}}
+  <a href="/admin/events?unpublished=1&amp;include_past=1" class="dash-hint dash-hint-info">📝 {{$.Strings.TF "dashboard_hint_suggestions" .Attention.PendingEventSuggestions}}</a>
+  {{end}}
+  {{if .Attention.PossibleDuplicates}}
+  <a href="/admin/events?flagged=1&amp;include_past=1" class="dash-hint dash-hint-danger">⚠ {{$.Strings.TF "dashboard_hint_duplicates" .Attention.PossibleDuplicates}}</a>
+  {{end}}
+</div>
+{{end}}
+
 <div class="dash-stats">
   <div class="dash-stat">
     <div class="dash-stat-n">{{.Stats.EventsCreated}}</div>
@@ -67,6 +81,12 @@
 {{end}}
 
 <style>
+.dash-hints{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.5rem}
+.dash-hint{display:block;padding:.6rem 1rem;border-radius:6px;font-size:.92rem;font-weight:600;text-decoration:none}
+.dash-hint-warn{background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404)}
+.dash-hint-info{background:var(--badge-info-bg,#d1ecf1);color:var(--badge-info-fg,#0c5460)}
+.dash-hint-danger{background:#fde2e1;color:#c0392b}
+.dash-hint:hover{filter:brightness(0.96)}
 .dash-stats{display:flex;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap}
 .dash-stat{background:var(--card-bg,#fff);border:1px solid var(--border-mid,#ddd);border-radius:8px;padding:1rem 1.5rem;min-width:140px;text-align:center}
 .dash-stat-n{font-size:2rem;font-weight:700;line-height:1.1;color:var(--link,#1a6eb5)}

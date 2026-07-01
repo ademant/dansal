@@ -2451,6 +2451,7 @@ func main() {
 	smux.HandleFunc("POST /api/v1/register/passkey/finish", webauthnRegFinish)
 	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
 	smux.Handle("GET /api/v1/pending-registrations/count", auth(pendingRegCountHandler))
+	smux.Handle("GET /api/v1/dashboard/attention", auth(dashboardAttentionHandler))
 	smux.Handle("POST /api/v1/pending-registrations/{id}/approve", auth(approveRegHandler))
 	smux.Handle("DELETE /api/v1/pending-registrations/{id}", auth(rejectRegHandler))
 

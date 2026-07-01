@@ -836,6 +836,57 @@ func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"count": count})
 }
 
+// GET /api/v1/dashboard/attention — scoped counts of items needing review.
+// Admins get instance-wide counts; RoleUser gets counts scoped to their
+// organization(s), including events at locations linked to their org via
+// location_organizations (covers shared venues like a community house).
+func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+
+	var regCount, suggestionCount, duplicateCount int
+	if callerRole == RoleAdmin {
+		db.QueryRow(
+			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
+		).Scan(&regCount)
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events WHERE is_published=0 AND (suggestion_token IS NULL OR suggestion_token='')",
+		).Scan(&suggestionCount)
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events WHERE needs_duplicate_review=1",
+		).Scan(&duplicateCount)
+	} else {
+		db.QueryRow(`
+			SELECT COUNT(*) FROM pending_registrations pr
+			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now')`,
+			callerID,
+		).Scan(&regCount)
+
+		const orgScopeClause = `AND (
+			e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)
+			OR e.location_id IN (
+				SELECT location_id FROM location_organizations
+				WHERE organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)
+			)
+		)`
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events e WHERE e.is_published=0 AND (e.suggestion_token IS NULL OR e.suggestion_token='') "+orgScopeClause,
+			callerID, callerID,
+		).Scan(&suggestionCount)
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events e WHERE e.needs_duplicate_review=1 "+orgScopeClause,
+			callerID, callerID,
+		).Scan(&duplicateCount)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{
+		"pending_registrations":     regCount,
+		"pending_event_suggestions": suggestionCount,
+		"possible_duplicates":       duplicateCount,
+	})
+}
+
 // startAutoDeclineJob runs an hourly sweep that deletes expired pending registrations
 // and notifies verified ones that their request was not approved in time.
 func startAutoDeclineJob() {

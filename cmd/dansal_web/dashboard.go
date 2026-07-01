@@ -10,10 +10,11 @@ import (
 
 // DashboardData is the template data for /dashboard.
 type DashboardData struct {
-	Stats    MeStats
-	UserOrgs []Organization
-	OrgMap   map[int]string
-	Events   []Event
+	Stats     MeStats
+	Attention DashboardAttention
+	UserOrgs  []Organization
+	OrgMap    map[int]string
+	Events    []Event
 }
 
 func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -29,11 +30,12 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			userOrgIDs []int
 			allOrgs    []Organization
 			stats      MeStats
+			attention  DashboardAttention
 			mu         sync.Mutex
 			wg         sync.WaitGroup
 		)
 
-		wg.Add(3)
+		wg.Add(4)
 		go func() {
 			defer wg.Done()
 			userOrgIDs, _ = client.GetUserOrganizationIDs(ctx, su.ID, token)
@@ -45,6 +47,10 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		go func() {
 			defer wg.Done()
 			stats, _ = client.GetMeStats(ctx, token)
+		}()
+		go func() {
+			defer wg.Done()
+			attention, _ = client.GetDashboardAttention(ctx, token)
 		}()
 		wg.Wait()
 
@@ -89,10 +95,11 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 
 		title := i18n.T(r, "dashboard_title")
 		renderTemplate(w, tmpls.dashboard, tmplData(r, cfg, i18n, title, DashboardData{
-			Stats:    stats,
-			UserOrgs: userOrgs,
-			OrgMap:   orgMap,
-			Events:   events,
+			Stats:     stats,
+			Attention: attention,
+			UserOrgs:  userOrgs,
+			OrgMap:    orgMap,
+			Events:    events,
 		}))
 	}
 }

@@ -3083,6 +3083,28 @@ func (c *DansalClient) GetPendingRegCount(ctx context.Context, token string) (in
 	return r.Count, nil
 }
 
+// DashboardAttention holds scoped counts of items needing review.
+type DashboardAttention struct {
+	PendingRegistrations    int `json:"pending_registrations"`
+	PendingEventSuggestions int `json:"pending_event_suggestions"`
+	PossibleDuplicates      int `json:"possible_duplicates"`
+}
+
+// GetDashboardAttention returns the scoped counts of items needing review for the caller.
+func (c *DansalClient) GetDashboardAttention(ctx context.Context, token string) (DashboardAttention, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/dashboard/attention", token, nil)
+	if err != nil {
+		return DashboardAttention{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return DashboardAttention{}, nil
+	}
+	var a DashboardAttention
+	json.NewDecoder(resp.Body).Decode(&a)
+	return a, nil
+}
+
 type PendingRegStatus struct {
 	ID         int    `json:"id"`
 	Verified   bool   `json:"verified"`

@@ -64,12 +64,17 @@
     <input type="hidden" name="_form_ts" value="{{$.Data.FormToken}}">
     <div class="form-row">
       <label>{{$.Strings.T "evt_title"}} *
-        <input type="text" name="title" required maxlength="200">
+        <input type="text" name="title" required maxlength="200" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
       </label>
     </div>
     <div class="form-row">
       <label>{{$.Strings.T "evt_description"}}
-        <textarea name="description" rows="4"></textarea>
+        <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
+      </label>
+    </div>
+    <div class="form-row">
+      <label>{{$.Strings.T "evt_website"}}
+        <input type="url" name="url" placeholder="https://...">
       </label>
     </div>
     <div class="form-row">
@@ -104,10 +109,10 @@
     </div>
     <div class="form-row form-row-2col">
       <label>{{$.Strings.T "col_location"}}
-        <input type="text" id="sg-location" name="location" maxlength="100">
+        <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
       </label>
       <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
-        <input type="text" id="sg-town" name="town" maxlength="100">
+        <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
       </label>
     </div>
     <div class="form-row">
@@ -149,24 +154,125 @@
       </div>
     </div>
     {{end}}
-    <div class="form-row">
-      <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
-      <div class="check-row">
-        <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
-        <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
-        <label class="check-label"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
-        <label class="check-label"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+
+    <details class="suggest-details">
+      <summary>{{$.Strings.T "food_label"}} / {{$.Strings.T "drink_label"}}</summary>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
+        <div class="check-row">
+          <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+        </div>
       </div>
-    </div>
-    <div class="form-row">
-      <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
-      <div class="check-row">
-        <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
-        <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
-        <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
-        <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
+        <div class="check-row">
+          <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+        </div>
       </div>
-    </div>
+    </details>
+
+    <details class="suggest-details">
+      <summary>{{$.Strings.T "evt_admission"}}</summary>
+      <div class="form-row">
+        <label for="sg-pricing-type">{{$.Strings.T "evt_pricing_type"}}</label>
+        <select id="sg-pricing-type" name="pricing_type" onchange="sgTogglePricing()">
+          <option value="none" selected>— {{$.Strings.T "evt_none"}} —</option>
+          <option value="free">{{$.Strings.T "evt_free"}}</option>
+          <option value="donation">{{$.Strings.T "evt_donation"}}</option>
+          <option value="single">{{$.Strings.T "evt_pricing_single"}}</option>
+          <option value="multiple">{{$.Strings.T "evt_pricing_multiple"}}</option>
+        </select>
+      </div>
+      <div id="sg-pricing-single" class="form-row form-row-2col" hidden>
+        <label>{{$.Strings.T "evt_pricing_amount"}}
+          <input type="number" name="pricing_amount" min="0" step="0.01" placeholder="10.00">
+        </label>
+        <label>{{$.Strings.T "evt_pricing_currency"}}
+          <input type="text" name="pricing_currency" placeholder="EUR" style="max-width:80px">
+        </label>
+      </div>
+      <div id="sg-pricing-multiple" class="form-row" hidden>
+        <table class="growing-table" id="sg-pricing-table">
+          <thead><tr><th>{{$.Strings.T "evt_pricing_label"}}</th><th>{{$.Strings.T "evt_pricing_amount"}}</th></tr></thead>
+          <tbody id="sg-pricing-body">
+            <tr>
+              <td><input type="text" name="pl_label" placeholder="Standard" oninput="sgGrowPricingTable(this)"></td>
+              <td><input type="number" name="pl_amount" min="0" step="0.01" placeholder="10.00"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="suggest-details">
+      <summary>{{$.Strings.T "evt_timetable"}}</summary>
+      <table class="growing-table" id="sg-tt-table">
+        <thead>
+          <tr>
+            <th>{{$.Strings.T "tt_start"}}</th>
+            <th>{{$.Strings.T "tt_end"}}</th>
+            <th>{{$.Strings.T "tt_title"}}</th>
+            <th>{{$.Strings.T "tt_room"}}</th>
+          </tr>
+        </thead>
+        <tbody id="sg-tt-body">
+          <tr class="sg-tt-row">
+            <td><input type="time" name="tt_start"></td>
+            <td><input type="time" name="tt_end"></td>
+            <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="sgGrowTTTable(this)"></td>
+            <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
+          </tr>
+          <tr class="sg-tt-row-detail">
+            <td colspan="2">
+              <select name="tt_type" class="tt-type-sel">
+                <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
+                <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
+              </select>
+            </td>
+            <td colspan="2"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details class="suggest-details">
+      <summary>{{$.Strings.T "evt_musicians"}} / {{$.Strings.T "evt_instructors"}}</summary>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "evt_musicians"}}</label>
+        <div id="sg-musician-chips" class="chip-wrap"></div>
+        <div class="ac-wrap">
+          <input id="sg-musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off">
+          <div id="sg-musician-ac" class="ac-list" hidden></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "evt_instructors"}}</label>
+        <div id="sg-instructor-chips" class="chip-wrap"></div>
+        <div class="ac-wrap">
+          <input id="sg-instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off">
+          <div id="sg-instructor-ac" class="ac-list" hidden></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="suggest-details">
+      <summary>{{$.Strings.T "evt_contact_name"}} / {{$.Strings.T "evt_contact_email"}}</summary>
+      <div class="form-row form-row-2col">
+        <label>{{$.Strings.T "evt_contact_name"}}
+          <input type="text" name="contact_name">
+        </label>
+        <label>{{$.Strings.T "evt_contact_email"}}
+          <input type="email" name="contact_email">
+        </label>
+      </div>
+    </details>
+
     {{if $.Data.HintSMTP}}
     <div class="form-row">
       <label>{{$.Strings.T "suggest_email_label"}} *
@@ -227,6 +333,22 @@
 #nominatim-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
 #nominatim-results li:last-child{border-bottom:none}
 #nominatim-results li:hover{background:#f0f4ff}
+.suggest-details{border:1px solid var(--border-mid,#ddd);border-radius:6px;padding:.6rem .9rem;margin-bottom:1rem}
+.suggest-details summary{cursor:pointer;font-weight:600;font-size:.92rem}
+.suggest-details[open] summary{margin-bottom:.75rem}
+.growing-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.growing-table th{text-align:left;padding:.3rem .4rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:1px solid #ddd}
+.growing-table td{padding:.2rem .3rem;vertical-align:middle}
+.growing-table input,.growing-table select{width:100%;padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.88rem;box-sizing:border-box}
+.sg-tt-row-detail td{padding:.1rem .3rem .4rem;vertical-align:middle;border-bottom:1px solid #f0f0f0}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.4rem}
+.musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
+.btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
+.btn-chip-del:hover{color:#c0392b}
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
+.ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
+.ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
 </style>
 
 <script>
@@ -240,6 +362,117 @@ function toggleDifficulty() {
   var show = document.getElementById('tag-dance-workshop').checked || document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden = !show;
 }
+
+// ── Pricing ───────────────────────────────────────────────────────────────
+function sgTogglePricing() {
+  var v = document.getElementById('sg-pricing-type').value;
+  document.getElementById('sg-pricing-single').hidden = (v !== 'single' && v !== 'donation');
+  document.getElementById('sg-pricing-multiple').hidden = (v !== 'multiple');
+}
+function sgGrowPricingTable(el) {
+  var tbody = document.getElementById('sg-pricing-body');
+  var rows = tbody.querySelectorAll('tr');
+  var last = rows[rows.length - 1];
+  if (el.closest('tr') === last && el.value.trim() !== '') {
+    var row = document.createElement('tr');
+    row.innerHTML = '<td><input type="text" name="pl_label" oninput="sgGrowPricingTable(this)"></td>' +
+      '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
+    tbody.appendChild(row);
+  }
+}
+
+// ── Timetable ───────────────────────────────────────────────────────────────
+function sgGrowTTTable(el) {
+  var tbody = document.getElementById('sg-tt-body');
+  var rows = tbody.querySelectorAll('.sg-tt-row');
+  var last = rows[rows.length - 1];
+  if (el.closest('.sg-tt-row') === last && el.value.trim() !== '') {
+    var row1 = document.createElement('tr');
+    row1.className = 'sg-tt-row';
+    row1.innerHTML = '<td><input type="time" name="tt_start"></td>' +
+      '<td><input type="time" name="tt_end"></td>' +
+      '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)"></td>' +
+      '<td><input type="text" name="tt_room"></td>';
+    var row2 = document.createElement('tr');
+    row2.className = 'sg-tt-row-detail';
+    var ttTypeOpts = '<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
+    row2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">' + ttTypeOpts + '</select></td>' +
+      '<td colspan="2"><input type="text" name="tt_desc" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></td>';
+    tbody.appendChild(row1);
+    tbody.appendChild(row2);
+  }
+}
+
+// ── Musicians / Instructors: chip picker with live autocomplete against the
+// public musician/instructor lists. Typing a name not found in the list still
+// adds a chip; the backend creates a new record for unmatched names.
+(function(){
+  function setupChipPicker(searchID, acID, chipsID, apiPath, fieldName) {
+    var input = document.getElementById(searchID);
+    var acList = document.getElementById(acID);
+    var chips  = document.getElementById(chipsID);
+    if (!input || !acList || !chips) return;
+
+    function addChip(name) {
+      name = name.trim();
+      if (!name) return;
+      var chip = document.createElement('div');
+      chip.className = 'musician-chip';
+      var span = document.createElement('span');
+      span.textContent = name;
+      chip.appendChild(span);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-chip-del';
+      btn.textContent = '×';
+      btn.addEventListener('click', function(){ chip.remove(); });
+      chip.appendChild(btn);
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = fieldName;
+      hidden.value = name;
+      chip.appendChild(hidden);
+      chips.appendChild(chip);
+      input.value = '';
+      acList.hidden = true;
+    }
+
+    var debounceTimer;
+    input.addEventListener('input', function(){
+      var q = input.value.trim();
+      clearTimeout(debounceTimer);
+      if (q.length < 2) { acList.hidden = true; return; }
+      debounceTimer = setTimeout(function(){
+        fetch(apiPath + '?name=' + encodeURIComponent(q))
+          .then(function(r){ return r.json(); })
+          .then(function(results){
+            if (!results || !results.length) { acList.hidden = true; return; }
+            acList.innerHTML = '';
+            results.slice(0, 8).forEach(function(r){
+              var name = r.bandname || r.name || '';
+              if (!name) return;
+              var item = document.createElement('div');
+              item.className = 'ac-item';
+              item.tabIndex = 0;
+              item.textContent = name;
+              item.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(name); });
+              acList.appendChild(item);
+            });
+            acList.hidden = false;
+          })
+          .catch(function(){ acList.hidden = true; });
+      }, 300);
+    });
+    input.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); addChip(input.value); }
+    });
+    document.addEventListener('click', function(e){
+      if (!e.target.closest('#' + acID) && e.target !== input) acList.hidden = true;
+    });
+  }
+  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/api/v1/musicians', 'musicians');
+  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/api/v1/instructors', 'instructors');
+})();
 
 // ── Date range picker ─────────────────────────────────────────────────────
 (function(){

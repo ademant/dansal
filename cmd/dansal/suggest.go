@@ -22,23 +22,67 @@ func initSuggestRateLimiters() {
 }
 
 type SuggestRequest struct {
-	Title              string               `json:"title"`
-	Description        string               `json:"description"`
-	StartTime          string               `json:"start_time"`
-	EndTime            string               `json:"end_time"`
-	HasBall            bool                 `json:"has_ball"`
-	HasWorkshop        bool                 `json:"has_workshop"`
-	HasFestival        bool                 `json:"has_festival"`
-	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty"`
-	IsCancelled        bool                 `json:"is_cancelled"`
-	Tags               []string             `json:"tags"`
-	DanceIDs           []int                `json:"dance_ids,omitempty"`
-	URL                string               `json:"url,omitempty"`
-	Food               string               `json:"food,omitempty"`
-	Drink              string               `json:"drink,omitempty"`
-	Location           EventLocationRequest `json:"location"`
-	Email              string               `json:"email"`
-	Phone2             string               `json:"phone2"` // honeypot
+	Title              string                  `json:"title"`
+	Description        string                  `json:"description"`
+	StartTime          string                  `json:"start_time"`
+	EndTime            string                  `json:"end_time"`
+	HasBall            bool                    `json:"has_ball"`
+	HasWorkshop        bool                    `json:"has_workshop"`
+	HasFestival        bool                    `json:"has_festival"`
+	WorkshopDifficulty string                  `json:"workshop_difficulty,omitempty"`
+	IsCancelled        bool                    `json:"is_cancelled"`
+	Tags               []string                `json:"tags"`
+	DanceIDs           []int                   `json:"dance_ids,omitempty"`
+	URL                string                  `json:"url,omitempty"`
+	Food               string                  `json:"food,omitempty"`
+	Drink              string                  `json:"drink,omitempty"`
+	Location           EventLocationRequest    `json:"location"`
+	Email              string                  `json:"email"`
+	Phone2             string                  `json:"phone2"` // honeypot
+	Pricing            *Pricing                `json:"pricing,omitempty"`
+	ContactName        string                  `json:"contact_name,omitempty"`
+	ContactEmail       string                  `json:"contact_email,omitempty"`
+	Musicians          []string                `json:"musicians,omitempty"`
+	Instructors        []string                `json:"instructors,omitempty"`
+	Timetable          []TimetableEntryRequest `json:"timetable,omitempty"`
+}
+
+// findOrCreateMusicianID resolves a musician by name (case-insensitive),
+// creating a new unreviewed record if no match exists. Used by the anonymous
+// suggestion flow, which has no authenticated caller to attribute creation to.
+func findOrCreateMusicianID(q querier, name string) (int, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, nil
+	}
+	var id int
+	err := q.QueryRow("SELECT id FROM musicians WHERE bandname = ? COLLATE NOCASE", name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	err = q.QueryRow("INSERT INTO musicians (bandname) VALUES (?) RETURNING id", name).Scan(&id)
+	return id, err
+}
+
+// findOrCreateInstructorID mirrors findOrCreateMusicianID for instructors.
+func findOrCreateInstructorID(q querier, name string) (int, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, nil
+	}
+	var id int
+	err := q.QueryRow("SELECT id FROM instructors WHERE name = ? COLLATE NOCASE", name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	err = q.QueryRow("INSERT INTO instructors (name) VALUES (?) RETURNING id", name).Scan(&id)
+	return id, err
 }
 
 // POST /api/v1/events/suggest-preview — parse iCal or folkdance-JSON without auth or org_id requirement.
@@ -178,6 +222,18 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		tokenArg = suggestionToken
 	}
 
+	var pricingArg any
+	if req.Pricing != nil {
+		if b, err := json.Marshal(req.Pricing); err == nil {
+			pricingArg = string(b)
+		}
+	}
+
+	if err := validateTimetableRequests(req.Timetable); err != nil {
+		writeError(w, "timetable: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var eventID int64
 	var shortCode string
 	var insertErr error
@@ -191,11 +247,13 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO events
 			 (title, description, start_time, end_time, location_id,
 			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
-			  is_published, url, food, drink, suggester_email, suggestion_token, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+			  is_published, url, food, drink, pricing, contact_name, contact_email,
+			  suggester_email, suggestion_token, short_code)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
-			urlVal(req.URL), req.Food, req.Drink, req.Email, tokenArg, shortCode,
+			urlVal(req.URL), req.Food, req.Drink, pricingArg, req.ContactName, req.ContactEmail,
+			req.Email, tokenArg, shortCode,
 		)
 		if insertErr == nil {
 			eventID, _ = res.LastInsertId()
@@ -212,6 +270,35 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	syncEventTags(tx, int(eventID), filterKnownTags(req.Tags))
 	for _, danceID := range req.DanceIDs {
 		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
+	}
+
+	musicianIDs := make([]int, 0, len(req.Musicians))
+	for _, name := range req.Musicians {
+		if id, err := findOrCreateMusicianID(tx, name); err == nil && id > 0 {
+			musicianIDs = append(musicianIDs, id)
+		}
+	}
+	if err := batchInsertPairs(tx, "event_musicians", "event_id", "musician_id", int(eventID), musicianIDs); err != nil {
+		writeError(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	instructorIDs := make([]int, 0, len(req.Instructors))
+	for _, name := range req.Instructors {
+		if id, err := findOrCreateInstructorID(tx, name); err == nil && id > 0 {
+			instructorIDs = append(instructorIDs, id)
+		}
+	}
+	if err := batchInsertPairs(tx, "event_instructors", "event_id", "instructor_id", int(eventID), instructorIDs); err != nil {
+		writeError(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for _, ttReq := range req.Timetable {
+		if _, err := insertEntry(tx, int(eventID), ttReq); err != nil {
+			writeError(w, "timetable: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -2851,22 +2851,28 @@ func (c *DansalClient) CreateEventBatch(ctx context.Context, events []json.RawMe
 
 // SuggestEventReq is the JSON body for POST /api/v1/events/suggest.
 type SuggestEventReq struct {
-	Title              string     `json:"title"`
-	Description        string     `json:"description"`
-	StartTime          string     `json:"start_time"`
-	EndTime            string     `json:"end_time,omitempty"`
-	HasBall            bool       `json:"has_ball"`
-	HasWorkshop        bool       `json:"has_workshop"`
-	HasFestival        bool       `json:"has_festival"`
-	WorkshopDifficulty string     `json:"workshop_difficulty,omitempty"`
-	Tags               []string   `json:"tags,omitempty"`
-	DanceIDs           []int      `json:"dance_ids,omitempty"`
-	URL                string     `json:"url,omitempty"`
-	Food               string     `json:"food,omitempty"`
-	Drink              string     `json:"drink,omitempty"`
-	Location           PreviewLoc `json:"location"`
-	Email              string     `json:"email"`
-	Phone2             string     `json:"phone2"` // honeypot
+	Title              string              `json:"title"`
+	Description        string              `json:"description"`
+	StartTime          string              `json:"start_time"`
+	EndTime            string              `json:"end_time,omitempty"`
+	HasBall            bool                `json:"has_ball"`
+	HasWorkshop        bool                `json:"has_workshop"`
+	HasFestival        bool                `json:"has_festival"`
+	WorkshopDifficulty string              `json:"workshop_difficulty,omitempty"`
+	Tags               []string            `json:"tags,omitempty"`
+	DanceIDs           []int               `json:"dance_ids,omitempty"`
+	URL                string              `json:"url,omitempty"`
+	Food               string              `json:"food,omitempty"`
+	Drink              string              `json:"drink,omitempty"`
+	Location           PreviewLoc          `json:"location"`
+	Email              string              `json:"email"`
+	Phone2             string              `json:"phone2"` // honeypot
+	Pricing            *Pricing            `json:"pricing,omitempty"`
+	ContactName        string              `json:"contact_name,omitempty"`
+	ContactEmail       string              `json:"contact_email,omitempty"`
+	Musicians          []string            `json:"musicians,omitempty"`
+	Instructors        []string            `json:"instructors,omitempty"`
+	Timetable          []TimetableEntryReq `json:"timetable,omitempty"`
 }
 
 // SuggestEventPreview calls POST /api/v1/events/suggest-preview with a multipart body.

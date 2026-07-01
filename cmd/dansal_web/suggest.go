@@ -89,6 +89,17 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 	}
 }
 
+// trimmedNonEmpty trims each string in vals and drops any that become empty.
+func trimmedNonEmpty(vals []string) []string {
+	out := make([]string, 0, len(vals))
+	for _, v := range vals {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !suggestAvailable(cfg) {
@@ -149,6 +160,76 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				danceIDs = append(danceIDs, id)
 			}
 		}
+
+		var pricing *Pricing
+		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
+			p := &Pricing{Type: pt}
+			switch pt {
+			case "single", "donation":
+				if amt := r.FormValue("pricing_amount"); amt != "" {
+					if f, err := strconv.ParseFloat(amt, 64); err == nil {
+						p.Amount = f
+					}
+				}
+				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+			case "multiple":
+				labels := r.Form["pl_label"]
+				amounts := r.Form["pl_amount"]
+				for i, lbl := range labels {
+					lbl = strings.TrimSpace(lbl)
+					if lbl == "" {
+						continue
+					}
+					var amt float64
+					if i < len(amounts) {
+						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
+							amt = f
+						}
+					}
+					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+				}
+				if len(p.Prices) == 0 {
+					p = nil
+				}
+			}
+			pricing = p
+		}
+
+		musicians := trimmedNonEmpty(r.Form["musicians"])
+		instructors := trimmedNonEmpty(r.Form["instructors"])
+
+		starts := r.Form["tt_start"]
+		ends := r.Form["tt_end"]
+		titles := r.Form["tt_title"]
+		descs := r.Form["tt_desc"]
+		rooms := r.Form["tt_room"]
+		ttTypes := r.Form["tt_type"]
+		var timetable []TimetableEntryReq
+		for i, s := range starts {
+			s = strings.TrimSpace(s)
+			if i >= len(titles) {
+				break
+			}
+			t := strings.TrimSpace(titles[i])
+			if s == "" && t == "" {
+				continue
+			}
+			entry := TimetableEntryReq{StartTime: s, Title: t}
+			if i < len(ends) {
+				entry.EndTime = strings.TrimSpace(ends[i])
+			}
+			if i < len(descs) {
+				entry.Description = strings.TrimSpace(descs[i])
+			}
+			if i < len(rooms) {
+				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(ttTypes) {
+				entry.EntryType = ttTypes[i]
+			}
+			timetable = append(timetable, entry)
+		}
+
 		req := SuggestEventReq{
 			Title:       title,
 			Description: description,
@@ -173,8 +254,14 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				OsmID:     parseOsmID(r.FormValue("osm_id")),
 				OsmType:   r.FormValue("osm_type"),
 			},
-			Email:  r.FormValue("email"),
-			Phone2: r.FormValue("phone2"),
+			Email:        r.FormValue("email"),
+			Phone2:       r.FormValue("phone2"),
+			Pricing:      pricing,
+			ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
+			Musicians:    musicians,
+			Instructors:  instructors,
+			Timetable:    timetable,
 		}
 
 		publicThrottle.record(key)

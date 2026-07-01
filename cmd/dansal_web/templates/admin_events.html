@@ -44,9 +44,8 @@
   <h1 style="margin:0">{{.Strings.T "admin_events_title"}}</h1>
   <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
   <a href="/admin/events/import" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#217a3c;color:#fff;border-radius:4px;font-size:.9rem">↑ {{.Strings.T "admin_import_title"}}</a>
-  <a href="/admin/events?source=suggestion&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#856404;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_suggestions"}}</a>
-  <a href="/admin/events?unpublished=1" style="text-decoration:none;padding:.4rem 1rem;background:#6c5ce7;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_unpublished"}}</a>
-  <a href="/admin/events?flagged=1&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#c0392b;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_duplicates"}}</a>
+  <a href="/admin/events?unpublished=1" style="text-decoration:none;padding:.4rem 1rem;background:#6c5ce7;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_unpublished"}}{{if .PendingSuggestionCount}} *{{end}}</a>
+  <a href="/admin/events?flagged=1&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#c0392b;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_duplicates"}}{{if .PossibleDuplicateCount}} *{{end}}</a>
 </div>
 {{with .Data}}{{if .FilterCreatedAfter}}
 <p class="import-notice">{{$.Strings.T "admin_import_recent_filter"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>

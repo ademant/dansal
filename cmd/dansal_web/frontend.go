@@ -25,7 +25,7 @@ import (
 
 type webContextKey int
 
-const ctxPendingRegCount webContextKey = 1
+const ctxDashboardAttention webContextKey = 1
 
 type TemplateData struct {
 	Title                  string
@@ -47,25 +47,36 @@ type TemplateData struct {
 	RegistrationEnabled    bool
 	SessionIdleTimeoutMins int
 	PendingRegCount        int    // verified pending registrations awaiting action (scoped to caller)
+	PendingSuggestionCount int    // unpublished events awaiting review (scoped to caller)
+	PossibleDuplicateCount int    // events flagged as possible duplicates (scoped to caller)
 	Path                   string // current request path, for building "return to this page" links
 }
 
-// pendingRegCountMiddleware fetches the scoped pending-registration count for
-// logged-in admin/user roles and stores it in the request context so tmplData
-// can inject it into every rendered page without each handler needing to ask.
-func pendingRegCountMiddleware(client *DansalClient) func(http.Handler) http.Handler {
+// dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
+// logged-in admin/user roles and stores them in the request context so tmplData
+// can inject them into every rendered page without each handler needing to ask.
+func dashboardAttentionMiddleware(client *DansalClient) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			su := getSessionUser(r)
 			if su != nil && (su.Role == "admin" || su.Role == "user") {
 				token := getSessionToken(r)
-				if count, err := client.GetPendingRegCount(r.Context(), token); err == nil && count > 0 {
-					r = r.WithContext(context.WithValue(r.Context(), ctxPendingRegCount, count))
+				if att, err := client.GetDashboardAttention(r.Context(), token); err == nil {
+					r = r.WithContext(context.WithValue(r.Context(), ctxDashboardAttention, att))
 				}
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// dashAttention returns the request-scoped "needs attention" counts stashed
+// by dashboardAttentionMiddleware, or a zero value when unset (public/publisher).
+func dashAttention(r *http.Request) DashboardAttention {
+	if v, ok := r.Context().Value(ctxDashboardAttention).(DashboardAttention); ok {
+		return v
+	}
+	return DashboardAttention{}
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
@@ -114,13 +125,10 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		SuggestAvailable:       suggestAvailable(cfg),
 		RegistrationEnabled:    registrationEnabled(cfg),
 		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
-		PendingRegCount: func() int {
-			if v, ok := r.Context().Value(ctxPendingRegCount).(int); ok {
-				return v
-			}
-			return 0
-		}(),
-		Path: r.URL.Path,
+		PendingRegCount:        dashAttention(r).PendingRegistrations,
+		PendingSuggestionCount: dashAttention(r).PendingEventSuggestions,
+		PossibleDuplicateCount: dashAttention(r).PossibleDuplicates,
+		Path:                   r.URL.Path,
 	}
 }
 

@@ -13,6 +13,8 @@ REST API served by the `dansal` binary. All endpoints are under the base URL con
 - [Authentication Endpoints](#authentication-endpoints)
 - [Sessions](#sessions)
 - [Users](#users)
+- [Publishers](#publishers)
+- [Dashboard](#dashboard)
 - [Registration](#registration)
 - [WebAuthn Credentials](#webauthn-credentials)
 - [TOTP](#totp)
@@ -181,38 +183,86 @@ Authentication required. List or revoke active sessions for the current user.
 
 ```
 GET    /api/v1/users              # admin only
-POST   /api/v1/users              # admin only
-GET    /api/v1/users/{id}         # admin or self
-PUT    /api/v1/users/{id}         # admin or self
-DELETE /api/v1/users/{id}         # admin only
-DELETE /api/v1/users/me           # self-deletion
-GET    /api/v1/users/{id}/organizations
+GET    /api/v1/users/{id}         # any authenticated caller; only the account owner gets full PII
+PUT    /api/v1/users/{id}         # admin or self (see restrictions below)
+DELETE /api/v1/users/me           # self-deletion (not available to admin accounts)
+GET    /api/v1/users/{id}/organizations   # admin or self
+GET    /api/v1/me/stats           # own event-authorship counts
 POST   /api/v1/user/password      # change own password
 POST   /api/v1/users/{id}/verify  # admin: send verification email
 POST   /api/v1/users/{id}/magic-link   # admin: generate magic link for user
-POST   /api/v1/users/{id}/password     # admin: set user password
 POST   /api/v1/users/{id}/telegram/message  # admin: send Telegram message to user
 ```
 
 There is no `GET /api/v1/users/me` endpoint. Use `GET /api/v1/users/{id}` with your own user ID.
 
-**Create user request (admin):**
-```json
-{
-  "email": "user@example.com",
-  "display_name": "Alice",
-  "role": "publisher"
-}
-```
+There is no user-creation or admin-driven password-reset endpoint, and no `DELETE /api/v1/users/{id}` for deleting another account — account lifecycle (creation, email/role changes by an admin, password resets, full deletion) is CLI-only (`dansal_admin`) or handled through the registration/invite flow. This is intentional (#613): the REST API only exposes self-service actions plus a few narrowly-scoped admin actions (verify, magic-link, Telegram message).
 
-**Update user request (`PUT`):**
+**`GET /api/v1/users` / `GET /api/v1/users/{id}` response shape:** callers who are not the account owner (or, for the list endpoint, not admin) receive a public subset only (`id`, `display_name`, `role`, `description`, `website`, `created_at` — no email, telegram handle, or verification flags).
+
+**Update user request (`PUT`) — restrictions:**
 ```json
 {
   "email": "new@example.com",
   "display_name": "Alice D.",
-  "telegram_handle": "@alice"
+  "telegram_handle": "@alice",
+  "role": "user"
 }
 ```
+- `email`: only the account owner may change their own email (clears `email_verified`); admins cannot change another user's email via this endpoint.
+- `role`: only admin may set this field; publisher accounts can never change role.
+- All other fields: owner or admin.
+
+## Publishers
+
+Publishers are service accounts (`role=publisher`) with no email/password/passkeys, authenticated purely via API key — the identity a fetch integration (e.g. a future WordPress plugin) uses to post events under an organization.
+
+```
+POST   /api/v1/publishers                       # create a publisher + API key atomically
+POST   /api/v1/publishers/{id}/regenerate-key    # rotate a publisher's API key
+DELETE /api/v1/publishers/{id}                   # delete a publisher account
+```
+
+Admin may act on any publisher. A `user`-role caller may create a publisher for any organization they belong to, and may regenerate/delete a publisher only if it shares at least one organization with the caller.
+
+**Create request:**
+```json
+{
+  "name": "Venue Feed Bot",
+  "org_id": 7
+}
+```
+
+**Create response (`201`, API key shown only here):**
+```json
+{
+  "user_id": 42,
+  "name": "Venue Feed Bot",
+  "key_id": 5,
+  "api_key": "ak_...",
+  "org_id": 7
+}
+```
+
+`regenerate-key` returns `{"api_key": "ak_..."}` and invalidates all previous keys for that publisher.
+
+## Dashboard
+
+```
+GET    /api/v1/dashboard/attention
+```
+
+Authentication required (admin or user role). Returns scoped counts of items needing review, used to drive "needs attention" hints on the dansal-web dashboard:
+
+```json
+{
+  "pending_registrations": 2,
+  "pending_event_suggestions": 5,
+  "possible_duplicates": 1
+}
+```
+
+Admins get instance-wide counts. `user`-role callers get counts scoped to their organization(s), including events at locations linked to their org via `location_organizations` (covers shared venues).
 
 ## Registration
 
@@ -307,10 +357,11 @@ GET    /api/v1/organizations/stats
 GET    /api/v1/organizations/{id}/members
 POST   /api/v1/organizations/{id}/members
 DELETE /api/v1/organizations/{id}/members/{user_id}
+GET    /api/v1/organizations/members?org_ids=1,2,3   # bulk membership lookup for several orgs
 GET    /api/v1/organizations/check-actor-name  # check ActivityPub actor name availability
 ```
 
-List and get are public. Create/update/delete require authentication.
+List and get are public. Create/update/delete require authentication. `GET /api/v1/organizations/members` requires authentication; non-admin callers only get results for orgs they belong to (others are silently omitted).
 
 ## Locations
 
@@ -370,6 +421,13 @@ PATCH  /api/v1/events/{id}        # auth required
 DELETE /api/v1/events/{id}        # auth required
 POST   /api/v1/events/{id}/publish
 POST   /api/v1/events/{id}/cancel
+POST   /api/v1/events/{id}/clone            # admin/user: duplicate an event, optionally into another org
+POST   /api/v1/events/{id}/assign-org       # admin/user (member of the target org)/publisher
+POST   /api/v1/events/{id}/enrich           # admin/publisher: attach musicians/pricing from an external lookup
+POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event's org)
+POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
+POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/amenities to event IDs
+POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
 ```
 
 **Query parameters for GET /api/v1/events:**
@@ -422,10 +480,11 @@ Authentication required (except `GET /api/v1/series/token/{token}` and the PATCH
 ## Timetable
 
 ```
-PUT    /api/v1/events/{id}/timetable
+POST   /api/v1/events/{id}/timetable    # append entries to the existing timetable
+PUT    /api/v1/events/{id}/timetable    # replace the entire timetable
 ```
 
-Authentication required. Replaces the timetable for an event (multi-slot workshop/festival schedules).
+Authentication required (admin or a member of the event's organization). Multi-slot workshop/festival schedules.
 
 ## Images
 

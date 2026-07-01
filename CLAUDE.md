@@ -4,7 +4,7 @@
 
 Before implementing any non-trivial change:
 1. **Discuss** the approach — explain the plan and tradeoffs, wait for confirmation
-2. **Create a GitHub issue** with `gh issue create` describing the problem and solution
+2. **Create a GitHub issue** with `gh issue create` describing the problem and solution, once the user gives the ok
 3. **Implement** the fix
 4. **Commit** with `Closes #<issue>` in the message so the issue is closed automatically on push
 
@@ -14,7 +14,9 @@ gh issue create --title "short description" --body "problem, solution, impact"
 git commit -m "fix: description\n\nCloses #NNN\n\nCo-Authored-By: ..."
 ```
 
-Skip the discussion step only for obvious typos or single-line fixes. Always create the issue before writing code.
+Discussion and issue creation (steps 1–2) do not have to be immediately followed by implementation (steps 3–4). The user may want to discuss and open issues for several features in a row, then come back and implement each one later, in any order. Only create an issue after the user has explicitly said ok to that specific proposal — don't create it as part of a general discussion. Each issue is still closed via its own `Closes #NNN` commit whenever it's eventually implemented.
+
+Skip the discussion step only for obvious typos or single-line fixes, which may be implemented directly without an issue. Always create the issue before writing code for anything else.
 
 ## Go version
 
@@ -40,6 +42,8 @@ sudo make deploy INSTANCE=prod
 ```
 
 `make deploy INSTANCE=<name>` installs binaries to `/usr/lib/dansal/<name>/`, updates systemd template units, and restarts the named instance (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`). Each instance has its own binary directory so dev/test/prod can run different versions independently. It does **not** build — run `make build` first as the regular user (sudo doesn't have `go` in PATH).
+
+`dev` is the default deploy target after implementing a change. Only deploy to `test` or `prod` when the user explicitly asks for that instance by name — never assume a change destined for dev should also go to test/prod.
 
 **Setting up a new instance** (first time only):
 ```bash

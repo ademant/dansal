@@ -2,12 +2,15 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,6 +37,14 @@ func generateAPIKey() (string, error) {
 	return "ak_" + base64.URLEncoding.EncodeToString(b), nil
 }
 
+// hashAPIKey returns the hex-encoded SHA-256 digest of an API key, which is
+// what's stored in api_keys.api_key — the raw key is never persisted, only
+// returned once in the HTTP response at creation/renewal time.
+func hashAPIKey(key string) string {
+	h := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(h[:])
+}
+
 // validateAPIKey checks an API key and returns the associated user.
 // Results are cached for up to credCacheTTL; the cache is invalidated on deletion.
 func validateAPIKey(key string) (int, string, error) {
@@ -47,7 +58,7 @@ func validateAPIKey(key string) (int, string, error) {
 
 	err := db.QueryRow(
 		"SELECT users.id, users.role, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
-		key,
+		hashAPIKey(key),
 	).Scan(&userID, &userRole, &expiresAt)
 
 	if err == sql.ErrNoRows {
@@ -165,7 +176,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	var createdAt string
 	err = db.QueryRow(
 		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id, created_at",
-		targetUserID, req.Name, key, expiresAt,
+		targetUserID, req.Name, hashAPIKey(key), expiresAt,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -200,8 +211,7 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerID int
-	var keyValue string
-	err = db.QueryRow("SELECT user_id, api_key FROM api_keys WHERE id = ?", keyID).Scan(&ownerID, &keyValue)
+	err = db.QueryRow("SELECT user_id FROM api_keys WHERE id = ?", keyID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "API key not found"})
@@ -225,6 +235,111 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	credentials.invalidate(keyValue)
+	credentials.pruneByUserID(ownerID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/apikeys/renew — self-service rotation for a key nearing its
+// expiry, authenticated by presenting that same key. Lets headless
+// integrations (e.g. a WordPress plugin holding a publisher key) rotate
+// without an admin/user session. Only keys with an expires_at set can be
+// renewed, and only before they expire — an already-expired key needs a
+// human to reissue it via regenerate-key.
+func renewAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	authHeader := r.Header.Get("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		return
+	}
+	presentedKey := parts[1]
+
+	var keyID, userID int
+	var name, createdAtStr string
+	var expiresAt sql.NullString
+	err := db.QueryRow(
+		"SELECT api_keys.id, api_keys.user_id, api_keys.name, api_keys.created_at, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
+		hashAPIKey(presentedKey),
+	).Scan(&keyID, &userID, &name, &createdAtStr, &expiresAt)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+	if !expiresAt.Valid || expiresAt.String == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "This key has no expiry; renewal is not applicable"})
+		return
+	}
+
+	oldExpiry, err := parseTokenExpiration(expiresAt.String)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+	if time.Now().After(oldExpiry) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "This key has already expired; ask an admin or org member to issue a new one"})
+		return
+	}
+	oldCreated, err := parseTokenExpiration(createdAtStr)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+
+	newExpiry := time.Now().Add(oldExpiry.Sub(oldCreated))
+
+	newKey, err := generateAPIKey()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate API key"})
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "db error"})
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM api_keys WHERE id=?", keyID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
+		return
+	}
+	var newID int
+	if err := tx.QueryRow(
+		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
+		userID, name, hashAPIKey(newKey), newExpiry.Unix(),
+	).Scan(&newID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "db error"})
+		return
+	}
+
+	credentials.invalidate(presentedKey)
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"key_id":     newID,
+		"api_key":    newKey,
+		"expires_at": newExpiry.UTC().Format(time.RFC3339),
+	})
 }

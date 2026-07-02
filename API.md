@@ -229,9 +229,12 @@ Admin may act on any publisher. A `user`-role caller may create a publisher for 
 ```json
 {
   "name": "Venue Feed Bot",
-  "org_id": 7
+  "org_id": 7,
+  "expires_at": "2027-01-01T00:00:00Z"
 }
 ```
+
+`expires_at` is optional (RFC3339) — omit it for a non-expiring key.
 
 **Create response (`201`, API key shown only here):**
 ```json
@@ -240,17 +243,20 @@ Admin may act on any publisher. A `user`-role caller may create a publisher for 
   "name": "Venue Feed Bot",
   "key_id": 5,
   "api_key": "ak_...",
-  "org_id": 7
+  "org_id": 7,
+  "expires_at": "2027-01-01T00:00:00Z"
 }
 ```
 
-`regenerate-key` returns `{"api_key": "ak_..."}` and invalidates all previous keys for that publisher.
+`regenerate-key` accepts an optional `{"expires_at": "..."}` body (same RFC3339 format) and returns `{"key_id": ..., "api_key": "ak_...", "expires_at": "..."}`, invalidating all previous keys for that publisher.
+
+Keys are stored hashed (SHA-256), never in plaintext — the raw value is only ever visible in the create/regenerate response.
 
 ### Building a third-party integration on a publisher account
 
 This is the intended shape for any external integration that authenticates as a publisher — e.g. the WordPress plugin currently in design, which defines one "connection" per org as a single API key stored in its settings.
 
-1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's sole credential and send it as `Authorization: Bearer <api_key>` on every request — there is no login step, and the key doesn't expire unless it's regenerated or the publisher is deleted.
+1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's sole credential and send it as `Authorization: Bearer <api_key>` on every request — there is no login step. If created with an `expires_at`, the integration should call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before expiry to rotate itself without human involvement; otherwise the key is valid until regenerated or the publisher is deleted.
 2. **Location sync — check before creating:**
    - `GET /api/v1/locations?osm_id=<id>&osm_type=<type>` — exact match
    - `GET /api/v1/locations?lat=<lat>&lng=<lng>&radius=<km>` — proximity match (adds `distance_km` to results)
@@ -341,9 +347,10 @@ Authentication required.
 GET    /api/v1/apikeys
 POST   /api/v1/apikeys
 DELETE /api/v1/apikeys/{id}
+POST   /api/v1/apikeys/renew   # self-service rotation; see below
 ```
 
-Authentication required.
+Authentication required (except `renew`, which authenticates via the key being renewed).
 
 **Create request:**
 ```json
@@ -355,9 +362,26 @@ Authentication required.
 
 `expires_at` is optional (RFC3339). There are no scopes — the key carries the same permissions as the user who created it.
 
-The full key value (prefix `ak_`) is returned only at creation.
+The full key value (prefix `ak_`) is returned only once, at creation — keys are stored hashed (SHA-256) and cannot be retrieved again afterward.
 
 Admins can also create keys for other users by passing `"user_id": <id>`.
+
+**Renewal (`POST /api/v1/apikeys/renew`):** for a headless integration (e.g. a publisher key held by a WordPress plugin) to rotate its own key without an admin/user session. Send the current key itself as the bearer token:
+
+```http
+POST /api/v1/apikeys/renew
+Authorization: Bearer ak_<current-key>
+```
+
+Only keys with a non-null `expires_at` that hasn't passed yet can be renewed — a key with no expiry returns `400`, an already-expired key returns `401` (a human must reissue it via `regenerate-key` or a fresh `POST /api/v1/apikeys`). On success, the old key is invalidated immediately and a new key is returned with the same lifetime duration as the original, counted from now:
+
+```json
+{
+  "key_id": 6,
+  "api_key": "ak_...",
+  "expires_at": "2026-08-01T00:00:00Z"
+}
+```
 
 ## Organizations
 

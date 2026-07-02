@@ -4,19 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 type CreatePublisherRequest struct {
-	Name  string `json:"name"`
-	OrgID *int   `json:"org_id"`
+	Name      string `json:"name"`
+	OrgID     *int   `json:"org_id"`
+	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339, optional
 }
 
 type PublisherCreatedResponse struct {
-	UserID int    `json:"user_id"`
-	Name   string `json:"name"`
-	KeyID  int    `json:"key_id"`
-	APIKey string `json:"api_key"`
-	OrgID  *int   `json:"org_id,omitempty"`
+	UserID    int    `json:"user_id"`
+	Name      string `json:"name"`
+	KeyID     int    `json:"key_id"`
+	APIKey    string `json:"api_key"`
+	OrgID     *int   `json:"org_id,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
 }
 
 // POST /api/v1/publishers — create a publisher service account + API key atomically.
@@ -36,6 +39,17 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	if req.OrgID == nil {
 		writeError(w, "org_id is required", http.StatusBadRequest)
 		return
+	}
+
+	var expiresAt *int64
+	if req.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		if err != nil {
+			writeError(w, "expires_at must be RFC3339", http.StatusBadRequest)
+			return
+		}
+		epoch := t.Unix()
+		expiresAt = &epoch
 	}
 
 	// Non-admin must be a member of the specified org.
@@ -91,8 +105,8 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	var keyID int
 	var createdAt string
 	if err := tx.QueryRow(
-		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id, created_at",
-		userID, keyName, key,
+		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id, created_at",
+		userID, keyName, hashAPIKey(key), expiresAt,
 	).Scan(&keyID, &createdAt); err != nil {
 		writeError(w, "failed to create API key", http.StatusInternalServerError)
 		return
@@ -111,11 +125,12 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(PublisherCreatedResponse{
-		UserID: int(userID),
-		Name:   displayName,
-		KeyID:  keyID,
-		APIKey: key,
-		OrgID:  req.OrgID,
+		UserID:    int(userID),
+		Name:      displayName,
+		KeyID:     keyID,
+		ExpiresAt: req.ExpiresAt,
+		APIKey:    key,
+		OrgID:     req.OrgID,
 	})
 }
 
@@ -158,6 +173,22 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var req struct {
+		ExpiresAt string `json:"expires_at,omitempty"`
+	}
+	json.NewDecoder(r.Body).Decode(&req) // body is optional; ignore decode errors on empty body
+
+	var expiresAt *int64
+	if req.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		if err != nil {
+			writeError(w, "expires_at must be RFC3339", http.StatusBadRequest)
+			return
+		}
+		epoch := t.Unix()
+		expiresAt = &epoch
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -165,15 +196,6 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Invalidate old keys.
-	rows, _ := tx.Query("SELECT api_key FROM api_keys WHERE user_id=?", targetID)
-	var oldKeys []string
-	for rows.Next() {
-		var k string
-		rows.Scan(&k)
-		oldKeys = append(oldKeys, k)
-	}
-	rows.Close()
 	tx.Exec("DELETE FROM api_keys WHERE user_id=?", targetID)
 
 	// Generate new key.
@@ -189,8 +211,8 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 	}
 	var keyID int
 	if err := tx.QueryRow(
-		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id",
-		targetID, keyName, newKey,
+		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
+		targetID, keyName, hashAPIKey(newKey), expiresAt,
 	).Scan(&keyID); err != nil {
 		writeError(w, "failed to store new key", http.StatusInternalServerError)
 		return
@@ -201,14 +223,13 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, k := range oldKeys {
-		credentials.invalidate(k)
-	}
+	credentials.pruneByUserID(targetID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"key_id":  keyID,
-		"api_key": newKey,
+		"key_id":     keyID,
+		"api_key":    newKey,
+		"expires_at": req.ExpiresAt,
 	})
 }
 
@@ -249,23 +270,12 @@ func deletePublisher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, _ := db.Query("SELECT api_key FROM api_keys WHERE user_id=?", targetID)
-	var oldKeys []string
-	for rows.Next() {
-		var k string
-		rows.Scan(&k)
-		oldKeys = append(oldKeys, k)
-	}
-	rows.Close()
-
 	if _, err := db.Exec("DELETE FROM users WHERE id=?", targetID); err != nil {
 		writeError(w, "failed to delete publisher", http.StatusInternalServerError)
 		return
 	}
 
-	for _, k := range oldKeys {
-		credentials.invalidate(k)
-	}
+	credentials.pruneByUserID(targetID)
 
 	w.WriteHeader(http.StatusNoContent)
 }

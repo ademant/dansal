@@ -1637,6 +1637,29 @@ func migrateDB() {
 			db.Exec("UPDATE instructors SET updated_at = strftime('%s', created_at) WHERE updated_at IS NULL")
 		}
 	}
+
+	// #691: API keys must not be stored in plaintext. Hash any row that isn't
+	// already a 64-char hex SHA-256 digest (idempotent — safe to run every start).
+	{
+		rows, err := db.Query("SELECT id, api_key FROM api_keys WHERE length(api_key) != 64")
+		if err == nil {
+			type idKey struct {
+				id  int
+				key string
+			}
+			var toHash []idKey
+			for rows.Next() {
+				var k idKey
+				if rows.Scan(&k.id, &k.key) == nil {
+					toHash = append(toHash, k)
+				}
+			}
+			rows.Close()
+			for _, k := range toHash {
+				db.Exec("UPDATE api_keys SET api_key=? WHERE id=?", hashAPIKey(k.key), k.id)
+			}
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -2565,6 +2588,10 @@ func main() {
 	smux.Handle("GET /api/v1/apikeys", auth(listAPIKeys))
 	smux.Handle("POST /api/v1/apikeys", auth(createAPIKey))
 	smux.Handle("DELETE /api/v1/apikeys/{id}", auth(deleteAPIKey))
+	// Not wrapped in auth(): renewAPIKey looks up the api_keys row directly
+	// (needs its id/expires_at/created_at, which resolveCaller doesn't expose)
+	// rather than going through the generic session/API-key resolver.
+	smux.Handle("POST /api/v1/apikeys/renew", http.HandlerFunc(renewAPIKey))
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))
 	smux.Handle("DELETE /api/v1/publishers/{id}", auth(deletePublisher))

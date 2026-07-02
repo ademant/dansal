@@ -246,6 +246,20 @@ Admin may act on any publisher. A `user`-role caller may create a publisher for 
 
 `regenerate-key` returns `{"api_key": "ak_..."}` and invalidates all previous keys for that publisher.
 
+### Building a third-party integration on a publisher account
+
+This is the intended shape for any external integration that authenticates as a publisher — e.g. the WordPress plugin currently in design, which defines one "connection" per org as a single API key stored in its settings.
+
+1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's sole credential and send it as `Authorization: Bearer <api_key>` on every request — there is no login step, and the key doesn't expire unless it's regenerated or the publisher is deleted.
+2. **Location sync — check before creating:**
+   - `GET /api/v1/locations?osm_id=<id>&osm_type=<type>` — exact match
+   - `GET /api/v1/locations?lat=<lat>&lng=<lng>&radius=<km>` — proximity match (adds `distance_km` to results)
+   - If a match exists but isn't yet linked to the org: `POST /api/v1/locations/{id}/assign-org` with `{"organization_id": <org_id>}` (publishers may only assign orgs they belong to)
+   - Otherwise: `POST /api/v1/locations` with `organization_ids: [<org_id>]`
+   - Once assigned, `PATCH /api/v1/locations/{id}` edits it like any other org member
+3. **Event sync — create or update, never duplicate:** `POST /api/v1/events` to create; `PATCH /api/v1/events/{id}` to update. The integration should persist the returned event `id` locally (e.g. WordPress post meta) so subsequent saves `PATCH` instead of `POST`. Publishers may only edit events they created themselves (`created_by_id`).
+4. **Reading back for display:** `GET /api/v1/events?organization_id=<org_id>` returns the org's own events (published and, for the publisher's own org, unpublished) for embedding on the third-party site.
+
 ## Dashboard
 
 ```

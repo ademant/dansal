@@ -2201,7 +2201,6 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_verification_tokens_user_id       ON verification_tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_user_id        ON magic_login_tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_api_keys_user_id                  ON api_keys(user_id);
-	CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id      ON webauthn_credentials(user_id);
 	CREATE INDEX IF NOT EXISTS idx_invite_links_created_by           ON invite_links(created_by);
 	CREATE INDEX IF NOT EXISTS idx_invite_links_org_id               ON invite_links(org_id);
 	CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id     ON timetable_entries(location_id);
@@ -2235,6 +2234,7 @@ func createTables() error {
 		name TEXT NOT NULL DEFAULT 'Passkey',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id      ON webauthn_credentials(user_id);
 	CREATE TABLE IF NOT EXISTS webauthn_sessions (
 		id TEXT PRIMARY KEY,
 		data TEXT NOT NULL,

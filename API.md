@@ -374,11 +374,21 @@ DELETE /api/v1/locations/{id}         # auth required
 POST   /api/v1/locations/merge        # admin: merge duplicate locations
 POST   /api/v1/locations/bulk-assign-org
 POST   /api/v1/locations/unassign-org
-POST   /api/v1/locations/{id}/assign-org
+POST   /api/v1/locations/{id}/assign-org  # admin/user (member of the target org)/publisher (member of the target org)
 GET    /api/v1/locations/event-counts # auth required
 ```
 
 List and get are public. Locations support `Accept: application/geo+json` on the list endpoint.
+
+**Query parameters for GET /api/v1/locations:**
+- `name=` — substring match on location name
+- `town=` — substring match on town
+- `country=` — comma-separated 2-letter country codes
+- `org_id=` — only locations assigned to this org
+- `osm_id=` + `osm_type=` — exact match on OSM place (both required together; used to check for an existing location before creating a duplicate)
+- `lat=` + `lng=` + `radius=` (km) — proximity search; adds `distance_km` to each result
+- `bbox=minLng,minLat,maxLng,maxLat` — bounding-box search
+- `with_event_counts=true` — adds future/past published event counts per location
 
 ## Musicians and Instructors
 

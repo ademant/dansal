@@ -322,6 +322,11 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 			addWhere("EXISTS (SELECT 1 FROM location_organizations lo2 WHERE lo2.location_id=l.id AND lo2.organization_id=?)", orgID)
 		}
 	}
+	if osmIDStr, osmType := q.Get("osm_id"), q.Get("osm_type"); osmIDStr != "" && osmType != "" {
+		if osmID, err := strconv.ParseInt(osmIDStr, 10, 64); err == nil {
+			addWhere("l.osm_id=? AND l.osm_type=?", osmID, osmType)
+		}
+	}
 
 	// Task B: bbox and lat/lng/radius geo filters
 	if bboxStr := q.Get("bbox"); bboxStr != "" {
@@ -854,7 +859,7 @@ func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if requesterRole != RoleAdmin {
-		if requesterRole != RoleUser {
+		if requesterRole != RoleUser && requesterRole != RolePublisher {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}

@@ -126,21 +126,54 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 	return token, expiresAt, nil
 }
 
-// validateToken checks if a token is valid and not expired.
+// createPinnedTokenInDB mints a short-lived session token bound to a specific
+// IP address — used by publishers exchanging their API key for a token that's
+// useless if exfiltrated to another network (see POST /api/v1/publishers/token).
+// Any existing pinned tokens for the user are deleted first, so re-authenticating
+// from a new IP immediately invalidates the old one.
+func createPinnedTokenInDB(userID int, ip string) (string, time.Time, error) {
+	token, err := generateSessionToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	hours := 1
+	if config != nil && config.Server.PublisherTokenExpirationHours > 0 {
+		hours = config.Server.PublisherTokenExpirationHours
+	}
+	expiresAt := time.Now().UTC().Add(time.Duration(hours) * time.Hour)
+
+	if _, err := db.Exec("DELETE FROM tokens WHERE user_id=? AND ip_pinned=1", userID); err != nil {
+		return "", time.Time{}, err
+	}
+	if _, err := db.Exec(
+		"INSERT INTO tokens (user_id, token, expires_at, ip, ip_pinned) VALUES (?, ?, ?, ?, 1)",
+		userID, token, expiresAt.Unix(), ip,
+	); err != nil {
+		return "", time.Time{}, err
+	}
+
+	return token, expiresAt, nil
+}
+
+// validateToken checks if a token is valid and not expired, and — for
+// IP-pinned tokens — that currentIP matches the IP it was minted for.
 // Results are cached for up to credCacheTTL to avoid a DB round-trip per request.
 // Returns userID, role, tokenID (DB row id of the token).
-func validateToken(token string) (int, string, int, error) {
-	if userID, role, tokenID, ok := credentials.get(token); ok {
+func validateToken(token, currentIP string) (int, string, int, error) {
+	if userID, role, tokenID, ok := credentials.get(token, currentIP); ok {
 		return userID, role, tokenID, nil
 	}
 
 	var userID, tokenID int
 	var userRole, expiresAt string
+	var ipPinned bool
+	var tokenIP sql.NullString
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role, tokens.expires_at, tokens.id FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
+		"SELECT users.id, users.role, tokens.expires_at, tokens.id, tokens.ip_pinned, tokens.ip FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
 		token,
-	).Scan(&userID, &userRole, &expiresAt, &tokenID)
+	).Scan(&userID, &userRole, &expiresAt, &tokenID, &ipPinned, &tokenIP)
 
 	if err == sql.ErrNoRows {
 		return 0, "", 0, fmt.Errorf("invalid token")
@@ -158,7 +191,15 @@ func validateToken(token string) (int, string, int, error) {
 		return 0, "", 0, fmt.Errorf("token expired")
 	}
 
-	credentials.set(token, userID, userRole, tokenID, expTime)
+	pinnedIP := ""
+	if ipPinned {
+		pinnedIP = tokenIP.String
+		if pinnedIP == "" || pinnedIP != currentIP {
+			return 0, "", 0, fmt.Errorf("invalid token")
+		}
+	}
+
+	credentials.set(token, userID, userRole, tokenID, expTime, pinnedIP)
 	return userID, userRole, tokenID, nil
 }
 
@@ -453,7 +494,7 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool
 	token := parts[1]
 
 	// Validate token, fall back to API key
-	userID, userRole, tokenID, err := validateToken(token)
+	userID, userRole, tokenID, err := validateToken(token, getClientIP(r))
 	if err != nil {
 		var apiErr error
 		userID, userRole, apiErr = validateAPIKey(token)

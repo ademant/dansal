@@ -1660,6 +1660,15 @@ func migrateDB() {
 			}
 		}
 	}
+
+	// #693: IP-pinned short-lived tokens for publisher integrations.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name='ip_pinned'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE tokens ADD COLUMN ip_pinned INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1890,6 +1899,7 @@ func createTables() error {
 		ip TEXT,
 		fingerprint TEXT,
 		last_seen_at INTEGER,
+		ip_pinned INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -2593,6 +2603,7 @@ func main() {
 	// rather than going through the generic session/API-key resolver.
 	smux.Handle("POST /api/v1/apikeys/renew", http.HandlerFunc(renewAPIKey))
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
+	smux.Handle("POST /api/v1/publishers/token", auth(publisherToken))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))
 	smux.Handle("DELETE /api/v1/publishers/{id}", auth(deletePublisher))
 

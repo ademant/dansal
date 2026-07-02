@@ -219,6 +219,7 @@ Publishers are service accounts (`role=publisher`) with no email/password/passke
 
 ```
 POST   /api/v1/publishers                       # create a publisher + API key atomically
+POST   /api/v1/publishers/token                  # exchange an API key for a short-lived, IP-pinned session token
 POST   /api/v1/publishers/{id}/regenerate-key    # rotate a publisher's API key
 DELETE /api/v1/publishers/{id}                   # delete a publisher account
 ```
@@ -252,11 +253,22 @@ Admin may act on any publisher. A `user`-role caller may create a publisher for 
 
 Keys are stored hashed (SHA-256), never in plaintext — the raw value is only ever visible in the create/regenerate response.
 
+**Token exchange (`POST /api/v1/publishers/token`):** authenticate with `Authorization: Bearer <api_key>` as usual; the response is a short-lived session token pinned to the caller's IP address:
+
+```json
+{
+  "token": "...",
+  "expires_at": "2026-07-03T01:00:00Z"
+}
+```
+
+Default lifetime is `server.publisher_token_expiration_hours` (1 hour). Use the returned `token` as the bearer credential for subsequent requests instead of the API key itself — it's rejected if presented from any IP other than the one it was minted from, so a leaked token is useless off-network. Re-calling this endpoint (from a new IP, or just to refresh) immediately invalidates any previously-issued pinned token for that publisher. Restricted to `role=publisher` callers — admin/user accounts already have ordinary login and gain nothing from IP-pinning on a session that may legitimately move across networks.
+
 ### Building a third-party integration on a publisher account
 
 This is the intended shape for any external integration that authenticates as a publisher — e.g. the WordPress plugin currently in design, which defines one "connection" per org as a single API key stored in its settings.
 
-1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's sole credential and send it as `Authorization: Bearer <api_key>` on every request — there is no login step. If created with an `expires_at`, the integration should call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before expiry to rotate itself without human involvement; otherwise the key is valid until regenerated or the publisher is deleted.
+1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's rarely-used credential-exchange secret — rather than sending it on every request, call `POST /api/v1/publishers/token` to mint a short-lived IP-pinned session token (above) and use that for actual API calls. If the integration's IP changes, its pinned token simply stops validating; re-exchange the API key from the new IP for a fresh one. If the API key itself was created with an `expires_at`, call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before it expires.
 2. **Location sync — check before creating:**
    - `GET /api/v1/locations?osm_id=<id>&osm_type=<type>` — exact match
    - `GET /api/v1/locations?lat=<lat>&lng=<lng>&radius=<km>` — proximity match (adds `distance_km` to results)

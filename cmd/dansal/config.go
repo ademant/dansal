@@ -10,42 +10,43 @@ import (
 )
 
 type ServerConfig struct {
-	Port                    int      `yaml:"port"`
-	Listen                  string   `yaml:"listen"`
-	TokenExpirationHours    int      `yaml:"token_expiration_hours"`
-	RateLimit               int      `yaml:"rate_limit"`
-	MaxBodyBytes            int64    `yaml:"max_body_bytes"`
-	ReadHeaderTimeoutSecs   int      `yaml:"read_header_timeout_secs"`
-	ReadTimeoutSecs         int      `yaml:"read_timeout_secs"`
-	WriteTimeoutSecs        int      `yaml:"write_timeout_secs"`
-	IdleTimeoutSecs         int      `yaml:"idle_timeout_secs"`
-	MaxConnsPerIP           int      `yaml:"max_conns_per_ip"`
-	ImagesDir               string   `yaml:"images_dir"`
-	ImageXMax               int      `yaml:"image_x_max"`
-	ImageYMax               int      `yaml:"image_y_max"`
-	AdminSocket             string   `yaml:"admin_socket"`
-	DBPath                  string   `yaml:"db_path"`
-	DBMaxConns              int      `yaml:"db_max_conns"`
-	LoginRateLimit          int      `yaml:"login_rate_limit"`
-	LoginMaxFailures        int      `yaml:"login_max_failures"`
-	LoginFailureWindowSecs  int      `yaml:"login_failure_window_secs"`
-	InviteExpiryHours       int      `yaml:"invite_expiry_hours"`
-	InviteQRExpiryMinutes   int      `yaml:"invite_qr_expiry_minutes"`
-	VerificationExpiryHours int      `yaml:"verification_expiry_hours"`
-	BaseURL                 string   `yaml:"base_url"`
-	TelegramBotToken        string   `yaml:"telegram_bot_token"`
-	TelegramBotName         string   `yaml:"telegram_bot_name"`
-	MatrixHomeserver        string   `yaml:"matrix_homeserver"`
-	MatrixAccessToken       string   `yaml:"matrix_access_token"`
-	MagicLoginExpirySecs    int      `yaml:"magic_login_expiry_secs"`
-	MagicLoginRateSecs      int      `yaml:"magic_login_rate_secs"`
-	MaxOpenTokensPerAddress int      `yaml:"max_open_tokens_per_address"`
-	HeartbeatIntervalMins   int      `yaml:"heartbeat_interval_mins"`
-	SessionIdleTimeoutMins  int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
-	SessionMaxConcurrent    int      `yaml:"session_max_concurrent"`    // 0 = unlimited
-	AllowedOrigins          []string `yaml:"allowed_origins"`
-	MetricsPort             int      `yaml:"metrics_port"`
-	MetricsAllowedIPs       []string `yaml:"metrics_allowed_ips"`
+	Port                          int      `yaml:"port"`
+	Listen                        string   `yaml:"listen"`
+	TokenExpirationHours          int      `yaml:"token_expiration_hours"`
+	PublisherTokenExpirationHours int      `yaml:"publisher_token_expiration_hours"`
+	RateLimit                     int      `yaml:"rate_limit"`
+	MaxBodyBytes                  int64    `yaml:"max_body_bytes"`
+	ReadHeaderTimeoutSecs         int      `yaml:"read_header_timeout_secs"`
+	ReadTimeoutSecs               int      `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs              int      `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs               int      `yaml:"idle_timeout_secs"`
+	MaxConnsPerIP                 int      `yaml:"max_conns_per_ip"`
+	ImagesDir                     string   `yaml:"images_dir"`
+	ImageXMax                     int      `yaml:"image_x_max"`
+	ImageYMax                     int      `yaml:"image_y_max"`
+	AdminSocket                   string   `yaml:"admin_socket"`
+	DBPath                        string   `yaml:"db_path"`
+	DBMaxConns                    int      `yaml:"db_max_conns"`
+	LoginRateLimit                int      `yaml:"login_rate_limit"`
+	LoginMaxFailures              int      `yaml:"login_max_failures"`
+	LoginFailureWindowSecs        int      `yaml:"login_failure_window_secs"`
+	InviteExpiryHours             int      `yaml:"invite_expiry_hours"`
+	InviteQRExpiryMinutes         int      `yaml:"invite_qr_expiry_minutes"`
+	VerificationExpiryHours       int      `yaml:"verification_expiry_hours"`
+	BaseURL                       string   `yaml:"base_url"`
+	TelegramBotToken              string   `yaml:"telegram_bot_token"`
+	TelegramBotName               string   `yaml:"telegram_bot_name"`
+	MatrixHomeserver              string   `yaml:"matrix_homeserver"`
+	MatrixAccessToken             string   `yaml:"matrix_access_token"`
+	MagicLoginExpirySecs          int      `yaml:"magic_login_expiry_secs"`
+	MagicLoginRateSecs            int      `yaml:"magic_login_rate_secs"`
+	MaxOpenTokensPerAddress       int      `yaml:"max_open_tokens_per_address"`
+	HeartbeatIntervalMins         int      `yaml:"heartbeat_interval_mins"`
+	SessionIdleTimeoutMins        int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
+	SessionMaxConcurrent          int      `yaml:"session_max_concurrent"`    // 0 = unlimited
+	AllowedOrigins                []string `yaml:"allowed_origins"`
+	MetricsPort                   int      `yaml:"metrics_port"`
+	MetricsAllowedIPs             []string `yaml:"metrics_allowed_ips"`
 
 	// InternalSharedSecret, when set, exempts loopback requests that send a
 	// matching X-Dansal-Internal header from RateLimitMiddleware and
@@ -139,6 +140,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.TokenExpirationHours == 0 {
 		cfg.Server.TokenExpirationHours = 24
+	}
+	if cfg.Server.PublisherTokenExpirationHours == 0 {
+		cfg.Server.PublisherTokenExpirationHours = 1
 	}
 	if cfg.Server.MaxBodyBytes == 0 {
 		cfg.Server.MaxBodyBytes = 1 << 20

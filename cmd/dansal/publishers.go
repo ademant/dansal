@@ -134,6 +134,32 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// POST /api/v1/publishers/token — exchange a publisher's API key for a
+// short-lived, IP-pinned session token. Meant for headless integrations
+// (e.g. a WordPress plugin) that would otherwise send their long-lived API
+// key on every request: the token is useless if exfiltrated to another
+// network, and re-exchanging from a new IP invalidates the previous token.
+func publisherToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RolePublisher {
+		writeError(w, "Forbidden: only publisher accounts use this endpoint", http.StatusForbidden)
+		return
+	}
+
+	token, expiresAt, err := createPinnedTokenInDB(callerID, getClientIP(r))
+	if err != nil {
+		writeError(w, "failed to create token", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"token":      token,
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+	})
+}
+
 // POST /api/v1/publishers/{id}/regenerate-key — rotate the API key for a publisher.
 // Admin may act on any publisher; user may only act on publishers in their org.
 func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {

@@ -1001,18 +1001,17 @@ func userOrgSet(userID int) map[int]bool {
 }
 
 // annotateEditable sets Editable and Cancelable on each event based on the caller's role.
-// editable/cancelable: admin=any; user=own orgs; publisher=own created events only
+// editable/cancelable: admin=any; user/publisher=own orgs.
 // The org membership set is fetched once to avoid N+1 queries.
 func annotateEditable(events []Event, userRole string, userID int) {
 	isAdmin := userRole == RoleAdmin
 	var memberOrgs map[int]bool
-	if userRole == RoleUser {
+	if userRole == RoleUser || userRole == RolePublisher {
 		memberOrgs = userOrgSet(userID)
 	}
 	for i := range events {
 		inOrg := memberOrgs != nil && events[i].OrganizationID != nil && memberOrgs[*events[i].OrganizationID]
-		ownAsPublisher := userRole == RolePublisher && events[i].CreatedByID != nil && *events[i].CreatedByID == userID
-		editable := isAdmin || inOrg || ownAsPublisher
+		editable := isAdmin || inOrg
 		cancelable := editable
 		events[i].Editable = &editable
 		events[i].Cancelable = &cancelable
@@ -1568,9 +1567,8 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inOrg := userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID)
-	ownAsPublisher := userRole == RolePublisher && event.CreatedByID != nil && *event.CreatedByID == callerID
-	editable := userRole == RoleAdmin || inOrg || ownAsPublisher
+	inOrg := (userRole == RoleUser || userRole == RolePublisher) && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID)
+	editable := userRole == RoleAdmin || inOrg
 	cancelable := editable
 	event.Editable = &editable
 	event.Cancelable = &cancelable
@@ -1655,11 +1653,11 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	case RoleAdmin:
 		// unrestricted
 	case RolePublisher:
-		if !existingCreatedBy.Valid || int(existingCreatedBy.Int64) != callerID {
-			writeError(w, "Forbidden: publishers may only edit events they created", http.StatusForbidden)
+		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if req.OrganizationID == nil || !isOrgMember(callerID, *req.OrganizationID) {
+		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
 			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
 			return
 		}
@@ -1888,7 +1886,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/events/{id}/cancel — set is_cancelled=1.
-// admin: any event. user: own orgs. publisher: own created events only.
+// admin: any event. user/publisher: own orgs.
 func cancelEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
 	id, err := strconv.Atoi(r.PathValue("id"))
@@ -1900,7 +1898,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 	switch userRole {
 	case RoleAdmin:
 		// unrestricted
-	case RoleUser:
+	case RoleUser, RolePublisher:
 		var orgID sql.NullInt64
 		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&orgID); err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
@@ -1911,19 +1909,6 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
 			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-	case RolePublisher:
-		var createdBy sql.NullInt64
-		if err := db.QueryRow("SELECT created_by_id FROM events WHERE id=?", id).Scan(&createdBy); err == sql.ErrNoRows {
-			writeError(w, "Event not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if !createdBy.Valid || int(createdBy.Int64) != callerID {
-			writeError(w, "Forbidden: publishers may only cancel events they created", http.StatusForbidden)
 			return
 		}
 	default:

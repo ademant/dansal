@@ -404,6 +404,7 @@ type UserInfo struct {
 	Disabled         bool   `json:"disabled"`
 	HasPassword      bool   `json:"has_password"`
 	TOTPEnabled      bool   `json:"totp_enabled"`
+	UserMetadata     string `json:"user_metadata,omitempty"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -2463,6 +2464,21 @@ func (c *DansalClient) CreateInvite(ctx context.Context, inviteType string, orgI
 		payload["org_id"] = *orgID
 	}
 	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/invites", token, body)
+	if err != nil {
+		return InviteLink{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return InviteLink{}, apiErr(resp)
+	}
+	var link InviteLink
+	return link, json.NewDecoder(resp.Body).Decode(&link)
+}
+
+// CreatePublisherInvite creates an invite link with role=publisher for the given org.
+func (c *DansalClient) CreatePublisherInvite(ctx context.Context, orgID int, token string) (InviteLink, error) {
+	body, _ := json.Marshal(map[string]any{"type": "link", "role": "publisher", "org_id": orgID})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/invites", token, body)
 	if err != nil {
 		return InviteLink{}, err

@@ -887,6 +887,14 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ip
 	},
+	"parseUserMetadata": func(s string) map[string]string {
+		var m map[string]string
+		if s == "" {
+			return nil
+		}
+		json.Unmarshal([]byte(s), &m)
+		return m
+	},
 	"add": func(a, b int) int { return a + b },
 	// pagerRange returns page numbers to display, using -1 as an ellipsis sentinel.
 	"pagerRange": func(current, total int) []int {

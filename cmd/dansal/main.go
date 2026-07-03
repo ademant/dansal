@@ -1669,6 +1669,15 @@ func migrateDB() {
 			db.Exec("ALTER TABLE tokens ADD COLUMN ip_pinned INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+
+	// #694: arbitrary JSON metadata per user (client_name, client_url for publishers; extensible for all roles).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='user_metadata'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE users ADD COLUMN user_metadata TEXT")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1828,6 +1837,7 @@ func createTables() error {
 		telegram_chat_id TEXT,
 		totp_secret TEXT,
 		totp_pending TEXT,
+		user_metadata TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
@@ -2417,6 +2427,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/verify/{token}", consumeVerification)
 	smux.HandleFunc("GET /api/v1/invites/{token}", getInviteInfo)
 	smux.HandleFunc("POST /api/v1/invites/{token}", useInvite)
+	smux.HandleFunc("POST /api/v1/invites/{token}/publisher", redeemPublisherInvite)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin", webauthnInviteBegin)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)

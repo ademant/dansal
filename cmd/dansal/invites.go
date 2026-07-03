@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -149,8 +151,11 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	// Role is always "user" for UI-created invites.
-	req.Role = RoleUser
+	// Only "user" and "publisher" roles are allowed via the UI; admin invites
+	// go through the sysadmin-only adminCreateAdminInvite path.
+	if req.Role != RolePublisher {
+		req.Role = RoleUser
+	}
 
 	// org_id is always required for all invite creation.
 	orgID := req.OrgID
@@ -389,5 +394,121 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		Role:        invite.Role,
 		Telegram:    req.Telegram,
 		Matrix:      req.Matrix,
+	})
+}
+
+// POST /api/v1/invites/{token}/publisher — public endpoint; redeem a
+// publisher invite: creates a service account + API key and returns
+// credentials. Body (all optional):
+//
+//	{"name":"wp-dansal @ example.com","user_metadata":{"client_name":"...","client_url":"..."}}
+func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	token := r.PathValue("token")
+
+	invite, err := loadValidInvite(token)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
+		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
+		return
+	case err == errInviteUsed:
+		writeError(w, "Invite link has already been used", http.StatusGone)
+		return
+	case err == errInviteExpired:
+		writeError(w, "Invite link has expired", http.StatusGone)
+		return
+	default:
+		writeError(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if invite.Role != RolePublisher {
+		writeError(w, "this invite link is not for a publisher account", http.StatusBadRequest)
+		return
+	}
+	if !invite.OrgID.Valid {
+		writeError(w, "publisher invite must be tied to an organisation", http.StatusInternalServerError)
+		return
+	}
+	orgID := int(invite.OrgID.Int64)
+
+	var req struct {
+		Name         string          `json:"name"`
+		UserMetadata json.RawMessage `json:"user_metadata,omitempty"`
+	}
+	json.NewDecoder(r.Body).Decode(&req) // body fully optional
+
+	var metadataVal any
+	if len(req.UserMetadata) > 0 && strings.TrimSpace(string(req.UserMetadata)) != "null" {
+		metadataVal = string(req.UserMetadata)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
+		"INSERT INTO users (role, display_name, password_hash, user_metadata) VALUES (?, ?, '', ?)",
+		RolePublisher, req.Name, metadataVal,
+	)
+	if err != nil {
+		writeError(w, "failed to create publisher account", http.StatusInternalServerError)
+		return
+	}
+	userID, _ := result.LastInsertId()
+
+	name := req.Name
+	if name == "" {
+		name = fmt.Sprintf("publisher#%d", userID)
+		tx.Exec("UPDATE users SET display_name=? WHERE id=?", name, userID)
+	}
+
+	if _, err := tx.Exec(
+		"INSERT INTO organization_members (organization_id, user_id) VALUES (?, ?)",
+		orgID, userID,
+	); err != nil {
+		writeError(w, "failed to assign publisher to org", http.StatusInternalServerError)
+		return
+	}
+
+	key, err := generateAPIKey()
+	if err != nil {
+		writeError(w, "failed to generate API key", http.StatusInternalServerError)
+		return
+	}
+	var keyID int
+	if err := tx.QueryRow(
+		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id",
+		userID, name, hashAPIKey(key),
+	).Scan(&keyID); err != nil {
+		writeError(w, "failed to create API key", http.StatusInternalServerError)
+		return
+	}
+
+	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	var orgName, actorName string
+	db.QueryRow("SELECT name, COALESCE(actor_name,'') FROM organizations WHERE id=?", orgID).Scan(&orgName, &actorName)
+
+	log.Printf("invite: publisher %q (user_id=%d) created via invite link id=%d for org %d", name, userID, invite.ID, orgID)
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]any{
+		"api_key":    key,
+		"user_id":    int(userID),
+		"org_id":     orgID,
+		"org_name":   orgName,
+		"org_slug":   actorName,
+		"base_url":   strings.TrimRight(config.Server.BaseURL, "/"),
 	})
 }

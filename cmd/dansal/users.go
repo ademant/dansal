@@ -38,6 +38,7 @@ type User struct {
 	Disabled         bool   `json:"disabled"`
 	HasPassword      bool   `json:"has_password"`
 	TOTPEnabled      bool   `json:"totp_enabled"`
+	UserMetadata     string `json:"user_metadata,omitempty"`
 	CreatedAt        string `json:"created_at"`
 }
 
@@ -111,14 +112,14 @@ func validateRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RolePublisher
 }
 
-const userSelectCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, CASE WHEN totp_secret IS NOT NULL AND totp_secret != '' THEN 1 ELSE 0 END, created_at"
+const userSelectCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), CASE WHEN password_hash != '' AND password_hash IS NOT NULL THEN 1 ELSE 0 END, CASE WHEN totp_secret IS NOT NULL AND totp_secret != '' THEN 1 ELSE 0 END, COALESCE(user_metadata,''), created_at"
 
 type userScanner interface{ Scan(...any) error }
 
 func scanUser(s userScanner) (User, error) {
 	var u User
 	var emailVer, telegramVer, matrixVer, disabled, hasPw, totpEnabled int
-	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &hasPw, &totpEnabled, &u.CreatedAt); err != nil {
+	if err := s.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Description, &u.Telegram, &u.TelegramChatID, &u.Matrix, &u.Mastodon, &u.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &hasPw, &totpEnabled, &u.UserMetadata, &u.CreatedAt); err != nil {
 		return User{}, err
 	}
 	u.HasPassword = hasPw != 0

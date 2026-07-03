@@ -106,6 +106,7 @@
       <tr>
         <th>{{$.Strings.T "admin_publisher_name"}}</th>
         <th>{{$.Strings.T "fetch_org"}}</th>
+        <th>{{$.Strings.T "admin_publisher_client"}}</th>
         <th></th>
       </tr>
     </thead>
@@ -117,7 +118,17 @@
     <tr>
       <td>{{if .DisplayName}}{{.DisplayName}}{{else}}<span class="muted">publisher#{{.ID}}</span>{{end}}</td>
       <td>{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
+      <td class="muted" style="font-size:.85rem">
+        {{- if .UserMetadata -}}
+          {{- $m := .UserMetadata | parseUserMetadata -}}
+          {{- $cu := index $m "client_url" -}}{{- $cn := index $m "client_name" -}}
+          {{- if $cu -}}<a href="{{$cu}}" target="_blank" rel="noopener">{{if $cn}}{{$cn}}{{else}}{{$cu}}{{end}}</a>
+          {{- else if $cn}}{{$cn}}{{end -}}
+        {{- end -}}
+      </td>
       <td style="white-space:nowrap">
+        {{$firstOrgID := 0}}{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if eq $i 0}}{{$firstOrgID = $oid}}{{end}}{{end}}
+        <button type="button" class="btn-sm" onclick="publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
       </td>
@@ -317,6 +328,21 @@ async function deletePublisher(id) {
     if (!r.ok) { var d = await r.json().catch(function(){return {};}); alert(d.error||r.statusText); return; }
     location.reload();
   } catch(e) { alert(e.message); }
+}
+async function publisherConnectLink(id, orgID) {
+  var res = document.getElementById('publisher-result');
+  res.hidden = false; res.innerHTML = '…';
+  try {
+    var r = await fetch('/admin/publishers/invite', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({org_id: orgID})
+    });
+    var d = await r.json();
+    if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
+    res.innerHTML = '{{$.Strings.T "admin_publisher_connect_link_hint"}}: ' +
+      '<code id="pub-connect-val" style="word-break:break-all;font-size:.82rem">' + d.redeem_url + '</code>' +
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-connect-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_connect_link_expires"}}: ' + new Date(d.expires_at).toLocaleString() + '</p>';
+  } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
 }
 async function createInvite(type) {
   var orgEl = document.getElementById('invite-org-id');

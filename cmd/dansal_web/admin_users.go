@@ -387,6 +387,47 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 	}
 }
 
+func adminPublisherInviteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			OrgID *int `json:"org_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrgID == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "org_id required"})
+			return
+		}
+		token := getSessionToken(r)
+		if su.Role != "admin" {
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*req.OrgID] {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
+				return
+			}
+		}
+		link, err := client.CreatePublisherInvite(r.Context(), *req.OrgID, token)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		redeemURL := cfg.publicBaseURL() + "/api/v1/invites/" + link.Token + "/publisher"
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":      link.Token,
+			"redeem_url": redeemURL,
+			"expires_at": link.ExpiresAt,
+		})
+	}
+}
+
 func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

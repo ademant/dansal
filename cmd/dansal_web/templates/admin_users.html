@@ -95,6 +95,7 @@
       {{end}}
     </select>
     <button type="button" class="btn-sm" onclick="createPublisher()">{{$.Strings.T "admin_publisher_create"}}</button>
+    <button type="button" class="btn-sm" onclick="publisherConnectLinkFromForm()">{{$.Strings.T "admin_publisher_connect_link"}}</button>
   </div>
   <div id="publisher-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;font-size:.9rem"></div>
 
@@ -328,6 +329,12 @@ async function deletePublisher(id) {
     if (!r.ok) { var d = await r.json().catch(function(){return {};}); alert(d.error||r.statusText); return; }
     location.reload();
   } catch(e) { alert(e.message); }
+}
+async function publisherConnectLinkFromForm() {
+  var orgEl = document.getElementById('publisher-org-id');
+  var orgVal = orgEl ? orgEl.value : '';
+  if (!orgVal) { alert('{{$.Strings.T "admin_invite_org_required"}}'); return; }
+  await publisherConnectLink(0, parseInt(orgVal));
 }
 async function publisherConnectLink(id, orgID) {
   var res = document.getElementById('publisher-result');

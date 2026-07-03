@@ -200,6 +200,8 @@ There is no user-creation or admin-driven password-reset endpoint, and no `DELET
 
 **`GET /api/v1/users` / `GET /api/v1/users/{id}` response shape:** callers who are not the account owner (or, for the list endpoint, not admin) receive a public subset only (`id`, `display_name`, `role`, `description`, `website`, `created_at` — no email, telegram handle, or verification flags).
 
+**`user_metadata`:** All user records have an optional `user_metadata` JSON field (string containing a JSON object). For publisher accounts it stores client information set during [connect-link redemption](#connect-link-bootstrap-recommended-setup-flow) (e.g. `{"client_name":"wp-dansal @ example.com","client_url":"https://example.com"}`). The field is returned as part of the full user object for the account owner and admin; it is stripped from public/list responses.
+
 **Update user request (`PUT`) — restrictions:**
 ```json
 {
@@ -215,13 +217,13 @@ There is no user-creation or admin-driven password-reset endpoint, and no `DELET
 
 ## Publishers
 
-Publishers are service accounts (`role=publisher`) with no email/password/passkeys, authenticated purely via API key — the identity a fetch integration (e.g. a future WordPress plugin) uses to post events under an organization.
+Publishers are service accounts (`role=publisher`) with no email/password/passkeys, authenticated purely via API key — the identity an external integration (e.g. the [wp-dansal](https://github.com/ademant/wp-dansal) WordPress plugin) uses to post events under an organization.
 
 ```
-POST   /api/v1/publishers                       # create a publisher + API key atomically
-POST   /api/v1/publishers/token                  # exchange an API key for a short-lived, IP-pinned session token
-POST   /api/v1/publishers/{id}/regenerate-key    # rotate a publisher's API key
-DELETE /api/v1/publishers/{id}                   # delete a publisher account
+POST   /api/v1/publishers                       # create a publisher + API key atomically (admin/user)
+POST   /api/v1/publishers/token                 # exchange an API key for a short-lived, IP-pinned session token
+POST   /api/v1/publishers/{id}/regenerate-key   # rotate a publisher's API key
+DELETE /api/v1/publishers/{id}                  # delete a publisher account
 ```
 
 Admin may act on any publisher. A `user`-role caller may create a publisher for any organization they belong to, and may regenerate/delete a publisher only if it shares at least one organization with the caller.
@@ -264,9 +266,54 @@ Keys are stored hashed (SHA-256), never in plaintext — the raw value is only e
 
 Default lifetime is `server.publisher_token_expiration_hours` (1 hour). Use the returned `token` as the bearer credential for subsequent requests instead of the API key itself — it's rejected if presented from any IP other than the one it was minted from, so a leaked token is useless off-network. Re-calling this endpoint (from a new IP, or just to refresh) immediately invalidates any previously-issued pinned token for that publisher. Restricted to `role=publisher` callers — admin/user accounts already have ordinary login and gain nothing from IP-pinning on a session that may legitimately move across networks.
 
+### Connect-link bootstrap (recommended setup flow)
+
+Instead of manually creating a publisher and copying the numeric org ID into a plugin's settings, org members can generate a single-use connect link from the `/admin/users` page. The link encodes a publisher invite that the plugin redeems in one call to receive all the credentials it needs.
+
+```
+POST /api/v1/invites/{token}/publisher
+```
+
+Public (no `Authorization` header required — the token is the credential). The `{token}` is the value from a `role=publisher` invite link; see [Invites](#invites) for how to generate one.
+
+**Request body (all fields optional):**
+```json
+{
+  "name": "wp-dansal @ example.com",
+  "user_metadata": {
+    "client_name": "wp-dansal @ example.com",
+    "client_url": "https://example.com"
+  }
+}
+```
+
+`user_metadata` is a free-form JSON object stored on the publisher's user record and shown in the admin user list. Integrations should include at minimum `client_name` and, if applicable, `client_url` — this lets admins identify which external site each publisher account belongs to. Any JSON object is accepted; unknown keys are preserved and ignored by dansal.
+
+**Response (`201`):**
+```json
+{
+  "api_key": "ak_...",
+  "user_id": 42,
+  "org_id": 7,
+  "org_name": "Bal Folk Berlin",
+  "org_slug": "balfolkberlin",
+  "base_url": "https://api.balfolk.jetzt"
+}
+```
+
+The token is consumed on first use (single-use) and expires after `server.invite_expiry_hours`. The `api_key` is shown only in this response — store it securely.
+
+**End-to-end flow for a WordPress plugin:**
+
+1. Org member opens `/admin/users` → clicks **Connect link** next to the org's publisher row (or creates a new one)
+2. The page shows a one-time URL like `https://api.balfolk.jetzt/api/v1/invites/abc123/publisher`
+3. Admin pastes the URL into the plugin's settings page
+4. Plugin POSTs to the URL with `{"user_metadata": {"client_name": "wp-dansal @ example.com", "client_url": "https://example.com"}}`
+5. Plugin stores the returned `api_key`, `org_id`, and `base_url` — setup complete, no manual ID lookup needed
+
 ### Building a third-party integration on a publisher account
 
-This is the intended shape for any external integration that authenticates as a publisher — e.g. the WordPress plugin currently in design, which defines one "connection" per org as a single API key stored in its settings.
+This is the intended shape for any external integration that authenticates as a publisher.
 
 1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's rarely-used credential-exchange secret — rather than sending it on every request, call `POST /api/v1/publishers/token` to mint a short-lived IP-pinned session token (above) and use that for actual API calls. If the integration's IP changes, its pinned token simply stops validating; re-exchange the API key from the new IP for a fresh one. If the API key itself was created with an `expires_at`, call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before it expires.
 2. **Location sync — check before creating:**
@@ -316,13 +363,7 @@ POST   /api/v1/pending-registrations/{id}/approve  # admin: approve
 DELETE /api/v1/pending-registrations/{id}       # admin: reject
 ```
 
-**Invite-based registration** (bypasses pending queue):
-```
-GET    /api/v1/invites/{token}                  # get invite info
-POST   /api/v1/invites/{token}                  # register with invite
-POST   /api/v1/invites/{token}/webauthn/begin   # passkey invite begin
-POST   /api/v1/invites/{token}/webauthn/finish  # passkey invite finish
-```
+**Invite-based registration** (bypasses pending queue): see [Invites](#invites) for the full endpoint list. For human accounts use `POST /api/v1/invites/{token}`; for publisher service accounts use `POST /api/v1/invites/{token}/publisher`.
 
 **Email verification** (after registration or email change):
 ```
@@ -622,12 +663,32 @@ Public. Suggestions are routed to admins via Telegram or email (configured in `w
 ## Invites
 
 ```
-GET    /api/v1/invites          # list invites (admin)
-POST   /api/v1/invites          # create invite (admin)
-DELETE /api/v1/invites/{token}  # revoke invite (admin)
-GET    /api/v1/pending-invites  # list sent invites that haven't been used
+GET    /api/v1/invites                          # list own invites; admin sees all
+POST   /api/v1/invites                          # create invite (admin or org member)
+DELETE /api/v1/invites/{token}                  # revoke unused invite (creator or admin)
+GET    /api/v1/invites/{token}                  # get invite info (public — for registration page)
+POST   /api/v1/invites/{token}                  # redeem invite — register a human user account
+POST   /api/v1/invites/{token}/publisher        # redeem invite — create a publisher service account
+POST   /api/v1/invites/{token}/webauthn/begin   # passkey invite registration begin
+POST   /api/v1/invites/{token}/webauthn/finish  # passkey invite registration finish
+GET    /api/v1/pending-invites                  # list sent invites that haven't been used
 POST   /api/v1/pending-invites/{id}/resend
 ```
+
+**Create request:**
+```json
+{
+  "type": "link",
+  "role": "user",
+  "org_id": 7
+}
+```
+
+`type` is `"link"` (default) or `"qr"` (short-lived, for in-person QR scanning). `role` may be `"user"` (default) or `"publisher"` — admin invites are created via the sysadmin-only CLI/socket path, never through this endpoint. `org_id` is required; non-admin callers must belong to the specified org.
+
+**Redemption for human users (`POST /api/v1/invites/{token}`):** creates a `role=user` account with optional email/password/passkey. See [Registration](#registration).
+
+**Redemption for publisher accounts (`POST /api/v1/invites/{token}/publisher`):** creates a `role=publisher` service account + API key atomically, with optional `user_metadata`. See [Connect-link bootstrap](#connect-link-bootstrap-recommended-setup-flow) in the Publishers section for the full flow and response shape.
 
 ## Telegram Webhook
 

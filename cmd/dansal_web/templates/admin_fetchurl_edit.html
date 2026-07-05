@@ -97,7 +97,11 @@ function copyFetchURL(btn){
 }
 function testFeed(){
   var url=document.getElementById('fetch-url-input').value;
-  window.open(url,'_blank','width=900,height=700');
+  try {
+    var u=new URL(url,window.location.href);
+    if(u.protocol!=='http:'&&u.protocol!=='https:') return;
+    window.open(u.href,'_blank','noopener,noreferrer,width=900,height=700');
+  } catch(e) {}
 }
 var _formDirty=false;
 function _markDirty(){

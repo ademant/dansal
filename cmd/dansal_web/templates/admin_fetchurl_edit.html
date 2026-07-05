@@ -6,10 +6,13 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <div class="fetch-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" id="save-btn" class="btn-primary" form="fetch-edit-form">{{$.Strings.T "admin_save"}}</button>
   <button type="button" id="test-btn" class="btn-secondary" onclick="testFeed()">{{$.Strings.T "fetch_test"}}</button>
+  {{if .Source.ID}}<button type="button" id="run-btn" class="btn-secondary" data-run-url="/admin/fetchurls/{{.Source.ID}}/run">{{$.Strings.T "fetch_run"}}</button>{{end}}
 </div>
 
 <form method="post" class="edit-form" id="fetch-edit-form">
@@ -86,8 +89,39 @@
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+.toast{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%) translateY(-120%);padding:.65rem 1.4rem;border-radius:6px;font-size:.95rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.18);transition:transform .25s ease,opacity .25s ease;opacity:0;pointer-events:none;z-index:9999;white-space:nowrap}
+.toast.toast-show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-ok{background:#1e7e34;color:#fff}
+.toast-err{background:#b00020;color:#fff}
 </style>
 <script>
+var toastTimer;
+function showToast(msg, ok) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-err') + ' toast-show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.className = 'toast'; }, 5000);
+}
+(function(){
+  var btn = document.getElementById('run-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var url = btn.dataset.runUrl;
+    btn.disabled = true;
+    fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
+      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+      .then(function(res) {
+        if (res.ok) {
+          showToast(res.data.count + ' {{$.Strings.T "fetch_run_result"}}', true);
+        } else {
+          showToast(res.data.error || '{{$.Strings.T "fetch_run_error"}}', false);
+        }
+      })
+      .catch(function(){ showToast('{{$.Strings.T "fetch_run_error"}}', false); })
+      .finally(function(){ btn.disabled = false; });
+  });
+})();
 function copyFetchURL(btn){
   var url=document.getElementById('fetch-url-input').value;
   navigator.clipboard.writeText(url).then(function(){

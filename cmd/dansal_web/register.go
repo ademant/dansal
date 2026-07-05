@@ -89,7 +89,8 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			log.Printf("%s ip=%s path=/register", authBlock, ip)
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-				Error: "login_error_throttled",
+				Error:     "login_error_throttled",
+				FormToken: newFormToken(),
 			}))
 			return
 		}
@@ -158,6 +159,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				Orgs:              orgs,
 				Error:             errKey,
 				TelegramAvailable: info.TelegramChannelAvailable,
+				FormToken:         newFormToken(),
 			}))
 			return
 		}

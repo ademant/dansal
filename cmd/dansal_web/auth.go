@@ -83,9 +83,10 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			log.Printf("%s ip=%s path=/login", authBlock, ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-				ErrorKey: "login_error_throttled",
-				Email:    email,
-				Next:     r.FormValue("next"),
+				ErrorKey:  "login_error_throttled",
+				Email:     email,
+				Next:      r.FormValue("next"),
+				FormToken: newFormToken(),
 			}))
 			return
 		}
@@ -118,9 +119,10 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			}
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-				ErrorKey: errorKey,
-				Email:    email,
-				Next:     r.FormValue("next"),
+				ErrorKey:  errorKey,
+				Email:     email,
+				Next:      r.FormValue("next"),
+				FormToken: newFormToken(),
 			}))
 			return
 		}
@@ -159,7 +161,8 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			log.Printf("%s ip=%s path=/magic", authBlock, ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-				ErrorKey: "login_error_throttled",
+				ErrorKey:  "login_error_throttled",
+				FormToken: newFormToken(),
 			}))
 			return
 		}

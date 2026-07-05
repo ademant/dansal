@@ -5,9 +5,19 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
-<form method="post" class="edit-form">
+
+<div class="fetch-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="submit" id="save-btn" class="btn-primary" form="fetch-edit-form">{{$.Strings.T "admin_save"}}</button>
+  <button type="button" id="test-btn" class="btn-secondary" onclick="testFeed()">{{$.Strings.T "fetch_test"}}</button>
+</div>
+
+<form method="post" class="edit-form" id="fetch-edit-form">
   <label>{{$.Strings.T "fetch_url"}}</label>
-  <input type="text" value="{{.Source.URL}}" disabled class="input-disabled">
+  <div class="url-row">
+    <input type="text" id="fetch-url-input" value="{{.Source.URL}}" disabled class="input-disabled">
+    <button type="button" id="copy-url-btn" class="btn-copy" onclick="copyFetchURL(this)" title="{{$.Strings.T "admin_invite_copy"}}" aria-label="{{$.Strings.T "admin_invite_copy"}}">⧉</button>
+  </div>
 
   <label for="type">{{$.Strings.T "fetch_type"}}</label>
   <select id="type" name="type">
@@ -52,10 +62,6 @@
   </select>
   {{end}}
 
-  <div class="form-actions">
-    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/fetchurls" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-  </div>
 </form>
 {{end}}
 </div>
@@ -63,18 +69,57 @@
 <style>
 .edit-wrap{max-width:560px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.fetch-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
 .edit-form{display:flex;flex-direction:column;gap:.6rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
 .edit-form label{font-weight:600;font-size:.9rem;color:#444}
 .edit-form input,.edit-form select{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%}
 .edit-form input:focus,.edit-form select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .input-disabled{background:#f5f5f5;color:#666}
+.url-row{display:flex;gap:.4rem;align-items:center}
+.url-row input{flex:1}
+.btn-copy{flex-shrink:0;padding:.45rem .65rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:1rem;cursor:pointer;line-height:1}
+.btn-copy:hover{background:#e8e8e8}
 .dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .5rem;margin:.25rem 0}
 .check-label{display:flex;align-items:center;gap:.35rem;font-size:.92rem;cursor:pointer;font-weight:normal}
 .check-label input{width:auto}
-.form-actions{display:flex;gap:.75rem;margin-top:.5rem}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
 </style>
+<script>
+function copyFetchURL(btn){
+  var url=document.getElementById('fetch-url-input').value;
+  navigator.clipboard.writeText(url).then(function(){
+    var orig=btn.textContent;btn.textContent='✓';
+    setTimeout(function(){btn.textContent=orig;},1500);
+  });
+}
+function testFeed(){
+  var url=document.getElementById('fetch-url-input').value;
+  window.open(url,'_blank','width=900,height=700');
+}
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}else{location.href='/admin/fetchurls';}
+}
+(function(){
+  var form=document.getElementById('fetch-edit-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
+})();
+</script>
 {{end}}

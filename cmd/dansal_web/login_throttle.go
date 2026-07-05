@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -24,8 +26,15 @@ type loginThrottle struct {
 }
 
 type throttleEntry struct {
-	failures    int
-	windowStart time.Time
+	failures     int
+	windowStart  time.Time
+	lastEmail    string // email of the most recent failed attempt
+	lastPassHash string // SHA-256 hex of the most recent failed password; never the plaintext
+}
+
+func hashLoginPassword(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(sum[:])
 }
 
 func newLoginThrottle(maxFailures int, window time.Duration) *loginThrottle {
@@ -48,7 +57,15 @@ func (lt *loginThrottle) isBlocked(ip string) bool {
 
 // recordFailure increments the counter and returns the backoff delay to sleep.
 // Delay is 2^(n-1) seconds: 1 s, 2 s, 4 s, 8 s, 16 s, capped at loginMaxDelay.
-func (lt *loginThrottle) recordFailure(ip string) time.Duration {
+//
+// A failed attempt that repeats the exact same email+password as the
+// immediately preceding failure from this IP doesn't increment the counter
+// or escalate the delay (still applies the current, frozen delay) — it
+// doesn't help an actual credential-guessing attempt, which needs distinct
+// guesses to make progress, so excluding exact repeats only helps the
+// common "retried the same typo" case without weakening brute-force
+// protection.
+func (lt *loginThrottle) recordFailure(ip, email, password string) time.Duration {
 	lt.mu.Lock()
 	defer lt.mu.Unlock()
 	e := lt.entries[ip]
@@ -58,10 +75,16 @@ func (lt *loginThrottle) recordFailure(ip string) time.Duration {
 	} else if time.Since(e.windowStart) > lt.window {
 		e.failures = 0
 		e.windowStart = time.Now()
+		e.lastEmail = ""
+		e.lastPassHash = ""
 	}
-	if e.failures < lt.maxFailures {
+	passHash := hashLoginPassword(password)
+	isRepeat := e.lastPassHash != "" && e.lastEmail == email && e.lastPassHash == passHash
+	if !isRepeat && e.failures < lt.maxFailures {
 		e.failures++
 	}
+	e.lastEmail = email
+	e.lastPassHash = passHash
 	delay := time.Duration(1<<uint(e.failures-1)) * time.Second
 	if delay > loginMaxDelay {
 		delay = loginMaxDelay

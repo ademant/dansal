@@ -104,7 +104,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 		if err != nil {
-			delay := throttle.recordFailure(ip)
+			delay := throttle.recordFailure(ip, email, password)
 			log.Printf("%s ip=%s path=/login", authFail, ip)
 			timer := time.NewTimer(delay)
 			select {

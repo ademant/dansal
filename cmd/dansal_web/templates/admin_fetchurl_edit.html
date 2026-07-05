@@ -15,6 +15,12 @@
   {{if .Source.ID}}<button type="button" id="run-btn" class="btn-secondary" data-run-url="/admin/fetchurls/{{.Source.ID}}/run">{{$.Strings.T "fetch_run"}}</button>{{end}}
 </div>
 
+<form method="post" action="/admin/events/import" enctype="multipart/form-data" target="dansalFeedTest" id="test-feed-form" style="display:none">
+  <input type="hidden" name="url" value="{{.Source.URL}}">
+  <input type="hidden" name="type" value="{{if or (eq .Source.Type "json") (eq .Source.Type "folkdance-json") (eq .Source.Type "gancio-json")}}json{{else}}{{.Source.Type}}{{end}}">
+  {{if .Source.OrganizationID}}<input type="hidden" name="organization_id" value="{{derefInt .Source.OrganizationID}}">{{end}}
+</form>
+
 <form method="post" class="edit-form" id="fetch-edit-form">
   <label>{{$.Strings.T "fetch_url"}}</label>
   <div class="url-row">
@@ -130,12 +136,8 @@ function copyFetchURL(btn){
   });
 }
 function testFeed(){
-  var url=document.getElementById('fetch-url-input').value;
-  try {
-    var u=new URL(url,window.location.href);
-    if(u.protocol!=='http:'&&u.protocol!=='https:') return;
-    window.open(u.href,'_blank','noopener,noreferrer,width=900,height=700');
-  } catch(e) {}
+  window.open('','dansalFeedTest','width=1000,height=750');
+  document.getElementById('test-feed-form').submit();
 }
 var _formDirty=false;
 function _markDirty(){

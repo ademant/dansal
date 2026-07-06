@@ -672,17 +672,22 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		}
 	}
 
-	// URL tier: fires when uid is absent or not found.
+	const threeHours = int64(3 * 60 * 60)
+
+	// URL tier: fires when uid is absent or not found. Constrained to a ±3h
+	// window around start_time — otherwise a feed that reuses one generic URL
+	// (e.g. its homepage) for every event permanently locks tier 2 onto the
+	// first event ever imported with that URL, silently absorbing every later,
+	// unrelated event sharing the same URL (#702).
 	if lookupErr == sql.ErrNoRows && url != "" {
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE url = ?", url,
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE url = ? AND ABS(start_time - ?) < ?",
+			url, startTime, threeHours,
 		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return 0, "", false, lookupErr
 		}
 	}
-
-	const threeHours = int64(3 * 60 * 60)
 
 	// Fuzzy fallback: fires when both uid and url lookups missed.
 	if lookupErr == sql.ErrNoRows {

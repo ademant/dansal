@@ -138,9 +138,22 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 		}
 	}
 
-	if lookupErr == sql.ErrNoRows && req.URL != "" {
+	startStr := req.StartTime
+	if len(req.Date) > 0 {
+		startStr = req.Date[0].StartTime
+	}
+	startEpoch, startErr := parseTimeToUnix(startStr)
+	const threeHours = int64(3 * 60 * 60)
+
+	// URL tier: constrained to a ±3h window around start_time — otherwise a
+	// feed that reuses one generic URL (e.g. its homepage) for every event
+	// permanently locks this tier onto the first event ever imported with
+	// that URL, silently absorbing every later, unrelated event sharing the
+	// same URL (#702).
+	if lookupErr == sql.ErrNoRows && req.URL != "" && startErr == nil {
 		found, lookupErr = scan(db.QueryRow(
-			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE url=?", req.URL,
+			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE url=? AND ABS(start_time-?)<?",
+			req.URL, startEpoch, threeHours,
 		))
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return "new"
@@ -148,13 +161,7 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 	}
 
 	if lookupErr == sql.ErrNoRows {
-		startStr := req.StartTime
-		if len(req.Date) > 0 {
-			startStr = req.Date[0].StartTime
-		}
-		startEpoch, err := parseTimeToUnix(startStr)
-		if err == nil {
-			const threeHours = int64(3 * 60 * 60)
+		if startErr == nil {
 			var locID int64
 			db.QueryRow("SELECT id FROM locations WHERE location=?", req.Location.Location).Scan(&locID)
 			if locID == 0 && req.Location.Address != "" {
@@ -206,11 +213,7 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 	}
 
 	// No source timestamps — compare key event fields.
-	startStr := req.StartTime
-	if len(req.Date) > 0 {
-		startStr = req.Date[0].StartTime
-	}
-	if startEpoch, err := parseTimeToUnix(startStr); err == nil {
+	if startErr == nil {
 		if startEpoch != found.startTime {
 			return "updated"
 		}

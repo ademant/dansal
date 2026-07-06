@@ -19,7 +19,7 @@
     <label class="assign-label" for="org_id">{{$.Strings.T "admin_import_org_label"}}</label>
     <select id="org_id" name="org_id" class="assign-select">
       <option value="">{{$.Strings.T "admin_import_org_none"}}</option>
-      {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      {{range $.Data.Orgs}}<option value="{{.ID}}"{{if eq .ID $.Data.SelectedOrgID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </div>
   {{end}}

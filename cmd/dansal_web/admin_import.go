@@ -29,6 +29,7 @@ type AdminImportEventsData struct {
 	Orgs           []Organization
 	Locations      []Location
 	UniqueFeedLocs []FeedLocation
+	SelectedOrgID  int
 }
 
 // ── Import events ─────────────────────────────────────────────────────────────
@@ -163,6 +164,8 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			previewJSON[i] = string(b)
 		}
 
+		selectedOrgID, _ := strconv.Atoi(orgID)
+
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
 
@@ -224,6 +227,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Orgs:           orgs,
 			Locations:      locs,
 			UniqueFeedLocs: uniqLocs,
+			SelectedOrgID:  selectedOrgID,
 		}))
 	}
 }

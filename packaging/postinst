@@ -22,8 +22,11 @@ case "$1" in
         chmod 640         /etc/dansal/web.yaml
         chown root:dansal /etc/dansal/webmin.yaml
         chmod 640         /etc/dansal/webmin.yaml
+        chown root:dansal /etc/dansal/doc.yaml
+        chmod 640         /etc/dansal/doc.yaml
 
         install -d -m 750 -o dansal -g dansal /var/lib/dansal-web
+        install -d -m 755 /usr/share/dansal/wiki
 
         systemctl daemon-reload
 
@@ -33,13 +36,16 @@ case "$1" in
             systemctl start  dansal.service || true
             systemctl enable dansal-web.service
             systemctl enable dansal-webmin.service
+            systemctl enable dansal-doc.service
             echo "dansal-web installed. Edit /etc/dansal/web.yaml (set domain + dansal_url), then: systemctl start dansal-web"
             echo "dansal-webmin installed. Edit /etc/dansal/webmin.yaml (set session_secret), then: systemctl start dansal-webmin"
+            echo "dansal-doc installed. Edit /etc/dansal/doc.yaml (set domain), then: systemctl start dansal-doc"
         else
             # Upgrade — restart running services.
             systemctl try-restart dansal.service        || true
             systemctl try-restart dansal-web.service    || true
             systemctl try-restart dansal-webmin.service || true
+            systemctl try-restart dansal-doc.service    || true
         fi
         ;;
 esac

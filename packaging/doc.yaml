@@ -1,0 +1,11 @@
+listen: "127.0.0.1:8070"
+domain: "doc.example.com"
+base_url: ""
+content_dir: "/usr/share/dansal/wiki"
+index_page: "README"
+site_name: "Dansal Documentation"
+
+read_header_timeout_secs: 5
+read_timeout_secs: 10
+write_timeout_secs: 30
+idle_timeout_secs: 60

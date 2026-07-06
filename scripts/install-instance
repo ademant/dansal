@@ -79,10 +79,12 @@ info "For multi-host setups, edit 'listen' in config.yaml/web.yaml/webmin.yaml"
 info "after install and restrict access at the firewall."
 
 DEFAULT_API=$(free_port 8000)
+DEFAULT_DOC=$(free_port 8070)
 DEFAULT_WEB=$(free_port 8080)
 DEFAULT_WEBMIN=$(free_port 8090)
 
 ask API_PORT    "API port"    "$DEFAULT_API"
+ask DOC_PORT    "Docs port"   "$DEFAULT_DOC"
 ask WEB_PORT    "Web port"    "$DEFAULT_WEB"
 ask WEBMIN_PORT "Webmin port" "$DEFAULT_WEBMIN"
 
@@ -95,6 +97,12 @@ echo
 ask WEB_DOMAIN "Web frontend domain (e.g. events.example.com)"
 
 ask     API_DOMAIN    "API domain"    "api.${WEB_DOMAIN}"
+if [[ $(awk -F. '{print NF}' <<< "$WEB_DOMAIN") -gt 2 ]]; then
+    DEFAULT_DOC_DOMAIN="doc.${WEB_DOMAIN#*.}"
+else
+    DEFAULT_DOC_DOMAIN="doc.${WEB_DOMAIN}"
+fi
+ask     DOC_DOMAIN    "Documentation domain" "$DEFAULT_DOC_DOMAIN"
 ask_optional WEBMIN_DOMAIN "Webmin domain (leave blank to skip nginx config)" \
     "webmin.${WEB_DOMAIN}"
 
@@ -162,6 +170,7 @@ fi
 section "Summary"
 echo "  Instance : ${INSTANCE}"
 echo "  API      : 127.0.0.1:${API_PORT}  (https://${API_DOMAIN})"
+echo "  Docs     : 127.0.0.1:${DOC_PORT}  (https://${DOC_DOMAIN})"
 echo "  Web      : 127.0.0.1:${WEB_PORT}  (https://${WEB_DOMAIN})"
 echo "  Webmin   : 127.0.0.1:${WEBMIN_PORT}${WEBMIN_DOMAIN:+  (https://${WEBMIN_DOMAIN})}"
 if [[ $USE_LOCAL_MTA == true ]]; then
@@ -238,6 +247,14 @@ fi
 
 info "Configs written to ${CONFDIR}/"
 
+# ── patch doc.yaml ────────────────────────────────────────────────────────────
+
+DOC="${CONFDIR}/doc.yaml"
+
+sed -i "s|^listen: \"127.0.0.1:8070\"|listen: \"127.0.0.1:${DOC_PORT}\"|" "$DOC"
+sed -i "s|^domain: \"doc.example.com\"|domain: \"${DOC_DOMAIN}\"|" "$DOC"
+sed -i "s|^base_url: \"\"|base_url: \"https://${DOC_DOMAIN}\"|" "$DOC"
+
 # ── mTLS certificates ─────────────────────────────────────────────────────────
 
 if [[ $MTLS == true ]]; then
@@ -298,18 +315,20 @@ section "Binaries"
 BINDIR="/usr/lib/dansal/${INSTANCE}"
 install -d -m 755 "$BINDIR"
 
-if [[ -f ./dansal && -f ./dansal_web && -f ./dansal_webmin && -f ./dansal_admin ]]; then
+if [[ -f ./dansal && -f ./dansal_web && -f ./dansal_webmin && -f ./dansal_admin && -f ./dansal_doc ]]; then
     info "Local build artifacts found — installing..."
     make deploy INSTANCE="$INSTANCE"
-elif [[ -f /usr/bin/dansal && -f /usr/bin/dansal-web ]]; then
+elif [[ -f /usr/bin/dansal && -f /usr/bin/dansal-web && -f /usr/bin/dansal-doc ]]; then
     info "Package binaries found in /usr/bin/ — copying to instance directory..."
     install -m 755 /usr/bin/dansal        "${BINDIR}/dansal"
     install -m 755 /usr/bin/dansal_admin  "${BINDIR}/dansal_admin"
     install -m 755 /usr/bin/dansal-web    "${BINDIR}/dansal-web"
     install -m 755 /usr/bin/dansal-webmin "${BINDIR}/dansal-webmin"
+    install -m 755 /usr/bin/dansal-doc    "${BINDIR}/dansal-doc"
     systemctl restart "dansal@${INSTANCE}"
     systemctl try-restart "dansal-web@${INSTANCE}.service"    || true
     systemctl try-restart "dansal-webmin@${INSTANCE}.service" || true
+    systemctl try-restart "dansal-doc@${INSTANCE}.service"    || true
 else
     echo
     echo "  No binaries found. Build them as a regular user, then deploy:"
@@ -356,6 +375,10 @@ if [[ $CERTBOT == true ]]; then
         certbot_domain "${API_DOMAIN}" || CERTS_OK=false
     fi
 
+    if [[ "${DOC_DOMAIN}" != "${WEB_DOMAIN}" && "${DOC_DOMAIN}" != "${API_DOMAIN}" ]]; then
+        certbot_domain "${DOC_DOMAIN}" || CERTS_OK=false
+    fi
+
     if [[ -n $WEBMIN_DOMAIN && "${WEBMIN_DOMAIN}" != "${WEB_DOMAIN}" ]]; then
         certbot_domain "${WEBMIN_DOMAIN}" || CERTS_OK=false
     fi
@@ -363,6 +386,7 @@ if [[ $CERTBOT == true ]]; then
     if [[ $CERTS_OK == true ]]; then
         info "Deploying nginx configurations..."
         make deploy-nginx INSTANCE="${INSTANCE}"
+        make deploy-nginx-doc INSTANCE="${INSTANCE}"
         [[ -n $WEBMIN_DOMAIN ]] && make deploy-nginx-webmin INSTANCE="${INSTANCE}"
         info "Certbot auto-renewal is handled by the certbot systemd timer."
         info "Check with: systemctl status certbot.timer"
@@ -373,9 +397,12 @@ if [[ $CERTBOT == true ]]; then
         echo "    certbot certonly --nginx -d ${WEB_DOMAIN}"
         [[ "${API_DOMAIN}" != "${WEB_DOMAIN}" ]] && \
             echo "    certbot certonly --nginx -d ${API_DOMAIN}"
+        [[ "${DOC_DOMAIN}" != "${WEB_DOMAIN}" && "${DOC_DOMAIN}" != "${API_DOMAIN}" ]] && \
+            echo "    certbot certonly --nginx -d ${DOC_DOMAIN}"
         [[ -n $WEBMIN_DOMAIN ]] && \
             echo "    certbot certonly --nginx -d ${WEBMIN_DOMAIN}"
         echo "    sudo make deploy-nginx INSTANCE=${INSTANCE}"
+        echo "    sudo make deploy-nginx-doc INSTANCE=${INSTANCE}"
         [[ -n $WEBMIN_DOMAIN ]] && \
             echo "    sudo make deploy-nginx-webmin INSTANCE=${INSTANCE}"
     fi
@@ -390,15 +417,19 @@ echo "  Config files (review before starting):"
 echo "    ${CONFDIR}/config.yaml"
 echo "    ${CONFDIR}/web.yaml"
 echo "    ${CONFDIR}/webmin.yaml"
+echo "    ${CONFDIR}/doc.yaml"
 echo
 if [[ $CERTBOT == false ]]; then
     echo "  To set up nginx and TLS later:"
     echo "    certbot certonly --nginx -d ${WEB_DOMAIN}"
     [[ "${API_DOMAIN}" != "${WEB_DOMAIN}" ]] && \
         echo "    certbot certonly --nginx -d ${API_DOMAIN}"
+    [[ "${DOC_DOMAIN}" != "${WEB_DOMAIN}" && "${DOC_DOMAIN}" != "${API_DOMAIN}" ]] && \
+        echo "    certbot certonly --nginx -d ${DOC_DOMAIN}"
     [[ -n $WEBMIN_DOMAIN ]] && \
         echo "    certbot certonly --nginx -d ${WEBMIN_DOMAIN}"
     echo "    sudo make deploy-nginx INSTANCE=${INSTANCE}"
+    echo "    sudo make deploy-nginx-doc INSTANCE=${INSTANCE}"
     [[ -n $WEBMIN_DOMAIN ]] && \
         echo "    sudo make deploy-nginx-webmin INSTANCE=${INSTANCE}"
     echo

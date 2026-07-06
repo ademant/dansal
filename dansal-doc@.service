@@ -1,0 +1,53 @@
+[Unit]
+Description=Dansal Documentation (%i)
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=dansal
+Group=dansal
+SyslogIdentifier=dansal-doc@%i
+ExecStart=/usr/lib/dansal/%i/dansal-doc --config /etc/dansal/%i/doc.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=35
+
+RuntimeDirectory=dansal-doc/%i
+RuntimeDirectoryMode=0750
+StateDirectory=dansal-doc/%i
+StateDirectoryMode=0750
+ConfigurationDirectory=dansal/%i
+ConfigurationDirectoryMode=0770
+
+# Sandboxing
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+DeviceAllow=
+RemoveIPC=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

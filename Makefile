@@ -11,12 +11,12 @@ SYSTEMDDIR := /etc/systemd/system
 
 .DEFAULT_GOAL := build
 
-.PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin \
-        run fmt vet vulncheck clean install install-web install-webmin install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-default deploy-full
+.PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
+        run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default deploy-full
 
 build:
-	$(MAKE) -j4 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
+	$(MAKE) -j5 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc
 
 build-dansal:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal ./cmd/dansal
@@ -29,6 +29,9 @@ build-dansal_admin:
 
 build-dansal_webmin:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_webmin ./cmd/dansal_webmin
+
+build-dansal_doc:
+	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_doc ./cmd/dansal_doc
 
 fmt:
 	go fmt ./...
@@ -43,7 +46,7 @@ run: build-dansal
 	./dansal --config ./config.yaml
 
 clean:
-	rm -f dansal dansal_web dansal_admin dansal_webmin *.deb
+	rm -f dansal dansal_web dansal_admin dansal_webmin dansal_doc *.deb
 
 install: build
 	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }
@@ -112,11 +115,26 @@ install-webmin: build-dansal_webmin
 	systemctl daemon-reload
 	systemctl enable dansal-webmin.service
 
+install-doc: build-dansal_doc
+	@[ "$(shell id -u)" = "0" ] || { echo "install-doc requires root"; exit 1; }
+	install -d -m 755 /usr/share/dansal/wiki
+	install -m 644 wiki/*.md /usr/share/dansal/wiki/
+	@if [ ! -f $(SYSCONFDIR)/doc.yaml ]; then \
+		install -m 640 -o root -g $(SERVICE) packaging/doc.yaml $(SYSCONFDIR)/doc.yaml; \
+		echo "Installed $(SYSCONFDIR)/doc.yaml — edit domain before starting"; \
+	else \
+		echo "$(SYSCONFDIR)/doc.yaml already exists — not overwriting"; \
+	fi
+	install -m 755 dansal_doc $(BINDIR)/dansal-doc
+	$(MAKE) install-units
+	systemctl enable dansal-doc.service
+
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
 	# Legacy non-template units (installed for reference; not enabled automatically)
 	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
 	install -m 644 dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
+	install -m 644 dansal-doc.service       $(SYSTEMDDIR)/dansal-doc.service
 	install -m 644 dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
 	install -m 644 dansal-fetch.timer       $(SYSTEMDDIR)/dansal-fetch.timer
 	install -m 644 dansal-backup.service    $(SYSTEMDDIR)/dansal-backup.service
@@ -131,6 +149,7 @@ install-units:
 	install -m 644 dansal@.service              $(SYSTEMDDIR)/dansal@.service
 	install -m 644 dansal-web@.service          $(SYSTEMDDIR)/dansal-web@.service
 	install -m 644 dansal-webmin@.service       $(SYSTEMDDIR)/dansal-webmin@.service
+	install -m 644 dansal-doc@.service          $(SYSTEMDDIR)/dansal-doc@.service
 	install -m 644 dansal-fetch@.service        $(SYSTEMDDIR)/dansal-fetch@.service
 	install -m 644 dansal-fetch@.timer          $(SYSTEMDDIR)/dansal-fetch@.timer
 	install -m 644 dansal-backup@.service       $(SYSTEMDDIR)/dansal-backup@.service
@@ -148,13 +167,16 @@ update: build install-units
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
 	install -m 755 dansal_web    $(BINDIR)/dansal-web
+	install -m 755 dansal_doc    $(BINDIR)/dansal-doc
 	systemctl restart $(SERVICE)
 	systemctl try-restart dansal-web.service || true
+	systemctl try-restart dansal-doc.service || true
 	@$(MAKE) --no-print-directory check-config
 
 check-config:
 	@packaging/check-config packaging/config.yaml $(SYSCONFDIR)/config.yaml
 	@packaging/check-config packaging/web.yaml    $(SYSCONFDIR)/web.yaml
+	@packaging/check-config packaging/doc.yaml    $(SYSCONFDIR)/doc.yaml
 
 # deploy: install pre-built binaries and restart a specific instance.
 # Usage: sudo make deploy INSTANCE=dev   (or prod, nl, ...)
@@ -165,14 +187,18 @@ ifndef INSTANCE
 	$(error INSTANCE is required: sudo make deploy INSTANCE=dev)
 endif
 	install -d -m 755 /usr/lib/dansal/$(INSTANCE)
+	install -d -m 755 /usr/share/dansal/wiki
+	install -m 644 wiki/*.md /usr/share/dansal/wiki/
 	install -m 755 dansal        /usr/lib/dansal/$(INSTANCE)/dansal
 	install -m 755 dansal_admin  /usr/lib/dansal/$(INSTANCE)/dansal_admin
 	install -m 755 dansal_web    /usr/lib/dansal/$(INSTANCE)/dansal-web
 	install -m 755 dansal_webmin /usr/lib/dansal/$(INSTANCE)/dansal-webmin
+	install -m 755 dansal_doc    /usr/lib/dansal/$(INSTANCE)/dansal-doc
 	install -m 755 packaging/dansal_preflight /usr/lib/dansal/dansal_preflight
 	systemctl restart dansal@$(INSTANCE)
 	systemctl try-restart dansal-web@$(INSTANCE).service || true
 	systemctl try-restart dansal-webmin@$(INSTANCE).service || true
+	systemctl try-restart dansal-doc@$(INSTANCE).service || true
 	@echo "deployed $(INSTANCE)"
 
 # setup-instance: create directories, install template configs, enable units for a new instance.
@@ -199,6 +225,8 @@ endif
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/images
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(STATEDIR)/$(INSTANCE)/backups
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
+	install -d -m 755 /usr/share/dansal/wiki
+	install -m 644 wiki/*.md /usr/share/dansal/wiki/
 	# Template configs — installed only if not already present (or empty from a failed prior run)
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
 		sed \
@@ -236,8 +264,14 @@ endif
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/webmin.yaml already exists — not overwriting"; \
 	fi
+	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/doc.yaml ]; then \
+		install -m 660 -o root -g $(SERVICE) packaging/doc.yaml $(SYSCONFDIR)/$(INSTANCE)/doc.yaml; \
+		echo "Created $(SYSCONFDIR)/$(INSTANCE)/doc.yaml — set listen and domain."; \
+	else \
+		echo "$(SYSCONFDIR)/$(INSTANCE)/doc.yaml already exists — not overwriting"; \
+	fi
 	# Enable units (not started — configure first)
-	systemctl enable dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE)
+	systemctl enable dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE) dansal-doc@$(INSTANCE)
 	systemctl enable dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer \
 	                 dansal-vacuum@$(INSTANCE).timer dansal-prune-images@$(INSTANCE).timer \
 	                 dansal-mailcheck@$(INSTANCE).timer
@@ -246,8 +280,9 @@ endif
 	@echo "  1. Edit $(SYSCONFDIR)/$(INSTANCE)/config.yaml  (port, base_url, smtp, …)"
 	@echo "  2. Edit $(SYSCONFDIR)/$(INSTANCE)/web.yaml     (listen, domain, dansal_url)"
 	@echo "  3. Edit $(SYSCONFDIR)/$(INSTANCE)/webmin.yaml  (listen, admin_socket, session_secret)"
-	@echo "  4. sudo systemctl start dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE)"
-	@echo "  5. sudo systemctl start dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer"
+	@echo "  4. Edit $(SYSCONFDIR)/$(INSTANCE)/doc.yaml     (listen, domain)"
+	@echo "  5. sudo systemctl start dansal@$(INSTANCE) dansal-web@$(INSTANCE) dansal-webmin@$(INSTANCE) dansal-doc@$(INSTANCE)"
+	@echo "  6. sudo systemctl start dansal-fetch@$(INSTANCE).timer dansal-backup@$(INSTANCE).timer"
 
 # Build a .deb package. VERSION may be overridden by the CI pipeline
 # (e.g.  make deb DEB_VERSION=0.1.0).
@@ -256,7 +291,7 @@ DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \
                 grep -E '^[0-9]' || echo "0.0~git.$(shell date +%Y%m%d).$(shell git rev-parse --short HEAD 2>/dev/null)")
 DEB_ARCH    ?= $(shell dpkg --print-architecture)
 
-deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
+deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc
 	@set -e; \
 	DEB_DIR=$$(mktemp -d /tmp/dansal-deb-XXXXXX); \
 	trap 'rm -rf $$DEB_DIR' EXIT; \
@@ -264,6 +299,7 @@ deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
 	install -d -m 755 $$DEB_DIR/DEBIAN; \
 	install -d -m 755 $$DEB_DIR/usr/bin; \
 	install -d -m 755 $$DEB_DIR/usr/lib/dansal; \
+	install -d -m 755 $$DEB_DIR/usr/share/dansal/wiki; \
 	install -d -m 755 $$DEB_DIR/$(SYSTEMDDIR); \
 	install -d -m 755 $$DEB_DIR/etc/dansal; \
 	install -d -m 755 $$DEB_DIR/etc/fail2ban/filter.d; \
@@ -281,12 +317,16 @@ deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin
 	install -m 755 dansal_web                            $$DEB_DIR/usr/bin/dansal-web; \
 	install -m 755 dansal_admin                          $$DEB_DIR/usr/bin/dansal_admin; \
 	install -m 755 dansal_webmin                         $$DEB_DIR/usr/bin/dansal-webmin; \
+	install -m 755 dansal_doc                            $$DEB_DIR/usr/bin/dansal-doc; \
+	install -m 644 wiki/*.md                             $$DEB_DIR/usr/share/dansal/wiki/; \
 	install -m 644 dansal.service                        $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
 	install -m 644 dansal-web.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
 	install -m 644 dansal-webmin.service                 $$DEB_DIR/$(SYSTEMDDIR)/dansal-webmin.service; \
+	install -m 644 dansal-doc.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-doc.service; \
 	install -m 644 packaging/config.yaml                 $$DEB_DIR/etc/dansal/config.yaml; \
 	install -m 644 packaging/web.yaml                    $$DEB_DIR/etc/dansal/web.yaml; \
 	install -m 644 packaging/webmin.yaml                 $$DEB_DIR/etc/dansal/webmin.yaml; \
+	install -m 644 packaging/doc.yaml                    $$DEB_DIR/etc/dansal/doc.yaml; \
 	install -m 644 deploy/fail2ban/filter.d/dansal.conf  $$DEB_DIR/etc/fail2ban/filter.d/dansal.conf; \
 	install -m 644 deploy/fail2ban/jail.d/dansal.conf    $$DEB_DIR/etc/fail2ban/jail.d/dansal.conf; \
 	\
@@ -380,6 +420,36 @@ endif
 	nginx -t || { rm -f /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf; exit 1; }
 	systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/dansal-webmin-$(INSTANCE).conf"
+
+# Deploy nginx configuration for dansal-doc for a specific instance.
+# Usage: sudo make deploy-nginx-doc INSTANCE=prod
+.ONESHELL:
+deploy-nginx-doc:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-nginx-doc requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy-nginx-doc INSTANCE=prod)
+endif
+	set -e
+	DOC_CONF=$(SYSCONFDIR)/$(INSTANCE)/doc.yaml
+	[ -f "$$DOC_CONF" ] || { echo "Error: $$DOC_CONF not found — run setup-instance first"; exit 1; }
+	DOC_DOMAIN=$$(grep -E '^domain:' "$$DOC_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$DOC_DOMAIN" ] && { echo "Error: domain not set in $$DOC_CONF"; exit 1; }
+	echo "$$DOC_DOMAIN" | grep -q '\.' || { echo "Error: domain '$$DOC_DOMAIN' looks invalid"; exit 1; }
+	DOC_PORT=$$(grep -E '^listen:' "$$DOC_CONF" | sed -E 's/.*:([0-9]+).*/\1/')
+	DOC_PORT=$${DOC_PORT:-8070}
+	echo "Deploying nginx-doc for instance '$(INSTANCE)': $$DOC_DOMAIN (port=$$DOC_PORT)"
+	install -d -m 755 /etc/nginx/conf.d
+	rm -f /etc/nginx/conf.d/dansal-doc.conf
+	sed \
+	    -e "s/doc\.example\.com/$$DOC_DOMAIN/g" \
+	    -e "s/127\.0\.0\.1:8070/127.0.0.1:$$DOC_PORT/g" \
+	    -e "s/\bdansal_doc\b/dansal_doc_$(INSTANCE)/g" \
+	    -e "s/zone=doc_conn_limit/zone=doc_conn_limit_$(INSTANCE)/g" \
+	    -e "s/limit_conn doc_conn_limit/limit_conn doc_conn_limit_$(INSTANCE)/g" \
+	    deploy/nginx/dansal-doc.conf > /etc/nginx/conf.d/dansal-doc-$(INSTANCE).conf
+	nginx -t || { rm -f /etc/nginx/conf.d/dansal-doc-$(INSTANCE).conf; exit 1; }
+	systemctl reload nginx
+	echo "Deployed /etc/nginx/conf.d/dansal-doc-$(INSTANCE).conf"
 
 # Install the global catch-all server block that rejects requests with an
 # unrecognized Host header. One-time, independent of INSTANCE.

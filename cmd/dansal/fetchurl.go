@@ -655,6 +655,52 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(src)
 }
 
+// fetchFailureAlertThreshold is the number of consecutive failed runs a fetch
+// source must accumulate before admins are alerted. Transient network
+// hiccups (one-off timeouts, momentary TLS issues) resolve on their own
+// within a run or two and shouldn't page anyone.
+const fetchFailureAlertThreshold = 3
+
+// recordFetchResult persists the outcome of a fetch-source run (last_result,
+// consecutive_failures) and, when a source crosses fetchFailureAlertThreshold
+// consecutive failures, notifies admins exactly once — not on every
+// subsequent failed run — so a persistently broken feed is surfaced without
+// spamming on every retry. The counter (and alert eligibility) resets to 0 on
+// the next successful run.
+func recordFetchResult(src FetchSource, events int, fetchErr error) {
+	if fetchErr != nil {
+		var failures int
+		db.QueryRow("UPDATE fetch_sources SET last_result = ?, consecutive_failures = consecutive_failures + 1 WHERE id = ? RETURNING consecutive_failures",
+			"error: "+fetchErr.Error(), src.ID).Scan(&failures)
+		if failures == fetchFailureAlertThreshold {
+			notifyAdminsFetchFailure(src, failures, fetchErr)
+		}
+		return
+	}
+	db.Exec("UPDATE fetch_sources SET last_result = ?, consecutive_failures = 0 WHERE id = ?",
+		fmt.Sprintf("%d", events), src.ID)
+}
+
+// notifyAdminsFetchFailure alerts admin users that a fetch source has failed
+// fetchFailureAlertThreshold times in a row.
+func notifyAdminsFetchFailure(src FetchSource, failures int, fetchErr error) {
+	msg := fmt.Sprintf("Fetch source #%d (%s) has failed %d times in a row: %v — check /admin/fetchurls.", src.ID, src.URL, failures, fetchErr)
+
+	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
+	if err != nil {
+		log.Printf("fetchurl: notify admins: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var email, chatID string
+		if err := rows.Scan(&email, &chatID); err != nil {
+			continue
+		}
+		notifyUser(chatID, email, "Fetch source failing", msg)
+	}
+}
+
 // importFromSource dispatches to the correct importer based on src.Type.
 func importFromSource(src FetchSource) ([]Event, bool, error) {
 	// Defense-in-depth: re-validate scheme even though the URL was validated at
@@ -1212,12 +1258,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData}
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
-		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)
+		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(allEvents)), src.ID)
+	recordFetchResult(src, len(allEvents), nil)
 	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1359,9 +1405,11 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			events, allCreated, err := importFromSource(src)
 			if err != nil {
+				recordFetchResult(src, 0, err)
 				results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Error: err.Error()}
 				return
 			}
+			recordFetchResult(src, len(events), nil)
 			results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Events: len(events), AllCreated: allCreated}
 		}(i, src)
 	}
@@ -1429,12 +1477,12 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
-		db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", "error: "+err.Error(), src.ID)
+		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	db.Exec("UPDATE fetch_sources SET last_result = ? WHERE id = ?", fmt.Sprintf("%d", len(allEvents)), src.ID)
+	recordFetchResult(src, len(allEvents), nil)
 	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")

@@ -1678,6 +1678,16 @@ func migrateDB() {
 			db.Exec("ALTER TABLE users ADD COLUMN user_metadata TEXT")
 		}
 	}
+
+	// #700: track consecutive fetch failures per source so admins can be
+	// alerted once a feed has been broken for a while, instead of never.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='consecutive_failures'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1981,7 +1991,8 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		template_id INTEGER,
 		template_mode TEXT NOT NULL DEFAULT '',
-		template_data TEXT
+		template_data TEXT,
+		consecutive_failures INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

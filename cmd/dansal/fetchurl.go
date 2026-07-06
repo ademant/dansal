@@ -179,6 +179,10 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 			composite := loc.Location + " - " + loc.Address
 			err = q.QueryRow("SELECT id FROM locations WHERE location = ?", composite).Scan(&id)
 		}
+		// Tier 4: alias lookup — feed may use a known alternate name for a venue.
+		if err == sql.ErrNoRows {
+			err = q.QueryRow("SELECT id FROM locations WHERE EXISTS (SELECT 1 FROM json_each(aliases) WHERE value = ?)", loc.Location).Scan(&id)
+		}
 	}
 
 	if matchedByOSM || err == nil {

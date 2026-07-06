@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -55,9 +56,21 @@ type tecResponse struct {
 }
 
 var htmlTagRE = regexp.MustCompile(`<[^>]+>`)
+var htmlNumericEntityRE = regexp.MustCompile(`&#(\d+);`)
 
 func tecStripHTML(s string) string {
 	s = htmlTagRE.ReplaceAllString(s, "")
+	s = htmlNumericEntityRE.ReplaceAllStringFunc(s, func(m string) string {
+		sub := htmlNumericEntityRE.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		n, err := strconv.Atoi(sub[1])
+		if err != nil || n < 0 || n > 0x10FFFF {
+			return m
+		}
+		return string(rune(n))
+	})
 	s = strings.ReplaceAll(s, "&amp;", "&")
 	s = strings.ReplaceAll(s, "&lt;", "<")
 	s = strings.ReplaceAll(s, "&gt;", ">")

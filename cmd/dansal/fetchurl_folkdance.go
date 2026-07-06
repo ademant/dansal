@@ -225,21 +225,21 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 	return reqs, nil
 }
 
-func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
+func importFromFolkdanceJSON(src FetchSource) ([]Event, ImportCounts, error) {
 	resp, err := safeClient.Get(src.URL)
 	if err != nil {
-		return nil, false, fmt.Errorf("fetch: %w", err)
+		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, false, fmt.Errorf("remote returned %d", resp.StatusCode)
+		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
 	}
 
 	var payload struct {
 		Events []folkdanceEvent `json:"events"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&payload); err != nil {
-		return nil, false, fmt.Errorf("parse JSON: %w", err)
+		return nil, ImportCounts{}, fmt.Errorf("parse JSON: %w", err)
 	}
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
@@ -248,12 +248,12 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
 	defer tx.Rollback()
 
 	var allEvents []Event
-	allCreated := true
+	var counts ImportCounts
 	now := time.Now().UTC()
 
 	for _, fe := range payload.Events {
@@ -313,7 +313,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			seenMusician[name] = true
 			id, err := ensureMusician(tx, name)
 			if err != nil {
-				return nil, false, fmt.Errorf("ensureMusician %q: %w", name, err)
+				return nil, ImportCounts{}, fmt.Errorf("ensureMusician %q: %w", name, err)
 			}
 			if id > 0 {
 				musicianIDs = append(musicianIDs, int(id))
@@ -350,15 +350,15 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			},
 		}
 
-		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
-			return nil, false, err
+		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents); err != nil {
+			return nil, ImportCounts{}, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
-	return allEvents, allCreated, nil
+	return allEvents, counts, nil
 }
 
 // folkdanceJSONProbe returns true when the URL looks like a folkdance.page JSON feed.

@@ -394,7 +394,7 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.NotFound(w, r)
 			return
 		}
-		count, runErr := client.RunFetchSource(r.Context(), id, getSessionToken(r))
+		result, runErr := client.RunFetchSource(r.Context(), id, getSessionToken(r))
 		if r.Header.Get("Accept") == "application/json" {
 			w.Header().Set("Content-Type", "application/json")
 			if runErr != nil {
@@ -402,7 +402,12 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 				json.NewEncoder(w).Encode(map[string]string{"error": runErr.Error()})
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]int{"count": count})
+			json.NewEncoder(w).Encode(map[string]int{
+				"count":     result.Count,
+				"new":       result.New,
+				"updated":   result.Updated,
+				"unchanged": result.Unchanged,
+			})
 			return
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)

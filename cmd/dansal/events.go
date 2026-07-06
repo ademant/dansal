@@ -647,12 +647,50 @@ func flagDuplicateReview(q querier, newID, candidateID int, title string) {
 	go notifyAdminsDuplicateReview(title)
 }
 
-// insertEvent upserts an event. Returns (id, shortCode, created, error) where
-// created=false means an existing event was updated instead of inserted.
+// Outcome values returned by insertEvent, describing what happened to the row.
+const (
+	outcomeNew       = "new"
+	outcomeUpdated   = "updated"
+	outcomeUnchanged = "unchanged"
+)
+
+// ImportCounts tallies insertEvent outcomes across a batch import run.
+type ImportCounts struct {
+	New       int
+	Updated   int
+	Unchanged int
+}
+
+// Add tallies a single insertEvent outcome.
+func (c *ImportCounts) Add(outcome string) {
+	switch outcome {
+	case outcomeNew:
+		c.New++
+	case outcomeUpdated:
+		c.Updated++
+	case outcomeUnchanged:
+		c.Unchanged++
+	}
+}
+
+// Merge folds another batch's counts into c.
+func (c *ImportCounts) Merge(other ImportCounts) {
+	c.New += other.New
+	c.Updated += other.Updated
+	c.Unchanged += other.Unchanged
+}
+
+// AllNew reports whether every event in the batch was newly inserted.
+func (c ImportCounts) AllNew() bool {
+	return c.Updated == 0 && c.Unchanged == 0
+}
+
+// insertEvent upserts an event. Returns (id, shortCode, outcome, error) where
+// outcome is one of outcomeNew/outcomeUpdated/outcomeUnchanged.
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string, createdByID *int) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string, createdByID *int) (int, string, string, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -668,7 +706,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE uid = ?", uid,
 		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return 0, "", false, lookupErr
+			return 0, "", "", lookupErr
 		}
 	}
 
@@ -685,7 +723,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			url, startTime, threeHours,
 		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return 0, "", false, lookupErr
+			return 0, "", "", lookupErr
 		}
 	}
 
@@ -716,7 +754,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	}
 
 	if lookupErr != nil && lookupErr != sql.ErrNoRows {
-		return 0, "", false, lookupErr
+		return 0, "", "", lookupErr
 	}
 
 	// Tier 5: low-confidence review candidate. Fires only when tiers 1-4 all
@@ -764,7 +802,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	if lookupErr == nil {
 		// Skip update when the source tells us nothing has changed since last import.
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
-			return existingID, existingShortCode, false, nil
+			return existingID, existingShortCode, outcomeUnchanged, nil
 		}
 
 		var slmArg any
@@ -776,7 +814,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		if source != "" && existingChangedAt > 0 {
 			if sourceLastModified == 0 || sourceLastModified <= existingChangedAt {
 				// Source has no timestamp or is not newer than the manual edit — skip.
-				return existingID, existingShortCode, false, nil
+				return existingID, existingShortCode, outcomeUnchanged, nil
 			}
 			// Source is newer than the manual edit — do a merge update: only
 			// overwrite fields where the source provides non-empty content, and
@@ -815,9 +853,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				existingID,
 			)
 			if err != nil {
-				return 0, "", false, err
+				return 0, "", "", err
 			}
-			return existingID, existingShortCode, false, nil
+			return existingID, existingShortCode, outcomeUpdated, nil
 		}
 
 		var err error
@@ -838,9 +876,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			)
 		}
 		if err != nil {
-			return 0, "", false, err
+			return 0, "", "", err
 		}
-		return existingID, existingShortCode, false, nil
+		return existingID, existingShortCode, outcomeUpdated, nil
 	}
 
 	var slmArg any
@@ -863,7 +901,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	for range 5 {
 		shortCode, err = generateShortCode()
 		if err != nil {
-			return 0, "", false, err
+			return 0, "", "", err
 		}
 		var sourceArg any
 		if source != "" {
@@ -881,18 +919,18 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			break
 		}
 		if !strings.Contains(err.Error(), "short_code") {
-			return 0, "", false, err
+			return 0, "", "", err
 		}
 	}
 	if err != nil {
-		return 0, "", false, err
+		return 0, "", "", err
 	}
 	id, _ := result.LastInsertId()
 	syncEventLocationGeohash(int(id))
 	if duplicateReviewCandidateID > 0 {
 		flagDuplicateReview(q, int(id), duplicateReviewCandidateID, title)
 	}
-	return int(id), shortCode, true, nil
+	return int(id), shortCode, outcomeNew, nil
 }
 
 // syncEventLocationGeohash updates location_geohash on an event from its location's coordinates.
@@ -909,11 +947,11 @@ func syncEventLocationGeohash(eventID int) {
 }
 
 // createEventFromRequest inserts or updates all events described by req.
-// Returns (events, allCreated, error); allCreated=false if any event was updated.
-func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, bool, error) {
+// Returns (events, counts, error) tallying how many events were new/updated/unchanged.
+func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, ImportCounts, error) {
 	syncEventTypeTags(&req.EventWriteRequest)
 	var createdEvents []Event
-	allCreated := true
+	var counts ImportCounts
 
 	type dateEntry struct {
 		description, startTime, endTime string
@@ -935,58 +973,56 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 	for _, entry := range entries {
 		startTime, err := parseTimeToUnix(entry.startTime)
 		if err != nil {
-			return nil, false, fmt.Errorf("start_time: %w", err)
+			return nil, counts, fmt.Errorf("start_time: %w", err)
 		}
 		endTime, err := parseTimeToUnix(entry.endTime)
 		if err != nil {
-			return nil, false, fmt.Errorf("end_time: %w", err)
+			return nil, counts, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail, createdByID)
+		id, shortCode, outcome, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail, createdByID)
 		if err != nil {
-			return nil, false, err
+			return nil, counts, err
 		}
-		if !created {
-			allCreated = false
-		}
+		counts.Add(outcome)
 
 		if len(req.Musicians) > 0 {
 			if _, err := q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 			if err := batchInsertPairs(q, "event_musicians", "event_id", "musician_id", id, req.Musicians); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 		}
 		if len(req.Instructors) > 0 {
 			if _, err := q.Exec("DELETE FROM event_instructors WHERE event_id = ?", id); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 			if err := batchInsertPairs(q, "event_instructors", "event_id", "instructor_id", id, req.Instructors); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 		}
 		if len(req.Dances) > 0 {
 			if _, err := q.Exec("DELETE FROM event_dances WHERE event_id = ?", id); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 			if err := batchInsertPairs(q, "event_dances", "event_id", "dance_id", id, req.Dances); err != nil {
-				return nil, false, err
+				return nil, counts, err
 			}
 		}
 		if err := syncEventTags(q, id, req.Tags); err != nil {
-			return nil, false, err
+			return nil, counts, err
 		}
 
 		event, err := fetchEventByID(q, id)
 		if err != nil {
-			return nil, false, err
+			return nil, counts, err
 		}
 		event.ShortCode = shortCode
 		createdEvents = append(createdEvents, event)
 	}
 
-	return createdEvents, allCreated, nil
+	return createdEvents, counts, nil
 }
 
 // userOrgSet returns the set of organization IDs the user is a member of.
@@ -1513,7 +1549,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var allCreatedEvents []Event
-	allCreated := true
+	var totalCounts ImportCounts
 	for i, req := range requests {
 		locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 		if err != nil {
@@ -1521,14 +1557,12 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		createdEvents, created, err := createEventFromRequest(tx, req, locationID, isPublished, &callerID)
+		createdEvents, counts, err := createEventFromRequest(tx, req, locationID, isPublished, &callerID)
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if !created {
-			allCreated = false
-		}
+		totalCounts.Merge(counts)
 		allCreatedEvents = append(allCreatedEvents, createdEvents...)
 		if i < len(vevents) {
 			for _, ev := range createdEvents {
@@ -1542,7 +1576,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if allCreated {
+	if totalCounts.AllNew() {
 		w.WriteHeader(http.StatusCreated)
 	} else {
 		w.WriteHeader(http.StatusOK)

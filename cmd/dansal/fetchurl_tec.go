@@ -196,12 +196,12 @@ func parseTECJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest,
 	return reqs, nil
 }
 
-func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
+func importFromTECJSON(src FetchSource) ([]Event, ImportCounts, error) {
 	var allTECEvents []tecEvent
 	for page := 1; ; page++ {
 		u, err := url.Parse(src.URL)
 		if err != nil {
-			return nil, false, fmt.Errorf("parse URL: %w", err)
+			return nil, ImportCounts{}, fmt.Errorf("parse URL: %w", err)
 		}
 		q := u.Query()
 		q.Set("page", fmt.Sprintf("%d", page))
@@ -210,13 +210,13 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 
 		resp, err := fetchClient.Get(u.String())
 		if err != nil {
-			return nil, false, fmt.Errorf("fetch page %d: %w", page, err)
+			return nil, ImportCounts{}, fmt.Errorf("fetch page %d: %w", page, err)
 		}
 		var payload tecResponse
 		decErr := json.NewDecoder(resp.Body).Decode(&payload)
 		resp.Body.Close()
 		if decErr != nil {
-			return nil, false, fmt.Errorf("parse page %d: %w", page, decErr)
+			return nil, ImportCounts{}, fmt.Errorf("parse page %d: %w", page, decErr)
 		}
 		allTECEvents = append(allTECEvents, payload.Events...)
 		if page >= payload.TotalPages || payload.TotalPages == 0 {
@@ -230,13 +230,13 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
 	defer tx.Rollback()
 
 	now := time.Now().UTC()
 	var allEvents []Event
-	allCreated := true
+	var counts ImportCounts
 
 	for _, te := range allTECEvents {
 		req, ok := tecEventToRequest(te, src, true)
@@ -246,13 +246,13 @@ func importFromTECJSON(src FetchSource) ([]Event, bool, error) {
 		if et, err2 := time.Parse(time.RFC3339, req.EndTime); err2 == nil && et.Before(now) {
 			continue
 		}
-		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &allCreated, &allEvents); err != nil {
-			return nil, false, err
+		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents); err != nil {
+			return nil, ImportCounts{}, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
-	return allEvents, allCreated, nil
+	return allEvents, counts, nil
 }

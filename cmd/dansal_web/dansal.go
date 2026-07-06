@@ -1286,20 +1286,32 @@ func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token stri
 	return nil
 }
 
-func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) (int, error) {
+type FetchRunResult struct {
+	Count     int
+	New       int
+	Updated   int
+	Unchanged int
+}
+
+func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) (FetchRunResult, error) {
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil)
 	if err != nil {
-		return 0, err
+		return FetchRunResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, apiErr(resp)
+		return FetchRunResult{}, apiErr(resp)
 	}
-	var events []json.RawMessage
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		return 0, nil
+	var body struct {
+		Events    []json.RawMessage `json:"events"`
+		New       int               `json:"new"`
+		Updated   int               `json:"updated"`
+		Unchanged int               `json:"unchanged"`
 	}
-	return len(events), nil
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return FetchRunResult{}, nil
+	}
+	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated, Unchanged: body.Unchanged}, nil
 }
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {

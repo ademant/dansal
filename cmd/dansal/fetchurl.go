@@ -702,11 +702,11 @@ func notifyAdminsFetchFailure(src FetchSource, failures int, fetchErr error) {
 }
 
 // importFromSource dispatches to the correct importer based on src.Type.
-func importFromSource(src FetchSource) ([]Event, bool, error) {
+func importFromSource(src FetchSource) ([]Event, ImportCounts, error) {
 	// Defense-in-depth: re-validate scheme even though the URL was validated at
 	// storage time, guarding against any future path that bypasses the handler check.
 	if u, err := url.Parse(src.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, false, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
+		return nil, ImportCounts{}, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
 	}
 	switch src.Type {
 	case "json":
@@ -724,7 +724,7 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 
 // importFromJSONSource auto-detects the JSON feed format from the URL and dispatches
 // to the appropriate internal importer.
-func importFromJSONSource(src FetchSource) ([]Event, bool, error) {
+func importFromJSONSource(src FetchSource) ([]Event, ImportCounts, error) {
 	if gancioJSONProbe(src.URL) {
 		return importFromGancioJSON(src)
 	}
@@ -837,9 +837,9 @@ func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableE
 
 // importSingleEvent applies template overrides, resolves the location, persists
 // the event, and applies the timetable. It appends created events to *allEvents
-// and clears *allCreated when the event already existed. The returned slice lets
-// callers do per-event post-processing (e.g. image attachment in the iCal importer).
-func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportData, mode string, allCreated *bool, allEvents *[]Event) ([]Event, error) {
+// and tallies the outcome into *counts. The returned slice lets callers do
+// per-event post-processing (e.g. image attachment in the iCal importer).
+func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportData, mode string, counts *ImportCounts, allEvents *[]Event) ([]Event, error) {
 	if td != nil {
 		applyTemplateToRequest(&req, *td, mode)
 	}
@@ -847,13 +847,11 @@ func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportDat
 	if err != nil {
 		return nil, err
 	}
-	evs, created, err := createEventFromRequest(tx, req, locationID, true, nil)
+	evs, evCounts, err := createEventFromRequest(tx, req, locationID, true, nil)
 	if err != nil {
 		return nil, err
 	}
-	if !created {
-		*allCreated = false
-	}
+	counts.Merge(evCounts)
 	if td != nil {
 		for _, ev := range evs {
 			applyTemplateTimetable(tx, ev.ID, td.Timetable, mode)
@@ -1044,20 +1042,20 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 }
 
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
-func importFromICalSource(src FetchSource) ([]Event, bool, error) {
+func importFromICalSource(src FetchSource) ([]Event, ImportCounts, error) {
 	resp, err := safeClient.Get(src.URL)
 	if err != nil {
-		return nil, false, fmt.Errorf("fetch: %w", err)
+		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, false, fmt.Errorf("remote returned %d", resp.StatusCode)
+		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
 	}
 
 	cal, err := ics.ParseCalendar(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
-		return nil, false, fmt.Errorf("parse iCal: %w", err)
+		return nil, ImportCounts{}, fmt.Errorf("parse iCal: %w", err)
 	}
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
@@ -1066,12 +1064,12 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
 	defer tx.Rollback()
 
 	var allEvents []Event
-	allCreated := true
+	var counts ImportCounts
 	now := time.Now().UTC()
 
 	for _, vevent := range cal.Events() {
@@ -1171,9 +1169,9 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				},
 			}
 
-			evs, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &allCreated, &allEvents)
+			evs, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
 			if err != nil {
-				return nil, false, err
+				return nil, ImportCounts{}, err
 			}
 			for _, ev := range evs {
 				attachImagesFromICalEvent(ev.ID, vevent)
@@ -1182,9 +1180,9 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, false, err
+		return nil, ImportCounts{}, err
 	}
-	return allEvents, allCreated, nil
+	return allEvents, counts, nil
 }
 
 // POST /api/v1/fetchurl
@@ -1256,7 +1254,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData}
-	allEvents, allCreated, err := importFromSource(src)
+	allEvents, counts, err := importFromSource(src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
@@ -1267,7 +1265,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
-	if allCreated && len(allEvents) > 0 {
+	if counts.AllNew() && len(allEvents) > 0 {
 		w.WriteHeader(http.StatusCreated)
 	}
 	json.NewEncoder(w).Encode(allEvents)
@@ -1403,14 +1401,14 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(i int, src FetchSource) {
 			defer wg.Done()
-			events, allCreated, err := importFromSource(src)
+			events, counts, err := importFromSource(src)
 			if err != nil {
 				recordFetchResult(src, 0, err)
 				results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Error: err.Error()}
 				return
 			}
 			recordFetchResult(src, len(events), nil)
-			results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Events: len(events), AllCreated: allCreated}
+			results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Events: len(events), AllCreated: counts.AllNew()}
 		}(i, src)
 	}
 	wg.Wait()
@@ -1475,7 +1473,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allEvents, allCreated, err := importFromSource(src)
+	allEvents, counts, err := importFromSource(src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
@@ -1486,8 +1484,13 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
-	if allCreated && len(allEvents) > 0 {
+	if counts.AllNew() && len(allEvents) > 0 {
 		w.WriteHeader(http.StatusCreated)
 	}
-	json.NewEncoder(w).Encode(allEvents)
+	json.NewEncoder(w).Encode(struct {
+		Events    []Event `json:"events"`
+		New       int     `json:"new"`
+		Updated   int     `json:"updated"`
+		Unchanged int     `json:"unchanged"`
+	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged})
 }

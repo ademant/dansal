@@ -93,7 +93,10 @@ document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
       .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
       .then(function(res) {
         if (res.ok) {
-          showToast(res.data.count + ' {{.Strings.T "fetch_run_result"}}', true);
+          showToast(res.data.count + ' {{.Strings.T "fetch_run_result"}}: ' +
+            res.data.updated + ' {{.Strings.T "fetch_run_updated"}}, ' +
+            res.data.new + ' {{.Strings.T "fetch_run_new"}}, ' +
+            res.data.unchanged + ' {{.Strings.T "fetch_run_unchanged"}}', true);
         } else {
           showToast(res.data.error || '{{.Strings.T "fetch_run_error"}}', false);
         }

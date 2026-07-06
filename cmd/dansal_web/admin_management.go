@@ -148,6 +148,26 @@ type AdminInfoData struct {
 	LoadAvg      string
 }
 
+type AdminStatsData struct {
+	Info DansalInfo
+}
+
+func adminStatsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		info, _ := client.GetDansalInfo(r.Context())
+		renderTemplate(w, tmpls.adminStats, tmplData(r, cfg, i18n, i18n.T(r, "admin_stats_title"), AdminStatsData{Info: info}))
+	}
+}
+
 func adminManagementHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

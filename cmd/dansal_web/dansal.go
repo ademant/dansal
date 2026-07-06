@@ -124,12 +124,13 @@ func (c *DansalClient) invalidateEvents() {
 	c.mu.Unlock()
 }
 
-// OrgStatRecord is returned by GetOrgStats: per-org event/location/source counts.
+// OrgStatRecord is returned by GetOrgStats: per-org event/location/source/board-entry counts.
 type OrgStatRecord struct {
-	ID            int `json:"id"`
-	EventCount    int `json:"event_count"`
-	LocationCount int `json:"location_count"`
-	SourceCount   int `json:"source_count"`
+	ID              int `json:"id"`
+	EventCount      int `json:"event_count"`
+	LocationCount   int `json:"location_count"`
+	SourceCount     int `json:"source_count"`
+	BoardEntryCount int `json:"board_entry_count"`
 }
 
 // GetOrgStats returns a map of org ID → counts, fetched via a single aggregation query.
@@ -2618,6 +2619,8 @@ type DansalInfo struct {
 	UpcomingEvents           int    `json:"upcoming_events"`
 	TotalUsers               int    `json:"total_users"`
 	BoardEntries             int    `json:"board_entries"`
+	TotalOrganizations       int    `json:"total_organizations"`
+	TotalLocations           int    `json:"total_locations"`
 	DBSizeBytes              int64  `json:"db_size_bytes"`
 	ImagesSizeBytes          int64  `json:"images_size_bytes"`
 	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`

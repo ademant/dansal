@@ -33,8 +33,14 @@
   <summary>{{$.Strings.T "dashboard_your_orgs"}} ({{len .UserOrgs}})</summary>
   <div class="dash-orgs-list">
     {{range .UserOrgs}}
+    {{$os := index $.Data.OrgStats .ID}}
     <div class="dash-org-row">
       <a href="/org/{{.ActorName}}" class="dash-org-name">{{.Name}}</a>
+      <div class="dash-org-mini-stats">
+        <span title="{{$.Strings.T "admin_stats_events"}}">📅 {{$os.EventCount}}</span>
+        <span title="{{$.Strings.T "admin_stats_locations"}}">📍 {{$os.LocationCount}}</span>
+        <span title="{{$.Strings.T "nav_board"}}">📋 {{$os.BoardEntryCount}}</span>
+      </div>
       <div class="dash-org-actions">
         <a href="/admin/events/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
         <a href="/admin/series/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
@@ -97,6 +103,7 @@
 .dash-org-row{display:flex;align-items:center;gap:1rem;padding:.4rem 0;border-bottom:1px solid var(--border-low,#eee)}
 .dash-org-row:last-child{border-bottom:none}
 .dash-org-name{font-weight:500;flex:1}
+.dash-org-mini-stats{display:flex;gap:.8rem;font-size:.85rem;color:var(--fg-2,#666);flex-shrink:0}
 .dash-org-actions{display:flex;gap:.5rem;flex-shrink:0}
 @media(max-width:480px){.dash-org-row{flex-direction:column;align-items:flex-start}}
 </style>

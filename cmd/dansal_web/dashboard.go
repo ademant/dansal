@@ -13,6 +13,7 @@ type DashboardData struct {
 	Stats    MeStats
 	UserOrgs []Organization
 	OrgMap   map[int]string
+	OrgStats map[int]OrgStatRecord
 	Events   []Event
 }
 
@@ -29,11 +30,12 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			userOrgIDs []int
 			allOrgs    []Organization
 			stats      MeStats
+			orgStats   map[int]OrgStatRecord
 			mu         sync.Mutex
 			wg         sync.WaitGroup
 		)
 
-		wg.Add(3)
+		wg.Add(4)
 		go func() {
 			defer wg.Done()
 			userOrgIDs, _ = client.GetUserOrganizationIDs(ctx, su.ID, token)
@@ -45,6 +47,10 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		go func() {
 			defer wg.Done()
 			stats, _ = client.GetMeStats(ctx, token)
+		}()
+		go func() {
+			defer wg.Done()
+			orgStats, _ = client.GetOrgStats(ctx)
 		}()
 		wg.Wait()
 
@@ -92,6 +98,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			Stats:    stats,
 			UserOrgs: userOrgs,
 			OrgMap:   orgMap,
+			OrgStats: orgStats,
 			Events:   events,
 		}))
 	}

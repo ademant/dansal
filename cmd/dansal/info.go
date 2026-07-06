@@ -18,6 +18,8 @@ type ServiceInfo struct {
 	UpcomingEvents           int    `json:"upcoming_events"`
 	TotalUsers               int    `json:"total_users"`
 	BoardEntries             int    `json:"board_entries"`
+	TotalOrganizations       int    `json:"total_organizations"`
+	TotalLocations           int    `json:"total_locations"`
 	DBSizeBytes              int64  `json:"db_size_bytes"`
 	ImagesSizeBytes          int64  `json:"images_size_bytes"`
 	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`
@@ -41,9 +43,11 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var totalUsers, boardEntries int
+	var totalUsers, boardEntries, totalOrgs, totalLocations int
 	db.QueryRow(`SELECT COUNT(*) FROM users WHERE disabled=0 AND email_verified=1`).Scan(&totalUsers)
 	db.QueryRow(`SELECT COUNT(*) FROM contact_posts WHERE email_verified=1`).Scan(&boardEntries)
+	db.QueryRow(`SELECT COUNT(*) FROM organizations`).Scan(&totalOrgs)
+	db.QueryRow(`SELECT COUNT(*) FROM locations`).Scan(&totalLocations)
 
 	var dbSize int64
 	if fi, err := os.Stat(config.Server.DBPath); err == nil {
@@ -68,6 +72,8 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 		UpcomingEvents:           upcoming,
 		TotalUsers:               totalUsers,
 		BoardEntries:             boardEntries,
+		TotalOrganizations:       totalOrgs,
+		TotalLocations:           totalLocations,
 		DBSizeBytes:              dbSize,
 		ImagesSizeBytes:          imagesSize,
 		SelfRegistrationEnabled:  selfRegEnabled(),

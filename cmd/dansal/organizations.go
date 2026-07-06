@@ -138,21 +138,23 @@ func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, e
 }
 
 type orgStatRow struct {
-	ID            int `json:"id"`
-	EventCount    int `json:"event_count"`
-	LocationCount int `json:"location_count"`
-	SourceCount   int `json:"source_count"`
+	ID              int `json:"id"`
+	EventCount      int `json:"event_count"`
+	LocationCount   int `json:"location_count"`
+	SourceCount     int `json:"source_count"`
+	BoardEntryCount int `json:"board_entry_count"`
 }
 
 // GET /api/v1/organizations/stats
-// Returns per-org event/location/source counts in a single aggregation query.
+// Returns per-org event/location/source/board-entry counts in a single aggregation query.
 func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query(`
 		SELECT o.id,
 			(SELECT COUNT(*) FROM events WHERE organization_id = o.id),
 			(SELECT COUNT(*) FROM location_organizations WHERE organization_id = o.id),
-			(SELECT COUNT(*) FROM fetch_sources WHERE organization_id = o.id)
+			(SELECT COUNT(*) FROM fetch_sources WHERE organization_id = o.id),
+			(SELECT COUNT(*) FROM contact_posts cp JOIN events e ON e.id = cp.event_id WHERE e.organization_id = o.id)
 		FROM organizations o`)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -162,7 +164,7 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 	result := []orgStatRow{}
 	for rows.Next() {
 		var s orgStatRow
-		if err := rows.Scan(&s.ID, &s.EventCount, &s.LocationCount, &s.SourceCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.EventCount, &s.LocationCount, &s.SourceCount, &s.BoardEntryCount); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -1,3 +1,7 @@
+---
+nav_order: 8
+---
+
 # WordPress-Plugin „wp-dansal" nutzen
 
 Wer bereits eine WordPress-Seite betreibt, kann Veranstaltungen und Veranstaltungsorte direkt aus dem gewohnten WordPress-Admin heraus pflegen, statt die dansal-Weboberfläche zu verwenden. Das Plugin **wp-dansal** speichert dabei nichts selbst – jede Änderung wird sofort mit einer dansal-Instanz synchronisiert, die als eigentlicher Datenspeicher dient.

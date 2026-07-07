@@ -33,9 +33,52 @@ type Config struct {
 }
 
 type Page struct {
-	Slug  string
-	Title string
-	Path  string
+	Slug     string
+	Title    string
+	Path     string
+	NavOrder int
+	HasOrder bool
+}
+
+// frontMatter holds the optional metadata block at the top of a wiki page,
+// e.g.:
+//
+//	---
+//	nav_order: 2
+//	title: Custom title
+//	---
+//
+// It's stripped before the body is handed to goldmark, so it never renders.
+// GitHub's wiki viewer doesn't understand this block, so pages using it
+// still need a wiki/_Sidebar.md for correct ordering there.
+type frontMatter struct {
+	NavOrder int    `yaml:"nav_order"`
+	Title    string `yaml:"title"`
+}
+
+// splitFrontMatter parses a leading "---\n...\n---\n" YAML block, returning
+// the parsed metadata and the remaining body. If data has no front matter,
+// it returns the zero frontMatter and data unchanged.
+func splitFrontMatter(data []byte) (frontMatter, []byte) {
+	const delim = "---"
+	text := string(data)
+	if !strings.HasPrefix(text, delim+"\n") {
+		return frontMatter{}, data
+	}
+	rest := text[len(delim)+1:]
+	end := strings.Index(rest, "\n"+delim)
+	if end == -1 {
+		return frontMatter{}, data
+	}
+	block := rest[:end]
+	body := rest[end+len("\n"+delim):]
+	body = strings.TrimPrefix(body, "\n")
+
+	var fm frontMatter
+	if err := yaml.Unmarshal([]byte(block), &fm); err != nil {
+		return frontMatter{}, data
+	}
+	return fm, []byte(body)
 }
 
 type App struct {
@@ -138,13 +181,21 @@ func newApp(cfg Config) (*App, error) {
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
 			continue
 		}
+		if strings.HasPrefix(entry.Name(), "_") {
+			continue // e.g. _Sidebar.md — GitHub-wiki-only, not a real page
+		}
 		path := filepath.Join(cfg.ContentDir, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
+		fm, body := splitFrontMatter(data)
 		slug := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		page := Page{Slug: slug, Title: firstHeading(data, slug), Path: path}
+		title := fm.Title
+		if title == "" {
+			title = firstHeading(body, slug)
+		}
+		page := Page{Slug: slug, Title: title, Path: path, NavOrder: fm.NavOrder, HasOrder: fm.NavOrder != 0}
 		pages[slug] = page
 	}
 
@@ -158,6 +209,12 @@ func newApp(cfg Config) (*App, error) {
 		}
 		if nav[j].Slug == "README" {
 			return false
+		}
+		if nav[i].HasOrder != nav[j].HasOrder {
+			return nav[i].HasOrder
+		}
+		if nav[i].HasOrder {
+			return nav[i].NavOrder < nav[j].NavOrder
 		}
 		return nav[i].Title < nav[j].Title
 	})
@@ -223,6 +280,7 @@ func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read page", http.StatusInternalServerError)
 		return
 	}
+	_, data = splitFrontMatter(data)
 
 	var rendered bytes.Buffer
 	if err := goldmark.Convert(data, &rendered); err != nil {

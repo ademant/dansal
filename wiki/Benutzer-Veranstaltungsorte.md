@@ -1,3 +1,7 @@
+---
+nav_order: 5
+---
+
 # Veranstaltungsorte verwalten
 
 ## 🏢 Veranstaltungsort anlegen

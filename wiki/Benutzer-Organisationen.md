@@ -1,3 +1,7 @@
+---
+nav_order: 6
+---
+
 # Organisationen verwalten
 
 ## 🎭 Organisation anlegen

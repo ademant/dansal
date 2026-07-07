@@ -1,3 +1,7 @@
+---
+nav_order: 2
+---
+
 # Benutzer-Guide – Veranstaltungen & Organisationen verwalten
 
 Diese Sektion richtet sich an Veranstalter, Publisher und reguläre Benutzer, die Inhalte auf dansal anlegen und verwalten.

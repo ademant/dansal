@@ -1,3 +1,7 @@
+---
+nav_order: 9
+---
+
 # Administration – Systemverwaltung
 
 Diese Seite richtet sich an Systemadministratoren, die eine dansal-Instanz installieren, konfigurieren und betreiben.

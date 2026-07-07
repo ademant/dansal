@@ -1,3 +1,7 @@
+---
+nav_order: 1
+---
+
 # Besucher-Guide – Tanzveranstaltungen finden
 
 Willkommen bei dansal! Dieser Leitfaden hilft dir, Tanzveranstaltungen zu finden und mit der Community in Kontakt zu treten.

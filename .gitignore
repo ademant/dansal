@@ -4,6 +4,7 @@
 /web
 /dansal_webmin
 /dansal_admin
+/dansal_doc
 cmd/dansal/dansal
 cmd/dansal_web/dansal_web
 *.deb

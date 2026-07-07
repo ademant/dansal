@@ -1,3 +1,7 @@
+---
+nav_order: 4
+---
+
 # Veranstaltungen erstellen & verwalten
 
 ## ✨ Grundlegende Veranstaltung anlegen

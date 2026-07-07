@@ -51,7 +51,7 @@
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
   <tr data-town="{{.Town}}" data-org="{{$orgName}}">
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}"><a href="/location/{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a></td>
+    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}"><a href="/admin/location/{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a></td>
     <td>{{.Town}}</td>
     <td>{{$orgName}}</td>
     <td class="ind-cell">

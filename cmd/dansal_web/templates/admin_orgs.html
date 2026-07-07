@@ -22,7 +22,7 @@
   <tbody>
   {{range .Stats}}
   <tr>
-    <td><a href="/org/{{.Slug}}">{{.Org.Name}}</a></td>
+    <td><a href="/admin/organization/{{.Slug}}">{{.Org.Name}}</a></td>
     <td class="muted">{{.MainTown}}</td>
     <td class="desc-cell md-content" title="{{.Org.Description}}">{{markdownHTML .Org.Description}}</td>
     <td class="col-num">{{.EventCount}}</td>

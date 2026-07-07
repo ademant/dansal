@@ -18,7 +18,7 @@
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
   {{if $.User}}
-  <a href="/admin/organization/{{.Org.Slug}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
+  <a href="/admin/organization/{{.Org.ActorName}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
   {{if .Org.FetchSourceID}}
   <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>

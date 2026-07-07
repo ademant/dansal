@@ -10,8 +10,8 @@
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 
 <div class="loc-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   {{if not .ReadOnly}}<button type="submit" id="save-btn" class="btn-primary" form="loc-edit-form">{{$.Strings.T "admin_save"}}</button>{{end}}
-  <a href="{{if .From}}{{.From}}{{else if .ReturnURL}}{{.ReturnURL}}{{else}}/admin/locations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   {{if .Location.ID}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
     <input type="hidden" name="return" value="{{.ReturnURL}}">
@@ -176,8 +176,24 @@
   </div><!-- loc-main -->
   </div><!-- loc-edit-layout -->
 
-  <label for="notes_md">{{$.Strings.T "loc_notes"}}</label>
+  <label for="notes_md">{{$.Strings.T "loc_notes"}} <span class="field-hint">{{$.Strings.T "md_label_hint"}}</span></label>
   <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
+  <div id="md-paste-hint" class="md-paste-hint" hidden>
+    <span>📋 {{$.Strings.T "paste_md_converted"}}</span>
+    <button type="button" onclick="this.parentElement.hidden=true" aria-label="×">×</button>
+  </div>
+  <details class="md-help-details">
+    <summary>{{$.Strings.T "md_help_title"}}</summary>
+    <ul>
+      <li><code>**{{$.Strings.T "md_help_bold"}}**</code> → <strong>{{$.Strings.T "md_help_bold"}}</strong></li>
+      <li><code>*{{$.Strings.T "md_help_italic"}}*</code> → <em>{{$.Strings.T "md_help_italic"}}</em></li>
+      <li><code># {{$.Strings.T "md_help_heading"}}</code></li>
+      <li><code>- {{$.Strings.T "md_help_list_item"}}</code></li>
+      <li><code>1. {{$.Strings.T "md_help_list_item"}}</code></li>
+      <li><code>[{{$.Strings.T "md_help_link"}}](https://...)</code></li>
+      <li><code>&gt; {{$.Strings.T "md_help_quote"}}</code></li>
+    </ul>
+  </details>
 
   {{if .Location.Aliases}}
   <div class="aliases-display">
@@ -321,6 +337,14 @@
 .btn-primary-sm:hover{background:#0d4a80}
 .btn-del{background:#b00020;color:#fff}
 .btn-del:hover{background:#800016}
+.md-paste-hint{display:flex;align-items:center;justify-content:space-between;background:#e8f4fd;border:1px solid #b3d7f5;border-radius:4px;padding:.35rem .6rem;font-size:.82rem;color:#1a5f8a;margin-top:.25rem}
+.md-paste-hint button{background:none;border:none;color:#1a5f8a;cursor:pointer;padding:0 .25rem;font-size:1rem;line-height:1;flex-shrink:0}
+.md-paste-hint button:hover{color:#0d3f6a}
+.md-help-details{margin-top:.35rem;background:#f7f8fb;border:1px solid #ddd;border-radius:6px;padding:.5rem .75rem}
+.md-help-details summary{font-weight:600;font-size:.82rem;cursor:pointer;color:#1a6eb5}
+.md-help-details ul{margin:.4rem 0 0;padding-left:1.1rem;font-size:.8rem;color:#555}
+.md-help-details li{margin-bottom:.2rem}
+.md-help-details code{background:#eceef3;padding:0 .2rem;border-radius:3px}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
@@ -665,6 +689,73 @@
       if (active) { idInp.value = active.dataset.id; form.submit(); }
     }
   });
+})();
+function _bindMdPaste(taId,hintId){
+  var ta=document.getElementById(taId),hint=document.getElementById(hintId);
+  if(!ta||!hint) return;
+  function hasRich(h){return /<(b|strong|i|em|h[1-6]|ul|ol|blockquote|code|pre|hr)[\s>\/]/i.test(h)||/<a\s/i.test(h);}
+  function n2m(n){
+    if(n.nodeType===3) return n.textContent;
+    if(n.nodeType!==1) return '';
+    var tag=n.tagName.toLowerCase(),inner=Array.from(n.childNodes).map(n2m).join('');
+    switch(tag){
+      case 'b':case 'strong':{var t=inner.trim();return t?'**'+t+'**':'';}
+      case 'i':case 'em':{var t=inner.trim();return t?'*'+t+'*':'';}
+      case 'h1':return '\n\n# '+inner.trim()+'\n\n';
+      case 'h2':return '\n\n## '+inner.trim()+'\n\n';
+      case 'h3':return '\n\n### '+inner.trim()+'\n\n';
+      case 'h4':case 'h5':case 'h6':return '\n\n#### '+inner.trim()+'\n\n';
+      case 'p':return '\n\n'+inner.trim()+'\n\n';
+      case 'br':return '\n';
+      case 'ul':case 'ol':return '\n'+inner+'\n';
+      case 'li':{var ol=n.parentElement&&n.parentElement.tagName.toLowerCase()==='ol';if(ol){var idx=Array.from(n.parentElement.children).indexOf(n)+1;return idx+'. '+inner.trim()+'\n';}return '- '+inner.trim()+'\n';}
+      case 'a':{var href=n.getAttribute('href')||'',txt=inner.trim();return href&&href!==txt?'['+txt+']('+href+')':txt;}
+      case 'blockquote':return '\n\n'+inner.trim().split('\n').map(function(l){return '> '+l;}).join('\n')+'\n\n';
+      case 'code':return '`'+inner+'`';
+      case 'pre':return '\n\n```\n'+n.textContent.trim()+'\n```\n\n';
+      case 'hr':return '\n\n---\n\n';
+      case 'head':case 'style':case 'script':case 'meta':return '';
+      default:return inner;
+    }
+  }
+  function toMd(html){var d=new DOMParser().parseFromString(html,'text/html');return n2m(d.body).replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();}
+  var timer;
+  ta.addEventListener('paste',function(e){
+    var html=e.clipboardData&&e.clipboardData.getData('text/html');
+    if(!html||!hasRich(html)) return;
+    e.preventDefault();
+    var md=toMd(html),s=ta.selectionStart,end=ta.selectionEnd,v=ta.value;
+    ta.value=v.slice(0,s)+md+v.slice(end);
+    ta.selectionStart=ta.selectionEnd=s+md.length;
+    hint.hidden=false;
+    clearTimeout(timer);
+    timer=setTimeout(function(){hint.hidden=true;},5000);
+    if(typeof _markDirty==='function') _markDirty();
+  });
+}
+_bindMdPaste('notes_md','md-paste-hint');
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}
+  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else if .Data.ReturnURL}}{{.Data.ReturnURL | js}}{{else}}/admin/locations{{end}}';}
+}
+(function(){
+  var form=document.getElementById('loc-edit-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
 })();
 </script>
 {{end}}

@@ -26,6 +26,12 @@
     <div class="dash-stat-n">{{.Stats.EventsLastEdited}}</div>
     <div class="dash-stat-l">{{$.Strings.T "dashboard_stats_edited"}}</div>
   </div>
+  <div class="dash-quicklinks">
+    <a href="/admin/organizations" class="btn-sm">{{$.Strings.T "nav_orgs"}}</a>
+    <a href="/admin/locations" class="btn-sm">{{$.Strings.T "nav_admin_locations"}}</a>
+    <a href="/admin/musicians" class="btn-sm">{{$.Strings.T "nav_musicians"}}</a>
+    <a href="/admin/instructors" class="btn-sm">{{$.Strings.T "nav_instructors"}}</a>
+  </div>
 </div>
 
 {{if .UserOrgs}}
@@ -93,10 +99,11 @@
 .dash-hint-info{background:var(--badge-info-bg,#d1ecf1);color:var(--badge-info-fg,#0c5460)}
 .dash-hint-danger{background:#fde2e1;color:#c0392b}
 .dash-hint:hover{filter:brightness(0.96)}
-.dash-stats{display:flex;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap}
+.dash-stats{display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap}
 .dash-stat{background:var(--card-bg,#fff);border:1px solid var(--border-mid,#ddd);border-radius:8px;padding:1rem 1.5rem;min-width:140px;text-align:center}
 .dash-stat-n{font-size:2rem;font-weight:700;line-height:1.1;color:var(--link,#1a6eb5)}
 .dash-stat-l{font-size:.85rem;color:var(--fg-2,#666);margin-top:.2rem}
+.dash-quicklinks{display:flex;flex-wrap:wrap;gap:.5rem;margin-left:auto}
 .dash-orgs{margin-bottom:1.5rem}
 .dash-orgs summary{cursor:pointer;font-size:1rem;font-weight:600;padding:.4rem 0}
 .dash-orgs-list{padding:.5rem 0}

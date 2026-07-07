@@ -2332,7 +2332,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 		includePast := r.URL.Query().Get("include_past") == "1"
 		params := url.Values{}
-		params.Set("org_id", strconv.Itoa(org.ID))
+		params.Set("organization_id", strconv.Itoa(org.ID))
 		params.Set("limit", "1000")
 		if includePast {
 			params.Set("include_past", "true")

@@ -331,6 +331,7 @@ func main() {
 		r.HandleFunc("POST /admin/fetchurls/{id}/delete", adminRateLimit(adminFetchurlDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/fetchurls/{id}/run", adminRateLimit(adminFetchurlRunHandler(cfg, client)))
 
+		r.HandleFunc("POST /admin/api/musician/quick-create", adminRateLimit(adminMusicianQuickCreateHandler(client)))
 		r.HandleFunc("GET /admin/musicians", adminMusiciansHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/musicians/new", adminMusicianNewPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /admin/musicians/new", adminRateLimit(adminMusicianCreateHandler(cfg, tmpls, client, i18n)))

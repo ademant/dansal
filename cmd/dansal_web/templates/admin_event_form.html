@@ -456,6 +456,10 @@
     </div>
     <script>
     var allMusicians = [{{range .Musicians}}{id:{{.ID}},name:{{jsStr .Bandname}}},{{end}}];
+    function _musNorm(s){
+      return s.toLowerCase().trim().replace(/&/g,' and ').replace(/\s+/g,' ')
+        .normalize('NFD').replace(/[̀-ͯ]/g,'');
+    }
     function selectedIDs(){
       return Array.from(document.querySelectorAll('#selected-musicians input[name=musician_ids]')).map(function(i){return parseInt(i.value,10);});
     }
@@ -467,16 +471,36 @@
       var results=allMusicians.filter(function(m){
         return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
       }).slice(0,8);
-      if(results.length===0){list.hidden=true;return;}
-      list.innerHTML=results.map(function(m){
+      var html=results.map(function(m){
         var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
       }).join('');
-      list.querySelectorAll('.ac-item').forEach(function(item){
+      if(q.length>=3){
+        var normQ=_musNorm(q);
+        var hasMatch=allMusicians.some(function(m){return _musNorm(m.name)===normQ;});
+        if(!hasMatch){
+          var escQ=q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          html+='<div class="ac-item ac-create" data-name="'+escQ+'" tabindex="0">➕ '+escQ+'</div>';
+        }
+      }
+      if(!html){list.hidden=true;return;}
+      list.innerHTML=html;
+      list.querySelectorAll('.ac-item:not(.ac-create)').forEach(function(item){
         item.addEventListener('click',function(){addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
         item.addEventListener('keydown',function(e){if(e.key==='Enter')addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
       });
+      list.querySelectorAll('.ac-create').forEach(function(item){
+        item.addEventListener('click',function(){createAndAddMusician(this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')createAndAddMusician(this.dataset.name);});
+      });
       list.hidden=false;
+    }
+    function createAndAddMusician(name){
+      document.getElementById('ac-list').hidden=true;
+      fetch('/admin/api/musician/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bandname:name})})
+        .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+        .then(function(m){allMusicians.push({id:m.id,name:m.bandname});if(typeof _ttMusicians!=='undefined')_ttMusicians.push({id:m.id,name:m.bandname});addMusician(m.id,m.bandname);})
+        .catch(function(){alert('Could not create musician');});
     }
     function addMusician(id,name){
       var wrap=document.getElementById('selected-musicians');
@@ -808,6 +832,8 @@
 .ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
 .ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
 .ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
+.ac-create{color:#1a6eb5;font-style:italic}
+.tt-mus-create{color:#1a6eb5;font-style:italic}
 #selected-musicians{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;min-height:1rem}
 .musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
 .btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
@@ -1124,7 +1150,6 @@ function _ttMusInput(inp){
   if(q.length<3){suggest.hidden=true;suggest.innerHTML='';return;}
   var ql=q.toLowerCase();
   var hits=_ttMusicians.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
-  if(!hits.length){suggest.hidden=true;suggest.innerHTML='';return;}
   suggest.innerHTML='';
   hits.forEach(function(m){
     var li=document.createElement('li');
@@ -1139,7 +1164,37 @@ function _ttMusInput(inp){
     });
     suggest.appendChild(li);
   });
+  var normQ=_musNorm(q);
+  var hasMatch=_ttMusicians.some(function(m){return _musNorm(m.name)===normQ;});
+  if(!hasMatch){
+    var li=document.createElement('li');
+    li.className='tt-mus-create';
+    li.textContent='➕ '+q;
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      _ttMusCreate(inp,q);
+    });
+    suggest.appendChild(li);
+  }
+  if(!suggest.children.length){suggest.hidden=true;return;}
   suggest.hidden=false;
+}
+function _ttMusCreate(inp,name){
+  var wrap=inp.closest('.tt-mus-wrap');
+  var idInp=wrap.querySelector('input[name="tt_musician_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_musician_name"]');
+  var suggest=wrap.querySelector('.tt-mus-suggest');
+  suggest.hidden=true;suggest.innerHTML='';
+  fetch('/admin/api/musician/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bandname:name})})
+    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(m){
+      _ttMusicians.push({id:m.id,name:m.bandname});
+      allMusicians.push({id:m.id,name:m.bandname});
+      inp.value=m.bandname;
+      idInp.value=m.id;
+      nameInp.value='';
+    })
+    .catch(function(){alert('Could not create musician');});
 }
 function addTTRow(){
   var tbody=document.getElementById('tt-body');

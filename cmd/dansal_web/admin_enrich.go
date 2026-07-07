@@ -74,9 +74,12 @@ func translateCity(city string, m map[string]string) string {
 
 // ── normalisation ─────────────────────────────────────────────────────────────
 
-// normalizeForMatch strips common European accents and lowercases s.
+// normalizeForMatch strips common European accents, lowercases s, and
+// equates "&" with "and" so enrichment matching handles both spellings.
 func normalizeForMatch(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, "&", " and ")
+	s = strings.Join(strings.Fields(s), " ") // collapse extra spaces
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {

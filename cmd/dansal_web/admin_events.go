@@ -2478,3 +2478,37 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}))
 	}
 }
+
+// POST /admin/api/musician/quick-create — inline musician creation from event form.
+// Normalises the requested bandname, returns an existing musician on a name match
+// (using the same normalizeForMatch logic as enrichment), or creates a new one.
+func adminMusicianQuickCreateHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var req struct {
+			Bandname string `json:"bandname"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Bandname) == "" {
+			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(req.Bandname)
+		normName := normalizeForMatch(name)
+
+		musicians, _ := client.GetMusicians(r.Context())
+		for _, m := range musicians {
+			if normalizeForMatch(m.Bandname) == normName {
+				json.NewEncoder(w).Encode(map[string]any{"id": m.ID, "bandname": m.Bandname, "existing": true})
+				return
+			}
+		}
+
+		m, err := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r))
+		if err != nil {
+			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": m.ID, "bandname": m.Bandname, "existing": false})
+	}
+}

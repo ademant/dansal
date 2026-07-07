@@ -95,7 +95,7 @@ func getDansalInfo(ctx context.Context, dansalURL string) (*DansalInfo, error) {
 func monitoredUnits(instance string) []string {
 	if instance == "" {
 		return []string{
-			"dansal", "dansal-web", "dansal-webmin",
+			"dansal", "dansal-web", "dansal-webmin", "dansal-doc",
 			"dansal-fetch.timer", "dansal-backup.timer",
 			"dansal-vacuum.timer", "dansal-prune-images.timer",
 			"dansal-mailcheck.timer",
@@ -106,6 +106,7 @@ func monitoredUnits(instance string) []string {
 		"dansal" + sfx,
 		"dansal-web" + sfx,
 		"dansal-webmin" + sfx,
+		"dansal-doc" + sfx,
 		"dansal-fetch" + sfx + ".timer",
 		"dansal-backup" + sfx + ".timer",
 		"dansal-vacuum" + sfx + ".timer",

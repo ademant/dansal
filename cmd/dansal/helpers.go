@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 )
 
@@ -16,6 +17,31 @@ func callerFromRequest(r *http.Request) (id int, role string) {
 	id, _ = strconv.Atoi(r.Header.Get("X-User-ID"))
 	role = r.Header.Get("X-User-Role")
 	return
+}
+
+// publicBaseURL returns the site's public base URL for building links from
+// background code with no *http.Request in scope (e.g. notification
+// goroutines). Falls back to localhost when unconfigured.
+func publicBaseURL() string {
+	if base := config.Server.BaseURL; base != "" {
+		return base
+	}
+	return fmt.Sprintf("http://localhost%s", getPort())
+}
+
+// adminReviewLink creates a one-time direct-login link for adminID that lands
+// on nextPath after login, so a time-sensitive admin notification (new
+// registration, new event suggestion) can be actioned in one click. Falls
+// back to plain text if token creation fails. The expiry is shown as a
+// time-only "valid till HH:MM" hint, since the window is always a few
+// minutes (magic_login_expiry_secs) — a date would be meaningless.
+func adminReviewLink(adminID int, nextPath string) string {
+	token, expiresAt, err := createMagicToken(adminID)
+	if err != nil {
+		return "review in the admin panel"
+	}
+	link := publicBaseURL() + "/login/magic/" + token + "?next=" + url.QueryEscape(nextPath)
+	return fmt.Sprintf("%s (valid till %s)", link, expiresAt.Local().Format("15:04"))
 }
 
 // notifyUser sends msg to the user via Telegram when chatID is set, or by

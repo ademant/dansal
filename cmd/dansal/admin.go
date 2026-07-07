@@ -393,11 +393,7 @@ func adminMagicLink(req adminRequest) adminResponse {
 	if err != nil {
 		return adminResponse{OK: false, Error: "failed to create token: " + err.Error()}
 	}
-	base := config.Server.BaseURL
-	if base == "" {
-		base = fmt.Sprintf("http://localhost%s", getPort())
-	}
-	url := base + "/login/magic/" + token
+	url := publicBaseURL() + "/login/magic/" + token
 	return adminResponse{OK: true, Data: map[string]string{"url": url}}
 }
 

@@ -772,18 +772,17 @@ func notifyApprovers(pendingID int) {
 		db.QueryRow("SELECT name FROM organizations WHERE id=?", orgID.Int64).Scan(&oName)
 		msg += fmt.Sprintf(" (join org: %q)", oName)
 	}
-	msg += " — review in the admin panel."
-
-	// Always notify admins.
+	// Always notify admins, each with their own one-time direct-login link.
 	rows, err := db.Query(
-		"SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role='admin'",
+		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role='admin'",
 	)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
+			var adminID int
 			var email, chatID string
-			rows.Scan(&email, &chatID)
-			notifyUser(chatID, email, "New registration request", msg)
+			rows.Scan(&adminID, &email, &chatID)
+			notifyUser(chatID, email, "New registration request", msg+" — "+adminReviewLink(adminID, "/admin/registrations"))
 		}
 	}
 

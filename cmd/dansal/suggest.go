@@ -370,22 +370,23 @@ func notifyAdminsDuplicateReview(title string) {
 
 // notifyAdminsSuggestion sends a notification to admin users via Telegram and/or email.
 func notifyAdminsSuggestion(title, startTime string) {
-	msg := "A new event suggestion is waiting for review in the admin panel."
+	msg := "A new event suggestion is waiting for review."
 	if title != "" {
-		msg = fmt.Sprintf("New event suggestion: %q (%s) — review in the admin panel.", title, startTime)
+		msg = fmt.Sprintf("New event suggestion: %q (%s) — review it.", title, startTime)
 	}
 
-	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
+	rows, err := db.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
 	if err != nil {
 		log.Printf("suggest: notify admins: %v", err)
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
+		var adminID int
 		var email, chatID string
-		if err := rows.Scan(&email, &chatID); err != nil {
+		if err := rows.Scan(&adminID, &email, &chatID); err != nil {
 			continue
 		}
-		notifyUser(chatID, email, "New event suggestion", msg)
+		notifyUser(chatID, email, "New event suggestion", msg+" — "+adminReviewLink(adminID, "/admin/events?unpublished=1&include_past=1"))
 	}
 }

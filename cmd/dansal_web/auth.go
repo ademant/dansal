@@ -209,6 +209,10 @@ func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			DisplayName: lr.User.DisplayName,
 			Role:        lr.User.Role,
 		}, expiresAt)
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		next := "/dashboard"
+		if p := safeReturnPath(r.URL.Query().Get("next")); p != "" {
+			next = p
+		}
+		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 }

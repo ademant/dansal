@@ -10,64 +10,58 @@
     {{else if eq .MagicSent "matrix"}}{{$.Strings.T "login_magic_sent_matrix"}}
     {{else}}{{$.Strings.T "login_magic_sent"}}{{end}}
   </p>{{end}}
-  <div class="login-form">
-    <span class="login-section-title">{{$.Strings.T "login_passkey_title"}}</span>
-    <button type="button" id="btn-passkey-instant" onclick="passkeyLoginDiscoverable()" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
-    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
-    <label for="passkey-email">{{$.Strings.T "login_email"}}</label>
-    <input id="passkey-email" type="email" autocomplete="email">
-    <button type="button" id="btn-passkey-login" onclick="passkeyLogin()">{{$.Strings.T "login_passkey_submit"}}</button>
-    <div id="passkey-msg" hidden class="login-error"></div>
-  </div>
 
-  {{if .TotpRequired}}
-  <div class="login-form" style="margin-top:1rem">
-    <span class="login-section-title">{{$.Strings.T "login_totp_title"}}</span>
-    <p style="font-size:.88rem;color:#555;margin:.2rem 0 .5rem">{{$.Strings.T "login_totp_hint"}}</p>
+  <div class="login-form">
+    <button type="button" id="btn-passkey-instant" onclick="passkeyLoginDiscoverable()" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
+
+    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
+
+    {{if .TotpRequired}}
     <form method="post" action="/login" autocomplete="off">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
       <input type="hidden" name="_form_ts" value="{{.FormToken}}">
-      <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
+      <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <input type="hidden" name="email" value="{{.Email}}">
       <input type="hidden" name="password" value="{{.Password}}">
+      <span class="login-section-title">{{$.Strings.T "login_totp_title"}}</span>
+      <p style="font-size:.88rem;color:#555;margin:.2rem 0 .5rem">{{$.Strings.T "login_totp_hint"}}</p>
       <label for="totp_code">{{$.Strings.T "login_totp_code"}}</label>
       <input id="totp_code" type="text" name="totp_code" inputmode="numeric" pattern="[0-9]{6}"
              maxlength="6" placeholder="000000" required autofocus autocomplete="one-time-code">
       <button type="submit">{{$.Strings.T "login_submit"}}</button>
     </form>
-  </div>
-  {{else}}
-  <details class="magic-section"{{if or .ErrorKey .Email}} open{{end}}>
-    <summary>{{$.Strings.T "login_password_title"}}</summary>
-    <form method="post" action="/login" class="login-form" style="margin-top:.75rem" autocomplete="on">
+    {{else}}
+    <form id="pw-form" method="post" action="/login" autocomplete="on">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
       <input type="hidden" name="_form_ts" value="{{.FormToken}}">
-      <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
+      <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <label for="identifier">{{$.Strings.T "login_identifier"}}</label>
       <input id="identifier" type="text" name="email" value="{{.Email}}"
-             inputmode="email" required{{if .ErrorKey}} autofocus{{end}} autocomplete="username">
+             inputmode="email" autocomplete="username"{{if .ErrorKey}} autofocus{{end}}>
       <label for="password">{{$.Strings.T "login_password"}}</label>
       <input id="password" type="password" name="password"
-             required autocomplete="current-password">
-      <button type="submit">{{$.Strings.T "login_submit"}}</button>
+             autocomplete="current-password" oninput="updateLoginBtn()">
+      <button type="submit" id="btn-login" class="btn-login" disabled>{{$.Strings.T "login_submit"}}</button>
     </form>
-  </details>
-  {{end}}
 
-  <details class="magic-section"{{if .MagicSent}} open{{end}}>
-    <summary>{{$.Strings.T "login_magic_title"}}</summary>
-    <form method="post" action="/magic" class="login-form" style="margin-top:.75rem">
+    <div class="alt-btns">
+      <button type="button" onclick="doPasskeyFromShared()" class="btn-alt btn-passkey-alt">{{$.Strings.T "login_passkey_submit"}}</button>
+      <button type="button" onclick="submitMagic('email')" class="btn-alt">{{$.Strings.T "login_magic_submit"}}</button>
+      <button type="button" onclick="submitMagic('telegram')" class="btn-alt btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
+      <button type="button" onclick="submitMagic('matrix')" class="btn-alt btn-matrix">{{$.Strings.T "login_magic_submit_matrix"}}</button>
+    </div>
+
+    <form id="magic-form" method="post" action="/magic" hidden>
+      {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
       <input type="hidden" name="_form_ts" value="{{.FormToken}}">
-      <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
-      <label for="magic-identifier">{{$.Strings.T "login_magic_identifier"}}</label>
-      <input id="magic-identifier" type="text" name="identifier" required autocomplete="username email">
-      <div class="magic-btns">
-        <button type="submit" name="channel" value="email">{{$.Strings.T "login_magic_submit"}}</button>
-        <button type="submit" name="channel" value="telegram" class="btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
-        <button type="submit" name="channel" value="matrix" class="btn-matrix">{{$.Strings.T "login_magic_submit_matrix"}}</button>
-      </div>
+      <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
+      <input type="hidden" name="identifier" id="magic-identifier">
+      <input type="hidden" name="channel" id="magic-channel">
     </form>
-  </details>
+    {{end}}
+
+    <div id="passkey-msg" hidden class="login-error" style="margin-top:.5rem"></div>
+  </div>
   {{end}}
 </div>
 
@@ -121,7 +115,6 @@
       var finishData = await finishResp.json();
       if(!finishResp.ok) throw new Error(finishData.error || finishResp.statusText);
 
-      // Session cookie already set by the proxy — redirect home.
       window.location.href = '/';
     } catch(err) {
       msgEl.hidden = false;
@@ -132,22 +125,26 @@
   window.passkeyLoginDiscoverable = async function() {
     var btn = document.getElementById('btn-passkey-instant');
     btn.disabled = true;
-    try {
-      await doPasskeyLogin('');
-    } finally {
-      btn.disabled = false;
-    }
+    try { await doPasskeyLogin(''); } finally { btn.disabled = false; }
   };
 
-  window.passkeyLogin = async function() {
-    var u = document.getElementById('passkey-email').value.trim();
-    var btn = document.getElementById('btn-passkey-login');
-    btn.disabled = true;
-    try {
-      await doPasskeyLogin(u);
-    } finally {
-      btn.disabled = false;
-    }
+  window.doPasskeyFromShared = async function() {
+    var idEl = document.getElementById('identifier');
+    var email = idEl ? idEl.value.trim() : '';
+    await doPasskeyLogin(email);
+  };
+
+  window.updateLoginBtn = function() {
+    var pwd = document.getElementById('password');
+    var btn = document.getElementById('btn-login');
+    if(pwd && btn) btn.disabled = !pwd.value;
+  };
+
+  window.submitMagic = function(channel) {
+    var idEl = document.getElementById('identifier');
+    document.getElementById('magic-identifier').value = idEl ? idEl.value.trim() : '';
+    document.getElementById('magic-channel').value = channel;
+    document.getElementById('magic-form').submit();
   };
 })();
 </script>
@@ -155,26 +152,27 @@
 .login-wrap{max-width:360px;margin:2rem auto}
 .login-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .login-info{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
-.login-form{display:flex;flex-direction:column;gap:.6rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
-.login-form label{font-weight:600;font-size:.9rem;color:#444}
-.login-form input{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%}
+.login-form{display:flex;flex-direction:column;gap:.6rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.5rem}
+.login-form label{font-weight:600;font-size:.9rem;color:var(--fg-2)}
+.login-form input[type=text],.login-form input[type=password],.login-form input[type=email]{padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:1rem;width:100%;background:var(--bg);color:var(--fg)}
 .login-form input:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
-.login-form button{margin-top:.4rem;padding:.5rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
-.login-form button:hover{background:#0d4a80}
+.login-form button{margin-top:.2rem;padding:.5rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+.login-form button:hover:not(:disabled){background:#0d4a80}
 .btn-passkey-instant{background:#0a7c4a!important;font-weight:600;font-size:1rem!important;padding:.6rem!important}
-.btn-passkey-instant:hover{background:#065e37!important}
-.passkey-or{display:flex;align-items:center;gap:.5rem;color:#999;font-size:.8rem;margin:.15rem 0}
-.passkey-or::before,.passkey-or::after{content:'';flex:1;border-top:1px solid #e0e0e0}
-.login-section-title{font-weight:700;font-size:.95rem;color:#333}
-.magic-section{margin-top:1.25rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.75rem 1.5rem}
-.magic-section .login-form{background:none;border:none;border-radius:0;padding:0}
-.magic-section summary{cursor:pointer;font-size:.9rem;color:#555;font-weight:600}
-.magic-btns{display:flex;gap:.4rem;flex-wrap:wrap}
-.magic-btns button{flex:1;min-width:80px;margin-top:.4rem}
-.btn-telegram{background:#2ca5e0!important}
-.btn-telegram:hover{background:#1a8abf!important}
-.btn-matrix{background:#0dbd8b!important}
-.btn-matrix:hover{background:#0a9970!important}
+.btn-passkey-instant:hover:not(:disabled){background:#065e37!important}
+.btn-login:disabled{opacity:.45;cursor:default}
+.passkey-or{display:flex;align-items:center;gap:.5rem;color:var(--fg-hint);font-size:.8rem;margin:.1rem 0}
+.passkey-or::before,.passkey-or::after{content:'';flex:1;border-top:1px solid var(--border)}
+.login-section-title{font-weight:700;font-size:.95rem;color:var(--fg-2)}
+.alt-btns{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.1rem}
+.btn-alt{flex:1;min-width:70px;margin-top:0!important;font-size:.82rem!important;padding:.4rem .3rem!important;background:var(--bg-subtle)!important;color:var(--fg-dim)!important;border:1px solid var(--border)!important;border-radius:4px;cursor:pointer}
+.btn-alt:hover{background:var(--bg-hover)!important}
+.btn-passkey-alt{background:#e8f0fe!important;color:#1a6eb5!important;border-color:#c8d4f5!important}
+.btn-passkey-alt:hover{background:#d0dffb!important}
+.btn-telegram{background:#d6f0fa!important;color:#0d6a99!important;border-color:#a8d8ef!important}
+.btn-telegram:hover{background:#bde4f5!important}
+.btn-matrix{background:#d6f5ee!important;color:#0a7a5c!important;border-color:#a8e5d4!important}
+.btn-matrix:hover{background:#baeee1!important}
 .hp-field{display:none!important}
 </style>
 {{end}}

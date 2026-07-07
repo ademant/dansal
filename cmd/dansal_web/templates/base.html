@@ -13,7 +13,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — {{.SiteName}}</title>
-<meta name="description" content="{{.Strings.T "meta_description"}}">
+{{- $desc := .MetaDescription}}{{if eq $desc ""}}{{$desc = .Strings.T "meta_description"}}{{end}}
+<meta name="description" content="{{$desc}}">
+<link rel="canonical" href="{{.CanonicalURL}}">
+<meta property="og:site_name" content="{{.SiteName}}">
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:description" content="{{$desc}}">
+<meta property="og:url" content="{{.CanonicalURL}}">
+<meta property="og:type" content="website">
+{{- if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{end}}
+<meta name="twitter:card" content="summary{{if .OGImage}}_large_image{{end}}">
+<meta name="twitter:title" content="{{.Title}}">
+<meta name="twitter:description" content="{{$desc}}">
+{{- if .OGImage}}<meta name="twitter:image" content="{{.OGImage}}">{{end}}
+{{block "head_extra" .}}{{end}}
 <link rel="icon" href="/favicon.svg">
 <link rel="manifest" href="/manifest.json">
 <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="{{.SiteName}}">

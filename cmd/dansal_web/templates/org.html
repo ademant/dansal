@@ -1,4 +1,17 @@
 {{template "base" .}}
+{{define "head_extra"}}{{with .Data.Org}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "{{.Name | js}}"
+  {{- with .Website}}, "url": "{{. | js}}"{{end}}
+  {{- with .ImageURL}}, "logo": "{{. | js}}"{{end}}
+  {{- with .Description}}, "description": "{{. | js}}"{{end}}
+  {{- with .Mastodon}}, "sameAs": "{{. | js}}"{{end}}
+}
+</script>
+{{end}}{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Org.ImageURL}}<img src="{{.}}" alt="{{$.Data.Org.Name}}" class="org-banner">{{end}}

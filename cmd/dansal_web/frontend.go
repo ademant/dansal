@@ -50,6 +50,9 @@ type TemplateData struct {
 	PendingSuggestionCount int    // unpublished events awaiting review (scoped to caller)
 	PossibleDuplicateCount int    // events flagged as possible duplicates (scoped to caller)
 	Path                   string // current request path, for building "return to this page" links
+	CanonicalURL           string // absolute canonical URL for this page
+	MetaDescription        string // page-specific meta description (falls back to i18n string in template)
+	OGImage                string // absolute URL of the primary image for OG/Twitter card
 }
 
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
@@ -106,6 +109,8 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 	strs := i18n.Strings(lang)
 
+	canonical := "https://" + cfg.Domain + r.URL.Path
+
 	return TemplateData{
 		Title:                  title,
 		Domain:                 cfg.Domain,
@@ -129,8 +134,26 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		PendingSuggestionCount: dashAttention(r).PendingEventSuggestions,
 		PossibleDuplicateCount: dashAttention(r).PossibleDuplicates,
 		Path:                   r.URL.Path,
+		CanonicalURL:           canonical,
 	}
 }
+
+// metaDesc returns the first maxLen chars of s with markdown syntax stripped,
+// suitable for use as a meta description or OG description.
+func metaDesc(s string, maxLen int) string {
+	// strip markdown: links, bold/italic, headings, list markers
+	s = reMetaMD.ReplaceAllString(s, "$1")
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.TrimSpace(s)
+	if len([]rune(s)) > maxLen {
+		runes := []rune(s)[:maxLen]
+		s = string(runes[:strings.LastIndex(string(runes), " ")]) + "…"
+	}
+	return s
+}
+
+var reMetaMD = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)|[*_~` + "`" + `#>]+`)
+
 
 type IndexData struct {
 	Events          []Event
@@ -1306,7 +1329,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		bookingError := r.URL.Query().Get("book_error")
 
 		clientIP := getClientIP(r)
-		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
+		td := tmplData(r, cfg, i18n, event.Title, EventData{
 			Event:             event,
 			Org:               org,
 			OrgSlug:           slug,
@@ -1325,7 +1348,12 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BoardFormToken:    issueFormToken(clientIP),
 			PrevEvent:         prevEvent,
 			NextEvent:         nextEvent,
-		}))
+		})
+		td.MetaDescription = metaDesc(event.Description, 155)
+		if event.ImageURL != "" {
+			td.OGImage = "https://" + cfg.Domain + event.ImageURL
+		}
+		renderTemplate(w, tmpls.event, td)
 	}
 }
 
@@ -1426,7 +1454,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		}
 
 		handle := "@" + slug + "@" + cfg.Domain
-		renderTemplate(w, tmpls.org, tmplData(r, cfg, i18n, org.Name, OrgData{
+		td := tmplData(r, cfg, i18n, org.Name, OrgData{
 			Org:            org,
 			UpcomingEvents: upcoming,
 			PastEvents:     past,
@@ -1435,7 +1463,12 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Slug:           slug,
 			Handle:         handle,
 			FollowerCount:  followerCount,
-		}))
+		})
+		td.MetaDescription = metaDesc(org.Description, 155)
+		if org.ImageURL != "" {
+			td.OGImage = "https://" + cfg.Domain + org.ImageURL
+		}
+		renderTemplate(w, tmpls.org, td)
 	}
 }
 
@@ -1456,10 +1489,19 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if title == "" {
 			title = loc.Location
 		}
-		renderTemplate(w, tmpls.location, tmplData(r, cfg, i18n, title, LocationPageData{
+		td := tmplData(r, cfg, i18n, title, LocationPageData{
 			Location: loc,
 			Events:   events,
-		}))
+		})
+		parts := []string{title}
+		if loc.Town != "" && loc.Town != title {
+			parts = append(parts, loc.Town)
+		}
+		if loc.Country != "" {
+			parts = append(parts, loc.Country)
+		}
+		td.MetaDescription = strings.Join(parts, ", ")
+		renderTemplate(w, tmpls.location, td)
 	}
 }
 

@@ -1,4 +1,30 @@
 {{template "base" .}}
+{{define "head_extra"}}{{with .Data.Event}}
+<meta property="og:type" content="event">
+{{- if .StartTime}}<meta property="event:start_time" content="{{.StartTime}}">{{end}}
+{{- if .EndTime}}<meta property="event:end_time" content="{{.EndTime}}">{{end}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Event",
+  "name": "{{.Title | js}}",
+  "startDate": "{{.StartTime}}",
+  "endDate": "{{.EndTime}}",
+  "eventStatus": "https://schema.org/{{if .IsCancelled}}EventCancelled{{else}}EventScheduled{{end}}",
+  "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode"
+  {{- with .Location}},
+  "location": {
+    "@type": "Place",
+    "name": "{{.Location | js}}"
+    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"}{{end}}
+  }
+  {{- end}}
+  {{- with .URL}}, "url": "{{. | js}}"{{end}}
+  {{- with .ImageURL}}, "image": "{{. | js}}"{{end}}
+  {{- with .Description}}, "description": "{{. | js}}"{{end}}
+}
+</script>
+{{end}}{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Event}}
@@ -731,29 +757,5 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 })();
 </script>
 {{end}}{{end}}
-
-{{with .Data.Event}}
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Event",
-  "name": "{{.Title | js}}",
-  "startDate": "{{.StartTime}}",
-  "endDate": "{{.EndTime}}",
-  "eventStatus": "https://schema.org/{{if .IsCancelled}}EventCancelled{{else}}EventScheduled{{end}}",
-  "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode"
-  {{- with .Location}},
-  "location": {
-    "@type": "Place",
-    "name": "{{.Location | js}}"
-    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"}{{end}}
-  }
-  {{- end}}
-  {{- with .URL}}, "url": "{{. | js}}"{{end}}
-  {{- with .ImageURL}}, "image": "{{. | js}}"{{end}}
-  {{- with .Description}}, "description": "{{. | js}}"{{end}}
-}
-</script>
-{{end}}
 
 {{end}}

@@ -95,7 +95,7 @@ languages:
       food_label: "Essen"
       food_unset: "Keine Angabe"
       food_sold: "Essen wird verkauft (kein eigenes Essen erlaubt)"
-      food_potluck: "Potluck"
+      food_potluck: "Mitbringbuffet"
       food_none: "Kein Essen organisiert"
       drink_label: "Getränke"
       drink_unset: "Keine Angabe"

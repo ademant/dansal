@@ -501,6 +501,15 @@ PUT    /api/v1/events/{id}/instructors  # set instructors for an event
 
 Musicians are performers linked to events; instructors are teachers linked to workshop slots.
 
+**Query parameters for GET /api/v1/musicians:**
+- `name=` — substring match on bandname
+- `organization_id=N` — musicians linked to events of this org
+- `country=` — filter by country code
+- `mbid=` — MusicBrainz ID exact match
+- `wikidata_id=` — Wikidata ID exact match
+- `discogs_id=` — Discogs ID exact match
+- `with_event_counts=true` — adds `future_event_count` and `past_event_count` to each result
+
 ## Tags and Dances
 
 ```
@@ -532,12 +541,51 @@ POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event ID
 ```
 
 **Query parameters for GET /api/v1/events:**
-- `start=YYYY-MM-DD` — filter from date
-- `end=YYYY-MM-DD` — filter to date
-- `location_id=N` — filter by location
+
+Time range (all timestamps are Unix epoch integers):
+- `include_past=true` — include events whose `end_time` is in the past (default: future only)
+- `start_time_after=N` — events whose `start_time > N`
+- `start_time_before=N` — events whose `start_time < N`
+- `end_time_after=N` — events whose `end_time > N`
+- `end_time_before=N` — events whose `end_time < N`
+
+Content filters:
+- `title=` — substring match on title
+- `description=` — substring match on description
+- `type=ball,workshop,festival` — comma-separated; matches events with any of the named types
+- `tag=` — filter by tag slug (single value)
+- `dance=` — filter by dance name
+- `dance_id=N` — filter by dance ID
+- `difficulty=` — workshop difficulty level
+- `pricing=free` — free events only
+- `is_cancelled=1` — only cancelled events
+- `musician_id=N` — events featuring this musician
+- `country=` — comma-separated ISO 3166-1 alpha-2 codes
+
+Location filters:
+- `location=` — substring match on location name
+- `location_id=N` — exact location
+- `lat=` + `lon=` + `radius_km=` — proximity search (bounding-box approximation)
+- `bbox=minLng,minLat,maxLng,maxLat` — bounding-box geo filter
+- `geohash=` — geohash prefix filter
+
+Structural filters:
 - `organization_id=N` — filter by organization
-- `status=published|draft|cancelled`
-- `limit=N` — max results (default varies)
+- `series_id=N` — filter by event series
+- `source=` — filter by import source URL (admin/user only)
+- `created_after=` — created at or after this datetime string
+- `wheelchair=1` — wheelchair-accessible events
+- `bookable=1` — events with booking enabled
+
+Auth-only filters:
+- `is_published=true|false` — filter by publish status (admin/user/publisher); publishers can only list their org's unpublished events
+- `include_past=true` — available to all callers but only authenticated callers can combine it with `is_published=false`
+
+Pagination:
+- `limit=N` — max results (default 100, max 1000)
+- `offset=N` — pagination offset
+
+The response includes an `X-Total-Count` header with the total matching row count before pagination.
 
 List and get are public for published events. Authenticated users see their organization's draft events too.
 

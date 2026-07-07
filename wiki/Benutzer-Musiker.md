@@ -16,5 +16,5 @@
 
 ---
 
-**Weiter zu**: [Benutzer/Administration](Benutzer/Administration) | [Benutzer](Benutzer)
+**Weiter zu**: [Benutzer-Administration](Benutzer-Administration) | [Benutzer](Benutzer)
 

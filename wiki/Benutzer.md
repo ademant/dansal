@@ -6,12 +6,13 @@ Diese Sektion richtet sich an Veranstalter, Publisher und reguläre Benutzer, di
 
 | Thema | Seite |
 |---|---|
-| Konto, Anmeldung, Rollen | [Benutzer/Konto](Benutzer/Konto) |
-| Veranstaltungen erstellen und verwalten | [Benutzer/Veranstaltungen](Benutzer/Veranstaltungen) |
-| Veranstaltungsorte verwalten | [Benutzer/Veranstaltungsorte](Benutzer/Veranstaltungsorte) |
-| Organisationen verwalten | [Benutzer/Organisationen](Benutzer/Organisationen) |
-| Musikerprofile verwalten | [Benutzer/Musiker](Benutzer/Musiker) |
-| Systemadministration | [Benutzer/Administration](Benutzer/Administration) |
+| Konto, Anmeldung, Rollen | [Benutzer-Konto](Benutzer-Konto) |
+| Veranstaltungen erstellen und verwalten | [Benutzer-Veranstaltungen](Benutzer-Veranstaltungen) |
+| Veranstaltungsorte verwalten | [Benutzer-Veranstaltungsorte](Benutzer-Veranstaltungsorte) |
+| Organisationen verwalten | [Benutzer-Organisationen](Benutzer-Organisationen) |
+| Musikerprofile verwalten | [Benutzer-Musiker](Benutzer-Musiker) |
+| WordPress-Plugin wp-dansal nutzen | [Benutzer-WordPress](Benutzer-WordPress) |
+| Systemadministration | [Benutzer-Administration](Benutzer-Administration) |
 
 ## Rollen auf einen Blick
 
@@ -30,7 +31,7 @@ Diese Sektion richtet sich an Veranstalter, Publisher und reguläre Benutzer, di
 
 ---
 
-**Mehr Hilfe nötig?** Siehe [Benutzer/Administration](Benutzer/Administration) für die Systemkonfiguration.
+**Mehr Hilfe nötig?** Siehe [Benutzer-Administration](Benutzer-Administration) für die Systemkonfiguration.
 
 **Fehler gefunden?** Melde es auf [GitHub](https://github.com/ademant/dansal/issues)
 

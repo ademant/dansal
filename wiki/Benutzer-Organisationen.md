@@ -17,7 +17,7 @@
 
 ## 🔄 Automatische Feed-Synchronisation einrichten
 
-Unter **Quellen → Neue Quelle** (`/admin/fetchurls/new`) richtest du einen dauerhaften Feed ein, der regelmäßig automatisch abgerufen wird – im Unterschied zum einmaligen, von Hand bestätigten Import (siehe [Benutzer/Veranstaltungen](Benutzer/Veranstaltungen)).
+Unter **Quellen → Neue Quelle** (`/admin/fetchurls/new`) richtest du einen dauerhaften Feed ein, der regelmäßig automatisch abgerufen wird – im Unterschied zum einmaligen, von Hand bestätigten Import (siehe [Benutzer-Veranstaltungen](Benutzer-Veranstaltungen)).
 
 **Einrichtung:**
 1. **URL** der Quelle eingeben (lässt sich nach dem Anlegen nicht mehr ändern)
@@ -57,5 +57,5 @@ Eine **Vorlage** speichert die festen Standardangaben einer Veranstaltung (Ort, 
 
 ---
 
-**Weiter zu**: [Benutzer/Musiker](Benutzer/Musiker) | [Benutzer](Benutzer)
+**Weiter zu**: [Benutzer-Musiker](Benutzer-Musiker) | [Benutzer](Benutzer)
 

@@ -72,7 +72,7 @@ Unter **Veranstaltungen → Importieren** (`/admin/events/import`) lassen sich m
 
 **Hinweise:**
 - Wiederkehrende iCal-Termine (RRULE) werden dabei automatisch in einzelne Vorkommen aufgeteilt (siehe auch Abschnitt „Wiederkehrende iCal-Veranstaltungen“ unten)
-- Dieser manuelle Import ist getrennt von der **automatischen Feed-Synchronisation** einer Organisation (siehe [Benutzer/Organisationen](Benutzer/Organisationen)) – dort wird ein Feed dauerhaft hinterlegt und regelmäßig automatisch abgerufen, während der Import hier ein einmaliger, von Hand bestätigter Vorgang ist
+- Dieser manuelle Import ist getrennt von der **automatischen Feed-Synchronisation** einer Organisation (siehe [Benutzer-Organisationen](Benutzer-Organisationen)) – dort wird ein Feed dauerhaft hinterlegt und regelmäßig automatisch abgerufen, während der Import hier ein einmaliger, von Hand bestätigter Vorgang ist
 
 ## 🚀 Erweiterte Funktionen
 
@@ -86,5 +86,5 @@ Beim Import über iCal-Feeds werden wiederkehrende Termine (RRULE) automatisch i
 
 ---
 
-**Weiter zu**: [Benutzer/Veranstaltungsorte](Benutzer/Veranstaltungsorte) | [Benutzer](Benutzer)
+**Weiter zu**: [Benutzer-Veranstaltungsorte](Benutzer-Veranstaltungsorte) | [Benutzer](Benutzer)
 

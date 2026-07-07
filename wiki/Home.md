@@ -18,7 +18,8 @@
 |---|---|---|
 | **Besucher** | Veranstaltungen finden, Karte nutzen, Pinnwand verwenden | [Besucher](Besucher) |
 | **Angemeldete Benutzer** | Veranstaltungen, Orte, Organisationen und Musiker anlegen und verwalten | [Benutzer](Benutzer) |
-| **Systemadministratoren** | Installation, Konfiguration, Wartung und Fehlerbehebung | [Benutzer/Administration](Benutzer/Administration) |
+| **Systemadministratoren** | Installation, Konfiguration, Wartung und Fehlerbehebung | [Benutzer-Administration](Benutzer-Administration) |
+| **WordPress-Betreiber** | Veranstaltungen über das Plugin wp-dansal direkt aus WordPress pflegen | [Benutzer-WordPress](Benutzer-WordPress) |
 
 ## Rollenübersicht
 

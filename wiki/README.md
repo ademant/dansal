@@ -1,40 +1,45 @@
-# Dansal Wiki
+<!-- Mirrors Home.md: GitHub wiki always uses Home.md as its landing page, while
+     dansal-doc's default index_page is README. Keep both in sync. -->
 
-This directory contains wiki documentation for the Dansal dance event management system.
+# dansal – Veranstaltungsplattform für Tanzgemeinschaften
 
-## Available Guides
+**dansal** ist eine Open-Source-Kalender- und Veranstaltungsplattform für Tanzgemeinschaften – von Bal-folk und Fest-noz über Tango bis hin zu Salsa-Festivals und Workshops.
 
-### For Visitors
-- **[Besucheranleitung.md](Besucheranleitung.md)** - German visitor guide (Hauptdokument)
-- **[Visitor-Guide.md](Visitor-Guide.md)** - English visitor guide
+## Was kann dansal?
 
-## About the Wiki
+- 📅 **Veranstaltungen verwalten**: Bälle, Workshops, Festivals und Kombinationen davon, inklusive mehrtägiger Veranstaltungen und Zeitpläne mit mehreren Räumen
+- 🗺️ **Interaktive Karte**: Alle kommenden Veranstaltungen auf einer Karte mit Geodaten
+- 🔄 **Automatischer Import**: Veranstaltungen können automatisch aus iCal- oder JSON-Feeds importiert werden
+- 🌐 **Fediverse-Anbindung**: Veranstaltungen werden automatisch über ActivityPub veröffentlicht (Mastodon & Co.)
+- 🌍 **Mehrsprachigkeit**: Die Oberfläche ist in 8 Sprachen verfügbar
+- 🔐 **Rollenbasierte Zugriffsrechte**: Administrator, Publisher, Benutzer und Besucher haben unterschiedliche Rechte
+- 📌 **Community-Pinnwand**: Mitfahrgelegenheiten, Unterkünfte und Ticketbörse direkt an jeder Veranstaltung
 
-This wiki provides comprehensive documentation for different user types:
+## Für wen ist diese Dokumentation?
 
-- **Visitors**: How to find and enjoy dance events using Dansal
-- **Organizers**: How to manage events and venues (coming soon)
-- **Administrators**: Technical setup and configuration (coming soon)
+| Zielgruppe | Beschreibung | Seite |
+|---|---|---|
+| **Besucher** | Veranstaltungen finden, Karte nutzen, Pinnwand verwenden | [Besucher](Besucher) |
+| **Angemeldete Benutzer** | Veranstaltungen, Orte, Organisationen und Musiker anlegen und verwalten | [Benutzer](Benutzer) |
+| **Systemadministratoren** | Installation, Konfiguration, Wartung und Fehlerbehebung | [Benutzer-Administration](Benutzer-Administration) |
+| **WordPress-Betreiber** | Veranstaltungen über das Plugin wp-dansal direkt aus WordPress pflegen | [Benutzer-WordPress](Benutzer-WordPress) |
 
-## Contributing
+## Rollenübersicht
 
-To add or update wiki content:
+| Rolle | Berechtigungen |
+|---|---|
+| **Besucher** (nicht angemeldet) | Veranstaltungen ansehen, Pinnwand-Einträge erstellen (mit Verifizierung) |
+| **Benutzer** | Veranstaltungen, Orte, Organisationen und Musiker für die eigene Organisation anlegen und verwalten |
+| **Publisher** | Veranstaltungen, Orte und Musiker erstellen/bearbeiten (Dienstkonto, z. B. für automatisierte Importe) |
+| **Administrator** | Voller Zugriff auf alle Funktionen und Einstellungen der Instanz |
 
-1. Create or modify markdown files in this directory
-2. Follow the existing structure and style
-3. Use clear section headings and cross-references
-4. Provide examples where helpful
-5. Keep content up-to-date with the latest features
+## Datenschutz
 
-## Structure
+dansal speichert grundsätzlich keine personenbezogenen Daten. Für Besucher werden keine Daten gespeichert – Cookies werden nur verwendet, um die gewählte Anzeigesprache zu merken. Für bestimmte Aktionen (z. B. Pinnwand-Beiträge) ist eine Verifizierung per E-Mail oder Telegram erforderlich, um Missbrauch zu verhindern. Hierzu sollten anonymisierte E-Mail-Adressen verwendet werden. Diese Kontaktdaten werden mit Löschen des Pinnwandeintrag automatisch gelöscht.
 
-- `Besucheranleitung.md` - Main German visitor guide
-- `Visitor-Guide.md` - English version of visitor guide
-- Additional guides will be added as needed
+## Weitere Informationen
 
-## Languages
+- **Fehler melden**: [GitHub Issues](https://github.com/ademant/dansal/issues)
+- **Quellcode**: Dieses Repository
+- **Lizenz**: MIT
 
-Dansal supports multiple languages, and we aim to provide documentation in:
-- German (primary)
-- English
-- Other languages as contributed by the community

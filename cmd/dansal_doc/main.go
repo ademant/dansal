@@ -39,9 +39,10 @@ type Page struct {
 }
 
 type App struct {
-	cfg   Config
-	pages map[string]Page
-	nav   []Page
+	cfg        Config
+	pages      map[string]Page
+	nav        []Page
+	imagesRoot string
 }
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.handlePage)
+	mux.HandleFunc("/images/", app.handleImage)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -160,7 +162,35 @@ func newApp(cfg Config) (*App, error) {
 		return nav[i].Title < nav[j].Title
 	})
 
-	return &App{cfg: cfg, pages: pages, nav: nav}, nil
+	imagesRoot, err := filepath.Abs(filepath.Join(cfg.ContentDir, "images"))
+	if err != nil {
+		return nil, err
+	}
+
+	return &App{cfg: cfg, pages: pages, nav: nav, imagesRoot: imagesRoot}, nil
+}
+
+// handleImage serves screenshots referenced from wiki markdown (e.g.
+// "![Setup](images/setup.png)") from content_dir/images. Relative markdown
+// links resolve to /images/... the same way on GitHub wiki and here, since
+// both drop the current page's last path segment when resolving.
+func (app *App) handleImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	rel := strings.TrimPrefix(r.URL.Path, "/images/")
+	path := filepath.Join(app.imagesRoot, filepath.Clean("/"+rel))
+	if !strings.HasPrefix(path, app.imagesRoot+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, path)
 }
 
 func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {

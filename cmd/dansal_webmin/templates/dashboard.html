@@ -63,6 +63,42 @@
   </table>
 </div>
 
+{{if .Events}}
+<div class="card" style="margin-top:1rem">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+    <div class="card-title" style="margin:0">Events ({{len .Events}})</div>
+    {{if .PastCount}}
+    <button id="btn-show-past" onclick="togglePast()" style="font-size:.82rem;padding:.2rem .6rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--fg-muted)">Show {{.PastCount}} past</button>
+    {{end}}
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+    <thead>
+      <tr><th style="text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--border);white-space:nowrap">Date</th><th style="text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--border)">Title</th><th style="text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--border)">Location</th></tr>
+    </thead>
+    <tbody>
+    {{range .Events}}
+    <tr{{if .IsPast}} class="evt-past" style="display:none;color:var(--fg-muted)"{{end}}>
+      <td style="padding:.3rem .5rem;white-space:nowrap;font-variant-numeric:tabular-nums">{{.DateLabel}}</td>
+      <td style="padding:.3rem .5rem">{{.Title}}{{if .IsCancelled}} <span style="font-size:.75rem;background:#f8d7da;color:#721c24;padding:.05rem .3rem;border-radius:3px">cancelled</span>{{end}}</td>
+      <td style="padding:.3rem .5rem;color:var(--fg-muted)">{{if .Town}}{{.Town}}{{else}}{{.Location}}{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+<script>
+var _pastShown=false;
+function togglePast(){
+  _pastShown=!_pastShown;
+  document.querySelectorAll('.evt-past').forEach(function(r){r.style.display=_pastShown?'':'none';});
+  var btn=document.getElementById('btn-show-past');
+  if(btn)btn.textContent=_pastShown?'Hide past':'Show {{.PastCount}} past';
+}
+</script>
+{{end}}
+
 <p style="color:var(--fg-muted);font-size:.82rem;text-align:right">Collected at {{.CollectedAt}}</p>
 {{end}}
 {{end}}

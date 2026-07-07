@@ -62,6 +62,16 @@ func fmtBytes(b int64) string {
 	}
 }
 
+type DashboardEvent struct {
+	ID          int
+	Title       string
+	DateLabel   string // formatted for display
+	Location    string
+	Town        string
+	IsCancelled bool
+	IsPast      bool
+}
+
 type DashboardData struct {
 	WebminVersion   string
 	WebminBuildTime string
@@ -69,7 +79,52 @@ type DashboardData struct {
 	DansalError     string
 	Services        []ServiceStatus
 	Disk            *DiskInfo
+	Events          []DashboardEvent
 	CollectedAt     string
+}
+
+func getDashboardEvents(ctx context.Context, dansalURL string) ([]DashboardEvent, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		dansalURL+"/api/v1/events?include_past=true&limit=500", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var raw []struct {
+		ID          int    `json:"id"`
+		Title       string `json:"title"`
+		StartTime   string `json:"start_time"`
+		IsCancelled bool   `json:"is_cancelled"`
+		Location    struct {
+			Location string `json:"location"`
+			Town     string `json:"town"`
+		} `json:"location"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	events := make([]DashboardEvent, 0, len(raw))
+	for _, e := range raw {
+		t, _ := time.Parse(time.RFC3339, e.StartTime)
+		events = append(events, DashboardEvent{
+			ID:          e.ID,
+			Title:       e.Title,
+			DateLabel:   t.Format("2006-01-02 15:04"),
+			Location:    e.Location.Location,
+			Town:        e.Location.Town,
+			IsCancelled: e.IsCancelled,
+			IsPast:      t.Before(now),
+		})
+	}
+	return events, nil
 }
 
 func getDansalInfo(ctx context.Context, dansalURL string) (*DansalInfo, error) {
@@ -172,6 +227,8 @@ func collectDashboard(ctx context.Context, cfg *Config) DashboardData {
 		d.DansalInfo = info
 	}
 
+	d.Events, _ = getDashboardEvents(ctx, cfg.DansalURL)
+
 	for _, unit := range monitoredUnits(cfg.Instance) {
 		d.Services = append(d.Services, getServiceStatus(unit))
 	}
@@ -215,6 +272,13 @@ func dashboardDataMap(d DashboardData) map[string]any {
 		}
 	}
 
+	pastCount := 0
+	for _, e := range d.Events {
+		if e.IsPast {
+			pastCount++
+		}
+	}
+
 	return map[string]any{
 		"WebminVersion":   d.WebminVersion,
 		"WebminBuildTime": d.WebminBuildTime,
@@ -222,6 +286,8 @@ func dashboardDataMap(d DashboardData) map[string]any {
 		"DansalError":     d.DansalError,
 		"Services":        d.Services,
 		"Disk":            disk,
+		"Events":          d.Events,
+		"PastCount":       pastCount,
 		"CollectedAt":     d.CollectedAt,
 	}
 }

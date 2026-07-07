@@ -121,7 +121,7 @@
     <fieldset class="org-assign-new">
       <legend>{{$.Strings.T "fetch_org"}}</legend>
       {{range .UserOrgs}}
-      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"> {{.Name}}</label>
+      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"{{if eq (len $.Data.UserOrgs) 1}} checked{{end}}> {{.Name}}</label>
       {{end}}
     </fieldset>
     {{end}}

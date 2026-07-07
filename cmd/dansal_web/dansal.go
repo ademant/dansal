@@ -1234,6 +1234,16 @@ func (c *DansalClient) GetLocation(ctx context.Context, id int) (Location, error
 	return loc, nil
 }
 
+// LocationConflictError is returned by CreateLocation when the API responds
+// 409 because a location with the same OSM place already exists.
+type LocationConflictError struct {
+	ExistingID int
+}
+
+func (e *LocationConflictError) Error() string {
+	return fmt.Sprintf("location already exists (id %d)", e.ExistingID)
+}
+
 func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token string) (Location, error) {
 	body, _ := json.Marshal(loc)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations", token, body)
@@ -1243,6 +1253,14 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		return Location{}, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode == http.StatusConflict {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		var body struct {
+			ExistingID int `json:"existing_id"`
+		}
+		json.Unmarshal(b, &body)
+		return Location{}, &LocationConflictError{ExistingID: body.ExistingID}
 	}
 	if resp.StatusCode != http.StatusCreated {
 		return Location{}, apiErr(resp)

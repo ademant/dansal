@@ -6,6 +6,7 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ConflictID}}<p class="form-error" role="alert">{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 
 <div class="loc-action-bar">

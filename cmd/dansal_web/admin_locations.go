@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -29,6 +30,7 @@ type AdminLocationEditData struct {
 	AvailableOrgs []Organization
 	ReadOnly      bool
 	ErrorKey      string
+	ConflictID    int // set when API returns 409: location with same OSM ID already exists
 	ReturnURL     string
 	From          string
 }
@@ -317,11 +319,17 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		_, err := client.CreateLocation(r.Context(), loc, token)
 		if err != nil {
 			title := i18n.T(r, "admin_new")
-			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+			data := AdminLocationEditData{
 				Location: loc,
 				UserOrgs: newLocationUserOrgs(r, user, client),
 				ErrorKey: "admin_save_error",
-			}))
+			}
+			var conflictErr *LocationConflictError
+			if errors.As(err, &conflictErr) {
+				data.ErrorKey = ""
+				data.ConflictID = conflictErr.ExistingID
+			}
+			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)

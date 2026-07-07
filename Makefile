@@ -111,7 +111,7 @@ install-webmin: build-dansal_webmin
 		echo "$(SYSCONFDIR)/webmin.yaml already exists — not overwriting"; \
 	fi
 	install -m 755 dansal_webmin $(BINDIR)/dansal-webmin
-	install -m 644 dansal-webmin.service $(SYSTEMDDIR)/dansal-webmin.service
+	install -m 644 systemd/dansal-webmin.service $(SYSTEMDDIR)/dansal-webmin.service
 	systemctl daemon-reload
 	systemctl enable dansal-webmin.service
 
@@ -132,34 +132,34 @@ install-doc: build-dansal_doc
 install-units:
 	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
 	# Legacy non-template units (installed for reference; not enabled automatically)
-	install -m 644 dansal.service           $(SYSTEMDDIR)/dansal.service
-	install -m 644 dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
-	install -m 644 dansal-doc.service       $(SYSTEMDDIR)/dansal-doc.service
-	install -m 644 dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
-	install -m 644 dansal-fetch.timer       $(SYSTEMDDIR)/dansal-fetch.timer
-	install -m 644 dansal-backup.service    $(SYSTEMDDIR)/dansal-backup.service
-	install -m 644 dansal-backup.timer      $(SYSTEMDDIR)/dansal-backup.timer
-	install -m 644 dansal-vacuum.service    $(SYSTEMDDIR)/dansal-vacuum.service
-	install -m 644 dansal-vacuum.timer      $(SYSTEMDDIR)/dansal-vacuum.timer
-	install -m 644 dansal-prune-images.service  $(SYSTEMDDIR)/dansal-prune-images.service
-	install -m 644 dansal-prune-images.timer    $(SYSTEMDDIR)/dansal-prune-images.timer
-	install -m 644 dansal-mailcheck.service     $(SYSTEMDDIR)/dansal-mailcheck.service
-	install -m 644 dansal-mailcheck.timer       $(SYSTEMDDIR)/dansal-mailcheck.timer
+	install -m 644 systemd/dansal.service           $(SYSTEMDDIR)/dansal.service
+	install -m 644 systemd/dansal-web.service       $(SYSTEMDDIR)/dansal-web.service
+	install -m 644 systemd/dansal-doc.service       $(SYSTEMDDIR)/dansal-doc.service
+	install -m 644 systemd/dansal-fetch.service     $(SYSTEMDDIR)/dansal-fetch.service
+	install -m 644 systemd/dansal-fetch.timer       $(SYSTEMDDIR)/dansal-fetch.timer
+	install -m 644 systemd/dansal-backup.service    $(SYSTEMDDIR)/dansal-backup.service
+	install -m 644 systemd/dansal-backup.timer      $(SYSTEMDDIR)/dansal-backup.timer
+	install -m 644 systemd/dansal-vacuum.service    $(SYSTEMDDIR)/dansal-vacuum.service
+	install -m 644 systemd/dansal-vacuum.timer      $(SYSTEMDDIR)/dansal-vacuum.timer
+	install -m 644 systemd/dansal-prune-images.service  $(SYSTEMDDIR)/dansal-prune-images.service
+	install -m 644 systemd/dansal-prune-images.timer    $(SYSTEMDDIR)/dansal-prune-images.timer
+	install -m 644 systemd/dansal-mailcheck.service     $(SYSTEMDDIR)/dansal-mailcheck.service
+	install -m 644 systemd/dansal-mailcheck.timer       $(SYSTEMDDIR)/dansal-mailcheck.timer
 	# Instance template units
-	install -m 644 dansal@.service              $(SYSTEMDDIR)/dansal@.service
-	install -m 644 dansal-web@.service          $(SYSTEMDDIR)/dansal-web@.service
-	install -m 644 dansal-webmin@.service       $(SYSTEMDDIR)/dansal-webmin@.service
-	install -m 644 dansal-doc@.service          $(SYSTEMDDIR)/dansal-doc@.service
-	install -m 644 dansal-fetch@.service        $(SYSTEMDDIR)/dansal-fetch@.service
-	install -m 644 dansal-fetch@.timer          $(SYSTEMDDIR)/dansal-fetch@.timer
-	install -m 644 dansal-backup@.service       $(SYSTEMDDIR)/dansal-backup@.service
-	install -m 644 dansal-backup@.timer         $(SYSTEMDDIR)/dansal-backup@.timer
-	install -m 644 dansal-vacuum@.service       $(SYSTEMDDIR)/dansal-vacuum@.service
-	install -m 644 dansal-vacuum@.timer         $(SYSTEMDDIR)/dansal-vacuum@.timer
-	install -m 644 dansal-prune-images@.service $(SYSTEMDDIR)/dansal-prune-images@.service
-	install -m 644 dansal-prune-images@.timer   $(SYSTEMDDIR)/dansal-prune-images@.timer
-	install -m 644 dansal-mailcheck@.service    $(SYSTEMDDIR)/dansal-mailcheck@.service
-	install -m 644 dansal-mailcheck@.timer      $(SYSTEMDDIR)/dansal-mailcheck@.timer
+	install -m 644 systemd/dansal@.service              $(SYSTEMDDIR)/dansal@.service
+	install -m 644 systemd/dansal-web@.service          $(SYSTEMDDIR)/dansal-web@.service
+	install -m 644 systemd/dansal-webmin@.service       $(SYSTEMDDIR)/dansal-webmin@.service
+	install -m 644 systemd/dansal-doc@.service          $(SYSTEMDDIR)/dansal-doc@.service
+	install -m 644 systemd/dansal-fetch@.service        $(SYSTEMDDIR)/dansal-fetch@.service
+	install -m 644 systemd/dansal-fetch@.timer          $(SYSTEMDDIR)/dansal-fetch@.timer
+	install -m 644 systemd/dansal-backup@.service       $(SYSTEMDDIR)/dansal-backup@.service
+	install -m 644 systemd/dansal-backup@.timer         $(SYSTEMDDIR)/dansal-backup@.timer
+	install -m 644 systemd/dansal-vacuum@.service       $(SYSTEMDDIR)/dansal-vacuum@.service
+	install -m 644 systemd/dansal-vacuum@.timer         $(SYSTEMDDIR)/dansal-vacuum@.timer
+	install -m 644 systemd/dansal-prune-images@.service $(SYSTEMDDIR)/dansal-prune-images@.service
+	install -m 644 systemd/dansal-prune-images@.timer   $(SYSTEMDDIR)/dansal-prune-images@.timer
+	install -m 644 systemd/dansal-mailcheck@.service    $(SYSTEMDDIR)/dansal-mailcheck@.service
+	install -m 644 systemd/dansal-mailcheck@.timer      $(SYSTEMDDIR)/dansal-mailcheck@.timer
 	systemctl daemon-reload
 
 update: build install-units
@@ -319,10 +319,10 @@ deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-
 	install -m 755 dansal_webmin                         $$DEB_DIR/usr/bin/dansal-webmin; \
 	install -m 755 dansal_doc                            $$DEB_DIR/usr/bin/dansal-doc; \
 	install -m 644 wiki/*.md                             $$DEB_DIR/usr/share/dansal/wiki/; \
-	install -m 644 dansal.service                        $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
-	install -m 644 dansal-web.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
-	install -m 644 dansal-webmin.service                 $$DEB_DIR/$(SYSTEMDDIR)/dansal-webmin.service; \
-	install -m 644 dansal-doc.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-doc.service; \
+	install -m 644 systemd/dansal.service                $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
+	install -m 644 systemd/dansal-web.service            $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
+	install -m 644 systemd/dansal-webmin.service         $$DEB_DIR/$(SYSTEMDDIR)/dansal-webmin.service; \
+	install -m 644 systemd/dansal-doc.service            $$DEB_DIR/$(SYSTEMDDIR)/dansal-doc.service; \
 	install -m 644 packaging/config.yaml                 $$DEB_DIR/etc/dansal/config.yaml; \
 	install -m 644 packaging/web.yaml                    $$DEB_DIR/etc/dansal/web.yaml; \
 	install -m 644 packaging/webmin.yaml                 $$DEB_DIR/etc/dansal/webmin.yaml; \

@@ -116,6 +116,7 @@
     </select>
   </div>
 
+  {{if $.Data.SelectedOrgID}}<input type="hidden" name="organization_id" value="{{$.Data.SelectedOrgID}}">{{end}}
   <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
 </form>
 {{end}}

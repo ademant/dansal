@@ -1,0 +1,379 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+
+{{with .Org.ImageURL}}<img src="{{.}}" alt="{{$.Data.Org.Name}}" class="org-banner">{{end}}
+<div class="org-page-header">
+  <h1>{{.Org.Name}}</h1>
+  <a href="/org/{{.Slug}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
+  <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+  {{if .Org.FetchSourceID}}
+  <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
+  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" onclick="orgFetchNow({{.Org.FetchSourceID}})">🔄</button>
+  {{end}}
+</div>
+
+{{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
+{{with .Org.NotesMd}}<div class="org-notes">{{markdownHTML .}}</div>{{end}}
+
+{{if or .Org.Website .Org.ContactEmail .Org.Mastodon .Org.Instagram .Org.Facebook}}
+<div class="org-links">
+  {{with .Org.Website}}<a href="{{.}}" class="org-link org-link-web" target="_blank" rel="noopener">{{$.Strings.T "org_website"}}</a>{{end}}
+  {{with .Org.ContactEmail}}<a href="mailto:{{.}}" class="org-link org-link-email">{{$.Strings.T "org_contact_email"}}</a>{{end}}
+  {{with .Org.Mastodon}}<a href="{{mastodonURL .}}" class="org-link org-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>{{end}}
+  {{with .Org.Instagram}}<a href="https://instagram.com/{{.}}" class="org-link org-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
+  {{with .Org.Facebook}}<a href="https://facebook.com/{{.}}" class="org-link org-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
+</div>
+{{end}}
+
+<div class="fediverse">
+  <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
+  <span class="fediverse-followers">{{$.Strings.TF "org_followers" .FollowerCount}}</span>
+</div>
+
+<div class="feed-links">
+  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+  <a href="/feed/org/{{.Slug}}/events.ical" class="feed-link">iCal</a>
+  <a href="/feed/org/{{.Slug}}/events.rss" class="feed-link">RSS</a>
+  <a href="/feed/org/{{.Slug}}/events.json" class="feed-link">JSON</a>
+</div>
+
+{{if .NewEventOrgID}}
+<div class="dash-actions">
+  <a href="/admin/events/new?org_id={{.NewEventOrgID}}" class="dash-btn">
+    {{if .IsMember}}+ {{$.Strings.T "admin_event_new_title"}}{{else}}+ {{$.Strings.T "admin_event_new_title"}} ({{.NewEventOrgName}}){{end}}
+  </a>
+  {{if .IsMember}}
+  <a href="/admin/events/import?org_id={{.Org.ID}}" class="dash-btn dash-btn-import">↑ {{$.Strings.T "admin_import_title"}}</a>
+  {{end}}
+</div>
+{{end}}
+
+<form method="get" action="/admin/organization/{{.Slug}}" class="event-filters">
+  <label class="filter-check">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "filter_include_past"}}
+  </label>
+  <select name="type" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_types"}}</option>
+    <option value="ball">{{$.Strings.T "filter_type_ball"}}</option>
+    <option value="workshop">{{$.Strings.T "filter_type_workshop"}}</option>
+    <option value="festival">{{$.Strings.T "filter_type_festival"}}</option>
+  </select>
+  <select name="dance" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_dances"}}</option>
+    {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
+  </select>
+  <a href="/admin/organization/{{.Slug}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
+</form>
+
+{{if .Events}}
+<p class="result-count">{{if and .TotalCount (gt .TotalCount (len .Events))}}{{.TotalCount}}{{else}}{{len .Events}}{{end}} {{$.Strings.T "admin_events_count"}}</p>
+{{end}}
+
+<form method="post" action="/admin/events/merge" id="event-bulk-form">
+<div class="bulk-edit-layout">
+<aside class="bulk-side" id="event-bulk-side">
+  <span class="event-bulk-count"></span>
+  <button type="submit" class="btn-sm btn-merge bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+  <button type="button" class="btn-sm event-bulk-tpl-btn bulk-action-btn" disabled>{{$.Strings.T "evt_apply_template_btn"}}</button>
+  <span class="bulk-sep"></span>
+  <div class="bq-group">
+    <label class="bq-label">{{$.Strings.T "evt_bulk_attrs_location"}}</label>
+    <div class="af-field bq-af">
+      <input type="text" id="bq-loc-input" class="af-input bq-input" placeholder="—" autocomplete="off">
+      <div id="bq-loc-suggest" class="af-suggest" hidden></div>
+    </div>
+    <input type="hidden" id="bq-loc-id" value="">
+  </div>
+  <div class="bq-group">
+    <label class="bq-label">{{$.Strings.T "evt_bulk_attrs_series"}}</label>
+    <select id="bq-series" class="bq-select">
+      <option value="">—</option>
+      {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+    </select>
+  </div>
+  <button type="button" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply" onclick="applyBulkQuick()">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+  <span class="bulk-sep"></span>
+  <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_more"}}</button>
+  <span class="bulk-sep"></span>
+  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+  {{if eq $.User.Role "admin"}}
+  <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_delete"}}')">{{$.Strings.T "evt_bulk_delete_btn"}}</button>
+  {{end}}
+</aside>
+<div class="bulk-main">
+{{if .Events}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th class="col-cb"><input type="checkbox" id="event-cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
+      <th data-sort="str">{{$.Strings.T "col_date"}}</th>
+      <th data-sort="str">{{$.Strings.T "col_title"}}</th>
+      <th data-sort="str">{{$.Strings.T "col_location"}}</th>
+      <th data-sort="str">Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Events}}
+  <tr>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{derefInt .OrganizationID}}{{end}}"></td>
+    <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
+    <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
+    <td>
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
+      {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+    </td>
+    <td style="white-space:nowrap">
+      {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+      {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if eq $.User.Role "admin"}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty-msg">{{$.Strings.T "no_events_found"}}</p>
+{{end}}
+</div>
+</div>
+</form>
+
+<dialog id="bulk-attrs-dialog" style="padding:1.5rem;border:1px solid #ccc;border-radius:8px;min-width:360px;max-width:520px;width:90vw">
+  <h3 style="margin:0 0 1rem;font-size:1rem">{{$.Strings.T "evt_bulk_attrs_title"}}</h3>
+  <form id="bulk-attrs-form" method="post" action="/admin/events/bulk-set-attributes">
+    <div id="bulk-attrs-ids"></div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-tags-enable"> {{$.Strings.T "evt_bulk_attrs_tags"}}</label>
+      <div class="ba-group-body" id="ba-tags-body" hidden>
+        <div class="ba-checks">{{range .AllTags}}<label class="ba-check"><input type="checkbox" name="add_tags" value="{{.Slug}}"> {{.Name}}</label>{{end}}</div>
+      </div>
+    </div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-dances-enable"> {{$.Strings.T "evt_bulk_attrs_dances"}}</label>
+      <div class="ba-group-body" id="ba-dances-body" hidden>
+        <div class="ba-checks">{{range .Dances}}<label class="ba-check"><input type="checkbox" name="add_dances" value="{{.ID}}"> {{.Name}}</label>{{end}}</div>
+      </div>
+    </div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-food-enable"> {{$.Strings.T "evt_bulk_attrs_food"}}</label>
+      <div class="ba-group-body" id="ba-food-body" hidden>
+        <label class="ba-radio"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+        <label class="ba-radio"><input type="radio" name="food" value="__unset__"> {{$.Strings.T "food_unset"}}</label>
+      </div>
+    </div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-drink-enable"> {{$.Strings.T "evt_bulk_attrs_drink"}}</label>
+      <div class="ba-group-body" id="ba-drink-body" hidden>
+        <label class="ba-radio"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+        <label class="ba-radio"><input type="radio" name="drink" value="__unset__"> {{$.Strings.T "drink_unset"}}</label>
+      </div>
+    </div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-access-enable"> {{$.Strings.T "evt_bulk_attrs_access"}}</label>
+      <div class="ba-group-body" id="ba-access-body" hidden>
+        <div class="ba-tristate-row"><span class="ba-ts-label">{{$.Strings.T "access_wheelchair"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_wheelchair" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_wheelchair" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+        <div class="ba-tristate-row"><span class="ba-ts-label">{{$.Strings.T "attr_bar"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_bar" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_bar" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+        <div class="ba-tristate-row"><span class="ba-ts-label">{{$.Strings.T "attr_kitchen"}}</span>
+          <label class="ba-radio"><input type="radio" name="attr_kitchen" value="1"> {{$.Strings.T "attr_yes"}}</label>
+          <label class="ba-radio"><input type="radio" name="attr_kitchen" value="0"> {{$.Strings.T "attr_no"}}</label>
+        </div>
+      </div>
+    </div>
+    <div class="ba-group">
+      <label class="ba-group-toggle"><input type="checkbox" id="ba-pricing-enable"> {{$.Strings.T "evt_bulk_attrs_pricing"}}</label>
+      <div class="ba-group-body" id="ba-pricing-body" hidden>
+        <label class="ba-radio"><input type="radio" name="pricing_type" value="free"> {{$.Strings.T "pricing_free"}}</label>
+        <label class="ba-radio"><input type="radio" name="pricing_type" value="donation"> {{$.Strings.T "pricing_donation"}}</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem">
+      <button type="button" onclick="document.getElementById('bulk-attrs-dialog').close()" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>
+      <button type="submit" style="padding:.35rem .8rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+    </div>
+  </form>
+</dialog>
+
+{{end}}{{/* .Data */}}
+<style>
+.org-banner{width:100%;max-height:280px;object-fit:cover;border-radius:6px;margin-bottom:1rem}
+.org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
+.org-page-header h1{margin:0}
+.org-desc,.org-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
+.org-desc p,.org-notes p{margin:.5rem 0}
+.org-desc a,.org-notes a{color:var(--link)}
+.org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
+.org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
+.org-link-web{background:#1a6eb5}.org-link-email{background:#555}.org-link-mastodon{background:#563acc}.org-link-instagram{background:#c13584}.org-link-facebook{background:#1877f2}
+.fediverse{background:var(--fedi-bg);border:1px solid var(--fedi-border);border-radius:6px;padding:.6rem .9rem;margin:1rem 0;font-size:.9rem}
+.fediverse code{font-size:.85rem;color:var(--fg-dim)}
+.fediverse-followers{margin-left:.6rem;font-size:.82rem;color:var(--fg-muted);background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:12px;padding:.1rem .55rem}
+.feed-links{margin:.75rem 0 1.25rem;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
+.dash-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
+.dash-btn{display:inline-block;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;text-decoration:none;color:#fff;background:#1a6eb5}
+.dash-btn:hover{background:#0d4a80}
+.dash-btn-import{background:#217a3c}
+.dash-btn-import:hover{background:#155727}
+.event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px}
+.event-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:var(--bg-card)}
+.filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
+.btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:var(--fg-dim);text-decoration:none;background:var(--bg-card)}
+.btn-reset:hover{background:var(--bg-hover)}
+.result-count{font-size:.85rem;color:var(--fg-muted);margin:.25rem 0 .5rem}
+.table-wrap{overflow-x:auto}
+.ext-link{font-size:.75rem;color:#888;text-decoration:none;vertical-align:super;margin-left:.15rem}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border-lite);vertical-align:top}
+.event-table thead th{background:var(--bg-subtle);font-weight:600;color:var(--fg-2);white-space:nowrap}
+.event-table tbody tr:hover{background:var(--bg-hover)}
+.badge.pub{background:#d4edda;color:#155724}
+.badge.unpub{background:#fff3cd;color:#856404}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
+.btn-sm:hover{background:#f0f0f0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+.btn-merge{background:#856404;color:#fff;border:none}
+.btn-merge:hover{background:#664e03}
+.btn-assign{background:#1a6eb5;color:#fff;border:none}
+.btn-assign:hover{background:#0d4a80}
+.btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
+.btn-cancel-bulk:hover{background:#b85f00}
+.btn-attrs{background:#5e6ad2;color:#fff;border:none}
+.btn-attrs:hover{background:#3d4fb5}
+.bulk-sep{width:1px;height:1.4em;background:#ccc;margin:0 .1rem}
+.bulk-action-btn:disabled{opacity:.45;cursor:default}
+.bulk-edit-layout{display:grid;grid-template-columns:160px 1fr;gap:1.25rem;align-items:start}
+.bulk-side{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.5rem;background:var(--bg-subtle);padding:.6rem;border-radius:6px;border:1px solid var(--border)}
+.bulk-side .bulk-sep{display:none}
+.bulk-side .event-bulk-count{font-size:.85rem;color:var(--fg-dim);text-align:center}
+@media(max-width:900px){.bulk-edit-layout{display:block}.bulk-side{position:static;flex-direction:row;flex-wrap:wrap;margin-bottom:.75rem}.bulk-side .bulk-sep{display:block}.bulk-side .event-bulk-count{text-align:left}}
+.col-cb{width:2rem;text-align:center}
+.af-field{position:relative}
+.af-input{max-width:11rem;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:var(--bg-card)}
+.af-suggest{position:absolute;top:100%;left:0;min-width:100%;z-index:10;background:var(--bg-card);border:1px solid #ccc;border-radius:4px;max-height:200px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap}
+.af-suggest div{padding:.35rem .6rem;cursor:pointer;font-size:.85rem}
+.af-suggest div:hover,.af-suggest div.af-active{background:var(--bg-hover)}
+.bq-group{display:flex;flex-direction:column;gap:.2rem;width:100%}
+.bq-label{font-size:.78rem;font-weight:600;color:var(--fg-muted)}
+.bq-af{width:100%}
+.bq-input{width:100%;max-width:none;box-sizing:border-box}
+.bq-select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem;width:100%;background:var(--bg-card)}
+.bq-apply{width:100%;justify-content:center;background:#1a6eb5;color:#fff;border:none;margin-top:.15rem}
+.bq-apply:hover:not(:disabled){background:#0d4a80}
+@media(max-width:900px){.bq-group{flex-direction:row;align-items:center;gap:.35rem;width:auto}.bq-apply{width:auto}}
+.ba-group{border:1px solid var(--border-lite);border-radius:6px;margin-bottom:.6rem;overflow:hidden}
+.ba-group-toggle{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--bg-subtle);cursor:pointer;font-size:.88rem;font-weight:600;color:var(--fg-2);margin:0}
+.ba-group-toggle input{accent-color:#1a6eb5}
+.ba-group-body{padding:.6rem .75rem;display:flex;flex-wrap:wrap;gap:.4rem .75rem;border-top:1px solid var(--border-lite)}
+.ba-checks{display:flex;flex-wrap:wrap;gap:.3rem .75rem}
+.ba-check,.ba-radio{display:flex;align-items:center;gap:.3rem;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.ba-tristate-row{display:flex;align-items:center;gap:.5rem;width:100%;margin-bottom:.25rem}
+.ba-ts-label{font-size:.82rem;color:var(--fg-muted);min-width:7rem}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+</style>
+<script>
+var _afLocs = {{locationsJSON .Data.Locations}};
+(function(){
+  function setupSuggest(opts){
+    var input=document.getElementById(opts.inputId),hidden=opts.hiddenId?document.getElementById(opts.hiddenId):null,box=document.getElementById(opts.suggestId);
+    if(!input||!box)return;
+    function hide(){box.hidden=true;box.innerHTML='';}
+    input.addEventListener('input',function(){
+      if(hidden)hidden.value='';
+      var q=input.value.trim().toLowerCase();
+      if(q.length<1){hide();return;}
+      var matches=opts.items().filter(function(it){return it.label.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+      if(!matches.length){hide();return;}
+      box.innerHTML=matches.map(function(it,i){return '<div data-idx="'+i+'">'+it.label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';}).join('');
+      box._matches=matches;box.hidden=false;
+    });
+    box.addEventListener('mousedown',function(e){
+      if(e.target&&e.target.dataset.idx!==undefined){e.preventDefault();var it=box._matches[+e.target.dataset.idx];input.value=it.label;if(hidden)hidden.value=it.id;hide();}
+    });
+    input.addEventListener('blur',function(){setTimeout(hide,150);});
+    input.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();var first=box._matches&&box._matches[0];if(first&&!box.hidden){input.value=first.label;if(hidden)hidden.value=first.id;}else if(!input.value.trim()&&hidden){hidden.value='';}hide();}
+    });
+  }
+  setupSuggest({inputId:'bq-loc-input',hiddenId:'bq-loc-id',suggestId:'bq-loc-suggest',items:function(){return _afLocs.map(function(l){return {id:l.id,label:l.label};});}});
+})();
+function applyBulkQuick(){
+  var checked=document.querySelectorAll('.event-cb:checked');if(!checked.length)return;
+  var f=document.createElement('form');f.method='post';f.action='/admin/events/bulk-set-attributes';
+  checked.forEach(function(cb){var i=document.createElement('input');i.type='hidden';i.name='event_ids';i.value=cb.value;f.appendChild(i);});
+  function addField(n,v){if(!v)return;var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);}
+  addField('location_id',document.getElementById('bq-loc-id').value);
+  addField('series_id',document.getElementById('bq-series').value);
+  document.body.appendChild(f);f.submit();
+}
+function openBulkAttrsModal(){
+  var checked=document.querySelectorAll('.event-cb:checked');if(!checked.length)return;
+  var c=document.getElementById('bulk-attrs-ids');c.innerHTML='';
+  checked.forEach(function(cb){var i=document.createElement('input');i.type='hidden';i.name='event_ids';i.value=cb.value;c.appendChild(i);});
+  document.getElementById('bulk-attrs-dialog').showModal();
+}
+document.querySelectorAll('.ba-group-toggle input[type=checkbox]').forEach(function(cb){
+  var body=cb.closest('.ba-group').querySelector('.ba-group-body');
+  if(!body)return;
+  cb.addEventListener('change',function(){body.hidden=!cb.checked;});
+});
+function delEvent(id){var f=document.createElement('form');f.method='post';f.action='/admin/events/'+id+'/delete';document.body.appendChild(f);f.submit();}
+(function(){
+  var cbAll=document.getElementById('event-cb-all');
+  if(!cbAll)return;
+  var cbs=document.querySelectorAll('.event-cb');
+  var countEls=document.querySelectorAll('.event-bulk-count');
+  var actionBtns=document.querySelectorAll('.bulk-action-btn');
+  function updateCount(){
+    var n=document.querySelectorAll('.event-cb:checked').length;
+    countEls.forEach(function(el){el.textContent=n>0?n+' ✓':'';});
+    actionBtns.forEach(function(btn){btn.disabled=n===0;});
+  }
+  cbAll.addEventListener('change',function(){cbs.forEach(function(cb){cb.checked=cbAll.checked;});updateCount();});
+  cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+  document.querySelectorAll('.event-bulk-tpl-btn').forEach(function(tplBtn){
+    tplBtn.addEventListener('click',function(){
+      var checked=document.querySelectorAll('.event-cb:checked');if(!checked.length)return;
+      var p=new URLSearchParams();checked.forEach(function(cb){p.append('event_ids',cb.value);});
+      window.location.href='/admin/events/template-assign?'+p.toString();
+    });
+  });
+})();
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+(function(){
+  var mergeForm=document.getElementById('event-bulk-form');
+  if(!mergeForm)return;
+  mergeForm.addEventListener('submit',function(){
+    var ids={};document.querySelectorAll('.event-cb:checked').forEach(function(cb){ids[cb.value]=true;});
+    mergeForm.querySelectorAll('input[name^="event_org_"]').forEach(function(inp){if(!ids[inp.name.replace('event_org_','')])inp.remove();});
+  });
+})();
+function orgFetchNow(id){
+  var btn=document.getElementById('btn-fetch-now');
+  btn.disabled=true;btn.textContent='Fetching…';
+  fetch('/admin/fetchurls/'+id+'/run',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json();})
+    .then(function(d){btn.textContent=d.error?'✗ '+d.error:'✓ '+d.count+' events';btn.disabled=false;})
+    .catch(function(){btn.textContent='✗ Error';btn.disabled=false;});
+}
+</script>
+{{end}}

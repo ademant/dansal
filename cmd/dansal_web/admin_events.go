@@ -1359,10 +1359,10 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		}
 
 		if prefill == nil {
-			if orgStr := r.URL.Query().Get("org_id"); orgStr != "" {
-				if oid, err := strconv.Atoi(orgStr); err == nil && oid > 0 {
-					prefill = &EventPrefill{OrgID: oid}
-				}
+			oid, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
+			lid, _ := strconv.Atoi(r.URL.Query().Get("loc_id"))
+			if oid > 0 || lid > 0 {
+				prefill = &EventPrefill{OrgID: oid, LocID: lid}
 			}
 		}
 
@@ -2243,5 +2243,238 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		default:
 			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 		}
+	}
+}
+
+// ── Admin org dashboard (/admin/organization/{slug}) ─────────────────────────
+
+type AdminOrgDashboardData struct {
+	Org              Organization
+	Slug             string
+	Handle           string
+	FollowerCount    int
+	Events           []Event
+	OrgMap           map[int]string
+	Locations        []Location
+	Dances           []Dance
+	AllTags          []Tag
+	Series           []EventSeries
+	FilterIncludePast bool
+	TotalCount       int
+	IsMember         bool   // admin or member of this org
+	NewEventOrgID    int    // org to pre-assign "new event" to
+	NewEventOrgName  string // org name shown on the button when not a member
+}
+
+func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		slug := r.PathValue("slug")
+
+		orgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			http.Error(w, "could not load organizations", http.StatusBadGateway)
+			return
+		}
+
+		var org Organization
+		var found bool
+		for _, o := range orgs {
+			if effectiveSlug(o) == slug {
+				org = o
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.NotFound(w, r)
+			return
+		}
+
+		token := getSessionToken(r)
+
+		orgMap := make(map[int]string, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o.Name
+		}
+
+		// Membership and new-event org determination.
+		var isMember bool
+		var newEventOrgID int
+		var newEventOrgName string
+
+		if su.Role == "admin" {
+			isMember = true
+			newEventOrgID = org.ID
+			newEventOrgName = org.Name
+		} else {
+			userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
+			for _, oid := range userOrgIDs {
+				if oid == org.ID {
+					isMember = true
+					break
+				}
+			}
+			if isMember {
+				newEventOrgID = org.ID
+				newEventOrgName = org.Name
+			} else if len(userOrgIDs) > 0 {
+				newEventOrgID = userOrgIDs[0]
+				newEventOrgName = orgMap[newEventOrgID]
+			}
+		}
+
+		followerCount, _ := countFollowers(db, org.ID)
+		handle := "@" + slug + "@" + cfg.Domain
+
+		includePast := r.URL.Query().Get("include_past") == "1"
+		params := url.Values{}
+		params.Set("org_id", strconv.Itoa(org.ID))
+		params.Set("limit", "1000")
+		if includePast {
+			params.Set("include_past", "true")
+		}
+
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
+
+		locs, _ := client.GetLocations(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		allTags, _ := client.GetTags(r.Context())
+		series, _ := client.GetSeriesList(r.Context(), token)
+
+		renderTemplate(w, tmpls.adminOrgDashboard, tmplData(r, cfg, i18n, org.Name, AdminOrgDashboardData{
+			Org:               org,
+			Slug:              slug,
+			Handle:            handle,
+			FollowerCount:     followerCount,
+			Events:            events,
+			OrgMap:            orgMap,
+			Locations:         locs,
+			Dances:            dances,
+			AllTags:           allTags,
+			Series:            series,
+			FilterIncludePast: includePast,
+			TotalCount:        total,
+			IsMember:          isMember,
+			NewEventOrgID:     newEventOrgID,
+			NewEventOrgName:   newEventOrgName,
+		}))
+	}
+}
+
+// ── Admin location dashboard (/admin/location/{id}) ──────────────────────────
+
+type AdminLocationDashboardData struct {
+	Location          Location
+	Events            []Event
+	OrgMap            map[int]string
+	Locations         []Location
+	Dances            []Dance
+	AllTags           []Tag
+	Series            []EventSeries
+	FilterIncludePast bool
+	TotalCount        int
+	NewEventOrgID     int    // org to pre-assign "new event" to
+	NewEventOrgName   string // shown on the button
+}
+
+func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		loc, err := client.GetLocation(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		token := getSessionToken(r)
+
+		orgs, _ := client.GetOrganizations(r.Context())
+		orgMap := make(map[int]string, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o.Name
+		}
+
+		// Determine which org to pre-assign for new events.
+		var newEventOrgID int
+		var newEventOrgName string
+
+		if su.Role == "admin" {
+			if len(loc.OrganizationIDs) > 0 {
+				newEventOrgID = loc.OrganizationIDs[0]
+				newEventOrgName = orgMap[newEventOrgID]
+			}
+		} else {
+			userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
+			locOrgSet := make(map[int]bool, len(loc.OrganizationIDs))
+			for _, oid := range loc.OrganizationIDs {
+				locOrgSet[oid] = true
+			}
+			for _, oid := range userOrgIDs {
+				if locOrgSet[oid] {
+					newEventOrgID = oid
+					newEventOrgName = orgMap[oid]
+					break
+				}
+			}
+			if newEventOrgID == 0 && len(userOrgIDs) > 0 {
+				newEventOrgID = userOrgIDs[0]
+				newEventOrgName = orgMap[newEventOrgID]
+			}
+		}
+
+		includePast := r.URL.Query().Get("include_past") == "1"
+		params := url.Values{}
+		params.Set("location_id", strconv.Itoa(id))
+		params.Set("limit", "1000")
+		if includePast {
+			params.Set("include_past", "true")
+		}
+
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
+
+		locs, _ := client.GetLocations(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		allTags, _ := client.GetTags(r.Context())
+		series, _ := client.GetSeriesList(r.Context(), token)
+
+		locTitle := loc.ShortName
+		if locTitle == "" {
+			locTitle = loc.Location
+		}
+
+		renderTemplate(w, tmpls.adminLocationDashboard, tmplData(r, cfg, i18n, locTitle, AdminLocationDashboardData{
+			Location:          loc,
+			Events:            events,
+			OrgMap:            orgMap,
+			Locations:         locs,
+			Dances:            dances,
+			AllTags:           allTags,
+			Series:            series,
+			FilterIncludePast: includePast,
+			TotalCount:        total,
+			NewEventOrgID:     newEventOrgID,
+			NewEventOrgName:   newEventOrgName,
+		}))
 	}
 }

@@ -40,8 +40,11 @@ func adminImportEventsPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) htt
 		if !ok {
 			return
 		}
+		selectedOrgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
 		title := i18n.T(r, "admin_import_title")
-		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{}))
+		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
+			SelectedOrgID: selectedOrgID,
+		}))
 	}
 }
 

@@ -285,6 +285,8 @@ func main() {
 		r.HandleFunc("POST /admin/templates/{id}/delete", adminRateLimit(adminTemplateDeleteHandler(db)))
 		r.HandleFunc("GET /admin/templates/{id}/data", adminTemplateDataHandler(db))
 
+		r.HandleFunc("GET /admin/organization/{slug}", adminOrgDashboardHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("GET /admin/location/{id}", adminLocationDashboardHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client))
 		r.HandleFunc("GET /admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n))

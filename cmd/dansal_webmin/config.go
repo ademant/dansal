@@ -20,6 +20,7 @@ type Config struct {
 	AdminSocket           string `yaml:"admin_socket"`
 	SiteName              string `yaml:"site_name"`
 	Instance              string `yaml:"instance"`
+	OrgID                 int    `yaml:"org_id"`      // optional: filter dashboard events to this org
 	WebDBPath             string `yaml:"web_db_path"` // path to web.db for site-config editing
 	ImagesDir             string `yaml:"images_dir"`  // path to images dir for logo/banner/favicon
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`

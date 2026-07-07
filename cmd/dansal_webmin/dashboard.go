@@ -83,9 +83,12 @@ type DashboardData struct {
 	CollectedAt     string
 }
 
-func getDashboardEvents(ctx context.Context, dansalURL string) ([]DashboardEvent, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		dansalURL+"/api/v1/events?include_past=true&limit=500", nil)
+func getDashboardEvents(ctx context.Context, dansalURL string, orgID int) ([]DashboardEvent, error) {
+	u := dansalURL + "/api/v1/events?include_past=true&limit=500"
+	if orgID > 0 {
+		u += "&org_id=" + fmt.Sprintf("%d", orgID)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +230,7 @@ func collectDashboard(ctx context.Context, cfg *Config) DashboardData {
 		d.DansalInfo = info
 	}
 
-	d.Events, _ = getDashboardEvents(ctx, cfg.DansalURL)
+	d.Events, _ = getDashboardEvents(ctx, cfg.DansalURL, cfg.OrgID)
 
 	for _, unit := range monitoredUnits(cfg.Instance) {
 		d.Services = append(d.Services, getServiceStatus(unit))

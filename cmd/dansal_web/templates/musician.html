@@ -6,13 +6,15 @@
   <img src="{{.Musician.ImageURL}}" class="musician-photo" alt="{{.Musician.Bandname}}">
   {{end}}
   <div>
-    <h1>{{.Musician.Bandname}}{{with .Musician.ShortName}} <small class="short-name">({{.}})</small>{{end}}</h1>
+    <div class="musician-title-row">
+      <h1>{{.Musician.Bandname}}{{with .Musician.ShortName}} <small class="short-name">({{.}})</small>{{end}}</h1>
+      {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+    </div>
     <div class="musician-meta">
       {{if .Musician.Country}}<span class="chip">{{.Musician.Country}}</span>{{end}}
       {{if .Musician.BeginYear}}<span class="chip">est. {{.Musician.BeginYear}}</span>{{end}}
     </div>
   </div>
-  {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon btn-edit-musician" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
 </div>
 
 {{if .Musician.Biography}}
@@ -118,6 +120,8 @@
 <style>
 .musician-header{display:flex;align-items:flex-start;gap:1.25rem;margin-bottom:1.25rem;flex-wrap:wrap}
 .musician-photo{width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border)}
+.musician-title-row{display:flex;align-items:center;gap:.4rem}
+.musician-title-row h1{margin:0}
 .short-name{font-size:1rem;font-weight:400;color:var(--fg-faint)}
 .musician-meta{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
 .musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
@@ -132,7 +136,6 @@
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
 .detail-list{margin:.25rem 0;padding-left:1.25rem;color:var(--fg-dim);font-size:.95rem}
 .detail-list li{margin-bottom:.2rem}
-.btn-edit-musician{margin-left:auto;align-self:flex-start}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 .events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
 .events-heading-row .section-heading{margin:0}

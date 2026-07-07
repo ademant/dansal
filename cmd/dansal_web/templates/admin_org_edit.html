@@ -7,8 +7,8 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 <div class="org-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" id="save-btn" class="btn-primary" form="org-edit-form" disabled>{{$.Strings.T "admin_save"}}</button>
-  <a href="{{if .From}}{{.From}}{{else}}/admin/organizations{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
 </div>
 <form method="post" enctype="multipart/form-data" class="edit-form" id="org-edit-form">
   <input type="hidden" name="from" value="{{.From}}">
@@ -412,6 +412,29 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   form.addEventListener('input',check);
   form.addEventListener('change',check);
   check();
+})();
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}
+  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/organizations{{end}}';}
+}
+(function(){
+  var form=document.getElementById('org-edit-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
 })();
 (function(){
   var websiteInp = document.getElementById('website');

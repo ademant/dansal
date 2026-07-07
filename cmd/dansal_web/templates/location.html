@@ -16,7 +16,10 @@
 {{with .Location}}
 <div class="loc-page-header">
   <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
-  {{if $.User}}<a href="/admin/locations/{{.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+  {{if $.User}}
+  <a href="/admin/location/{{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
+  <a href="/admin/locations/{{.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+  {{end}}
 </div>
 
 <div class="loc-meta">

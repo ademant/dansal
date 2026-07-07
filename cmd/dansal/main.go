@@ -315,6 +315,17 @@ func startTokenCleanup() {
 				db.Exec("DELETE FROM tokens WHERE last_seen_at IS NOT NULL AND last_seen_at < ?", idleCutoff)
 			}
 			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", now)
+			// Clean up users pre-created by webauthnInviteBegin that were never
+			// completed: their invite session expired, they have no credentials,
+			// and they have no org membership.
+			db.Exec(`DELETE FROM users WHERE id IN (
+				SELECT CAST(json_extract(data,'$.user_id') AS INTEGER)
+				FROM webauthn_sessions
+				WHERE json_extract(data,'$.invite_id') IS NOT NULL
+				  AND expires_at < ?
+			) AND id NOT IN (SELECT user_id FROM webauthn_credentials)
+			  AND id NOT IN (SELECT user_id FROM organization_members)`, now)
+			db.Exec("DELETE FROM webauthn_sessions WHERE expires_at < ?", now)
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {

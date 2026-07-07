@@ -88,6 +88,7 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var url = btn.dataset.runUrl;
+    var row = btn.closest('tr');
     btn.disabled = true;
     fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
       .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
@@ -97,8 +98,24 @@ document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
             res.data.updated + ' {{.Strings.T "fetch_run_updated"}}, ' +
             res.data.new + ' {{.Strings.T "fetch_run_new"}}, ' +
             res.data.unchanged + ' {{.Strings.T "fetch_run_unchanged"}}', true);
+          var now = new Date();
+          var dateCell = row.querySelector('.date-cell');
+          if (dateCell) {
+            dateCell.setAttribute('data-val', Math.floor(now.getTime() / 1000));
+            dateCell.textContent = now.toLocaleDateString();
+          }
+          var resultCell = row.querySelector('.result-cell');
+          if (resultCell) {
+            var count = String(res.data.count);
+            resultCell.innerHTML = '<span class="result-ok" title="' + count + '">' + count + '</span>';
+          }
         } else {
           showToast(res.data.error || '{{.Strings.T "fetch_run_error"}}', false);
+          var resultCell = row.querySelector('.result-cell');
+          if (resultCell) {
+            var errMsg = 'error: ' + (res.data.error || '?');
+            resultCell.innerHTML = '<span class="result-err" title="' + errMsg.replace(/"/g, '&quot;') + '">' + errMsg + '</span>';
+          }
         }
       })
       .catch(function(){ showToast('{{.Strings.T "fetch_run_error"}}', false); })

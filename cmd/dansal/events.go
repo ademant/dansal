@@ -1736,6 +1736,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	var locationIDArg any
+	if locationID > 0 {
+		locationIDArg = locationID
+	}
 
 	var pricingArg any
 	if req.Pricing != nil {
@@ -1760,7 +1764,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
 		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
-		req.Title, req.Description, startTime, endTime, locationID,
+		req.Title, req.Description, startTime, endTime, locationIDArg,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),

@@ -215,14 +215,17 @@
           <thead><tr><th data-sort="str">{{$.Strings.T "loc_name"}}</th><th data-sort="str">{{$.Strings.T "loc_town"}}</th><th></th></tr></thead>
           <tbody>
           {{range .LocOrgFirst}}
-          <tr>
+          <tr data-group="org">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
             <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
           </tr>
           {{end}}
+          {{if and .LocOrgFirst .LocOthers}}
+          <tr class="loc-table-sep" data-group="sep"><td colspan="3">— {{$.Strings.T "loc_sep_no_org"}} —</td></tr>
+          {{end}}
           {{range .LocOthers}}
-          <tr>
+          <tr data-group="other">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
             <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
@@ -854,6 +857,7 @@
 .assign-table td{padding:.3rem .5rem;border-bottom:1px solid #eee;vertical-align:middle}
 .assign-table tr:last-child td{border-bottom:none}
 .assign-table td:last-child{width:1%;white-space:nowrap}
+.loc-table-sep td{padding:.2rem .5rem;font-size:.78rem;color:#888;background:#f5f5f5;text-align:center;border-bottom:1px solid #ddd;font-style:italic;pointer-events:none}
 .assign-picker-actions{display:flex;gap:.5rem;margin-top:.5rem}
 .btn-primary-sm{padding:.2rem .6rem;background:#1a6eb5;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:.8rem;white-space:nowrap}
 .btn-primary-sm:hover{background:#0d4a80}
@@ -886,9 +890,17 @@ function toggleDifficulty(){
 document.querySelectorAll('#org-picker-table,#loc-picker-table').forEach(initSortable);
 function filterAssignTable(tableID,q){
   q=q.toLowerCase();
+  var hasOrg=false, hasOther=false;
   document.querySelectorAll('#'+tableID+' tbody tr').forEach(function(row){
-    row.style.display=(!q||row.textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+    var g=row.dataset.group;
+    if(g==='sep') return; // handle separator after counting
+    var show=!q||row.textContent.toLowerCase().indexOf(q)>=0;
+    row.style.display=show?'':'none';
+    if(show&&g==='org') hasOrg=true;
+    if(show&&g==='other') hasOther=true;
   });
+  var sep=document.querySelector('#'+tableID+' tbody tr[data-group="sep"]');
+  if(sep) sep.style.display=(hasOrg&&hasOther)?'':'none';
 }
 function orgNameByID(id){
   var sel=document.getElementById('org_id');

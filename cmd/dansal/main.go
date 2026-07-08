@@ -2549,11 +2549,12 @@ func main() {
 	smux.Handle("POST /api/v1/locations/merge", auth(mergeLocations))
 	smux.Handle("POST /api/v1/locations/bulk-assign-org", auth(bulkAssignLocationOrg))
 	smux.Handle("POST /api/v1/locations/unassign-org", auth(unassignLocationOrg))
+	smux.Handle("PUT /api/v1/locations/{id}", auth(putLocation))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(patchLocation))
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
-	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationPatchRequest])
+	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])
 
 	// Dance endpoints (protected writes)
 	smux.Handle("POST /api/v1/dances", auth(createDance))

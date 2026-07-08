@@ -510,7 +510,8 @@ List and get are public. Create/update/delete require authentication. `GET /api/
 GET    /api/v1/locations
 GET    /api/v1/locations/{id}
 POST   /api/v1/locations              # auth required
-PATCH  /api/v1/locations/{id}         # auth required
+PUT    /api/v1/locations/{id}         # auth required — full replace
+PATCH  /api/v1/locations/{id}         # auth required — partial merge
 DELETE /api/v1/locations/{id}         # auth required
 POST   /api/v1/locations/merge        # admin: merge duplicate locations
 POST   /api/v1/locations/bulk-assign-org
@@ -520,6 +521,8 @@ GET    /api/v1/locations/event-counts # auth required
 ```
 
 List and get are public. Locations support `Accept: application/geo+json` on the list endpoint.
+
+**`PUT` vs `PATCH`:** `PUT` replaces the entire location — send the complete object; any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array/map fields (`organization_ids`, `attributes`, `aliases`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
 
 **Query parameters for GET /api/v1/locations:**
 - `name=` — substring match on location name

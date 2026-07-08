@@ -232,29 +232,37 @@ func similarLocations(name, street, town string) []Location {
 	return result
 }
 
-// LocationPatchRequest is the body accepted by PATCH /api/v1/locations/{id}.
-type LocationPatchRequest struct {
-	Location        string          `json:"location"`
-	ShortName       string          `json:"short_name"`
-	Address         string          `json:"address"`
-	Zipcode         string          `json:"zipcode"`
-	Town            string          `json:"town"`
-	Country         string          `json:"country"`
-	CountryCode     string          `json:"country_code"`
-	Region          string          `json:"region"`
-	Latitude        *float64        `json:"latitude"`
-	Longitude       *float64        `json:"longitude"`
-	Internetsite    string          `json:"internetsite"`
-	OsmID           *int64          `json:"osm_id"`
-	OsmType         string          `json:"osm_type"`
-	WikidataID      string          `json:"wikidata_id"`
-	MBPlaceID       string          `json:"mb_place_id"`
-	OrganizationIDs []int           `json:"organization_ids"`
-	NotesMd         string          `json:"notes_md"`
-	Attributes      map[string]bool `json:"attributes,omitempty"`
-	Parking         string          `json:"parking,omitempty" enum:"none,free,paid"`
-	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
-	Aliases         []string        `json:"aliases,omitempty"`
+// LocationMergePatchRequest is the body accepted by PATCH /api/v1/locations/{id}
+// (Content-Type: application/merge-patch+json — RFC 7396). Every field is a
+// pointer: an omitted key leaves the existing value unchanged; a present key
+// sets it (an explicit "" clears a plain text field). Array/map fields
+// (organization_ids, attributes, aliases) are replaced wholesale when
+// present, never merged element-by-element. As with events (#721), clearing
+// a field that is itself optional at the domain level isn't distinguishable
+// from omitting it through a single pointer — send a full PUT for that case.
+type LocationMergePatchRequest struct {
+	Location        *string          `json:"location,omitempty"`
+	ShortName       *string          `json:"short_name,omitempty"`
+	Address         *string          `json:"address,omitempty"`
+	Zipcode         *string          `json:"zipcode,omitempty"`
+	Town            *string          `json:"town,omitempty"`
+	Country         *string          `json:"country,omitempty"`
+	CountryCode     *string          `json:"country_code,omitempty"`
+	Region          *string          `json:"region,omitempty"`
+	Latitude        *float64         `json:"latitude,omitempty"`
+	Longitude       *float64         `json:"longitude,omitempty"`
+	Internetsite    *string          `json:"internetsite,omitempty"`
+	OsmID           *int64           `json:"osm_id,omitempty"`
+	OsmType         *string          `json:"osm_type,omitempty"`
+	WikidataID      *string          `json:"wikidata_id,omitempty"`
+	MBPlaceID       *string          `json:"mb_place_id,omitempty"`
+	OrganizationIDs *[]int           `json:"organization_ids,omitempty"`
+	NotesMd         *string          `json:"notes_md,omitempty"`
+	Attributes      *map[string]bool `json:"attributes,omitempty"`
+	Parking         *string          `json:"parking,omitempty" enum:"none,free,paid"`
+	FloorCondition  *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	NoStreetShoes   *bool            `json:"no_street_shoes,omitempty"`
+	Aliases         *[]string        `json:"aliases,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -619,33 +627,49 @@ func writeLocationsAtom(w http.ResponseWriter, r *http.Request, locations []Loca
 	})
 }
 
-// PATCH /api/v1/locations/{id} - Full update including organization_id
-func patchLocation(w http.ResponseWriter, r *http.Request) {
+// checkLocationWriteAccess enforces that non-admins are members of the
+// location's organization (publishers included). Writes the error response
+// and returns false if access should be denied.
+func checkLocationWriteAccess(w http.ResponseWriter, callerID int, requesterRole, id string) bool {
+	if requesterRole == RoleAdmin {
+		return true
+	}
+	if requesterRole != RoleUser && requesterRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return false
+	}
+	idInt, _ := strconv.Atoi(id)
+	if !locationHasOrgMember(idInt, callerID) {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// PUT /api/v1/locations/{id} — full replace. Requires the complete object;
+// fields omitted from the body are cleared to their zero value, matching PUT
+// semantics elsewhere (e.g. events).
+func putLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, requesterRole := callerFromRequest(r)
 	id := r.PathValue("id")
-
-	if requesterRole != RoleAdmin {
-		if requesterRole != RoleUser && requesterRole != RolePublisher {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		var exists int
-		if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
-			writeError(w, "Location not found", http.StatusNotFound)
-			return
-		}
-		idInt, _ := strconv.Atoi(id)
-		if !locationHasOrgMember(idInt, callerID) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
+	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
+		return
 	}
 
-	var req LocationPatchRequest
+	var req LocationCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Location == "" {
+		writeError(w, "location is required", http.StatusBadRequest)
 		return
 	}
 	if !validCountryCode(req.CountryCode) {
@@ -657,6 +681,71 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validFloorCondition(req.FloorCondition) {
+		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
+		return
+	}
+
+	var existing int
+	if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&existing); err != nil || existing == 0 {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+
+	gh := ""
+	if req.Latitude != nil && req.Longitude != nil {
+		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
+	}
+	if _, err := db.Exec(
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, aliasesJSON(req.Aliases), resolveDisplayName(callerID), id,
+	); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	idInt, _ := strconv.Atoi(id)
+	syncLocationOrgs(idInt, req.OrganizationIDs)
+
+	var loc Location
+	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.id=? GROUP BY l.id`, id), &loc); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(loc)
+}
+
+// PATCH /api/v1/locations/{id} — partial merge (RFC 7396 JSON Merge Patch).
+// Only fields present in the body are changed; omitted fields keep their
+// current value. Requires Content-Type: application/merge-patch+json.
+func patchLocation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	callerID, requesterRole := callerFromRequest(r)
+	id := r.PathValue("id")
+	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
+		return
+	}
+
+	var req LocationMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.CountryCode != nil && !validCountryCode(*req.CountryCode) {
+		writeError(w, "country_code must be 2 uppercase letters (e.g. 'DE') or empty", http.StatusBadRequest)
+		return
+	}
+	if req.Parking != nil && !validParking(*req.Parking) {
+		writeError(w, "invalid parking value", http.StatusBadRequest)
+		return
+	}
+	if req.FloorCondition != nil && !validFloorCondition(*req.FloorCondition) {
 		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 		return
 	}
@@ -674,36 +763,76 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Location != "" {
-		loc.Location = req.Location
+	if req.Location != nil {
+		loc.Location = *req.Location
 	}
-	loc.ShortName = req.ShortName
-	loc.Address = req.Address
-	loc.Zipcode = req.Zipcode
-	if req.Town != "" {
-		loc.Town = req.Town
+	if req.ShortName != nil {
+		loc.ShortName = *req.ShortName
 	}
-	loc.Country = req.Country
-	loc.CountryCode = req.CountryCode
-	loc.Region = req.Region
-	loc.Latitude = req.Latitude
-	loc.Longitude = req.Longitude
-	loc.Internetsite = req.Internetsite
-	loc.OsmID = req.OsmID
-	loc.OsmType = req.OsmType
-	loc.WikidataID = req.WikidataID
-	loc.MBPlaceID = req.MBPlaceID
-	loc.OrganizationIDs = req.OrganizationIDs
-	loc.NotesMd = req.NotesMd
-	loc.Attributes = req.Attributes
-	loc.Parking = req.Parking
-	loc.FloorCondition = req.FloorCondition
-	loc.Aliases = req.Aliases
+	if req.Address != nil {
+		loc.Address = *req.Address
+	}
+	if req.Zipcode != nil {
+		loc.Zipcode = *req.Zipcode
+	}
+	if req.Town != nil {
+		loc.Town = *req.Town
+	}
+	if req.Country != nil {
+		loc.Country = *req.Country
+	}
+	if req.CountryCode != nil {
+		loc.CountryCode = *req.CountryCode
+	}
+	if req.Region != nil {
+		loc.Region = *req.Region
+	}
+	if req.Latitude != nil {
+		loc.Latitude = req.Latitude
+	}
+	if req.Longitude != nil {
+		loc.Longitude = req.Longitude
+	}
+	if req.Internetsite != nil {
+		loc.Internetsite = *req.Internetsite
+	}
+	if req.OsmID != nil {
+		loc.OsmID = req.OsmID
+	}
+	if req.OsmType != nil {
+		loc.OsmType = *req.OsmType
+	}
+	if req.WikidataID != nil {
+		loc.WikidataID = *req.WikidataID
+	}
+	if req.MBPlaceID != nil {
+		loc.MBPlaceID = *req.MBPlaceID
+	}
+	if req.OrganizationIDs != nil {
+		loc.OrganizationIDs = *req.OrganizationIDs
+	}
+	if req.NotesMd != nil {
+		loc.NotesMd = *req.NotesMd
+	}
+	if req.Attributes != nil {
+		loc.Attributes = *req.Attributes
+	}
+	if req.Parking != nil {
+		loc.Parking = *req.Parking
+	}
+	if req.FloorCondition != nil {
+		loc.FloorCondition = *req.FloorCondition
+	}
+	if req.NoStreetShoes != nil {
+		loc.NoStreetShoes = *req.NoStreetShoes
+	}
+	if req.Aliases != nil {
+		loc.Aliases = *req.Aliases
+	}
 
-	gh := ""
+	gh := loc.Geohash
 	if loc.Latitude != nil && loc.Longitude != nil {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
-		loc.Geohash = gh
 	}
 	if _, err := db.Exec(
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
@@ -712,7 +841,9 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	syncLocationOrgs(loc.ID, loc.OrganizationIDs)
+	if req.OrganizationIDs != nil {
+		syncLocationOrgs(loc.ID, loc.OrganizationIDs)
+	}
 
 	json.NewEncoder(w).Encode(loc)
 }

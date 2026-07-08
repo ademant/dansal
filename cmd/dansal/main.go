@@ -256,7 +256,10 @@ func corsOrigin(r *http.Request) string {
 
 // CORSMiddleware adds Access-Control-Allow-Origin to every response and
 // handles OPTIONS preflight requests inline so each route need not register
-// a separate OPTIONS handler.
+// a separate OPTIONS handler. A bare OPTIONS request (no
+// Access-Control-Request-Method header, i.e. not a browser preflight) falls
+// through to smux instead, so routes registered for OPTIONS — e.g. the
+// write-endpoint schema responders — are reachable.
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if o := corsOrigin(r); o != "" {
@@ -265,7 +268,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 				w.Header().Add("Vary", "Origin")
 			}
 		}
-		if r.Method == http.MethodOptions {
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Role, X-User-ID")
 			w.Header().Set("Access-Control-Max-Age", "86400")

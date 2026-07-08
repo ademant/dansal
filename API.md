@@ -110,7 +110,54 @@ Both are public. `/api/v1/info` returns server version and build metadata. `/api
 GET /api/v1/vocabulary
 ```
 
-Public. Returns enumerable field values (event types, tag categories, countries, etc.) for building dynamic UIs.
+Public. Returns enumerable field values for building dynamic UIs, keyed by field name. Most keys are arrays of `{"slug": ..., "label_key": ...}` — `slug` is the value stored on the record, `label_key` is the i18n key dansal's own admin UI uses to render it (clients may translate `label_key` themselves or fall back to `slug`):
+
+- `food` — `sold`, `potluck`, `none`
+- `drink` — `alcohol`, `soft`, `none`
+- `floor_condition` — `parquet`, `stone`, `tiles`, `grass`, `sand`, `pavement`
+- `parking` (locations only) — `none`, `free`, `paid`
+- `workshop_difficulties` — `beginner`, `advanced`, `profi`
+- `pricing_types` — `free`, `donation`, `single`, `multiple`
+- `contact_post_types` — `ride_offer`, `ride_request`, `sleep_offer`, `sleep_request`, `ticket_offer`, `ticket_request`, `lost_item`, `found_item`
+- `timetable_entry_types` — `bal`, `workshop`
+- `price_labels` — suggested labels (`normal`, `reduced`, `presale`, `member`, `supporter`) for a `pricing.type = "multiple"` entry's `label` field. **Suggestions only** — `Price.Label` remains free text with no server-side validation against this list, since organizations have tiers this fixed set can't cover.
+- `attributes`, `osm_types` — plain string arrays (no `label_key`, self-explanatory).
+
+**Empty string (`""`) semantics** for `food`, `drink`, `floor_condition`, `parking`:
+- `floor_condition` on an **event**: inherit from the venue's own `floor_condition`.
+- All other fields, and `floor_condition`/`parking` on a **location**: not set.
+
+`food`, `drink`, `floor_condition` (events and locations) and `parking` (locations) are validated server-side on write — `POST`/`PUT`/`PATCH` with a value outside the vocabulary (and not `""`) returns `400 Bad Request`.
+
+### Discovering request body shape: `OPTIONS`
+
+For write endpoints where the accepted JSON body isn't obvious from field names alone, send an `OPTIONS` request to the same path as the `POST`/`PUT`/`PATCH` endpoint to get a JSON schema of expected fields:
+
+```
+OPTIONS /api/v1/events
+OPTIONS /api/v1/events/{id}
+OPTIONS /api/v1/locations
+OPTIONS /api/v1/locations/{id}
+OPTIONS /api/v1/musicians
+OPTIONS /api/v1/musicians/{id}
+OPTIONS /api/v1/instructors
+OPTIONS /api/v1/instructors/{id}
+```
+
+Public — no auth required, since this describes shape, not data. Response shape:
+
+```json
+{
+  "fields": {
+    "title": {"type": "string", "required": true},
+    "food": {"type": "string", "enum": ["sold", "potluck", "none"]},
+    "musicians": {"type": "array", "items": "number"},
+    "pricing": {"type": "object"}
+  }
+}
+```
+
+`required` is true when the field has no JSON `omitempty` tag. `enum` is present only on fields with a closed vocabulary. Not available for users, organizations, API keys, or publishers — those are account/credential-provisioning endpoints that stay admin-driven rather than a self-service integration target.
 
 ## Authentication Endpoints
 

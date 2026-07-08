@@ -78,8 +78,8 @@ type LocationCreateRequest struct {
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`
 	NotesMd         string          `json:"notes_md"`
 	Attributes      map[string]bool `json:"attributes,omitempty"`
-	Parking         string          `json:"parking,omitempty"`
-	FloorCondition  string          `json:"floor_condition,omitempty"`
+	Parking         string          `json:"parking,omitempty" enum:"none,free,paid"`
+	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 }
@@ -232,22 +232,29 @@ func similarLocations(name, street, town string) []Location {
 	return result
 }
 
-type LocationUpdateRequest struct {
-	ShortName      string          `json:"short_name"`
-	Address        string          `json:"address"`
-	Zipcode        string          `json:"zipcode"`
-	Town           string          `json:"town"`
-	Country        string          `json:"country"`
-	CountryCode    string          `json:"country_code"`
-	Region         string          `json:"region"`
-	Latitude       *float64        `json:"latitude,omitempty"`
-	Longitude      *float64        `json:"longitude,omitempty"`
-	Internetsite   string          `json:"internetsite"`
-	NotesMd        string          `json:"notes_md"`
-	Attributes     map[string]bool `json:"attributes,omitempty"`
-	Parking        string          `json:"parking,omitempty"`
-	FloorCondition string          `json:"floor_condition,omitempty"`
-	NoStreetShoes  bool            `json:"no_street_shoes,omitempty"`
+// LocationPatchRequest is the body accepted by PATCH /api/v1/locations/{id}.
+type LocationPatchRequest struct {
+	Location        string          `json:"location"`
+	ShortName       string          `json:"short_name"`
+	Address         string          `json:"address"`
+	Zipcode         string          `json:"zipcode"`
+	Town            string          `json:"town"`
+	Country         string          `json:"country"`
+	CountryCode     string          `json:"country_code"`
+	Region          string          `json:"region"`
+	Latitude        *float64        `json:"latitude"`
+	Longitude       *float64        `json:"longitude"`
+	Internetsite    string          `json:"internetsite"`
+	OsmID           *int64          `json:"osm_id"`
+	OsmType         string          `json:"osm_type"`
+	WikidataID      string          `json:"wikidata_id"`
+	MBPlaceID       string          `json:"mb_place_id"`
+	OrganizationIDs []int           `json:"organization_ids"`
+	NotesMd         string          `json:"notes_md"`
+	Attributes      map[string]bool `json:"attributes,omitempty"`
+	Parking         string          `json:"parking,omitempty" enum:"none,free,paid"`
+	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	Aliases         []string        `json:"aliases,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -419,6 +426,14 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		}
 		if !validCountryCode(req.CountryCode) {
 			writeError(w, "country_code must be 2 uppercase letters (e.g. 'DE') or empty", http.StatusBadRequest)
+			return
+		}
+		if !validParking(req.Parking) {
+			writeError(w, "invalid parking value", http.StatusBadRequest)
+			return
+		}
+		if !validFloorCondition(req.FloorCondition) {
+			writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 			return
 		}
 	}
@@ -628,35 +643,21 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var req struct {
-		Location        string          `json:"location"`
-		ShortName       string          `json:"short_name"`
-		Address         string          `json:"address"`
-		Zipcode         string          `json:"zipcode"`
-		Town            string          `json:"town"`
-		Country         string          `json:"country"`
-		CountryCode     string          `json:"country_code"`
-		Region          string          `json:"region"`
-		Latitude        *float64        `json:"latitude"`
-		Longitude       *float64        `json:"longitude"`
-		Internetsite    string          `json:"internetsite"`
-		OsmID           *int64          `json:"osm_id"`
-		OsmType         string          `json:"osm_type"`
-		WikidataID      string          `json:"wikidata_id"`
-		MBPlaceID       string          `json:"mb_place_id"`
-		OrganizationIDs []int           `json:"organization_ids"`
-		NotesMd         string          `json:"notes_md"`
-		Attributes      map[string]bool `json:"attributes,omitempty"`
-		Parking         string          `json:"parking,omitempty"`
-		FloorCondition  string          `json:"floor_condition,omitempty"`
-		Aliases         []string        `json:"aliases,omitempty"`
-	}
+	var req LocationPatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if !validCountryCode(req.CountryCode) {
 		writeError(w, "country_code must be 2 uppercase letters (e.g. 'DE') or empty", http.StatusBadRequest)
+		return
+	}
+	if !validParking(req.Parking) {
+		writeError(w, "invalid parking value", http.StatusBadRequest)
+		return
+	}
+	if !validFloorCondition(req.FloorCondition) {
+		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 		return
 	}
 

@@ -2527,6 +2527,8 @@ func main() {
 	smux.Handle("POST /api/v1/events/bulk-set-attributes", auth(http.HandlerFunc(bulkSetEventAttributes)))
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
+	smux.HandleFunc("OPTIONS /api/v1/events", optionsSchema[EventWriteRequest])
+	smux.HandleFunc("OPTIONS /api/v1/events/{id}", optionsSchema[EventWriteRequest])
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
@@ -2546,6 +2548,8 @@ func main() {
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(patchLocation))
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
+	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
+	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationPatchRequest])
 
 	// Dance endpoints (protected writes)
 	smux.Handle("POST /api/v1/dances", auth(createDance))
@@ -2555,11 +2559,15 @@ func main() {
 	smux.Handle("POST /api/v1/musicians", auth(createMusician))
 	smux.Handle("PUT /api/v1/musicians/{id}", auth(updateMusician))
 	smux.Handle("DELETE /api/v1/musicians/{id}", auth(deleteMusician))
+	smux.HandleFunc("OPTIONS /api/v1/musicians", optionsSchema[MusicianCreateRequest])
+	smux.HandleFunc("OPTIONS /api/v1/musicians/{id}", optionsSchema[MusicianCreateRequest])
 
 	// Instructor endpoints
 	smux.Handle("POST /api/v1/instructors", auth(createInstructor))
 	smux.Handle("PUT /api/v1/instructors/{id}", auth(updateInstructor))
 	smux.Handle("DELETE /api/v1/instructors/{id}", auth(deleteInstructor))
+	smux.HandleFunc("OPTIONS /api/v1/instructors", optionsSchema[InstructorRequest])
+	smux.HandleFunc("OPTIONS /api/v1/instructors/{id}", optionsSchema[InstructorRequest])
 	smux.Handle("PUT /api/v1/events/{id}/instructors", auth(setEventInstructors))
 
 	// Protected image writes

@@ -92,7 +92,7 @@ type EventWriteRequest struct {
 	HasBall            bool                 `json:"has_ball"`
 	HasWorkshop        bool                 `json:"has_workshop"`
 	HasFestival        bool                 `json:"has_festival"`
-	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty"`
+	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
 	IsCancelled        bool                 `json:"is_cancelled"`
 	IsPublished        bool                 `json:"is_published"`
 	Tags               []string             `json:"tags"`
@@ -108,9 +108,9 @@ type EventWriteRequest struct {
 	Availability       string               `json:"availability,omitempty"`
 	TicketsTotal       int                  `json:"tickets_total,omitempty"`
 	BookingEnabled     bool                 `json:"booking_enabled,omitempty"`
-	Food               string               `json:"food,omitempty"`
-	Drink              string               `json:"drink,omitempty"`
-	FloorCondition     string               `json:"floor_condition,omitempty"`
+	Food               string               `json:"food,omitempty" enum:"sold,potluck,none"`
+	Drink              string               `json:"drink,omitempty" enum:"alcohol,soft,none"`
+	FloorCondition     string               `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
 	Attributes         map[string]bool      `json:"attributes,omitempty"`
 	ContactName        string               `json:"contact_name,omitempty"`
 	ContactEmail       string               `json:"contact_email,omitempty"`
@@ -162,6 +162,29 @@ type Pricing struct {
 	Currency string  `json:"currency,omitempty"`
 	Prices   []Price `json:"prices,omitempty"`
 }
+
+// VocabEntry describes one allowed value in a closed vocabulary, pairing the
+// value stored on the record with the i18n key dansal's admin UI uses to
+// render it. Clients may translate label_key themselves or fall back to slug.
+type VocabEntry struct {
+	Slug     string `json:"slug"`
+	LabelKey string `json:"label_key"`
+}
+
+// Closed vocabularies for event/location fields. "" is always accepted and
+// means "inherit from venue" (event floor_condition) or "not set" (all other
+// fields, and floor_condition/parking on a location).
+var (
+	validFoodValues           = map[string]bool{"": true, "sold": true, "potluck": true, "none": true}
+	validDrinkValues          = map[string]bool{"": true, "alcohol": true, "soft": true, "none": true}
+	validFloorConditionValues = map[string]bool{"": true, "parquet": true, "stone": true, "tiles": true, "grass": true, "sand": true, "pavement": true}
+	validParkingValues        = map[string]bool{"": true, "none": true, "free": true, "paid": true}
+)
+
+func validFood(s string) bool           { return validFoodValues[s] }
+func validDrink(s string) bool          { return validDrinkValues[s] }
+func validFloorCondition(s string) bool { return validFloorConditionValues[s] }
+func validParking(s string) bool        { return validParkingValues[s] }
 
 // resolveLocationID returns the location ID to use for a write request.
 // If location_id is supplied directly it is used without a DB round-trip.
@@ -590,6 +613,10 @@ func applyPagination(r *http.Request, query *string, args *[]any) {
 }
 
 // GET /api/v1/vocabulary
+//
+// Empty-string ("") semantics for food/drink/floor_condition/parking:
+//   - floor_condition on an event: inherit from the venue's own floor_condition
+//   - all other fields, and floor_condition/parking on a location: not set
 func getVocabulary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"event_types": []map[string]string{
@@ -597,10 +624,65 @@ func getVocabulary(w http.ResponseWriter, r *http.Request) {
 			{"key": "workshop", "label": "Workshop"},
 			{"key": "festival", "label": "Festival"},
 		},
-		"workshop_difficulties": []string{"beginner", "intermediate", "advanced"},
-		"pricing_types":         []string{"free", "donation", "single", "multiple"},
-		"attributes":            []string{"wheelchair", "bar", "kitchen"},
-		"osm_types":             []string{"node", "way", "relation"},
+		"workshop_difficulties": []VocabEntry{
+			{"beginner", "workshop_difficulty_beginner"},
+			{"advanced", "workshop_difficulty_advanced"},
+			{"profi", "workshop_difficulty_profi"},
+		},
+		"pricing_types": []VocabEntry{
+			{"free", "evt_free"},
+			{"donation", "evt_donation"},
+			{"single", "evt_pricing_single"},
+			{"multiple", "evt_pricing_multiple"},
+		},
+		"attributes": []string{"wheelchair", "bar", "kitchen"},
+		"osm_types":  []string{"node", "way", "relation"},
+		"food": []VocabEntry{
+			{"sold", "food_sold"},
+			{"potluck", "food_potluck"},
+			{"none", "food_none"},
+		},
+		"drink": []VocabEntry{
+			{"alcohol", "drink_alcohol"},
+			{"soft", "drink_soft"},
+			{"none", "drink_none"},
+		},
+		"floor_condition": []VocabEntry{
+			{"parquet", "floor_parquet"},
+			{"stone", "floor_stone"},
+			{"tiles", "floor_tiles"},
+			{"grass", "floor_grass"},
+			{"sand", "floor_sand"},
+			{"pavement", "floor_pavement"},
+		},
+		"parking": []VocabEntry{
+			{"none", "parking_none"},
+			{"free", "parking_free"},
+			{"paid", "parking_paid"},
+		},
+		"contact_post_types": []VocabEntry{
+			{"ride_offer", "board_ride_offer"},
+			{"ride_request", "board_ride_request"},
+			{"sleep_offer", "board_sleep_offer"},
+			{"sleep_request", "board_sleep_request"},
+			{"ticket_offer", "board_ticket_offer"},
+			{"ticket_request", "board_ticket_request"},
+			{"lost_item", "board_lost_item"},
+			{"found_item", "board_found_item"},
+		},
+		"timetable_entry_types": []VocabEntry{
+			{"bal", "tt_type_bal"},
+			{"workshop", "tt_type_workshop"},
+		},
+		// price_labels are suggestions only — Price.Label remains free text
+		// with no server-side validation against this list.
+		"price_labels": []VocabEntry{
+			{"normal", "price_label_normal"},
+			{"reduced", "price_label_reduced"},
+			{"presale", "price_label_presale"},
+			{"member", "price_label_member"},
+			{"supporter", "price_label_supporter"},
+		},
 	})
 }
 
@@ -1521,6 +1603,21 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		syncEventTypeTags(&requests[i].EventWriteRequest)
 	}
 
+	for _, req := range requests {
+		if !validFood(req.Food) {
+			writeError(w, "invalid food value", http.StatusBadRequest)
+			return
+		}
+		if !validDrink(req.Drink) {
+			writeError(w, "invalid drink value", http.StatusBadRequest)
+			return
+		}
+		if !validFloorCondition(req.FloorCondition) {
+			writeError(w, "invalid floor_condition value", http.StatusBadRequest)
+			return
+		}
+	}
+
 	if callerRole != RoleAdmin {
 		checked := make(map[int]bool)
 		for _, req := range requests {
@@ -1676,6 +1773,18 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validateTags(req.Tags); err != nil {
 		writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !validFood(req.Food) {
+		writeError(w, "invalid food value", http.StatusBadRequest)
+		return
+	}
+	if !validDrink(req.Drink) {
+		writeError(w, "invalid drink value", http.StatusBadRequest)
+		return
+	}
+	if !validFloorCondition(req.FloorCondition) {
+		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 		return
 	}
 
@@ -2430,6 +2539,14 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	if req.Food != nil && !validFood(*req.Food) {
+		writeError(w, "invalid food value", http.StatusBadRequest)
+		return
+	}
+	if req.Drink != nil && !validDrink(*req.Drink) {
+		writeError(w, "invalid drink value", http.StatusBadRequest)
 		return
 	}
 	// Non-admins may only reassign to an org they belong to, and may not unset the org.

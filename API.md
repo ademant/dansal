@@ -142,6 +142,9 @@ OPTIONS /api/v1/musicians
 OPTIONS /api/v1/musicians/{id}
 OPTIONS /api/v1/instructors
 OPTIONS /api/v1/instructors/{id}
+OPTIONS /api/v1/fetchurl
+OPTIONS /api/v1/fetchurl/{id}
+OPTIONS /api/v1/events/{id}/contact-posts
 ```
 
 Public — no auth required, since this describes shape, not data. Response shape:

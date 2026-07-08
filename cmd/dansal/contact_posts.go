@@ -94,6 +94,17 @@ var validContactPostTypes = map[string]bool{
 // lostFoundTypes holds the types that use a flat 30-day expiry regardless of event end.
 var lostFoundTypes = map[string]bool{"lost_item": true, "found_item": true}
 
+// ContactPostCreateRequest is the body accepted by POST /api/v1/events/{id}/contact-posts.
+type ContactPostCreateRequest struct {
+	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
+	City     string `json:"city"`
+	Persons  int    `json:"persons"`
+	Message  string `json:"message"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Telegram string `json:"telegram"`
+}
+
 // GET /api/v1/events/{id}/contact-posts
 // Public. Returns only email-verified posts; email field is never returned.
 func listContactPosts(w http.ResponseWriter, r *http.Request) {
@@ -150,15 +161,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Type     string `json:"type"`
-		City     string `json:"city"`
-		Persons  int    `json:"persons"`
-		Message  string `json:"message"`
-		Nickname string `json:"nickname"`
-		Email    string `json:"email"`
-		Telegram string `json:"telegram"`
-	}
+	var req ContactPostCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid request body", http.StatusBadRequest)
 		return

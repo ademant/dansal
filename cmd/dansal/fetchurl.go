@@ -21,13 +21,24 @@ import (
 
 type FetchURLRequest struct {
 	URL            string   `json:"url"`
-	Type           string   `json:"type"`
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss"`
 	Tags           []string `json:"tags"`
 	Organization   string   `json:"organization,omitempty"`    // find-or-create by name
 	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
 	TemplateID     *int     `json:"template_id,omitempty"`
-	TemplateMode   string   `json:"template_mode,omitempty"`
+	TemplateMode   string   `json:"template_mode,omitempty" enum:"fetch_master,template_master"`
 	TemplateData   string   `json:"template_data,omitempty"`
+}
+
+// FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
+type FetchSourcePatchRequest struct {
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss"`
+	Tags           []string `json:"tags"`
+	DanceIDs       []int    `json:"dance_ids"`
+	OrganizationID *int     `json:"organization_id"`
+	TemplateID     *int     `json:"template_id"`
+	TemplateMode   string   `json:"template_mode" enum:"fetch_master,template_master"`
+	TemplateData   string   `json:"template_data"`
 }
 
 type FetchSource struct {
@@ -597,15 +608,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var req struct {
-		Type           string   `json:"type"`
-		Tags           []string `json:"tags"`
-		DanceIDs       []int    `json:"dance_ids"`
-		OrganizationID *int     `json:"organization_id"`
-		TemplateID     *int     `json:"template_id"`
-		TemplateMode   string   `json:"template_mode"`
-		TemplateData   string   `json:"template_data"`
-	}
+	var req FetchSourcePatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid body", http.StatusBadRequest)
 		return

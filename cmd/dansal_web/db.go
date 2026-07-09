@@ -16,7 +16,7 @@ func migrationApplied(db *sql.DB, version int) bool {
 }
 
 func initDB(path string) *sql.DB {
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000&_synchronous=NORMAL&_cache_size=-8000&_mmap_size=134217728")
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}

@@ -29,7 +29,7 @@ func openWebDB(path string) *sql.DB {
 	if path == "" {
 		return nil
 	}
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=ON")
 	if err != nil {
 		log.Printf("open web db %s: %v", path, err)
 		return nil

@@ -1065,6 +1065,12 @@ function filterLocsByOrg(){
     else outOrg.push(o);
   });
   // Re-insert: blank option, inOrg, separator (if both buckets non-empty), outOrg.
+  // Save/restore the selection explicitly: removing options one at a time
+  // (below) transiently auto-selects whichever option the browser considers
+  // "first remaining" at each step, and that auto-selection cascades forward
+  // through the rebuild, silently leaving the LAST re-added option selected
+  // instead of preserving the original value.
+  var curVal=locSel.value;
   var blank=locSel.options[0];
   while(locSel.options.length) locSel.remove(0);
   locSel.add(blank);
@@ -1080,6 +1086,7 @@ function filterLocsByOrg(){
     s.textContent=sep?sep.textContent:'———';
     if(inOrg.length&&outOrg.length) locSel.add(s);
   }
+  locSel.value=curVal;
 }
 function restoreLocOptions(){ /* order restored on next filterLocsByOrg call or page reload */ }
 // Location → Org: show only orgs that own the selected location.

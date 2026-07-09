@@ -141,25 +141,29 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sendErr error
-	switch req.Channel {
-	case "email":
-		var msgID string
-		msgID, sendErr = sendEmailVerification(user, vURL)
-		if sendErr == nil {
-			db.Exec("UPDATE verification_tokens SET message_id=? WHERE token=?", msgID, token)
+	// Sent asynchronously — the response doesn't wait on delivery, so a send
+	// failure is logged and cleans up the token, but is never surfaced to
+	// the caller.
+	go func() {
+		var sendErr error
+		switch req.Channel {
+		case "email":
+			var msgID string
+			msgID, sendErr = sendEmailVerification(user, vURL)
+			if sendErr == nil {
+				db.Exec("UPDATE verification_tokens SET message_id=? WHERE token=?", msgID, token)
+			}
+		case "matrix":
+			sendErr = sendMatrixVerification(user, vURL)
 		}
-	case "matrix":
-		sendErr = sendMatrixVerification(user, vURL)
-	}
-	if sendErr != nil {
-		db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
-		log.Printf("verify: send failed for user %d channel %s: %v", targetID, req.Channel, sendErr)
-		writeError(w, "Failed to send verification: "+sendErr.Error(), http.StatusBadGateway)
-		return
-	}
+		if sendErr != nil {
+			db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
+			log.Printf("verify: send failed for user %d channel %s: %v", targetID, req.Channel, sendErr)
+			return
+		}
+		log.Printf("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Email)
+	}()
 
-	log.Printf("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Email)
 	w.WriteHeader(http.StatusNoContent)
 }
 

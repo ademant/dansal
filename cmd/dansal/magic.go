@@ -65,15 +65,24 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 	msgText := fmt.Sprintf("An admin has generated a login link for your account:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
 		magicURL, config.Server.MagicLoginExpirySecs/60)
 
+	// sentTo reflects the attempted channel, not confirmed delivery — the
+	// actual send happens asynchronously below so this handler never blocks
+	// on Telegram/Matrix API latency.
 	sentTo := ""
 	if telegramVerified == 1 && telegramChatID != "" {
-		if err2 := sendTelegramMessage(telegramChatID, msgText); err2 == nil {
-			sentTo = "telegram"
-		}
+		sentTo = "telegram"
+		go func() {
+			if err2 := sendTelegramMessage(telegramChatID, msgText); err2 != nil {
+				log.Printf("magic: telegram send failed for user %d: %v", userID, err2)
+			}
+		}()
 	} else if matrixVerified == 1 && matrixID != "" {
-		if err2 := sendMatrixMessage(matrixID, msgText); err2 == nil {
-			sentTo = "matrix"
-		}
+		sentTo = "matrix"
+		go func() {
+			if err2 := sendMatrixMessage(matrixID, msgText); err2 != nil {
+				log.Printf("magic: matrix send failed for user %d: %v", userID, err2)
+			}
+		}()
 	}
 
 	log.Printf("magic: admin user %s generated login link for user %d (sent_to=%q)", r.Header.Get("X-User-ID"), userID, sentTo)
@@ -179,31 +188,27 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		magicURL, config.Server.MagicLoginExpirySecs/60,
 	)
 
-	switch req.Channel {
-	case "telegram":
-		if err := sendTelegramMessage(telegramChatID, msgText); err != nil {
+	// Sent asynchronously — the response doesn't wait on delivery, so a
+	// failure here is logged and cleans up the token, but is never surfaced
+	// to the caller (matches this handler's "always returns 204" contract).
+	go func() {
+		var err error
+		switch req.Channel {
+		case "telegram":
+			err = sendTelegramMessage(telegramChatID, msgText)
+		case "matrix":
+			err = sendMatrixMessage(matrixID, msgText)
+		default: // "email"
+			_, err = SendEmail(user.Email, "Your passwordless login link", msgText, false)
+		}
+		if err != nil {
 			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
-			log.Printf("magic: telegram send failed for user %d (%s): %v", user.ID, user.Email, err)
-			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
+			log.Printf("magic: send failed for user %d (%s) via %s: %v", user.ID, user.Email, req.Channel, err)
 			return
 		}
-	case "matrix":
-		if err := sendMatrixMessage(matrixID, msgText); err != nil {
-			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
-			log.Printf("magic: matrix send failed for user %d (%s): %v", user.ID, user.Email, err)
-			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-	default: // "email"
-		if _, err := SendEmail(user.Email, "Your passwordless login link", msgText, false); err != nil {
-			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
-			log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Email, err)
-			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-	}
+		log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Email, req.Channel)
+	}()
 
-	log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Email, req.Channel)
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -91,7 +91,7 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 - **Services**: `dansal` (API, port 8000), `dansal-web` (frontend, port 8080 behind nginx), `dansal-webmin` (admin UI)
 - **DB migrations**: append idempotent `db.Exec(...)` calls at the end of `runMigrations()` in `cmd/dansal/main.go`; also update `createTables()` for fresh installs
 - **Maps**: always use `attachTileLayer(map)` from `base.html` — never call `L.tileLayer` directly
-- **Email**: always send in a goroutine — never block the HTTP handler
+- **Email, Telegram, Matrix**: always send in a goroutine — never block the HTTP handler
 - **New i18n strings**: add to all 7 language sections in `i18n.yaml` (`br`, `de`, `en`, `es`, `fr`, `it`, `nl`)
 
 ## DB migration safety-net pattern

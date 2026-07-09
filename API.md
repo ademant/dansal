@@ -702,11 +702,11 @@ POST   /api/v1/series/{id}/token/revoke
 GET    /api/v1/series/{id}/events           # list events belonging to this series
 PUT    /api/v1/series/{id}/events/{event_id}    # add one event to the series
 DELETE /api/v1/series/{id}/events/{event_id}    # remove one event from the series
-GET    /api/v1/series/token/{token}
-PATCH  /api/v1/series/token/{token}/events/{eventID}
+GET    /api/v1/series-by-token/{token}
+PATCH  /api/v1/series-by-token/{token}/events/{eventID}
 ```
 
-Authentication required (except `GET /api/v1/series/token/{token}` and the PATCH for external organizer access).
+Authentication required (except `GET /api/v1/series-by-token/{token}` and the PATCH for external organizer access).
 
 The `.../events/{event_id}` pair is the single-item counterpart to `assign-events`/`remove-from-series` (#727): `PUT` adds one event to the series (rejecting, with `409 Conflict`, an event whose `organization_id` doesn't match the series' organization — `assign-events` instead skips mismatches silently when bulk-assigning); `DELETE` removes one event, equivalent to `POST /api/v1/events/{id}/remove-from-series` but addressed from the series side.
 

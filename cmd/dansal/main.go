@@ -2628,8 +2628,8 @@ func main() {
 	// Event series endpoints
 	smux.Handle("GET /api/v1/series", auth(getSeries))
 	smux.Handle("POST /api/v1/series", auth(createSeries))
-	smux.HandleFunc("GET /api/v1/series/token/{token}", getSeriesByToken)
-	smux.HandleFunc("PATCH /api/v1/series/token/{token}/events/{eventID}", patchSeriesEventDescription)
+	smux.HandleFunc("GET /api/v1/series-by-token/{token}", getSeriesByToken)
+	smux.HandleFunc("PATCH /api/v1/series-by-token/{token}/events/{eventID}", patchSeriesEventDescription)
 	smux.Handle("GET /api/v1/series/{id}", auth(getSeriesByID))
 	smux.Handle("PUT /api/v1/series/{id}", auth(updateSeries))
 	smux.Handle("DELETE /api/v1/series/{id}", auth(deleteSeries))

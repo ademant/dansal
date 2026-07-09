@@ -622,7 +622,7 @@ func revokeSeriesToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/v1/series/token/{token}
+// GET /api/v1/series-by-token/{token}
 func getSeriesByToken(w http.ResponseWriter, r *http.Request) {
 	tok := r.PathValue("token")
 	row := db.QueryRow("SELECT "+seriesSelectCols+" FROM event_series WHERE invite_token=?", tok)
@@ -647,7 +647,7 @@ func getSeriesByToken(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(s)
 }
 
-// PATCH /api/v1/series/token/{token}/events/{eventID}
+// PATCH /api/v1/series-by-token/{token}/events/{eventID}
 func patchSeriesEventDescription(w http.ResponseWriter, r *http.Request) {
 	tok := r.PathValue("token")
 	eventIDStr := r.PathValue("eventID")

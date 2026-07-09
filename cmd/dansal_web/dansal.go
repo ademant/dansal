@@ -3396,7 +3396,7 @@ func (c *DansalClient) AssignEventsToSeries(ctx context.Context, seriesID int, e
 
 func (c *DansalClient) GetSeriesByInviteToken(ctx context.Context, seriesToken string) (EventSeries, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		c.BaseURL+"/api/v1/series/token/"+seriesToken, nil)
+		c.BaseURL+"/api/v1/series-by-token/"+seriesToken, nil)
 	if err != nil {
 		return EventSeries{}, err
 	}
@@ -3417,7 +3417,7 @@ func (c *DansalClient) GetSeriesByInviteToken(ctx context.Context, seriesToken s
 
 func (c *DansalClient) PatchSeriesEventDescription(ctx context.Context, seriesToken string, eventID int, description string) error {
 	b, _ := json.Marshal(map[string]string{"description": description})
-	path := fmt.Sprintf("/api/v1/series/token/%s/events/%d", seriesToken, eventID)
+	path := fmt.Sprintf("/api/v1/series-by-token/%s/events/%d", seriesToken, eventID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.BaseURL+path, bytes.NewReader(b))
 	if err != nil {
 		return err

@@ -105,6 +105,34 @@ type ContactPostCreateRequest struct {
 	Telegram string `json:"telegram"`
 }
 
+// ContactPostWriteRequest is the body accepted by PUT /api/v1/contact-posts/{id}
+// (Content-Type: application/json). Full replace of the editable fields
+// (type, city, persons, message, nickname) — any field omitted is cleared to
+// its zero value, same as PUT semantics elsewhere in the API. Authorization
+// is via the ?token= manage_token query parameter, not auth()/Bearer, since
+// board posts have no user account backing them (see #726).
+type ContactPostWriteRequest struct {
+	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
+	City     string `json:"city"`
+	Persons  int    `json:"persons"`
+	Message  string `json:"message"`
+	Nickname string `json:"nickname"`
+}
+
+// ContactPostMergePatchRequest is the body accepted by PATCH
+// /api/v1/contact-posts/{id} (Content-Type: application/merge-patch+json —
+// RFC 7396). Every field is a pointer: an omitted key leaves the existing
+// value unchanged; a present key sets it (an explicit "" clears a plain text
+// field). Authorization is via the ?token= manage_token query parameter, not
+// auth()/Bearer (see #726).
+type ContactPostMergePatchRequest struct {
+	Type     *string `json:"type,omitempty" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
+	City     *string `json:"city,omitempty"`
+	Persons  *int    `json:"persons,omitempty"`
+	Message  *string `json:"message,omitempty"`
+	Nickname *string `json:"nickname,omitempty"`
+}
+
 // GET /api/v1/events/{id}/contact-posts
 // Public. Returns only email-verified posts; email field is never returned.
 func listContactPosts(w http.ResponseWriter, r *http.Request) {
@@ -400,49 +428,53 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PATCH /api/v1/contact-posts/{id}?token={manage_token}
-// Public. Edits type, city, persons, message, nickname. Token must match and post must not be expired.
-func updateContactPost(w http.ResponseWriter, r *http.Request) {
+// checkContactPostManageToken loads a post's manage_token/expires_at and
+// verifies the caller-supplied token matches and the post hasn't expired.
+// Writes the error response and returns false if access should be denied.
+func checkContactPostManageToken(w http.ResponseWriter, postID int, token string) bool {
+	if token == "" {
+		writeError(w, "token required", http.StatusBadRequest)
+		return false
+	}
+	var storedToken, expiresAtStr string
+	err := db.QueryRow("SELECT manage_token, expires_at FROM contact_posts WHERE id=?", postID).
+		Scan(&storedToken, &expiresAtStr)
+	if err == sql.ErrNoRows {
+		writeError(w, "post not found", http.StatusNotFound)
+		return false
+	}
+	if err != nil {
+		writeError(w, "internal server error", http.StatusInternalServerError)
+		return false
+	}
+	if storedToken != token {
+		writeError(w, "invalid token", http.StatusForbidden)
+		return false
+	}
+	exp, err := parseTokenExpiration(expiresAtStr)
+	if err != nil || time.Now().After(exp) {
+		writeError(w, "post has expired", http.StatusGone)
+		return false
+	}
+	return true
+}
+
+// PUT /api/v1/contact-posts/{id}?token={manage_token}
+// Public. Full replace of type, city, persons, message, nickname. Token must
+// match and post must not be expired. Authorization is the manage_token, not
+// auth()/Bearer — see #726.
+func putContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	postID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
 	}
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		writeError(w, "token required", http.StatusBadRequest)
+	if !checkContactPostManageToken(w, postID, r.URL.Query().Get("token")) {
 		return
 	}
 
-	var storedToken, expiresAtStr string
-	err = db.QueryRow("SELECT manage_token, expires_at FROM contact_posts WHERE id=?", postID).
-		Scan(&storedToken, &expiresAtStr)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	if storedToken != token {
-		writeError(w, "invalid token", http.StatusForbidden)
-		return
-	}
-	exp, err := parseTokenExpiration(expiresAtStr)
-	if err != nil || time.Now().After(exp) {
-		writeError(w, "post has expired", http.StatusGone)
-		return
-	}
-
-	var req struct {
-		Type     string `json:"type"`
-		City     string `json:"city"`
-		Persons  int    `json:"persons"`
-		Message  string `json:"message"`
-		Nickname string `json:"nickname"`
-	}
+	var req ContactPostWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
@@ -450,7 +482,11 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 	req.Type = strings.TrimSpace(req.Type)
 	req.City = strings.TrimSpace(req.City)
 	req.Nickname = strings.TrimSpace(req.Nickname)
-	if req.Type != "" && !validContactPostTypes[req.Type] {
+	if req.Type == "" || req.City == "" || req.Nickname == "" {
+		writeError(w, "type, city and nickname are required", http.StatusBadRequest)
+		return
+	}
+	if !validContactPostTypes[req.Type] {
 		writeError(w, "invalid type", http.StatusBadRequest)
 		return
 	}
@@ -462,17 +498,82 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		req.Persons = 1
 	}
 
-	_, err = db.Exec(
-		`UPDATE contact_posts SET
-		   type    = CASE WHEN ?1 != '' THEN ?1 ELSE type END,
-		   city    = CASE WHEN ?2 != '' THEN ?2 ELSE city END,
-		   persons = ?3,
-		   message = ?4,
-		   nickname = CASE WHEN ?5 != '' THEN ?5 ELSE nickname END
-		 WHERE id = ?6`,
+	if _, err := db.Exec(
+		"UPDATE contact_posts SET type=?, city=?, persons=?, message=?, nickname=? WHERE id=?",
 		req.Type, req.City, req.Persons, req.Message, req.Nickname, postID,
-	)
+	); err != nil {
+		writeError(w, "failed to update post", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("contact_posts: replaced post %d via manage token", postID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PATCH /api/v1/contact-posts/{id}?token={manage_token}
+// Public. Partial update (RFC 7396 JSON Merge Patch) of type, city, persons,
+// message, nickname. Token must match and post must not be expired.
+// Authorization is the manage_token, not auth()/Bearer — see #726.
+func updateContactPost(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+	postID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
+		writeError(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+	if !checkContactPostManageToken(w, postID, r.URL.Query().Get("token")) {
+		return
+	}
+
+	var type_, city, message, nickname string
+	var persons int
+	if err := db.QueryRow(
+		"SELECT type, city, persons, COALESCE(message,''), nickname FROM contact_posts WHERE id=?", postID,
+	).Scan(&type_, &city, &persons, &message, &nickname); err != nil {
+		writeError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var req ContactPostMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Type != nil {
+		t := strings.TrimSpace(*req.Type)
+		if !validContactPostTypes[t] {
+			writeError(w, "invalid type", http.StatusBadRequest)
+			return
+		}
+		type_ = t
+	}
+	if req.City != nil {
+		city = strings.TrimSpace(*req.City)
+	}
+	if req.Nickname != nil {
+		nickname = strings.TrimSpace(*req.Nickname)
+	}
+	if req.Message != nil {
+		message = *req.Message
+	}
+	if containsLink(message) {
+		writeError(w, "message must not contain links", http.StatusBadRequest)
+		return
+	}
+	if req.Persons != nil {
+		persons = *req.Persons
+	}
+	if persons < 1 {
+		persons = 1
+	}
+
+	if _, err := db.Exec(
+		"UPDATE contact_posts SET type=?, city=?, persons=?, message=?, nickname=? WHERE id=?",
+		type_, city, persons, message, nickname, postID,
+	); err != nil {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
 	}

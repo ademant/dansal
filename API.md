@@ -145,6 +145,7 @@ OPTIONS /api/v1/instructors/{id}
 OPTIONS /api/v1/fetchurl
 OPTIONS /api/v1/fetchurl/{id}
 OPTIONS /api/v1/events/{id}/contact-posts
+OPTIONS /api/v1/contact-posts/{id}
 ```
 
 Public — no auth required, since this describes shape, not data. Response shape:
@@ -741,7 +742,8 @@ GET    /api/v1/contact-posts                    # all posts (auth required)
 GET    /api/v1/events/{id}/contact-posts        # posts for one event (public)
 POST   /api/v1/events/{id}/contact-posts        # create post (public, verification required)
 GET    /api/v1/contact-posts/manage/{token}     # get post by management token
-PATCH  /api/v1/contact-posts/{id}               # update (management token or admin)
+PUT    /api/v1/contact-posts/{id}               # full replace (management token)
+PATCH  /api/v1/contact-posts/{id}               # partial merge (management token)
 DELETE /api/v1/contact-posts/{id}               # delete (admin)
 DELETE /api/v1/contact-posts/token/{token}      # delete by management token
 POST   /api/v1/contact-posts/{id}/contact       # contact the poster (public)
@@ -749,6 +751,8 @@ GET    /api/v1/contact-requests/verify/{token}  # verify a contact request
 ```
 
 Public posts require email or Telegram verification before appearing.
+
+**Authorization for `PUT`/`PATCH` is different from every other resource in this API**: board posts have no user account backing them, so instead of `auth()`/Bearer, both are gated by the `?token={manage_token}` query parameter issued at creation time (the same token used by `DELETE .../token/{token}`) — an admin Bearer token does not grant access to these two endpoints. `PUT` (`Content-Type: application/json`) replaces `type`, `city`, `persons`, `message`, `nickname` wholesale — any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396, 415 otherwise) and only changes fields present in the body. Neither endpoint can change `email`/`telegram`, which stay fixed to the value used at creation for verification purposes.
 
 ## Bookings
 

@@ -1616,6 +1616,15 @@ func migrateDB() {
 	db.Exec("DROP INDEX IF EXISTS idx_events_published_start")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1")
 
+	// #742: the public feed/tag/town endpoints (events.go getEventsPublic,
+	// getEventsByTag, getEventsByTown) filter is_published=1 AND start_time >= ?
+	// ordered by start_time ASC — a different query shape than the general
+	// getEvents handler's default end_time-led "exclude past" filter above, which
+	// idx_events_published_end_start already serves. EXPLAIN QUERY PLAN confirmed
+	// this new index is used as a covering index for the start_time-led queries
+	// without displacing the end_time-led one, so both are kept.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_start_time ON events(start_time, end_time) WHERE is_published=1")
+
 	// #603: index on active (email-verified, non-expired) contact posts for the
 	// board listing query and the startup cleanup DELETE.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_active ON contact_posts(expires_at, created_at) WHERE email_verified=1")
@@ -2201,6 +2210,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url             ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1;
+	CREATE INDEX IF NOT EXISTS idx_events_published_start_time ON events(start_time, end_time) WHERE is_published=1;
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL;

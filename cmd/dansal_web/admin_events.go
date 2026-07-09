@@ -1427,6 +1427,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
+		token := getSessionToken(r)
 		renderErr := func(errKey string) {
 			title := i18n.T(r, "admin_event_new_title")
 			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
@@ -1478,12 +1479,14 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		var locReq EventLocReq
+		var selectedLocID int
 		switch r.FormValue("loc_choice") {
 		case "existing":
 			if v := r.FormValue("loc_id"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil {
 					for _, l := range bundle.Locations {
 						if l.ID == n {
+							selectedLocID = l.ID
 							locReq = EventLocReq{
 								Location:  l.Location,
 								Address:   l.Address,
@@ -1610,15 +1613,83 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		renderErrFull := func(errKey string) {
+			ev := Event{
+				Title:          req.Title,
+				Description:    req.Description,
+				StartTime:      req.StartTime,
+				EndTime:        req.EndTime,
+				HasBall:        req.HasBall,
+				HasWorkshop:    req.HasWorkshop,
+				HasFestival:    req.HasFestival,
+				BookingURL:     req.BookingURL,
+				Food:           req.Food,
+				Drink:          req.Drink,
+				FloorCondition: req.FloorCondition,
+				Attributes:     req.Attributes,
+				ContactName:    req.ContactName,
+				ContactEmail:   req.ContactEmail,
+				Tags:           req.Tags,
+				URL:            req.URL,
+				OrganizationID: req.OrganizationID,
+				Pricing:        req.Pricing,
+				Musicians:      musiciansByID(musicianIDs, bundle.Musicians),
+				Instructors:    instructorsByID(instructorIDs, bundle.Instructors),
+			}
+			if selectedLocID > 0 {
+				ev.LocationID = &selectedLocID
+			}
+			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, ev)
+			var eventOrg *Organization
+			if ev.OrganizationID != nil {
+				for i := range bundle.Orgs {
+					if bundle.Orgs[i].ID == *ev.OrganizationID {
+						eventOrg = &bundle.Orgs[i]
+						break
+					}
+				}
+			}
+			var userOrgs []Organization
+			if su.Role == "admin" {
+				userOrgs = bundle.Orgs
+			} else {
+				orgIDSet := make(map[int]bool)
+				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
+					orgIDSet[oid] = true
+				}
+				for _, o := range bundle.Orgs {
+					if orgIDSet[o.ID] {
+						userOrgs = append(userOrgs, o)
+					}
+				}
+			}
+			title := i18n.T(r, "admin_event_new_title")
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:              true,
+				Event:              ev,
+				Org:                eventOrg,
+				Organizations:      bundle.Orgs,
+				Locations:          bundle.Locations,
+				LocOrgFirst:        locOrgFirst,
+				LocOthers:          locOthers,
+				Musicians:          bundle.Musicians,
+				Instructors:        bundle.Instructors,
+				Dances:             bundle.Dances,
+				SelectedDanceNames: buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances),
+				UserOrgs:           userOrgs,
+				ErrorKey:           errKey,
+			}))
+		}
+
 		if req.Title == "" {
-			renderErr("evt_title_required")
+			renderErrFull("evt_title_required")
 			return
 		}
 
-		event, err := client.CreateEvent(r.Context(), req, getSessionToken(r))
+		event, err := client.CreateEvent(r.Context(), req, token)
 		if err != nil {
 			log.Printf("create event error: %v", err)
-			renderErr("admin_save_error")
+			renderErrFull("admin_save_error")
 			return
 		}
 
@@ -1746,6 +1817,32 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", event.ID), http.StatusSeeOther)
 		}
 	}
+}
+
+func musiciansByID(ids []int, all []Musician) []Musician {
+	var out []Musician
+	for _, id := range ids {
+		for _, m := range all {
+			if m.ID == id {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func instructorsByID(ids []int, all []Instructor) []Instructor {
+	var out []Instructor
+	for _, id := range ids {
+		for _, in := range all {
+			if in.ID == id {
+				out = append(out, in)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -1966,12 +2063,14 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		var locReq EventLocReq
+		var selectedLocID int
 		switch r.FormValue("loc_choice") {
 		case "existing":
 			if v := r.FormValue("loc_id"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil {
 					for _, l := range bundle.Locations {
 						if l.ID == n {
+							selectedLocID = l.ID
 							locReq = EventLocReq{
 								Location:  l.Location,
 								Address:   l.Address,
@@ -2107,14 +2206,86 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			applyTemplateFields(&req, tplOverride, tplFieldsSet, bundle.Locations)
 		}
 
+		renderErrFull := func(errKey string) {
+			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
+			event.Title = req.Title
+			event.Description = req.Description
+			event.StartTime = req.StartTime
+			event.EndTime = req.EndTime
+			event.HasBall = req.HasBall
+			event.HasWorkshop = req.HasWorkshop
+			event.HasFestival = req.HasFestival
+			event.BookingURL = req.BookingURL
+			event.Food = req.Food
+			event.Drink = req.Drink
+			event.FloorCondition = req.FloorCondition
+			event.Attributes = req.Attributes
+			event.ContactName = req.ContactName
+			event.ContactEmail = req.ContactEmail
+			event.IsCancelled = req.IsCancelled
+			event.Availability = req.Availability
+			event.TicketsTotal = req.TicketsTotal
+			event.BookingEnabled = req.BookingEnabled
+			event.IsPublished = req.IsPublished
+			event.Tags = req.Tags
+			event.URL = req.URL
+			event.OrganizationID = req.OrganizationID
+			event.Pricing = req.Pricing
+			event.Musicians = musiciansByID(musicianIDs, bundle.Musicians)
+			event.Instructors = instructorsByID(instructorIDs, bundle.Instructors)
+			if selectedLocID > 0 {
+				event.LocationID = &selectedLocID
+			}
+			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+			var evtOrg *Organization
+			if event.OrganizationID != nil {
+				for i := range bundle.Orgs {
+					if bundle.Orgs[i].ID == *event.OrganizationID {
+						evtOrg = &bundle.Orgs[i]
+						break
+					}
+				}
+			}
+			var userOrgs []Organization
+			if su.Role == "admin" {
+				userOrgs = bundle.Orgs
+			} else {
+				orgIDSet := make(map[int]bool)
+				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, saveTok) {
+					orgIDSet[oid] = true
+				}
+				for _, o := range bundle.Orgs {
+					if orgIDSet[o.ID] {
+						userOrgs = append(userOrgs, o)
+					}
+				}
+			}
+			title := i18n.T(r, "admin_event_edit_title")
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:              false,
+				Event:              event,
+				Org:                evtOrg,
+				Organizations:      bundle.Orgs,
+				Locations:          bundle.Locations,
+				LocOrgFirst:        locOrgFirst,
+				LocOthers:          locOthers,
+				Musicians:          bundle.Musicians,
+				Instructors:        bundle.Instructors,
+				Dances:             bundle.Dances,
+				SelectedDanceNames: buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances),
+				UserOrgs:           userOrgs,
+				ErrorKey:           errKey,
+			}))
+		}
+
 		if req.Title == "" {
-			renderErr("evt_title_required")
+			renderErrFull("evt_title_required")
 			return
 		}
 
-		if _, err := client.UpdateEvent(r.Context(), id, req, getSessionToken(r)); err != nil {
+		if _, err := client.UpdateEvent(r.Context(), id, req, saveTok); err != nil {
 			log.Printf("update event error: %v", err)
-			renderErr("admin_save_error")
+			renderErrFull("admin_save_error")
 			return
 		}
 
@@ -2249,21 +2420,21 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 // ── Admin org dashboard (/admin/organization/{slug}) ─────────────────────────
 
 type AdminOrgDashboardData struct {
-	Org              Organization
-	Slug             string
-	Handle           string
-	FollowerCount    int
-	Events           []Event
-	OrgMap           map[int]string
-	Locations        []Location
-	Dances           []Dance
-	AllTags          []Tag
-	Series           []EventSeries
+	Org               Organization
+	Slug              string
+	Handle            string
+	FollowerCount     int
+	Events            []Event
+	OrgMap            map[int]string
+	Locations         []Location
+	Dances            []Dance
+	AllTags           []Tag
+	Series            []EventSeries
 	FilterIncludePast bool
-	TotalCount       int
-	IsMember         bool   // admin or member of this org
-	NewEventOrgID    int    // org to pre-assign "new event" to
-	NewEventOrgName  string // org name shown on the button when not a member
+	TotalCount        int
+	IsMember          bool   // admin or member of this org
+	NewEventOrgID     int    // org to pre-assign "new event" to
+	NewEventOrgName   string // org name shown on the button when not a member
 }
 
 func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {

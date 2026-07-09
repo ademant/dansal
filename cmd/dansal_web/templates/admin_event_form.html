@@ -1442,7 +1442,7 @@ function safeGoBack(){
     });
     if(cloneMode){
       var dateEl=document.getElementById('date');
-      if(dateEl&&dateEl.value===origDate) ok=false;
+      if(!dateEl||!dateEl.value||dateEl.value===origDate) ok=false;
     }
     btn.disabled=!ok;
   }

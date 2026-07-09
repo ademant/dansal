@@ -90,28 +90,26 @@ func sortLocsByDistanceThenName(locs []Location, refLat, refLng *float64) {
 }
 
 // splitEventLocations divides all locations into two groups for the event-edit
-// location dropdown: org-first (same org as the event's pre-assigned location)
-// and others. Within each group locations are sorted by distance from the
-// pre-assigned location (when it has coordinates), then by name.
+// location dropdown: org-first (locations belonging to the event's organization,
+// and/or sharing an org with the event's pre-assigned location) and others.
+// Within each group locations are sorted by distance from the pre-assigned
+// location (when it has coordinates), then by name.
 func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Location) {
-	if event.LocationID == nil {
-		others = append([]Location(nil), allLocs...)
-		sortLocsByDistanceThenName(others, nil, nil)
-		return
-	}
 	var refLat, refLng *float64
-	var evOrgIDs map[int]bool
-	for _, loc := range allLocs {
-		if loc.ID == *event.LocationID {
-			refLat = loc.Latitude
-			refLng = loc.Longitude
-			if len(loc.OrganizationIDs) > 0 {
-				evOrgIDs = make(map[int]bool, len(loc.OrganizationIDs))
+	evOrgIDs := make(map[int]bool)
+	if event.OrganizationID != nil {
+		evOrgIDs[*event.OrganizationID] = true
+	}
+	if event.LocationID != nil {
+		for _, loc := range allLocs {
+			if loc.ID == *event.LocationID {
+				refLat = loc.Latitude
+				refLng = loc.Longitude
 				for _, oid := range loc.OrganizationIDs {
 					evOrgIDs[oid] = true
 				}
+				break
 			}
-			break
 		}
 	}
 	if len(evOrgIDs) == 0 {

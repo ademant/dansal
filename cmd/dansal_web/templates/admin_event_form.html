@@ -215,11 +215,11 @@
     <div id="loc-picker-panel" class="assign-picker-panel" hidden>
       <input type="text" class="assign-picker-filter" id="loc-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('loc-picker-table', this.value)">
       <div class="assign-picker-list">
-        <table class="assign-table" id="loc-picker-table" data-sortable>
+        <table class="assign-table" id="loc-picker-table" data-sortable data-sep-text="{{$.Strings.T "loc_sep_no_org"}}">
           <thead><tr><th data-sort="str">{{$.Strings.T "loc_name"}}</th><th data-sort="str">{{$.Strings.T "loc_town"}}</th><th></th></tr></thead>
           <tbody>
           {{range .LocOrgFirst}}
-          <tr data-group="org">
+          <tr data-group="org" data-orgs="{{joinInts .OrganizationIDs}}">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
             <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
@@ -229,7 +229,7 @@
           <tr class="loc-table-sep" data-group="sep"><td colspan="3">— {{$.Strings.T "loc_sep_no_org"}} —</td></tr>
           {{end}}
           {{range .LocOthers}}
-          <tr data-group="other">
+          <tr data-group="other" data-orgs="{{joinInts .OrganizationIDs}}">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
             <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
@@ -1089,6 +1089,48 @@ function filterLocsByOrg(){
   locSel.value=curVal;
 }
 function restoreLocOptions(){ /* order restored on next filterLocsByOrg call or page reload */ }
+// Org -> Location picker table: reorder the visible #loc-picker-table rows
+// the same way filterLocsByOrg reorders the hidden <select>, since the table
+// (not the hidden select) is what the user actually clicks to assign a
+// location. Without this, org-first grouping only ever reflected whatever
+// org the event had at initial page load, not a later org pick.
+function reorderLocPickerTable(){
+  var orgSel=document.getElementById('org_id');
+  var table=document.getElementById('loc-picker-table');
+  if(!orgSel||!table) return;
+  var tbody=table.querySelector('tbody');
+  if(!tbody) return;
+  var orgID=orgSel.value;
+  var rows=Array.prototype.slice.call(tbody.querySelectorAll('tr[data-group]'));
+  var sepRow=tbody.querySelector('tr[data-group="sep"]');
+  if(!orgID){
+    rows.forEach(function(r){ tbody.appendChild(r); });
+    return;
+  }
+  var inOrg=[], outOrg=[];
+  rows.forEach(function(r){
+    if(r.dataset.group==='sep') return;
+    var orgs=(r.dataset.orgs||'').split(',').filter(Boolean);
+    if(orgs.indexOf(orgID)>=0) inOrg.push(r); else outOrg.push(r);
+  });
+  var frag=document.createDocumentFragment();
+  inOrg.forEach(function(r){ frag.appendChild(r); });
+  if(inOrg.length&&outOrg.length){
+    var s=sepRow||document.createElement('tr');
+    if(!sepRow){
+      s.className='loc-table-sep'; s.dataset.group='sep';
+      var sepTd=document.createElement('td');
+      sepTd.colSpan=3;
+      sepTd.textContent='— '+(table.dataset.sepText||'')+' —';
+      s.appendChild(sepTd);
+    }
+    frag.appendChild(s);
+  } else if(sepRow){
+    sepRow.remove();
+  }
+  outOrg.forEach(function(r){ frag.appendChild(r); });
+  tbody.appendChild(frag);
+}
 // Location → Org: show only orgs that own the selected location.
 // autoSelect=false suppresses auto-picking the org (used on page load to avoid
 // making it look like an org is already saved when it isn't).
@@ -1125,11 +1167,12 @@ function restoreOrgOptions(){
 (function(){
   var orgSel=document.getElementById('org_id');
   var locSel=document.getElementById('loc_id');
-  if(orgSel) orgSel.addEventListener('change', filterLocsByOrg);
+  if(orgSel) orgSel.addEventListener('change', function(){ filterLocsByOrg(); reorderLocPickerTable(); });
   if(locSel) locSel.addEventListener('change', filterOrgsByLoc);
   // Apply on load if values are pre-selected (filter list but don't auto-assign).
   if(locSel&&locSel.value) filterOrgsByLoc(false);
   else if(orgSel&&orgSel.value) filterLocsByOrg();
+  reorderLocPickerTable();
   syncOrgUI();
   syncLocUI();
 })();

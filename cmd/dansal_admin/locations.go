@@ -62,7 +62,7 @@ func cmdFillLocationFields(args []string) {
 	apply := fs.Bool("apply", false, "write changes (default is dry-run)")
 	fs.Parse(args)
 
-	db, err := sql.Open("sqlite3", *dbPath+"?_foreign_keys=ON&_busy_timeout=500")
+	db, err := sql.Open("sqlite3", *dbPath+"?_foreign_keys=ON&_journal_mode=WAL&_busy_timeout=500")
 	if err != nil {
 		die("open db: %v", err)
 	}

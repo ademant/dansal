@@ -91,7 +91,7 @@ type exportEvent struct {
 // ── helpers ────────────────────────────────────────────────────────────────
 
 func openDB(path string) *sql.DB {
-	db, err := sql.Open("sqlite3", path+"?_foreign_keys=ON&_journal_mode=WAL&_busy_timeout=500")
+	db, err := sql.Open("sqlite3", path+"?_foreign_keys=ON&_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		die("open db: %v", err)
 	}

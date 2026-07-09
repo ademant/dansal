@@ -2531,6 +2531,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/bulk-set-attributes", auth(http.HandlerFunc(bulkSetEventAttributes)))
 	smux.Handle("POST /api/v1/events", auth(createEvent))
 	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
+	smux.Handle("PATCH /api/v1/events/{id}", auth(patchEvent))
 	smux.HandleFunc("OPTIONS /api/v1/events", optionsSchema[EventWriteRequest])
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}", optionsSchema[EventWriteRequest])
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))

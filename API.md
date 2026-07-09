@@ -580,7 +580,8 @@ Both list endpoints are public. Tags have three categories: `format`, `level`, `
 GET    /api/v1/events
 GET    /api/v1/events/{id}
 POST   /api/v1/events             # auth required
-PATCH  /api/v1/events/{id}        # auth required
+PUT    /api/v1/events/{id}        # auth required — full replace
+PATCH  /api/v1/events/{id}        # auth required — partial update (merge patch)
 DELETE /api/v1/events/{id}        # auth required
 POST   /api/v1/events/{id}/publish
 POST   /api/v1/events/{id}/cancel
@@ -592,6 +593,8 @@ POST   /api/v1/events/preview               # admin/user: preview-parse a feed w
 POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
 ```
+
+**`PUT` vs `PATCH`:** `PUT` replaces the entire event — send the complete object; any field omitted from the body is cleared to its zero value, and `location` may be a full nested object (find-or-create by name/address). `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array fields (`tags`, `musicians`, `instructors`, `dances`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element; `has_ball`/`has_workshop`/`has_festival` still auto-derive their associated tags whenever either the booleans or `tags` are part of the patch. `PATCH` has no nested `location` object — repoint an event at an existing location via `location_id`, or use `PUT` to also create/update the location itself. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
 
 **Query parameters for GET /api/v1/events:**
 

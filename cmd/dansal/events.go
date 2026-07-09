@@ -120,6 +120,53 @@ type EventUpdateRequest struct {
 	EventWriteRequest
 }
 
+// EventMergePatchRequest is the body accepted by PATCH /api/v1/events/{id}
+// (Content-Type: application/merge-patch+json — RFC 7396). Every field is a
+// pointer: an omitted key leaves the existing value unchanged; a present key
+// sets it (an explicit "" clears a plain text field). Array/map fields
+// (tags, musicians, instructors, dances, attributes) are replaced wholesale
+// when present, never merged element-by-element.
+//
+// There is no nested "location" field here (unlike EventWriteRequest): PATCH
+// only supports repointing an event at an existing location via location_id.
+// Creating/updating the location itself is a separate concern — use the
+// locations endpoints, or PUT the event with a full location payload.
+//
+// As with locations (#722), fields that are already optional at the domain
+// level (organization_id, location_id, pricing) can't distinguish "omitted"
+// from "explicitly cleared" through a single Go pointer — send a full PUT
+// for that case.
+type EventMergePatchRequest struct {
+	Title              *string          `json:"title,omitempty"`
+	Description        *string          `json:"description,omitempty"`
+	StartTime          *string          `json:"start_time,omitempty"`
+	EndTime            *string          `json:"end_time,omitempty"`
+	HasBall            *bool            `json:"has_ball,omitempty"`
+	HasWorkshop        *bool            `json:"has_workshop,omitempty"`
+	HasFestival        *bool            `json:"has_festival,omitempty"`
+	WorkshopDifficulty *string          `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
+	IsCancelled        *bool            `json:"is_cancelled,omitempty"`
+	IsPublished        *bool            `json:"is_published,omitempty"`
+	Tags               *[]string        `json:"tags,omitempty"`
+	URL                *string          `json:"url,omitempty"`
+	OrganizationID     *int             `json:"organization_id,omitempty"`
+	LocationID         *int             `json:"location_id,omitempty"`
+	Pricing            *Pricing         `json:"pricing,omitempty"`
+	Musicians          *[]int           `json:"musicians,omitempty"`
+	Instructors        *[]int           `json:"instructors,omitempty"`
+	Dances             *[]int           `json:"dances,omitempty"`
+	BookingURL         *string          `json:"booking_url,omitempty"`
+	Availability       *string          `json:"availability,omitempty"`
+	TicketsTotal       *int             `json:"tickets_total,omitempty"`
+	BookingEnabled     *bool            `json:"booking_enabled,omitempty"`
+	Food               *string          `json:"food,omitempty" enum:"sold,potluck,none"`
+	Drink              *string          `json:"drink,omitempty" enum:"alcohol,soft,none"`
+	FloorCondition     *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	Attributes         *map[string]bool `json:"attributes,omitempty"`
+	ContactName        *string          `json:"contact_name,omitempty"`
+	ContactEmail       *string          `json:"contact_email,omitempty"`
+}
+
 type EventCreateRequest struct {
 	EventWriteRequest
 	UID                string      `json:"uid,omitempty"`
@@ -1910,6 +1957,320 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if err := syncEventTags(tx, id, req.Tags); err != nil {
 		writeError(w, "failed to update tags", http.StatusInternalServerError)
 		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	syncEventLocationGeohash(id)
+
+	event, err := fetchEventByID(db, id)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if musicians, err := fetchEventMusicians(id); err == nil {
+		event.Musicians = musicians
+	}
+	if instructors, err := fetchEventInstructors(id); err == nil {
+		event.Instructors = instructors
+	}
+	if timetable, err := fetchTimetable(id); err == nil {
+		event.Timetable = timetable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(event)
+}
+
+// PATCH /api/v1/events/{id} — partial event update (RFC 7396 JSON Merge Patch)
+func patchEvent(w http.ResponseWriter, r *http.Request) {
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req EventMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Title != nil && *req.Title == "" {
+		writeError(w, "title is required", http.StatusBadRequest)
+		return
+	}
+	if req.Tags != nil {
+		if err := validateTags(*req.Tags); err != nil {
+			writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if req.Food != nil && !validFood(*req.Food) {
+		writeError(w, "invalid food value", http.StatusBadRequest)
+		return
+	}
+	if req.Drink != nil && !validDrink(*req.Drink) {
+		writeError(w, "invalid drink value", http.StatusBadRequest)
+		return
+	}
+	if req.FloorCondition != nil && !validFloorCondition(*req.FloorCondition) {
+		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		title, description, url, workshopDifficulty, bookingURL, availability string
+		food, drink, floorCondition, contactName, contactEmail, attrsRaw      string
+		startUnix, endUnix                                                    int64
+		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished           bool
+		bookingEnabled                                                        bool
+		ticketsTotal                                                          int
+		existingOrgID, existingLocationID                                     sql.NullInt64
+		existingCreatedBy                                                     sql.NullInt64
+		pricingRaw                                                            sql.NullString
+	)
+	err = db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
+		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), pricing,
+		COALESCE(workshop_difficulty,''), COALESCE(booking_url,''), COALESCE(availability,''), tickets_total, booking_enabled,
+		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(attributes,'{}'),
+		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id
+		FROM events WHERE id=?`, id).Scan(
+		&title, &description, &startUnix, &endUnix, &existingLocationID, &existingOrgID,
+		&hasBall, &hasWorkshop, &hasFestival, &isCancelled, &isPublished, &url, &pricingRaw,
+		&workshopDifficulty, &bookingURL, &availability, &ticketsTotal, &bookingEnabled,
+		&food, &drink, &floorCondition, &attrsRaw,
+		&contactName, &contactEmail, &existingCreatedBy,
+	)
+	if err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	newOrgID := existingOrgID
+	if req.OrganizationID != nil {
+		newOrgID = sql.NullInt64{Int64: int64(*req.OrganizationID), Valid: true}
+	}
+	switch userRole {
+	case RoleAdmin:
+		// unrestricted
+	case RolePublisher:
+		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+			return
+		}
+	default:
+		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !newOrgID.Valid || !isOrgMember(callerID, int(newOrgID.Int64)) {
+			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+			return
+		}
+	}
+
+	if req.Title != nil {
+		title = *req.Title
+	}
+	if req.Description != nil {
+		description = *req.Description
+	}
+	if req.StartTime != nil {
+		startUnix, err = parseTimeToUnix(*req.StartTime)
+		if err != nil {
+			writeError(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if req.EndTime != nil {
+		if v, err := parseTimeToUnix(*req.EndTime); err == nil {
+			endUnix = v
+		} else {
+			endUnix = startUnix
+		}
+	}
+	if req.HasBall != nil {
+		hasBall = *req.HasBall
+	}
+	if req.HasWorkshop != nil {
+		hasWorkshop = *req.HasWorkshop
+	}
+	if req.HasFestival != nil {
+		hasFestival = *req.HasFestival
+	}
+	if req.WorkshopDifficulty != nil {
+		workshopDifficulty = *req.WorkshopDifficulty
+	}
+	if req.IsCancelled != nil {
+		isCancelled = *req.IsCancelled
+	}
+	if req.IsPublished != nil {
+		isPublished = *req.IsPublished
+	}
+	if req.URL != nil {
+		url = *req.URL
+	}
+	if req.BookingURL != nil {
+		bookingURL = *req.BookingURL
+	}
+	if req.Availability != nil {
+		availability = *req.Availability
+	}
+	if req.TicketsTotal != nil {
+		ticketsTotal = *req.TicketsTotal
+	}
+	if req.BookingEnabled != nil {
+		bookingEnabled = *req.BookingEnabled
+	}
+	if req.Food != nil {
+		food = *req.Food
+	}
+	if req.Drink != nil {
+		drink = *req.Drink
+	}
+	if req.FloorCondition != nil {
+		floorCondition = *req.FloorCondition
+	}
+	if req.ContactName != nil {
+		contactName = *req.ContactName
+	}
+	if req.ContactEmail != nil {
+		contactEmail = *req.ContactEmail
+	}
+	if req.Attributes != nil {
+		attrsRaw = attrsJSON(*req.Attributes)
+	}
+
+	var locationIDArg any
+	if req.LocationID != nil {
+		if *req.LocationID > 0 {
+			locationIDArg = *req.LocationID
+		}
+	} else if existingLocationID.Valid {
+		locationIDArg = existingLocationID.Int64
+	}
+
+	var pricingArg any
+	if req.Pricing != nil {
+		if b, err := json.Marshal(req.Pricing); err == nil {
+			pricingArg = string(b)
+		}
+	} else if pricingRaw.Valid && pricingRaw.String != "" {
+		pricingArg = pricingRaw.String
+	}
+
+	var orgIDArg any
+	if newOrgID.Valid {
+		orgIDArg = newOrgID.Int64
+	}
+
+	// syncEventTypeTags derives tags like "bal-folk"/"workshop"/"festival" from
+	// the has_ball/has_workshop/has_festival booleans, so re-run it whenever
+	// either the tags or any of those booleans are part of this patch.
+	var tagsToSync []string
+	syncTags := req.Tags != nil || req.HasBall != nil || req.HasWorkshop != nil || req.HasFestival != nil
+	if syncTags {
+		if req.Tags != nil {
+			tagsToSync = *req.Tags
+		} else {
+			rows, err := db.Query("SELECT tag FROM event_tags WHERE event_id=?", id)
+			if err == nil {
+				for rows.Next() {
+					var t string
+					if rows.Scan(&t) == nil {
+						tagsToSync = append(tagsToSync, t)
+					}
+				}
+				rows.Close()
+			}
+		}
+		tmp := EventWriteRequest{HasBall: hasBall, HasWorkshop: hasWorkshop, HasFestival: hasFestival, Tags: tagsToSync}
+		syncEventTypeTags(&tmp)
+		tagsToSync = filterKnownTags(tmp.Tags)
+	}
+
+	changedByUser := resolveDisplayName(callerID)
+	var callerIDArg any
+	if callerID > 0 {
+		callerIDArg = callerID
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(
+		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
+		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
+		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
+		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
+		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
+		title, description, startUnix, endUnix, locationIDArg,
+		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished,
+		workshopDifficulty, urlVal(url), urlVal(bookingURL), orgIDArg, pricingArg,
+		availability, ticketsTotal, bookingEnabled, food, drink, floorCondition, attrsRaw,
+		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
+	); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if req.Musicians != nil {
+		if _, err := tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id); err != nil {
+			writeError(w, "failed to update musicians", http.StatusInternalServerError)
+			return
+		}
+		if err := batchInsertPairs(tx, "event_musicians", "event_id", "musician_id", id, *req.Musicians); err != nil {
+			writeError(w, "failed to update musicians", http.StatusInternalServerError)
+			return
+		}
+	}
+	if req.Instructors != nil {
+		if _, err := tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", id); err != nil {
+			writeError(w, "failed to update instructors", http.StatusInternalServerError)
+			return
+		}
+		if err := batchInsertPairs(tx, "event_instructors", "event_id", "instructor_id", id, *req.Instructors); err != nil {
+			writeError(w, "failed to update instructors", http.StatusInternalServerError)
+			return
+		}
+	}
+	if req.Dances != nil {
+		if _, err := tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id); err != nil {
+			writeError(w, "failed to update dances", http.StatusInternalServerError)
+			return
+		}
+		if err := batchInsertPairs(tx, "event_dances", "event_id", "dance_id", id, *req.Dances); err != nil {
+			writeError(w, "failed to update dances", http.StatusInternalServerError)
+			return
+		}
+	}
+	if syncTags {
+		if err := syncEventTags(tx, id, tagsToSync); err != nil {
+			writeError(w, "failed to update tags", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

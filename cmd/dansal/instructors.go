@@ -31,6 +31,17 @@ type InstructorRequest struct {
 	Email   string `json:"email"`
 }
 
+// InstructorMergePatchRequest is the body accepted by PATCH
+// /api/v1/instructors/{id} (Content-Type: application/merge-patch+json —
+// RFC 7396). Every field is a pointer: an omitted key leaves the existing
+// value unchanged; a present key sets it (an explicit "" clears a field).
+type InstructorMergePatchRequest struct {
+	Name    *string `json:"name,omitempty"`
+	Bio     *string `json:"bio,omitempty"`
+	Website *string `json:"website,omitempty"`
+	Email   *string `json:"email,omitempty"`
+}
+
 const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')"
 
 // scanInstructor scans an instructorCols row into an Instructor. Extra
@@ -193,6 +204,87 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(inst)
+}
+
+// PATCH /api/v1/instructors/{id} - partial update (RFC 7396 JSON Merge Patch)
+func patchInstructor(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+
+	if callerRole != RoleAdmin {
+		var createdBy sql.NullInt64
+		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
+			writeError(w, "Instructor not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !createdBy.Valid || int(createdBy.Int64) != callerID {
+			writeError(w, "Forbidden: you can only edit instructors you created", http.StatusForbidden)
+			return
+		}
+	}
+
+	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, "Instructor not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var req InstructorMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Name != nil {
+		if strings.TrimSpace(*req.Name) == "" {
+			writeError(w, "name is required", http.StatusBadRequest)
+			return
+		}
+		inst.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Bio != nil {
+		inst.Bio = *req.Bio
+	}
+	if req.Website != nil {
+		inst.Website = *req.Website
+	}
+	if req.Email != nil {
+		inst.Email = *req.Email
+	}
+
+	result, err := db.Exec(
+		"UPDATE instructors SET name=?, bio=?, website=?, email=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		inst.Name, inst.Bio, inst.Website, inst.Email, resolveDisplayName(callerID), id,
+	)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		writeError(w, "Instructor not found", http.StatusNotFound)
+		return
+	}
+	updated, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(updated)
 }
 
 // DELETE /api/v1/instructors/{id}

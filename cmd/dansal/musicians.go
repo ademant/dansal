@@ -62,6 +62,32 @@ type MusicianCreateRequest struct {
 	Genre        string `json:"genre"`
 }
 
+// MusicianMergePatchRequest is the body accepted by PATCH
+// /api/v1/musicians/{id} (Content-Type: application/merge-patch+json — RFC
+// 7396). Every field is a pointer: an omitted key leaves the existing value
+// unchanged; a present key sets it (an explicit "" clears a field).
+type MusicianMergePatchRequest struct {
+	Bandname     *string `json:"bandname,omitempty"`
+	ShortName    *string `json:"short_name,omitempty"`
+	Internetsite *string `json:"internetsite,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	MBID         *string `json:"mbid,omitempty"`
+	WikidataID   *string `json:"wikidata_id,omitempty"`
+	DiscogsID    *string `json:"discogs_id,omitempty"`
+	Country      *string `json:"country,omitempty"`
+	BeginYear    *int    `json:"begin_year,omitempty"`
+	Biography    *string `json:"biography,omitempty"`
+	MembersJSON  *string `json:"members_json,omitempty"`
+	AlbumsJSON   *string `json:"albums_json,omitempty"`
+	Mastodon     *string `json:"mastodon,omitempty"`
+	Instagram    *string `json:"instagram,omitempty"`
+	Facebook     *string `json:"facebook,omitempty"`
+	Soundcloud   *string `json:"soundcloud,omitempty"`
+	Spotify      *string `json:"spotify,omitempty"`
+	Deezer       *string `json:"deezer,omitempty"`
+	Genre        *string `json:"genre,omitempty"`
+}
+
 const musicianCols = `id, bandname,
 	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),
 	COALESCE(mbid,''), COALESCE(wikidata_id,''), COALESCE(discogs_id,''), COALESCE(country,''), COALESCE(begin_year,0),
@@ -325,6 +351,115 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	json.NewEncoder(w).Encode(musician)
+}
+
+// PATCH /api/v1/musicians/{id} - partial update (RFC 7396 JSON Merge Patch)
+func patchMusician(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+	_, requesterRole := callerFromRequest(r)
+	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	id := r.PathValue("id")
+	m, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
+	if err == sql.ErrNoRows {
+		writeError(w, "Musician not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var req MusicianMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Bandname != nil {
+		m.Bandname = *req.Bandname
+	}
+	if req.ShortName != nil {
+		m.ShortName = *req.ShortName
+	}
+	if req.Internetsite != nil {
+		m.Internetsite = *req.Internetsite
+	}
+	if req.Description != nil {
+		m.Description = *req.Description
+	}
+	if req.MBID != nil {
+		m.MBID = *req.MBID
+	}
+	if req.WikidataID != nil {
+		m.WikidataID = *req.WikidataID
+	}
+	if req.DiscogsID != nil {
+		m.DiscogsID = *req.DiscogsID
+	}
+	if req.Country != nil {
+		m.Country = *req.Country
+	}
+	if req.BeginYear != nil {
+		m.BeginYear = *req.BeginYear
+	}
+	if req.Biography != nil {
+		m.Biography = *req.Biography
+	}
+	if req.MembersJSON != nil {
+		m.MembersJSON = *req.MembersJSON
+	}
+	if req.AlbumsJSON != nil {
+		m.AlbumsJSON = *req.AlbumsJSON
+	}
+	if req.Mastodon != nil {
+		m.Mastodon = *req.Mastodon
+	}
+	if req.Instagram != nil {
+		m.Instagram = *req.Instagram
+	}
+	if req.Facebook != nil {
+		m.Facebook = *req.Facebook
+	}
+	if req.Soundcloud != nil {
+		m.Soundcloud = *req.Soundcloud
+	}
+	if req.Spotify != nil {
+		m.Spotify = *req.Spotify
+	}
+	if req.Deezer != nil {
+		m.Deezer = *req.Deezer
+	}
+	if req.Genre != nil {
+		m.Genre = *req.Genre
+	}
+
+	callerID, _ := callerFromRequest(r)
+	if _, err := db.Exec(
+		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
+		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?,
+		 updated_at=strftime('%s','now'), updated_by=? WHERE id=?`,
+		m.Bandname, m.ShortName, m.Internetsite, m.Description, m.MBID,
+		m.WikidataID, m.DiscogsID, m.Country, m.BeginYear, m.Biography, m.MembersJSON, m.AlbumsJSON,
+		m.Mastodon, m.Instagram, m.Facebook, m.Soundcloud,
+		m.Spotify, m.Deezer, m.Genre, resolveDisplayName(callerID), id,
+	); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	json.NewEncoder(w).Encode(musician)
 }
 

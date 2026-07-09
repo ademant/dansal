@@ -543,19 +543,23 @@ List and get are public. Locations support `Accept: application/geo+json` on the
 GET    /api/v1/musicians
 GET    /api/v1/musicians/{id}
 POST   /api/v1/musicians              # auth required
-PUT    /api/v1/musicians/{id}         # auth required
+PUT    /api/v1/musicians/{id}         # auth required — full replace
+PATCH  /api/v1/musicians/{id}         # auth required — partial merge
 DELETE /api/v1/musicians/{id}         # auth required
 
 GET    /api/v1/instructors
 GET    /api/v1/instructors/{id}
 GET    /api/v1/events/{id}/instructors
 POST   /api/v1/instructors            # auth required
-PUT    /api/v1/instructors/{id}       # auth required
+PUT    /api/v1/instructors/{id}       # auth required — full replace
+PATCH  /api/v1/instructors/{id}       # auth required — partial merge
 DELETE /api/v1/instructors/{id}       # auth required
 PUT    /api/v1/events/{id}/instructors  # set instructors for an event
 ```
 
 Musicians are performers linked to events; instructors are teachers linked to workshop slots.
+
+`PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`. Instructor edit permissions are unchanged between `PUT` and `PATCH`: admins may edit any instructor, other users only ones they created.
 
 **Query parameters for GET /api/v1/musicians:**
 - `name=` — substring match on bandname

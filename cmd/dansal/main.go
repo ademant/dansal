@@ -2564,6 +2564,7 @@ func main() {
 	// Protected musician writes
 	smux.Handle("POST /api/v1/musicians", auth(createMusician))
 	smux.Handle("PUT /api/v1/musicians/{id}", auth(updateMusician))
+	smux.Handle("PATCH /api/v1/musicians/{id}", auth(patchMusician))
 	smux.Handle("DELETE /api/v1/musicians/{id}", auth(deleteMusician))
 	smux.HandleFunc("OPTIONS /api/v1/musicians", optionsSchema[MusicianCreateRequest])
 	smux.HandleFunc("OPTIONS /api/v1/musicians/{id}", optionsSchema[MusicianCreateRequest])
@@ -2571,6 +2572,7 @@ func main() {
 	// Instructor endpoints
 	smux.Handle("POST /api/v1/instructors", auth(createInstructor))
 	smux.Handle("PUT /api/v1/instructors/{id}", auth(updateInstructor))
+	smux.Handle("PATCH /api/v1/instructors/{id}", auth(patchInstructor))
 	smux.Handle("DELETE /api/v1/instructors/{id}", auth(deleteInstructor))
 	smux.HandleFunc("OPTIONS /api/v1/instructors", optionsSchema[InstructorRequest])
 	smux.HandleFunc("OPTIONS /api/v1/instructors/{id}", optionsSchema[InstructorRequest])

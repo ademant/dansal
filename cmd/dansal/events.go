@@ -3030,3 +3030,294 @@ func removeEventFromSeries(w http.ResponseWriter, r *http.Request) {
 	db.Exec("UPDATE events SET series_id=NULL WHERE id=?", eventID)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ── Sub-resource endpoints (#727) ───────────────────────────────────────────
+//
+// Additive, REST-idiomatic alternatives to embedding location_id/organization_id/
+// musicians[]/instructors[]/dances[] in the event write body. In particular,
+// PUT/DELETE .../location and .../organization give clients a way to set or
+// clear those two nullable references directly — something PATCH's merge-patch
+// semantics can't express (see #721's accepted omit-vs-null limitation).
+
+// EventLocationRefRequest is the body for PUT /api/v1/events/{id}/location.
+type EventLocationRefRequest struct {
+	LocationID int `json:"location_id"`
+}
+
+// EventOrganizationRefRequest is the body for PUT /api/v1/events/{id}/organization.
+type EventOrganizationRefRequest struct {
+	OrganizationID int `json:"organization_id"`
+}
+
+// PUT /api/v1/events/{id}/location — set the event's location.
+func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	var req EventLocationRefRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID <= 0 {
+		writeError(w, "location_id is required", http.StatusBadRequest)
+		return
+	}
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", req.LocationID).Scan(&exists)
+	if exists == 0 {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if _, err := db.Exec("UPDATE events SET location_id=? WHERE id=?", req.LocationID, eventID); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	syncEventLocationGeohash(eventID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/events/{id}/location — clear the event's location.
+func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	db.Exec("UPDATE events SET location_id=NULL WHERE id=?", eventID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/events/{id}/organization — set the event's organization.
+// Requires the caller to be a member of the target organization (unless admin).
+func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	var req EventOrganizationRefRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrganizationID <= 0 {
+		writeError(w, "organization_id is required", http.StatusBadRequest)
+		return
+	}
+	if userRole != RoleAdmin && !isOrgMember(callerID, req.OrganizationID) {
+		writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+		return
+	}
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", req.OrganizationID).Scan(&exists)
+	if exists == 0 {
+		writeError(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+	if _, err := db.Exec("UPDATE events SET organization_id=? WHERE id=?", req.OrganizationID, eventID); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/events/{id}/organization — clear the event's organization
+// (event becomes orphaned; see assignEventOrg to reassign).
+func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	db.Exec("UPDATE events SET organization_id=NULL WHERE id=?", eventID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/events/{id}/musicians/{musician_id} — add one musician to the event.
+func addEventMusician(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	musicianID, err := strconv.Atoi(r.PathValue("musician_id"))
+	if err != nil {
+		writeError(w, "invalid musician id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM musicians WHERE id=?", musicianID).Scan(&exists)
+	if exists == 0 {
+		writeError(w, "Musician not found", http.StatusNotFound)
+		return
+	}
+	db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", eventID, musicianID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/events/{id}/musicians/{musician_id} — remove one musician from the event.
+func removeEventMusician(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	musicianID, err := strconv.Atoi(r.PathValue("musician_id"))
+	if err != nil {
+		writeError(w, "invalid musician id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	db.Exec("DELETE FROM event_musicians WHERE event_id=? AND musician_id=?", eventID, musicianID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/events/{id}/instructors/{instructor_id} — add one instructor to the event.
+func addEventInstructor(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	instructorID, err := strconv.Atoi(r.PathValue("instructor_id"))
+	if err != nil {
+		writeError(w, "invalid instructor id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM instructors WHERE id=?", instructorID).Scan(&exists)
+	if exists == 0 {
+		writeError(w, "Instructor not found", http.StatusNotFound)
+		return
+	}
+	db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", eventID, instructorID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/events/{id}/instructors/{instructor_id} — remove one instructor from the event.
+func removeEventInstructor(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	instructorID, err := strconv.Atoi(r.PathValue("instructor_id"))
+	if err != nil {
+		writeError(w, "invalid instructor id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	db.Exec("DELETE FROM event_instructors WHERE event_id=? AND instructor_id=?", eventID, instructorID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/events/{id}/dances/{dance_id} — add one dance to the event.
+func addEventDance(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	danceID, err := strconv.Atoi(r.PathValue("dance_id"))
+	if err != nil {
+		writeError(w, "invalid dance id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM dances WHERE id=?", danceID).Scan(&exists)
+	if exists == 0 {
+		writeError(w, "Dance not found", http.StatusNotFound)
+		return
+	}
+	db.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?,?)", eventID, danceID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/events/{id}/dances/{dance_id} — remove one dance from the event.
+func removeEventDance(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	danceID, err := strconv.Atoi(r.PathValue("dance_id"))
+	if err != nil {
+		writeError(w, "invalid dance id", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	db.Exec("DELETE FROM event_dances WHERE event_id=? AND dance_id=?", eventID, danceID)
+	w.WriteHeader(http.StatusNoContent)
+}

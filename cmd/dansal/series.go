@@ -777,3 +777,66 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// GET /api/v1/series/{id}/events — list events belonging to this series (#727).
+func getSeriesEvents(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+	events, err := loadSeriesEvents(series.ID)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, events)
+}
+
+// PUT /api/v1/series/{id}/events/{event_id} — add one event to the series (#727).
+// Single-item counterpart to assign-events: rejects (rather than silently
+// skipping) an event whose organization_id conflicts with the series org.
+func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("event_id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	var evOrgID sql.NullInt64
+	if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", eventID).Scan(&evOrgID); err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if evOrgID.Valid && series.OrganizationID != nil && evOrgID.Int64 != int64(*series.OrganizationID) {
+		writeError(w, "event organization does not match series organization", http.StatusConflict)
+		return
+	}
+	db.Exec("UPDATE events SET series_id=? WHERE id=?", series.ID, eventID)
+	if series.OrganizationID != nil {
+		db.Exec("UPDATE events SET organization_id=? WHERE id=?", *series.OrganizationID, eventID)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/series/{id}/events/{event_id} — remove one event from the series (#727).
+// Consolidates the existing asymmetric assign-events/remove-from-series pair
+// into a single consistent location; does not touch organization_id.
+func removeSeriesEvent(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("event_id"))
+	if err != nil {
+		writeError(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	db.Exec("UPDATE events SET series_id=NULL WHERE id=? AND series_id=?", eventID, series.ID)
+	w.WriteHeader(http.StatusNoContent)
+}

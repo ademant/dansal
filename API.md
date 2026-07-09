@@ -146,6 +146,8 @@ OPTIONS /api/v1/fetchurl
 OPTIONS /api/v1/fetchurl/{id}
 OPTIONS /api/v1/events/{id}/contact-posts
 OPTIONS /api/v1/contact-posts/{id}
+OPTIONS /api/v1/events/{id}/location
+OPTIONS /api/v1/events/{id}/organization
 ```
 
 Public — no auth required, since this describes shape, not data. Response shape:
@@ -600,7 +602,20 @@ POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event
 POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
 POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
+
+PUT    /api/v1/events/{id}/location                    # set the event's location
+DELETE /api/v1/events/{id}/location                     # clear the event's location
+PUT    /api/v1/events/{id}/organization                 # set the event's organization
+DELETE /api/v1/events/{id}/organization                 # clear the event's organization
+PUT    /api/v1/events/{id}/musicians/{musician_id}      # add one musician
+DELETE /api/v1/events/{id}/musicians/{musician_id}      # remove one musician
+PUT    /api/v1/events/{id}/instructors/{instructor_id}  # add one instructor
+DELETE /api/v1/events/{id}/instructors/{instructor_id}  # remove one instructor
+PUT    /api/v1/events/{id}/dances/{dance_id}            # add one dance
+DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 ```
+
+**Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization. `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
 
 **`PUT` vs `PATCH`:** `PUT` replaces the entire event — send the complete object; any field omitted from the body is cleared to its zero value, and `location` may be a full nested object (find-or-create by name/address). `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array fields (`tags`, `musicians`, `instructors`, `dances`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element; `has_ball`/`has_workshop`/`has_festival` still auto-derive their associated tags whenever either the booleans or `tags` are part of the patch. `PATCH` has no nested `location` object — repoint an event at an existing location via `location_id`, or use `PUT` to also create/update the location itself. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
 
@@ -684,11 +699,16 @@ POST   /api/v1/series/{id}/descriptions
 POST   /api/v1/series/{id}/assign-events
 POST   /api/v1/series/{id}/token/regenerate
 POST   /api/v1/series/{id}/token/revoke
+GET    /api/v1/series/{id}/events           # list events belonging to this series
+PUT    /api/v1/series/{id}/events/{event_id}    # add one event to the series
+DELETE /api/v1/series/{id}/events/{event_id}    # remove one event from the series
 GET    /api/v1/series/token/{token}
 PATCH  /api/v1/series/token/{token}/events/{eventID}
 ```
 
 Authentication required (except `GET /api/v1/series/token/{token}` and the PATCH for external organizer access).
+
+The `.../events/{event_id}` pair is the single-item counterpart to `assign-events`/`remove-from-series` (#727): `PUT` adds one event to the series (rejecting, with `409 Conflict`, an event whose `organization_id` doesn't match the series' organization — `assign-events` instead skips mismatches silently when bulk-assigning); `DELETE` removes one event, equivalent to `POST /api/v1/events/{id}/remove-from-series` but addressed from the series side.
 
 ## Timetable
 

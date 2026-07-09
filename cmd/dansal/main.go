@@ -2547,6 +2547,20 @@ func main() {
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 
+	// Event relationship sub-resources (#727)
+	smux.Handle("PUT /api/v1/events/{id}/location", auth(http.HandlerFunc(setEventLocationRef)))
+	smux.Handle("DELETE /api/v1/events/{id}/location", auth(http.HandlerFunc(unsetEventLocationRef)))
+	smux.HandleFunc("OPTIONS /api/v1/events/{id}/location", optionsSchema[EventLocationRefRequest])
+	smux.Handle("PUT /api/v1/events/{id}/organization", auth(http.HandlerFunc(setEventOrganizationRef)))
+	smux.Handle("DELETE /api/v1/events/{id}/organization", auth(http.HandlerFunc(unsetEventOrganizationRef)))
+	smux.HandleFunc("OPTIONS /api/v1/events/{id}/organization", optionsSchema[EventOrganizationRefRequest])
+	smux.Handle("PUT /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(addEventMusician)))
+	smux.Handle("DELETE /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(removeEventMusician)))
+	smux.Handle("PUT /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(addEventInstructor)))
+	smux.Handle("DELETE /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(removeEventInstructor)))
+	smux.Handle("PUT /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(addEventDance)))
+	smux.Handle("DELETE /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(removeEventDance)))
+
 	// Protected location writes
 	smux.Handle("POST /api/v1/locations", auth(createLocation))
 	smux.Handle("POST /api/v1/locations/merge", auth(mergeLocations))
@@ -2624,6 +2638,9 @@ func main() {
 	smux.Handle("POST /api/v1/series/{id}/assign-events", auth(http.HandlerFunc(assignSeriesEvents)))
 	smux.Handle("POST /api/v1/series/{id}/token/regenerate", auth(regenerateSeriesToken))
 	smux.Handle("POST /api/v1/series/{id}/token/revoke", auth(revokeSeriesToken))
+	smux.Handle("GET /api/v1/series/{id}/events", auth(http.HandlerFunc(getSeriesEvents)))
+	smux.Handle("PUT /api/v1/series/{id}/events/{event_id}", auth(http.HandlerFunc(addSeriesEvent)))
+	smux.Handle("DELETE /api/v1/series/{id}/events/{event_id}", auth(http.HandlerFunc(removeSeriesEvent)))
 
 	// Organization writes (protected)
 	smux.Handle("POST /api/v1/organizations", auth(createOrganization))

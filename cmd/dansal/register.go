@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -76,9 +75,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, config.Server.MaxBodyBytes))
-	if err != nil {
-		writeError(w, "read error", http.StatusBadRequest)
+	body, ok := readBodyOrError(w, r)
+	if !ok {
 		return
 	}
 	var req RegisterRequest

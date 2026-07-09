@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -17,6 +19,27 @@ func writeError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// readBodyOrError reads r.Body fully, writing a 413 with guidance to reduce
+// the payload size (e.g. splitting a bulk-create array into multiple smaller
+// requests) when the body exceeds config.Server.MaxBodyBytes (enforced by
+// MaxBodyMiddleware's MaxBytesReader), or a plain 400 for any other read
+// error. Returns ok=false after already writing the error response.
+func readBodyOrError(w http.ResponseWriter, r *http.Request) (body []byte, ok bool) {
+	body, err := io.ReadAll(r.Body)
+	if err == nil {
+		return body, true
+	}
+	if errors.As(err, new(*http.MaxBytesError)) {
+		writeError(w, fmt.Sprintf(
+			"request body exceeds the %d MB limit — reduce the payload size (e.g. split a bulk-create array into multiple smaller requests)",
+			config.Server.MaxBodyBytes>>20,
+		), http.StatusRequestEntityTooLarge)
+		return nil, false
+	}
+	writeError(w, err.Error(), http.StatusBadRequest)
+	return nil, false
 }
 
 // writeJSON sets Content-Type and encodes v as JSON with HTTP 200.

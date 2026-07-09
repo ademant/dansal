@@ -3,9 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -129,20 +127,20 @@ func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventI
 	return true
 }
 
-func readTimetableBody(r *http.Request) ([]TimetableEntryRequest, error) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
+func readTimetableBody(w http.ResponseWriter, r *http.Request) (reqs []TimetableEntryRequest, ok bool) {
+	body, ok := readBodyOrError(w, r)
+	if !ok {
+		return nil, false
 	}
-	var reqs []TimetableEntryRequest
 	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Title == "" {
 		var single TimetableEntryRequest
 		if err := json.Unmarshal(body, &single); err != nil {
-			return nil, fmt.Errorf("invalid request body")
+			writeError(w, "invalid request body", http.StatusBadRequest)
+			return nil, false
 		}
 		reqs = []TimetableEntryRequest{single}
 	}
-	return reqs, nil
+	return reqs, true
 }
 
 func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEntry, error) {
@@ -181,13 +179,8 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqs, err := readTimetableBody(r)
-	if err != nil {
-		status := http.StatusBadRequest
-		if errors.As(err, new(*http.MaxBytesError)) {
-			status = http.StatusRequestEntityTooLarge
-		}
-		writeError(w, err.Error(), status)
+	reqs, ok := readTimetableBody(w, r)
+	if !ok {
 		return
 	}
 	if err := validateTimetableRequests(reqs); err != nil {
@@ -227,13 +220,8 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		status := http.StatusBadRequest
-		if errors.As(err, new(*http.MaxBytesError)) {
-			status = http.StatusRequestEntityTooLarge
-		}
-		writeError(w, err.Error(), status)
+	body, ok := readBodyOrError(w, r)
+	if !ok {
 		return
 	}
 	// PUT always expects an array; send [] to clear the timetable.

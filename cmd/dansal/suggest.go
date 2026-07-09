@@ -138,9 +138,8 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, config.Server.MaxBodyBytes))
-	if err != nil {
-		writeError(w, "read failed", http.StatusBadRequest)
+	body, ok := readBodyOrError(w, r)
+	if !ok {
 		return
 	}
 

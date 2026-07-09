@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -129,13 +128,8 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		status := http.StatusBadRequest
-		if errors.As(err, new(*http.MaxBytesError)) {
-			status = http.StatusRequestEntityTooLarge
-		}
-		writeError(w, err.Error(), status)
+	body, ok := readBodyOrError(w, r)
+	if !ok {
 		return
 	}
 	var req InstructorRequest

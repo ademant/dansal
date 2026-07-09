@@ -851,6 +851,12 @@ Public (Telegram calls directly). Optional validation via `telegram_webhook_secr
 | 429 | Rate limit exceeded |
 | 500 | Internal server error |
 
+### Request body size limit
+
+All request bodies are capped at `server.max_body_bytes` (default 1MB). Exceeding it returns `413` with a message suggesting the payload be reduced.
+
+For bulk-create endpoints that accept a JSON array (`POST /api/v1/events`, `/locations`, `/musicians` — see their sections below), this 1MB cap is the practical constraint on batch size, not server processing time: a benchmark of event insertion against the production schema showed ~800 events/sec, so the 1MB body limit is reached (roughly 1,000–2,000 events for typical payloads, more for minimal ones) well before any request-processing timeout would be. **Recommended safe batch size: up to ~1,000 items per request** for typical payloads; split larger imports into multiple requests rather than relying on a single very large array.
+
 ## Usage Examples
 
 ### Login and create an event

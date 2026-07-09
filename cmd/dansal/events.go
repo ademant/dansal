@@ -4,9 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net/http"
@@ -1514,13 +1512,8 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	var vevents []*ics.VEvent
 
 	if contentType == "application/json" {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			status := http.StatusBadRequest
-			if errors.As(err, new(*http.MaxBytesError)) {
-				status = http.StatusRequestEntityTooLarge
-			}
-			writeError(w, err.Error(), status)
+		body, ok := readBodyOrError(w, r)
+		if !ok {
 			return
 		}
 		var arrayReqs []EventCreateRequest
@@ -1535,13 +1528,8 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			requests = []EventCreateRequest{singleReq}
 		}
 	} else if contentType == "text/calendar" {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			status := http.StatusBadRequest
-			if errors.As(err, new(*http.MaxBytesError)) {
-				status = http.StatusRequestEntityTooLarge
-			}
-			writeError(w, err.Error(), status)
+		body, ok := readBodyOrError(w, r)
+		if !ok {
 			return
 		}
 		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))

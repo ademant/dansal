@@ -2625,6 +2625,7 @@ func main() {
 	smux.Handle("POST /api/v1/organizations", auth(createOrganization))
 	smux.Handle("GET /api/v1/organizations/check-actor-name", auth(checkActorName))
 	smux.Handle("PUT /api/v1/organizations/{id}", auth(updateOrganization))
+	smux.Handle("PATCH /api/v1/organizations/{id}", auth(patchOrganization))
 	smux.Handle("DELETE /api/v1/organizations/{id}", auth(deleteOrganization))
 	smux.Handle("GET /api/v1/organizations/{id}/members", auth(getOrganizationMembers))
 	smux.Handle("POST /api/v1/organizations/{id}/members", auth(addOrganizationMember))

@@ -492,7 +492,8 @@ Only keys with a non-null `expires_at` that hasn't passed yet can be renewed —
 GET    /api/v1/organizations
 GET    /api/v1/organizations/{id}
 POST   /api/v1/organizations              # auth required
-PUT    /api/v1/organizations/{id}         # member or admin
+PUT    /api/v1/organizations/{id}         # member or admin — full replace
+PATCH  /api/v1/organizations/{id}         # member or admin — partial merge
 DELETE /api/v1/organizations/{id}         # admin only
 GET    /api/v1/organizations/stats
 GET    /api/v1/organizations/{id}/members
@@ -503,6 +504,8 @@ GET    /api/v1/organizations/check-actor-name  # check ActivityPub actor name av
 ```
 
 List and get are public. Create/update/delete require authentication. `GET /api/v1/organizations/members` requires authentication; non-admin callers only get results for orgs they belong to (others are silently omitted).
+
+`PUT` replaces every editable field with the body's values. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body. In both, `name`/`actor_name` may only be changed by admins — a non-admin org member's `name`/`actor_name` value in the body is silently ignored rather than rejected, matching the pre-existing `PUT` behavior. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`. There is no `OPTIONS` schema-discovery endpoint for organizations, matching the exclusion for users/apikeys/publishers (see Vocabulary section) — organization management is meant to stay inside dansal rather than become an external self-service surface.
 
 ## Locations
 

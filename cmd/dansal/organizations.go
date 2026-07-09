@@ -62,6 +62,25 @@ type AddMemberRequest struct {
 	UserID int `json:"user_id"`
 }
 
+// OrganizationMergePatchRequest is the body accepted by PATCH
+// /api/v1/organizations/{id} (Content-Type: application/merge-patch+json —
+// RFC 7396). Every field is a pointer: an omitted key leaves the existing
+// value unchanged; a present key sets it (an explicit "" clears a field).
+// As with PUT, name/actor_name may only be changed by admins.
+type OrganizationMergePatchRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	ActorName    *string `json:"actor_name,omitempty"`
+	Website      *string `json:"website,omitempty"`
+	Instagram    *string `json:"instagram,omitempty"`
+	Mastodon     *string `json:"mastodon,omitempty"`
+	Facebook     *string `json:"facebook,omitempty"`
+	ContactEmail *string `json:"contact_email,omitempty"`
+	ContactName  *string `json:"contact_name,omitempty"`
+	WikidataID   *string `json:"wikidata_id,omitempty"`
+	NotesMd      *string `json:"notes_md,omitempty"`
+}
+
 // ensureOrgFromOrganizer finds or creates an organization from a vevent's ORGANIZER property.
 // Prefers the CN parameter as the org name; falls back to the value with "mailto:" stripped.
 // Returns nil when no usable ORGANIZER is present or on any DB error.
@@ -431,6 +450,99 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.ContactName = req.ContactName
 	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
+	if _, err := db.Exec(
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, resolveDisplayName(callerID), id,
+	); err != nil {
+		writeError(w, "Failed to update organization", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(o)
+}
+
+// PATCH /api/v1/organizations/{id} — partial update (RFC 7396 JSON Merge Patch).
+// Same field-level permissions as PUT: admins may change name/actor_name,
+// org members with role user may only change description/contact/social fields.
+func patchOrganization(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if ct := r.Header.Get("Content-Type"); ct != "application/merge-patch+json" {
+		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
+		return
+	}
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	orgID, err := strconv.Atoi(id)
+	if err != nil {
+		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+	if callerRole != RoleAdmin && !isOrgMember(callerID, orgID) {
+		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
+		return
+	}
+	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+	if err == sql.ErrNoRows {
+		writeError(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var req OrganizationMergePatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if callerRole == RoleAdmin {
+		if req.ActorName != nil {
+			if *req.ActorName == "relay" {
+				writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
+				return
+			}
+			var n int
+			db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", *req.ActorName, id).Scan(&n)
+			if n > 0 {
+				writeError(w, "actor_name already in use", http.StatusConflict)
+				return
+			}
+			o.ActorName = *req.ActorName
+		}
+		if req.Name != nil && *req.Name != "" {
+			o.Name = *req.Name
+		}
+	}
+	if req.Description != nil {
+		o.Description = *req.Description
+	}
+	if req.Website != nil {
+		o.Website = *req.Website
+	}
+	if req.Instagram != nil {
+		o.Instagram = *req.Instagram
+	}
+	if req.Mastodon != nil {
+		o.Mastodon = *req.Mastodon
+	}
+	if req.Facebook != nil {
+		o.Facebook = *req.Facebook
+	}
+	if req.ContactEmail != nil {
+		o.ContactEmail = *req.ContactEmail
+	}
+	if req.ContactName != nil {
+		o.ContactName = *req.ContactName
+	}
+	if req.WikidataID != nil {
+		o.WikidataID = *req.WikidataID
+	}
+	if req.NotesMd != nil {
+		o.NotesMd = *req.NotesMd
+	}
 	if _, err := db.Exec(
 		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
 		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, resolveDisplayName(callerID), id,

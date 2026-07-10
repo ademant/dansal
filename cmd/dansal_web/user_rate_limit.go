@@ -3,29 +3,15 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
 
-type userCounter struct {
-	globalCount    int
-	endpointCounts map[string]int
-	lastRequest    map[string]time.Time
-	windowStart    time.Time
-}
-
-// throttleDelay is the maximum delay applied per request once a user exceeds
-// an endpoint's soft limit within the current window.
-const throttleDelay = 4 * time.Second
-
 // UserRateLimiter tracks per-user POST request counts within a sliding 1-minute window.
-//
-// Two limits apply:
-//   - a per-endpoint "soft" limit (defaultLimit / endpointLimits): once exceeded,
-//     requests are not rejected but delayed by up to throttleDelay, so rapid
-//     sequential actions (e.g. "Save & Next") slow down instead of erroring.
-//   - a global hard limit (globalLimit): once exceeded, requests are rejected
-//     with 429 as a last-resort abuse ceiling.
+// All endpoint limits are hard: once exceeded, requests are rejected with 429.
+// The global limit is a final ceiling across all endpoints for a single user.
 type UserRateLimiter struct {
 	globalLimit    int
 	defaultLimit   int
@@ -34,13 +20,33 @@ type UserRateLimiter struct {
 	mu             sync.Mutex
 }
 
-func newUserRateLimiter(globalLimit int, endpointLimits map[string]int) *UserRateLimiter {
+type userCounter struct {
+	globalCount    int
+	endpointCounts map[string]int
+	windowStart    time.Time
+}
+
+func newUserRateLimiter(globalLimit int, cfgLimits map[string]int) *UserRateLimiter {
 	if globalLimit <= 0 {
 		globalLimit = 100
 	}
-	lim := make(map[string]int, len(endpointLimits))
-	for k, v := range endpointLimits {
+	// Conservative defaults for create/edit actions; operator can override via web.yaml user_rate_limits.
+	defaults := map[string]int{
+		"admin_events_create":    10,
+		"admin_events_edit":      20,
+		"admin_orgs_create":      10,
+		"admin_orgs_edit":        20,
+		"admin_musicians_create": 10,
+		"admin_musicians_edit":   20,
+		"admin_locations_new":    10,
+		"admin_locations_edit":   20,
+	}
+	lim := make(map[string]int, len(defaults)+len(cfgLimits))
+	for k, v := range defaults {
 		lim[k] = v
+	}
+	for k, v := range cfgLimits {
+		lim[k] = v // config overrides defaults
 	}
 	return &UserRateLimiter{
 		globalLimit:    globalLimit,
@@ -50,10 +56,9 @@ func newUserRateLimiter(globalLimit int, endpointLimits map[string]int) *UserRat
 	}
 }
 
-// Check reports whether the request is allowed at all (false if the hard
-// global limit is exceeded), and how long the caller should sleep before
-// proceeding to enforce the soft per-endpoint limit.
-func (rl *UserRateLimiter) Check(userID int, endpoint string) (allowed bool, delay time.Duration) {
+// Check reports whether the request should be allowed. Returns false when the
+// per-endpoint limit or the global limit for the user is exceeded.
+func (rl *UserRateLimiter) Check(userID int, endpoint string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -62,30 +67,26 @@ func (rl *UserRateLimiter) Check(userID int, endpoint string) (allowed bool, del
 	if !ok || now.Sub(c.windowStart) > time.Minute {
 		c = &userCounter{
 			endpointCounts: make(map[string]int),
-			lastRequest:    make(map[string]time.Time),
 			windowStart:    now,
 		}
 		rl.counters[userID] = c
 	}
 
 	if c.globalCount >= rl.globalLimit {
-		return false, 0
+		return false
 	}
-	c.globalCount++
-	c.endpointCounts[endpoint]++
 
 	limit := rl.defaultLimit
 	if v, ok := rl.endpointLimits[endpoint]; ok && v > 0 {
 		limit = v
 	}
-
-	if c.endpointCounts[endpoint] > limit {
-		if since := now.Sub(c.lastRequest[endpoint]); since < throttleDelay {
-			delay = throttleDelay - since
-		}
+	if c.endpointCounts[endpoint] >= limit {
+		return false
 	}
-	c.lastRequest[endpoint] = now
-	return true, delay
+
+	c.globalCount++
+	c.endpointCounts[endpoint]++
+	return true
 }
 
 func (rl *UserRateLimiter) cleanup() {
@@ -161,22 +162,44 @@ var routeEndpoint = map[string]string{
 
 var userRateLimiter *UserRateLimiter
 
+// adminAllowedHost is set at startup from cfg.Domain and used by adminRateLimit
+// to reject admin POST requests whose Origin/Referer header does not match.
+var adminAllowedHost string
+
+// checkAdminOrigin implements Option B of the CSRF analysis (#748): when an
+// Origin or Referer header is present, reject unless its host matches
+// adminAllowedHost. Both headers absent is allowed — SameSite=Lax already
+// covers the primary browser CSRF vector in that case.
+func checkAdminOrigin(r *http.Request) bool {
+	for _, h := range []string{"Origin", "Referer"} {
+		if v := r.Header.Get(h); v != "" {
+			u, err := url.Parse(v)
+			if err != nil || !strings.EqualFold(u.Hostname(), adminAllowedHost) {
+				return false
+			}
+			return true
+		}
+	}
+	return true
+}
+
 func adminRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if adminAllowedHost != "" && !checkAdminOrigin(r) {
+			log.Printf("dansal-web: CSRF_BLOCK ip=%s origin=%q referer=%q", getClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		su := getSessionUser(r)
 		if su != nil {
 			endpoint := routeEndpoint[r.Pattern]
 			if endpoint == "" {
 				endpoint = r.Pattern
 			}
-			allowed, delay := userRateLimiter.Check(su.ID, endpoint)
-			if !allowed {
+			if !userRateLimiter.Check(su.ID, endpoint) {
 				log.Printf("dansal-web: USER_RATE_LIMIT user=%d action=%s ip=%s", su.ID, endpoint, getClientIP(r))
 				http.Error(w, "Rate limit exceeded. Please slow down.", http.StatusTooManyRequests)
 				return
-			}
-			if delay > 0 {
-				time.Sleep(delay)
 			}
 		}
 		next(w, r)

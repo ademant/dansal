@@ -99,6 +99,7 @@ func main() {
 	startFormTokenCleanup(cfg.FormTokenMaxAgeMins, cfg.FormTokenCleanupMins)
 	userRateLimiter = newUserRateLimiter(cfg.UserRateLimitGlobal, cfg.UserRateLimits)
 	userRateLimiter.startCleanup(2 * time.Minute)
+	adminAllowedHost = cfg.Domain
 
 	if *printVersion {
 		fmt.Printf("dansal-web %s (built %s)\n", Version, BuildTime)

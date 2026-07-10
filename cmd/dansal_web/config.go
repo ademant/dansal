@@ -96,7 +96,7 @@ type Config struct {
 
 	// Per-user rate limiting for authorized POST endpoints
 	UserRateLimitGlobal int            `yaml:"user_rate_limit_global"` // max POST requests/minute per user; default 100
-	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 5/minute each
+	UserRateLimits      map[string]int `yaml:"user_rate_limits"`       // endpoint-specific limits; default 15/minute each (create/edit actions default to 10–20)
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName string `yaml:"site_name"`

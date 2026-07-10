@@ -163,7 +163,10 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	if country := q.Get("country"); country != "" {
 		addWhere("country=?", country)
 	}
-	query += " ORDER BY bandname"
+	if genre := q.Get("genre"); genre != "" {
+		addWhere("LOWER(genre) LIKE LOWER(?)", "%"+genre+"%")
+	}
+	applyListPagination(r, "bandname ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

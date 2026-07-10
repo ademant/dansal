@@ -657,6 +657,25 @@ func applyPagination(r *http.Request, query *string, args *[]any) {
 	*args = append(*args, limit, offset)
 }
 
+// applyListPagination appends "ORDER BY <orderBy> LIMIT ? OFFSET ?" to a list query.
+// orderBy is a literal SQL fragment (never user-supplied).
+func applyListPagination(r *http.Request, orderBy string, query *string, args *[]any) {
+	q := r.URL.Query()
+	limit, offset := 100, 0
+	if l := q.Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 1000 {
+			limit = parsed
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	*query += " ORDER BY " + orderBy + " LIMIT ? OFFSET ?"
+	*args = append(*args, limit, offset)
+}
+
 // GET /api/v1/vocabulary
 //
 // Empty-string ("") semantics for food/drink/floor_condition/parking:

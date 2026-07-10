@@ -798,7 +798,7 @@ func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token 
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
 	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
 		var orgs []Organization
-		return orgs, c.get(ctx, "/api/v1/organizations", &orgs)
+		return orgs, c.get(ctx, "/api/v1/organizations?limit=1000", &orgs)
 	})
 }
 
@@ -842,7 +842,7 @@ func (c *DansalClient) GetAllPublicEventsByMusician(ctx context.Context, musicia
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
 		var ms []Musician
-		return ms, c.get(ctx, "/api/v1/musicians", &ms)
+		return ms, c.get(ctx, "/api/v1/musicians?limit=1000", &ms)
 	})
 }
 
@@ -898,7 +898,7 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 
 func (c *DansalClient) GetInstructors(ctx context.Context) ([]Instructor, error) {
 	var out []Instructor
-	return out, c.get(ctx, "/api/v1/instructors", &out)
+	return out, c.get(ctx, "/api/v1/instructors?limit=1000", &out)
 }
 
 func (c *DansalClient) GetInstructor(ctx context.Context, id int) (Instructor, error) {
@@ -1202,7 +1202,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 	return cached(&c.mu, &c.locationsCache, locationsTTL, func() ([]Location, error) {
 		var locs []Location
-		return locs, c.get(ctx, "/api/v1/locations", &locs)
+		return locs, c.get(ctx, "/api/v1/locations?limit=1000", &locs)
 	})
 }
 
@@ -1210,7 +1210,7 @@ func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 // counts; used by the /embed/locations map.
 func (c *DansalClient) GetLocationsWithEventCounts(ctx context.Context) ([]Location, error) {
 	var locs []Location
-	return locs, c.get(ctx, "/api/v1/locations?with_event_counts=true", &locs)
+	return locs, c.get(ctx, "/api/v1/locations?with_event_counts=true&limit=1000", &locs)
 }
 
 func (c *DansalClient) GetLocationEventCounts(ctx context.Context, token string) (map[int]int, error) {

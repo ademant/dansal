@@ -72,12 +72,27 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 		) ec ON ec.instructor_id = instructors.id`
 	}
 	var args []any
-
-	if name := q.Get("name"); name != "" {
-		query += " WHERE name LIKE ?"
-		args = append(args, "%"+name+"%")
+	where := false
+	addWhere := func(clause string, vals ...any) {
+		if !where {
+			query += " WHERE " + clause
+			where = true
+		} else {
+			query += " AND " + clause
+		}
+		args = append(args, vals...)
 	}
-	query += " ORDER BY name"
+	if name := q.Get("name"); name != "" {
+		addWhere("name LIKE ?", "%"+name+"%")
+	}
+	if orgIDStr := q.Get("organization_id"); orgIDStr != "" {
+		addWhere(`id IN (
+			SELECT DISTINCT ei.instructor_id FROM event_instructors ei
+			JOIN events e ON e.id = ei.event_id
+			WHERE e.organization_id = ? AND e.is_published = 1
+		)`, orgIDStr)
+	}
+	applyListPagination(r, "name ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

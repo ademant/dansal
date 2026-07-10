@@ -222,9 +222,23 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 			GROUP BY lo.organization_id
 		) loc ON loc.organization_id = organizations.id`
 	}
-	query += ` ORDER BY organizations.id`
+	var args []any
+	where := false
+	addWhere := func(clause string, vals ...any) {
+		if !where {
+			query += " WHERE " + clause
+			where = true
+		} else {
+			query += " AND " + clause
+		}
+		args = append(args, vals...)
+	}
+	if name := q.Get("name"); name != "" {
+		addWhere("LOWER(organizations.name) LIKE LOWER(?)", "%"+name+"%")
+	}
+	applyListPagination(r, "organizations.name ASC", &query, &args)
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

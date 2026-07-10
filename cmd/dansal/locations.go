@@ -362,6 +362,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query += " GROUP BY l.id"
+	applyListPagination(r, "l.location ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

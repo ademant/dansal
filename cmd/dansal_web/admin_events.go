@@ -713,6 +713,12 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			for _, m := range ev.Musicians {
 				musicianSet[m.ID] = true
 			}
+			// Prefer a richer location over a stub: coords beat no-coords;
+			// a non-"Unknown" name beats "Unknown".
+			if locationQuality(ev.Location) > locationQuality(base.Location) {
+				base.LocationID = ev.LocationID
+				base.Location = ev.Location
+			}
 		}
 
 		tags := make([]string, 0, len(tagSet))
@@ -1865,6 +1871,22 @@ func buildSelectedDanceNamesFromIDs(ids []int, dances []Dance) map[string]bool {
 		}
 	}
 	return m
+}
+
+// locationQuality returns a score for how complete a location is.
+// Higher is better: coords are worth 2, a non-stub name is worth 1.
+func locationQuality(loc *Location) int {
+	if loc == nil {
+		return 0
+	}
+	q := 0
+	if loc.Latitude != nil {
+		q += 2
+	}
+	if loc.Location != "" && !strings.Contains(loc.Location, "Unknown") {
+		q += 1
+	}
+	return q
 }
 
 func loadDefaultDanceIDs(db *sql.DB) []int {

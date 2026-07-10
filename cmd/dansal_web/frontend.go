@@ -1135,11 +1135,28 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// isClientDisconnect reports whether err is a routine client-side network
+// termination (broken pipe, connection reset, i/o timeout). These happen when
+// a browser navigates away mid-response and are not actionable server-side.
+func isClientDisconnect(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "connection reset by peer") ||
+		strings.Contains(s, "i/o timeout")
+}
+
 func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
-		log.Printf("template error: %v", err)
-		http.Error(w, "template error", http.StatusInternalServerError)
+		// The response status is already committed (streaming template), so
+		// calling http.Error here would trigger a superfluous WriteHeader
+		// warning. Log genuine template bugs; silently drop client disconnects.
+		if !isClientDisconnect(err) {
+			log.Printf("template error: %v", err)
+		}
 	}
 }
 
@@ -1147,8 +1164,9 @@ func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
 func renderEmbed(w http.ResponseWriter, tmpl *template.Template, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
-		log.Printf("template error: %v", err)
-		http.Error(w, "template error", http.StatusInternalServerError)
+		if !isClientDisconnect(err) {
+			log.Printf("template error: %v", err)
+		}
 	}
 }
 

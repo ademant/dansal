@@ -404,6 +404,27 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 			case strings.HasPrefix(p, "/feed/events."):
 				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/events."))
 				mainH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/veranstaltungen/") && strings.Contains(p, "/ical"):
+				// Redirect old WordPress per-event and category iCal URLs.
+				rest := strings.TrimPrefix(p, "/veranstaltungen/")
+				parts := strings.SplitN(rest, "/", 3)
+				switch {
+				case len(parts) >= 2 && parts[0] == "tags":
+					switch parts[1] {
+					case "balfolk", "bal-folk":
+						http.Redirect(w, r, "/feed/ball/events.ics", http.StatusMovedPermanently)
+					case "festival":
+						http.Redirect(w, r, "/feed/festival/events.ics", http.StatusMovedPermanently)
+					case "workshop", "workshops":
+						http.Redirect(w, r, "/feed/workshop/events.ics", http.StatusMovedPermanently)
+					default:
+						http.Redirect(w, r, "/feed/events.ics", http.StatusMovedPermanently)
+					}
+				case len(parts) >= 1 && parts[0] == "kategorie":
+					http.Redirect(w, r, "/feed/events.ics", http.StatusMovedPermanently)
+				default:
+					http.Redirect(w, r, "/events/"+parts[0]+".ics", http.StatusMovedPermanently)
+				}
 			default:
 				next.ServeHTTP(w, r)
 			}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // POST /events/{id}/book
@@ -30,8 +31,12 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
 			return
 		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			return
+		}
+		if hasPendingSubmission(ip, r.UserAgent()) {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}
@@ -48,11 +53,14 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			"message": r.FormValue("message"),
 		}
 
+		publicThrottle.record(ip + "|" + r.UserAgent())
+		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		globalEmailSendRate.record()
 		if err := client.CreateBooking(r.Context(), eventID, fields, cfg.publicBaseURL()); err != nil {
+			clearPendingSubmission(ip, r.UserAgent())
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
 			return
 		}
-		publicThrottle.record(ip + "|" + r.UserAgent())
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
 	}
 }

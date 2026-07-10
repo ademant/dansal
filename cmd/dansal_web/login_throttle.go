@@ -18,6 +18,9 @@ const authFail = "dansal-web: AUTH_FAIL"
 // publicBlock is the log prefix for public form endpoint rate limits.
 const publicBlock = "dansal-web: PUBLIC_BLOCK"
 
+// tokenBlock is the log prefix for GET-side token-issuance rate limit hits.
+const tokenBlock = "dansal-web: TOKEN_BLOCK"
+
 type loginThrottle struct {
 	mu          sync.Mutex
 	entries     map[string]*throttleEntry

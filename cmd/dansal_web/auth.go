@@ -43,17 +43,45 @@ func safeNext(next string) string {
 	return u.String()
 }
 
+// loginMinAge / loginMaxAge are the per-class bounds for the login form token.
+// These are intentionally tight: login forms need only seconds to fill.
+const loginMinAge = 100 * time.Millisecond
+
+func loginFormMaxAge(cfg *Config) time.Duration {
+	return time.Duration(cfg.FormTokenLoginMaxAgeSecs) * time.Second
+}
+
+func stdFormMaxAge(cfg *Config) time.Duration {
+	return time.Duration(cfg.FormTokenMaxAgeMins) * time.Minute
+}
+
 func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if getSessionUser(r) != nil {
 			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 			return
 		}
+		ip := getClientIP(r)
+		if tokenThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/login", tokenBlock, ip)
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
+			return
+		}
+		applyEmailBackpressure(r.Context(), globalEmailSendRate, w)
+		if r.Context().Err() != nil {
+			return
+		}
+		tok := issueFormToken(ip)
+		if tok == "" {
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusServiceUnavailable)
+			return
+		}
+		tokenThrottle.record(ip)
 		title := i18n.T(r, "login_title")
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 			MagicSent: r.URL.Query().Get("magic_sent"),
 			Next:      r.URL.Query().Get("next"),
-			FormToken: newFormToken(),
+			FormToken: tok,
 		}))
 	}
 }
@@ -74,32 +102,34 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		next := safeNext(r.FormValue("next"))
 		ip := getClientIP(r)
 
-		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+		if r.FormValue("phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, loginMinAge, loginFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			http.Redirect(w, r, next, http.StatusSeeOther)
 			return
 		}
 
 		if throttle.isBlocked(ip) {
 			log.Printf("%s ip=%s path=/login", authBlock, ip)
+			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey:  "login_error_throttled",
 				Email:     email,
 				Next:      r.FormValue("next"),
-				FormToken: newFormToken(),
+				FormToken: tok,
 			}))
 			return
 		}
 
 		lr, err := client.Login(r.Context(), email, password, totpCode, ip, r.UserAgent())
 		if err == ErrTOTPRequired {
+			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				TotpRequired: true,
 				Email:        email,
 				Password:     password,
 				Next:         r.FormValue("next"),
-				FormToken:    newFormToken(),
+				FormToken:    tok,
 			}))
 			return
 		}
@@ -117,12 +147,13 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			if throttle.isBlocked(ip) {
 				errorKey = "login_error_throttled"
 			}
+			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey:  errorKey,
 				Email:     email,
 				Next:      r.FormValue("next"),
-				FormToken: newFormToken(),
+				FormToken: tok,
 			}))
 			return
 		}
@@ -159,10 +190,11 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		ip := getClientIP(r)
 		if authThrottle.isBlocked(ip) {
 			log.Printf("%s ip=%s path=/magic", authBlock, ip)
+			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey:  "login_error_throttled",
-				FormToken: newFormToken(),
+				FormToken: tok,
 			}))
 			return
 		}
@@ -174,13 +206,14 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if channel == "" {
 			channel = "email"
 		}
-		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+		if r.FormValue("phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, loginMinAge, loginFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)
 			return
 		}
 		identifier := r.FormValue("identifier")
 		if identifier != "" {
 			authThrottle.record(ip)
+			globalEmailSendRate.record()
 			_ = client.RequestMagicLogin(r.Context(), identifier, channel, cfg.publicBaseURL())
 		}
 		http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)

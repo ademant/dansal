@@ -33,6 +33,9 @@ var publicThrottle *submissionThrottle
 // Generous limit (default 60/min) blocks scraping/hammering without affecting normal browsing.
 var searchThrottle *submissionThrottle
 
+// tokenThrottle is the per-IP rate limiter for GET handlers that issue form tokens.
+var tokenThrottle *submissionThrottle
+
 // liveHandler is an http.Handler whose inner handler can be swapped atomically.
 // This lets systemctl reload rebuild all route closures with new config+i18n
 // without stopping the server.
@@ -96,7 +99,20 @@ func main() {
 		cfg.SearchRateLimit,
 		time.Duration(cfg.SearchRateWindowMins)*time.Minute,
 	)
-	startFormTokenCleanup(cfg.FormTokenMaxAgeMins, cfg.FormTokenCleanupMins)
+	tokenThrottle = newSubmissionThrottle(
+		cfg.TokenRateLimit,
+		time.Duration(cfg.TokenRateWindowMins)*time.Minute,
+	)
+	// Use the longer of login/non-login max-ages as the cleanup cutoff.
+	formTokenMaxAge := time.Duration(cfg.FormTokenMaxAgeMins) * time.Minute
+	startFormTokenCleanup(formTokenMaxAge, cfg.FormTokenCleanupMins)
+	startPendingSubmissionCleanup(formTokenMaxAge * 2)
+	formTokenCap = int64(cfg.FormTokenCap)
+	globalEmailSendRate = newEmailSendThrottle(
+		time.Duration(cfg.EmailRateWindowSecs)*time.Second,
+		cfg.EmailRateSoftLimit,
+		cfg.EmailRateHardLimit,
+	)
 	userRateLimiter = newUserRateLimiter(cfg.UserRateLimitGlobal, cfg.UserRateLimits)
 	userRateLimiter.startCleanup(2 * time.Minute)
 	adminAllowedHost = cfg.Domain

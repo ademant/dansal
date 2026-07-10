@@ -1037,6 +1037,8 @@ languages:
       series_save_description: "Speichern"
       event_more_info: "Mehr Infos"
       all_events: "Alle Veranstaltungen"
+      form_token_cap_error: "Der Server ist momentan stark ausgelastet. Bitte versuchen Sie es in wenigen Minuten erneut."
+      register_error_pending: "Es gibt bereits eine ausstehende Registrierung von Ihrem Gerät. Bitte überprüfen Sie Ihr E-Mail-Postfach oder warten Sie einige Minuten."
 
   br:
     flag: "BZH"
@@ -2068,6 +2070,8 @@ languages:
       series_save_description: "Enrollañ"
       event_more_info: "Muioc'h a titourou"
       all_events: "An holl evenimantoù"
+      form_token_cap_error: "Emsav ar servijer a zo re uhel. Klaskit en-dro a-benn nebeut munutennoù."
+      register_error_pending: "Bez' ez eus eus ur reoliadur o c'hortoz diouzh ho trevnad. Sellit ouzh ho boest bost pe gortozit nebeut munutennoù."
 
   en:
     flag: "🇬🇧"
@@ -3102,6 +3106,8 @@ languages:
       series_save_description: "Save"
       event_more_info: "More info"
       all_events: "All events"
+      form_token_cap_error: "The server is currently under heavy load — please try again in a few minutes."
+      register_error_pending: "There is already a pending registration from your device. Please check your inbox or wait a few minutes."
 
   es:
     flag: "🇪🇸"
@@ -4123,6 +4129,8 @@ languages:
       series_save_description: "Guardar"
       event_more_info: "Más información"
       all_events: "Todos los eventos"
+      form_token_cap_error: "El servidor está actualmente bajo mucha carga — por favor, inténtelo de nuevo en unos minutos."
+      register_error_pending: "Ya hay un registro pendiente desde su dispositivo. Por favor, revise su bandeja de entrada o espere unos minutos."
 
   fr:
     flag: "🇫🇷"
@@ -5156,6 +5164,8 @@ languages:
       series_save_description: "Enregistrer"
       event_more_info: "Plus d'infos"
       all_events: "Tous les événements"
+      form_token_cap_error: "Le serveur est actuellement surchargé — veuillez réessayer dans quelques minutes."
+      register_error_pending: "Il y a déjà une inscription en attente depuis votre appareil. Veuillez vérifier votre boîte de réception ou attendre quelques minutes."
 
   it:
     flag: "🇮🇹"
@@ -6177,6 +6187,8 @@ languages:
       series_save_description: "Salva"
       event_more_info: "Più informazioni"
       all_events: "Tutti gli eventi"
+      form_token_cap_error: "Il server è attualmente sotto carico elevato — riprovare tra qualche minuto."
+      register_error_pending: "C'è già una registrazione in attesa dal tuo dispositivo. Controlla la tua casella di posta o attendi qualche minuto."
 
   nl:
     flag: "🇳🇱"
@@ -7198,6 +7210,8 @@ languages:
       series_save_description: "Opslaan"
       event_more_info: "Meer informatie"
       all_events: "Alle evenementen"
+      form_token_cap_error: "De server is momenteel zwaar belast — probeer het over een paar minuten opnieuw."
+      register_error_pending: "Er is al een openstaande registratie van uw apparaat. Controleer uw inbox of wacht een paar minuten."
 
   uk:
     flag: "🇺🇦"
@@ -8217,6 +8231,8 @@ languages:
       settings_sessions_none: "Немає активних сесій"
       settings_email_verified_ok: "Адресу email успішно підтверджено."
       board_title: "Дошка підвезення, проживання, квитків і знахідок"
+      form_token_cap_error: "Сервер наразі перевантажений — будь ласка, спробуйте ще раз за кілька хвилин."
+      register_error_pending: "З вашого пристрою вже є очікувана реєстрація. Перевірте вхідні повідомлення або зачекайте кілька хвилин."
   ca:
     flag: "🇪🇸"
     name: "Català"
@@ -9236,6 +9252,8 @@ languages:
       settings_email_verified_ok: "Adreça de correu verificada correctament."
       settings_telegram_verified_ok: "Compte de Telegram verificat correctament."
       settings_matrix_verified_ok: "Compte de Matrix verificat correctament."
+      form_token_cap_error: "El servidor està sota una càrrega elevada — torneu-ho a intentar d'aquí a uns minuts."
+      register_error_pending: "Ja hi ha un registre pendent des del vostre dispositiu. Comproveu la vostra bústia o espereu uns minuts."
   pt:
     flag: "🇵🇹"
     name: "Português"
@@ -10255,6 +10273,8 @@ languages:
       settings_email_verified_ok: "Endereço de email verificado com sucesso."
       settings_telegram_verified_ok: "Conta Telegram verificada com sucesso."
       settings_matrix_verified_ok: "Conta Matrix verificada com sucesso."
+      form_token_cap_error: "O servidor está actualmente sob carga elevada — tente novamente em alguns minutos."
+      register_error_pending: "Já existe um registo pendente do seu dispositivo. Verifique a sua caixa de entrada ou aguarde alguns minutos."
   pl:
     flag: "🇵🇱"
     name: "Polski"
@@ -11274,6 +11294,8 @@ languages:
       settings_email_verified_ok: "Adres email zweryfikowany pomyślnie."
       settings_telegram_verified_ok: "Konto Telegram zweryfikowane pomyślnie."
       settings_matrix_verified_ok: "Konto Matrix zweryfikowane pomyślnie."
+      form_token_cap_error: "Serwer jest aktualnie mocno obciążony — spróbuj ponownie za kilka minut."
+      register_error_pending: "Z tego urządzenia istnieje już oczekująca rejestracja. Sprawdź swoją skrzynkę pocztową lub poczekaj kilka minut."
   cs:
     flag: "🇨🇿"
     name: "Čeština"
@@ -12293,3 +12315,5 @@ languages:
       settings_email_verified_ok: "E-mailová adresa úspěšně ověřena."
       settings_telegram_verified_ok: "Účet Telegram úspěšně ověřen."
       settings_matrix_verified_ok: "Účet Matrix úspěšně ověřen."
+      form_token_cap_error: "Server je momentálně velmi vytížen — zkuste to prosím znovu za pár minut."
+      register_error_pending: "Z vašeho zařízení již existuje nevyřízená registrace. Zkontrolujte svou doručenou poštu nebo počkejte pár minut."

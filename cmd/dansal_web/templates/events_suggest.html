@@ -13,7 +13,7 @@
   {{if .PreviewEvents}}
   <h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
   <form method="post" action="/events/suggest/submit">
-    <input type="hidden" name="_form_ts" value="{{$.Data.FormToken}}">
+    <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
     <div class="table-wrap">
     <table class="event-table">
       <thead>
@@ -61,7 +61,7 @@
 
   <div id="tab-manual" class="tab-panel">
   <form method="post" action="/events/suggest/submit">
-    <input type="hidden" name="_form_ts" value="{{$.Data.FormToken}}">
+    <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
     <div class="form-row">
       <label>{{$.Strings.T "evt_title"}} *
         <input type="text" name="title" required maxlength="200" placeholder="{{$.Strings.T "evt_title_placeholder"}}">

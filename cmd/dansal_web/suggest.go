@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SuggestPageData struct {
@@ -30,12 +31,28 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.NotFound(w, r)
 			return
 		}
+		ip := getClientIP(r)
+		if tokenThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/events/suggest", tokenBlock, ip)
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
+			return
+		}
+		applyEmailBackpressure(r.Context(), globalEmailSendRate, w)
+		if r.Context().Err() != nil {
+			return
+		}
+		tok := issueFormToken(ip)
+		if tok == "" {
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusServiceUnavailable)
+			return
+		}
+		tokenThrottle.record(ip)
 		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
-			FormToken:      newFormToken(),
+			FormToken:      tok,
 			Dances:         dances,
 		}))
 	}
@@ -55,7 +72,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:     i18n.T(r, "suggest_error_rate_limit"),
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}
@@ -67,7 +84,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:     i18n.T(r, "suggest_error_parse"),
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}
@@ -85,7 +102,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			PreviewEvents:  events,
 			PreviewJSON:    previewJSON,
 			CaptchaSiteKey: cfg.CaptchaSiteKey,
-			FormToken:      newFormToken(),
+			FormToken:      issueFormToken(ip),
 			Dances:         dances,
 		}))
 	}
@@ -116,7 +133,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:     i18n.T(r, "suggest_error_rate_limit"),
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}
@@ -126,8 +143,18 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
-		if r.FormValue("phone2") != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+		if r.FormValue("phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		if hasPendingSubmission(ip, r.UserAgent()) {
+			pageTitle := i18n.T(r, "suggest_event_title")
+			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
+				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+				Error:     i18n.T(r, "suggest_error_rate_limit"),
+				FormToken: issueFormToken(ip),
+			}))
 			return
 		}
 
@@ -138,7 +165,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 					HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 					Error:     i18n.T(r, "suggest_error_captcha"),
-					FormToken: newFormToken(),
+					FormToken: issueFormToken(ip),
 				}))
 				return
 			}
@@ -153,7 +180,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
 				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:     i18n.T(r, "suggest_error_links"),
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}
@@ -270,13 +297,16 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 
 		publicThrottle.record(key)
+		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		globalEmailSendRate.record()
 
 		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
+			clearPendingSubmission(ip, r.UserAgent())
 			pageTitle := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
 				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 				Error:     i18n.T(r, "suggest_error_submit"),
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}

@@ -34,9 +34,13 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
 			return
 		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			return
+		}
+		if hasPendingSubmission(ip, r.UserAgent()) {
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
 			return
 		}
 
@@ -55,12 +59,15 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			"telegram": r.FormValue("telegram"),
 		}
 
+		publicThrottle.record(ip + "|" + r.UserAgent())
+		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		globalEmailSendRate.record()
 		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
+			clearPendingSubmission(ip, r.UserAgent())
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
 		}
-		publicThrottle.record(ip + "|" + r.UserAgent())
 		if firstPost {
 			go triggerBoardOpenNote(cfg, db, client, eventID)
 		}
@@ -128,7 +135,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
 			return
 		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
@@ -138,12 +145,13 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		telegram := r.FormValue("telegram")
 		message := r.FormValue("message")
 
+		publicThrottle.record(ip + "|" + r.UserAgent())
+		globalEmailSendRate.record()
 		tgURL, err := client.ContactPoster(r.Context(), postID, email, telegram, message, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
 			return
 		}
-		publicThrottle.record(ip + "|" + r.UserAgent())
 		if tgURL != "" {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1&board_contact_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
 			return
@@ -225,7 +233,7 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			return
 		}
 		ip := getClientIP(r)
-		if !consumeFormToken(r.FormValue("_form_token"), ip, cfg.FormTokenMaxAgeMins, cfg.FormTokenBindIP) {
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}

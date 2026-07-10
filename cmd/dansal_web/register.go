@@ -67,12 +67,28 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			}
 		}
 
+		ip := getClientIP(r)
+		if tokenThrottle.isBlocked(ip) {
+			log.Printf("%s ip=%s path=/register", tokenBlock, ip)
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
+			return
+		}
+		applyEmailBackpressure(r.Context(), globalEmailSendRate, w)
+		if r.Context().Err() != nil {
+			return
+		}
+		tok := issueFormToken(ip)
+		if tok == "" {
+			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusServiceUnavailable)
+			return
+		}
+		tokenThrottle.record(ip)
 		orgs, _ := client.GetOrganizations(r.Context())
 		info, _ := client.GetServiceInfo(r.Context())
 		title := i18n.T(r, "register_title")
 		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 			Orgs:              orgs,
-			FormToken:         newFormToken(),
+			FormToken:         tok,
 			TelegramAvailable: info.TelegramChannelAvailable,
 		}))
 	}
@@ -90,7 +106,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 				Error:     "login_error_throttled",
-				FormToken: newFormToken(),
+				FormToken: issueFormToken(ip),
 			}))
 			return
 		}
@@ -111,8 +127,20 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
 		phone2 := r.FormValue("phone2")
 
-		if phone2 != "" || !validFormToken(r.FormValue("_form_ts"), cfg.MinSubmitSecs) {
+		if phone2 != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			http.Redirect(w, r, "/register/done?ch=email", http.StatusSeeOther)
+			return
+		}
+		if hasPendingSubmission(ip, r.UserAgent()) {
+			orgs, _ := client.GetOrganizations(r.Context())
+			info, _ := client.GetServiceInfo(r.Context())
+			title := i18n.T(r, "register_title")
+			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
+				Orgs:              orgs,
+				Error:             "register_error_pending",
+				TelegramAvailable: info.TelegramChannelAvailable,
+				FormToken:         issueFormToken(ip),
+			}))
 			return
 		}
 
@@ -141,8 +169,11 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		authThrottle.record(ip)
+		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		globalEmailSendRate.record()
 		result, err := client.Register(r.Context(), req, cfg.publicBaseURL())
 		if err != nil {
+			clearPendingSubmission(ip, r.UserAgent())
 			errKey := "register_error_other"
 			msg := err.Error()
 			if strings.Contains(msg, " 409") || strings.Contains(msg, "already") {
@@ -159,7 +190,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				Orgs:              orgs,
 				Error:             errKey,
 				TelegramAvailable: info.TelegramChannelAvailable,
-				FormToken:         newFormToken(),
+				FormToken:         issueFormToken(ip),
 			}))
 			return
 		}

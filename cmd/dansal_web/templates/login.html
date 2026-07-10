@@ -19,7 +19,7 @@
     {{if .TotpRequired}}
     <form method="post" action="/login" autocomplete="off">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
-      <input type="hidden" name="_form_ts" value="{{.FormToken}}">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
       <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <input type="hidden" name="email" value="{{.Email}}">
       <input type="hidden" name="password" value="{{.Password}}">
@@ -33,7 +33,7 @@
     {{else}}
     <form id="pw-form" method="post" action="/login" autocomplete="on">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
-      <input type="hidden" name="_form_ts" value="{{.FormToken}}">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
       <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <label for="identifier">{{$.Strings.T "login_identifier"}}</label>
       <input id="identifier" type="text" name="email" value="{{.Email}}"
@@ -53,7 +53,7 @@
 
     <form id="magic-form" method="post" action="/magic" hidden>
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
-      <input type="hidden" name="_form_ts" value="{{.FormToken}}">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
       <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <input type="hidden" name="identifier" id="magic-identifier">
       <input type="hidden" name="channel" id="magic-channel">

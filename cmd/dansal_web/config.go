@@ -81,9 +81,20 @@ type Config struct {
 	SearchRateWindowMins int `yaml:"search_rate_window_mins"` // window in minutes; default 1
 
 	// Form token anti-bot protection
-	FormTokenMaxAgeMins  int  `yaml:"form_token_max_age_mins"` // token validity window; default 10
-	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"` // cleanup interval; default 5
-	FormTokenBindIP      bool `yaml:"form_token_bind_ip"`      // bind token to client IP; default false
+	FormTokenMaxAgeMins      int  `yaml:"form_token_max_age_mins"`       // non-login token validity window in minutes; default 5
+	FormTokenLoginMaxAgeSecs int  `yaml:"form_token_login_max_age_secs"` // login-form token validity in seconds; default 10
+	FormTokenCleanupMins     int  `yaml:"form_token_cleanup_mins"`       // cleanup interval; default 5
+	FormTokenBindIP          bool `yaml:"form_token_bind_ip"`            // bind token to client IP; default false
+	FormTokenCap             int  `yaml:"form_token_cap"`                // max outstanding tokens; 0 = no cap; default 500
+
+	// GET-side token-issuance rate limit (applied to page-render handlers that issue tokens)
+	TokenRateLimit      int `yaml:"token_rate_limit"`       // max GET-token-issuances per window per IP; default 30
+	TokenRateWindowMins int `yaml:"token_rate_window_mins"` // window in minutes; default 1
+
+	// Email send-rate adaptive backpressure
+	EmailRateWindowSecs int `yaml:"email_rate_window_secs"` // sliding window in seconds; default 10
+	EmailRateSoftLimit  int `yaml:"email_rate_soft_limit"`  // sends/window before adding 500ms GET delay; default 5
+	EmailRateHardLimit  int `yaml:"email_rate_hard_limit"`  // sends/window before hard-reject; default 10
 
 	// HTTP server timeouts
 	ReadHeaderTimeoutSecs int `yaml:"read_header_timeout_secs"`
@@ -134,8 +145,15 @@ func loadConfig() *Config {
 		PublicThrottleForgetHours: 1,
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
-		FormTokenMaxAgeMins:       10,
+		FormTokenMaxAgeMins:       5,
+		FormTokenLoginMaxAgeSecs:  10,
 		FormTokenCleanupMins:      5,
+		FormTokenCap:              500,
+		TokenRateLimit:            30,
+		TokenRateWindowMins:       1,
+		EmailRateWindowSecs:       10,
+		EmailRateSoftLimit:        5,
+		EmailRateHardLimit:        10,
 		UserRateLimitGlobal:       100,
 		ReadHeaderTimeoutSecs:     5,
 		ReadTimeoutSecs:           10,
@@ -223,8 +241,15 @@ func reloadConfig(path string) *Config {
 		PublicThrottleForgetHours: 1,
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
-		FormTokenMaxAgeMins:       10,
+		FormTokenMaxAgeMins:       5,
+		FormTokenLoginMaxAgeSecs:  10,
 		FormTokenCleanupMins:      5,
+		FormTokenCap:              500,
+		TokenRateLimit:            30,
+		TokenRateWindowMins:       1,
+		EmailRateWindowSecs:       10,
+		EmailRateSoftLimit:        5,
+		EmailRateHardLimit:        10,
 		UserRateLimitGlobal:       100,
 		ReadHeaderTimeoutSecs:     5,
 		ReadTimeoutSecs:           10,

@@ -1095,6 +1095,7 @@ func syncEventLocationGeohash(eventID int) {
 // createEventFromRequest inserts or updates all events described by req.
 // Returns (events, counts, error) tallying how many events were new/updated/unchanged.
 func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, ImportCounts, error) {
+	req.Tags = filterKnownTags(req.Tags)
 	syncEventTypeTags(&req.EventWriteRequest)
 	var createdEvents []Event
 	var counts ImportCounts

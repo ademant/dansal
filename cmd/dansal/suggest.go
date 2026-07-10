@@ -165,6 +165,25 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
+	if smtpConfigured && req.Email != "" {
+		if !isValidEmail(req.Email) {
+			writeError(w, "invalid email address", http.StatusBadRequest)
+			return
+		}
+		if looksLikeGmailDotSpam(req.Email) {
+			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			return
+		}
+		var open int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND suggestion_token IS NOT NULL",
+			req.Email,
+		).Scan(&open)
+		if open >= config.Server.MaxOpenTokensPerAddress {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
+	}
 
 	if containsLink(req.Title) || containsLink(req.Description) {
 		writeError(w, "links are not allowed in title or description", http.StatusBadRequest)

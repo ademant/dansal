@@ -245,6 +245,21 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
+	if req.Email != "" && looksLikeGmailDotSpam(req.Email) {
+		writeError(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
+	if req.Email != "" {
+		var open int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM contact_posts WHERE LOWER(email)=LOWER(?) AND email_verified=0 AND expires_at>strftime('%s','now')",
+			req.Email,
+		).Scan(&open)
+		if open >= config.Server.MaxOpenTokensPerAddress {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
+	}
 	useTelegram := req.Telegram != ""
 	if useTelegram && config.Server.TelegramBotName == "" {
 		writeError(w, "telegram not configured on this server", http.StatusBadRequest)
@@ -740,6 +755,21 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	if req.Email != "" && !isValidEmail(req.Email) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
+	}
+	if req.Email != "" && looksLikeGmailDotSpam(req.Email) {
+		writeError(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
+	if req.Email != "" {
+		var open int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM contact_requests WHERE LOWER(sender_email)=LOWER(?) AND verify_token IS NOT NULL AND expires_at>strftime('%s','now')",
+			req.Email,
+		).Scan(&open)
+		if open >= config.Server.MaxOpenTokensPerAddress {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
 	}
 	useTelegram := req.Telegram != ""
 	if useTelegram && config.Server.TelegramBotName == "" {

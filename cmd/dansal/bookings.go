@@ -171,6 +171,21 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
+	if looksLikeGmailDotSpam(req.Email) {
+		writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+		return
+	}
+	{
+		var open int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM bookings WHERE LOWER(email)=LOWER(?) AND status='pending' AND expires_at>strftime('%s','now')",
+			req.Email,
+		).Scan(&open)
+		if open >= config.Server.MaxOpenTokensPerAddress {
+			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			return
+		}
+	}
 	if req.Persons < 1 {
 		req.Persons = 1
 	}

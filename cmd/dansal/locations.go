@@ -90,25 +90,25 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE(l.aliases,'[]'), COALESCE(l.updated_by,'')`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,'')`
 
 // scanLocation scans a locationCols row into loc. Extra destination pointers
 // (e.g. for appended future/past event count columns) can be passed via extra.
 func scanLocation(s scanner, loc *Location, extra ...any) error {
-	var orgIDsStr, attrsJSON, aliasesJSON string
+	var orgIDsStr, attrsJSON, aliasesStr string
 	dest := []any{&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesJSON, &loc.UpdatedBy}
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy}
 	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
 		json.Unmarshal([]byte(attrsJSON), &loc.Attributes)
 	}
-	if aliasesJSON != "" && aliasesJSON != "[]" {
-		json.Unmarshal([]byte(aliasesJSON), &loc.Aliases)
+	if aliasesStr != "" {
+		loc.Aliases = strings.Split(aliasesStr, "||")
 	}
 	loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
 	if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
@@ -125,12 +125,14 @@ func attrsJSON(attrs map[string]bool) string {
 	return string(b)
 }
 
-func aliasesJSON(aliases []string) string {
-	if len(aliases) == 0 {
-		return "[]"
+func syncLocationAliases(locationID int, aliases []string) {
+	db.Exec("DELETE FROM location_aliases WHERE location_id=?", locationID)
+	for _, a := range aliases {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			db.Exec("INSERT OR IGNORE INTO location_aliases (location_id, alias) VALUES (?, ?)", locationID, a)
+		}
 	}
-	b, _ := json.Marshal(aliases)
-	return string(b)
 }
 
 func parseOrgIDs(s string) []int {
@@ -496,8 +498,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, aliases, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, aliasesJSON(req.Aliases),
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -505,6 +507,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		}
 		id, _ := result.LastInsertId()
 		syncLocationOrgs(int(id), req.OrganizationIDs)
+		syncLocationAliases(int(id), req.Aliases)
 		loc := Location{
 			ID:              int(id),
 			Location:        req.Location,
@@ -690,14 +693,15 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, aliasesJSON(req.Aliases), resolveDisplayName(callerID), id,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	idInt, _ := strconv.Atoi(id)
 	syncLocationOrgs(idInt, req.OrganizationIDs)
+	syncLocationAliases(idInt, req.Aliases)
 
 	var loc Location
 	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
@@ -829,14 +833,17 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, aliases=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, aliasesJSON(loc.Aliases), resolveDisplayName(callerID), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, resolveDisplayName(callerID), loc.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if req.OrganizationIDs != nil {
 		syncLocationOrgs(loc.ID, loc.OrganizationIDs)
+	}
+	if req.Aliases != nil {
+		syncLocationAliases(loc.ID, loc.Aliases)
 	}
 
 	json.NewEncoder(w).Encode(loc)
@@ -1137,6 +1144,9 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 			tx.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", keep.ID, oid)
 		}
 	}
+
+	// Copy aliases from merged location to keep (junction table; ON DELETE CASCADE handles cleanup).
+	tx.Exec("INSERT OR IGNORE INTO location_aliases (location_id, alias) SELECT ?, alias FROM location_aliases WHERE location_id=?", keep.ID, merge.ID)
 
 	// Delete the merged location.
 	tx.Exec("DELETE FROM locations WHERE id=?", merge.ID)

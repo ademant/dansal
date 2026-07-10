@@ -1745,6 +1745,9 @@ func migrateDB() {
 	migrateFetchSourcesTypeCheck()
 	migrateEventsEnumChecks()
 	migrateLocationsEnumChecks()
+
+	// #740: migrate locations.aliases JSON column to location_aliases junction table.
+	migrateLocationAliasesToJunction()
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -2043,6 +2046,117 @@ func migrateLocationsEnumChecks() {
 	log.Printf("migrateLocationsEnumChecks: added CHECK constraints to locations.parking and locations.floor_condition")
 }
 
+// migrateLocationAliasesToJunction migrates locations.aliases (JSON TEXT column) to
+// the location_aliases junction table and drops the column from locations.
+func migrateLocationAliasesToJunction() {
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='aliases'").Scan(&n)
+	if n == 0 {
+		return // already migrated
+	}
+
+	// Create junction table and index (idempotent).
+	db.Exec(`CREATE TABLE IF NOT EXISTS location_aliases (
+		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+		alias TEXT NOT NULL,
+		PRIMARY KEY (location_id, alias)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_aliases_alias ON location_aliases(alias)")
+
+	// Populate from existing JSON data.
+	db.Exec(`INSERT OR IGNORE INTO location_aliases (location_id, alias)
+		SELECT id, j.value FROM locations, json_each(COALESCE(aliases,'[]')) j
+		WHERE j.value != ''`)
+
+	// Rebuild locations table without the aliases column.
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateLocationAliasesToJunction: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateLocationAliasesToJunction: pragma off: %v", err)
+		return
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("migrateLocationAliasesToJunction: begin: %v", err)
+		conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+		return
+	}
+	stmts := []string{
+		`CREATE TABLE locations_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			location TEXT NOT NULL,
+			short_name TEXT,
+			address TEXT,
+			zipcode TEXT,
+			town TEXT,
+			country TEXT,
+			country_code TEXT,
+			region TEXT,
+			latitude REAL,
+			longitude REAL,
+			internetsite TEXT,
+			osm_id INTEGER,
+			osm_type TEXT,
+			geohash TEXT,
+			wikidata_id TEXT,
+			mb_place_id TEXT,
+			notes_md TEXT,
+			attributes TEXT,
+			parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
+			floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
+			no_street_shoes INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT '',
+			organization_id INTEGER,
+			wheelchair_accessible INTEGER NOT NULL DEFAULT 0,
+			hearing_loop INTEGER NOT NULL DEFAULT 0,
+			visual_support INTEGER NOT NULL DEFAULT 0
+		)`,
+		`INSERT INTO locations_new
+			(id, location, short_name, address, zipcode, town, country, country_code, region,
+			 latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id,
+			 notes_md, attributes, parking, floor_condition, no_street_shoes,
+			 created_at, updated_at, updated_by,
+			 organization_id, wheelchair_accessible, hearing_loop, visual_support)
+		SELECT id, location, short_name, address, zipcode, town, country, country_code, region,
+			 latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id,
+			 notes_md, attributes,
+			 CASE WHEN parking IS NULL OR parking IN ('','none','free','paid')
+			      THEN parking ELSE '' END,
+			 CASE WHEN floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')
+			      THEN floor_condition ELSE '' END,
+			 COALESCE(no_street_shoes, 0),
+			 created_at, updated_at, COALESCE(updated_by, ''),
+			 organization_id, COALESCE(wheelchair_accessible, 0), COALESCE(hearing_loop, 0), COALESCE(visual_support, 0)
+		FROM locations`,
+		`DROP TABLE locations`,
+		`ALTER TABLE locations_new RENAME TO locations`,
+	}
+	for _, s := range stmts {
+		if _, err := tx.ExecContext(ctx, s); err != nil {
+			tx.Rollback()
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateLocationAliasesToJunction: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+		log.Printf("migrateLocationAliasesToJunction: commit: %v", err)
+		return
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
+	log.Printf("migrateLocationAliasesToJunction: migrated locations.aliases to location_aliases junction table")
+}
+
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
 // (no email address) are supported.
 func migrateUsersEmailOptional() {
@@ -2305,11 +2419,16 @@ func createTables() error {
 		parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
 		floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
 		no_street_shoes INTEGER DEFAULT 0,
-		aliases TEXT NOT NULL DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
 	);
+	CREATE TABLE IF NOT EXISTS location_aliases (
+		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+		alias TEXT NOT NULL,
+		PRIMARY KEY (location_id, alias)
+	);
+	CREATE INDEX IF NOT EXISTS idx_location_aliases_alias ON location_aliases(alias);
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		bandname TEXT NOT NULL,

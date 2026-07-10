@@ -23,6 +23,15 @@ func initDB(path string) *sql.DB {
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(2)
 	db.SetConnMaxLifetime(time.Hour)
+	// #737: actors.org_id, followers.org_id, delivered.event_id/org_id, and
+	// event_templates.org_id all reference IDs in calendar.db (the dansal API DB).
+	// SQLite cannot enforce cross-database foreign keys, so referential integrity
+	// here is application-enforced: dansal_web deletes/updates these rows via
+	// API-triggered hooks (org delete, event delete) rather than ON DELETE CASCADE.
+	// This is intentional — coupling both DBs into one file would prevent
+	// independent scaling and per-instance isolation. The blast radius of an orphaned
+	// row is bounded: a missing org_id causes a missed ActivityPub delivery, not
+	// data corruption. No known incidents have occurred from this pattern.
 	if _, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS actors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -192,7 +192,7 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 		}
 		// Tier 4: alias lookup — feed may use a known alternate name for a venue.
 		if err == sql.ErrNoRows {
-			err = q.QueryRow("SELECT id FROM locations WHERE EXISTS (SELECT 1 FROM json_each(aliases) WHERE value = ?)", loc.Location).Scan(&id)
+			err = q.QueryRow("SELECT location_id FROM location_aliases WHERE alias=? LIMIT 1", loc.Location).Scan(&id)
 		}
 	}
 

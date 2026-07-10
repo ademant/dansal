@@ -2247,6 +2247,10 @@ func createTables() error {
 		series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL,
 		needs_duplicate_review INTEGER NOT NULL DEFAULT 0,
 		duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+		-- location_id and organization_id are intentionally nullable (#736):
+		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
+		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
+		-- requires organization_id; sub-resource PUT .../location requires location_id).
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
@@ -2586,6 +2590,8 @@ func createTables() error {
 		user_id             INTEGER REFERENCES users(id),
 		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
 		expires_at         INTEGER NOT NULL,
+		-- ON DELETE CASCADE is intentional (#743): a join request for a deleted org has nothing
+		-- to point at and is meaningless, so silently removing it is the correct behaviour.
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);

@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -938,6 +939,15 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE events SET location_id=? WHERE location_id=?", reassignTo, id)
 		db.Exec("UPDATE OR IGNORE event_locations SET location_id=? WHERE location_id=?", reassignTo, id)
 		db.Exec("DELETE FROM event_locations WHERE location_id=?", id)
+	} else {
+		// Admin delete without reassign_to: events.location_id is RESTRICT (no ON DELETE
+		// action), so a plain DELETE would hit a raw FK error. Return a clear 409 instead.
+		var eventCount int
+		db.QueryRow("SELECT COUNT(*) FROM events WHERE location_id=?", id).Scan(&eventCount)
+		if eventCount > 0 {
+			writeError(w, fmt.Sprintf("Cannot delete: location has %d event(s) assigned; use ?reassign_to=<id> to move them first", eventCount), http.StatusConflict)
+			return
+		}
 	}
 
 	var locationID int

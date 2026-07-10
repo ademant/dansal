@@ -48,7 +48,7 @@ func safeNext(next string) string {
 const loginMinAge = 100 * time.Millisecond
 
 func loginFormMaxAge(cfg *Config) time.Duration {
-	return time.Duration(cfg.FormTokenLoginMaxAgeSecs) * time.Second
+	return time.Duration(cfg.FormTokenLoginMaxAgeMins) * time.Minute
 }
 
 func stdFormMaxAge(cfg *Config) time.Duration {

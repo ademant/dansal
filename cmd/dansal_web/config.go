@@ -82,7 +82,7 @@ type Config struct {
 
 	// Form token anti-bot protection
 	FormTokenMaxAgeMins      int  `yaml:"form_token_max_age_mins"`       // non-login token validity window in minutes; default 5
-	FormTokenLoginMaxAgeSecs int  `yaml:"form_token_login_max_age_secs"` // login-form token validity in seconds; default 10
+	FormTokenLoginMaxAgeMins int  `yaml:"form_token_login_max_age_mins"` // login-form token validity in minutes; default 10
 	FormTokenCleanupMins     int  `yaml:"form_token_cleanup_mins"`       // cleanup interval; default 5
 	FormTokenBindIP          bool `yaml:"form_token_bind_ip"`            // bind token to client IP; default false
 	FormTokenCap             int  `yaml:"form_token_cap"`                // max outstanding tokens; 0 = no cap; default 500
@@ -146,7 +146,7 @@ func loadConfig() *Config {
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
 		FormTokenMaxAgeMins:       5,
-		FormTokenLoginMaxAgeSecs:  10,
+		FormTokenLoginMaxAgeMins:  10,
 		FormTokenCleanupMins:      5,
 		FormTokenCap:              500,
 		TokenRateLimit:            30,
@@ -242,7 +242,7 @@ func reloadConfig(path string) *Config {
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
 		FormTokenMaxAgeMins:       5,
-		FormTokenLoginMaxAgeSecs:  10,
+		FormTokenLoginMaxAgeMins:  10,
 		FormTokenCleanupMins:      5,
 		FormTokenCap:              500,
 		TokenRateLimit:            30,

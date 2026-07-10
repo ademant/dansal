@@ -337,6 +337,7 @@
 .btn-primary-sm:hover{background:#0d4a80}
 .btn-del{background:#b00020;color:#fff}
 .btn-del:hover{background:#800016}
+.field-hint{font-weight:400;color:#888;font-size:.82rem}
 .md-paste-hint{display:flex;align-items:center;justify-content:space-between;background:#e8f4fd;border:1px solid #b3d7f5;border-radius:4px;padding:.35rem .6rem;font-size:.82rem;color:#1a5f8a;margin-top:.25rem}
 .md-paste-hint button{background:none;border:none;color:#1a5f8a;cursor:pointer;padding:0 .25rem;font-size:1rem;line-height:1;flex-shrink:0}
 .md-paste-hint button:hover{color:#0d3f6a}
@@ -816,7 +817,7 @@ function _bindMdAutosize(taId){
   ta.style.overflow='hidden';ta.style.resize='none';
   var open=true;
   function renderPrev(){prev.innerHTML=_mdToHtml(ta.value)||'<span class="md-preview-empty">Preview</span>';}
-  function doExpand(){open=true;ta.style.height='0';ta.style.height=ta.scrollHeight+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
+  function doExpand(){open=true;ta.style.height='0';ta.style.height=Math.max(ch,ta.scrollHeight)+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
   function doCollapse(){open=false;ta.style.height=ch+'px';ta.style.overflow='auto';btn.textContent='▼';btn.title='Expand';}
   renderPrev();
   if(ta.offsetHeight>0){doExpand();}

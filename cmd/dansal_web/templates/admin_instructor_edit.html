@@ -212,7 +212,7 @@ function _bindMdAutosize(taId){
   ta.style.overflow='hidden';ta.style.resize='none';
   var open=true;
   function renderPrev(){prev.innerHTML=_mdToHtml(ta.value)||'<span class="md-preview-empty">Preview</span>';}
-  function doExpand(){open=true;ta.style.height='0';ta.style.height=ta.scrollHeight+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
+  function doExpand(){open=true;ta.style.height='0';ta.style.height=Math.max(ch,ta.scrollHeight)+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
   function doCollapse(){open=false;ta.style.height=ch+'px';ta.style.overflow='auto';btn.textContent='▼';btn.title='Expand';}
   renderPrev();
   if(ta.offsetHeight>0){doExpand();}

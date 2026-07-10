@@ -32,7 +32,8 @@ func getDances(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/dances
 func createDance(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin {
 		writeError(w, "Forbidden: only admins may create dances", http.StatusForbidden)
 		return
 	}
@@ -44,7 +45,7 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var d Dance
-	if err := db.QueryRow("INSERT INTO dances (name) VALUES (?) RETURNING id, name", req.Name).Scan(&d.ID, &d.Name); err != nil {
+	if err := db.QueryRow("INSERT INTO dances (name, created_by_id) VALUES (?, ?) RETURNING id, name", req.Name, callerID).Scan(&d.ID, &d.Name); err != nil {
 		writeError(w, "Failed to create dance", http.StatusInternalServerError)
 		return
 	}

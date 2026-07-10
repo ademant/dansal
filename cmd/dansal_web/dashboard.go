@@ -75,7 +75,6 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 					defer evtWg.Done()
 					params := url.Values{}
 					params.Set("organization_id", strconv.Itoa(oid))
-					params.Set("include_past", "true")
 					evts, _ := client.GetAdminEvents(ctx, token, params)
 					mu.Lock()
 					events = append(events, evts...)

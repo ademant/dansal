@@ -1711,6 +1711,336 @@ func migrateDB() {
 			db.Exec("ALTER TABLE fetch_sources ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+
+	// #741: audit columns (created_by_id, updated_at, updated_by) for dances, tags,
+	// fetch_sources, and event_series, matching the pattern established for events/locations/musicians.
+	for _, col := range []struct{ table, column, definition string }{
+		{"dances", "created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"},
+		{"dances", "created_by_id", "INTEGER REFERENCES users(id)"},
+		{"dances", "updated_at", "INTEGER"},
+		{"dances", "updated_by", "TEXT DEFAULT ''"},
+		{"tags", "created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP"},
+		{"tags", "created_by_id", "INTEGER REFERENCES users(id)"},
+		{"tags", "updated_at", "INTEGER"},
+		{"tags", "updated_by", "TEXT DEFAULT ''"},
+		{"fetch_sources", "created_by_id", "INTEGER REFERENCES users(id)"},
+		{"fetch_sources", "updated_at", "INTEGER"},
+		{"fetch_sources", "updated_by", "TEXT DEFAULT ''"},
+		{"event_series", "created_by_id", "INTEGER REFERENCES users(id)"},
+		{"event_series", "updated_by", "TEXT DEFAULT ''"},
+	} {
+		var n int
+		db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name='%s'", col.table, col.column)).Scan(&n)
+		if n == 0 {
+			db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", col.table, col.column, col.definition))
+		}
+	}
+
+	// #738: event_tags.tag needs a FK to tags.slug so orphaned rows are prevented
+	// at the DB level, not just by periodic cleanup migrations.
+	migrateEventTagsFK()
+
+	// #739: CHECK constraints on enum-like TEXT columns that were only enforced by
+	// Go-side validation. Each is guarded by a schema check and only rebuilds once.
+	migrateFetchSourcesTypeCheck()
+	migrateEventsEnumChecks()
+	migrateLocationsEnumChecks()
+}
+
+// migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
+// to event_tags. Orphaned rows are deleted first so the new FK is not violated.
+func migrateEventTagsFK() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='event_tags'").Scan(&schema)
+	if strings.Contains(schema, "REFERENCES tags") {
+		return
+	}
+	db.Exec("DELETE FROM event_tags WHERE tag NOT IN (SELECT slug FROM tags)")
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateEventTagsFK: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE event_tags_new (
+			event_id INTEGER NOT NULL,
+			tag TEXT NOT NULL,
+			PRIMARY KEY (event_id, tag),
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+			FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
+		)`,
+		`INSERT INTO event_tags_new SELECT event_id, tag FROM event_tags`,
+		`DROP TABLE event_tags`,
+		`ALTER TABLE event_tags_new RENAME TO event_tags`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateEventTagsFK: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
+	log.Printf("migrateEventTagsFK: added FK from event_tags.tag to tags.slug")
+}
+
+// migrateFetchSourcesTypeCheck adds CHECK(type IN (...)) to fetch_sources.type.
+// Any row with a now-invalid type is coerced to 'ical' before the rebuild.
+func migrateFetchSourcesTypeCheck() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
+	if strings.Contains(schema, "CHECK(type IN") || strings.Contains(schema, "CHECK (type IN") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateFetchSourcesTypeCheck: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE fetch_sources_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT UNIQUE NOT NULL,
+			type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss')),
+			tags TEXT,
+			organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+			last_fetched_at INTEGER,
+			last_result TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			template_id INTEGER,
+			template_mode TEXT NOT NULL DEFAULT '',
+			template_data TEXT,
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			dance_ids TEXT DEFAULT '[]',
+			created_by_id INTEGER REFERENCES users(id),
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT ''
+		)`,
+		`INSERT INTO fetch_sources_chk
+			(id, url, type, tags, organization_id, last_fetched_at, last_result,
+			 created_at, template_id, template_mode, template_data, consecutive_failures,
+			 dance_ids, created_by_id, updated_at, updated_by)
+		SELECT id, url,
+			CASE WHEN type IN ('ical','json','folkdance-json','gancio-json','rss') THEN type ELSE 'ical' END,
+			tags, organization_id, last_fetched_at, last_result,
+			created_at, template_id, template_mode, template_data,
+			COALESCE(consecutive_failures, 0),
+			COALESCE(dance_ids, '[]'),
+			created_by_id, updated_at, COALESCE(updated_by, '')
+		FROM fetch_sources`,
+		`DROP TABLE fetch_sources`,
+		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateFetchSourcesTypeCheck: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
+}
+
+// migrateEventsEnumChecks adds CHECK constraints to events.workshop_difficulty
+// and events.availability.
+func migrateEventsEnumChecks() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'").Scan(&schema)
+	if strings.Contains(schema, "CHECK(workshop_difficulty") || strings.Contains(schema, "CHECK (workshop_difficulty") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateEventsEnumChecks: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE events_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uid TEXT UNIQUE,
+			title TEXT NOT NULL,
+			description TEXT,
+			start_time INTEGER NOT NULL,
+			end_time INTEGER NOT NULL,
+			location_id INTEGER,
+			organization_id INTEGER,
+			has_ball INTEGER DEFAULT 0,
+			has_workshop INTEGER DEFAULT 0,
+			has_festival INTEGER DEFAULT 0,
+			is_cancelled INTEGER DEFAULT 0,
+			is_published INTEGER DEFAULT 0,
+			short_code TEXT UNIQUE,
+			url TEXT,
+			source TEXT,
+			source_last_modified INTEGER,
+			pricing TEXT,
+			workshop_difficulty TEXT DEFAULT '' CHECK(workshop_difficulty IN ('','beginner','advanced','profi')),
+			booking_url TEXT DEFAULT '',
+			availability TEXT DEFAULT '' CHECK(availability IN ('','limited','sold_out')),
+			tickets_total INTEGER DEFAULT 0,
+			booking_enabled INTEGER DEFAULT 0,
+			food TEXT DEFAULT '',
+			drink TEXT DEFAULT '',
+			floor_condition TEXT DEFAULT '',
+			attributes TEXT,
+			contact_name TEXT,
+			contact_email TEXT,
+			suggester_email TEXT DEFAULT '',
+			suggestion_token TEXT,
+			changed_at INTEGER,
+			changed_by TEXT DEFAULT '',
+			changed_by_id INTEGER REFERENCES users(id),
+			created_by_id INTEGER REFERENCES users(id),
+			fetch_source_id INTEGER,
+			has_lost_found INTEGER NOT NULL DEFAULT 0,
+			expires_at INTEGER,
+			location_geohash TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL,
+			needs_duplicate_review INTEGER NOT NULL DEFAULT 0,
+			duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+			FOREIGN KEY (location_id)     REFERENCES locations(id),
+			FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO events_chk
+			(id, uid, title, description, start_time, end_time, location_id, organization_id,
+			 has_ball, has_workshop, has_festival, is_cancelled, is_published, short_code, url,
+			 source, source_last_modified, pricing, workshop_difficulty, booking_url, availability,
+			 tickets_total, booking_enabled, food, drink, floor_condition, attributes,
+			 contact_name, contact_email, suggester_email, suggestion_token,
+			 changed_at, changed_by, changed_by_id, created_by_id, fetch_source_id,
+			 location_geohash, created_at, series_id, needs_duplicate_review, duplicate_of_id)
+		SELECT id, uid, title, description, start_time, end_time, location_id, organization_id,
+			 has_ball, has_workshop, has_festival, is_cancelled, is_published, short_code, url,
+			 source, source_last_modified, pricing,
+			 CASE WHEN COALESCE(workshop_difficulty,'') IN ('','beginner','advanced','profi')
+			      THEN COALESCE(workshop_difficulty,'') ELSE '' END,
+			 booking_url,
+			 CASE WHEN COALESCE(availability,'') IN ('','limited','sold_out')
+			      THEN COALESCE(availability,'') ELSE '' END,
+			 tickets_total, booking_enabled, food, drink, floor_condition, attributes,
+			 contact_name, contact_email, suggester_email, suggestion_token,
+			 changed_at, changed_by, changed_by_id, created_by_id, fetch_source_id,
+			 location_geohash, created_at, series_id,
+			 COALESCE(needs_duplicate_review, 0), duplicate_of_id
+		FROM events`,
+		`DROP TABLE events`,
+		`ALTER TABLE events_chk RENAME TO events`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateEventsEnumChecks: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	// Recreate indexes dropped by the table rebuild.
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_end_time ON events(end_time)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_series_id ON events(series_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_created_by_id ON events(created_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_changed_by_id ON events(changed_by_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_needs_duplicate_review ON events(needs_duplicate_review) WHERE needs_duplicate_review=1")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_start_time ON events(start_time, end_time) WHERE is_published=1")
+	log.Printf("migrateEventsEnumChecks: added CHECK constraints to events.workshop_difficulty and events.availability")
+}
+
+// migrateLocationsEnumChecks adds CHECK constraints to locations.parking and
+// locations.floor_condition, and ensures no_street_shoes column exists.
+func migrateLocationsEnumChecks() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='locations'").Scan(&schema)
+	if strings.Contains(schema, "CHECK(parking") || strings.Contains(schema, "CHECK (parking") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateLocationsEnumChecks: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE locations_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			location TEXT NOT NULL,
+			short_name TEXT,
+			address TEXT,
+			zipcode TEXT,
+			town TEXT,
+			country TEXT,
+			country_code TEXT,
+			region TEXT,
+			latitude REAL,
+			longitude REAL,
+			internetsite TEXT,
+			osm_id INTEGER,
+			osm_type TEXT,
+			geohash TEXT,
+			wikidata_id TEXT,
+			mb_place_id TEXT,
+			notes_md TEXT,
+			attributes TEXT,
+			parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
+			floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
+			no_street_shoes INTEGER DEFAULT 0,
+			aliases TEXT NOT NULL DEFAULT '[]',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT '',
+			organization_id INTEGER,
+			wheelchair_accessible INTEGER NOT NULL DEFAULT 0,
+			hearing_loop INTEGER NOT NULL DEFAULT 0,
+			visual_support INTEGER NOT NULL DEFAULT 0
+		)`,
+		`INSERT INTO locations_chk
+			(id, location, short_name, address, zipcode, town, country, country_code, region,
+			 latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id,
+			 notes_md, attributes, parking, floor_condition, no_street_shoes, aliases,
+			 created_at, updated_at, updated_by,
+			 organization_id, wheelchair_accessible, hearing_loop, visual_support)
+		SELECT id, location, short_name, address, zipcode, town, country, country_code, region,
+			 latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id,
+			 notes_md, attributes,
+			 CASE WHEN parking IS NULL OR parking IN ('','none','free','paid')
+			      THEN parking ELSE '' END,
+			 CASE WHEN floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')
+			      THEN floor_condition ELSE '' END,
+			 COALESCE(no_street_shoes, 0),
+			 COALESCE(aliases, '[]'),
+			 created_at, updated_at, COALESCE(updated_by, ''),
+			 organization_id, COALESCE(wheelchair_accessible, 0), COALESCE(hearing_loop, 0), COALESCE(visual_support, 0)
+		FROM locations`,
+		`DROP TABLE locations`,
+		`ALTER TABLE locations_chk RENAME TO locations`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateLocationsEnumChecks: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
+	log.Printf("migrateLocationsEnumChecks: added CHECK constraints to locations.parking and locations.floor_condition")
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -1892,9 +2222,9 @@ func createTables() error {
 		source TEXT,
 		source_last_modified INTEGER,
 		pricing TEXT,
-		workshop_difficulty TEXT DEFAULT '',
+		workshop_difficulty TEXT DEFAULT '' CHECK(workshop_difficulty IN ('','beginner','advanced','profi')),
 		booking_url TEXT DEFAULT '',
-		availability TEXT DEFAULT '',
+		availability TEXT DEFAULT '' CHECK(availability IN ('','limited','sold_out')),
 		tickets_total INTEGER DEFAULT 0,
 		booking_enabled INTEGER DEFAULT 0,
 		food TEXT DEFAULT '',
@@ -1931,7 +2261,9 @@ func createTables() error {
 		default_end_time TEXT DEFAULT '',
 		invite_token TEXT UNIQUE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at INTEGER DEFAULT 0
+		updated_at INTEGER DEFAULT 0,
+		created_by_id INTEGER REFERENCES users(id),
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1966,8 +2298,9 @@ func createTables() error {
 		mb_place_id TEXT,
 		notes_md TEXT,
 		attributes TEXT,
-		parking TEXT,
-		floor_condition TEXT,
+		parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
+		floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
+		no_street_shoes INTEGER DEFAULT 0,
 		aliases TEXT NOT NULL DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
@@ -2001,12 +2334,16 @@ func createTables() error {
 	);
 	CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT UNIQUE NOT NULL
+		name TEXT UNIQUE NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_by_id INTEGER REFERENCES users(id),
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS fetch_sources (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		url TEXT UNIQUE NOT NULL,
-		type TEXT NOT NULL DEFAULT 'ical',
+		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss')),
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at INTEGER,
@@ -2015,7 +2352,10 @@ func createTables() error {
 		template_id INTEGER,
 		template_mode TEXT NOT NULL DEFAULT '',
 		template_data TEXT,
-		consecutive_failures INTEGER NOT NULL DEFAULT 0
+		consecutive_failures INTEGER NOT NULL DEFAULT 0,
+		created_by_id INTEGER REFERENCES users(id),
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
@@ -2159,7 +2499,8 @@ func createTables() error {
 		event_id INTEGER NOT NULL,
 		tag TEXT NOT NULL,
 		PRIMARY KEY (event_id, tag),
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id);
 	CREATE TABLE IF NOT EXISTS contact_posts (
@@ -2276,7 +2617,11 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS tags (
 		slug     TEXT PRIMARY KEY,
 		name     TEXT NOT NULL,
-		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
+		category TEXT NOT NULL CHECK(category IN ('format','level','type')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_by_id INTEGER REFERENCES users(id),
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS webauthn_credentials (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

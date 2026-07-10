@@ -317,6 +317,26 @@
 .md-help-details ul{margin:.4rem 0 0;padding-left:1.1rem;font-size:.8rem;color:#555}
 .md-help-details li{margin-bottom:.2rem}
 .md-help-details code{background:#eceef3;padding:0 .2rem;border-radius:3px}
+.md-ta-wrap{display:flex;gap:1rem;align-items:flex-start;flex:1 1 auto;min-width:0}
+.md-ta-left{flex:1 1 55%;position:relative;min-width:0}
+.md-ta-left textarea{width:100%}
+.md-ta-toggle{position:absolute;top:.3rem;right:.3rem;background:var(--bg-card,#fff);border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:.72rem;line-height:1;padding:.18rem .3rem;color:#999;z-index:1}
+.md-ta-toggle:hover{color:#1a6eb5;border-color:#1a6eb5}
+.md-preview{flex:0 1 42%;min-width:180px;padding:.6rem .85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;font-size:.86rem;line-height:1.6;color:var(--fg);overflow:auto;word-break:break-word}
+.md-preview h1{font-size:1.1rem;margin:.4rem 0 .2rem}
+.md-preview h2{font-size:1rem;margin:.35rem 0 .15rem}
+.md-preview h3,.md-preview h4{font-size:.92rem;margin:.3rem 0 .1rem}
+.md-preview p,.md-preview li{margin:.1rem 0}
+.md-preview ul,.md-preview ol{margin:.2rem 0;padding-left:1.2rem}
+.md-preview blockquote{border-left:3px solid var(--border);margin:.35rem 0;padding:.15rem .6rem;opacity:.75}
+.md-preview code{background:var(--code-bg);padding:.05rem .22rem;border-radius:3px;font-size:.83em}
+.md-preview pre{background:var(--code-bg);padding:.45rem .65rem;border-radius:4px;overflow-x:auto;margin:.3rem 0}
+.md-preview pre code{background:none;padding:0}
+.md-preview a{color:#1a6eb5}
+.md-preview hr{border:none;border-top:1px solid var(--border);margin:.4rem 0}
+.md-preview-empty{color:#aaa;font-style:italic}
+.md-br{margin:.2rem 0!important;height:0!important}
+@media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
 <script>
 function filterLocs(q){
@@ -527,11 +547,82 @@ function safeGoBack(){
     var s=ta.selectionStart,end=ta.selectionEnd,v=ta.value;
     ta.value=v.slice(0,s)+md+v.slice(end);
     ta.selectionStart=ta.selectionEnd=s+md.length;
+    ta.dispatchEvent(new Event('input'));
     hint.hidden=false;
     clearTimeout(hintTimer);
     hintTimer=setTimeout(function(){hint.hidden=true;},5000);
     _markDirty();
   });
 })();
+function _mdToHtml(md){
+  if(!md) return '';
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function inline(s){
+    s=esc(s);
+    s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+    s=s.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>');
+    s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    s=s.replace(/_(.+?)_/g,'<em>$1</em>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return s;
+  }
+  var lines=md.split('\n'),out=[],inUl=false,inOl=false,inPre=false,preBuf=[];
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i];
+    if(/^```/.test(l)){
+      if(inPre){out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');preBuf=[];inPre=false;}
+      else{if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}inPre=true;}
+      continue;
+    }
+    if(inPre){preBuf.push(l);continue;}
+    var hm=l.match(/^(#{1,6}) (.*)/);
+    if(hm){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<h'+hm[1].length+'>'+inline(hm[2])+'</h'+hm[1].length+'>');continue;}
+    if(/^>\s/.test(l)){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<blockquote>'+inline(l.replace(/^>\s*/,''))+'</blockquote>');continue;}
+    if(/^-{3,}$/.test(l.trim())){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<hr>');continue;}
+    var ulm=l.match(/^[*-] (.*)/);
+    if(ulm){if(inOl){out.push('</ol>');inOl=false;}if(!inUl){out.push('<ul>');inUl=true;}out.push('<li>'+inline(ulm[1])+'</li>');continue;}
+    var olm=l.match(/^\d+\. (.*)/);
+    if(olm){if(inUl){out.push('</ul>');inUl=false;}if(!inOl){out.push('<ol>');inOl=true;}out.push('<li>'+inline(olm[1])+'</li>');continue;}
+    if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}
+    if(!l.trim()){out.push('<p class="md-br"></p>');continue;}
+    out.push('<p>'+inline(l)+'</p>');
+  }
+  if(inUl)out.push('</ul>');if(inOl)out.push('</ol>');
+  if(inPre)out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');
+  return out.join('');
+}
+function _bindMdAutosize(taId){
+  var ta=document.getElementById(taId);
+  if(!ta) return;
+  var ch=ta.offsetHeight||(parseInt(ta.getAttribute('rows')||'4')*22+14);
+  var wrap=document.createElement('div');
+  wrap.className='md-ta-wrap';
+  ta.parentNode.insertBefore(wrap,ta);
+  wrap.appendChild(ta);
+  var left=document.createElement('div');
+  left.className='md-ta-left';
+  wrap.insertBefore(left,ta);
+  left.appendChild(ta);
+  var btn=document.createElement('button');
+  btn.type='button';btn.className='md-ta-toggle';btn.title='Collapse';btn.textContent='▲';
+  left.appendChild(btn);
+  var prev=document.createElement('div');
+  prev.className='md-preview';
+  wrap.appendChild(prev);
+  var descRow=wrap.closest&&wrap.closest('.desc-row');
+  if(descRow){var mh=descRow.querySelector('.md-help');if(mh)mh.hidden=true;}
+  ta.style.overflow='hidden';ta.style.resize='none';
+  var open=true;
+  function renderPrev(){prev.innerHTML=_mdToHtml(ta.value)||'<span class="md-preview-empty">Preview</span>';}
+  function doExpand(){open=true;ta.style.height='0';ta.style.height=ta.scrollHeight+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
+  function doCollapse(){open=false;ta.style.height=ch+'px';ta.style.overflow='auto';btn.textContent='▼';btn.title='Expand';}
+  renderPrev();
+  if(ta.offsetHeight>0){doExpand();}
+  else{var ro=new ResizeObserver(function(e){if(e[0].contentRect.height>0){doExpand();ro.disconnect();}});ro.observe(ta);}
+  ta.addEventListener('input',function(){if(open)doExpand();renderPrev();});
+  btn.addEventListener('click',function(){if(open)doCollapse();else doExpand();});
+}
+_bindMdAutosize('description');
 </script>
 {{end}}

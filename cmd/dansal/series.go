@@ -369,21 +369,21 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	var result sql.Result
 	if req.OrganizationID != nil {
 		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, organization_id, default_location_id, default_start_time, default_end_time, updated_at)
-			VALUES (?,?,?,?,?,?,?,?)`,
+			(slug, title, description, organization_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
 			slug, req.Title, req.Description,
 			*req.OrganizationID, optionalInt(req.DefaultLocationID),
 			startTimeStr, endTimeStr,
-			time.Now().Unix(),
+			time.Now().Unix(), callerID, resolveDisplayName(callerID),
 		)
 	} else {
 		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, default_location_id, default_start_time, default_end_time, updated_at)
-			VALUES (?,?,?,?,?,?,?)`,
+			(slug, title, description, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by)
+			VALUES (?,?,?,?,?,?,?,?,?)`,
 			slug, req.Title, req.Description,
 			optionalInt(req.DefaultLocationID),
 			startTimeStr, endTimeStr,
-			time.Now().Unix(),
+			time.Now().Unix(), callerID, resolveDisplayName(callerID),
 		)
 	}
 	if err != nil {
@@ -485,17 +485,15 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	if role == RoleAdmin && req.OrganizationID != nil {
 		orgID = req.OrganizationID
 	}
-	_ = callerID
-
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,
-		    organization_id=?, updated_at=?
+		    organization_id=?, updated_at=?, updated_by=?
 		WHERE id=?`,
 		req.Title, req.Description,
 		optionalInt(req.DefaultLocationID),
 		req.DefaultStartTime, req.DefaultEndTime,
 		optionalInt(orgID),
-		time.Now().Unix(),
+		time.Now().Unix(), resolveDisplayName(callerID),
 		series.ID,
 	)
 	if err != nil {

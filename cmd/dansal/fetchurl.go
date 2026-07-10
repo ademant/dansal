@@ -475,7 +475,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 }
 
 // upsertFetchSource inserts or updates a fetch source by URL, returning its id.
-func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, error) {
+func upsertFetchSource(rawURL, typ string, tags []string, orgID *int, callerID int) (int64, error) {
 	tagsJSON, _ := json.Marshal(tags)
 	var id int64
 	err := db.QueryRow("SELECT id FROM fetch_sources WHERE url = ?", rawURL).Scan(&id)
@@ -485,8 +485,8 @@ func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, er
 			orgVal = *orgID
 		}
 		result, err := db.Exec(
-			"INSERT INTO fetch_sources (url, type, tags, organization_id) VALUES (?, ?, ?, ?)",
-			rawURL, typ, string(tagsJSON), orgVal,
+			"INSERT INTO fetch_sources (url, type, tags, organization_id, created_by_id) VALUES (?, ?, ?, ?, ?)",
+			rawURL, typ, string(tagsJSON), orgVal, callerID,
 		)
 		if err != nil {
 			return 0, err
@@ -643,8 +643,8 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		tplDataVal = src.TemplateData
 	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, resolveDisplayName(callerID), src.ID,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1237,7 +1237,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID)
+	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID, callerID)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

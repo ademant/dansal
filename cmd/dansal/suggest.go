@@ -285,7 +285,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "db error: "+insertErr.Error(), http.StatusInternalServerError)
 		return
 	}
-	syncEventTags(tx, int(eventID), filterKnownTags(req.Tags))
+	syncEventTags(tx, int(eventID), req.Tags)
 	for _, danceID := range req.DanceIDs {
 		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
 	}

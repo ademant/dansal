@@ -1748,6 +1748,9 @@ func migrateDB() {
 
 	// #740: migrate locations.aliases JSON column to location_aliases junction table.
 	migrateLocationAliasesToJunction()
+
+	// #763: drop FK from event_tags.tag → tags.slug so feed-provided tags are preserved.
+	migrateEventTagsDropTagFK()
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -1789,6 +1792,46 @@ func migrateEventTagsFK() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
 	log.Printf("migrateEventTagsFK: added FK from event_tags.tag to tags.slug")
+}
+
+// migrateEventTagsDropTagFK rebuilds event_tags without the FK on tag → tags.slug
+// so feed-provided category slugs are preserved rather than rejected or filtered.
+// Idempotent: no-op when the schema no longer references tags.
+func migrateEventTagsDropTagFK() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='event_tags'").Scan(&schema)
+	if !strings.Contains(schema, "REFERENCES tags") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateEventTagsDropTagFK: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE event_tags_new (
+			event_id INTEGER NOT NULL,
+			tag TEXT NOT NULL,
+			PRIMARY KEY (event_id, tag),
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+		)`,
+		`INSERT INTO event_tags_new SELECT event_id, tag FROM event_tags`,
+		`DROP TABLE event_tags`,
+		`ALTER TABLE event_tags_new RENAME TO event_tags`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateEventTagsDropTagFK: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
+	log.Printf("migrateEventTagsDropTagFK: removed FK from event_tags.tag to tags.slug")
 }
 
 // migrateFetchSourcesTypeCheck adds CHECK(type IN (...)) to fetch_sources.type.

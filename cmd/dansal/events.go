@@ -1095,7 +1095,6 @@ func syncEventLocationGeohash(eventID int) {
 // createEventFromRequest inserts or updates all events described by req.
 // Returns (events, counts, error) tallying how many events were new/updated/unchanged.
 func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool, createdByID *int) ([]Event, ImportCounts, error) {
-	req.Tags = filterKnownTags(req.Tags)
 	syncEventTypeTags(&req.EventWriteRequest)
 	var createdEvents []Event
 	var counts ImportCounts
@@ -1654,7 +1653,6 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range requests {
-		requests[i].Tags = filterKnownTags(requests[i].Tags)
 		syncEventTypeTags(&requests[i].EventWriteRequest)
 	}
 
@@ -1892,7 +1890,6 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	req.Tags = filterKnownTags(req.Tags)
 	syncEventTypeTags(&req.EventWriteRequest)
 
 	locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
@@ -2212,7 +2209,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		tmp := EventWriteRequest{HasBall: hasBall, HasWorkshop: hasWorkshop, HasFestival: hasFestival, Tags: tagsToSync}
 		syncEventTypeTags(&tmp)
-		tagsToSync = filterKnownTags(tmp.Tags)
+		tagsToSync = tmp.Tags
 	}
 
 	changedByUser := resolveDisplayName(callerID)
@@ -2829,23 +2826,6 @@ func knownTagSlugs() (map[string]bool, error) {
 		slugs[s] = true
 	}
 	return slugs, nil
-}
-
-func filterKnownTags(tags []string) []string {
-	if len(tags) == 0 {
-		return nil
-	}
-	known, err := knownTagSlugs()
-	if err != nil {
-		return nil
-	}
-	var result []string
-	for _, t := range tags {
-		if known[t] {
-			result = append(result, t)
-		}
-	}
-	return result
 }
 
 func validateTags(tags []string) error {

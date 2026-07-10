@@ -29,6 +29,10 @@ var siteCfg *siteSettingsCache
 // Key is IP + "|" + User-Agent. Initialised in main() after config is loaded.
 var publicThrottle *submissionThrottle
 
+// searchThrottle is the per-IP rate limiter for GET /search/results.
+// Generous limit (default 60/min) blocks scraping/hammering without affecting normal browsing.
+var searchThrottle *submissionThrottle
+
 // liveHandler is an http.Handler whose inner handler can be swapped atomically.
 // This lets systemctl reload rebuild all route closures with new config+i18n
 // without stopping the server.
@@ -87,6 +91,10 @@ func main() {
 		cfg.PublicRateLimit,
 		time.Duration(cfg.PublicRateWindowMins)*time.Minute,
 		time.Duration(cfg.PublicThrottleForgetHours)*time.Hour,
+	)
+	searchThrottle = newSubmissionThrottle(
+		cfg.SearchRateLimit,
+		time.Duration(cfg.SearchRateWindowMins)*time.Minute,
 	)
 	startFormTokenCleanup(cfg.FormTokenMaxAgeMins, cfg.FormTokenCleanupMins)
 	userRateLimiter = newUserRateLimiter(cfg.UserRateLimitGlobal, cfg.UserRateLimits)

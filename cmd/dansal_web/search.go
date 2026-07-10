@@ -73,6 +73,15 @@ type searchResultsResponse struct {
 // against this one fetched batch (see discussion in #650-adjacent issues).
 func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		if searchThrottle.isBlocked(ip) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"rate limit exceeded"}`))
+			return
+		}
+		searchThrottle.record(ip)
+
 		from, err1 := time.Parse("2006-01-02", r.URL.Query().Get("from"))
 		to, err2 := time.Parse("2006-01-02", r.URL.Query().Get("to"))
 		if err1 != nil || err2 != nil || to.Before(from) {

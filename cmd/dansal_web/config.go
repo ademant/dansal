@@ -76,6 +76,10 @@ type Config struct {
 	PublicRateWindowMins      int `yaml:"public_rate_window_mins"`      // window in minutes; default 10
 	PublicThrottleForgetHours int `yaml:"public_throttle_forget_hours"` // forget inactive entries after N hours; default 1
 
+	// Rate limiting for GET /search/results
+	SearchRateLimit      int `yaml:"search_rate_limit"`       // max requests per window per IP; default 60
+	SearchRateWindowMins int `yaml:"search_rate_window_mins"` // window in minutes; default 1
+
 	// Form token anti-bot protection
 	FormTokenMaxAgeMins  int  `yaml:"form_token_max_age_mins"` // token validity window; default 10
 	FormTokenCleanupMins int  `yaml:"form_token_cleanup_mins"` // cleanup interval; default 5
@@ -128,6 +132,8 @@ func loadConfig() *Config {
 		PublicRateLimit:           10,
 		PublicRateWindowMins:      10,
 		PublicThrottleForgetHours: 1,
+		SearchRateLimit:           60,
+		SearchRateWindowMins:      1,
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
 		UserRateLimitGlobal:       100,
@@ -215,6 +221,8 @@ func reloadConfig(path string) *Config {
 		PublicRateLimit:           10,
 		PublicRateWindowMins:      10,
 		PublicThrottleForgetHours: 1,
+		SearchRateLimit:           60,
+		SearchRateWindowMins:      1,
 		FormTokenMaxAgeMins:       10,
 		FormTokenCleanupMins:      5,
 		UserRateLimitGlobal:       100,

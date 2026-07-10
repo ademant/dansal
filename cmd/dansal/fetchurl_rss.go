@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -113,8 +114,8 @@ func rssEventDates(startStr, endStr string) (time.Time, time.Time, bool) {
 	return startT, startT.Add(2 * time.Hour), true
 }
 
-func importFromRSSSource(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(safeClient, src.URL)
+func importFromRSSSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	resp, err := getWithRetry(ctx, safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
@@ -133,22 +134,22 @@ func importFromRSSSource(src FetchSource) ([]Event, ImportCounts, error) {
 	// Try RSS 2.0
 	var rssFd rssFeed
 	if xmlErr := xml.Unmarshal(body, &rssFd); xmlErr == nil && rssFd.XMLName.Local == "rss" {
-		return importRSSItems(rssFd.Channel.Items, src)
+		return importRSSItems(ctx, rssFd.Channel.Items, src)
 	}
 
 	// Try Atom
 	var atomFd atomFeed
 	if xmlErr := xml.Unmarshal(body, &atomFd); xmlErr == nil && atomFd.XMLName.Local == "feed" {
-		return importAtomEntries(atomFd.Entries, src)
+		return importAtomEntries(ctx, atomFd.Entries, src)
 	}
 
 	return nil, ImportCounts{}, fmt.Errorf("not a valid RSS 2.0 or Atom feed")
 }
 
-func importRSSItems(items []rssItem, src FetchSource) ([]Event, ImportCounts, error) {
+func importRSSItems(ctx context.Context, items []rssItem, src FetchSource) ([]Event, ImportCounts, error) {
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
@@ -209,10 +210,10 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, ImportCounts, er
 	return allEvents, counts, nil
 }
 
-func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, ImportCounts, error) {
+func importAtomEntries(ctx context.Context, entries []atomEntry, src FetchSource) ([]Event, ImportCounts, error) {
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}

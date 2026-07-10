@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -196,7 +197,7 @@ func parseTECJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest,
 	return reqs, nil
 }
 
-func importFromTECJSON(src FetchSource) ([]Event, ImportCounts, error) {
+func importFromTECJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
 	var allTECEvents []tecEvent
 	for page := 1; ; page++ {
 		u, err := url.Parse(src.URL)
@@ -208,7 +209,7 @@ func importFromTECJSON(src FetchSource) ([]Event, ImportCounts, error) {
 		q.Set("per_page", "50")
 		u.RawQuery = q.Encode()
 
-		resp, err := getWithRetry(fetchClient, u.String())
+		resp, err := getWithRetry(ctx, fetchClient, u.String())
 		if err != nil {
 			return nil, ImportCounts{}, fmt.Errorf("fetch page %d: %w", page, err)
 		}
@@ -228,7 +229,7 @@ func importFromTECJSON(src FetchSource) ([]Event, ImportCounts, error) {
 
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}

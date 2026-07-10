@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -225,8 +226,8 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 	return reqs, nil
 }
 
-func importFromFolkdanceJSON(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(safeClient, src.URL)
+func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	resp, err := getWithRetry(ctx, safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
@@ -246,7 +247,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, ImportCounts, error) {
 
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}

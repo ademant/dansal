@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -172,8 +173,8 @@ func parseGancioJSONToRequests(body []byte, src FetchSource) ([]EventCreateReque
 	return gancioEventsToRequests(events, src), nil
 }
 
-func importFromGancioJSON(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(safeClient, src.URL)
+func importFromGancioJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	resp, err := getWithRetry(ctx, safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
@@ -191,7 +192,7 @@ func importFromGancioJSON(src FetchSource) ([]Event, ImportCounts, error) {
 
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}

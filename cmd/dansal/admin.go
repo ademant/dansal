@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -293,7 +294,7 @@ func adminFetchAll() adminResponse {
 	}
 	results := make([]sourceResult, 0, len(sources))
 	for _, src := range sources {
-		events, _, fetchErr := importFromSource(src)
+		events, _, fetchErr := importFromSource(context.Background(), src)
 		r := sourceResult{ID: src.ID, URL: src.URL}
 		if fetchErr != nil {
 			r.Error = fetchErr.Error()

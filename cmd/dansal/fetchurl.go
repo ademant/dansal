@@ -118,10 +118,14 @@ var safeClient = &http.Client{
 // exponential backoff (1s, 2s, 4s, 8s). A Retry-After header, if present and
 // between 1–300 seconds, overrides the computed delay. At most 5 attempts are
 // made; the final 429 response is returned as-is so callers can log the status.
-func getWithRetry(client *http.Client, rawURL string) (*http.Response, error) {
+func getWithRetry(ctx context.Context, client *http.Client, rawURL string) (*http.Response, error) {
 	delays := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
 	for attempt := 0; ; attempt++ {
-		resp, err := client.Get(rawURL)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +140,11 @@ func getWithRetry(client *http.Client, rawURL string) (*http.Response, error) {
 		}
 		resp.Body.Close()
 		log.Printf("fetch: 429 from %s, retrying in %s (attempt %d)", rawURL, delay, attempt+1)
-		time.Sleep(delay)
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 }
 
@@ -731,7 +739,7 @@ func notifyAdminsFetchFailure(src FetchSource, failures int, fetchErr error) {
 }
 
 // importFromSource dispatches to the correct importer based on src.Type.
-func importFromSource(src FetchSource) ([]Event, ImportCounts, error) {
+func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
 	// Defense-in-depth: re-validate scheme even though the URL was validated at
 	// storage time, guarding against any future path that bypasses the handler check.
 	if u, err := url.Parse(src.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -739,28 +747,28 @@ func importFromSource(src FetchSource) ([]Event, ImportCounts, error) {
 	}
 	switch src.Type {
 	case "json":
-		return importFromJSONSource(src)
+		return importFromJSONSource(ctx, src)
 	case "folkdance-json":
-		return importFromFolkdanceJSON(src)
+		return importFromFolkdanceJSON(ctx, src)
 	case "gancio-json":
-		return importFromGancioJSON(src)
+		return importFromGancioJSON(ctx, src)
 	case "rss":
-		return importFromRSSSource(src)
+		return importFromRSSSource(ctx, src)
 	default:
-		return importFromICalSource(src)
+		return importFromICalSource(ctx, src)
 	}
 }
 
 // importFromJSONSource auto-detects the JSON feed format from the URL and dispatches
 // to the appropriate internal importer.
-func importFromJSONSource(src FetchSource) ([]Event, ImportCounts, error) {
+func importFromJSONSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
 	if gancioJSONProbe(src.URL) {
-		return importFromGancioJSON(src)
+		return importFromGancioJSON(ctx, src)
 	}
 	if tecJSONProbe(src.URL) {
-		return importFromTECJSON(src)
+		return importFromTECJSON(ctx, src)
 	}
-	return importFromFolkdanceJSON(src)
+	return importFromFolkdanceJSON(ctx, src)
 }
 
 // parseTemplateData parses template JSON stored in fetch_sources.template_data.
@@ -1071,8 +1079,8 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 }
 
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
-func importFromICalSource(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(safeClient, src.URL)
+func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	resp, err := getWithRetry(ctx, safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}
@@ -1091,7 +1099,7 @@ func importFromICalSource(src FetchSource) ([]Event, ImportCounts, error) {
 
 	td := parseTemplateData(src.TemplateData)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
@@ -1283,7 +1291,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData}
-	allEvents, counts, err := importFromSource(src)
+	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
@@ -1426,11 +1434,12 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]BulkSourceResult, len(sources))
 	var wg sync.WaitGroup
+	ctx := r.Context()
 	for i, src := range sources {
 		wg.Add(1)
 		go func(i int, src FetchSource) {
 			defer wg.Done()
-			events, counts, err := importFromSource(src)
+			events, counts, err := importFromSource(ctx, src)
 			if err != nil {
 				recordFetchResult(src, 0, err)
 				results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Error: err.Error()}
@@ -1502,7 +1511,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allEvents, counts, err := importFromSource(src)
+	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)

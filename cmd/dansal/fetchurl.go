@@ -114,6 +114,32 @@ var safeClient = &http.Client{
 	Transport: uaTransport{rt: &http.Transport{DialContext: safeDialContext}},
 }
 
+// getWithRetry performs a GET request via client, retrying on HTTP 429 with
+// exponential backoff (1s, 2s, 4s, 8s). A Retry-After header, if present and
+// between 1–300 seconds, overrides the computed delay. At most 5 attempts are
+// made; the final 429 response is returned as-is so callers can log the status.
+func getWithRetry(client *http.Client, rawURL string) (*http.Response, error) {
+	delays := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
+	for attempt := 0; ; attempt++ {
+		resp, err := client.Get(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusTooManyRequests || attempt >= len(delays) {
+			return resp, nil
+		}
+		delay := delays[attempt]
+		if ra := resp.Header.Get("Retry-After"); ra != "" {
+			if secs, err := strconv.Atoi(ra); err == nil && secs >= 1 && secs <= 300 {
+				delay = time.Duration(secs) * time.Second
+			}
+		}
+		resp.Body.Close()
+		log.Printf("fetch: 429 from %s, retrying in %s (attempt %d)", rawURL, delay, attempt+1)
+		time.Sleep(delay)
+	}
+}
+
 var privateRanges = func() []*net.IPNet {
 	cidrs := []string{
 		"127.0.0.0/8",    // loopback
@@ -1046,7 +1072,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
 func importFromICalSource(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := safeClient.Get(src.URL)
+	resp, err := getWithRetry(safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}

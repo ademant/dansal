@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -91,6 +92,20 @@ func looksLikeGmailDotSpam(email string) bool {
 		}
 	}
 	return short*10 >= len(parts)*6 // ≥60% of segments are ≤2 chars
+}
+
+var (
+	reTelegramUsername = regexp.MustCompile(`^@?[A-Za-z0-9_]{5,32}$`)
+	reTelegramLink     = regexp.MustCompile(`(?i)^https?://(t\.me|telegram\.me)/[A-Za-z0-9_]{5,32}$`)
+	reTelegramPhone    = regexp.MustCompile(`^\+?\d{5,15}$`)
+)
+
+// isValidTelegramContact checks that s is a plausible Telegram identifier:
+// a bare username (@optional, 5–32 alphanumeric+underscore chars), a t.me/
+// telegram.me link, or a phone number (optional +, 5–15 digits).
+func isValidTelegramContact(s string) bool {
+	s = strings.TrimSpace(s)
+	return reTelegramUsername.MatchString(s) || reTelegramLink.MatchString(s) || reTelegramPhone.MatchString(s)
 }
 
 // isValidMatrixID checks that s is a fully-qualified Matrix user ID: @localpart:server

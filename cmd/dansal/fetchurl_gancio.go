@@ -173,7 +173,7 @@ func parseGancioJSONToRequests(body []byte, src FetchSource) ([]EventCreateReque
 }
 
 func importFromGancioJSON(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := safeClient.Get(src.URL)
+	resp, err := getWithRetry(safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}

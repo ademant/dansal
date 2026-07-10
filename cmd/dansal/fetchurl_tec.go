@@ -208,7 +208,7 @@ func importFromTECJSON(src FetchSource) ([]Event, ImportCounts, error) {
 		q.Set("per_page", "50")
 		u.RawQuery = q.Encode()
 
-		resp, err := fetchClient.Get(u.String())
+		resp, err := getWithRetry(fetchClient, u.String())
 		if err != nil {
 			return nil, ImportCounts{}, fmt.Errorf("fetch page %d: %w", page, err)
 		}

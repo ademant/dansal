@@ -226,7 +226,7 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 }
 
 func importFromFolkdanceJSON(src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := safeClient.Get(src.URL)
+	resp, err := getWithRetry(safeClient, src.URL)
 	if err != nil {
 		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
 	}

@@ -105,6 +105,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.Telegram != "" && !isValidTelegramContact(req.Telegram) {
+		writeError(w, "invalid Telegram identifier: provide a username (@handle), a t.me link, or a phone number", http.StatusUnprocessableEntity)
+		return
+	}
 	if len(req.Description) > 500 {
 		writeError(w, "description must be 500 characters or fewer", http.StatusUnprocessableEntity)
 		return

@@ -568,7 +568,9 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		if from != "" {
 			target = from
 		}
-		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+		if p := safeReturnPath(target); p != "" {
+			target = p
+		} else {
 			target = "/admin/organizations"
 		}
 		http.Redirect(w, r, target, http.StatusSeeOther)

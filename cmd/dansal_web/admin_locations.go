@@ -457,7 +457,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if from != "" {
 			target = from
 		}
-		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+		if p := safeReturnPath(target); p != "" {
+			target = p
+		} else {
 			target = "/admin/locations"
 		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
@@ -477,7 +479,9 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		}
 		_ = client.DeleteLocation(r.Context(), id, getSessionToken(r))
 		target := safeLocationsReturnURL(r.FormValue("return"))
-		if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+		if p := safeReturnPath(target); p != "" {
+			target = p
+		} else {
 			target = "/admin/locations"
 		}
 		http.Redirect(w, r, target, http.StatusSeeOther)

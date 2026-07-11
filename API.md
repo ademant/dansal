@@ -416,6 +416,8 @@ POST   /api/v1/pending-registrations/{id}/approve  # admin: approve
 DELETE /api/v1/pending-registrations/{id}       # admin: reject
 ```
 
+A registration's email/telegram verification token is valid for **7 days** from submission (`GET /api/v1/register/verify/email/{token}` after that returns expired). To limit spam, at most `max_open_tokens_per_address` (default 5) unverified pending registrations may be open for the same email address at once — further submissions to that address return `429` until one is verified or expires.
+
 **Invite-based registration** (bypasses pending queue): see [Invites](#invites) for the full endpoint list. For human accounts use `POST /api/v1/invites/{token}`; for publisher service accounts use `POST /api/v1/invites/{token}/publisher`.
 
 **Email verification** (after registration or email change):

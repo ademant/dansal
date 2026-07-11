@@ -4,6 +4,14 @@ nav_order: 4
 
 # Veranstaltungen erstellen & verwalten
 
+Als Nutzer lassen sich Veranstaltungen an unterschiedlichen Stellen erstellen, entweder komplett leer oder bereits vorausgefüllt:
+- **Veranstaltungen**: Komplett leere Veranstaltungen
+- **Organisationen**: Bereits der entsprechenden Organisation zugeordnet
+- **Veranstaltungsort**: Bereits dem Ort zugeordnet
+- **Vorlage**: In der Vorlage gespeicherten Werte sind vorausgefüllt
+- **Klonen**: Eine Veranstaltung lässt sich klonen (ohne Datum, das muss zwingend neu gesetzt werden)
+- **Terminserie**: Einer Serie lassen sich unkompliziert neue Termine anhängen.
+
 ## ✨ Grundlegende Veranstaltung anlegen
 
 1. Navigiere zu **Veranstaltungen → Neue Veranstaltung erstellen**
@@ -20,11 +28,11 @@ nav_order: 4
 
 ## 📋 Veranstaltungsdetails
 
-- **Beschreibung**: Formatierter Text
+- **Beschreibung**: Formatierter Text: Markdown wird verwendet. Formatierter Text aus Word wird in Markdown umgewandelt
 - **Preise**: Mehrere Preisstufen möglich (kostenlos, Spende, Frühbucher, regulär, Abendkasse usw.)
 - **Buchungslink**: Link zum Ticketsystem
 - **Tags**: Format-, Typ- und Level-Tags
-- **Bild**: Veranstaltungsplakat oder Foto hochladen
+- **Bild**: Veranstaltungsplakat oder Foto hochladen (Breites Format wird angezeigt)
 
 ## 🕒 Erweiterte Optionen: Zeitplan (mehrere Programmpunkte)
 
@@ -52,6 +60,7 @@ Raum B:
 - **Bearbeiten**: Beliebige Details aktualisieren
 - **Absagen**: Veranstaltung als abgesagt markieren (mit Hinweis sichtbar)
 - **Duplizieren**: Eine Kopie der Veranstaltung erstellen
+- **Terminserie**: Die Veranstaltung als Basis einer Terminserie verwenden oder einer Terminserie zuordnen
 
 ## 📥 Veranstaltungen aus iCal-/JSON-Feed importieren
 
@@ -73,6 +82,7 @@ Unter **Veranstaltungen → Importieren** (`/admin/events/import`) lassen sich m
 
    Eine manuelle Zuordnung wird als **Alias** beim Ort gespeichert, sodass künftige Importe aus derselben Quelle automatisch erkannt werden.
 6. Gewünschte Zeilen auswählen (oder „Alle auswählen“) und **Importieren** klicken – die ausgewählten Termine werden als neue Veranstaltungen angelegt
+7. Zum Abschluss lässt sich dieser Feed auch auch regelmäßige Quelle für die Organisation abspeichern.
 
 **Hinweise:**
 - Wiederkehrende iCal-Termine (RRULE) werden dabei automatisch in einzelne Vorkommen aufgeteilt (siehe auch Abschnitt „Wiederkehrende iCal-Veranstaltungen“ unten)
@@ -81,9 +91,12 @@ Unter **Veranstaltungen → Importieren** (`/admin/events/import`) lassen sich m
 ## 🚀 Erweiterte Funktionen
 
 ### Veranstaltungsserien
-Zusammengehörige Veranstaltungen zu einer Serie gruppieren, um die Verwaltung zu erleichtern:
-- Gemeinsame Details für alle Termine der Serie bearbeiten
-- Details für einzelne Termine überschreiben
+Regelmäßige Termine, wie Übungsabende, können in einer Veranstaltungsserie gruppiert werden, was deren Verwaltung vereinfacht:
+- Vorauswahl eines Ortes, Beschreibung, Uhrzeit und weitere Informationen
+- In einer Tabelle lassen sich dann einzelne Tage einfach zufügen. Wie bei einer Vorlage werden dann einzelne Felder vorausgefüllt.
+- Über einen Magic-Link lässt sich die Veranstaltungsreihe in einer Orga-Gruppe teilen:
+-- Diese Personen können die Beschreibung eines Termins ändern, um die Planung von Übungsabenden abzusprechen
+-- Einzelne Termine können in dieser Tabelle einfach abgesagt werden, wenn z.B. Regen eine Außenveranstaltung erschwert.
 
 ### Wiederkehrende iCal-Veranstaltungen
 Beim Import über iCal-Feeds werden wiederkehrende Termine (RRULE) automatisch in einzelne Vorkommen aufgeteilt.

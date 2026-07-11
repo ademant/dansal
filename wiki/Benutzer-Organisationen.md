@@ -4,6 +4,8 @@ nav_order: 6
 
 # Organisationen verwalten
 
+Organisationen (Vereine oder wie auch immer ihr organisiert seid) können nur vom Administrator angelegt werden. Bei der Registrierung könnt ihr auch eine neue Organisation beantragen. Die muss dann auch von einem Administrator genehmigt werden.
+
 ## 🎭 Organisation anlegen
 
 1. Gehe zu **Organisationen → Neue Organisation**

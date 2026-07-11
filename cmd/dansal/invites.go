@@ -100,9 +100,15 @@ func createInviteRecord(creatorID int, role, inviteType string, orgID *int) (Inv
 		inviteType = "link"
 	}
 	var expiresAt time.Time
-	if inviteType == "qr" {
+	switch {
+	case role == RolePublisher:
+		// Publisher invites mint an API key on redemption, so a leaked link is
+		// higher-stakes than a plain user-signup invite — keep the window short
+		// regardless of invite_type.
+		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InvitePublisherExpiryMinutes) * time.Minute)
+	case inviteType == "qr":
 		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteQRExpiryMinutes) * time.Minute)
-	} else {
+	default:
 		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
 	}
 

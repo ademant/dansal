@@ -32,6 +32,7 @@ type ServerConfig struct {
 	LoginFailureWindowSecs        int      `yaml:"login_failure_window_secs"`
 	InviteExpiryHours             int      `yaml:"invite_expiry_hours"`
 	InviteQRExpiryMinutes         int      `yaml:"invite_qr_expiry_minutes"`
+	InvitePublisherExpiryMinutes  int      `yaml:"invite_publisher_expiry_minutes"`
 	VerificationExpiryHours       int      `yaml:"verification_expiry_hours"`
 	BaseURL                       string   `yaml:"base_url"`
 	TelegramBotToken              string   `yaml:"telegram_bot_token"`
@@ -200,6 +201,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.InviteQRExpiryMinutes == 0 {
 		cfg.Server.InviteQRExpiryMinutes = 15
+	}
+	if cfg.Server.InvitePublisherExpiryMinutes == 0 {
+		cfg.Server.InvitePublisherExpiryMinutes = 30
 	}
 	if cfg.Server.VerificationExpiryHours == 0 {
 		cfg.Server.VerificationExpiryHours = 24

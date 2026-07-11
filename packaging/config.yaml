@@ -42,6 +42,11 @@ server:
   # Hours before an invite link expires.
   invite_expiry_hours: 48
 
+  # Minutes before a publisher invite link expires. Publisher invites mint an
+  # API key on redemption, so a leaked link is higher-stakes than a plain
+  # user-signup invite — kept much shorter than invite_expiry_hours.
+  invite_publisher_expiry_minutes: 30
+
   # Hours before an email verification link expires.
   verification_expiry_hours: 24
 

@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -41,18 +41,22 @@ func parseClientRSAPubkey(pemStr string) (*rsa.PublicKey, error) {
 }
 
 // encryptAPIKeyForClient encrypts apiKey with the client's RSA public key
-// using RSA-OAEP-SHA256, so the API key returned by invite redemption is
-// end-to-end encrypted (defense-in-depth on top of TLS — see #770). Returns
-// the base64-encoded ciphertext and the algorithm identifier for the
-// response, or errInvalidClientPubkey if pemStr doesn't parse.
+// using RSA-OAEP-SHA1, so the API key returned by invite redemption is
+// end-to-end encrypted (defense-in-depth on top of TLS — see #770). SHA-1 is
+// used instead of SHA-256 because PHP's openssl_private_decrypt/
+// openssl_public_encrypt hardcode SHA-1 for OAEP with no way to select a
+// different hash — SHA-256 ciphertext is rejected outright by wp-dansal, the
+// only current client of this feature (see #773). Returns the base64-encoded
+// ciphertext and the algorithm identifier for the response, or
+// errInvalidClientPubkey if pemStr doesn't parse.
 func encryptAPIKeyForClient(pemStr, apiKey string) (ciphertextB64, algorithm string, err error) {
 	pub, err := parseClientRSAPubkey(pemStr)
 	if err != nil {
 		return "", "", err
 	}
-	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pub, []byte(apiKey), nil)
+	ciphertext, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, pub, []byte(apiKey), nil)
 	if err != nil {
 		return "", "", err
 	}
-	return base64.StdEncoding.EncodeToString(ciphertext), "RSA-OAEP-SHA256", nil
+	return base64.StdEncoding.EncodeToString(ciphertext), "RSA-OAEP-SHA1", nil
 }

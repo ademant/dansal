@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -38,8 +38,8 @@ func TestEncryptAPIKeyForClientRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encryptAPIKeyForClient: %v", err)
 	}
-	if algorithm != "RSA-OAEP-SHA256" {
-		t.Errorf("algorithm = %q, want RSA-OAEP-SHA256", algorithm)
+	if algorithm != "RSA-OAEP-SHA1" {
+		t.Errorf("algorithm = %q, want RSA-OAEP-SHA1", algorithm)
 	}
 
 	ciphertext, err := decodeAndDecrypt(t, priv, ciphertextB64)
@@ -57,7 +57,7 @@ func decodeAndDecrypt(t *testing.T, priv *rsa.PrivateKey, ciphertextB64 string) 
 	if err != nil {
 		return "", err
 	}
-	plaintext, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, data, nil)
+	plaintext, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, priv, data, nil)
 	if err != nil {
 		return "", err
 	}

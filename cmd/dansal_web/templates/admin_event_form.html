@@ -14,7 +14,7 @@
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" id="save-btn" class="btn-primary" form="evt-form" disabled>{{$.Strings.T "admin_save"}}</button>
   <button type="submit" name="intent" value="clone" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_clone"}}</button>
-  {{if and (not .IsNew) (eq $.User.Role "admin")}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
+  {{if and (not .IsNew) .CanDelete}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
 </div>

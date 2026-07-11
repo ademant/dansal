@@ -46,6 +46,7 @@ type Event struct {
 	OrganizationID       *int             `json:"organization_id,omitempty"`
 	Editable             *bool            `json:"editable,omitempty"`
 	Cancelable           *bool            `json:"cancelable,omitempty"`
+	Deletable            *bool            `json:"deletable,omitempty"`
 	CreatedByID          *int             `json:"created_by_id,omitempty"`
 	Timetable            []TimetableEntry `json:"timetable,omitempty"`
 	Pricing              *Pricing         `json:"pricing,omitempty"`
@@ -1187,8 +1188,11 @@ func userOrgSet(userID int) map[int]bool {
 	return orgs
 }
 
-// annotateEditable sets Editable and Cancelable on each event based on the caller's role.
+// annotateEditable sets Editable, Cancelable and Deletable on each event based
+// on the caller's role.
 // editable/cancelable: admin=any; user/publisher=own orgs.
+// deletable: admin=any; user/publisher=own orgs, and only within
+// eventDeletionDeadline (see deleteEvent).
 // The org membership set is fetched once to avoid N+1 queries.
 func annotateEditable(events []Event, userRole string, userID int) {
 	isAdmin := userRole == RoleAdmin
@@ -1200,9 +1204,26 @@ func annotateEditable(events []Event, userRole string, userID int) {
 		inOrg := memberOrgs != nil && events[i].OrganizationID != nil && memberOrgs[*events[i].OrganizationID]
 		editable := isAdmin || inOrg
 		cancelable := editable
+		deletable := isAdmin || (inOrg && withinDeletionDeadline(events[i]))
 		events[i].Editable = &editable
 		events[i].Cancelable = &cancelable
+		events[i].Deletable = &deletable
 	}
+}
+
+// withinDeletionDeadline reports whether event's CreatedAt/StartTime are
+// still inside the non-admin deletion window (see eventDeletionDeadline).
+func withinDeletionDeadline(event Event) bool {
+	createdUnix, err := parseTimeToUnix(event.CreatedAt)
+	if err != nil {
+		return false
+	}
+	startUnix, err := parseTimeToUnix(event.StartTime)
+	if err != nil {
+		return false
+	}
+	deadline := eventDeletionDeadline(time.Unix(createdUnix, 0), time.Unix(startUnix, 0))
+	return !time.Now().After(deadline)
 }
 
 // fetchEventMusicians returns musicians linked to an event via event_musicians.
@@ -1759,8 +1780,10 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	inOrg := (userRole == RoleUser || userRole == RolePublisher) && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID)
 	editable := userRole == RoleAdmin || inOrg
 	cancelable := editable
+	deletable := userRole == RoleAdmin || (inOrg && withinDeletionDeadline(event))
 	event.Editable = &editable
 	event.Cancelable = &cancelable
+	event.Deletable = &deletable
 
 	var (
 		timetable   []TimetableEntry
@@ -2384,13 +2407,45 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/v1/events/{id} — admin only.
+// DELETE /api/v1/events/{id}
+// admin: unrestricted. user/publisher: own org, and only within a shrinking
+// window after creation — see eventDeletionDeadline.
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may delete events", http.StatusForbidden)
+	callerID, userRole := callerFromRequest(r)
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	id := r.PathValue("id")
+
+	switch userRole {
+	case RoleAdmin:
+		// unrestricted
+	case RoleUser, RolePublisher:
+		var orgID sql.NullInt64
+		var startTime int64
+		var createdAt time.Time
+		if err := db.QueryRow("SELECT organization_id, start_time, created_at FROM events WHERE id=?", id).Scan(&orgID, &startTime, &createdAt); err == sql.ErrNoRows {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			writeError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		deadline := eventDeletionDeadline(createdAt, time.Unix(startTime, 0))
+		if time.Now().After(deadline) {
+			writeError(w, "Forbidden: this event can no longer be deleted, only cancelled", http.StatusForbidden)
+			return
+		}
+	default:
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -2401,6 +2456,26 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// eventDeletionDeadline computes the last moment a non-admin org member may
+// hard-delete an event. Normally that's 1 month after creation, but never
+// later than 1 month before the event starts (close-in events should be
+// cancelled, not deleted). When those two limits collide — the event starts
+// soon after creation — a 1 week floor guarantees a minimum deletion window.
+// The result is never later than the event's own start time.
+func eventDeletionDeadline(createdAt, startTime time.Time) time.Time {
+	deadline := createdAt.AddDate(0, 1, 0)
+	if beforeStart := startTime.AddDate(0, -1, 0); beforeStart.Before(deadline) {
+		deadline = beforeStart
+	}
+	if floor := createdAt.AddDate(0, 0, 7); deadline.Before(floor) {
+		deadline = floor
+	}
+	if deadline.After(startTime) {
+		deadline = startTime
+	}
+	return deadline
 }
 
 // POST /api/v1/events/{id}/cancel — set is_cancelled=1.

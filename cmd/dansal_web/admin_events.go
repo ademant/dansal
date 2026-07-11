@@ -144,6 +144,7 @@ type AdminEventFormData struct {
 	Series             []EventSeries
 	CurrentSeries      *EventSeries
 	Prefill            *EventPrefill // new-event only: clone/suggestion prefill metadata for JS
+	CanDelete          bool          // whether the current user is allowed to hard-delete this event
 }
 
 // eventFromPrefill synthesizes an Event from prefill data so the unified
@@ -2026,6 +2027,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			Templates:          editTemplates,
 			Series:             seriesList,
 			CurrentSeries:      currentSeries,
+			CanDelete:          event.Deletable,
 		}))
 	}
 }

@@ -3,7 +3,41 @@ package main
 import (
 	"math"
 	"testing"
+	"time"
 )
+
+func TestEventDeletionDeadline(t *testing.T) {
+	created := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name         string
+		startsIn     time.Duration
+		wantDeadline time.Time
+	}{
+		{"created 5 months before start: normal 1-month window",
+			5 * 30 * 24 * time.Hour, created.AddDate(0, 1, 0)},
+		{"created 5 weeks before start: collision, 1-week floor",
+			5 * 7 * 24 * time.Hour, created.AddDate(0, 0, 7)},
+		{"created 3 weeks before start: collision, 1-week floor",
+			3 * 7 * 24 * time.Hour, created.AddDate(0, 0, 7)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			start := created.Add(c.startsIn)
+			got := eventDeletionDeadline(created, start)
+			if !got.Equal(c.wantDeadline) {
+				t.Errorf("eventDeletionDeadline(%v, %v) = %v, want %v", created, start, got, c.wantDeadline)
+			}
+		})
+	}
+
+	t.Run("deadline never exceeds start time", func(t *testing.T) {
+		start := created.Add(2 * 24 * time.Hour)
+		got := eventDeletionDeadline(created, start)
+		if got.After(start) {
+			t.Errorf("deadline %v is after start time %v", got, start)
+		}
+	})
+}
 
 func TestHaversineKm(t *testing.T) {
 	cases := []struct {

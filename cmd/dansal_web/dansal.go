@@ -230,6 +230,7 @@ type Event struct {
 	FetchSourceID        int              `json:"fetch_source_id,omitempty"`
 	Editable             bool             `json:"editable,omitempty"`
 	Cancelable           bool             `json:"cancelable,omitempty"`
+	Deletable            bool             `json:"deletable,omitempty"`
 	CreatedByID          *int             `json:"created_by_id,omitempty"`
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`

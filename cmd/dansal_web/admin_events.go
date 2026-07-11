@@ -393,6 +393,35 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 	}
 }
 
+func adminEventBulkSetTimeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		startTime := r.FormValue("bulk_start_time")
+		endTime := r.FormValue("bulk_end_time")
+		if startTime == "" && endTime == "" {
+			http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
+			return
+		}
+		var ids []int
+		for _, s := range r.Form["event_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) > 0 {
+			_ = client.BulkSetEventTime(r.Context(), ids, startTime, endTime, getSessionToken(r))
+		}
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
+	}
+}
+
 func adminEventBulkAssignSeriesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)

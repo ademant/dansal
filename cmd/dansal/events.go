@@ -2999,6 +2999,54 @@ func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// POST /api/v1/events/bulk-set-time — set the time-of-day of start_time/end_time
+// on multiple events, keeping each event's own calendar date. Mirrors the
+// single-day time semantics used by addSeriesDate (series.go). Either field
+// may be omitted to leave it unchanged.
+// admin: unrestricted. user: skips events where caller is not an org member.
+func bulkSetEventTime(w http.ResponseWriter, r *http.Request) {
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs       []int  `json:"ids"`
+		StartTime string `json:"start_time"` // "HH:MM"; empty = leave unchanged
+		EndTime   string `json:"end_time"`   // "HH:MM"; empty = leave unchanged
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	if req.StartTime == "" && req.EndTime == "" {
+		writeError(w, "start_time or end_time required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+			continue
+		}
+		var startEpoch, endEpoch int64
+		if err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", id).Scan(&startEpoch, &endEpoch); err != nil {
+			continue
+		}
+		d := time.Unix(startEpoch, 0).In(berlinLoc)
+		newStart, newEnd := startEpoch, endEpoch
+		if req.StartTime != "" {
+			newStart = combineDateAndTime(d, req.StartTime)
+		}
+		if req.EndTime != "" {
+			newEnd = combineDateAndTime(d, req.EndTime)
+		}
+		if newEnd <= newStart {
+			newEnd = newStart + 3*3600
+		}
+		db.Exec("UPDATE events SET start_time=?, end_time=? WHERE id=?", newStart, newEnd, id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/v1/events/{id}/remove-from-series
 func removeEventFromSeries(w http.ResponseWriter, r *http.Request) {
 	callerID, role := callerFromRequest(r)

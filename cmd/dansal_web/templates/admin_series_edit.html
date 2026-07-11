@@ -5,6 +5,15 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
+<div class="evt-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
+  <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
+        onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?')">
+    <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
+  </form>
+</div>
+
 <!-- Header form -->
 <form id="series-header-form" method="post" action="/admin/series/{{.Series.ID}}/edit" class="evt-form" style="margin-bottom:0">
   <section class="form-section">
@@ -59,14 +68,6 @@
     </div>
   </section>
 </form>
-<div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem">
-  <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
-  <a href="/admin/series" style="color:#555;text-decoration:none">{{$.Strings.T "admin_cancel"}}</a>
-  <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
-        onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?')">
-    <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
-  </form>
-</div>
 
 <!-- Invite token section -->
 <section style="margin-bottom:2rem;padding:1rem;background:#f8f9fa;border:1px solid #ddd;border-radius:6px">
@@ -94,13 +95,31 @@
 <!-- Events table -->
 <h2 style="font-size:1.05rem;margin-bottom:.5rem">{{$.Strings.T "series_events"}}</h2>
 <form method="post" action="/admin/series/{{.Series.ID}}/descriptions" id="desc-form">
+<div class="series-bulk-toolbar" id="series-bulk-toolbar">
+  <span class="event-bulk-count"></span>
+  <select name="bulk_location_id" class="bulk-loc-sel">
+    <option value="">{{$.Strings.T "col_location"}}…</option>
+    {{range .Locations}}
+    <option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
+    {{end}}
+  </select>
+  <button type="submit" formaction="/admin/events/bulk-assign-location" class="btn-sm btn-assign bulk-action-btn" disabled>{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+  <span class="bulk-sep"></span>
+  <input type="time" name="bulk_start_time" title="{{$.Strings.T "series_start_time"}}">
+  <input type="time" name="bulk_end_time" title="{{$.Strings.T "series_end_time"}}">
+  <button type="submit" formaction="/admin/events/bulk-set-time" class="btn-sm btn-assign bulk-action-btn" disabled>{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+  <span class="bulk-sep"></span>
+  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled
+          onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+</div>
 <div class="table-wrap">
 <table class="event-table">
   <thead>
     <tr>
+      <th class="col-cb"><input type="checkbox" id="series-cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
       <th>{{$.Strings.T "series_date"}}</th>
       <th>{{$.Strings.T "evt_start"}}</th>
-      <th>{{$.Strings.T "series_default_location"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
       <th style="min-width:220px">{{$.Strings.T "series_description"}}</th>
       <th>Status</th>
       <th>{{$.Strings.T "series_actions"}}</th>
@@ -109,6 +128,7 @@
   <tbody>
   {{range .Series.Events}}
   <tr {{if .IsCancelled}}style="opacity:.55"{{end}}>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="series-event-cb"></td>
     <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
     <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
     <td>{{.LocationName}}</td>
@@ -121,13 +141,13 @@
     </td>
   </tr>
   {{else}}
-  <tr><td colspan="6" style="text-align:center;color:#888;padding:1rem">—</td></tr>
+  <tr><td colspan="7" style="text-align:center;color:#888;padding:1rem">—</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
 <div style="margin-top:.5rem">
-  <button type="submit" class="btn-sm">{{$.Strings.T "series_save_descriptions"}}</button>
+  <button type="submit" formaction="/admin/series/{{.Series.ID}}/descriptions" class="btn-sm">{{$.Strings.T "series_save_descriptions"}}</button>
 </div>
 </form>
 
@@ -174,6 +194,20 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .btn-del:hover{background:#800016}
 .loc-filter-wrap{position:relative}
 .form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
+.evt-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1.25rem}
+.btn-secondary{padding:.4rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:.95rem}
+.btn-secondary:hover{background:#f0f0f0}
+.col-cb{width:2rem;text-align:center}
+.btn-assign{background:#1a6eb5;color:#fff;border:none}
+.btn-assign:hover{background:#0d4a80}
+.btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
+.btn-cancel-bulk:hover{background:#b85f00}
+.bulk-sep{width:1px;height:1.4em;background:#ccc;margin:0 .1rem}
+.bulk-loc-sel{padding:.25rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.8rem;max-width:12rem}
+.bulk-action-btn:disabled{opacity:.45;cursor:default}
+.series-bulk-toolbar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;background:#f4f6fb;padding:.5rem .6rem;border-radius:6px;border:1px solid #ddd;margin-bottom:.5rem}
+.series-bulk-toolbar .event-bulk-count{font-size:.85rem;color:#555}
+.series-bulk-toolbar input[type=time]{padding:.25rem .4rem;font-size:.8rem}
 </style>
 <script>
 function copyInviteLink(btn){
@@ -197,5 +231,45 @@ function filterLocOptions(q){
     o.hidden=q&&!(o.dataset.search||'').includes(q);
   });
 }
+(function(){
+  var cbAll=document.getElementById('series-cb-all');
+  if(!cbAll) return;
+  var cbs=document.querySelectorAll('.series-event-cb');
+  var countEls=document.querySelectorAll('.event-bulk-count');
+  var actionBtns=document.querySelectorAll('.bulk-action-btn');
+  function updateCount(){
+    var n=document.querySelectorAll('.series-event-cb:checked').length;
+    countEls.forEach(function(el){el.textContent=n>0?n+' ✓':'';});
+    actionBtns.forEach(function(btn){btn.disabled=n===0;});
+  }
+  cbAll.addEventListener('change',function(){
+    cbs.forEach(function(cb){cb.checked=cbAll.checked;});
+    updateCount();
+  });
+  cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+})();
+
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}else{location.href='/admin/series';}
+}
+(function(){
+  var form=document.getElementById('series-header-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
+})();
 </script>
 {{end}}

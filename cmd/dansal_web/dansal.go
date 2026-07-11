@@ -567,6 +567,20 @@ func (c *DansalClient) BulkSetEventLocation(ctx context.Context, ids []int, loca
 	return nil
 }
 
+func (c *DansalClient) BulkSetEventTime(ctx context.Context, ids []int, startTime, endTime, token string) error {
+	body, _ := json.Marshal(map[string]any{"ids": ids, "start_time": startTime, "end_time": endTime})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events/bulk-set-time", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateEvents()
+	return nil
+}
+
 func (c *DansalClient) BulkSetEventAttributes(ctx context.Context, payload map[string]any, token string) error {
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events/bulk-set-attributes", token, body)

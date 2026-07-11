@@ -112,6 +112,29 @@ func inviteTokenType(role string) string {
 	return role + "_invite"
 }
 
+var errInvalidChallenge = errors.New("user_metadata.challenge must be between 16 and 256 characters")
+
+// extractInviteChallenge pulls an optional challenge string out of a raw
+// user_metadata JSON blob (see #771). Returns "" with no error if absent.
+// The server treats the challenge as an opaque value to echo back, not a
+// secret — validation is limited to a sane length.
+func extractInviteChallenge(userMetadata json.RawMessage) (string, error) {
+	if len(userMetadata) == 0 {
+		return "", nil
+	}
+	var um struct {
+		Challenge string `json:"challenge"`
+	}
+	json.Unmarshal(userMetadata, &um)
+	if um.Challenge == "" {
+		return "", nil
+	}
+	if len(um.Challenge) < 16 || len(um.Challenge) > 256 {
+		return "", errInvalidChallenge
+	}
+	return um.Challenge, nil
+}
+
 // createInviteRecord generates a token and inserts the invite_links row.
 // Shared by the public createInvite HTTP handler (always role=user) and the
 // admin-socket invite-admin command (role=admin, sysadmin-only).
@@ -487,6 +510,16 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		metadataVal = string(req.UserMetadata)
 	}
 
+	// Optional client challenge (user_metadata.challenge, see #771): echoed
+	// back in the response so the client can confirm this specific response
+	// is fresh, rather than a replayed one. Validated for a sane length only
+	// — the server treats it as an opaque value, not a secret.
+	challenge, err := extractInviteChallenge(req.UserMetadata)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -550,6 +583,9 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		"org_name": orgName,
 		"org_slug": actorName,
 		"base_url": strings.TrimRight(config.Server.BaseURL, "/"),
+	}
+	if challenge != "" {
+		resp["challenge"] = challenge
 	}
 	if req.ClientPubkey != "" {
 		encrypted, algorithm, err := encryptAPIKeyForClient(req.ClientPubkey, key)

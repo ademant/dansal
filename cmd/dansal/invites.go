@@ -469,8 +469,18 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name         string          `json:"name"`
 		UserMetadata json.RawMessage `json:"user_metadata,omitempty"`
+		ClientPubkey string          `json:"client_pubkey,omitempty"`
 	}
 	json.NewDecoder(r.Body).Decode(&req) // body fully optional
+
+	// Validate client_pubkey before touching the DB, so a malformed key
+	// fails fast without creating a publisher account we'd have to discard.
+	if req.ClientPubkey != "" {
+		if _, err := parseClientRSAPubkey(req.ClientPubkey); err != nil {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
 	var metadataVal any
 	if len(req.UserMetadata) > 0 && strings.TrimSpace(string(req.UserMetadata)) != "null" {
@@ -534,13 +544,28 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("invite: publisher %q (user_id=%d) created via invite link id=%d for org %d", name, userID, invite.ID, orgID)
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
-		"api_key":  key,
+	resp := map[string]any{
 		"user_id":  int(userID),
 		"org_id":   orgID,
 		"org_name": orgName,
 		"org_slug": actorName,
 		"base_url": strings.TrimRight(config.Server.BaseURL, "/"),
-	})
+	}
+	if req.ClientPubkey != "" {
+		encrypted, algorithm, err := encryptAPIKeyForClient(req.ClientPubkey, key)
+		if err != nil {
+			// The API key was already committed to the DB; the account exists
+			// and its key can still be reset via the admin UI, so fail closed
+			// on the response rather than leaking it in plaintext.
+			writeError(w, "failed to encrypt API key for client_pubkey", http.StatusInternalServerError)
+			return
+		}
+		resp["api_key_encrypted"] = encrypted
+		resp["encryption_algorithm"] = algorithm
+	} else {
+		resp["api_key"] = key
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 }

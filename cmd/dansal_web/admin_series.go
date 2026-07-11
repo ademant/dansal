@@ -11,8 +11,9 @@ import (
 // ── Data structs ──────────────────────────────────────────────────────────────
 
 type AdminSeriesData struct {
-	Series  []EventSeries
-	IsAdmin bool
+	Series   []EventSeries
+	IsAdmin  bool
+	OrgNames map[int]string
 }
 
 type AdminSeriesEditData struct {
@@ -80,10 +81,18 @@ func adminSeriesListHandler(cfg *Config, tmpls *Templates, client *DansalClient,
 			http.Error(w, "could not load series: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		orgs, err := client.GetOrganizations(r.Context())
+		orgNames := make(map[int]string)
+		if err == nil {
+			for _, o := range orgs {
+				orgNames[o.ID] = o.Name
+			}
+		}
 		title := i18n.T(r, "series_title")
 		renderTemplate(w, tmpls.adminSeries, tmplData(r, cfg, i18n, title, AdminSeriesData{
-			Series:  series,
-			IsAdmin: user.Role == "admin",
+			Series:   series,
+			IsAdmin:  user.Role == "admin",
+			OrgNames: orgNames,
 		}))
 	}
 }

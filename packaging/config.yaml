@@ -47,6 +47,11 @@ server:
   # user-signup invite — kept much shorter than invite_expiry_hours.
   invite_publisher_expiry_minutes: 30
 
+  # Path to the ECDSA P-256 key pair used to sign invite-link JWTs. Generated
+  # automatically on first run if it doesn't exist. Defaults next to db_path.
+  # The public key is published at GET /.well-known/jwks.json.
+  # invite_signing_key_path: /var/lib/dansal/invite_signing_key.pem
+
   # Hours before an email verification link expires.
   verification_expiry_hours: 24
 

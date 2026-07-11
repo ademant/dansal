@@ -639,20 +639,23 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		orgID = pr.OrgID.Int64
 	}
 
-	inviteToken, err := generateInviteToken()
+	expiresAtTime := time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
+	var orgVal any
+	var orgIDPtr *int
+	if orgID != 0 {
+		orgVal = orgID
+		id := int(orgID)
+		orgIDPtr = &id
+	}
+	inviteToken, err := signInviteJWT(role, orgIDPtr, inviteTokenType(role), expiresAtTime)
 	if err != nil {
 		writeError(w, "failed to generate invite token", http.StatusInternalServerError)
 		return
 	}
-	expiresAt := time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour).Unix()
-	var orgVal any
-	if orgID != 0 {
-		orgVal = orgID
-	}
 	if _, err := tx.Exec(
 		`INSERT INTO invite_links (token, created_by, role, org_id, expires_at, preset_email)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		inviteToken, callerID, role, orgVal, expiresAt, pr.Email,
+		inviteToken, callerID, role, orgVal, expiresAtTime.Unix(), pr.Email,
 	); err != nil {
 		writeError(w, "failed to create invite link", http.StatusInternalServerError)
 		return

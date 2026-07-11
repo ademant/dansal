@@ -482,19 +482,22 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM invite_links WHERE id=?", id)
 
 	// Create a fresh one.
-	newToken, err := generateInviteToken()
+	expiresAtTime := time.Now().UTC().Add(72 * time.Hour)
+	var orgVal any
+	var orgIDPtr *int
+	if orgID.Valid {
+		orgVal = orgID.Int64
+		id := int(orgID.Int64)
+		orgIDPtr = &id
+	}
+	newToken, err := signInviteJWT(roleVal, orgIDPtr, inviteTokenType(roleVal), expiresAtTime)
 	if err != nil {
 		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
-	expiresAt := time.Now().UTC().Add(72 * time.Hour).Unix()
-	var orgVal any
-	if orgID.Valid {
-		orgVal = orgID.Int64
-	}
 	if _, err := db.Exec(
 		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at, preset_email) VALUES (?,?,?,?,?,?)",
-		newToken, callerID, roleVal, orgVal, expiresAt, presetEmail,
+		newToken, callerID, roleVal, orgVal, expiresAtTime.Unix(), presetEmail,
 	); err != nil {
 		writeError(w, "failed to create invite", http.StatusInternalServerError)
 		return

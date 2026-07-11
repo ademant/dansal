@@ -47,6 +47,24 @@ func loadValidInvite(token string) (inviteRecord, error) {
 	if exp, err2 := parseTokenExpiration(invite.ExpiresAt); err2 != nil || time.Now().After(exp) {
 		return inviteRecord{}, errInviteExpired
 	}
+	// The token itself is a signed JWT (see invite_jwt.go); verify its
+	// signature and claims as an authenticity check on top of the DB lookup
+	// above, which remains the source of truth for one-time-use/expiry.
+	claims, err := verifyInviteJWT(token, inviteTokenType(invite.Role))
+	if err != nil {
+		return inviteRecord{}, errInviteBadToken
+	}
+	wantOrgID := 0
+	if invite.OrgID.Valid {
+		wantOrgID = int(invite.OrgID.Int64)
+	}
+	gotOrgID := 0
+	if claims.OrgID != nil {
+		gotOrgID = *claims.OrgID
+	}
+	if wantOrgID != gotOrgID {
+		return inviteRecord{}, errInviteBadToken
+	}
 	return invite, nil
 }
 
@@ -88,8 +106,10 @@ type UseInviteRequest struct {
 	Matrix      string `json:"matrix,omitempty"`
 }
 
-func generateInviteToken() (string, error) {
-	return generateToken(24)
+// inviteTokenType maps an invite role to the JWT token_type claim used by
+// signInviteJWT/verifyInviteJWT.
+func inviteTokenType(role string) string {
+	return role + "_invite"
 }
 
 // createInviteRecord generates a token and inserts the invite_links row.
@@ -112,7 +132,7 @@ func createInviteRecord(creatorID int, role, inviteType string, orgID *int) (Inv
 		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
 	}
 
-	token, err := generateInviteToken()
+	token, err := signInviteJWT(role, orgID, inviteTokenType(role), expiresAt)
 	if err != nil {
 		return InviteLink{}, err
 	}
@@ -317,6 +337,9 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	case err == errInviteExpired:
 		writeError(w, "Invite link has expired", http.StatusGone)
 		return
+	case err == errInviteBadToken:
+		writeError(w, "Invalid invite link", http.StatusBadRequest)
+		return
 	default:
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -425,6 +448,9 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 	case err == errInviteExpired:
 		writeError(w, "Invite link has expired", http.StatusGone)
 		return
+	case err == errInviteBadToken:
+		writeError(w, "Invalid invite link", http.StatusBadRequest)
+		return
 	default:
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -510,11 +536,11 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"api_key":    key,
-		"user_id":    int(userID),
-		"org_id":     orgID,
-		"org_name":   orgName,
-		"org_slug":   actorName,
-		"base_url":   strings.TrimRight(config.Server.BaseURL, "/"),
+		"api_key":  key,
+		"user_id":  int(userID),
+		"org_id":   orgID,
+		"org_name": orgName,
+		"org_slug": actorName,
+		"base_url": strings.TrimRight(config.Server.BaseURL, "/"),
 	})
 }

@@ -61,6 +61,12 @@ type ServerConfig struct {
 	BoardOpenPosting         bool   `yaml:"board_open_posting"`         // true = posts visible immediately; false (default) = verify contact first
 	BackupDir                string `yaml:"backup_dir"`
 	BackupIntervalHours      int    `yaml:"backup_interval_hours"` // 0 = disabled
+
+	// InviteSigningKeyPath is where the ECDSA P-256 key pair used to sign
+	// invite-link JWTs (see invite_jwt.go) is persisted. Generated on first
+	// use if the file doesn't exist. Defaults next to db_path so it survives
+	// upgrades but isn't accidentally checked into a repo.
+	InviteSigningKeyPath string `yaml:"invite_signing_key_path"`
 }
 
 type SMTPConfig struct {
@@ -186,6 +192,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.BackupDir == "" {
 		cfg.Server.BackupDir = filepath.Join(filepath.Dir(cfg.Server.DBPath), "backups")
+	}
+	if cfg.Server.InviteSigningKeyPath == "" {
+		cfg.Server.InviteSigningKeyPath = filepath.Join(filepath.Dir(cfg.Server.DBPath), "invite_signing_key.pem")
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

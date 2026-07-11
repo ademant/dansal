@@ -139,11 +139,11 @@
   </div>
   <div>
     <label style="font-size:.85rem">{{$.Strings.T "series_start_time"}}</label>
-    <input type="time" name="start_time" placeholder="{{.Series.DefaultStartTime}}">
+    <input type="time" name="start_time" value="{{.Series.DefaultStartTime}}">
   </div>
   <div>
     <label style="font-size:.85rem">{{$.Strings.T "series_end_time"}}</label>
-    <input type="time" name="end_time" placeholder="{{.Series.DefaultEndTime}}">
+    <input type="time" name="end_time" value="{{.Series.DefaultEndTime}}">
   </div>
   <button type="submit" class="btn-sm" style="background:#217a3c;color:#fff;border:none;padding:.35rem .8rem">+ {{$.Strings.T "series_add_date"}}</button>
 </form>

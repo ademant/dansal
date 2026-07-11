@@ -66,11 +66,11 @@
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
-        <input id="start_time" type="time" name="start_time" value="{{isoTime .Event.StartTime}}">
+        <input id="start_time" type="time" name="start_time" value="{{if and .Prefill (not .Event.StartTime)}}{{.Prefill.StartTime}}{{else}}{{isoTime .Event.StartTime}}{{end}}">
       </div>
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
-        <input id="end_time" type="time" name="end_time" value="{{isoTime .Event.EndTime}}">
+        <input id="end_time" type="time" name="end_time" value="{{if and .Prefill (not .Event.EndTime)}}{{.Prefill.EndTime}}{{else}}{{isoTime .Event.EndTime}}{{end}}">
       </div>
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
@@ -1376,8 +1376,8 @@ function delRow(btn){
   var startInp=row.querySelector('[name="tt_start"]');
   var endInp=row.querySelector('[name="tt_end"]');
   var locSel=row.querySelector('[name="tt_loc_id"]');
-  if(startInp)startInp.value={{isoTime $.Data.Event.StartTime | jsStr}};
-  if(endInp)endInp.value={{isoTime $.Data.Event.EndTime | jsStr}};
+  if(startInp)startInp.value={{if and $.Data.Prefill (not $.Data.Event.StartTime)}}{{$.Data.Prefill.StartTime | jsStr}}{{else}}{{isoTime $.Data.Event.StartTime | jsStr}}{{end}};
+  if(endInp)endInp.value={{if and $.Data.Prefill (not $.Data.Event.EndTime)}}{{$.Data.Prefill.EndTime | jsStr}}{{else}}{{isoTime $.Data.Event.EndTime | jsStr}}{{end}};
   if(locSel&&_ttDefaultLocID)locSel.value=_ttDefaultLocID;
   {{if $.Data.Event.Musicians}}
   var detail=row.nextElementSibling;

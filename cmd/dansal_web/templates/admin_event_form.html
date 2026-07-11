@@ -99,7 +99,7 @@
       <label class="check-label"><input type="checkbox" name="tags" value="concert"{{if hasTag .Event.Tags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
     </div>
     <div class="check-row" style="margin-top:.25rem">
-      <label class="check-label"><input type="checkbox" name="is_published"{{if .Event.IsPublished}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
+      <label class="check-label"><input type="checkbox" name="is_published"{{if or .Event.IsPublished .IsNew}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
       <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
     </div>
     <div id="workshop-difficulty"{{if and (not (hasTag .Event.Tags "dance-workshop")) (not (hasTag .Event.Tags "musician-workshop"))}} hidden{{end}} style="margin-top:.5rem">

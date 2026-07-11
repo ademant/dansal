@@ -565,14 +565,14 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 	if series.OrganizationID != nil {
 		_, err = db.Exec(`INSERT INTO events
 			(title, description, start_time, end_time, location_id, organization_id, series_id, is_published)
-			VALUES (?,?,?,?,?,?,?,0)`,
+			VALUES (?,?,?,?,?,?,?,1)`,
 			series.Title, "", startEpoch, endEpoch,
 			optionalInt(series.DefaultLocationID), *series.OrganizationID, series.ID,
 		)
 	} else {
 		_, err = db.Exec(`INSERT INTO events
 			(title, description, start_time, end_time, location_id, series_id, is_published)
-			VALUES (?,?,?,?,?,?,0)`,
+			VALUES (?,?,?,?,?,?,1)`,
 			series.Title, "", startEpoch, endEpoch,
 			optionalInt(series.DefaultLocationID), series.ID,
 		)

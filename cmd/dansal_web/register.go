@@ -62,7 +62,7 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 						return
 					}
 					// Expired or not found — clear cookie.
-					http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+					http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/", Secure: true})
 				}
 			}
 		}
@@ -205,6 +205,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				Value:    pid + ":" + tok,
 				Path:     "/",
 				HttpOnly: true,
+				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
 				Expires:  time.Now().Add(7 * 24 * time.Hour),
 			})
@@ -343,7 +344,7 @@ func registerResendHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		parts := strings.SplitN(c.Value, ":", 2)
 		if len(parts) != 2 {
-			http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+			http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/", Secure: true})
 			http.Redirect(w, r, "/register", http.StatusSeeOther)
 			return
 		}
@@ -369,7 +370,7 @@ func registerCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 				log.Printf("register cancel: %v", err)
 			}
 		}
-		http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/"})
+		http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/", Secure: true})
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
 	}
 }

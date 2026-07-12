@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v2"
 )
 
@@ -86,6 +87,7 @@ type App struct {
 	pages      map[string]Page
 	nav        []Page
 	imagesRoot string
+	markdown   goldmark.Markdown
 }
 
 func main() {
@@ -224,7 +226,11 @@ func newApp(cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	return &App{cfg: cfg, pages: pages, nav: nav, imagesRoot: imagesRoot}, nil
+	markdown := goldmark.New(
+		goldmark.WithExtensions(extension.Table),
+	)
+
+	return &App{cfg: cfg, pages: pages, nav: nav, imagesRoot: imagesRoot, markdown: markdown}, nil
 }
 
 // handleImage serves screenshots referenced from wiki markdown (e.g.
@@ -283,7 +289,7 @@ func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {
 	_, data = splitFrontMatter(data)
 
 	var rendered bytes.Buffer
-	if err := goldmark.Convert(data, &rendered); err != nil {
+	if err := app.markdown.Convert(data, &rendered); err != nil {
 		http.Error(w, "render page", http.StatusInternalServerError)
 		return
 	}

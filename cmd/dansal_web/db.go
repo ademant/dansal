@@ -171,10 +171,15 @@ type ActorRecord struct {
 
 func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 	var a ActorRecord
+	var storedKey string
 	err := db.QueryRow(
 		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem FROM actors WHERE org_slug = ?",
 		slug,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &storedKey)
+	if err != nil {
+		return nil, err
+	}
+	a.PrivateKeyPEM, err = actorKeyDecrypt(storedKey)
 	if err != nil {
 		return nil, err
 	}
@@ -183,10 +188,15 @@ func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 
 func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
 	var a ActorRecord
+	var storedKey string
 	err := db.QueryRow(
 		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem FROM actors WHERE org_id = ?",
 		orgID,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &a.PrivateKeyPEM)
+	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &storedKey)
+	if err != nil {
+		return nil, err
+	}
+	a.PrivateKeyPEM, err = actorKeyDecrypt(storedKey)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +237,7 @@ func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 
 	_, err = db.Exec(
 		"INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (?, ?, ?, ?)",
-		orgID, orgSlug, pub, priv,
+		orgID, orgSlug, pub, actorKeyEncrypt(priv),
 	)
 	if err != nil {
 		return nil, err
@@ -269,7 +279,7 @@ func ensureActorWithMove(cfg *Config, db *sql.DB, orgID int, orgSlug string) (*A
 
 	_, err = db.Exec(
 		"INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (?, ?, ?, ?)",
-		orgID, orgSlug, pub, priv,
+		orgID, orgSlug, pub, actorKeyEncrypt(priv),
 	)
 	if err != nil {
 		return nil, err

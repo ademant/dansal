@@ -122,7 +122,9 @@ func main() {
 		os.Exit(0)
 	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
+	initDBKey()
 	db := initDB(cfg.DBPath)
+	migrateActorKeyEncryption(db)
 	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,

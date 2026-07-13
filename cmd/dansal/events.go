@@ -476,12 +476,12 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	q := r.URL.Query()
 
 	if title := q.Get("title"); title != "" {
-		*query += " AND e.title LIKE ?"
-		*args = append(*args, "%"+title+"%")
+		*query += ` AND e.title LIKE ? ESCAPE '\'`
+		*args = append(*args, "%"+escapeLike(title)+"%")
 	}
 	if desc := q.Get("description"); desc != "" {
-		*query += " AND e.description LIKE ?"
-		*args = append(*args, "%"+desc+"%")
+		*query += ` AND e.description LIKE ? ESCAPE '\'`
+		*args = append(*args, "%"+escapeLike(desc)+"%")
 	}
 	if v := q.Get("start_time_after"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -496,8 +496,8 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		}
 	}
 	if loc := q.Get("location"); loc != "" {
-		*query += " AND l.location LIKE ?"
-		*args = append(*args, "%"+loc+"%")
+		*query += ` AND l.location LIKE ? ESCAPE '\'`
+		*args = append(*args, "%"+escapeLike(loc)+"%")
 	}
 	// ?has_ball, ?has_workshop, ?has_festival are kept as aliases for backward
 	// compatibility; they map to their canonical tag equivalents.
@@ -2686,8 +2686,8 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 		cntArgs = append(cntArgs, tag)
 	}
 	if loc != "" {
-		cntQ += " AND l.location LIKE ?"
-		cntArgs = append(cntArgs, "%"+loc+"%")
+		cntQ += ` AND l.location LIKE ? ESCAPE '\'`
+		cntArgs = append(cntArgs, "%"+escapeLike(loc)+"%")
 	}
 	if checkPublicCacheHeaders(w, r, cntQ, cntArgs...) {
 		return
@@ -2701,8 +2701,8 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 		args = append(args, tag)
 	}
 	if loc != "" {
-		query += " AND l.location LIKE ?"
-		args = append(args, "%"+loc+"%")
+		query += ` AND l.location LIKE ? ESCAPE '\'`
+		args = append(args, "%"+escapeLike(loc)+"%")
 	}
 
 	query += " ORDER BY e.start_time ASC"
@@ -2787,13 +2787,14 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	town := r.PathValue("town")
 	now := time.Now().Unix()
+	escapedTown := "%" + escapeLike(town) + "%"
 	if checkPublicCacheHeaders(w, r,
-		"SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ?",
-		now, "%"+town+"%") {
+		`SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ESCAPE '\'`,
+		now, escapedTown) {
 		return
 	}
-	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ORDER BY e.start_time ASC"
-	rows, err := db.Query(query, now, "%"+town+"%")
+	query := eventListSelect + ` WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ESCAPE '\' ORDER BY e.start_time ASC`
+	rows, err := db.Query(query, now, escapedTown)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

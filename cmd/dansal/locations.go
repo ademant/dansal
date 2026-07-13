@@ -328,10 +328,10 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 
 	// Task A: name, town, org_id filters
 	if name := q.Get("name"); name != "" {
-		addWhere("LOWER(l.location) LIKE LOWER(?)", "%"+name+"%")
+		addWhere(`LOWER(l.location) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
 	if town := q.Get("town"); town != "" {
-		addWhere("l.town LIKE ?", "%"+town+"%")
+		addWhere(`l.town LIKE ? ESCAPE '\'`, "%"+escapeLike(town)+"%")
 	}
 	if orgIDStr := q.Get("org_id"); orgIDStr != "" {
 		if orgID, err := strconv.Atoi(orgIDStr); err == nil {

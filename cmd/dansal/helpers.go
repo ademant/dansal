@@ -8,7 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
+
+// escapeLike escapes SQLite LIKE metacharacters (\, %, _) in s so that the
+// value can be safely wrapped as "%"+escapeLike(s)+"%" and used with
+// LIKE ? ESCAPE '\' without matching unintended rows.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
 
 // callerFromRequest extracts the authenticated caller's ID and role from the
 // request headers set by TokenMiddleware. Returns (0, "") when the headers are

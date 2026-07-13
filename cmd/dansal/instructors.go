@@ -83,14 +83,16 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 		args = append(args, vals...)
 	}
 	if name := q.Get("name"); name != "" {
-		addWhere("name LIKE ?", "%"+name+"%")
+		addWhere(`name LIKE ? ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
 	if orgIDStr := q.Get("organization_id"); orgIDStr != "" {
-		addWhere(`id IN (
-			SELECT DISTINCT ei.instructor_id FROM event_instructors ei
-			JOIN events e ON e.id = ei.event_id
-			WHERE e.organization_id = ? AND e.is_published = 1
-		)`, orgIDStr)
+		if orgID, err := strconv.Atoi(orgIDStr); err == nil {
+			addWhere(`id IN (
+				SELECT DISTINCT ei.instructor_id FROM event_instructors ei
+				JOIN events e ON e.id = ei.event_id
+				WHERE e.organization_id = ? AND e.is_published = 1
+			)`, orgID)
+		}
 	}
 	applyListPagination(r, "name ASC", &query, &args)
 

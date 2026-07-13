@@ -934,8 +934,8 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 		args = append(args, town)
 	}
 	if search := strings.TrimSpace(q.Get("q")); search != "" {
-		query += " AND (lower(cp.message) LIKE lower(?) OR lower(cp.nickname) LIKE lower(?))"
-		like := "%" + search + "%"
+		query += ` AND (lower(cp.message) LIKE lower(?) ESCAPE '\' OR lower(cp.nickname) LIKE lower(?) ESCAPE '\')`
+		like := "%" + escapeLike(search) + "%"
 		args = append(args, like, like)
 	}
 

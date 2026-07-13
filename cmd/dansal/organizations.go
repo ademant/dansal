@@ -234,7 +234,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 		args = append(args, vals...)
 	}
 	if name := q.Get("name"); name != "" {
-		addWhere("LOWER(organizations.name) LIKE LOWER(?)", "%"+name+"%")
+		addWhere(`LOWER(organizations.name) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
 	applyListPagination(r, "organizations.name ASC", &query, &args)
 

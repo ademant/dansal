@@ -142,14 +142,16 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if orgIDStr := q.Get("organization_id"); orgIDStr != "" {
-		addWhere(`id IN (
-			   SELECT DISTINCT em.musician_id FROM event_musicians em
-			   JOIN events e ON e.id = em.event_id
-			   WHERE e.organization_id = ? AND e.is_published = 1
-			 )`, orgIDStr)
+		if orgID, err := strconv.Atoi(orgIDStr); err == nil {
+			addWhere(`id IN (
+				SELECT DISTINCT em.musician_id FROM event_musicians em
+				JOIN events e ON e.id = em.event_id
+				WHERE e.organization_id = ? AND e.is_published = 1
+			)`, orgID)
+		}
 	}
 	if name := q.Get("name"); name != "" {
-		addWhere("LOWER(bandname) LIKE LOWER(?)", "%"+name+"%")
+		addWhere(`LOWER(bandname) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
 	if mbid := q.Get("mbid"); mbid != "" {
 		addWhere("mbid=?", mbid)
@@ -164,7 +166,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		addWhere("country=?", country)
 	}
 	if genre := q.Get("genre"); genre != "" {
-		addWhere("LOWER(genre) LIKE LOWER(?)", "%"+genre+"%")
+		addWhere(`LOWER(genre) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(genre)+"%")
 	}
 	applyListPagination(r, "bandname ASC", &query, &args)
 

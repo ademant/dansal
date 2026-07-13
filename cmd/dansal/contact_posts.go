@@ -151,7 +151,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		eventID, time.Now().UTC().Unix(),
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -161,7 +161,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		var p ContactPost
 		var ev int
 		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		p.EmailVerified = ev == 1
@@ -944,7 +944,7 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -961,7 +961,7 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 			&ev, &cp.CreatedAt,
 			&evTitle, &startEpoch, &evTown, &evCountry,
 		); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		cp.EmailVerified = ev == 1

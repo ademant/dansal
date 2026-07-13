@@ -21,6 +21,15 @@ func writeError(w http.ResponseWriter, msg string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// writeInternalError logs the raw error detail server-side and sends a generic
+// 500 message to the client, preventing internal DB/system details from leaking.
+func writeInternalError(w http.ResponseWriter, err error) {
+	log.Printf("internal error: %v", err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+}
+
 // readBodyOrError reads r.Body fully, writing a 413 with guidance to reduce
 // the payload size (e.g. splitting a bulk-create array into multiple smaller
 // requests) when the body exceeds config.Server.MaxBodyBytes (enforced by

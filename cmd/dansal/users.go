@@ -315,7 +315,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -525,7 +525,7 @@ func listPendingInvites(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY created_at DESC`,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -544,7 +544,7 @@ func listPendingInvites(w http.ResponseWriter, r *http.Request) {
 		var p pendingInvite
 		var orgID sql.NullInt64
 		if err := rows.Scan(&p.ID, &p.Token, &p.Role, &orgID, &p.ExpiresAt, &p.CreatedAt, &p.PresetEmail); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		p.ExpiresAt = epochStrToRFC3339(p.ExpiresAt)

@@ -172,7 +172,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -186,7 +186,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		}
 		m, err := scanMusician(rows, extra...)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if withCounts {
@@ -246,7 +246,7 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -294,7 +294,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 			req.Spotify, req.Deezer, req.Genre, callerID,
 		))
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		musicians = append(musicians, m)
@@ -333,7 +333,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		req.Spotify, req.Deezer, req.Genre, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -345,7 +345,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -371,7 +371,7 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -449,13 +449,13 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 		m.Mastodon, m.Instagram, m.Facebook, m.Soundcloud,
 		m.Spotify, m.Deezer, m.Genre, resolveDisplayName(callerID), id,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(musician)
@@ -477,7 +477,7 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Musician not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !createdBy.Valid || int(createdBy.Int64) != callerID {
@@ -488,7 +488,7 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec("DELETE FROM musicians WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 

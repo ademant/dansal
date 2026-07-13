@@ -176,7 +176,7 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 			(SELECT COUNT(*) FROM contact_posts cp JOIN events e ON e.id = cp.event_id WHERE e.organization_id = o.id)
 		FROM organizations o`)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -184,7 +184,7 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s orgStatRow
 		if err := rows.Scan(&s.ID, &s.EventCount, &s.LocationCount, &s.SourceCount, &s.BoardEntryCount); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		result = append(result, s)
@@ -240,7 +240,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -257,7 +257,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 		}
 		o, err := scanOrg(rows, extra...)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if withCounts {
@@ -387,7 +387,7 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	var fsID int
@@ -429,7 +429,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	var req CreateOrganizationRequest
@@ -504,7 +504,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	var req OrganizationMergePatchRequest
@@ -576,7 +576,7 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	result, err := db.Exec("DELETE FROM organizations WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -616,7 +616,7 @@ func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
 		memberRows, err := db.Query(
 			"SELECT organization_id FROM organization_members WHERE user_id = ?", callerID)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		allowed := map[int]bool{}
@@ -651,7 +651,7 @@ func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
 		WHERE om.organization_id IN (`+strings.Join(placeholders, ",")+`)
 		ORDER BY om.organization_id, om.created_at`, ids...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -659,7 +659,7 @@ func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m OrganizationMember
 		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Email, &m.DisplayName, &m.Role, &m.CreatedAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		result[m.OrganizationID] = append(result[m.OrganizationID], m)
@@ -677,7 +677,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 		WHERE om.organization_id = ?
 		ORDER BY om.created_at`, id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -685,7 +685,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m OrganizationMember
 		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Email, &m.DisplayName, &m.Role, &m.CreatedAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		members = append(members, m)
@@ -775,7 +775,7 @@ func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		orgID, r.PathValue("user_id"),
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

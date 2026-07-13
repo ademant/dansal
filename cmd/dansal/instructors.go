@@ -98,7 +98,7 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -111,7 +111,7 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 		}
 		inst, err := scanInstructor(rows, extra...)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if withCounts {
@@ -131,7 +131,7 @@ func getInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Instructor not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, inst)
@@ -159,7 +159,7 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, callerID,
 	))
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -182,7 +182,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Instructor not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !createdBy.Valid || int(createdBy.Int64) != callerID {
@@ -201,7 +201,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	rows, _ := result.RowsAffected()
@@ -211,7 +211,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(inst)
@@ -237,7 +237,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Instructor not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !createdBy.Valid || int(createdBy.Int64) != callerID {
@@ -251,7 +251,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Instructor not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -282,7 +282,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 		inst.Name, inst.Bio, inst.Website, inst.Email, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	rows, _ := result.RowsAffected()
@@ -292,7 +292,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(updated)
@@ -313,7 +313,7 @@ func deleteInstructor(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Instructor not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !createdBy.Valid || int(createdBy.Int64) != callerID {
@@ -324,7 +324,7 @@ func deleteInstructor(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec("DELETE FROM instructors WHERE id=?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	rows, _ := result.RowsAffected()
@@ -344,7 +344,7 @@ func getEventInstructors(w http.ResponseWriter, r *http.Request) {
 	}
 	instructors, err := fetchEventInstructors(eventID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, instructors)
@@ -395,7 +395,7 @@ func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -405,13 +405,13 @@ func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 		tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", eventID, id)
 	}
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
 	instructors, err := fetchEventInstructors(eventID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(instructors)

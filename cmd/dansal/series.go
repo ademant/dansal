@@ -167,7 +167,7 @@ func checkSeriesAccess(w http.ResponseWriter, r *http.Request) (series EventSeri
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	callerID, role := callerFromRequest(r)
@@ -224,7 +224,7 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 			ORDER BY id DESC`, callerID)
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -241,7 +241,7 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 			&inviteToken, &s.CreatedAt, &s.UpdatedAt,
 			&s.EventCount,
 		); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if orgID.Valid {
@@ -359,7 +359,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -387,7 +387,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	seriesID64, _ := result.LastInsertId()
@@ -422,7 +422,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -430,7 +430,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	row := db.QueryRow("SELECT "+seriesSelectCols+" FROM event_series WHERE id=?", seriesID)
 	s, err := scanSeries(row)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	s.EventCount = len(dates)
@@ -448,7 +448,7 @@ func getSeriesByID(w http.ResponseWriter, r *http.Request) {
 	}
 	events, err := loadSeriesEvents(series.ID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	series.Events = events
@@ -497,7 +497,7 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 		series.ID,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -578,7 +578,7 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -598,7 +598,7 @@ func regenerateSeriesToken(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec("UPDATE event_series SET invite_token=?, updated_at=? WHERE id=?",
 		tok, time.Now().Unix(), series.ID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -614,7 +614,7 @@ func revokeSeriesToken(w http.ResponseWriter, r *http.Request) {
 	_, err := db.Exec("UPDATE event_series SET invite_token=NULL, updated_at=? WHERE id=?",
 		time.Now().Unix(), series.ID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -630,12 +630,12 @@ func getSeriesByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	events, err := loadSeriesEvents(s.ID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	s.Events = events
@@ -680,7 +680,7 @@ func patchSeriesEventDescription(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = db.Exec("UPDATE events SET description=? WHERE id=?", req.Description, eventID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -784,7 +784,7 @@ func getSeriesEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	events, err := loadSeriesEvents(series.ID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, events)
@@ -808,7 +808,7 @@ func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if evOrgID.Valid && series.OrganizationID != nil && evOrgID.Int64 != int64(*series.OrganizationID) {

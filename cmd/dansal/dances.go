@@ -14,7 +14,7 @@ type Dance struct {
 func getDances(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT id, name FROM dances ORDER BY name")
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -22,7 +22,7 @@ func getDances(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d Dance
 		if err := rows.Scan(&d.ID, &d.Name); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		dances = append(dances, d)
@@ -63,7 +63,7 @@ func deleteDance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	result, err := db.Exec("DELETE FROM dances WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {

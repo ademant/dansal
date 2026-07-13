@@ -366,7 +366,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -378,11 +378,11 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		var location Location
 		if withCounts {
 			if err := scanLocation(rows, &location, &location.FutureEventCount, &location.PastEventCount); err != nil {
-				writeError(w, err.Error(), http.StatusInternalServerError)
+				writeInternalError(w, err)
 				return
 			}
 		} else if err := scanLocation(rows, &location); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if hasGeoRadius && location.Latitude != nil && location.Longitude != nil {
@@ -551,7 +551,7 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -697,7 +697,7 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
 		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, resolveDisplayName(callerID), id,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	idInt, _ := strconv.Atoi(id)
@@ -708,7 +708,7 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
 		WHERE l.id=? GROUP BY l.id`, id), &loc); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(loc)
@@ -758,7 +758,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -837,7 +837,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
 		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, resolveDisplayName(callerID), loc.ID,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if req.OrganizationIDs != nil {
@@ -965,13 +965,13 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
 	result, err := db.Exec("DELETE FROM locations WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1023,7 +1023,7 @@ func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locID, req.OrganizationID); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1103,7 +1103,7 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -1153,7 +1153,7 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	tx.Exec("DELETE FROM locations WHERE id=?", merge.ID)
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1166,7 +1166,7 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 func locationEventCounts(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`SELECT location_id, COUNT(*) FROM events WHERE location_id IS NOT NULL GROUP BY location_id`)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()

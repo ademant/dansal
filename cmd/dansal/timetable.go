@@ -117,7 +117,7 @@ func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventI
 		return false
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return false
 	}
 	if userRole != RoleAdmin && (!orgID.Valid || !isOrgMember(callerID, int(orgID.Int64))) {
@@ -192,7 +192,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	for _, req := range reqs {
 		e, err := insertEntry(db, eventID, req)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		entries = append(entries, e)
@@ -237,13 +237,13 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.Exec("DELETE FROM timetable_entries WHERE event_id = ?", eventID); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -251,14 +251,14 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	for _, req := range reqs {
 		e, err := insertEntry(tx, eventID, req)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		entries = append(entries, e)
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 

@@ -38,7 +38,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		WHERE user_id = ? AND expires_at > strftime('%s','now')
 		ORDER BY COALESCE(last_seen_at, created_at) DESC`, userID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -48,7 +48,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		var s Session
 		var hasFP int
 		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		s.LastSeenAt = epochStrToRFC3339(s.LastSeenAt)
@@ -79,7 +79,7 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 

@@ -1387,7 +1387,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 				writeError(w, "Event not found", http.StatusNotFound)
 				return
 			} else if err != nil {
-				writeError(w, err.Error(), http.StatusInternalServerError)
+				writeInternalError(w, err)
 				return
 			}
 			json.NewEncoder(w).Encode(event)
@@ -1454,7 +1454,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -1463,7 +1463,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		events = append(events, event)
@@ -1714,7 +1714,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -1724,13 +1724,13 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	for i, req := range requests {
 		locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 
 		createdEvents, counts, err := createEventFromRequest(tx, req, locationID, isPublished, &callerID)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		totalCounts.Merge(counts)
@@ -1743,7 +1743,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1773,7 +1773,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1870,7 +1870,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	switch userRole {
@@ -1908,7 +1908,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -1917,7 +1917,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	var locationIDArg any
@@ -1954,7 +1954,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
 		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1988,14 +1988,14 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	syncEventLocationGeohash(id)
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if musicians, err := fetchEventMusicians(id); err == nil {
@@ -2084,7 +2084,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -2243,7 +2243,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -2260,7 +2260,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		availability, ticketsTotal, bookingEnabled, food, drink, floorCondition, attrsRaw,
 		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -2302,14 +2302,14 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	syncEventLocationGeohash(id)
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if musicians, err := fetchEventMusicians(id); err == nil {
@@ -2335,7 +2335,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	if userRole == RoleAdmin {
 		result, err := db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if n, _ := result.RowsAffected(); n == 0 {
@@ -2353,7 +2353,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
@@ -2397,7 +2397,7 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := db.Exec(query, req.OrgID, id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -2429,7 +2429,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
@@ -2448,7 +2448,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -2497,7 +2497,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
@@ -2511,7 +2511,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec("UPDATE events SET is_cancelled=1 WHERE id=?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -2548,7 +2548,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -2585,7 +2585,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer tx.Rollback()
@@ -2637,7 +2637,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		&callerID,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -2657,13 +2657,13 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
 	event, err := fetchEventByID(db, cloneID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	event.ShortCode = shortCode
@@ -2709,7 +2709,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -2719,7 +2719,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -2762,7 +2762,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?) ORDER BY e.start_time ASC"
 	rows, err := db.Query(query, now, tag)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -2772,7 +2772,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -2796,7 +2796,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	query := eventListSelect + ` WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ESCAPE '\' ORDER BY e.start_time ASC`
 	rows, err := db.Query(query, now, escapedTown)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -2806,7 +2806,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -2925,7 +2925,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query("SELECT slug, name, category FROM tags ORDER BY category, name")
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -2933,7 +2933,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t Tag
 		if err := rows.Scan(&t.Slug, &t.Name, &t.Category); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		tags = append(tags, t)
@@ -3188,7 +3188,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := db.Exec("UPDATE events SET location_id=? WHERE id=?", req.LocationID, eventID); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	syncEventLocationGeohash(eventID)
@@ -3246,7 +3246,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := db.Exec("UPDATE events SET organization_id=? WHERE id=?", req.OrganizationID, eventID); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -254,7 +254,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -264,7 +264,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 		var l InviteLink
 		var orgID sql.NullInt64
 		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &l.InviteType, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		l.ExpiresAt = epochStrToRFC3339(l.ExpiresAt)
@@ -293,7 +293,7 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if usedAt != "" {

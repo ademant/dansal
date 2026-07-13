@@ -569,7 +569,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 			ORDER BY id ASC`, callerID)
 	}
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -578,7 +578,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		src, err := scanFetchSource(rows)
 		if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		sources = append(sources, src)
@@ -603,7 +603,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Fetch source not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if callerRole != RoleAdmin {
@@ -632,7 +632,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if callerRole != RoleAdmin {
@@ -680,11 +680,11 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
 		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, resolveDisplayName(callerID), src.ID,
 	); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if err := setFetchSourceDances(src.ID, src.DanceIDs); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1269,7 +1269,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 
 	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID, callerID)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -1330,7 +1330,7 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Fetch source not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
@@ -1340,7 +1340,7 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
@@ -1409,7 +1409,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	query := "SELECT " + fetchSourceCols + " FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -1492,7 +1492,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Fetch source not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	if callerRole != RoleAdmin {

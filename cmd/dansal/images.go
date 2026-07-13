@@ -370,7 +370,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
@@ -385,7 +385,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := os.Remove(imgPath); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	id, _ := strconv.Atoi(eventID)
@@ -410,7 +410,7 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 
@@ -437,7 +437,7 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errNotImage) {
 			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
 		} else {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 		}
 		return
 	}

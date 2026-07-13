@@ -107,7 +107,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 		 FROM bookings WHERE event_id=? ORDER BY created_at ASC`, eventID,
 	)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -116,7 +116,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var b Booking
 		if err := rows.Scan(&b.ID, &b.EventID, &b.Name, &b.Email, &b.Persons, &b.Message, &b.Status, &b.QRToken, &b.CreatedAt); err != nil {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 			return
 		}
 		out = append(out, b)

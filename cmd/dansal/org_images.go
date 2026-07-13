@@ -134,7 +134,7 @@ func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errNotImage) {
 			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
 		} else {
-			writeError(w, err.Error(), http.StatusInternalServerError)
+			writeInternalError(w, err)
 		}
 		return
 	}
@@ -169,7 +169,7 @@ func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := os.Remove(imgPath); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+		writeInternalError(w, err)
 		return
 	}
 	orgImgCache.remove(id)

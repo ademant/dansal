@@ -13,9 +13,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
+	"golang.org/x/term"
 	"gopkg.in/yaml.v2"
 	"software.sslmate.com/src/go-pkcs12"
 )
@@ -54,6 +56,29 @@ func writePEM(path, pemType string, data []byte) error {
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: data})
 }
 
+// readPassphrase prompts on stderr and reads a passphrase without echo.
+func readPassphrase(prompt string) ([]byte, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	pass, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Fprintln(os.Stderr)
+	return pass, err
+}
+
+// writeEncryptedPEM encrypts data with AES-256-CBC under passphrase and writes
+// a PEM file with the standard Proc-Type/DEK-Info encryption headers.
+func writeEncryptedPEM(path, pemType string, data, passphrase []byte) error { //nolint:staticcheck
+	block, err := x509.EncryptPEMBlock(rand.Reader, pemType, data, passphrase, x509.PEMCipherAES256) //nolint:staticcheck
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pem.Encode(f, block)
+}
+
 func loadCACert(dir string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	keyPEM, err := os.ReadFile(filepath.Join(dir, "ca.key"))
 	if err != nil {
@@ -63,7 +88,20 @@ func loadCACert(dir string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	if block == nil {
 		return nil, nil, fmt.Errorf("invalid ca.key PEM")
 	}
-	caKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+
+	keyDER := block.Bytes
+	if x509.IsEncryptedPEMBlock(block) { //nolint:staticcheck
+		passphrase, err := readPassphrase("CA key passphrase: ")
+		if err != nil {
+			return nil, nil, fmt.Errorf("read passphrase: %w", err)
+		}
+		keyDER, err = x509.DecryptPEMBlock(block, passphrase) //nolint:staticcheck
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypt ca.key (wrong passphrase?): %w", err)
+		}
+	}
+
+	caKey, err := x509.ParsePKCS1PrivateKey(keyDER)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse ca.key: %w", err)
 	}
@@ -139,6 +177,7 @@ func regenerateCRL(dir string, caCert *x509.Certificate, caKey *rsa.PrivateKey, 
 func cmdMTLSInit(args []string) {
 	fs := flag.NewFlagSet("mtls-init", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["mtls-init"]) }
+	encryptKey := fs.Bool("encrypt-key", false, "protect the CA private key with a passphrase (prompted interactively)")
 	fs.Parse(args)
 
 	dir := pkiDir()
@@ -150,6 +189,25 @@ func cmdMTLSInit(args []string) {
 
 	if err := os.MkdirAll(filepath.Join(dir, "issued"), 0750); err != nil {
 		die("create pki dir: %v", err)
+	}
+
+	var passphrase []byte
+	if *encryptKey {
+		p1, err := readPassphrase("CA key passphrase: ")
+		if err != nil {
+			die("read passphrase: %v", err)
+		}
+		p2, err := readPassphrase("Confirm passphrase: ")
+		if err != nil {
+			die("read passphrase: %v", err)
+		}
+		if string(p1) != string(p2) {
+			die("passphrases do not match")
+		}
+		if len(p1) == 0 {
+			die("passphrase must not be empty when --encrypt-key is set")
+		}
+		passphrase = p1
 	}
 
 	fmt.Fprintln(os.Stderr, "Generating RSA-4096 CA key (this takes a moment)...")
@@ -177,8 +235,16 @@ func cmdMTLSInit(args []string) {
 		die("create CA cert: %v", err)
 	}
 
-	if err := writePEM(filepath.Join(dir, "ca.key"), "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(caKey)); err != nil {
-		die("write ca.key: %v", err)
+	keyPath := filepath.Join(dir, "ca.key")
+	keyDER := x509.MarshalPKCS1PrivateKey(caKey)
+	if len(passphrase) > 0 {
+		if err := writeEncryptedPEM(keyPath, "RSA PRIVATE KEY", keyDER, passphrase); err != nil {
+			die("write ca.key: %v", err)
+		}
+	} else {
+		if err := writePEM(keyPath, "RSA PRIVATE KEY", keyDER); err != nil {
+			die("write ca.key: %v", err)
+		}
 	}
 	if err := writePEM(filepath.Join(dir, "ca.crt"), "CERTIFICATE", caDER); err != nil {
 		die("write ca.crt: %v", err)

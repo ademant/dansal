@@ -1295,11 +1295,14 @@ function _ttMusKeydown(e,inp){
     if(cur) cur.classList.remove('tt-mus-active');
     if(idx>0) items[idx-1].classList.add('tt-mus-active');
   } else if(e.key==='Enter'){
-    var active=suggest.querySelector('li.tt-mus-active');
-    if(active){
-      e.preventDefault();
-      active.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));
-    }
+    // Always swallow Enter while the dropdown is open — otherwise, if the
+    // user never arrow-navigated to highlight an item, Enter falls through
+    // to the browser's default action and implicitly submits the whole
+    // form (see #808). Fall back to the first suggestion when nothing is
+    // actively highlighted.
+    e.preventDefault();
+    var active=suggest.querySelector('li.tt-mus-active')||items[0];
+    active.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));
   } else if(e.key==='Escape'){
     e.preventDefault();
     suggest.hidden=true;suggest.innerHTML='';

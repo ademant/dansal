@@ -12,6 +12,7 @@ import (
 	"log/syslog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -241,9 +242,14 @@ func getIP(r *http.Request) string {
 }
 
 // corsOrigin returns the allowed CORS origin for the request.
-// With no AllowedOrigins configured, "*" is returned (open API mode).
+// When allowed_origins is unset, falls back to the configured base_url origin
+// so that unconfigured deployments don't silently open CORS to all domains.
+// Falls through to "*" only when base_url is also not set.
 func corsOrigin(r *http.Request) string {
 	if len(config.Server.AllowedOrigins) == 0 {
+		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
+			return u.Scheme + "://" + u.Host
+		}
 		return "*"
 	}
 	origin := r.Header.Get("Origin")
@@ -2936,7 +2942,11 @@ func main() {
 	applyDefaults(config)
 
 	if len(config.Server.AllowedOrigins) == 0 {
-		log.Printf("warning: server.allowed_origins is unset — CORS defaults to '*' (all origins)")
+		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
+			log.Printf("info: server.allowed_origins is unset — CORS restricted to base_url origin (%s://%s)", u.Scheme, u.Host)
+		} else {
+			log.Printf("warning: server.allowed_origins and base_url are both unset — CORS defaults to '*' (all origins); set base_url or allowed_origins in config")
+		}
 	}
 
 	if err := loadOrGenerateInviteSigningKey(); err != nil {

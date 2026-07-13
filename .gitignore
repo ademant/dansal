@@ -22,6 +22,12 @@ images/
 *.env
 .env
 
+# Instance config files — contain secrets (SMTP, tokens, session keys).
+# Templates live under deploy/; real configs go in /etc/dansal/<instance>/.
+config.yaml
+web.yaml
+webmin.yaml
+
 # Editor
 .idea/
 .vscode/

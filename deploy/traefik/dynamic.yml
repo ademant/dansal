@@ -16,6 +16,7 @@ http:
     dansal-api:
       rule: "Host(`events.example.com`) && PathPrefix(`/api/`)"
       entryPoints: ["websecure"]
+      middlewares: ["security-headers"]
       service: dansal-api
       tls:
         certResolver: letsencrypt
@@ -25,6 +26,7 @@ http:
     dansal-web:
       rule: "Host(`events.example.com`)"
       entryPoints: ["websecure"]
+      middlewares: ["security-headers"]
       service: dansal-web
       tls:
         certResolver: letsencrypt
@@ -42,6 +44,17 @@ http:
       redirectScheme:
         scheme: https
         permanent: true
+
+    security-headers:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "geolocation=(self), camera=(), microphone=()"
+        customResponseHeaders:
+          Cross-Origin-Opener-Policy: "same-origin"
 
   services:
     dansal-api:

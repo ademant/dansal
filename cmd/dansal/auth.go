@@ -373,8 +373,8 @@ func login(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(TokenError{Error: "totp_required"})
 			return
 		}
-		if !totpValid(totpSecret, req.TotpCode, time.Now()) {
-			log.Printf("auth failed from %s: invalid TOTP code for %q", clientIP, user.Email)
+		if !totpCheckAndMark(user.ID, totpSecret, req.TotpCode, time.Now()) {
+			log.Printf("auth failed from %s: invalid or replayed TOTP code for %q", clientIP, user.Email)
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(TokenError{Error: "Invalid TOTP code"})
 			return

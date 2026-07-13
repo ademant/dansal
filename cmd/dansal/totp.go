@@ -49,6 +49,7 @@ func totpGenerate(secretBase32 string, t time.Time) (string, error) {
 }
 
 // totpValid checks code against ±1 time window (30 s each) to tolerate clock skew.
+// For authentication use totpCheckAndMark, which also enforces replay protection.
 func totpValid(secretBase32, code string, t time.Time) bool {
 	code = strings.TrimSpace(code)
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(secretBase32))
@@ -61,6 +62,27 @@ func totpValid(secretBase32, code string, t time.Time) bool {
 		}
 	}
 	return false
+}
+
+// totpCheckAndMark validates code and, if correct, atomically records it as used
+// to prevent replay within the 90-second acceptance window (±1 step).
+// Returns false for an invalid code or a code that was already used.
+func totpCheckAndMark(userID int, secretBase32, code string, t time.Time) bool {
+	if !totpValid(secretBase32, code, t) {
+		return false
+	}
+	// The acceptance window spans three 30-second steps; expire records after 120s to be safe.
+	expiry := t.Unix() + 120
+	db.Exec("DELETE FROM totp_used_codes WHERE expires_at < ?", t.Unix())
+	res, err := db.Exec(
+		"INSERT OR IGNORE INTO totp_used_codes (user_id, code, expires_at) VALUES (?, ?, ?)",
+		userID, code, expiry,
+	)
+	if err != nil {
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n > 0 // 0 rows = duplicate code rejected
 }
 
 // totpNewSecret generates a random 20-byte secret encoded as base32 (no padding).
@@ -183,7 +205,7 @@ func totpDisableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !totpValid(secret.String, req.Code, time.Now()) {
+	if !totpCheckAndMark(userID, secret.String, req.Code, time.Now()) {
 		writeError(w, "invalid TOTP code", http.StatusUnauthorized)
 		return
 	}

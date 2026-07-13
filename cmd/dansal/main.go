@@ -1416,6 +1416,25 @@ func migrateDB() {
 		db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop'))")
 		mark(9)
 	}
+	// v10: totp_used_codes table for TOTP replay prevention.
+	if !applied(10) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS totp_used_codes (
+			user_id    INTEGER NOT NULL,
+			code       TEXT NOT NULL,
+			expires_at INTEGER NOT NULL,
+			PRIMARY KEY (user_id, code)
+		)`)
+		mark(10)
+	}
+	// Safety net: ensure totp_used_codes table exists even if v10 was pre-marked.
+	{
+		db.Exec(`CREATE TABLE IF NOT EXISTS totp_used_codes (
+			user_id    INTEGER NOT NULL,
+			code       TEXT NOT NULL,
+			expires_at INTEGER NOT NULL,
+			PRIMARY KEY (user_id, code)
+		)`)
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2809,6 +2828,12 @@ func createTables() error {
 		data TEXT NOT NULL,
 		expires_at INTEGER NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS totp_used_codes (
+		user_id    INTEGER NOT NULL,
+		code       TEXT NOT NULL,
+		expires_at INTEGER NOT NULL,
+		PRIMARY KEY (user_id, code)
+	);
 	CREATE TABLE IF NOT EXISTS schema_migrations (
 		version    INTEGER PRIMARY KEY,
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -2828,6 +2853,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(7)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

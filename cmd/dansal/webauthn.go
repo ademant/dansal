@@ -664,8 +664,8 @@ func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "TOTP not configured", http.StatusBadRequest)
 		return
 	}
-	if !totpValid(totpSecret, req.TotpCode, time.Now()) {
-		log.Printf("webauthn: invalid TOTP for user %d (%s)", pending.UserID, pending.Email)
+	if !totpCheckAndMark(pending.UserID, totpSecret, req.TotpCode, time.Now()) {
+		log.Printf("webauthn: invalid or replayed TOTP for user %d (%s)", pending.UserID, pending.Email)
 		writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 		return
 	}

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
+	"crypto/sha1" //nolint:gosec // HIBP k-anonymity API requires SHA-1
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -557,6 +561,47 @@ func listPendingInvites(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// isPasswordPwned checks whether the given password appears in the HaveIBeenPwned
+// breach database using the k-anonymity API (only the first 5 hex chars of the
+// SHA-1 hash are sent to the server). Returns true when the password was found.
+// On any network/API error it returns false (fail open) so a transient HIBP
+// outage never blocks users from changing their password.
+func isPasswordPwned(ctx context.Context, password string) bool {
+	h := sha1.New() //nolint:gosec // SHA-1 mandated by HIBP k-anonymity API
+	h.Write([]byte(password))
+	hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+	prefix, suffix := hash[:5], hash[5:]
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.pwnedpasswords.com/range/"+prefix, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Add-Padding", "true")
+
+	resp, err := safeClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return false
+	}
+
+	for _, line := range strings.Split(string(body), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), ":", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 // POST /api/v1/user/password — authenticated user sets or changes their own password.
 // If the user already has a password, old_password is required for verification.
 func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
@@ -579,6 +624,10 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.NewPassword) < 8 {
 		writeError(w, "Password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+	if isPasswordPwned(r.Context(), req.NewPassword) {
+		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusBadRequest)
 		return
 	}
 

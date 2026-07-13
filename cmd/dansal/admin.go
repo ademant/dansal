@@ -559,6 +559,11 @@ func adminSetPassword(req adminRequest) adminResponse {
 	if req.Email == "" || req.Password == "" {
 		return adminResponse{OK: false, Error: "email and password are required"}
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if isPasswordPwned(ctx, req.Password) {
+		return adminResponse{OK: false, Error: "Password has appeared in a data breach; choose a different one"}
+	}
 	result, err := db.Exec("UPDATE users SET password_hash = ? WHERE email = ?",
 		hashPassword(req.Password), req.Email)
 	if err != nil {

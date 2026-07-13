@@ -20,7 +20,7 @@ func createMagicToken(userID int) (token string, expiresAt time.Time, err error)
 	db.Exec("DELETE FROM magic_login_tokens WHERE user_id=?", userID)
 	_, err = db.Exec(
 		"INSERT INTO magic_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-		token, userID, expiresAt.Unix(),
+		sha256Hex(token), userID, expiresAt.Unix(),
 	)
 	return
 }
@@ -202,7 +202,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 			_, err = SendEmail(user.Email, "Your passwordless login link", msgText, false)
 		}
 		if err != nil {
-			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
+			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", sha256Hex(token))
 			log.Printf("magic: send failed for user %d (%s) via %s: %v", user.ID, user.Email, req.Channel, err)
 			return
 		}
@@ -220,7 +220,7 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	var id, userID int
 	var expiresAt string
 	err := db.QueryRow(
-		"SELECT id, user_id, expires_at FROM magic_login_tokens WHERE token=?", token,
+		"SELECT id, user_id, expires_at FROM magic_login_tokens WHERE token=?", sha256Hex(token),
 	).Scan(&id, &userID, &expiresAt)
 	if err == sql.ErrNoRows {
 		writeError(w, "Invalid or expired login link", http.StatusNotFound)

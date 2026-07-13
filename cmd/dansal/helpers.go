@@ -2,7 +2,9 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +12,12 @@ import (
 	"strconv"
 	"strings"
 )
+
+// sha256Hex returns the hex-encoded SHA-256 digest of s.
+func sha256Hex(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
 
 // escapeLike escapes SQLite LIKE metacharacters (\, %, _) in s so that the
 // value can be safely wrapped as "%"+escapeLike(s)+"%" and used with

@@ -47,7 +47,7 @@ func updateLastSeen(token string) {
 	lastSeenCache[token] = now
 	lastSeenMu.Unlock()
 	go func() {
-		if _, err := db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), token); err != nil {
+		if _, err := db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), sha256Hex(token)); err != nil {
 			log.Printf("warn: update last_seen_at: %v", err)
 		}
 	}()

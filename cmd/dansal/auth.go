@@ -107,7 +107,7 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 	}
 	_, err = db.Exec(
 		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, token, expiresAt.Unix(), userAgent, ip, fpVal,
+		userID, sha256Hex(token), expiresAt.Unix(), userAgent, ip, fpVal,
 	)
 	if err != nil {
 		return "", time.Time{}, err
@@ -148,7 +148,7 @@ func createPinnedTokenInDB(userID int, ip string) (string, time.Time, error) {
 	}
 	if _, err := db.Exec(
 		"INSERT INTO tokens (user_id, token, expires_at, ip, ip_pinned) VALUES (?, ?, ?, ?, 1)",
-		userID, token, expiresAt.Unix(), ip,
+		userID, sha256Hex(token), expiresAt.Unix(), ip,
 	); err != nil {
 		return "", time.Time{}, err
 	}
@@ -172,7 +172,7 @@ func validateToken(token, currentIP string) (int, string, int, error) {
 
 	err := db.QueryRow(
 		"SELECT users.id, users.role, tokens.expires_at, tokens.id, tokens.ip_pinned, tokens.ip FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
-		token,
+		sha256Hex(token),
 	).Scan(&userID, &userRole, &expiresAt, &tokenID, &ipPinned, &tokenIP)
 
 	if err == sql.ErrNoRows {

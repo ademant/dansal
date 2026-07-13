@@ -131,7 +131,7 @@ func startMetricsServer() {
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", handler)
 
-	addr := ":" + strconv.Itoa(config.Server.MetricsPort)
+	addr := "127.0.0.1:" + strconv.Itoa(config.Server.MetricsPort)
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      metricsMux,

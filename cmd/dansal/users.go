@@ -79,7 +79,7 @@ func hashPassword(password string) string {
 	if password == "" {
 		return ""
 	}
-	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), 12)
 	if err != nil {
 		panic(fmt.Sprintf("bcrypt: %v", err))
 	}

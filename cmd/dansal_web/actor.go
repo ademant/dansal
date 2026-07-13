@@ -35,7 +35,8 @@ func safeFedDial(ctx context.Context, network, addr string) (net.Conn, error) {
 			return nil, fmt.Errorf("safeFedDial: parse IP %q: %w", a, err)
 		}
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-			ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() ||
+			cgnat6598.Contains(ip) {
 			return nil, fmt.Errorf("safeFedDial: %q resolves to non-routable IP %s", host, a)
 		}
 	}
@@ -54,6 +55,8 @@ var fedHTTPClient = &http.Client{
 		MaxIdleConns:          50,
 	},
 }
+
+var cgnat6598 = netip.MustParsePrefix("100.64.0.0/10")
 
 var (
 	slugTranslit = strings.NewReplacer(
@@ -767,6 +770,9 @@ func resolveInboxURL(ctx context.Context, _ *DansalClient, actorURI string) (str
 		return "", err
 	}
 	inbox, _ := actor["inbox"].(string)
+	if err := validateAPURL(inbox); err != nil {
+		return "", fmt.Errorf("actor inbox URL invalid: %w", err)
+	}
 	return inbox, nil
 }
 
@@ -1001,6 +1007,9 @@ func resolveActorFromInput(ctx context.Context, _ *http.Client, input string) (a
 	inboxURL, _ = actor["inbox"].(string)
 	if inboxURL == "" {
 		return "", "", fmt.Errorf("no inbox in actor response")
+	}
+	if err := validateAPURL(inboxURL); err != nil {
+		return "", "", fmt.Errorf("actor inbox URL invalid: %w", err)
 	}
 	return apID, inboxURL, nil
 }

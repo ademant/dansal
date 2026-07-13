@@ -372,7 +372,7 @@ func httpContentType(rawURL string) string {
 	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return ""
 	}
-	resp, err := fetchClient.Head(rawURL)
+	resp, err := safeClient.Head(rawURL)
 	if err != nil {
 		return ""
 	}

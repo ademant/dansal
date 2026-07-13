@@ -61,6 +61,16 @@
     {{end}}
 
     <div id="passkey-msg" hidden class="login-error" style="margin-top:.5rem"></div>
+
+    <div id="wa-totp-section" hidden style="margin-top:1rem">
+      <span class="login-section-title">{{$.Strings.T "login_totp_title"}}</span>
+      <p style="font-size:.88rem;color:#555;margin:.2rem 0 .5rem">{{$.Strings.T "login_totp_hint"}}</p>
+      <label for="wa-totp-code">{{$.Strings.T "login_totp_code"}}</label>
+      <input id="wa-totp-code" type="text" inputmode="numeric" pattern="[0-9]{6}"
+             maxlength="6" placeholder="000000" autocomplete="one-time-code">
+      <button type="button" onclick="submitWaTOTP()">{{$.Strings.T "login_submit"}}</button>
+      <p id="wa-totp-msg" hidden class="login-error" style="margin-top:.4rem"></p>
+    </div>
   </div>
   {{end}}
 </div>
@@ -113,6 +123,12 @@
         body: JSON.stringify(credJSON)
       });
       var finishData = await finishResp.json();
+      if(finishData.totp_required) {
+        window.__waTotpPendingToken = finishData.pending_token;
+        document.getElementById('wa-totp-section').hidden = false;
+        document.getElementById('wa-totp-code').focus();
+        return;
+      }
       if(!finishResp.ok) throw new Error(finishData.error || finishResp.statusText);
 
       window.location.href = '/';
@@ -121,6 +137,23 @@
       msgEl.textContent = err.message || '{{$.Strings.T "login_passkey_error"}}';
     }
   }
+
+  window.submitWaTOTP = async function() {
+    var code = document.getElementById('wa-totp-code').value.trim();
+    var msgEl = document.getElementById('wa-totp-msg');
+    msgEl.hidden = true;
+    var resp = await fetch('/auth/webauthn/totp-challenge', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pending_token: window.__waTotpPendingToken, totp_code: code})
+    });
+    var data = await resp.json();
+    if(!resp.ok) {
+      msgEl.hidden = false;
+      msgEl.textContent = data.error || resp.statusText;
+      return;
+    }
+    window.location.href = '/';
+  };
 
   window.passkeyLoginDiscoverable = async function() {
     var btn = document.getElementById('btn-passkey-instant');

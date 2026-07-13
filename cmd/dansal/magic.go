@@ -241,13 +241,18 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	// Consume the token immediately to prevent replay.
 	db.Exec("DELETE FROM magic_login_tokens WHERE id=?", id)
 
-	// Load user; re-enable if disabled (magic link proves email ownership).
-	db.Exec("UPDATE users SET disabled=0, failed_login_count=0, failed_login_since=NULL WHERE id=?", userID)
+	// Reset failed-login counter; magic link proves delivery-channel access
+	// but must not lift an explicit admin suspension.
+	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", userID)
 	credentials.pruneByUserID(userID)
 
 	user, err := getUserByID(userID)
 	if err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if user.Disabled {
+		writeError(w, "This account has been disabled. Please contact the administrator.", http.StatusForbidden)
 		return
 	}
 

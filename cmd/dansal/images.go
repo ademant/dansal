@@ -15,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -235,8 +236,11 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 		return true
 	}
 
-	// URI attachment
-	resp, err := fetchClient.Get(prop.Value)
+	// URI attachment — use safeClient to block SSRF to private/internal addresses.
+	if u, err2 := url.Parse(prop.Value); err2 != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	resp, err := safeClient.Get(prop.Value)
 	if err != nil {
 		log.Printf("iCal ATTACH fetch for event %d: %v", eventID, err)
 		return false

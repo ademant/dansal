@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"net/url"
 	"strings"
-	"time"
 )
 
 func adminTelegramGet() adminResponse {
@@ -68,8 +67,11 @@ func adminMatrixLogin(req adminRequest) adminResponse {
 			"user": req.MatrixUsername,
 		},
 	})
-	hc := &http.Client{Timeout: 15 * time.Second}
-	resp, err := hc.Post(hs+"/_matrix/client/v3/login", "application/json", bytes.NewReader(body))
+	loginURL := hs + "/_matrix/client/v3/login"
+	if u, err2 := url.Parse(loginURL); err2 != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return adminResponse{OK: false, Error: "invalid homeserver URL"}
+	}
+	resp, err := safeClient.Post(loginURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return adminResponse{OK: false, Error: fmt.Sprintf("Matrix login request failed: %v", err)}
 	}

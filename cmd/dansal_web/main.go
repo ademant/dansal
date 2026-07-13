@@ -174,6 +174,7 @@ func main() {
 		r.HandleFunc("POST /invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
 		r.HandleFunc("POST /auth/webauthn/login/begin", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
 		r.HandleFunc("POST /auth/webauthn/login/finish", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/finish"))
+		r.HandleFunc("POST /auth/webauthn/totp-challenge", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/totp-challenge"))
 		r.HandleFunc("POST /auth/webauthn/register/passkey/begin", webauthnProxy(cfg, client, "/api/v1/register/passkey/begin"))
 		r.HandleFunc("POST /auth/webauthn/register/passkey/finish", webauthnProxy(cfg, client, "/api/v1/register/passkey/finish"))
 		r.HandleFunc("GET /register", registerPageHandler(cfg, tmpls, client, i18n))

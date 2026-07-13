@@ -2992,6 +2992,7 @@ func main() {
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnLoginFinish)
+	smux.HandleFunc("POST /api/v1/auth/webauthn/totp-challenge", webauthnTOTPChallenge)
 	smux.Handle("GET /api/v1/user/webauthn/credentials", auth(webauthnUserCredentialsList))
 	smux.Handle("POST /api/v1/user/webauthn/register/begin", auth(webauthnUserRegisterBegin))
 	smux.Handle("POST /api/v1/user/webauthn/register/finish", auth(webauthnUserRegisterFinish))

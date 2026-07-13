@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -17,6 +18,38 @@ import (
 )
 
 var wauthn *webauthn.WebAuthn
+
+// waTotpPending holds a short-lived record created after WebAuthn credential
+// verification when the user has TOTP enrolled. The pending token is consumed
+// by webauthnTOTPChallenge to issue a full session without re-doing the ceremony.
+type waTotpPending struct {
+	UserID    int
+	Email     string
+	Role      string
+	ExpiresAt time.Time
+}
+
+var webauthnPendingTOTP sync.Map
+
+// issueWATOTPPending creates a pending TOTP token for a user who passed WebAuthn
+// but has TOTP enrolled. Returns 200 with totp_required instead of a full session.
+func issueWATOTPPending(w http.ResponseWriter, userID int, email, role string) {
+	token, err := generateVerificationToken()
+	if err != nil {
+		writeError(w, "Could not create pending token", http.StatusInternalServerError)
+		return
+	}
+	webauthnPendingTOTP.Store(token, waTotpPending{
+		UserID: userID, Email: email, Role: role,
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	})
+	go time.AfterFunc(5*time.Minute, func() { webauthnPendingTOTP.Delete(token) })
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"totp_required": true,
+		"pending_token": token,
+	})
+}
 
 // initWebAuthn initialises the WebAuthn relying party from config.
 // A missing or unparseable BaseURL simply disables the feature.
@@ -532,6 +565,12 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 			"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
 			credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), discUserID, credential.ID,
 		)
+		var discTOTPSecret string
+		db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", discUserID).Scan(&discTOTPSecret)
+		if discTOTPSecret != "" {
+			issueWATOTPPending(w, discUserID, discEmail, discRole)
+			return
+		}
 		issueSessionResponse(w, r, http.StatusOK, discUserID, discEmail, discRole, func() {
 			writeError(w, "Could not create session", http.StatusInternalServerError)
 		})
@@ -587,7 +626,50 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), stored.UserID, credential.ID,
 	)
 
+	var totpSecret string
+	db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", stored.UserID).Scan(&totpSecret)
+	if totpSecret != "" {
+		issueWATOTPPending(w, stored.UserID, userEmail, role)
+		return
+	}
 	issueSessionResponse(w, r, http.StatusOK, stored.UserID, userEmail, role, func() {
+		writeError(w, "Could not create session", http.StatusInternalServerError)
+	})
+}
+
+// POST /api/v1/auth/webauthn/totp-challenge — validates a pending WebAuthn TOTP token
+// and issues a full session. Called after webauthnLoginFinish returns totp_required.
+func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var req struct {
+		PendingToken string `json:"pending_token"`
+		TotpCode     string `json:"totp_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	v, ok := webauthnPendingTOTP.LoadAndDelete(req.PendingToken)
+	if !ok {
+		writeError(w, "invalid or expired pending token", http.StatusUnauthorized)
+		return
+	}
+	pending := v.(waTotpPending)
+	if time.Now().After(pending.ExpiresAt) {
+		writeError(w, "pending token expired", http.StatusUnauthorized)
+		return
+	}
+	var totpSecret string
+	if err := db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", pending.UserID).Scan(&totpSecret); err != nil || totpSecret == "" {
+		writeError(w, "TOTP not configured", http.StatusBadRequest)
+		return
+	}
+	if !totpValid(totpSecret, req.TotpCode, time.Now()) {
+		log.Printf("webauthn: invalid TOTP for user %d (%s)", pending.UserID, pending.Email)
+		writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
+		return
+	}
+	issueSessionResponse(w, r, http.StatusOK, pending.UserID, pending.Email, pending.Role, func() {
 		writeError(w, "Could not create session", http.StatusInternalServerError)
 	})
 }

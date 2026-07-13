@@ -67,6 +67,13 @@ type ServerConfig struct {
 	// use if the file doesn't exist. Defaults next to db_path so it survives
 	// upgrades but isn't accidentally checked into a repo.
 	InviteSigningKeyPath string `yaml:"invite_signing_key_path"`
+
+	// PasswordKDF selects the key-derivation function used to hash newly
+	// set passwords: "argon2id" (default) or "pbkdf2" (FIPS 140-friendly,
+	// see #802). Existing hashes (including legacy bcrypt/SHA-256) remain
+	// verifiable regardless of this setting and are transparently re-hashed
+	// with the configured KDF on next successful login.
+	PasswordKDF string `yaml:"password_kdf"`
 }
 
 type SMTPConfig struct {
@@ -228,6 +235,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.HeartbeatIntervalMins == 0 {
 		cfg.Server.HeartbeatIntervalMins = 5
+	}
+	if cfg.Server.PasswordKDF == "" {
+		cfg.Server.PasswordKDF = "argon2id"
 	}
 }
 

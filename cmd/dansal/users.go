@@ -78,37 +78,55 @@ func passwordBytes(password string) []byte {
 	return h[:]
 }
 
-// hashPassword hashes password with bcrypt (DefaultCost) over a SHA-256 digest.
+// hashPassword hashes password with the configured KDF (argon2id by
+// default, or pbkdf2 for FIPS 140 environments — see config.go's
+// PasswordKDF and #802).
 func hashPassword(password string) string {
 	if password == "" {
 		return ""
 	}
-	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), 12)
-	if err != nil {
-		panic(fmt.Sprintf("bcrypt: %v", err))
+	if passwordKDF() == "pbkdf2" {
+		return hashPBKDF2(password)
 	}
-	return string(h)
+	return hashArgon2id(password)
 }
 
-// checkPassword verifies password against stored hash.
+// checkPassword verifies password against stored hash, which may be in any
+// format ever produced by hashPassword (argon2id, pbkdf2) or the legacy
+// bcrypt/raw-SHA-256 formats it replaced. migrate reports whether stored
+// should be replaced with hashPassword(password) — either because it's in
+// a deprecated format (bcrypt, legacy SHA-256) or because it doesn't match
+// the currently configured KDF.
 func checkPassword(password, stored string) (ok, migrate bool) {
 	if stored == "" {
 		return false, false
 	}
-	if strings.HasPrefix(stored, "$2") {
+	switch {
+	case strings.HasPrefix(stored, "$argon2id$"):
+		if checkArgon2id(password, stored) {
+			return true, passwordKDF() != "argon2id"
+		}
+		return false, false
+	case strings.HasPrefix(stored, "$pbkdf2-sha256$"):
+		if checkPBKDF2(password, stored) {
+			return true, passwordKDF() != "pbkdf2"
+		}
+		return false, false
+	case strings.HasPrefix(stored, "$2"):
 		if bcrypt.CompareHashAndPassword([]byte(stored), passwordBytes(password)) == nil {
-			return true, false
+			return true, true
 		}
 		if bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil {
 			return true, true
 		}
 		return false, false
+	default:
+		sum := sha256.Sum256([]byte(password)) //nolint:gosec
+		if fmt.Sprintf("%x", sum) == stored {
+			return true, true
+		}
+		return false, false
 	}
-	sum := sha256.Sum256([]byte(password)) //nolint:gosec
-	if fmt.Sprintf("%x", sum) == stored {
-		return true, true
-	}
-	return false, false
 }
 
 // validateRole checks if the role is valid

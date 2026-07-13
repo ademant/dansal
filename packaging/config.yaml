@@ -52,6 +52,14 @@ server:
   # The public key is published at GET /.well-known/jwks.json.
   # invite_signing_key_path: /var/lib/dansal/invite_signing_key.pem
 
+  # Key-derivation function used to hash newly set passwords: "argon2id"
+  # (default, NIST SP 800-63B recommended) or "pbkdf2" (FIPS 140-approved,
+  # 210,000 PBKDF2-HMAC-SHA256 iterations — pick this if FIPS compliance is
+  # required). Existing password hashes (including legacy bcrypt/SHA-256)
+  # remain verifiable regardless of this setting, and are transparently
+  # re-hashed with the configured KDF on next successful login.
+  password_kdf: argon2id
+
   # Hours before an email verification link expires.
   verification_expiry_hours: 24
 

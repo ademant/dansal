@@ -424,7 +424,7 @@
         </tr>
         <tr class="tt-row-detail">
           <td><select name="tt_type" class="tt-type-sel"><option value="bal"{{if ne .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option></select></td>
-          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
           <td colspan="4"><input type="text" name="tt_desc" value="{{.Description}}" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
         {{end}}
@@ -438,11 +438,12 @@
         </tr>
         <tr class="tt-row-detail">
           <td><select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option></select></td>
-          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
+          <td><div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div></td>
           <td colspan="4"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
         </tr>
       </tbody>
     </table>
+    <input type="hidden" name="timetable_edited" id="tt-edited" value="0">
   </section>
 
   <!-- Musicians -->
@@ -822,7 +823,7 @@
 .tt-mus-wrap{position:relative}
 .tt-mus-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
 .tt-mus-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
-.tt-mus-suggest li:hover{background:#e8f0fe}
+.tt-mus-suggest li:hover,.tt-mus-suggest li.tt-mus-active{background:#e8f0fe}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .clone-notice{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem;color:#856404}
 .meta-value{font-size:.88rem;color:#333;padding:.25rem 0;word-break:break-all}
@@ -1257,7 +1258,12 @@ function _buildLocOpts(selectedID){
   return h;
 }
 // Growing timetable
+function _ttMarkEdited(){
+  var el=document.getElementById('tt-edited');
+  if(el) el.value='1';
+}
 function growTTTable(el){
+  _ttMarkEdited();
   var tbody=document.getElementById('tt-body');
   var rows=tbody.querySelectorAll('.tt-row');
   var last=rows[rows.length-1];
@@ -1267,12 +1273,40 @@ function growTTTable(el){
 }
 function _buildTTMusWidget(){
   return '<div class="tt-mus-wrap">'+
-    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)">'+
+    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)">'+
     '<input type="hidden" name="tt_musician_id" value="">'+
     '<input type="hidden" name="tt_musician_name" value="">'+
     '<ul class="tt-mus-suggest" hidden></ul></div>';
 }
+function _ttMusKeydown(e,inp){
+  var wrap=inp.closest('.tt-mus-wrap');
+  var suggest=wrap.querySelector('.tt-mus-suggest');
+  if(suggest.hidden) return;
+  var items=suggest.querySelectorAll('li');
+  if(!items.length) return;
+  var cur=suggest.querySelector('li.tt-mus-active');
+  var idx=cur?Array.prototype.indexOf.call(items,cur):-1;
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('tt-mus-active');
+    items[Math.min(idx+1,items.length-1)].classList.add('tt-mus-active');
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('tt-mus-active');
+    if(idx>0) items[idx-1].classList.add('tt-mus-active');
+  } else if(e.key==='Enter'){
+    var active=suggest.querySelector('li.tt-mus-active');
+    if(active){
+      e.preventDefault();
+      active.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));
+    }
+  } else if(e.key==='Escape'){
+    e.preventDefault();
+    suggest.hidden=true;suggest.innerHTML='';
+  }
+}
 function _ttMusInput(inp){
+  _ttMarkEdited();
   var wrap=inp.closest('.tt-mus-wrap');
   var idInp=wrap.querySelector('input[name="tt_musician_id"]');
   var nameInp=wrap.querySelector('input[name="tt_musician_name"]');
@@ -1294,6 +1328,7 @@ function _ttMusInput(inp){
       nameInp.value='';
       suggest.hidden=true;
       suggest.innerHTML='';
+      _ttMarkEdited();
     });
     suggest.appendChild(li);
   });
@@ -1365,6 +1400,7 @@ function delRow(btn){
   if(tbody.querySelectorAll('.tt-row').length>1){
     row1.remove();
     if(row2&&row2.classList.contains('tt-row-detail'))row2.remove();
+    _ttMarkEdited();
   }
 }
 

@@ -2423,8 +2423,16 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				ttEntries = append(ttEntries, entry)
 			}
 		}
-		if err := client.ReplaceTimetable(r.Context(), id, ttEntries, getSessionToken(r)); err != nil {
-			log.Printf("replace timetable error: %v", err)
+		// Only replace the timetable when the form signals it was touched.
+		// Skipping when untouched prevents a parsing failure or premature
+		// form submission from silently wiping existing entries.
+		if r.FormValue("timetable_edited") == "1" {
+			if ttEntries == nil {
+				ttEntries = []TimetableEntryReq{}
+			}
+			if err := client.ReplaceTimetable(r.Context(), id, ttEntries, getSessionToken(r)); err != nil {
+				log.Printf("replace timetable error: %v", err)
+			}
 		}
 
 		if req.IsPublished {

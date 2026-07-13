@@ -145,6 +145,7 @@ type AdminEventFormData struct {
 	CurrentSeries      *EventSeries
 	Prefill            *EventPrefill // new-event only: clone/suggestion prefill metadata for JS
 	CanDelete          bool          // whether the current user is allowed to hard-delete this event
+	TimetableError     string        // raw message when the timetable failed to save (see #808 follow-up)
 }
 
 // eventFromPrefill synthesizes an Event from prefill data so the unified
@@ -2028,6 +2029,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			Series:             seriesList,
 			CurrentSeries:      currentSeries,
 			CanDelete:          event.Deletable,
+			TimetableError:     r.URL.Query().Get("tt_error"),
 		}))
 	}
 }
@@ -2426,17 +2428,27 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		// Only replace the timetable when the form signals it was touched.
 		// Skipping when untouched prevents a parsing failure or premature
 		// form submission from silently wiping existing entries.
+		var ttError string
 		if r.FormValue("timetable_edited") == "1" {
 			if ttEntries == nil {
 				ttEntries = []TimetableEntryReq{}
 			}
 			if err := client.ReplaceTimetable(r.Context(), id, ttEntries, getSessionToken(r)); err != nil {
 				log.Printf("replace timetable error: %v", err)
+				ttError = err.Error()
 			}
 		}
 
 		if req.IsPublished {
 			go deliverUpdateToFollowers(cfg, db, client, id)
+		}
+
+		// editRedirect appends a tt_error query param (surfacing a timetable
+		// save failure — see #808 follow-up) to the standard edit-page
+		// redirect target, when present.
+		editRedirect := fmt.Sprintf("/admin/events/%d/edit", id)
+		if ttError != "" {
+			editRedirect += "?tt_error=" + url.QueryEscape(ttError)
 		}
 
 		switch intent {
@@ -2457,15 +2469,15 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 					}
 				}
 			}
-			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "assign-series":
 			if seriesID, serr := strconv.Atoi(r.FormValue("series_id")); serr == nil && seriesID > 0 {
 				_ = client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, getSessionToken(r))
 			}
-			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "remove-series":
 			_ = client.RemoveEventFromSeries(r.Context(), id, getSessionToken(r))
-			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "create-series":
 			seriesURL := fmt.Sprintf("/admin/series/new?ids=%d&prefill_event_id=%d", id, id)
 			if req.OrganizationID != nil {
@@ -2473,7 +2485,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 			http.Redirect(w, r, seriesURL, http.StatusSeeOther)
 		default:
-			http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		}
 	}
 }

@@ -1816,15 +1816,32 @@ func (c *DansalClient) UpdateEvent(ctx context.Context, id int, req EventUpdateR
 	return event, nil
 }
 
+// apiErrorMessage extracts the "error" field from a dansal API error
+// response body (see writeError in cmd/dansal/errors.go), falling back to
+// the raw body text if it isn't the expected JSON shape.
+func apiErrorMessage(resp *http.Response) string {
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil || len(b) == 0 {
+		return ""
+	}
+	var v struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(b, &v) == nil && v.Error != "" {
+		return v.Error
+	}
+	return string(b)
+}
+
 func (c *DansalClient) ReplaceTimetable(ctx context.Context, eventID int, entries []TimetableEntryReq, token string) error {
 	body, _ := json.Marshal(entries)
 	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/timetable", eventID), token, body)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("replace timetable: %s", resp.Status)
+		return fmt.Errorf("replace timetable: %s: %s", resp.Status, apiErrorMessage(resp))
 	}
 	return nil
 }
@@ -1835,9 +1852,9 @@ func (c *DansalClient) AddTimetableEntries(ctx context.Context, eventID int, ent
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("add timetable: %s", resp.Status)
+		return fmt.Errorf("add timetable: %s: %s", resp.Status, apiErrorMessage(resp))
 	}
 	return nil
 }

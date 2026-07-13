@@ -21,8 +21,7 @@
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
       <input type="hidden" name="_form_token" value="{{.FormToken}}">
       <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
-      <input type="hidden" name="email" value="{{.Email}}">
-      <input type="hidden" name="password" value="{{.Password}}">
+      <input type="hidden" name="pending_token" value="{{.PendingToken}}">
       <span class="login-section-title">{{$.Strings.T "login_totp_title"}}</span>
       <p style="font-size:.88rem;color:#555;margin:.2rem 0 .5rem">{{$.Strings.T "login_totp_hint"}}</p>
       <label for="totp_code">{{$.Strings.T "login_totp_code"}}</label>

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,8 +17,50 @@ type LoginPageData struct {
 	MagicSent    string // "email" or "telegram" when a link was just sent
 	Next         string
 	FormToken    string
-	TotpRequired bool   // password verified; waiting for TOTP code
-	Password     string // held briefly for TOTP second step (POST body only, never in URL)
+	TotpRequired bool
+	PendingToken string // opaque server-side handle replacing the password hidden field
+}
+
+// pendingTOTPAuth holds credentials across the TOTP second step so the
+// password is never written into the HTML form.
+type pendingTOTPAuth struct {
+	email     string
+	password  string
+	expiresAt time.Time
+}
+
+var (
+	totpPendingMu  sync.Mutex
+	totpPendingMap = map[string]pendingTOTPAuth{}
+)
+
+// issueTOTPPending stores (email, password) under a random key for 5 minutes
+// and returns the key. The key goes into a hidden form field; the password
+// never touches the page.
+func issueTOTPPending(email, password string) string {
+	b := make([]byte, 24)
+	rand.Read(b)
+	token := base64.URLEncoding.EncodeToString(b)
+	totpPendingMu.Lock()
+	totpPendingMap[token] = pendingTOTPAuth{email: email, password: password, expiresAt: time.Now().Add(5 * time.Minute)}
+	totpPendingMu.Unlock()
+	return token
+}
+
+// consumeTOTPPending retrieves and deletes the pending auth for token.
+// Returns (auth, true) when found and not expired.
+func consumeTOTPPending(token string) (pendingTOTPAuth, bool) {
+	totpPendingMu.Lock()
+	defer totpPendingMu.Unlock()
+	p, ok := totpPendingMap[token]
+	if !ok {
+		return pendingTOTPAuth{}, false
+	}
+	delete(totpPendingMap, token)
+	if time.Now().After(p.expiresAt) {
+		return pendingTOTPAuth{}, false
+	}
+	return p, true
 }
 
 // safeNext returns next only when it is a local path with no host or scheme,
@@ -96,8 +141,6 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		email := r.FormValue("email")
-		password := r.FormValue("password")
 		totpCode := r.FormValue("totp_code")
 		next := safeNext(r.FormValue("next"))
 		ip := getClientIP(r)
@@ -113,21 +156,41 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey:  "login_error_throttled",
-				Email:     email,
 				Next:      r.FormValue("next"),
 				FormToken: tok,
 			}))
 			return
 		}
 
+		// TOTP second step: pending_token replaces the password hidden field.
+		var email, password string
+		if pt := r.FormValue("pending_token"); pt != "" {
+			pending, ok := consumeTOTPPending(pt)
+			if !ok {
+				tok := issueFormToken(ip)
+				title := i18n.T(r, "login_title")
+				renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
+					ErrorKey:  "login_error_invalid",
+					Next:      r.FormValue("next"),
+					FormToken: tok,
+				}))
+				return
+			}
+			email, password = pending.email, pending.password
+		} else {
+			email = r.FormValue("email")
+			password = r.FormValue("password")
+		}
+
 		lr, err := client.Login(r.Context(), email, password, totpCode, ip, r.UserAgent())
 		if err == ErrTOTPRequired {
+			pending := issueTOTPPending(email, password)
 			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				TotpRequired: true,
 				Email:        email,
-				Password:     password,
+				PendingToken: pending,
 				Next:         r.FormValue("next"),
 				FormToken:    tok,
 			}))

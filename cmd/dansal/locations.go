@@ -78,7 +78,7 @@ type LocationCreateRequest struct {
 	NotesMd         string          `json:"notes_md"`
 	Attributes      map[string]bool `json:"attributes,omitempty"`
 	Parking         string          `json:"parking,omitempty" enum:"none,free,paid"`
-	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 }
@@ -261,7 +261,7 @@ type LocationMergePatchRequest struct {
 	NotesMd         *string          `json:"notes_md,omitempty"`
 	Attributes      *map[string]bool `json:"attributes,omitempty"`
 	Parking         *string          `json:"parking,omitempty" enum:"none,free,paid"`
-	FloorCondition  *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	FloorCondition  *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
 	NoStreetShoes   *bool            `json:"no_street_shoes,omitempty"`
 	Aliases         *[]string        `json:"aliases,omitempty"`
 }

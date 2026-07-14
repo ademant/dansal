@@ -30,7 +30,7 @@
     {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
     {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
     {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
-    {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{end}}</span>{{end}}
+    {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}
   </div>
   {{end}}
   {{if and .Latitude .Longitude}}

@@ -223,7 +223,7 @@ type VocabEntry struct {
 var (
 	validFoodValues           = map[string]bool{"": true, "sold": true, "potluck": true, "none": true}
 	validDrinkValues          = map[string]bool{"": true, "alcohol": true, "soft": true, "none": true}
-	validFloorConditionValues = map[string]bool{"": true, "parquet": true, "stone": true, "tiles": true, "grass": true, "sand": true, "pavement": true}
+	validFloorConditionValues = map[string]bool{"": true, "parquet": true, "stone": true, "tiles": true, "grass": true, "sand": true, "pavement": true, "carpet": true}
 	validParkingValues        = map[string]bool{"": true, "none": true, "free": true, "paid": true}
 )
 

@@ -571,16 +571,36 @@
       var results=allInstructors.filter(function(m){
         return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
       }).slice(0,8);
-      if(results.length===0){list.hidden=true;return;}
-      list.innerHTML=results.map(function(m){
+      var html=results.map(function(m){
         var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
       }).join('');
-      list.querySelectorAll('.ac-item').forEach(function(item){
+      if(q.length>=3){
+        var normQ=_musNorm(q);
+        var hasMatch=allInstructors.some(function(m){return _musNorm(m.name)===normQ;});
+        if(!hasMatch){
+          var escQ=q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          html+='<div class="ac-item ac-create" data-name="'+escQ+'" tabindex="0">➕ '+escQ+'</div>';
+        }
+      }
+      if(!html){list.hidden=true;return;}
+      list.innerHTML=html;
+      list.querySelectorAll('.ac-item:not(.ac-create)').forEach(function(item){
         item.addEventListener('click',function(){addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
         item.addEventListener('keydown',function(e){if(e.key==='Enter')addInstructor(parseInt(this.dataset.id,10),this.dataset.name);});
       });
+      list.querySelectorAll('.ac-create').forEach(function(item){
+        item.addEventListener('click',function(){createAndAddInstructor(this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')createAndAddInstructor(this.dataset.name);});
+      });
       list.hidden=false;
+    }
+    function createAndAddInstructor(name){
+      document.getElementById('ac-instr-list').hidden=true;
+      fetch('/admin/api/instructor/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+        .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+        .then(function(inst){allInstructors.push({id:inst.id,name:inst.name});addInstructor(inst.id,inst.name);})
+        .catch(function(){alert('Could not create instructor');});
     }
     function addInstructor(id,name){
       var wrap=document.getElementById('selected-instructors');

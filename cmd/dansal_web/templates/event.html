@@ -16,7 +16,8 @@
   "location": {
     "@type": "Place",
     "name": "{{.Location | js}}"
-    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"}{{end}}
+    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Country}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
   }
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}

@@ -53,6 +53,7 @@ type TemplateData struct {
 	CanonicalURL           string // absolute canonical URL for this page
 	MetaDescription        string // page-specific meta description (falls back to i18n string in template)
 	OGImage                string // absolute URL of the primary image for OG/Twitter card
+	GoogleSiteVerification string
 }
 
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
@@ -135,6 +136,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		PossibleDuplicateCount: dashAttention(r).PossibleDuplicates,
 		Path:                   r.URL.Path,
 		CanonicalURL:           canonical,
+		GoogleSiteVerification: cfg.GoogleSiteVerification,
 	}
 }
 

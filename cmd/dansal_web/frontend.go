@@ -1229,6 +1229,9 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		var event Event
 		if token := getSessionToken(r); token != "" {
 			event, err = client.GetEventAuthed(r.Context(), id, token)
+			if err != nil {
+				event, err = client.GetEvent(r.Context(), id)
+			}
 		} else {
 			event, err = client.GetEvent(r.Context(), id)
 		}

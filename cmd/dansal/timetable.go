@@ -64,7 +64,7 @@ const timetableReturning = "RETURNING id, event_id, start_time, end_time, title,
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
-		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), t.location_id, COALESCE(l.location,''), t.musician_id, COALESCE(m.name,''), t.created_at
+		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), t.location_id, COALESCE(l.location,''), t.musician_id, COALESCE(m.bandname,''), t.created_at
 		 FROM timetable_entries t
 		 LEFT JOIN locations l ON t.location_id = l.id
 		 LEFT JOIN musicians m ON t.musician_id = m.id

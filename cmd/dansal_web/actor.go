@@ -172,6 +172,33 @@ func actorsListHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// webfingerSlug extracts the actor slug from a WebFinger resource query,
+// accepting both "acct:user@domain" and the actor's canonical "https://"
+// URL (as returned by actorURL). RFC 7033 permits either form, and real
+// Fediverse servers commonly look up actors they already know by URL, not
+// just by acct: handle (issue #830). notFound distinguishes a
+// well-formed-but-unresolvable resource (404) from an unsupported format
+// (400).
+func webfingerSlug(cfg *Config, resource string) (slug string, notFound, ok bool) {
+	if strings.HasPrefix(resource, "acct:") {
+		account := strings.TrimPrefix(resource, "acct:")
+		parts := strings.SplitN(account, "@", 2)
+		if len(parts) != 2 || parts[1] != cfg.Domain || parts[0] == "" {
+			return "", true, false
+		}
+		return parts[0], false, true
+	}
+	orgPrefix := actorURL(cfg, "")
+	if strings.HasPrefix(resource, orgPrefix) {
+		slug := strings.TrimPrefix(resource, orgPrefix)
+		if slug == "" {
+			return "", true, false
+		}
+		return slug, false, true
+	}
+	return "", false, false
+}
+
 func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resource := r.URL.Query().Get("resource")
@@ -179,18 +206,15 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 			writeJSONError(w, r, http.StatusBadRequest, "resource parameter required")
 			return
 		}
-		prefix := "acct:"
-		if !strings.HasPrefix(resource, prefix) {
-			writeJSONError(w, r, http.StatusBadRequest, "only acct: resources supported")
-			return
-		}
-		account := strings.TrimPrefix(resource, prefix)
-		parts := strings.SplitN(account, "@", 2)
-		if len(parts) != 2 || parts[1] != cfg.Domain {
+		slug, notFound, ok := webfingerSlug(cfg, resource)
+		if notFound {
 			writeJSONError(w, r, http.StatusNotFound, "user not found")
 			return
 		}
-		slug := parts[0]
+		if !ok {
+			writeJSONError(w, r, http.StatusBadRequest, "unsupported resource format")
+			return
+		}
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {
@@ -223,7 +247,7 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 
 		base := actorURL(cfg, actor.OrgSlug)
 		wf := WebFinger{
-			Subject: resource,
+			Subject: "acct:" + actor.OrgSlug + "@" + cfg.Domain,
 			Aliases: []string{base},
 			Links: []WebFingerLink{
 				{

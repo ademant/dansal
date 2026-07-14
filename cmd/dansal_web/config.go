@@ -114,6 +114,8 @@ type Config struct {
 
 	// GoogleSiteVerification, if set, is rendered as a meta verification tag in <head>.
 	GoogleSiteVerification string `yaml:"google_site_verification"`
+	// BingSiteVerification, if set, is rendered as a meta verification tag in <head>.
+	BingSiteVerification string `yaml:"bing_site_verification"`
 }
 
 var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}

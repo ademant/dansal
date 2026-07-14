@@ -1290,7 +1290,14 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 
 func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {
 	body, _ := json.Marshal(loc)
-	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/locations/%d", id), token, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
 	}

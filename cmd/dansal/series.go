@@ -483,7 +483,11 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 
 	orgID := series.OrganizationID
 	if role == RoleAdmin && req.OrganizationID != nil {
-		orgID = req.OrganizationID
+		if *req.OrganizationID == 0 {
+			orgID = nil
+		} else {
+			orgID = req.OrganizationID
+		}
 	}
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,

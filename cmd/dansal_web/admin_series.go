@@ -307,9 +307,12 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 				body["default_location_id"] = n
 			}
 		}
-		if v := r.FormValue("organization_id"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		if vals, ok := r.Form["organization_id"]; ok {
+			n, _ := strconv.Atoi(vals[0])
+			if n > 0 {
 				body["organization_id"] = n
+			} else {
+				body["organization_id"] = 0
 			}
 		}
 		if err := client.UpdateSeries(r.Context(), id, body, token); err != nil {

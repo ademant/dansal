@@ -156,10 +156,10 @@
         <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{end}}">
           <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
           <div class="tt-body">
-            <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{end}}</div>
+            <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
             {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
             {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
-            {{if .MusicianName}}<div class="tt-meta">{{.MusicianName}}</div>{{end}}
+            {{if .MusicianName}}<div class="tt-meta">{{if .MusicianID}}<a href="/musicians/{{.MusicianID}}">{{.MusicianName}}</a>{{else}}{{.MusicianName}}{{end}}</div>{{end}}
             {{if .Description}}<div class="tt-desc md-content">{{markdownHTML .Description}}</div>{{end}}
           </div>
         </div>
@@ -558,6 +558,7 @@
 .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);padding-top:.1rem}
 .tt-title{font-weight:600;font-size:.95rem;color:var(--heading)}
 .tt-badge-ws{display:inline-block;font-size:.7rem;font-weight:700;background:var(--link);color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
+.tt-badge-bal{display:inline-block;font-size:.7rem;font-weight:700;background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-meta{font-size:.82rem;color:var(--fg-faint);margin-top:.15rem}
 .tt-desc{font-size:.88rem;color:var(--fg-dim);margin-top:.25rem}
 .evt-sidebar{display:flex;flex-direction:column;gap:.1rem}

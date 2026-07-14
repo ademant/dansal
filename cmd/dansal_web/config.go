@@ -111,6 +111,9 @@ type Config struct {
 
 	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
 	SiteName string `yaml:"site_name"`
+
+	// GoogleSiteVerification, if set, is rendered as a meta verification tag in <head>.
+	GoogleSiteVerification string `yaml:"google_site_verification"`
 }
 
 var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}

@@ -1283,12 +1283,14 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 	if resp.StatusCode != http.StatusCreated {
 		return Location{}, apiErr(resp)
 	}
-	var created Location
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-		return Location{}, err
+	var results []struct {
+		Location Location `json:"location"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil || len(results) == 0 {
+		return Location{}, fmt.Errorf("unexpected response from create location")
 	}
 	c.invalidateLocations()
-	return created, nil
+	return results[0].Location, nil
 }
 
 func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {

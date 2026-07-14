@@ -269,6 +269,7 @@ func main() {
 		r.HandleFunc("POST /admin/users/bulk", adminRateLimit(adminUsersBulkHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/disable", adminRateLimit(adminUserDisableHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/magic-link", adminRateLimit(adminGenerateMagicLinkHandler(cfg, client)))
+		r.HandleFunc("POST /admin/users/{id}/telegram/message", adminRateLimit(adminUserTelegramMessageHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/role", adminRateLimit(adminUserRoleHandler(cfg, client)))
 		r.HandleFunc("POST /admin/users/{id}/org", adminRateLimit(adminUserOrgHandler(cfg, client)))
 		r.HandleFunc("POST /admin/invites/new", adminRateLimit(adminInviteCreateHandler(cfg, client)))

@@ -76,6 +76,7 @@
               onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
       <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
+      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
     </td>
     {{end}}
   </tr>
@@ -428,6 +429,18 @@ function copyMagicLink() {
 }
 function closeMagicModal() {
   document.getElementById('magic-link-modal').hidden = true;
+}
+function sendTelegramMsg(uid) {
+  var msg = prompt('{{$.Strings.T "admin_telegram_msg_prompt"}}');
+  if (!msg || !msg.trim()) return;
+  fetch('/admin/users/' + uid + '/telegram/message', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'message=' + encodeURIComponent(msg.trim())
+  }).then(function(r) {
+    if (r.ok) alert('{{$.Strings.T "admin_telegram_msg_sent"}}');
+    else r.text().then(function(t){ alert('Error: ' + t); });
+  }).catch(function(){ alert('Error sending message'); });
 }
 (function(){
   var cbAll = document.getElementById('cb-all');

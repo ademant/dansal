@@ -434,10 +434,20 @@ POST   /api/v1/user/webauthn/register/finish      # complete adding a new passke
 DELETE /api/v1/user/webauthn/credentials/{id}     # remove a passkey
 
 POST   /api/v1/auth/webauthn/login/begin          # begin passkey login (discoverable or with email)
-POST   /api/v1/auth/webauthn/login/finish         # complete passkey login → returns session token
+POST   /api/v1/auth/webauthn/login/finish         # complete passkey login → returns session token or totp_required
+POST   /api/v1/auth/webauthn/totp-challenge       # complete TOTP second factor after passkey login
 ```
 
 All credential management endpoints require authentication. Login endpoints are public.
+
+**Passkey login with TOTP:** when a user has both a passkey and TOTP enrolled, `login/finish` returns `200` with `{"totp_required": true, "pending_token": "..."}` instead of a session token. The client must then POST to `totp-challenge`:
+
+```json
+POST /api/v1/auth/webauthn/totp-challenge
+{ "pending_token": "...", "totp_code": "123456" }
+```
+
+On success returns the same session token response as a normal login. The `pending_token` is single-use, expires after 5 minutes, and is invalid outside this endpoint.
 
 ## TOTP
 
@@ -604,6 +614,7 @@ POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event
 POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
 POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
+POST   /api/v1/events/bulk-set-time         # admin/user: bulk-update start/end time-of-day for event IDs
 
 PUT    /api/v1/events/{id}/location                    # set the event's location
 DELETE /api/v1/events/{id}/location                     # clear the event's location
@@ -618,6 +629,12 @@ DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 ```
 
 **Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization. `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
+
+**`bulk-set-time` request:** adjusts the time-of-day component of `start_time` and/or `end_time` for multiple events while keeping their dates. Times are in `"HH:MM"` format (Berlin timezone). At least one of `start_time` or `end_time` is required; omit the other to leave it unchanged. Events where the caller is not an org member are silently skipped (admins may affect all events). Returns `204`.
+
+```json
+{ "ids": [1, 2, 3], "start_time": "19:00", "end_time": "23:00" }
+```
 
 **`PUT` vs `PATCH`:** `PUT` replaces the entire event — send the complete object; any field omitted from the body is cleared to its zero value, and `location` may be a full nested object (find-or-create by name/address). `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array fields (`tags`, `musicians`, `instructors`, `dances`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element; `has_ball`/`has_workshop`/`has_festival` still auto-derive their associated tags whenever either the booleans or `tags` are part of the patch. `PATCH` has no nested `location` object — repoint an event at an existing location via `location_id`, or use `PUT` to also create/update the location itself. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
 

@@ -269,6 +269,38 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 	}
 }
 
+func adminUserTelegramMessageHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		message := r.FormValue("message")
+		if message == "" {
+			http.Error(w, "message required", http.StatusBadRequest)
+			return
+		}
+		if err := client.SendTelegramMessageToUser(r.Context(), id, message, getSessionToken(r)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

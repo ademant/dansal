@@ -546,6 +546,7 @@ func (c *DansalClient) Logout(ctx context.Context, token string) error {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -1021,6 +1022,7 @@ func (c *DansalClient) UploadMusicianImage(ctx context.Context, id int, data []b
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -1050,6 +1052,7 @@ func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, 
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -1793,6 +1796,7 @@ func (c *DansalClient) UploadEventImage(ctx context.Context, eventID int, data [
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -2127,7 +2131,7 @@ func (c *DansalClient) UpdateContactPost(ctx context.Context, id int, token stri
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -2355,6 +2359,7 @@ func (c *DansalClient) GenerateMagicLink(ctx context.Context, userID int, sessio
 	if baseURL != "" {
 		req.Header.Set("X-Base-URL", baseURL)
 	}
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", err
@@ -2613,30 +2618,9 @@ func (c *DansalClient) VerifyContactRequest(ctx context.Context, token string) e
 	return nil
 }
 
-type AdminConfig struct {
-	TelegramBotToken      string `json:"telegram_bot_token"`
-	TelegramBotName       string `json:"telegram_bot_name"`
-	MatrixHomeserver      string `json:"matrix_homeserver"`
-	MatrixAccessToken     string `json:"matrix_access_token"`
-	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins"`
-}
-
-func (c *DansalClient) GetAdminConfig(ctx context.Context, token string) (AdminConfig, error) {
-	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/admin/config", token, nil)
-	if err != nil {
-		return AdminConfig{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return AdminConfig{}, apiErr(resp)
-	}
-	var ac AdminConfig
-	return ac, json.NewDecoder(resp.Body).Decode(&ac)
-}
-
-func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac AdminConfig) error {
-	body, _ := json.Marshal(ac)
-	resp, err := c.authed(ctx, http.MethodPatch, "/api/v1/admin/config", token, body)
+func (c *DansalClient) SendTelegramMessageToUser(ctx context.Context, userID int, message, token string) error {
+	body, _ := json.Marshal(map[string]string{"message": message})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/telegram/message", userID), token, body)
 	if err != nil {
 		return err
 	}
@@ -2905,6 +2889,7 @@ func (c *DansalClient) PreviewEvents(ctx context.Context, body io.Reader, conten
 	}
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -3118,6 +3103,7 @@ func (c *DansalClient) ResendInvite(ctx context.Context, token string, inviteID 
 	if baseURL != "" {
 		req.Header.Set("X-Base-URL", baseURL)
 	}
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -3484,6 +3470,7 @@ func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupIn
 		return TOTPSetupInfo{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return TOTPSetupInfo{}, err
@@ -3507,6 +3494,7 @@ func (c *DansalClient) TOTPConfirm(ctx context.Context, token, code string) erro
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
@@ -3526,6 +3514,7 @@ func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) erro
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err

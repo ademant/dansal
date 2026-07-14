@@ -441,6 +441,32 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
+// GET /api/v1/me - Full profile for the authenticated user, plus token expiry.
+func getMe(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	callerID, _ := callerFromRequest(r)
+	if callerID == 0 {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	user, err := getUserByID(callerID)
+	if err != nil {
+		log.Printf("getMe: %v", err)
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	// Look up token expiry so callers can re-issue session cookies with the right TTL.
+	var rawExpiry string
+	if parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2); len(parts) == 2 {
+		db.QueryRow("SELECT expires_at FROM tokens WHERE token = ?", sha256Hex(parts[1])).Scan(&rawExpiry)
+	}
+	type meResponse struct {
+		User
+		TokenExpiresAt string `json:"token_expires_at,omitempty"`
+	}
+	json.NewEncoder(w).Encode(meResponse{User: user, TokenExpiresAt: epochStrToRFC3339(rawExpiry)})
+}
+
 // GET /api/v1/me/stats - Event counts for the authenticated user.
 func getMeStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

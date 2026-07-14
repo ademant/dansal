@@ -96,6 +96,23 @@ func (c Cookies) Set(w http.ResponseWriter, token string, user any, expiresAt ti
 	})
 }
 
+// SetUser re-signs and overwrites only the user cookie, leaving the token
+// cookie untouched. Used to refresh the HMAC-signed user blob after a process
+// restart without disturbing the raw session token stored in the browser.
+func (c Cookies) SetUser(w http.ResponseWriter, user any, expiresAt time.Time) {
+	userJSON, _ := json.Marshal(user)
+	payload := base64.StdEncoding.EncodeToString(userJSON)
+	http.SetCookie(w, &http.Cookie{
+		Name:     c.User,
+		Value:    payload + "." + c.mac([]byte(payload)),
+		Path:     "/",
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // Clear deletes both session cookies.
 func (c Cookies) Clear(w http.ResponseWriter) {
 	for _, name := range []string{c.Token, c.User} {

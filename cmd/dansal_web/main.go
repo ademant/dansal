@@ -401,7 +401,7 @@ func main() {
 		r.HandleFunc("GET /embed/calendar", embedCalendarHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/locations", embedLocationsHandler(cfg, tmpls, client, i18n))
 
-		return dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r)))
+		return authRefreshMiddleware(client)(dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r))))
 	}
 
 	i18n := loadI18n(cfg.I18nFile)

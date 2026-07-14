@@ -8,6 +8,38 @@ import (
 	"github.com/ademant/dansal/internal/websession"
 )
 
+// authRefreshMiddleware transparently re-establishes a session when the
+// dsw_user HMAC cookie is missing or invalid (e.g. after a process restart)
+// but the raw dsw_token cookie is still valid in the API's database.
+// It calls GET /api/v1/me to validate the token, re-issues the signed user
+// cookie with the correct expiry, and injects the user into the request
+// context so requireLogin sees an authenticated session within this request.
+func authRefreshMiddleware(client *DansalClient) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if getSessionUser(r) == nil {
+				if token := getSessionToken(r); token != "" {
+					if me, err := client.GetMe(r.Context(), token); err == nil {
+						su := &SessionUser{
+							ID:          me.ID,
+							Email:       me.Email,
+							DisplayName: me.DisplayName,
+							Role:        me.Role,
+						}
+						expiresAt, _ := time.Parse(time.RFC3339, me.TokenExpiresAt)
+						if expiresAt.IsZero() {
+							expiresAt = time.Now().Add(24 * time.Hour)
+						}
+						sessionCookies.SetUser(w, su, expiresAt)
+						r = withSessionUser(r, su)
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 type sessionContextKey int
 
 const ctxSessionUser sessionContextKey = 1

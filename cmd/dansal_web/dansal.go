@@ -1926,6 +1926,27 @@ type MeStats struct {
 	EventsLastEdited int `json:"events_last_edited"`
 }
 
+// MeInfo is the response from GET /api/v1/me: full user profile plus the
+// token's expiry so callers can re-issue session cookies with the right TTL.
+type MeInfo struct {
+	UserInfo
+	TokenExpiresAt string `json:"token_expires_at,omitempty"`
+}
+
+// GetMe returns the full profile for the token owner, including TokenExpiresAt.
+func (c *DansalClient) GetMe(ctx context.Context, token string) (MeInfo, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/me", token, nil)
+	if err != nil {
+		return MeInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return MeInfo{}, apiErr(resp)
+	}
+	var m MeInfo
+	return m, json.NewDecoder(resp.Body).Decode(&m)
+}
+
 // GetMeStats returns event creation and last-edit counts for the authenticated user.
 func (c *DansalClient) GetMeStats(ctx context.Context, token string) (MeStats, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/me/stats", token, nil)

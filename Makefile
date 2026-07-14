@@ -13,7 +13,8 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
         run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default deploy-full
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default deploy-full \
+        wp-zip deploy-wp
 
 build:
 	$(MAKE) -j5 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc
@@ -467,3 +468,24 @@ deploy-nginx-default:
 # Deploy both web application and nginx configuration for an instance.
 # Usage: sudo make deploy-full INSTANCE=prod
 deploy-full: deploy deploy-nginx
+
+# WordPress plugin — zip and deploy targets.
+WP_PLUGIN_DIR ?= /srv/wordpress/balfolk.social/wp-content/plugins
+WP_PLUGIN_SRC := wp-dansal/dansal-events-embed
+
+# Build a standard WordPress plugin zip (upload via WP admin > Plugins > Add New).
+# Output: dansal-events-embed.zip
+wp-zip:
+	rm -f dansal-events-embed.zip
+	cd wp-dansal && zip -r ../dansal-events-embed.zip dansal-events-embed/
+	@echo "Built dansal-events-embed.zip"
+
+# Copy plugin files directly into a WordPress installation.
+# Usage: sudo make deploy-wp
+#        sudo make deploy-wp WP_PLUGIN_DIR=/path/to/wp-content/plugins
+deploy-wp:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-wp requires root"; exit 1; }
+	install -d -m 755 $(WP_PLUGIN_DIR)/dansal-events-embed
+	install -m 644 $(WP_PLUGIN_SRC)/dansal-events-embed.php \
+	    $(WP_PLUGIN_DIR)/dansal-events-embed/dansal-events-embed.php
+	@echo "Deployed to $(WP_PLUGIN_DIR)/dansal-events-embed"

@@ -1170,8 +1170,23 @@ func renderEmbed(w http.ResponseWriter, tmpl *template.Template, data any) {
 	}
 }
 
+// legacyGancioRedirect 301s an unsupported Gancio-era URL pattern to target.
+// dansal's IDs/slugs don't correspond 1:1 to Gancio's (different DB), so we
+// can't resolve these to a specific equivalent page — a permanent redirect
+// to the closest generic target still transfers SEO signal, unlike letting
+// the request silently fall through to "/" with a 200 (issue #823).
+func legacyGancioRedirect(target string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+	}
+}
+
 func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		var events []Event
 		var orgs []Organization
 		var dances []Dance

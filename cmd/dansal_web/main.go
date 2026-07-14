@@ -213,6 +213,14 @@ func main() {
 			w.Write(qrcodeJS)
 		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
+		// Legacy Gancio URL patterns dansal doesn't support: 301 instead of
+		// silently falling through to the "/" catch-all with a 200 (issue #823).
+		r.HandleFunc("GET /event/{slug}", legacyGancioRedirect("/"))
+		r.HandleFunc("GET /tag/{slug}", legacyGancioRedirect("/"))
+		r.HandleFunc("GET /collection/{name}", legacyGancioRedirect("/"))
+		r.HandleFunc("GET /place/{id}/{slug...}", legacyGancioRedirect("/"))
+		r.HandleFunc("GET /export", legacyGancioRedirect("/"))
+		r.HandleFunc("GET /add", legacyGancioRedirect("/events/suggest"))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /api/events-more", eventsMoreHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /dashboard", dashboardHandler(cfg, tmpls, client, i18n))

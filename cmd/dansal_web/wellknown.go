@@ -80,7 +80,7 @@ func robotsTxtHandler(cfg *Config) http.HandlerFunc {
 		base := cfg.publicBaseURL()
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nSitemap: %s/sitemap.xml\n", base)
+		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nContent-Signal: search=yes, ai-train=yes, use=full\n\nSitemap: %s/sitemap.xml\n", base)
 	}
 }
 

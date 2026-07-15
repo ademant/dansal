@@ -32,6 +32,7 @@
 <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="{{.SiteName}}">
 {{- if .GoogleSiteVerification}}<meta name="google-site-verification" content="{{.GoogleSiteVerification}}">{{end}}
 {{- if .BingSiteVerification}}<meta name="msvalidate.01" content="{{.BingSiteVerification}}">{{end}}
+<meta name="rating" content="general">
 <meta name="theme-color" content="#1a6eb5">
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="dns-prefetch" href="https://unpkg.com">
@@ -231,6 +232,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .dpr-range-end{background:var(--heading);color:#fff!important;border-radius:0 50% 50% 0}
 .dpr-range-start.dpr-range-end{border-radius:50%}
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","url":"{{.BaseURL}}/","name":"{{.SiteName}}","audience":{"@type":"PeopleAudience","typicalAgeRange":"12-"}}</script>
 </head>
 <body>
 <nav>

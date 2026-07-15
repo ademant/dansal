@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/flatpickr/dist/flatpickr.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff;padding:.75rem}
 .filters{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.6rem;font-size:.85rem}
 .filters label{display:flex;flex-direction:column;gap:.15rem;color:#666;font-size:.78rem}
 .filters input,.filters select{font-size:.85rem;padding:.2rem .35rem}
+#cal-daterange{cursor:pointer;min-width:14rem;background:#fff}
 #cal-map{height:300px;border-radius:4px;margin-bottom:.6rem}
 .ev-list{list-style:none}
 .ev-item{display:flex;gap:.75rem;padding:.6rem 0;border-bottom:1px solid #eee;align-items:flex-start}
@@ -29,8 +31,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 </head>
 <body>
 <div class="filters">
-  <label>{{.Strings.T "filter_from_label"}}<input type="date" id="cal-from" value="{{.From}}"></label>
-  <label>{{.Strings.T "filter_to_label"}}<input type="date" id="cal-to" value="{{.To}}"></label>
+  <label>{{.Strings.T "filter_from_label"}} – {{.Strings.T "filter_to_label"}}<input type="text" id="cal-daterange" readonly></label>
   <label>{{.Strings.T "col_type"}}
     <select id="cal-tag">
       <option value="">{{.Strings.T "filter_all_types"}}</option>
@@ -62,10 +63,14 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 <div class="empty" id="cal-empty"{{if .Events}} hidden{{end}}>—</div>
 <script type="application/json" id="cal-data">{{.CalData}}</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/flatpickr/dist/flatpickr.min.js"></script>
+{{if .FPLocale}}<script src="https://unpkg.com/flatpickr/dist/l10n/{{.FPLocale}}.js"></script>{{end}}
 <script>
 (function(){
   var calData = JSON.parse(document.getElementById('cal-data').textContent);
   var map, markerLayer, markersById = {};
+  var calFrom = '{{.From}}';
+  var calTo   = '{{.To}}';
 
   function escHtml(s){
     return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
@@ -89,8 +94,6 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   }
 
   function apply(){
-    var from = document.getElementById('cal-from').value;
-    var to = document.getElementById('cal-to').value;
     var tag = document.getElementById('cal-tag').value;
     markerLayer.clearLayers();
     var bounds = [];
@@ -100,8 +103,8 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       var date = (d.start||'').slice(0,10);
       var tags = ' '+(d.tags||'')+' ';
       var show = true;
-      if(from && date < from) show = false;
-      if(to && date > to) show = false;
+      if(calFrom && date < calFrom) show = false;
+      if(calTo   && date > calTo)   show = false;
       if(tag && tags.indexOf(' '+tag+' ') === -1) show = false;
       li.hidden = !show;
       if(show){
@@ -115,12 +118,28 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     reportHeight();
   }
 
-  document.getElementById('cal-from').addEventListener('change',apply);
-  document.getElementById('cal-to').addEventListener('change',apply);
   document.getElementById('cal-tag').addEventListener('change',apply);
 
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
-  window.addEventListener('load',function(){ initMap(); apply(); reportHeight(); });
+
+  window.addEventListener('load',function(){
+    initMap();
+    apply();
+    flatpickr('#cal-daterange',{
+      mode:'range',
+      dateFormat:'Y-m-d',
+      defaultDate:[calFrom,calTo],
+      {{if .FPLocale}}locale:'{{.FPLocale}}',{{end}}
+      onChange:function(dates){
+        if(dates.length===2){
+          calFrom=dates[0].toISOString().slice(0,10);
+          calTo  =dates[1].toISOString().slice(0,10);
+          apply();
+        }
+      }
+    });
+    reportHeight();
+  });
   new ResizeObserver(reportHeight).observe(document.body);
 })();
 </script>

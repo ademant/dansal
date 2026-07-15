@@ -429,6 +429,12 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		allTags, _ := client.GetTags(r.Context())
 
+		fpLocales := map[string]string{
+			"de": "de", "fr": "fr", "es": "es", "it": "it",
+			"nl": "nl", "uk": "uk", "ca": "cat", "pt": "pt",
+			"pl": "pl", "cs": "cs", "br": "fr",
+		}
+
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedCalendar, map[string]any{
 			"Lang":        lang,
@@ -439,6 +445,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"From":        from.Format("2006-01-02"),
 			"To":          to.Format("2006-01-02"),
 			"SelectedTag": q.Get("tag"),
+			"FPLocale":    fpLocales[lang],
 			"Strings":     strs,
 			"BaseURL":     cfg.BaseURL,
 		})

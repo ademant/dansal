@@ -125,14 +125,12 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		})
 	}
 
-	// Organizations — only those with a public actor page.
+	// Organizations — every org has a public page at effectiveSlug(o),
+	// whether or not it has an explicit ActorName.
 	orgs, _ := client.GetOrganizations(ctx)
 	for _, o := range orgs {
-		if o.ActorName == "" {
-			continue
-		}
 		urls = append(urls, sitemapURL{
-			Loc:        base + "/org/" + o.ActorName,
+			Loc:        base + "/org/" + effectiveSlug(o),
 			ChangeFreq: "weekly",
 			Priority:   "0.7",
 		})

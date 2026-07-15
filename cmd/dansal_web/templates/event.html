@@ -23,6 +23,10 @@
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
   {{- with .ImageURL}}, "image": "{{. | js}}"{{end}}
   {{- with .Description}}, "description": "{{. | js}}"{{end}}
+  {{- if .Musicians}}, "performer": [
+    {{- range $i, $m := .Musicians}}{{if $i}}, {{end}}{"@type": "MusicGroup", "name": "{{$m.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{$m.ID}}"}{{end}}
+  ]{{end}}
+  {{- if $.Data.Org}}, "organizer": {"@type": "Organization", "name": "{{$.Data.Org.Name | js}}", "url": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
 }
 </script>
 {{end}}{{end}}

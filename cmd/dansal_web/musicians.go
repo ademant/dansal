@@ -70,7 +70,7 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 		json.Unmarshal([]byte(musician.MembersJSON), &members)
 		json.Unmarshal([]byte(musician.AlbumsJSON), &albums)
 		title := musician.Bandname
-		renderTemplate(w, tmpls.musician, tmplData(r, cfg, i18n, title, MusicianPageData{
+		td := tmplData(r, cfg, i18n, title, MusicianPageData{
 			Musician:    musician,
 			Events:      displayEvents,
 			Slug:        orgSlug(musician.Bandname),
@@ -78,6 +78,15 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			Albums:      albums,
 			HasPast:     hasPast,
 			IncludePast: includePast,
-		}))
+		})
+		desc := musician.Biography
+		if desc == "" {
+			desc = musician.Description
+		}
+		td.MetaDescription = metaDesc(desc, 155)
+		if musician.ImageURL != "" {
+			td.OGImage = "https://" + cfg.Domain + musician.ImageURL
+		}
+		renderTemplate(w, tmpls.musician, td)
 	}
 }

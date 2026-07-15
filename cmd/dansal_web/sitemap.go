@@ -136,6 +136,16 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		})
 	}
 
+	// Musicians
+	musicians, _ := client.GetMusicians(ctx)
+	for _, m := range musicians {
+		urls = append(urls, sitemapURL{
+			Loc:        base + fmt.Sprintf("/musicians/%d", m.ID),
+			ChangeFreq: "monthly",
+			Priority:   "0.5",
+		})
+	}
+
 	sm := sitemapXML{
 		NS:   "http://www.sitemaps.org/schemas/sitemap/0.9",
 		URLs: urls,

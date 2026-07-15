@@ -1,4 +1,27 @@
 {{template "base" .}}
+{{define "head_extra"}}{{with .Data.Musician}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "MusicGroup",
+  "name": "{{.Bandname | js}}"
+  {{- with .ImageURL}}, "image": "https://{{$.Domain}}{{. | js}}"{{end}}
+  {{- with .Biography}}, "description": "{{. | js}}"{{else}}{{with .Description}}, "description": "{{. | js}}"{{end}}{{end}}
+  {{- with .Genre}}, "genre": "{{. | js}}"{{end}}
+  {{- if or .Internetsite .Mastodon .Instagram .Facebook .Soundcloud .Spotify .Deezer .MBID}}, "sameAs": [
+    {{- $first := true}}
+    {{- with .Internetsite}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{end}}
+    {{- with .Mastodon}}{{if not $first}}, {{end}}"{{mastodonURL . | js}}"{{$first = false}}{{end}}
+    {{- with .Instagram}}{{if not $first}}, {{end}}"{{printf "https://instagram.com/%s" . | js}}"{{$first = false}}{{end}}
+    {{- with .Facebook}}{{if not $first}}, {{end}}"{{printf "https://facebook.com/%s" . | js}}"{{$first = false}}{{end}}
+    {{- with .Soundcloud}}{{if not $first}}, {{end}}"{{printf "https://soundcloud.com/%s" . | js}}"{{$first = false}}{{end}}
+    {{- with .Spotify}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{end}}
+    {{- with .Deezer}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{end}}
+    {{- with .MBID}}{{if not $first}}, {{end}}"{{printf "https://musicbrainz.org/artist/%s" . | js}}"{{$first = false}}{{end}}
+  ]{{end}}
+}
+</script>
+{{end}}{{end}}
 {{define "content"}}
 {{with .Data}}
 <div class="musician-header">

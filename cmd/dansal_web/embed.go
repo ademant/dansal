@@ -360,7 +360,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		now := time.Now().UTC()
 		from := now.Truncate(24 * time.Hour)
-		to := from.AddDate(0, 0, 180)
+		to := from.AddDate(0, 0, 14)
 		if v, err := time.Parse("2006-01-02", q.Get("from")); err == nil {
 			from = v
 		}

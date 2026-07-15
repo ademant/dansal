@@ -13,7 +13,6 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .loc-popup a:hover{text-decoration:underline}
 .loc-popup .loc-town{color:#888;font-size:.8rem;margin-top:.15rem}
 .loc-popup .loc-count{color:#999;font-size:.78rem;margin-top:.3rem}
-.loc-pin{border-radius:50%;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -32,23 +31,26 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   // Color scale by future event count (relative to max in dataset)
   var maxFuture = locData.reduce(function(m,l){ return Math.max(m, l.future||0); }, 1);
   function pinColor(count){
-    if(!count) return {bg:'#bbb', sz:10};
+    if(!count) return '#aaa';
     var frac = count / maxFuture;
-    var bg = frac <= 0.25 ? '#74b3f0'
-           : frac <= 0.5  ? '#1a6eb5'
-           : frac <= 0.75 ? '#f97316'
-           :                '#dc2626';
-    var sz = frac <= 0.25 ? 11 : frac <= 0.5 ? 13 : frac <= 0.75 ? 15 : 17;
-    return {bg:bg, sz:sz};
+    return frac <= 0.25 ? '#74b3f0'
+         : frac <= 0.5  ? '#1a6eb5'
+         : frac <= 0.75 ? '#f97316'
+         :                '#dc2626';
   }
 
   function makeIcon(count){
-    var p = pinColor(count);
+    var c = pinColor(count);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">'
+      + '<path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z" fill="'+c+'" stroke="white" stroke-width="1.5"/>'
+      + '<circle cx="12.5" cy="12.5" r="4.5" fill="white" opacity="0.55"/>'
+      + '</svg>';
     return L.divIcon({
       className: '',
-      html: '<div class="loc-pin" style="width:'+p.sz+'px;height:'+p.sz+'px;background:'+p.bg+'"></div>',
-      iconSize: [p.sz, p.sz],
-      iconAnchor: [p.sz/2, p.sz/2]
+      html: svg,
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34]
     });
   }
 

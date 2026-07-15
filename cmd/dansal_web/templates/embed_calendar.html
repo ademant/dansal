@@ -27,6 +27,22 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .ev-cancelled{color:#e05c00;font-size:.75rem;margin-left:.3rem}
 .empty{color:#999;text-align:center;padding:1.5rem}
 .empty[hidden]{display:none}
+.ev-item{cursor:pointer}
+.ev-item:hover{background:#f5f8ff}
+.ov-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;padding:1rem}
+.ov-backdrop.open{display:flex}
+.ov-card{background:#fff;border-radius:8px;padding:1.25rem 1.4rem;max-width:min(420px,100%);width:100%;box-shadow:0 8px 32px rgba(0,0,0,.22);position:relative}
+.ov-close{position:absolute;top:.55rem;right:.8rem;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#888;line-height:1;padding:.2rem}
+.ov-title{font-size:1.05rem;font-weight:600;color:#1a1a2e;margin:0 1.5rem .6rem 0}
+.ov-cancelled{color:#e05c00;font-size:.8rem;margin-left:.4rem}
+.ov-meta{font-size:.85rem;color:#555;line-height:1.7;margin-bottom:.9rem}
+.ov-meta span{display:block}
+.ov-links{display:flex;gap:.6rem;flex-wrap:wrap}
+.ov-links a{display:inline-block;padding:.4rem .9rem;border-radius:4px;font-size:.85rem;text-decoration:none;font-weight:500}
+.ov-btn-primary{background:#1a6eb5;color:#fff!important}
+.ov-btn-primary:hover{background:#0d4a80}
+.ov-btn-secondary{background:#f0f4ff;color:#1a6eb5!important;border:1px solid #c8d4f5}
+.ov-btn-secondary:hover{background:#e8f0fe}
 </style>
 </head>
 <body>
@@ -61,6 +77,14 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 </ul>
 {{end}}
 <div class="empty" id="cal-empty"{{if .Events}} hidden{{end}}>—</div>
+<div class="ov-backdrop" id="ov-backdrop">
+  <div class="ov-card">
+    <button class="ov-close" id="ov-close" aria-label="✕">✕</button>
+    <p class="ov-title" id="ov-title"></p>
+    <div class="ov-meta" id="ov-meta"></div>
+    <div class="ov-links" id="ov-links"></div>
+  </div>
+</div>
 <script type="application/json" id="cal-data">{{.CalData}}</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/flatpickr/dist/flatpickr.min.js"></script>
@@ -72,8 +96,45 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   var calFrom = '{{.From}}';
   var calTo   = '{{.To}}';
 
+  // Build lookup for overlay
+  var byId = {};
+  calData.forEach(function(e){ byId[e.id] = e; });
+
+  var i18nMoreInfo  = {{jsStr (.Strings.T "embed_more_info")}};
+  var i18nEventSite = {{jsStr (.Strings.T "embed_event_site")}};
+
   function escHtml(s){
     return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+  }
+
+  // Overlay
+  var backdrop = document.getElementById('ov-backdrop');
+  document.getElementById('ov-close').addEventListener('click',function(){ backdrop.classList.remove('open'); });
+  backdrop.addEventListener('click',function(ev){ if(ev.target===backdrop) backdrop.classList.remove('open'); });
+  document.addEventListener('keydown',function(ev){ if(ev.key==='Escape') backdrop.classList.remove('open'); });
+
+  function openOverlay(id){
+    var e = byId[id];
+    if(!e) return;
+
+    document.getElementById('ov-title').innerHTML =
+      escHtml(e.t) + (e.x ? '<span class="ov-cancelled">✕</span>' : '');
+
+    var meta = '';
+    var start = new Date(e.s);
+    meta += '<span>📅 ' + start.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+    if(e.s.length > 10) meta += ', ' + e.s.slice(11,16);
+    if(e.e && e.e.length > 10) meta += ' – ' + e.e.slice(11,16);
+    meta += '</span>';
+    if(e.loc) meta += '<span>📍 ' + escHtml(e.loc) + (e.town ? ', ' + escHtml(e.town) : '') + '</span>';
+    if(e.org) meta += '<span>🎪 ' + escHtml(e.org) + '</span>';
+    document.getElementById('ov-meta').innerHTML = meta;
+
+    var links = '<a href="{{.BaseURL}}/events/'+e.id+'" target="_blank" rel="noopener" class="ov-btn-primary">'+escHtml(i18nMoreInfo)+' →</a>';
+    if(e.url) links += '<a href="'+escHtml(e.url)+'" target="_blank" rel="noopener noreferrer" class="ov-btn-secondary">↗ '+escHtml(i18nEventSite)+'</a>';
+    document.getElementById('ov-links').innerHTML = links;
+
+    backdrop.classList.add('open');
   }
 
   function initMap(){
@@ -119,6 +180,14 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   }
 
   document.getElementById('cal-tag').addEventListener('change',apply);
+
+  // Intercept list-item clicks to open overlay instead of navigating
+  document.addEventListener('click',function(ev){
+    var li = ev.target.closest('.ev-item');
+    if(!li) return;
+    ev.preventDefault();
+    openOverlay(parseInt(li.dataset.id,10));
+  });
 
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
 

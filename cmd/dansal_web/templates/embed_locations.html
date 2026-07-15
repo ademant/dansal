@@ -13,6 +13,9 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .loc-popup a:hover{text-decoration:underline}
 .loc-popup .loc-town{color:#888;font-size:.8rem;margin-top:.15rem}
 .loc-popup .loc-count{color:#999;font-size:.78rem;margin-top:.3rem}
+.loc-legend{background:rgba(255,255,255,.88);padding:.35rem .55rem;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.75rem;color:#555;line-height:1.6}
+.loc-legend-dots{display:flex;align-items:center;gap:2px;margin-top:.15rem}
+.loc-legend-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(255,255,255,.8);flex-shrink:0}
 </style>
 </head>
 <body>
@@ -76,6 +79,18 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 
     map.addLayer(cluster);
     if(locData.length) map.fitBounds(cluster.getBounds(),{padding:[20,20],maxZoom:9});
+
+    var legend = L.control({position:'bottomright'});
+    legend.onAdd = function(){
+      var div = L.DomUtil.create('div','loc-legend');
+      var colors = ['#aaa','#74b3f0','#1a6eb5','#f97316','#dc2626'];
+      var dots = colors.map(function(c){
+        return '<div class="loc-legend-dot" style="background:'+c+'"></div>';
+      }).join('');
+      div.innerHTML = '<div class="loc-legend-dots"><span>0</span>'+dots+'<span>'+maxFuture+'</span></div>';
+      return div;
+    };
+    legend.addTo(map);
     reportHeight();
   });
   new ResizeObserver(reportHeight).observe(document.body);

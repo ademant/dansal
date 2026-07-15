@@ -4,26 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff}
-#loc-map{aspect-ratio:4/3}
+#loc-map{height:100vh}
 .loc-popup a{color:#1a6eb5;text-decoration:none;font-weight:500}
 .loc-popup a:hover{text-decoration:underline}
 .loc-popup .loc-town{color:#888;font-size:.8rem;margin-top:.15rem}
 .loc-popup .loc-count{color:#999;font-size:.78rem;margin-top:.3rem}
+.loc-pin{border-radius:50%;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
 <div id="loc-map"></div>
 <script type="application/json" id="loc-data">{{.LocData}}</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 <script>
 (function(){
   var locData = JSON.parse(document.getElementById('loc-data').textContent);
 
   function escHtml(s){
     return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+  }
+
+  // Color scale by future event count (relative to max in dataset)
+  var maxFuture = locData.reduce(function(m,l){ return Math.max(m, l.future||0); }, 1);
+  function pinColor(count){
+    if(!count) return {bg:'#bbb', sz:10};
+    var frac = count / maxFuture;
+    var bg = frac <= 0.25 ? '#74b3f0'
+           : frac <= 0.5  ? '#1a6eb5'
+           : frac <= 0.75 ? '#f97316'
+           :                '#dc2626';
+    var sz = frac <= 0.25 ? 11 : frac <= 0.5 ? 13 : frac <= 0.75 ? 15 : 17;
+    return {bg:bg, sz:sz};
+  }
+
+  function makeIcon(count){
+    var p = pinColor(count);
+    return L.divIcon({
+      className: '',
+      html: '<div class="loc-pin" style="width:'+p.sz+'px;height:'+p.sz+'px;background:'+p.bg+'"></div>',
+      iconSize: [p.sz, p.sz],
+      iconAnchor: [p.sz/2, p.sz/2]
+    });
   }
 
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
@@ -35,18 +61,19 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       maxZoom:18
     }).addTo(map);
 
-    var bounds = [];
+    var cluster = L.markerClusterGroup({maxClusterRadius:40});
+
     locData.forEach(function(l){
       var popup = '<div class="loc-popup">'
         + '<a href="{{.BaseURL}}/location/'+l.id+'" target="_blank" rel="noopener">'+escHtml(l.name)+'</a>';
       if(l.town){ popup += '<div class="loc-town">'+escHtml(l.town)+'</div>'; }
       if(l.future > 0){ popup += '<div class="loc-count">'+escHtml("{{.Strings.T "embed_loc_upcoming_events"}}".replace('%d', l.future))+'</div>'; }
       popup += '</div>';
-      var m = L.marker([l.lat,l.lng]).bindPopup(popup);
-      m.addTo(map);
-      bounds.push([l.lat,l.lng]);
+      L.marker([l.lat,l.lng], {icon: makeIcon(l.future)}).bindPopup(popup).addTo(cluster);
     });
-    if(bounds.length) map.fitBounds(bounds,{padding:[20,20],maxZoom:13});
+
+    map.addLayer(cluster);
+    if(locData.length) map.fitBounds(cluster.getBounds(),{padding:[20,20],maxZoom:9});
     reportHeight();
   });
   new ResizeObserver(reportHeight).observe(document.body);

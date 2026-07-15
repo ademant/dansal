@@ -130,8 +130,13 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     if(e.org) meta += '<span>🎪 ' + escHtml(e.org) + '</span>';
     document.getElementById('ov-meta').innerHTML = meta;
 
-    var links = '<a href="{{.BaseURL}}/events/'+e.id+'" target="_blank" rel="noopener" class="ov-btn-primary">'+escHtml(i18nMoreInfo)+' →</a>';
-    if(e.url) links += '<a href="'+escHtml(e.url)+'" target="_blank" rel="noopener noreferrer" class="ov-btn-secondary">↗ '+escHtml(i18nEventSite)+'</a>';
+    var links = '';
+    if(e.url){
+      links += '<a href="'+escHtml(e.url)+'" target="_blank" rel="noopener noreferrer" class="ov-btn-primary">↗ '+escHtml(i18nEventSite)+'</a>';
+      links += '<a href="{{.BaseURL}}/events/'+e.id+'" target="_blank" rel="noopener" class="ov-btn-secondary">'+escHtml(i18nMoreInfo)+'</a>';
+    } else {
+      links += '<a href="{{.BaseURL}}/events/'+e.id+'" target="_blank" rel="noopener" class="ov-btn-primary">'+escHtml(i18nMoreInfo)+' →</a>';
+    }
     document.getElementById('ov-links').innerHTML = links;
 
     backdrop.classList.add('open');

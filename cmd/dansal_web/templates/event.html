@@ -25,6 +25,8 @@
   {{- with .Description}}, "description": "{{. | js}}"{{end}}
   {{- if .Musicians}}, "performer": [
     {{- range $i, $m := .Musicians}}{{if $i}}, {{end}}{"@type": "MusicGroup", "name": "{{$m.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{$m.ID}}"}{{end}}
+  ]{{else if .Instructors}}, "performer": [
+    {{- range $i, $ins := .Instructors}}{{if $i}}, {{end}}{"@type": "Person", "name": "{{$ins.Name | js}}"{{with $ins.Website}}, "url": "{{. | js}}"{{end}}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@type": "Organization", "name": "{{$.Data.Org.Name | js}}", "url": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
 }

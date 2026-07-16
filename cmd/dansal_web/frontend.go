@@ -139,6 +139,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		CanonicalURL:           canonical,
 		GoogleSiteVerification: cfg.GoogleSiteVerification,
 		BingSiteVerification:   cfg.BingSiteVerification,
+		OGImage:                "https://" + cfg.Domain + "/banner.avif",
 	}
 }
 

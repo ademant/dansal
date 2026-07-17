@@ -451,3 +451,93 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		})
 	}
 }
+
+// embedParam describes one query parameter accepted by an embed widget, for
+// the machine-readable manifest served at /embed/manifest.json.
+type embedParam struct {
+	Type        string `json:"type"`
+	Repeatable  bool   `json:"repeatable,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Description string `json:"description"`
+}
+
+// embedWidget describes one /embed/* route for the manifest.
+type embedWidget struct {
+	Path        string                `json:"path"`
+	Description string                `json:"description"`
+	Params      map[string]embedParam `json:"params"`
+}
+
+// embedManifest is the static, hand-maintained source of truth for
+// /embed/manifest.json — kept next to the handlers it documents so a change
+// to a handler's query params is a visible diff against this struct.
+var embedManifest = map[string]embedWidget{
+	"events": {
+		Path:        "/embed/events",
+		Description: "Filterable upcoming event list",
+		Params: map[string]embedParam{
+			"org":      {Type: "string", Repeatable: true, Description: "org slug filter; repeatable, e.g. ?org=a&org=b"},
+			"location": {Type: "number", Repeatable: true, Description: "location ID filter; repeatable"},
+			"mode":     {Type: "string", Default: "agenda", Description: "display mode"},
+			"lang":     {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"event": {
+		Path:        "/embed/event/{id}",
+		Description: "Single event card",
+		Params: map[string]embedParam{
+			"lang": {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"org": {
+		Path:        "/embed/org/{slug}",
+		Description: "Organization profile card with upcoming events",
+		Params: map[string]embedParam{
+			"events": {Type: "number", Default: "3", Description: "number of upcoming events to show (0 to hide the list)"},
+			"lang":   {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"next": {
+		Path:        "/embed/next",
+		Description: "Minimal upcoming events ticker",
+		Params: map[string]embedParam{
+			"org":      {Type: "string", Repeatable: true, Description: "org slug filter; repeatable"},
+			"location": {Type: "number", Repeatable: true, Description: "location ID filter; repeatable"},
+			"count":    {Type: "number", Default: "5", Description: "max number of events to show"},
+			"lang":     {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"locations": {
+		Path:        "/embed/locations",
+		Description: "Map of all locations with future/past event counts",
+		Params: map[string]embedParam{
+			"org":  {Type: "string", Repeatable: true, Description: "org slug filter; repeatable"},
+			"lang": {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"calendar": {
+		Path:        "/embed/calendar",
+		Description: "Combined map + filterable event list with client-side date-range and tag filter",
+		Params: map[string]embedParam{
+			"org":      {Type: "string", Repeatable: true, Description: "org slug filter; repeatable"},
+			"location": {Type: "number", Repeatable: true, Description: "location ID filter; repeatable"},
+			"from":     {Type: "string", Description: "start date, YYYY-MM-DD (default: today)"},
+			"to":       {Type: "string", Description: "end date, YYYY-MM-DD (default: 14 days after from)"},
+			"tag":      {Type: "string", Description: "pre-select a tag slug in the client-side filter"},
+			"lang":     {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+}
+
+// embedManifestHandler serves GET /embed/manifest.json — a machine-readable
+// description of every /embed/* widget and its query params, so integrators
+// (e.g. the wp-dansal WordPress plugin) can introspect embed options at
+// runtime instead of hardcoding them.
+func embedManifestHandler(cfg *Config) http.HandlerFunc {
+	data, _ := json.MarshalIndent(map[string]any{"widgets": embedManifest}, "", "  ")
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	}
+}

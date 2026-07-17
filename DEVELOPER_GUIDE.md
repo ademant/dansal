@@ -113,6 +113,8 @@ Full endpoint reference: **[API.md](API.md)**
 
 The REST API is served by the `dansal` binary at `http://127.0.0.1:8000` by default (behind nginx in production).
 
+dansal-web's own routes (public pages, feeds, embeds) are documented separately: **[WEB.md](WEB.md)**.
+
 **Authentication:** Bearer token in `Authorization: Bearer <token>` header. Tokens are issued by `POST /api/v1/login`, magic link, or WebAuthn login. API keys (prefix `ak_`) are also accepted and have no expiration unless explicitly set.
 
 **Three roles:** `admin`, `publisher`, `user`. There is no viewer role — unauthenticated access to public endpoints is the equivalent.

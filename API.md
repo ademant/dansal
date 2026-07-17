@@ -2,6 +2,8 @@
 
 REST API served by the `dansal` binary. All endpoints are under the base URL configured as `server.base_url` in `config.yaml`.
 
+For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widgets), see [WEB.md](WEB.md).
+
 ## Table of Contents
 
 - [Base URL](#base-url)
@@ -536,11 +538,22 @@ POST   /api/v1/locations/bulk-assign-org
 POST   /api/v1/locations/unassign-org
 POST   /api/v1/locations/{id}/assign-org  # admin/user (member of the target org)/publisher (member of the target org)
 GET    /api/v1/locations/event-counts # auth required
+
+GET    /api/v1/locations/{id}/rooms               # list rooms for a location
+POST   /api/v1/locations/{id}/rooms               # auth required — create a room
+DELETE /api/v1/locations/{id}/rooms/{room_id}     # auth required — delete a room
 ```
 
 List and get are public. Locations support `Accept: application/geo+json` on the list endpoint.
 
 **`PUT` vs `PATCH`:** `PUT` replaces the entire location — send the complete object; any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array/map fields (`organization_ids`, `attributes`, `aliases`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
+
+**Rooms** are named sub-locations (e.g. "Grand Hall", "Studio 2") within a venue, selectable per-event via `Event.room_id`. `GET .../rooms` is public. `POST`/`DELETE` require the caller to be an admin or a member of one of the location's organizations. `GET /api/v1/locations` and `GET /api/v1/locations/{id}` embed a location's rooms as `"rooms": [{"id": N, "name": "..."}]` (omitted when empty). Deleting a room sets `room_id` to `NULL` on any events that referenced it (`ON DELETE SET NULL`) rather than blocking the delete.
+
+```json
+POST /api/v1/locations/42/rooms
+{ "name": "Grand Hall" }
+```
 
 **Query parameters for GET /api/v1/locations:**
 - `name=` — substring match on location name
@@ -627,6 +640,8 @@ DELETE /api/v1/events/{id}/instructors/{instructor_id}  # remove one instructor
 PUT    /api/v1/events/{id}/dances/{dance_id}            # add one dance
 DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 ```
+
+`Event.room_id` (optional) points at a [room](#locations) within the event's location; the response also includes the denormalized `room_name` for display. Settable via `POST`/`PUT`/`PATCH` on the event body — there is no dedicated sub-resource endpoint for it (unlike `location`/`organization`/`musicians`/`instructors`/`dances`), since a room is scoped to the event's location and clearing it to `null` is unambiguous in a merge-patch.
 
 **Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization. `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
 

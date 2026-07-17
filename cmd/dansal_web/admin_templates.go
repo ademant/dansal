@@ -14,6 +14,7 @@ import (
 type AdminTemplatesData struct {
 	Templates []EventTemplate
 	OrgMap    map[int]Organization
+	PinnedIDs map[int]bool
 }
 
 func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -37,10 +38,12 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		for _, o := range orgs {
 			orgMap[o.ID] = o
 		}
+		pinnedIDs, _ := listPinnedTemplateIDs(db, su.ID)
 		title := i18n.T(r, "admin_templates_title")
 		renderTemplate(w, tmpls.adminTemplates, tmplData(r, cfg, i18n, title, AdminTemplatesData{
 			Templates: ts,
 			OrgMap:    orgMap,
+			PinnedIDs: pinnedIDs,
 		}))
 	}
 }
@@ -133,6 +136,48 @@ func adminTemplateDeleteHandler(db *sql.DB) http.HandlerFunc {
 		}
 		_ = deleteTemplate(db, id, su.ID, su.Role == "admin")
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
+	}
+}
+
+// templatePinRedirectTarget lets both /admin/templates and the dashboard's
+// "Your Presets" section post to the same pin/unpin endpoints and land back
+// where the user started.
+func templatePinRedirectTarget(r *http.Request) string {
+	if r.URL.Query().Get("from") == "dashboard" {
+		return "/dashboard"
+	}
+	return "/admin/templates"
+}
+
+func adminTemplatePinHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = pinTemplate(db, su.ID, id)
+		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
+	}
+}
+
+func adminTemplateUnpinHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = unpinTemplate(db, su.ID, id)
+		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
 	}
 }
 

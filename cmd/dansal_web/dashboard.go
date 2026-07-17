@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"net/http"
 	"net/url"
 	"sort"
@@ -10,14 +11,17 @@ import (
 
 // DashboardData is the template data for /dashboard.
 type DashboardData struct {
-	Stats    MeStats
-	UserOrgs []Organization
-	OrgMap   map[int]string
-	OrgStats map[int]OrgStatRecord
-	Events   []Event
+	Stats             MeStats
+	UserOrgs          []Organization
+	OrgMap            map[int]string
+	OrgStats          map[int]OrgStatRecord
+	Events            []Event
+	PinnedTemplates   []EventTemplate
+	UnpinnedTemplates []EventTemplate
+	TemplateOrgMap    map[int]string
 }
 
-func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -92,13 +96,41 @@ func dashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			orgMap[o.ID] = o.Name
 		}
 
+		// Presets: templates the user has access to (own + orgs they belong to;
+		// all orgs for admins, matching adminTemplatesHandler's scope), split
+		// into pinned (shown on the dashboard) and unpinned (the "add" dropdown).
+		templateOrgIDs := userOrgIDs
+		if su.Role == "admin" {
+			templateOrgIDs = make([]int, 0, len(allOrgs))
+			for _, o := range allOrgs {
+				templateOrgIDs = append(templateOrgIDs, o.ID)
+			}
+		}
+		accessibleTemplates, _ := listTemplates(db, su.ID, templateOrgIDs)
+		pinnedIDs, _ := listPinnedTemplateIDs(db, su.ID)
+		var pinnedTemplates, unpinnedTemplates []EventTemplate
+		for _, t := range accessibleTemplates {
+			if pinnedIDs[t.ID] {
+				pinnedTemplates = append(pinnedTemplates, t)
+			} else {
+				unpinnedTemplates = append(unpinnedTemplates, t)
+			}
+		}
+		templateOrgMap := make(map[int]string, len(allOrgs))
+		for _, o := range allOrgs {
+			templateOrgMap[o.ID] = o.Name
+		}
+
 		title := i18n.T(r, "dashboard_title")
 		renderTemplate(w, tmpls.dashboard, tmplData(r, cfg, i18n, title, DashboardData{
-			Stats:    stats,
-			UserOrgs: userOrgs,
-			OrgMap:   orgMap,
-			OrgStats: orgStats,
-			Events:   events,
+			Stats:             stats,
+			UserOrgs:          userOrgs,
+			OrgMap:            orgMap,
+			OrgStats:          orgStats,
+			Events:            events,
+			PinnedTemplates:   pinnedTemplates,
+			UnpinnedTemplates: unpinnedTemplates,
+			TemplateOrgMap:    templateOrgMap,
 		}))
 	}
 }

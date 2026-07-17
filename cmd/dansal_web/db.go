@@ -97,6 +97,11 @@ CREATE TABLE IF NOT EXISTS event_templates (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_templates_name ON event_templates(user_id, name);
+CREATE TABLE IF NOT EXISTS template_pins (
+    user_id INTEGER NOT NULL,
+    template_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, template_id)
+);
 CREATE TABLE IF NOT EXISTS delivery_failures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     activity_id TEXT NOT NULL,
@@ -646,6 +651,59 @@ func deleteTemplate(db *sql.DB, id, userID int, isAdmin bool) error {
 		_, err = db.Exec("DELETE FROM event_templates WHERE id = ? AND user_id = ?", id, userID)
 	}
 	return err
+}
+
+// pinTemplate/unpinTemplate/listPinnedTemplateIDs implement per-user dashboard
+// pins — strictly scoped to userID, independent of who owns or can edit the
+// template itself. Pinning a template you can only read (org-scoped, not
+// yours) is fine; the pin is just a personal bookmark.
+func pinTemplate(db *sql.DB, userID, templateID int) error {
+	_, err := db.Exec("INSERT OR IGNORE INTO template_pins (user_id, template_id) VALUES (?, ?)", userID, templateID)
+	return err
+}
+
+func unpinTemplate(db *sql.DB, userID, templateID int) error {
+	_, err := db.Exec("DELETE FROM template_pins WHERE user_id = ? AND template_id = ?", userID, templateID)
+	return err
+}
+
+func listPinnedTemplateIDs(db *sql.DB, userID int) (map[int]bool, error) {
+	rows, err := db.Query("SELECT template_id FROM template_pins WHERE user_id = ?", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make(map[int]bool)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids[id] = true
+	}
+	return ids, nil
+}
+
+// listPinnedTemplates returns the caller's pinned templates, restricted to
+// ones they still have access to (own or org member) — a pin to a template
+// whose org access was later revoked silently drops off the dashboard rather
+// than erroring.
+func listPinnedTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error) {
+	accessible, err := listTemplates(db, userID, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+	pinned, err := listPinnedTemplateIDs(db, userID)
+	if err != nil {
+		return nil, err
+	}
+	var out []EventTemplate
+	for _, t := range accessible {
+		if pinned[t.ID] {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 // DeliveryFailure holds a record of a failed ActivityPub inbox POST for retry.

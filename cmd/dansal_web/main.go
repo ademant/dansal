@@ -223,7 +223,7 @@ func main() {
 		r.HandleFunc("GET /add", legacyGancioRedirect("/events/suggest"))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /api/events-more", eventsMoreHandler(tmpls, i18n, client))
-		r.HandleFunc("GET /dashboard", dashboardHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /dashboard", dashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /search", searchPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
@@ -322,6 +322,8 @@ func main() {
 		r.HandleFunc("GET /admin/templates", adminTemplatesHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/templates/{id}/delete", adminRateLimit(adminTemplateDeleteHandler(db)))
 		r.HandleFunc("GET /admin/templates/{id}/data", adminTemplateDataHandler(db))
+		r.HandleFunc("POST /admin/templates/{id}/pin", adminRateLimit(adminTemplatePinHandler(db)))
+		r.HandleFunc("POST /admin/templates/{id}/unpin", adminRateLimit(adminTemplateUnpinHandler(db)))
 
 		r.HandleFunc("GET /admin/organization/{slug}", adminOrgDashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /admin/location/{id}", adminLocationDashboardHandler(cfg, tmpls, client, i18n))

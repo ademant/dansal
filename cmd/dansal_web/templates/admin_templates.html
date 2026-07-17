@@ -9,16 +9,23 @@
     <tr>
       <th>{{$.Strings.T "admin_template_name"}}</th>
       <th>{{$.Strings.T "admin_template_scope"}}</th>
+      <th class="tpl-pin-col" title="{{$.Strings.T "admin_template_pin_col_title"}}">{{$.Strings.T "admin_template_pin_col"}}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     {{range .Templates}}
+    {{$pinned := index $.Data.PinnedIDs .ID}}
     <tr id="tpl-row-{{.ID}}">
       <td>{{.Name}}</td>
       <td>
         {{$org := orgName $.Data.OrgMap .OrgID}}
         {{if $org}}{{$org}}{{else}}{{$.Strings.T "admin_template_personal"}}{{end}}
+      </td>
+      <td class="tpl-pin-col">
+        <form method="post" action="/admin/templates/{{.ID}}/{{if $pinned}}unpin{{else}}pin{{end}}" style="display:inline">
+          <button type="submit" class="tpl-pin-btn" title="{{$.Strings.T "admin_template_pin_col_title"}}" aria-label="{{$.Strings.T "admin_template_pin_col_title"}}">{{if $pinned}}★{{else}}☆{{end}}</button>
+        </form>
       </td>
       <td class="tpl-actions">
         <button type="button" class="btn-preview" onclick="togglePreview({{.ID}})">&#9656; {{$.Strings.T "admin_template_preview"}}</button>
@@ -28,7 +35,7 @@
       </td>
     </tr>
     <tr id="tpl-preview-{{.ID}}" class="tpl-preview-row" hidden>
-      <td colspan="3"><div class="tpl-preview-body" id="tpl-preview-body-{{.ID}}"></div></td>
+      <td colspan="4"><div class="tpl-preview-body" id="tpl-preview-body-{{.ID}}"></div></td>
     </tr>
     {{end}}
   </tbody>
@@ -118,6 +125,9 @@ function escHtml(s) {
 .admin-table th{text-align:left;padding:.4rem .6rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:2px solid #ddd}
 .admin-table td{padding:.4rem .6rem;border-bottom:1px solid #f0f0f0;vertical-align:middle}
 .tpl-actions{white-space:nowrap}
+.tpl-pin-col{text-align:center;width:2.5rem}
+.tpl-pin-btn{background:none;border:none;cursor:pointer;font-size:1.1rem;color:#c9a227;padding:.1rem .3rem;line-height:1}
+.tpl-pin-btn:hover{color:#a5811a}
 .btn-del-small{background:none;border-color:transparent;color:var(--fg-faint)}
 .btn-del-small:hover{color:#c0392b;border-color:#c0392b}
 .btn-preview{background:none;border:none;color:var(--fg-dim);cursor:pointer;font-size:.82rem;padding:.2rem .4rem;margin-right:.4rem}

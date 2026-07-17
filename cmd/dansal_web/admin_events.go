@@ -923,6 +923,59 @@ func prefillFromEvent(ev Event) *EventPrefill {
 	return pf
 }
 
+// templateAccessible mirrors listTemplates' access rule (owner, or org member
+// for an org-scoped template; admins see everything) for the single-template
+// lookup used by the ?tpl_id= prefill path, so a guessed/stale template ID
+// belonging to another user's personal or a foreign org's template can't leak
+// its contents.
+func templateAccessible(tpl EventTemplate, userID int, isAdmin bool, orgIDs []int) bool {
+	if isAdmin || tpl.UserID == userID {
+		return true
+	}
+	if tpl.OrgID == nil {
+		return false
+	}
+	for _, oid := range orgIDs {
+		if oid == *tpl.OrgID {
+			return true
+		}
+	}
+	return false
+}
+
+// prefillFromTemplate builds an EventPrefill from a saved template — the
+// counterpart to prefillFromEvent for the dashboard's "+ New event" preset
+// shortcut (/admin/events/new?tpl_id=...). Title/description are
+// deliberately left blank: templates don't carry them (see
+// templateEventData), unlike clone_from which copies an existing event's
+// title as a starting point.
+func prefillFromTemplate(td templateEventData) *EventPrefill {
+	pf := &EventPrefill{
+		URL:                td.URL,
+		BookingURL:         td.BookingURL,
+		HasBall:            td.HasBall,
+		HasWorkshop:        td.HasWorkshop,
+		HasFestival:        td.HasFestival,
+		WorkshopDifficulty: td.WorkshopDifficulty,
+		StartTime:          isoTimeStr(td.StartTime),
+		EndTime:            isoTimeStr(td.EndTime),
+		OrgID:              td.OrgID,
+		LocID:              td.LocID,
+		PricingType:        td.PricingType,
+		PricingAmount:      td.PricingAmount,
+		PricingCurrency:    td.PricingCurrency,
+		PricingLines:       td.PricingLines,
+		Tags:               td.Tags,
+		DanceIDs:           td.DanceIDs,
+		Food:               td.Food,
+		Drink:              td.Drink,
+		TicketsTotal:       td.TicketsTotal,
+		BookingEnabled:     td.BookingEnabled,
+		Timetable:          td.Timetable,
+	}
+	return pf
+}
+
 // isoDateStr extracts "YYYY-MM-DD" from "YYYY-MM-DDTHH:MM:SS".
 func isoDateStr(t string) string {
 	if len(t) >= 10 {
@@ -1376,6 +1429,15 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 					}
 					pf.CloneMode = true
 					prefill = pf
+				}
+			}
+		} else if tplIDStr := r.URL.Query().Get("tpl_id"); tplIDStr != "" {
+			if tplID, err := strconv.Atoi(tplIDStr); err == nil {
+				if tpl, err := getTemplate(db, tplID); err == nil && templateAccessible(tpl, su.ID, su.Role == "admin", getUserOrgs()) {
+					var td templateEventData
+					if json.Unmarshal([]byte(tpl.Data), &td) == nil {
+						prefill = prefillFromTemplate(td)
+					}
 				}
 			}
 		} else if r.URL.Query().Get("title") != "" {

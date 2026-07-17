@@ -602,6 +602,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(!allLoaded && monthEndMs > maxLoadedStartMs()){
       ensureLoadedUntil(monthEndMs).then(refilterKeepShown);
     }
+    // Look-ahead: pre-fetch the *next* month so → navigation is instant and
+    // its heat-map dots are ready before the user clicks.
+    var nextMonthEndMs = new Date(miniCalYear, miniCalMonth+2, 0, 23, 59, 59).getTime();
+    if(!allLoaded && nextMonthEndMs > maxLoadedStartMs()){
+      ensureLoadedUntil(nextMonthEndMs).then(refilterKeepShown);
+    }
 
     var evtCounts=getEventCounts();
     var monthDate=new Date(miniCalYear,miniCalMonth,1);
@@ -1294,6 +1300,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // Record initial week in history so back-button works from within the page.
   history.replaceState({wo:weekOffset,di:currentDayIndex},'',window.location.href);
   applyFilters();
+
+  // Background pre-fetch: immediately load events for the next 3 months so the
+  // mini-calendar heat map is fully populated and week navigation within that
+  // window is lag-free without any user interaction required.
+  if(!allLoaded){
+    var _preloadEnd = new Date();
+    _preloadEnd.setMonth(_preloadEnd.getMonth() + 3);
+    ensureLoadedUntil(_preloadEnd.getTime()).then(refilterKeepShown);
+  }
 
   // Restore week and table mode when the user navigates back/forward.
   window.addEventListener('popstate',function(ev){

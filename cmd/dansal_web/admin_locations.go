@@ -445,12 +445,18 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			title := i18n.T(r, "admin_edit")
-			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+			data := AdminLocationEditData{
 				Location:  loc,
 				ErrorKey:  "admin_save_error",
 				ReturnURL: returnURL,
 				From:      from,
-			}))
+			}
+			var conflictErr *LocationConflictError
+			if errors.As(err, &conflictErr) {
+				data.ErrorKey = ""
+				data.ConflictID = conflictErr.ExistingID
+			}
+			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
 		target := returnURL

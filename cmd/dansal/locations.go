@@ -689,6 +689,15 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.OsmID != nil && req.OsmType != "" {
+		var existingID int
+		if db.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=? AND id!=?", req.OsmType, *req.OsmID, id).Scan(&existingID) == nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
+			return
+		}
+	}
+
 	gh := ""
 	if req.Latitude != nil && req.Longitude != nil {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
@@ -827,6 +836,15 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Aliases != nil {
 		loc.Aliases = *req.Aliases
+	}
+
+	if loc.OsmID != nil && loc.OsmType != "" {
+		var existingID int
+		if db.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=? AND id!=?", loc.OsmType, *loc.OsmID, loc.ID).Scan(&existingID) == nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
+			return
+		}
 	}
 
 	gh := loc.Geohash

@@ -66,11 +66,11 @@
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
-        <input id="start_time" type="time" name="start_time" value="{{if and .Prefill (not .Event.StartTime)}}{{.Prefill.StartTime}}{{else}}{{isoTime .Event.StartTime}}{{end}}">
+        <input id="start_time" type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="start_time" value="{{if and .Prefill (not .Event.StartTime)}}{{.Prefill.StartTime}}{{else}}{{isoTime .Event.StartTime}}{{end}}">
       </div>
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
-        <input id="end_time" type="time" name="end_time" value="{{if and .Prefill (not .Event.EndTime)}}{{.Prefill.EndTime}}{{else}}{{isoTime .Event.EndTime}}{{end}}">
+        <input id="end_time" type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="end_time" value="{{if and .Prefill (not .Event.EndTime)}}{{.Prefill.EndTime}}{{else}}{{isoTime .Event.EndTime}}{{end}}">
       </div>
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
@@ -416,8 +416,8 @@
       <tbody id="tt-body">
         {{range .Event.Timetable}}{{$entry := .}}
         <tr class="tt-row">
-          <td><input type="time" name="tt_start" value="{{.StartTime}}"></td>
-          <td><input type="time" name="tt_end" value="{{.EndTime}}"></td>
+          <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" value="{{.StartTime}}"></td>
+          <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></td>
           <td><input type="text" name="tt_title" value="{{.Title}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_room" value="{{.Room}}"></td>
           <td><select name="tt_loc_id"><option value="">—</option>{{range $.Data.Locations}}<option value="{{.ID}}"{{if and $entry.LocationID (eq .ID (derefInt $entry.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}</select></td>
@@ -430,8 +430,8 @@
         </tr>
         {{end}}
         <tr class="tt-row">
-          <td><input type="time" name="tt_start"></td>
-          <td><input type="time" name="tt_end"></td>
+          <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start"></td>
+          <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></td>
           <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
           <td><select name="tt_loc_id" id="tt-loc-template"></select></td>
@@ -1409,8 +1409,9 @@ function addTTRow(){
   var tbody=document.getElementById('tt-body');
   var row1=document.createElement('tr');
   row1.className='tt-row';
-  row1.innerHTML='<td><input type="time" name="tt_start"></td>'+
-    '<td><input type="time" name="tt_end"></td>'+
+  var _tl='{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}';
+  row1.innerHTML='<td><input type="time" lang="'+_tl+'" name="tt_start"></td>'+
+    '<td><input type="time" lang="'+_tl+'" name="tt_end"></td>'+
     '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
     '<td><input type="text" name="tt_room"></td>'+
     '<td><select name="tt_loc_id">'+_buildLocOpts(_ttDefaultLocID)+'</select></td>'+

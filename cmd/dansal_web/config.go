@@ -48,6 +48,7 @@ type Config struct {
 	LogoHeightMain   int    `yaml:"logo_height_main"`   // px in nav on main page
 	LogoHeightSub    int    `yaml:"logo_height_sub"`    // px in nav on sub pages
 	DarkMode         string `yaml:"dark_mode"`          // "auto" (default), "light", "dark"
+	TimeFormat       string `yaml:"time_format"`        // "24h" (default), "12h"
 
 	pagesContent *PagesContent
 	configPath   string // path from which config was loaded; used for reload
@@ -220,6 +221,13 @@ func applyWebEnvOverrides(cfg *Config) {
 	} else if v := os.Getenv("DANSAL_URL"); v != "" {
 		cfg.DansalURL = v
 	}
+}
+
+func (c *Config) timeFormat() string {
+	if c.TimeFormat == "12h" {
+		return "12h"
+	}
+	return "24h"
 }
 
 // reloadConfig re-reads the YAML file at path and applies DB overrides.

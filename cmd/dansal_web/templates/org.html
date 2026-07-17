@@ -106,7 +106,7 @@
 <li class="event-item">
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
-    {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+    {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
     {{if .Location}}&mdash; {{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}{{if .Location.Town}}, {{.Location.Town}}{{end}}{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
@@ -127,7 +127,7 @@
 <li class="event-item past-item">
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
-    {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+    {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
     {{if .Location}}&mdash; {{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}{{if .Location.Town}}, {{.Location.Town}}{{end}}{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
   </div>

@@ -41,6 +41,7 @@ type TemplateData struct {
 	BannerHeight           int
 	LogoHeight             int
 	DarkMode               string // "auto", "light", or "dark"
+	TimeFormat             string // "24h" or "12h"
 	AppVersion             string
 	AppBuildTime           string
 	SuggestAvailable       bool
@@ -127,6 +128,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		BannerHeight:           bannerHeight,
 		LogoHeight:             logoHeight,
 		DarkMode:               cfg.DarkMode,
+		TimeFormat:             cfg.timeFormat(),
 		AppVersion:             Version,
 		AppBuildTime:           BuildTime,
 		SuggestAvailable:       suggestAvailable(cfg),
@@ -513,18 +515,36 @@ func fetchAndRenderEventRows(r *http.Request, tmpl *template.Template, i18n *I18
 	return events, rowsHTML.String(), nil
 }
 
+// fmtClock formats an hour/minute pair in 24h ("13:00") or 12h ("1:00 PM") notation.
+func fmtClock(timeFormat string, h, m int) string {
+	if timeFormat == "12h" {
+		ampm := "AM"
+		if h >= 12 {
+			ampm = "PM"
+		}
+		if h > 12 {
+			h -= 12
+		} else if h == 0 {
+			h = 12
+		}
+		return fmt.Sprintf("%d:%02d %s", h, m, ampm)
+	}
+	return fmt.Sprintf("%02d:%02d", h, m)
+}
+
 var tmplFuncMap = template.FuncMap{
-	"formatTime": func(lang, s string) string {
+	"formatTime": func(lang, timeFormat, s string) string {
 		t, ok := parseTime(s)
 		if !ok {
 			return s
 		}
 		wd := locWeekday(lang, t.Weekday())
 		mo := locMonth(lang, t.Month())
+		clock := fmtClock(timeFormat, t.Hour(), t.Minute())
 		if lang == "de" {
-			return fmt.Sprintf("%s %02d. %s %d, %02d:%02d", wd, t.Day(), mo, t.Year(), t.Hour(), t.Minute())
+			return fmt.Sprintf("%s %02d. %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
 		}
-		return fmt.Sprintf("%s %02d %s %d, %02d:%02d", wd, t.Day(), mo, t.Year(), t.Hour(), t.Minute())
+		return fmt.Sprintf("%s %02d %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
 	},
 	"formatDate": func(lang, s string) string {
 		t, ok := parseTime(s)
@@ -582,9 +602,9 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ""
 	},
-	"formatHourMin": func(s string) string {
+	"formatHourMin": func(timeFormat, s string) string {
 		if t, ok := parseTime(s); ok {
-			return fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
+			return fmtClock(timeFormat, t.Hour(), t.Minute())
 		}
 		return ""
 	},

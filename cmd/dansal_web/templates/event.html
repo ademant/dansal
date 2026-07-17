@@ -104,10 +104,10 @@
   <div class="evt-header-meta">
     {{if .StartTime}}
     <span class="evt-time">
-      {{formatTime $.LangCode .StartTime}}
+      {{formatTime $.LangCode $.TimeFormat .StartTime}}
       {{if .EndTime}}
-        {{if sameDate .StartTime .EndTime}} – {{formatHourMin .EndTime}}
-        {{else}} – {{formatTime $.LangCode .EndTime}}
+        {{if sameDate .StartTime .EndTime}} – {{formatHourMin $.TimeFormat .EndTime}}
+        {{else}} – {{formatTime $.LangCode $.TimeFormat .EndTime}}
         {{end}}
       {{end}}
     </span>
@@ -321,7 +321,7 @@
     {{if .ChangedAt}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_last_update"}}</div>
-      <div class="sidebar-meta-text">{{formatTime $.LangCode .ChangedAt}}</div>
+      <div class="sidebar-meta-text">{{formatTime $.LangCode $.TimeFormat .ChangedAt}}</div>
       {{if $.User}}
         {{if eq .ChangedBy "fetch"}}
           {{if .FetchSourceID}}

@@ -282,6 +282,12 @@
       <span id="geo-status" style="font-size:.82rem;color:#888;margin-left:.5rem"></span>
       <div id="geo-map" style="display:none;height:200px;margin-top:.75rem;border-radius:4px;border:1px solid #ddd"></div>
     </div>
+
+    <div id="room-sel-wrap" style="display:none">
+      <label for="room_id" style="font-weight:600;font-size:.9rem;color:#444">Room</label>
+      <select id="room_id" name="room_id" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
+      </select>
+    </div>
   </section>
 
   <!-- Venue attribute overrides -->
@@ -1089,6 +1095,38 @@ function cancelLocCreateNew(){
   document.getElementById('loc_choice').value=document.getElementById('loc_id').value?'existing':'';
   syncLocUI();
 }
+// Room selector: map from location ID → [{id, name}, ...]
+var locRooms={
+{{range .Locations}}{{if .Rooms}}{{.ID}}:[{{range .Rooms}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}],{{end}}{{end}}
+};
+function updateRoomSel(locID){
+  var wrap=document.getElementById('room-sel-wrap');
+  var sel=document.getElementById('room_id');
+  var rooms=locRooms[locID]||[];
+  if(!locID||rooms.length===0){wrap.style.display='none';sel.innerHTML='';return;}
+  var curVal=sel.value;
+  sel.innerHTML='';
+  rooms.forEach(function(r){
+    var o=document.createElement('option');
+    o.value=String(r.id); o.textContent=r.name;
+    if(String(r.id)===curVal) o.selected=true;
+    sel.appendChild(o);
+  });
+  if(!curVal||!sel.value) sel.selectedIndex=0;
+  wrap.style.display='';
+}
+// Wire room selector to loc_id change.
+(function(){
+  var locSel=document.getElementById('loc_id');
+  if(locSel){
+    locSel.addEventListener('change',function(){updateRoomSel(this.value);});
+    var initialRoom={{if .Event.RoomID}}{{derefInt .Event.RoomID}}{{else}}0{{end}};
+    var roomSel=document.getElementById('room_id');
+    if(initialRoom) roomSel.dataset.initial=String(initialRoom);
+    updateRoomSel(locSel.value);
+    if(initialRoom) roomSel.value=String(initialRoom);
+  }
+})();
 // Org → Location: move selected-org's locations to top; hide separator when filtering.
 function filterLocsByOrg(){
   var orgSel=document.getElementById('org_id');

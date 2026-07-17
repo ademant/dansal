@@ -213,6 +213,33 @@
 
 {{if .Location.ID}}
 <fieldset class="members-fieldset">
+  <legend>Rooms</legend>
+  {{if .Location.Rooms}}
+  <table class="members-table">
+    <tbody>
+    {{range .Location.Rooms}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>
+        <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
+              onsubmit="return confirm('Delete room «{{.Name}}»?')">
+          <button type="submit" class="btn-sm btn-del">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No rooms defined.</p>
+  {{end}}
+  <form method="post" action="/admin/locations/{{.Location.ID}}/rooms/new" class="room-add-form">
+    <input type="text" name="name" placeholder="New room name…" required class="room-add-input">
+    <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
+  </form>
+</fieldset>
+
+<fieldset class="members-fieldset">
   <legend>Organisations</legend>
   {{if .AssignedOrgs}}
   <table class="members-table">
@@ -329,6 +356,8 @@
 .org-ac-list{position:absolute;z-index:200;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:4px;max-height:220px;overflow-y:auto;padding:0;margin:.2rem 0 0;list-style:none;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 .org-ac-item{padding:.35rem .6rem;font-size:.88rem;cursor:pointer}
 .org-ac-item:hover,.org-ac-item.is-active{background:#e8f0fe;color:#1a6eb5}
+.room-add-form{display:flex;gap:.5rem;margin-top:.5rem}
+.room-add-input{flex:1;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem}
 .members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
 .members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}

@@ -72,6 +72,8 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
+	RoomID               *int             `json:"room_id,omitempty"`
+	RoomName             string           `json:"room_name,omitempty"`
 	TagsJSON             string           `json:"-"`
 	PricingJSON          string           `json:"-"`
 }
@@ -113,6 +115,7 @@ type EventWriteRequest struct {
 	Attributes         map[string]bool      `json:"attributes,omitempty"`
 	ContactName        string               `json:"contact_name,omitempty"`
 	ContactEmail       string               `json:"contact_email,omitempty"`
+	RoomID             *int                 `json:"room_id,omitempty"`
 }
 
 type EventUpdateRequest struct {
@@ -164,6 +167,7 @@ type EventMergePatchRequest struct {
 	Attributes         *map[string]bool `json:"attributes,omitempty"`
 	ContactName        *string          `json:"contact_name,omitempty"`
 	ContactEmail       *string          `json:"contact_email,omitempty"`
+	RoomID             *int             `json:"room_id,omitempty"`
 }
 
 type EventCreateRequest struct {
@@ -256,7 +260,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, e.room_id, COALESCE(r.name,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id LEFT JOIN rooms r ON e.room_id = r.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -313,8 +317,9 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	var danceNamesCSV string
 	var locLat, locLng sql.NullFloat64
-	var createdByID, seriesID, duplicateOfID sql.NullInt64
+	var createdByID, seriesID, duplicateOfID, roomID sql.NullInt64
 	var needsDuplicateReviewInt int
+	var roomName string
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
@@ -327,13 +332,18 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
-		&needsDuplicateReviewInt, &duplicateOfID); err != nil {
+		&needsDuplicateReviewInt, &duplicateOfID, &roomID, &roomName); err != nil {
 		return Event{}, err
 	}
 	event.NeedsDuplicateReview = needsDuplicateReviewInt == 1
 	if duplicateOfID.Valid {
 		v := int(duplicateOfID.Int64)
 		event.DuplicateOfID = &v
+	}
+	if roomID.Valid {
+		v := int(roomID.Int64)
+		event.RoomID = &v
+		event.RoomName = roomName
 	}
 	if seriesID.Valid {
 		v := int(seriesID.Int64)
@@ -1160,6 +1170,9 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 		if err := syncEventTags(q, id, req.Tags); err != nil {
 			return nil, counts, err
 		}
+		if req.RoomID != nil {
+			q.Exec("UPDATE events SET room_id=? WHERE id=?", *req.RoomID, id)
+		}
 
 		event, err := fetchEventByID(q, id)
 		if err != nil {
@@ -1942,17 +1955,21 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if callerID > 0 {
 		callerIDArg = callerID
 	}
+	var roomIDArg any
+	if req.RoomID != nil {
+		roomIDArg = *req.RoomID
+	}
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
-		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
+		 contact_name=?, contact_email=?, room_id=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationIDArg,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
-		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
+		req.ContactName, req.ContactEmail, roomIDArg, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -2248,17 +2265,21 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var patchRoomIDArg any
+	if req.RoomID != nil {
+		patchRoomIDArg = *req.RoomID
+	}
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
-		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
+		 contact_name=?, contact_email=?, room_id=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
 		title, description, startUnix, endUnix, locationIDArg,
 		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished,
 		workshopDifficulty, urlVal(url), urlVal(bookingURL), orgIDArg, pricingArg,
 		availability, ticketsTotal, bookingEnabled, food, drink, floorCondition, attrsRaw,
-		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
+		contactName, contactEmail, patchRoomIDArg, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return

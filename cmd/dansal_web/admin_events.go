@@ -1609,6 +1609,12 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		var createRoomID *int
+		if v := r.FormValue("room_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				createRoomID = &n
+			}
+		}
 		req := EventCreateReq{
 			Title:          strings.TrimSpace(r.FormValue("title")),
 			Description:    strings.TrimSpace(r.FormValue("description")),
@@ -1632,6 +1638,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
+			RoomID:         createRoomID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -2209,6 +2216,12 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 
+		var saveRoomID *int
+		if v := r.FormValue("room_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				saveRoomID = &n
+			}
+		}
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
 			Title:          strings.TrimSpace(r.FormValue("title")),
@@ -2238,6 +2251,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
+			RoomID:         saveRoomID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).

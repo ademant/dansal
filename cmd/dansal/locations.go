@@ -10,6 +10,30 @@ import (
 	"strings"
 )
 
+type Room struct {
+	ID         int    `json:"id"`
+	LocationID int    `json:"location_id,omitempty"`
+	Name       string `json:"name"`
+}
+
+// fetchLocationRooms returns all rooms for a location ordered by id (insertion order).
+func fetchLocationRooms(locationID int) []Room {
+	rows, err := db.Query("SELECT id, name FROM rooms WHERE location_id=? ORDER BY id", locationID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var rooms []Room
+	for rows.Next() {
+		var rm Room
+		if rows.Scan(&rm.ID, &rm.Name) == nil {
+			rm.LocationID = locationID
+			rooms = append(rooms, rm)
+		}
+	}
+	return rooms
+}
+
 type Location struct {
 	ID               int             `json:"id"`
 	Location         string          `json:"location"`
@@ -41,6 +65,7 @@ type Location struct {
 	Aliases          []string        `json:"aliases,omitempty"`
 	FutureEventCount int             `json:"future_event_count,omitempty"`
 	PastEventCount   int             `json:"past_event_count,omitempty"`
+	Rooms            []Room          `json:"rooms,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -392,6 +417,26 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		locations = append(locations, location)
 	}
 
+	// Attach rooms in a single batch query to avoid N+1.
+	if len(locations) > 0 {
+		roomRows, err := db.Query("SELECT id, location_id, name FROM rooms ORDER BY location_id, id")
+		if err == nil {
+			byLoc := make(map[int][]Room)
+			for roomRows.Next() {
+				var rm Room
+				if roomRows.Scan(&rm.ID, &rm.LocationID, &rm.Name) == nil {
+					byLoc[rm.LocationID] = append(byLoc[rm.LocationID], rm)
+				}
+			}
+			roomRows.Close()
+			for i := range locations {
+				if rms, ok := byLoc[locations[i].ID]; ok {
+					locations[i].Rooms = rms
+				}
+			}
+		}
+	}
+
 	if strings.Contains(accept, "application/geo+json") {
 		writeLocationGeoJSON(w, locations)
 	} else if strings.Contains(accept, "application/atom+xml") {
@@ -554,6 +599,8 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+
+	location.Rooms = fetchLocationRooms(location.ID)
 
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/geo+json") {
@@ -1178,6 +1225,80 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	result := keep
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// GET /api/v1/locations/{id}/rooms — list rooms for a location.
+func getLocationRooms(w http.ResponseWriter, r *http.Request) {
+	locID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var exists int
+	if db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", locID).Scan(&exists); exists == 0 {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	rooms := fetchLocationRooms(locID)
+	if rooms == nil {
+		rooms = []Room{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rooms)
+}
+
+// POST /api/v1/locations/{id}/rooms — create a room for a location.
+// Requires admin or membership in one of the location's organizations.
+func createLocationRoom(w http.ResponseWriter, r *http.Request) {
+	callerID, requesterRole := callerFromRequest(r)
+	id := r.PathValue("id")
+	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		writeError(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	locID, _ := strconv.Atoi(id)
+	result, err := db.Exec("INSERT INTO rooms (location_id, name) VALUES (?, ?)", locID, strings.TrimSpace(req.Name))
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	roomID, _ := result.LastInsertId()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(Room{ID: int(roomID), LocationID: locID, Name: strings.TrimSpace(req.Name)})
+}
+
+// DELETE /api/v1/locations/{id}/rooms/{room_id} — delete a room.
+// Requires admin or membership in one of the location's organizations.
+// Cascades: events with this room_id will have room_id set to NULL (ON DELETE SET NULL).
+func deleteLocationRoom(w http.ResponseWriter, r *http.Request) {
+	callerID, requesterRole := callerFromRequest(r)
+	id := r.PathValue("id")
+	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
+		return
+	}
+	roomID, err := strconv.Atoi(r.PathValue("room_id"))
+	if err != nil {
+		writeError(w, "invalid room_id", http.StatusBadRequest)
+		return
+	}
+	locID, _ := strconv.Atoi(id)
+	result, err := db.Exec("DELETE FROM rooms WHERE id=? AND location_id=?", roomID, locID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "Room not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /api/v1/locations/event-counts — returns a map of location_id → event count.

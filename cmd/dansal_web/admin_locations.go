@@ -678,3 +678,53 @@ func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.Handl
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
 }
+
+func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(r.FormValue("name"))
+		if name == "" {
+			http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
+			return
+		}
+		token := getSessionToken(r)
+		_, _ = client.CreateLocationRoom(r.Context(), id, name, token)
+		client.invalidateLocations()
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		locID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		roomID, err := strconv.Atoi(r.PathValue("room_id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		_ = client.DeleteLocationRoom(r.Context(), locID, roomID, token)
+		client.invalidateLocations()
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
+	}
+}

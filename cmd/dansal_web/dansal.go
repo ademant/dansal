@@ -235,6 +235,8 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
+	RoomID               *int             `json:"room_id,omitempty"`
+	RoomName             string           `json:"room_name,omitempty"`
 }
 
 type Dance struct {
@@ -271,6 +273,12 @@ type Instructor struct {
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+}
+
+type Room struct {
+	ID         int    `json:"id"`
+	LocationID int    `json:"location_id,omitempty"`
+	Name       string `json:"name"`
 }
 
 type Organization struct {
@@ -358,6 +366,8 @@ type Location struct {
 	Aliases         []string        `json:"aliases,omitempty"`
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
 	UpdatedBy       string          `json:"updated_by,omitempty"`
+
+	Rooms []Room `json:"rooms,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
@@ -1317,6 +1327,43 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	return nil
 }
 
+func (c *DansalClient) GetLocationRooms(ctx context.Context, locationID int) ([]Room, error) {
+	var rooms []Room
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), &rooms); err != nil {
+		return nil, err
+	}
+	return rooms, nil
+}
+
+func (c *DansalClient) CreateLocationRoom(ctx context.Context, locationID int, name string, token string) (Room, error) {
+	body, _ := json.Marshal(map[string]string{"name": name})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), token, body)
+	if err != nil {
+		return Room{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return Room{}, apiErr(resp)
+	}
+	var room Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		return Room{}, err
+	}
+	return room, nil
+}
+
+func (c *DansalClient) DeleteLocationRoom(ctx context.Context, locationID, roomID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/rooms/%d", locationID, roomID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token string) error {
 	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, nil)
 	if err != nil {
@@ -1600,6 +1647,7 @@ type EventCreateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
+	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventUpdateReq struct {
@@ -1632,6 +1680,7 @@ type EventUpdateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
+	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventLocReq struct {

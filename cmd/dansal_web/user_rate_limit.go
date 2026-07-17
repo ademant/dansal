@@ -157,10 +157,12 @@ var routeEndpoint = map[string]string{
 	"POST /admin/api/instructor/quick-create":     "admin_instructors_create",
 	"POST /admin/musicians/{id}/edit":             "admin_musicians_edit",
 	"POST /admin/musicians/{id}/delete":           "admin_musicians_delete",
-	"POST /admin/locations/new":                   "admin_locations_new",
-	"POST /admin/locations/bulk-assign":           "admin_locations_bulk",
-	"POST /admin/locations/{id}/edit":             "admin_locations_edit",
-	"POST /admin/locations/{id}/delete":           "admin_locations_delete",
+	"POST /admin/locations/new":                        "admin_locations_new",
+	"POST /admin/locations/bulk-assign":                "admin_locations_bulk",
+	"POST /admin/locations/{id}/edit":                  "admin_locations_edit",
+	"POST /admin/locations/{id}/delete":                "admin_locations_delete",
+	"POST /admin/locations/{id}/rooms/new":             "admin_locations_rooms_new",
+	"POST /admin/locations/{id}/rooms/{room_id}/delete": "admin_locations_rooms_delete",
 }
 
 var userRateLimiter *UserRateLimiter

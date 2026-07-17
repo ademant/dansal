@@ -1441,6 +1441,32 @@ func migrateDB() {
 			PRIMARY KEY (user_id, code)
 		)`)
 	}
+
+	// v11: rooms table (named sub-locations) and events.room_id FK.
+	if !applied(11) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS rooms (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+			name TEXT NOT NULL
+		)`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_rooms_location_id ON rooms(location_id)`)
+		db.Exec(`ALTER TABLE events ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL`)
+		mark(11)
+	}
+	// Safety net: ensure rooms table and events.room_id exist even if v11 was pre-marked.
+	{
+		db.Exec(`CREATE TABLE IF NOT EXISTS rooms (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+			name TEXT NOT NULL
+		)`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_rooms_location_id ON rooms(location_id)`)
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='room_id'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE events ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2434,9 +2460,16 @@ func createTables() error {
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
 		-- requires organization_id; sub-resource PUT .../location requires location_id).
+		room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
+	CREATE TABLE IF NOT EXISTS rooms (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+		name TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_rooms_location_id ON rooms(location_id);
 	CREATE TABLE IF NOT EXISTS event_series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		slug TEXT UNIQUE NOT NULL,
@@ -2860,6 +2893,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3142,6 +3176,9 @@ func main() {
 	smux.Handle("PUT /api/v1/locations/{id}", auth(accountMutationLimit(putLocation)))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(accountMutationLimit(patchLocation)))
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
+	smux.Handle("GET /api/v1/locations/{id}/rooms", optAuth(http.HandlerFunc(getLocationRooms)))
+	smux.Handle("POST /api/v1/locations/{id}/rooms", auth(createLocationRoom))
+	smux.Handle("DELETE /api/v1/locations/{id}/rooms/{room_id}", auth(deleteLocationRoom))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
 	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])

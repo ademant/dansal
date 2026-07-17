@@ -6,7 +6,14 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
-{{if .ConflictID}}<p class="form-error" role="alert">{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>{{end}}
+{{if .ConflictID}}<div class="form-error" role="alert">
+  <p>{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
+  {{if .Location.ID}}<form method="post" action="/admin/locations/merge" style="margin-top:.5rem" onsubmit="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">
+    <input type="hidden" name="loc_ids" value="{{.Location.ID}}">
+    <input type="hidden" name="loc_ids" value="{{.ConflictID}}">
+    <button type="submit" class="btn-merge">{{$.Strings.T "loc_conflict_merge"}}</button>
+  </form>{{end}}
+</div>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 
 <div class="loc-action-bar">

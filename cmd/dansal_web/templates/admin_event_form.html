@@ -1097,7 +1097,7 @@ function cancelLocCreateNew(){
 }
 // Room selector: map from location ID → [{id, name}, ...]
 var locRooms={
-{{range .Locations}}{{if .Rooms}}{{.ID}}:[{{range .Rooms}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}],{{end}}{{end}}
+{{range $.Data.Locations}}{{if .Rooms}}{{.ID}}:[{{range .Rooms}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}],{{end}}{{end}}
 };
 function updateRoomSel(locID){
   var wrap=document.getElementById('room-sel-wrap');
@@ -1120,7 +1120,7 @@ function updateRoomSel(locID){
   var locSel=document.getElementById('loc_id');
   if(locSel){
     locSel.addEventListener('change',function(){updateRoomSel(this.value);});
-    var initialRoom={{if .Event.RoomID}}{{derefInt .Event.RoomID}}{{else}}0{{end}};
+    var initialRoom={{if $.Data.Event.RoomID}}{{derefInt $.Data.Event.RoomID}}{{else}}0{{end}};
     var roomSel=document.getElementById('room_id');
     if(initialRoom) roomSel.dataset.initial=String(initialRoom);
     updateRoomSel(locSel.value);

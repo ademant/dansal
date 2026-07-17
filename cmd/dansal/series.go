@@ -14,19 +14,96 @@ import (
 
 // EventSeries represents a recurring event series.
 type EventSeries struct {
-	ID                int           `json:"id"`
-	Slug              string        `json:"slug"`
-	Title             string        `json:"title"`
-	Description       string        `json:"description"`
-	OrganizationID    *int          `json:"organization_id,omitempty"`
-	DefaultLocationID *int          `json:"default_location_id,omitempty"`
-	DefaultStartTime  string        `json:"default_start_time"`
-	DefaultEndTime    string        `json:"default_end_time"`
-	InviteToken       string        `json:"invite_token,omitempty"`
-	CreatedAt         string        `json:"created_at"`
-	UpdatedAt         int64         `json:"updated_at"`
-	EventCount        int           `json:"event_count,omitempty"`
-	Events            []SeriesEvent `json:"events,omitempty"`
+	ID                int             `json:"id"`
+	Slug              string          `json:"slug"`
+	Title             string          `json:"title"`
+	Description       string          `json:"description"`
+	OrganizationID    *int            `json:"organization_id,omitempty"`
+	DefaultLocationID *int            `json:"default_location_id,omitempty"`
+	DefaultStartTime  string          `json:"default_start_time"`
+	DefaultEndTime    string          `json:"default_end_time"`
+	InviteToken       string          `json:"invite_token,omitempty"`
+	CreatedAt         string          `json:"created_at"`
+	UpdatedAt         int64           `json:"updated_at"`
+	EventCount        int             `json:"event_count,omitempty"`
+	Events            []SeriesEvent   `json:"events,omitempty"`
+	TemplateData      json.RawMessage `json:"template_data,omitempty"`
+}
+
+// seriesTemplateData is the rich per-series default set applied to every
+// occurrence created via addSeriesDate/createSeries, on top of the series'
+// own title/location/times/org (which have their own dedicated fields and
+// semantics — recurrence dates, default venue — that don't belong here).
+// Mirrors the shape of dansal_web's templateEventData (cmd/dansal_web/admin_templates.go)
+// minus the fields that are series-specific already (start/end time, org, location).
+type seriesTemplateData struct {
+	HasBall            bool                    `json:"has_ball"`
+	HasWorkshop        bool                    `json:"has_workshop"`
+	HasFestival        bool                    `json:"has_festival"`
+	WorkshopDifficulty string                  `json:"workshop_difficulty"`
+	URL                string                  `json:"url"`
+	BookingURL         string                  `json:"booking_url"`
+	Pricing            *Pricing                `json:"pricing,omitempty"`
+	Tags               []string                `json:"tags"`
+	DanceIDs           []int                   `json:"dance_ids"`
+	Food               string                  `json:"food"`
+	Drink              string                  `json:"drink"`
+	FloorCondition     string                  `json:"floor_condition"`
+	Attributes         map[string]bool         `json:"attributes,omitempty"`
+	ContactName        string                  `json:"contact_name,omitempty"`
+	ContactEmail       string                  `json:"contact_email,omitempty"`
+	TicketsTotal       int                     `json:"tickets_total"`
+	BookingEnabled     bool                    `json:"booking_enabled"`
+	Timetable          []TimetableEntryRequest `json:"timetable"`
+}
+
+// applySeriesTemplate writes seriesTemplateData's fields onto a freshly
+// inserted event. Only called right after the bare INSERT in
+// createSeries/addSeriesDate, so there is nothing to preserve — every field
+// is safe to set unconditionally (an empty td leaves the new row at its
+// just-inserted defaults, which matches a series with no template_data).
+func applySeriesTemplate(q querier, eventID int, td seriesTemplateData) error {
+	var pricingArg any
+	if td.Pricing != nil {
+		if b, err := json.Marshal(td.Pricing); err == nil {
+			pricingArg = string(b)
+		}
+	}
+	if _, err := q.Exec(
+		`UPDATE events SET has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?,
+		 url=?, booking_url=?, pricing=?, tickets_total=?, booking_enabled=?,
+		 food=?, drink=?, floor_condition=?, attributes=?, contact_name=?, contact_email=? WHERE id=?`,
+		td.HasBall, td.HasWorkshop, td.HasFestival, td.WorkshopDifficulty,
+		urlVal(td.URL), urlVal(td.BookingURL), pricingArg, td.TicketsTotal, td.BookingEnabled,
+		td.Food, td.Drink, td.FloorCondition, attrsJSON(td.Attributes), td.ContactName, td.ContactEmail, eventID,
+	); err != nil {
+		return err
+	}
+	if err := syncEventTags(q, eventID, td.Tags); err != nil {
+		return err
+	}
+	if len(td.DanceIDs) > 0 {
+		if err := batchInsertPairs(q, "event_dances", "event_id", "dance_id", eventID, td.DanceIDs); err != nil {
+			return err
+		}
+	}
+	for _, entry := range td.Timetable {
+		if _, err := insertEntry(q, eventID, entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// parseSeriesTemplateData decodes an event_series.template_data JSON blob,
+// tolerating the empty/unset "{}" default.
+func parseSeriesTemplateData(raw json.RawMessage) seriesTemplateData {
+	var td seriesTemplateData
+	if len(raw) == 0 {
+		return td
+	}
+	_ = json.Unmarshal(raw, &td)
+	return td
 }
 
 // SeriesEvent is a lightweight event view for the management table.
@@ -84,11 +161,12 @@ func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
 	var s EventSeries
 	var orgID, locID sql.NullInt64
 	var inviteToken sql.NullString
+	var templateData string
 	if err := row.Scan(
 		&s.ID, &s.Slug, &s.Title, &s.Description,
 		&orgID, &locID,
 		&s.DefaultStartTime, &s.DefaultEndTime,
-		&inviteToken, &s.CreatedAt, &s.UpdatedAt,
+		&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
 	); err != nil {
 		return s, err
 	}
@@ -103,13 +181,14 @@ func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
 	if inviteToken.Valid {
 		s.InviteToken = inviteToken.String
 	}
+	s.TemplateData = json.RawMessage(templateData)
 	return s, nil
 }
 
 const seriesSelectCols = `id, slug, title, COALESCE(description,''),
 	organization_id, default_location_id,
 	COALESCE(default_start_time,''), COALESCE(default_end_time,''),
-	invite_token, created_at, COALESCE(updated_at,0)`
+	invite_token, created_at, COALESCE(updated_at,0), COALESCE(template_data,'{}')`
 
 // loadSeriesEvents loads all events belonging to a series, ordered by start_time.
 func loadSeriesEvents(seriesID int) ([]SeriesEvent, error) {
@@ -234,11 +313,12 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 		var s EventSeries
 		var orgID, locID sql.NullInt64
 		var inviteToken sql.NullString
+		var templateData string
 		if err := rows.Scan(
 			&s.ID, &s.Slug, &s.Title, &s.Description,
 			&orgID, &locID,
 			&s.DefaultStartTime, &s.DefaultEndTime,
-			&inviteToken, &s.CreatedAt, &s.UpdatedAt,
+			&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
 			&s.EventCount,
 		); err != nil {
 			writeInternalError(w, err)
@@ -255,6 +335,7 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 		if inviteToken.Valid {
 			s.InviteToken = inviteToken.String
 		}
+		s.TemplateData = json.RawMessage(templateData)
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -270,16 +351,17 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title             string `json:"title"`
-		Description       string `json:"description"`
-		OrganizationID    *int   `json:"organization_id"`
-		DefaultLocationID *int   `json:"default_location_id"`
-		DefaultStartTime  string `json:"default_start_time"`
-		DefaultEndTime    string `json:"default_end_time"`
-		StartDate         string `json:"start_date"`
-		Recurrence        string `json:"recurrence"`
-		Occurrences       int    `json:"occurrences"`
-		EndDate           string `json:"end_date"`
+		Title             string          `json:"title"`
+		Description       string          `json:"description"`
+		OrganizationID    *int            `json:"organization_id"`
+		DefaultLocationID *int            `json:"default_location_id"`
+		DefaultStartTime  string          `json:"default_start_time"`
+		DefaultEndTime    string          `json:"default_end_time"`
+		StartDate         string          `json:"start_date"`
+		Recurrence        string          `json:"recurrence"`
+		Occurrences       int             `json:"occurrences"`
+		EndDate           string          `json:"end_date"`
+		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -288,6 +370,15 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.Title) == "" {
 		writeError(w, "title is required", http.StatusBadRequest)
 		return
+	}
+	templateDataStr := "{}"
+	if len(req.TemplateData) > 0 {
+		var td seriesTemplateData
+		if err := json.Unmarshal(req.TemplateData, &td); err != nil {
+			writeError(w, "invalid template_data: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		templateDataStr = string(req.TemplateData)
 	}
 
 	// Auth check
@@ -369,21 +460,21 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	var result sql.Result
 	if req.OrganizationID != nil {
 		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, organization_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by)
-			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			(slug, title, description, organization_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 			slug, req.Title, req.Description,
 			*req.OrganizationID, optionalInt(req.DefaultLocationID),
 			startTimeStr, endTimeStr,
-			time.Now().Unix(), callerID, resolveDisplayName(callerID),
+			time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
 		)
 	} else {
 		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by)
-			VALUES (?,?,?,?,?,?,?,?,?)`,
+			(slug, title, description, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
 			slug, req.Title, req.Description,
 			optionalInt(req.DefaultLocationID),
 			startTimeStr, endTimeStr,
-			time.Now().Unix(), callerID, resolveDisplayName(callerID),
+			time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
 		)
 	}
 	if err != nil {
@@ -392,6 +483,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	seriesID64, _ := result.LastInsertId()
 	seriesID := int(seriesID64)
+	td := parseSeriesTemplateData(json.RawMessage(templateDataStr))
 
 	// Generate event rows
 	for _, d := range dates {
@@ -400,15 +492,16 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		if endEpoch <= startEpoch {
 			endEpoch = startEpoch + 3*3600 // fallback 3h
 		}
+		var evResult sql.Result
 		if req.OrganizationID != nil {
-			_, err = tx.Exec(`INSERT INTO events
+			evResult, err = tx.Exec(`INSERT INTO events
 				(title, description, start_time, end_time, location_id, organization_id, series_id, is_published)
 				VALUES (?,?,?,?,?,?,?,0)`,
 				req.Title, "", startEpoch, endEpoch,
 				optionalInt(req.DefaultLocationID), *req.OrganizationID, seriesID,
 			)
 		} else {
-			_, err = tx.Exec(`INSERT INTO events
+			evResult, err = tx.Exec(`INSERT INTO events
 				(title, description, start_time, end_time, location_id, series_id, is_published)
 				VALUES (?,?,?,?,?,?,0)`,
 				req.Title, "", startEpoch, endEpoch,
@@ -417,6 +510,11 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			writeError(w, "failed to insert event: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		evID64, _ := evResult.LastInsertId()
+		if err := applySeriesTemplate(tx, int(evID64), td); err != nil {
+			writeError(w, "failed to apply series defaults: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -465,12 +563,13 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	callerID, role := callerFromRequest(r)
 
 	var req struct {
-		Title             string `json:"title"`
-		Description       string `json:"description"`
-		DefaultLocationID *int   `json:"default_location_id"`
-		DefaultStartTime  string `json:"default_start_time"`
-		DefaultEndTime    string `json:"default_end_time"`
-		OrganizationID    *int   `json:"organization_id"`
+		Title             string          `json:"title"`
+		Description       string          `json:"description"`
+		DefaultLocationID *int            `json:"default_location_id"`
+		DefaultStartTime  string          `json:"default_start_time"`
+		DefaultEndTime    string          `json:"default_end_time"`
+		OrganizationID    *int            `json:"organization_id"`
+		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid JSON", http.StatusBadRequest)
@@ -489,15 +588,24 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 			orgID = req.OrganizationID
 		}
 	}
+	templateDataStr := string(series.TemplateData)
+	if len(req.TemplateData) > 0 {
+		var td seriesTemplateData
+		if err := json.Unmarshal(req.TemplateData, &td); err != nil {
+			writeError(w, "invalid template_data: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		templateDataStr = string(req.TemplateData)
+	}
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,
-		    organization_id=?, updated_at=?, updated_by=?
+		    organization_id=?, updated_at=?, updated_by=?, template_data=?
 		WHERE id=?`,
 		req.Title, req.Description,
 		optionalInt(req.DefaultLocationID),
 		req.DefaultStartTime, req.DefaultEndTime,
 		optionalInt(orgID),
-		time.Now().Unix(), resolveDisplayName(callerID),
+		time.Now().Unix(), resolveDisplayName(callerID), templateDataStr,
 		series.ID,
 	)
 	if err != nil {
@@ -566,15 +674,16 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		endEpoch = startEpoch + 3*3600
 	}
 
+	var result sql.Result
 	if series.OrganizationID != nil {
-		_, err = db.Exec(`INSERT INTO events
+		result, err = db.Exec(`INSERT INTO events
 			(title, description, start_time, end_time, location_id, organization_id, series_id, is_published)
 			VALUES (?,?,?,?,?,?,?,1)`,
 			series.Title, "", startEpoch, endEpoch,
 			optionalInt(series.DefaultLocationID), *series.OrganizationID, series.ID,
 		)
 	} else {
-		_, err = db.Exec(`INSERT INTO events
+		result, err = db.Exec(`INSERT INTO events
 			(title, description, start_time, end_time, location_id, series_id, is_published)
 			VALUES (?,?,?,?,?,?,1)`,
 			series.Title, "", startEpoch, endEpoch,
@@ -582,6 +691,11 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	evID64, _ := result.LastInsertId()
+	if err := applySeriesTemplate(db, int(evID64), parseSeriesTemplateData(series.TemplateData)); err != nil {
 		writeInternalError(w, err)
 		return
 	}

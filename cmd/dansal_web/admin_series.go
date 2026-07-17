@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -16,13 +17,51 @@ type AdminSeriesData struct {
 	OrgNames map[int]string
 }
 
+// seriesDefaults mirrors cmd/dansal's seriesTemplateData JSON shape — the
+// rich per-series default set (everything a template can carry, minus
+// title/location/times/org, which the series already models via its own
+// dedicated fields). Kept as a plain struct (not reusing EventTemplate's
+// templateEventData) since series defaults intentionally exclude org_id/
+// loc_id/start_time/end_time, which templateEventData carries but series
+// already owns through other fields.
+type seriesDefaults struct {
+	HasBall            bool             `json:"has_ball"`
+	HasWorkshop        bool             `json:"has_workshop"`
+	HasFestival        bool             `json:"has_festival"`
+	WorkshopDifficulty string           `json:"workshop_difficulty"`
+	URL                string           `json:"url"`
+	BookingURL         string           `json:"booking_url"`
+	Pricing            *Pricing         `json:"pricing,omitempty"`
+	Tags               []string         `json:"tags"`
+	DanceIDs           []int            `json:"dance_ids"`
+	Food               string           `json:"food"`
+	Drink              string           `json:"drink"`
+	FloorCondition     string           `json:"floor_condition"`
+	ContactName        string           `json:"contact_name,omitempty"`
+	ContactEmail       string           `json:"contact_email,omitempty"`
+	TicketsTotal       int              `json:"tickets_total"`
+	BookingEnabled     bool             `json:"booking_enabled"`
+	Timetable          []TimetableEntry `json:"timetable"`
+}
+
+func parseSeriesDefaults(raw json.RawMessage) seriesDefaults {
+	var d seriesDefaults
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &d)
+	}
+	return d
+}
+
 type AdminSeriesEditData struct {
-	Series    EventSeries
-	Locations []Location
-	Orgs      []Organization
-	IsAdmin   bool
-	BaseURL   string
-	ErrorKey  string
+	Series      EventSeries
+	Locations   []Location
+	Orgs        []Organization
+	IsAdmin     bool
+	BaseURL     string
+	ErrorKey    string
+	TplDefaults seriesDefaults
+	Dances      []Dance
+	DanceIDSet  map[int]bool
 }
 
 type PrefillDate struct {
@@ -269,15 +308,69 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		}
 		locs, _ := client.GetLocations(r.Context())
 		orgs, _ := client.GetOrganizations(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		td := parseSeriesDefaults(series.TemplateData)
+		danceIDSet := make(map[int]bool, len(td.DanceIDs))
+		for _, id := range td.DanceIDs {
+			danceIDSet[id] = true
+		}
 		title := i18n.T(r, "series_edit")
 		renderTemplate(w, tmpls.adminSeriesEdit, tmplData(r, cfg, i18n, title, AdminSeriesEditData{
-			Series:    series,
-			Locations: locs,
-			Orgs:      orgs,
-			IsAdmin:   user.Role == "admin",
-			BaseURL:   cfg.publicBaseURL(),
+			Series:      series,
+			Locations:   locs,
+			Orgs:        orgs,
+			IsAdmin:     user.Role == "admin",
+			BaseURL:     cfg.publicBaseURL(),
+			TplDefaults: td,
+			Dances:      dances,
+			DanceIDSet:  danceIDSet,
 		}))
 	}
+}
+
+// seriesDefaultsFromForm builds the template_data JSON blob from the
+// "Series Defaults" fieldset in admin_series_edit.html. Mirrors how
+// createEvent derives has_ball/workshop/festival from the submitted tags.
+// existingTimetable is carried through unchanged since there is no UI yet
+// for editing a series' default timetable — without this, saving the header
+// form would silently wipe out a timetable set via the API.
+func seriesDefaultsFromForm(r *http.Request, existingTimetable []TimetableEntry) []byte {
+	tags := r.Form["tags"]
+	var danceIDs []int
+	for _, v := range r.Form["dance_ids"] {
+		if n, err := strconv.Atoi(v); err == nil {
+			danceIDs = append(danceIDs, n)
+		}
+	}
+	d := seriesDefaults{
+		HasBall:            sliceContains(tags, "bal-folk"),
+		HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+		HasFestival:        sliceContains(tags, "festival"),
+		WorkshopDifficulty: r.FormValue("workshop_difficulty"),
+		URL:                strings.TrimSpace(r.FormValue("url")),
+		BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
+		Tags:               tags,
+		DanceIDs:           danceIDs,
+		Food:               r.FormValue("food"),
+		Drink:              r.FormValue("drink"),
+		FloorCondition:     r.FormValue("floor_condition"),
+		ContactName:        strings.TrimSpace(r.FormValue("contact_name")),
+		ContactEmail:       strings.TrimSpace(r.FormValue("contact_email")),
+		BookingEnabled:     r.FormValue("booking_enabled") != "",
+	}
+	if n, err := strconv.Atoi(r.FormValue("tickets_total")); err == nil {
+		d.TicketsTotal = n
+	}
+	switch r.FormValue("pricing_type") {
+	case "free":
+		d.Pricing = &Pricing{Type: "free"}
+	case "donation", "single":
+		amount, _ := strconv.ParseFloat(r.FormValue("pricing_amount"), 64)
+		d.Pricing = &Pricing{Type: r.FormValue("pricing_type"), Amount: amount, Currency: strings.TrimSpace(r.FormValue("pricing_currency"))}
+	}
+	d.Timetable = existingTimetable
+	b, _ := json.Marshal(d)
+	return b
 }
 
 func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
@@ -296,6 +389,11 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			return
 		}
 		token := getSessionToken(r)
+		existing, err := client.GetSeriesByID(r.Context(), id, token)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		body := map[string]any{
 			"title":              strings.TrimSpace(r.FormValue("title")),
 			"description":        strings.TrimSpace(r.FormValue("description")),
@@ -315,6 +413,7 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 				body["organization_id"] = 0
 			}
 		}
+		body["template_data"] = json.RawMessage(seriesDefaultsFromForm(r, parseSeriesDefaults(existing.TemplateData).Timetable))
 		if err := client.UpdateSeries(r.Context(), id, body, token); err != nil {
 			http.Error(w, "failed to save: "+err.Error(), http.StatusBadGateway)
 			return

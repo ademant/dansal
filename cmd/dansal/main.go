@@ -1467,6 +1467,21 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE events ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL`)
 		}
 	}
+	// v12: event_series.template_data — rich per-series defaults (pricing, tags,
+	// dances, food/drink, floor_condition, attributes, contact, booking,
+	// timetable) applied to every occurrence created via addSeriesDate/createSeries.
+	if !applied(12) {
+		db.Exec(`ALTER TABLE event_series ADD COLUMN template_data TEXT NOT NULL DEFAULT '{}'`)
+		mark(12)
+	}
+	// Safety net: ensure event_series.template_data exists even if v12 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_series') WHERE name='template_data'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE event_series ADD COLUMN template_data TEXT NOT NULL DEFAULT '{}'`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2483,7 +2498,8 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER DEFAULT 0,
 		created_by_id INTEGER REFERENCES users(id),
-		updated_by TEXT DEFAULT ''
+		updated_by TEXT DEFAULT '',
+		template_data TEXT NOT NULL DEFAULT '{}'
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2894,6 +2910,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

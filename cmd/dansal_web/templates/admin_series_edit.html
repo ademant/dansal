@@ -67,6 +67,112 @@
       </div>
     </div>
   </section>
+
+  <!-- Series defaults: applied to every new occurrence (add-date / generated dates) -->
+  <h2 style="font-size:1.05rem;margin:1.5rem 0 .75rem">{{$.Strings.T "series_defaults_title"}}</h2>
+  <p class="field-hint" style="margin-bottom:1rem">{{$.Strings.T "series_defaults_hint"}}</p>
+
+  <section class="form-section">
+    <label for="url">{{$.Strings.T "evt_website"}}</label>
+    <input id="url" type="url" name="url" value="{{.TplDefaults.URL}}" placeholder="https://...">
+  </section>
+
+  <section class="form-section">
+    <div class="check-row">
+      <label class="check-label"><input type="checkbox" name="tags" value="bal-folk"{{if hasTag .TplDefaults.Tags "bal-folk"}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop"{{if hasTag .TplDefaults.Tags "dance-workshop"}} checked{{end}}> {{$.Strings.T "tag_dance_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop"{{if hasTag .TplDefaults.Tags "musician-workshop"}} checked{{end}}> {{$.Strings.T "tag_musician_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="festival"{{if hasTag .TplDefaults.Tags "festival"}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="open-air"{{if hasTag .TplDefaults.Tags "open-air"}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="session"{{if hasTag .TplDefaults.Tags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="concert"{{if hasTag .TplDefaults.Tags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
+    </div>
+    <div class="check-row" style="margin-top:.5rem">
+      <label class="check-label"><input type="checkbox" name="tags" value="beginners"{{if hasTag .TplDefaults.Tags "beginners"}} checked{{end}}> {{$.Strings.T "tag_beginners"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="intermediate"{{if hasTag .TplDefaults.Tags "intermediate"}} checked{{end}}> {{$.Strings.T "tag_intermediate"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="advanced"{{if hasTag .TplDefaults.Tags "advanced"}} checked{{end}}> {{$.Strings.T "tag_advanced"}}</label>
+    </div>
+    <label for="workshop_difficulty" style="margin-top:.5rem">{{$.Strings.T "workshop_difficulty_label"}}</label>
+    <select id="workshop_difficulty" name="workshop_difficulty">
+      <option value=""{{if eq .TplDefaults.WorkshopDifficulty ""}} selected{{end}}>—</option>
+      <option value="beginners"{{if eq .TplDefaults.WorkshopDifficulty "beginners"}} selected{{end}}>{{$.Strings.T "tag_beginners"}}</option>
+      <option value="intermediate"{{if eq .TplDefaults.WorkshopDifficulty "intermediate"}} selected{{end}}>{{$.Strings.T "tag_intermediate"}}</option>
+      <option value="advanced"{{if eq .TplDefaults.WorkshopDifficulty "advanced"}} selected{{end}}>{{$.Strings.T "tag_advanced"}}</option>
+    </select>
+  </section>
+
+  <section class="form-section">
+    <label>Dance styles</label>
+    <div class="check-row">
+      {{range .Dances}}
+      <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"{{if index $.Data.DanceIDSet .ID}} checked{{end}}> {{.Name}}</label>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="form-section">
+    <label for="pricing_type">{{$.Strings.T "evt_pricing_type"}}</label>
+    <select id="pricing_type" name="pricing_type">
+      <option value="none"{{if not .TplDefaults.Pricing}} selected{{end}}>— {{$.Strings.T "evt_none"}} —</option>
+      <option value="free"{{if and .TplDefaults.Pricing (eq .TplDefaults.Pricing.Type "free")}} selected{{end}}>{{$.Strings.T "evt_free"}}</option>
+      <option value="donation"{{if and .TplDefaults.Pricing (eq .TplDefaults.Pricing.Type "donation")}} selected{{end}}>{{$.Strings.T "evt_donation"}}</option>
+      <option value="single"{{if and .TplDefaults.Pricing (eq .TplDefaults.Pricing.Type "single")}} selected{{end}}>{{$.Strings.T "evt_pricing_single"}}</option>
+    </select>
+    <div class="field-row">
+      <div>
+        <label for="pricing_amount">{{$.Strings.T "evt_pricing_amount"}}</label>
+        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" value="{{with .TplDefaults.Pricing}}{{.Amount}}{{end}}" placeholder="10.00">
+      </div>
+      <div>
+        <label for="pricing_currency">{{$.Strings.T "evt_pricing_currency"}}</label>
+        <input id="pricing_currency" type="text" name="pricing_currency" value="{{with .TplDefaults.Pricing}}{{.Currency}}{{end}}" placeholder="EUR" style="max-width:80px">
+      </div>
+    </div>
+    <p class="field-hint">{{$.Strings.T "series_defaults_pricing_hint"}}</p>
+  </section>
+
+  <section class="form-section">
+    <label>{{$.Strings.T "food_label"}}</label>
+    <div class="check-row">
+      <label class="check-label"><input type="radio" name="food" value=""{{if eq .TplDefaults.Food ""}} checked{{end}}> {{$.Strings.T "food_unset"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="sold"{{if eq .TplDefaults.Food "sold"}} checked{{end}}> {{$.Strings.T "food_sold"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="potluck"{{if eq .TplDefaults.Food "potluck"}} checked{{end}}> {{$.Strings.T "food_potluck"}}</label>
+      <label class="check-label"><input type="radio" name="food" value="none"{{if eq .TplDefaults.Food "none"}} checked{{end}}> {{$.Strings.T "food_none"}}</label>
+    </div>
+    <label style="margin-top:.5rem">{{$.Strings.T "drink_label"}}</label>
+    <div class="check-row">
+      <label class="check-label"><input type="radio" name="drink" value=""{{if eq .TplDefaults.Drink ""}} checked{{end}}> {{$.Strings.T "drink_unset"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="alcohol"{{if eq .TplDefaults.Drink "alcohol"}} checked{{end}}> {{$.Strings.T "drink_alcohol"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="soft"{{if eq .TplDefaults.Drink "soft"}} checked{{end}}> {{$.Strings.T "drink_soft"}}</label>
+      <label class="check-label"><input type="radio" name="drink" value="none"{{if eq .TplDefaults.Drink "none"}} checked{{end}}> {{$.Strings.T "drink_none"}}</label>
+    </div>
+    <label for="floor_condition" style="margin-top:.5rem">{{$.Strings.T "floor_label"}}</label>
+    <select id="floor_condition" name="floor_condition">
+      <option value=""{{if eq .TplDefaults.FloorCondition ""}} selected{{end}}>{{$.Strings.T "floor_from_venue"}}</option>
+      <option value="parquet"{{if eq .TplDefaults.FloorCondition "parquet"}} selected{{end}}>{{$.Strings.T "floor_parquet"}}</option>
+      <option value="stone"{{if eq .TplDefaults.FloorCondition "stone"}} selected{{end}}>{{$.Strings.T "floor_stone"}}</option>
+      <option value="tiles"{{if eq .TplDefaults.FloorCondition "tiles"}} selected{{end}}>{{$.Strings.T "floor_tiles"}}</option>
+      <option value="grass"{{if eq .TplDefaults.FloorCondition "grass"}} selected{{end}}>{{$.Strings.T "floor_grass"}}</option>
+      <option value="sand"{{if eq .TplDefaults.FloorCondition "sand"}} selected{{end}}>{{$.Strings.T "floor_sand"}}</option>
+      <option value="pavement"{{if eq .TplDefaults.FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
+      <option value="carpet"{{if eq .TplDefaults.FloorCondition "carpet"}} selected{{end}}>{{$.Strings.T "floor_carpet"}}</option>
+    </select>
+  </section>
+
+  <section class="form-section">
+    <label for="booking_url">{{$.Strings.T "evt_booking"}}</label>
+    <input id="booking_url" type="url" name="booking_url" value="{{.TplDefaults.BookingURL}}" placeholder="https://...">
+    <label for="tickets_total">{{$.Strings.T "evt_tickets_total"}}</label>
+    <input id="tickets_total" type="number" name="tickets_total" value="{{.TplDefaults.TicketsTotal}}" min="0" placeholder="0">
+    <label class="check-label"><input type="checkbox" name="booking_enabled"{{if .TplDefaults.BookingEnabled}} checked{{end}}> {{$.Strings.T "evt_booking_enabled"}}</label>
+  </section>
+
+  <section class="form-section">
+    <label for="evt_contact_name">{{$.Strings.T "evt_contact_name"}}</label>
+    <input id="evt_contact_name" type="text" name="contact_name" value="{{.TplDefaults.ContactName}}">
+    <label for="evt_contact_email">{{$.Strings.T "evt_contact_email"}}</label>
+    <input id="evt_contact_email" type="email" name="contact_email" value="{{.TplDefaults.ContactEmail}}">
+  </section>
 </form>
 
 <!-- Invite token section -->
@@ -208,6 +314,10 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .series-bulk-toolbar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;background:#f4f6fb;padding:.5rem .6rem;border-radius:6px;border:1px solid #ddd;margin-bottom:.5rem}
 .series-bulk-toolbar .event-bulk-count{font-size:.85rem;color:#555}
 .series-bulk-toolbar input[type=time]{padding:.25rem .4rem;font-size:.8rem}
+.check-row{display:flex;gap:1.5rem;margin:.5rem 0;flex-wrap:wrap}
+.check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
+.check-label input{width:auto}
+.field-hint{font-size:.82rem;color:#666;margin:.15rem 0 .6rem}
 </style>
 <script>
 function copyInviteLink(btn){

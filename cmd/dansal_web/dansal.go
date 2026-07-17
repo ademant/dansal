@@ -3329,19 +3329,20 @@ type SeriesEvent struct {
 }
 
 type EventSeries struct {
-	ID                int           `json:"id"`
-	Slug              string        `json:"slug"`
-	Title             string        `json:"title"`
-	Description       string        `json:"description"`
-	OrganizationID    *int          `json:"organization_id,omitempty"`
-	DefaultLocationID *int          `json:"default_location_id,omitempty"`
-	DefaultStartTime  string        `json:"default_start_time"`
-	DefaultEndTime    string        `json:"default_end_time"`
-	InviteToken       string        `json:"invite_token,omitempty"`
-	CreatedAt         string        `json:"created_at"`
-	UpdatedAt         int64         `json:"updated_at"`
-	EventCount        int           `json:"event_count,omitempty"`
-	Events            []SeriesEvent `json:"events,omitempty"`
+	ID                int             `json:"id"`
+	Slug              string          `json:"slug"`
+	Title             string          `json:"title"`
+	Description       string          `json:"description"`
+	OrganizationID    *int            `json:"organization_id,omitempty"`
+	DefaultLocationID *int            `json:"default_location_id,omitempty"`
+	DefaultStartTime  string          `json:"default_start_time"`
+	DefaultEndTime    string          `json:"default_end_time"`
+	InviteToken       string          `json:"invite_token,omitempty"`
+	CreatedAt         string          `json:"created_at"`
+	UpdatedAt         int64           `json:"updated_at"`
+	EventCount        int             `json:"event_count,omitempty"`
+	Events            []SeriesEvent   `json:"events,omitempty"`
+	TemplateData      json.RawMessage `json:"template_data,omitempty"`
 }
 
 func (c *DansalClient) GetSeriesList(ctx context.Context, token string) ([]EventSeries, error) {

@@ -236,6 +236,12 @@ func validDrink(s string) bool          { return validDrinkValues[s] }
 func validFloorCondition(s string) bool { return validFloorConditionValues[s] }
 func validParking(s string) bool        { return validParkingValues[s] }
 
+// touchEvent stamps changed_at/changed_by on an event after a sub-resource mutation.
+func touchEvent(eventID, callerID int) {
+	db.Exec("UPDATE events SET changed_at=?, changed_by=? WHERE id=?",
+		time.Now().UTC().Unix(), resolveDisplayName(callerID), eventID)
+}
+
 // resolveLocationID returns the location ID to use for a write request.
 // If location_id is supplied directly it is used without a DB round-trip.
 // Otherwise ensureLocation does the find-or-create lookup.
@@ -1047,11 +1053,10 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var result sql.Result
 	var err error
 	var shortCode string
-	var insChangedAt any
-	var insChangedBy string
+	insChangedAt := time.Now().UTC().Unix()
+	insChangedBy := "admin"
 	var insFetchSourceID any
 	if fetchSourceID > 0 {
-		insChangedAt = time.Now().UTC().Unix()
 		insChangedBy = "fetch"
 		insFetchSourceID = fetchSourceID
 	}
@@ -2425,6 +2430,8 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found or already assigned to an organisation", http.StatusNotFound)
 		return
 	}
+	eventID, _ := strconv.Atoi(id)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2539,6 +2546,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
+	touchEvent(id, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3067,6 +3075,7 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 			b, _ := json.Marshal(p)
 			db.Exec("UPDATE events SET pricing=? WHERE id=?", string(b), id)
 		}
+		touchEvent(id, callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -3092,6 +3101,7 @@ func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		db.Exec("UPDATE events SET location_id=? WHERE id=?", req.LocationID, id)
+		touchEvent(id, callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -3140,6 +3150,7 @@ func bulkSetEventTime(w http.ResponseWriter, r *http.Request) {
 			newEnd = newStart + 3*3600
 		}
 		db.Exec("UPDATE events SET start_time=?, end_time=? WHERE id=?", newStart, newEnd, id)
+		touchEvent(id, callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -3213,6 +3224,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	syncEventLocationGeohash(eventID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3232,6 +3244,7 @@ func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("UPDATE events SET location_id=NULL WHERE id=?", eventID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3270,6 +3283,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3290,6 +3304,7 @@ func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("UPDATE events SET organization_id=NULL WHERE id=?", eventID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3320,6 +3335,7 @@ func addEventMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", eventID, musicianID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3344,6 +3360,7 @@ func removeEventMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("DELETE FROM event_musicians WHERE event_id=? AND musician_id=?", eventID, musicianID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3374,6 +3391,7 @@ func addEventInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", eventID, instructorID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3398,6 +3416,7 @@ func removeEventInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("DELETE FROM event_instructors WHERE event_id=? AND instructor_id=?", eventID, instructorID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3428,6 +3447,7 @@ func addEventDance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?,?)", eventID, danceID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -3452,5 +3472,6 @@ func removeEventDance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("DELETE FROM event_dances WHERE event_id=? AND dance_id=?", eventID, danceID)
+	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }

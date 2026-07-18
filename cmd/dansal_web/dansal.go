@@ -339,6 +339,9 @@ type Musician struct {
 	CreatedAt    string `json:"created_at,omitempty"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
 	UpdatedBy    string `json:"updated_by,omitempty"`
+
+	FutureEventCount int `json:"future_event_count,omitempty"`
+	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
 type Location struct {
@@ -869,7 +872,7 @@ func (c *DansalClient) GetAllPublicEventsByMusician(ctx context.Context, musicia
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
 		var ms []Musician
-		return ms, c.get(ctx, "/api/v1/musicians?limit=1000", &ms)
+		return ms, c.get(ctx, "/api/v1/musicians?limit=1000&with_event_counts=true", &ms)
 	})
 }
 

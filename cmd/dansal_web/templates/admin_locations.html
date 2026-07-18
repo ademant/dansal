@@ -20,7 +20,7 @@
 {{if .IsAdmin}}
 <form method="post" action="/admin/locations/bulk-assign" id="bulk-form">
 <div class="bulk-edit-layout">
-<aside class="bulk-side">
+<aside class="bulk-side" id="bulk-side">
   <span id="bulk-count"></span>
   <select name="organization_id">
     <option value="">{{$.Strings.T "loc_no_org"}}</option>
@@ -29,6 +29,7 @@
   <button type="submit" class="btn-sm loc-bulk-action-btn" disabled>{{$.Strings.T "loc_bulk_assign_btn"}}</button>
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge loc-bulk-action-btn" disabled
           onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
+  <button type="button" class="btn-sm ms-close" id="ms-close" title="{{$.Strings.T "admin_magic_link_close"}}" aria-label="{{$.Strings.T "admin_magic_link_close"}}">✕</button>
 </aside>
 <div class="bulk-main">
 {{end}}
@@ -49,12 +50,12 @@
   {{range .Locations}}
   {{$orgName := ""}}
   {{range .OrganizationIDs}}{{$n := (index $.Data.OrgMap .).Name}}{{if $orgName}}{{$orgName = printf "%s, %s" $orgName $n}}{{else}}{{$orgName = $n}}{{end}}{{end}}
-  <tr data-town="{{.Town}}" data-org="{{$orgName}}">
-    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}"><a href="/admin/location/{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a></td>
-    <td>{{.Town}}</td>
-    <td>{{$orgName}}</td>
-    <td class="ind-cell">
+  <tr data-town="{{.Town}}" data-org="{{$orgName}}" data-loc-row data-loc-id="{{.ID}}">
+    {{if $.Data.IsAdmin}}<td class="col-cb cell-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
+    <td class="cell-name" data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}"><a href="/admin/location/{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a></td>
+    <td class="cell-town">{{.Town}}</td>
+    <td class="cell-org">{{$orgName}}</td>
+    <td class="ind-cell cell-ind">
       <span class="ind {{if and .Latitude .Longitude}}ind-ok{{else}}ind-no{{end}}" title="Geo">⊕</span>
       <span class="ind {{if .Town}}ind-ok{{else}}ind-no{{end}}" title="Town">⌂</span>
       <span class="ind {{if .Internetsite}}ind-ok{{else}}ind-no{{end}}" title="Website">🔗</span>
@@ -66,14 +67,14 @@
       {{if eq .Parking "free"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_free"}}">🅿</span>{{else if eq .Parking "paid"}}<span class="ind ind-ok" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{else if eq .Parking "none"}}<span class="ind ind-no" title="{{$.Strings.T "parking_none"}}">🅿</span>{{end}}
       {{with index $.Data.EventCounts .ID}}<span class="evt-count" title="{{$.Strings.T "loc_event_count"}}">{{.}}</span>{{end}}
     </td>
-    <td class="col-actions">
+    <td class="col-actions cell-actions">
       {{if or $.Data.IsAdmin (index $.Data.EditableIDs .ID)}}
       <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       {{else}}
       <span class="btn-icon btn-disabled" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</span>
       {{end}}
       {{if and $.Data.UserOrgs (not (index $.Data.EditableIDs .ID))}}
-      <form method="post" action="/admin/locations/{{.ID}}/assign-org" style="margin:0;display:inline-flex;gap:.25rem;align-items:center">
+      <form method="post" action="/admin/locations/{{.ID}}/assign-org" class="mobile-hide" style="margin:0;display:inline-flex;gap:.25rem;align-items:center">
         {{if eq (len $.Data.UserOrgs) 1}}
         <input type="hidden" name="org_id" value="{{(index $.Data.UserOrgs 0).ID}}">
         {{else}}
@@ -84,7 +85,7 @@
         <button type="submit" class="btn-sm btn-assign">{{$.Strings.T "loc_assign_btn"}}</button>
       </form>
       {{end}}
-      {{if $.Data.IsAdmin}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+      {{if $.Data.IsAdmin}}<button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
               onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>
@@ -138,6 +139,23 @@
 .btn-assign:hover{background:#0d4a80}
 .cc-badge{display:inline-block;background:#e8eaf0;color:#555;border-radius:3px;padding:.05rem .3rem;font-size:.75rem;font-family:monospace;letter-spacing:.03em}
 .evt-count{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:10px;padding:.05rem .45rem;font-size:.78rem;font-weight:600;margin-left:.2rem}
+.ms-close{display:none}
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .col-cb{display:none;order:0}
+  .event-table .cell-name{order:1;font-weight:600}
+  .event-table .cell-actions{order:2;margin-left:auto}
+  .event-table .cell-town{order:3;flex-basis:100%;font-size:.85rem;color:#555}
+  .event-table .cell-org{order:4;font-size:.85rem;color:#555}
+  .event-table .cell-ind{order:5;flex-basis:100%}
+  .event-table .mobile-hide{display:none}
+  body.ms-active .event-table .col-cb{display:block}
+  body.ms-active #bulk-side{position:fixed;top:0;left:0;right:0;z-index:100;flex-direction:row;flex-wrap:wrap;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:0}
+  body.ms-active .ms-close{display:inline-block;margin-left:auto}
+  body.ms-active .bulk-edit-layout{padding-top:3.2rem}
+}
 </style>
 
 <script>
@@ -206,6 +224,42 @@ function delLocation(id) {
     updateCount();
   });
   cbs.forEach(function(cb){ cb.addEventListener('change', updateCount); });
+
+  // Long-press (touch) on a row enters multi-select mode on mobile.
+  var LONG_PRESS_MS = 500, MOVE_TOLERANCE = 10;
+  var pressTimer = null, startX = 0, startY = 0, pressRow = null;
+  function enterMultiSelect(row){
+    document.body.classList.add('ms-active');
+    if(row){
+      var cb = row.querySelector('.loc-cb');
+      if(cb){ cb.checked = true; updateCount(); }
+    }
+  }
+  function exitMultiSelect(){
+    document.body.classList.remove('ms-active');
+    cbs.forEach(function(cb){ cb.checked = false; });
+    updateCount();
+  }
+  function clearPressTimer(){
+    if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+    pressRow = null;
+  }
+  tbody.addEventListener('touchstart', function(e){
+    if(!window.matchMedia('(max-width:640px)').matches) return;
+    var row = e.target.closest('tr[data-loc-row]');
+    if(!row) return;
+    pressRow = row;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    pressTimer = setTimeout(function(){ enterMultiSelect(pressRow); clearPressTimer(); }, LONG_PRESS_MS);
+  }, {passive:true});
+  tbody.addEventListener('touchmove', function(e){
+    if(!pressTimer) return;
+    var dx = Math.abs(e.touches[0].clientX - startX), dy = Math.abs(e.touches[0].clientY - startY);
+    if(dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) clearPressTimer();
+  }, {passive:true});
+  tbody.addEventListener('touchend', clearPressTimer);
+  tbody.addEventListener('touchcancel', clearPressTimer);
+  document.getElementById('ms-close').addEventListener('click', exitMultiSelect);
 })();
 </script>
 {{end}}

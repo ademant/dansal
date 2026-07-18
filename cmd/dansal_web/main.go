@@ -243,6 +243,8 @@ func main() {
 		r.HandleFunc("GET /board", boardHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians", musiciansHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /instructors", instructorsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /instructors/{id}", instructorHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /organizations", orgsHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /impressum", impressumHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /privacy", legalPageHandler(cfg, tmpls, i18n, "privacy", "nav_privacy"))
@@ -329,6 +331,7 @@ func main() {
 
 		r.HandleFunc("GET /admin/organization/{slug}", adminOrgDashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /admin/location/{id}", adminLocationDashboardHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/instructor/{id}", adminInstructorDashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client))
 		r.HandleFunc("GET /admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n))

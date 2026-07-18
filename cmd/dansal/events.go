@@ -546,6 +546,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		*query += " AND (EXISTS (SELECT 1 FROM event_musicians em WHERE em.event_id = e.id AND em.musician_id = ?) OR EXISTS (SELECT 1 FROM timetable_entries t WHERE t.event_id = e.id AND t.musician_id = ?))"
 		*args = append(*args, v, v)
 	}
+	if v := q.Get("instructor_id"); v != "" {
+		*query += " AND EXISTS (SELECT 1 FROM event_instructors ei WHERE ei.event_id = e.id AND ei.instructor_id = ?)"
+		*args = append(*args, v)
+	}
 	if dance := q.Get("dance"); dance != "" {
 		*query += " AND EXISTS (SELECT 1 FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id AND d.name=?)"
 		*args = append(*args, dance)

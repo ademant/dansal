@@ -449,25 +449,26 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 
 	// Auth check — a series must be owned by something the caller has rights
 	// over: an org they belong to, or a musician/instructor they created.
+	// Every owner field supplied is validated independently (not just the
+	// first one) — the INSERT below writes all three fields verbatim, so
+	// leaving any of them unchecked would let a caller who legitimately owns
+	// e.g. an org piggyback an arbitrary musician_id/instructor_id they don't
+	// own onto the same request.
 	if role != RoleAdmin {
-		switch {
-		case req.OrganizationID != nil:
-			if !isOrgMember(callerID, *req.OrganizationID) {
-				writeError(w, "forbidden", http.StatusForbidden)
-				return
-			}
-		case req.MusicianID != nil:
-			if !isMusicianOwner(callerID, *req.MusicianID) {
-				writeError(w, "forbidden", http.StatusForbidden)
-				return
-			}
-		case req.InstructorID != nil:
-			if !isInstructorOwner(callerID, *req.InstructorID) {
-				writeError(w, "forbidden", http.StatusForbidden)
-				return
-			}
-		default:
+		if req.OrganizationID == nil && req.MusicianID == nil && req.InstructorID == nil {
 			writeError(w, "organization_id, musician_id or instructor_id required for non-admin", http.StatusBadRequest)
+			return
+		}
+		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if req.MusicianID != nil && !isMusicianOwner(callerID, *req.MusicianID) {
+			writeError(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if req.InstructorID != nil && !isInstructorOwner(callerID, *req.InstructorID) {
+			writeError(w, "forbidden", http.StatusForbidden)
 			return
 		}
 	}

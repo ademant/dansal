@@ -1000,6 +1000,8 @@ type Templates struct {
 	musician                  *template.Template
 	adminMusicians            *template.Template
 	adminMusicianEdit         *template.Template
+	instructors               *template.Template
+	instructor                *template.Template
 	adminInstructors          *template.Template
 	adminInstructorEdit       *template.Template
 	adminEvents               *template.Template
@@ -1032,6 +1034,7 @@ type Templates struct {
 	adminEnrich               *template.Template
 	adminOrgDashboard         *template.Template
 	adminLocationDashboard    *template.Template
+	adminInstructorDashboard  *template.Template
 	seriesToken               *template.Template
 	embedEvents               *template.Template
 	embedEvent                *template.Template
@@ -1089,6 +1092,8 @@ func loadTemplates() *Templates {
 		musician:                  load("musician"),
 		adminMusicians:            load("admin_musicians"),
 		adminMusicianEdit:         load("admin_musician_edit"),
+		instructors:               load("instructors"),
+		instructor:                load("instructor"),
 		adminInstructors:          load("admin_instructors"),
 		adminInstructorEdit:       load("admin_instructor_edit"),
 		adminEvents:               load("admin_events"),
@@ -1121,6 +1126,7 @@ func loadTemplates() *Templates {
 		adminEnrich:               load("admin_enrich"),
 		adminOrgDashboard:         load("admin_org_dashboard"),
 		adminLocationDashboard:    load("admin_location_dashboard"),
+		adminInstructorDashboard:  load("admin_instructor_dashboard"),
 		seriesToken:               load("series_token"),
 		embedEvents:               loadEmbed("embed_events"),
 		embedEvent:                loadEmbed("embed_event"),

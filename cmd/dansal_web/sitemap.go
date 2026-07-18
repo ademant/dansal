@@ -70,6 +70,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	urls := []sitemapURL{
 		{Loc: base + "/", LastMod: today, ChangeFreq: "daily", Priority: "1.0"},
 		{Loc: base + "/musicians", ChangeFreq: "weekly", Priority: "0.6"},
+		{Loc: base + "/instructors", ChangeFreq: "weekly", Priority: "0.6"},
 		{Loc: base + "/organizations", ChangeFreq: "weekly", Priority: "0.6"},
 	}
 
@@ -143,6 +144,16 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	for _, m := range musicians {
 		urls = append(urls, sitemapURL{
 			Loc:        base + fmt.Sprintf("/musicians/%d", m.ID),
+			ChangeFreq: "monthly",
+			Priority:   "0.5",
+		})
+	}
+
+	// Instructors
+	instructors, _ := client.GetInstructors(ctx)
+	for _, ins := range instructors {
+		urls = append(urls, sitemapURL{
+			Loc:        base + fmt.Sprintf("/instructors/%d", ins.ID),
 			ChangeFreq: "monthly",
 			Priority:   "0.5",
 		})

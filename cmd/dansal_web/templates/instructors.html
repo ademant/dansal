@@ -1,0 +1,30 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "instructors_title"}}</h1>
+
+{{with .Data}}
+{{if .Instructors}}
+<div class="musician-grid">
+{{range .Instructors}}
+<a href="/instructors/{{.ID}}" class="musician-card">
+  <div class="mcard-body">
+    <div class="mcard-name">{{.Name}}</div>
+    {{if .Bio}}<div class="mcard-desc md-content">{{markdownHTML .Bio}}</div>{{end}}
+  </div>
+</a>
+{{end}}
+</div>
+{{else}}
+<p>{{$.Strings.T "instructors_none"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.musician-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-top:.5rem}
+.musician-card{display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-decoration:none;color:var(--heading);transition:box-shadow .15s,border-color .15s}
+.musician-card:hover{border-color:var(--link);box-shadow:0 2px 8px rgba(26,110,181,.12)}
+.mcard-body{padding:.75rem .9rem;flex:1;display:flex;flex-direction:column;gap:.2rem}
+.mcard-name{font-weight:600;font-size:.95rem}
+.mcard-desc{font-size:.82rem;color:var(--fg-muted);margin-top:.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+</style>
+{{end}}

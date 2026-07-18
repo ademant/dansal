@@ -1,0 +1,138 @@
+{{template "base" .}}
+{{define "head_extra"}}{{with .Data.Instructor}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "{{.Name | js}}"
+  {{- with .Bio}}, "description": "{{. | js}}"{{end}}
+  {{- with .Website}}, "sameAs": ["{{. | js}}"]{{end}}
+}
+</script>
+{{end}}{{end}}
+{{define "content"}}
+{{with .Data}}
+<div class="musician-header">
+  <div>
+    <div class="musician-title-row">
+      <h1>{{.Instructor.Name}}</h1>
+      {{if $.User}}<a href="/admin/instructors/{{.Instructor.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+    </div>
+  </div>
+</div>
+
+{{if .Instructor.Bio}}
+<div class="page-section">
+  <div class="md-content">{{markdownHTML .Instructor.Bio}}</div>
+</div>
+{{end}}
+
+{{if .Instructor.Website}}
+<div class="page-section">
+  <div class="musician-links">
+    <a href="{{.Instructor.Website}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "instructor_website"}}</a>
+  </div>
+</div>
+{{end}}
+
+<div class="page-section">
+  <div class="events-heading-row">
+    <h2 class="section-heading">{{$.Strings.T "instructor_upcoming_events"}}</h2>
+    {{if .HasPast}}
+    <form method="get" class="past-toggle">
+      {{if .IncludePast}}
+      <button type="submit" name="include_past" value="" class="btn-toggle btn-toggle-active">{{$.Strings.T "filter_include_past"}}</button>
+      {{else}}
+      <button type="submit" name="include_past" value="1" class="btn-toggle">{{$.Strings.T "filter_include_past"}}</button>
+      {{end}}
+    </form>
+    {{end}}
+  </div>
+
+  {{if .Events}}
+  {{/* Map — only rendered if at least one event has coordinates */}}
+  <div id="mmap-wrap" hidden>
+    <div id="mmap"></div>
+  </div>
+  <script type="application/json" id="mmap-data">{{eventsGeoJSON .Events}}</script>
+
+  <ul class="event-list">
+  {{range .Events}}
+  <li class="event-item">
+    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+    <div class="event-meta">
+      {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
+      {{with .Location}}
+        {{if .ShortName}} &mdash; {{.ShortName}}{{if .Address}}, {{.Address}}{{end}}{{if .Town}}, {{.Town}}{{end}}
+        {{else if .Location}} &mdash; {{.Location}}{{else if .Town}} &mdash; {{.Town}}{{end}}
+      {{end}}
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+      {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+      {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    </div>
+    <div class="event-attr-row">{{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}</div>
+    {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+    {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
+  </li>
+  {{end}}
+  </ul>
+  {{else}}<p class="empty-msg">{{$.Strings.T "instructor_no_events"}}</p>{{end}}
+</div>
+
+{{end}}{{/* .Data */}}
+
+<style>
+.musician-header{display:flex;align-items:flex-start;gap:1.25rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.musician-title-row{display:flex;align-items:center;gap:.4rem}
+.musician-title-row h1{margin:0}
+.musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
+.m-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
+.m-link-web{background:#1a6eb5}.m-link-web:hover{background:#0d4a80}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+.events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
+.events-heading-row .section-heading{margin:0}
+.past-toggle{margin:0}
+.btn-toggle{padding:.25rem .75rem;border:1px solid var(--border-mid);border-radius:14px;background:var(--btn-bg);color:var(--fg-dim);cursor:pointer;font-size:.82rem}
+.btn-toggle:hover{border-color:var(--fg-faint);color:var(--fg)}
+.btn-toggle-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+#mmap{height:280px;border-radius:6px;border:1px solid var(--border);margin-bottom:1rem}
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var raw = document.getElementById('mmap-data');
+  if(!raw) return;
+  var geo;
+  try { geo = JSON.parse(raw.textContent); } catch(_){ return; }
+  if(!geo || !geo.length) return;
+
+  var wrap = document.getElementById('mmap-wrap');
+  wrap.hidden = false;
+
+  var map = L.map('mmap');
+  attachTileLayer(map);
+
+  var bounds = [];
+  geo.forEach(function(e){
+    var ll = [e.lat, e.lng];
+    bounds.push(ll);
+    var label = e.loc || e.town || '';
+    var popup = '<b><a href="/events/'+e.id+'">'+escHtml(e.t)+'</a></b>'+
+      (e.s ? '<br><small>'+(e.s||'').slice(0,10)+'</small>' : '')+
+      (label ? '<br><small>'+escHtml(label)+'</small>' : '');
+    L.marker(ll).bindPopup(popup,{maxWidth:240}).addTo(map);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 12);
+  } else {
+    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:10}); } catch(_){}
+  }
+
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+})();
+</script>
+{{end}}

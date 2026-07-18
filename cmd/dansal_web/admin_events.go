@@ -1554,6 +1554,24 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				}
 			}
 		}
+		// Pre-select the instructor/musician the "+ New event" button on their
+		// dashboard was launched from (mirrors org_id/loc_id prefill above).
+		if iid, _ := strconv.Atoi(r.URL.Query().Get("instructor_id")); iid > 0 {
+			for _, ins := range bundle.Instructors {
+				if ins.ID == iid {
+					event.Instructors = []Instructor{ins}
+					break
+				}
+			}
+		}
+		if mid, _ := strconv.Atoi(r.URL.Query().Get("musician_id")); mid > 0 {
+			for _, m := range bundle.Musicians {
+				if m.ID == mid {
+					event.Musicians = []Musician{m}
+					break
+				}
+			}
+		}
 
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
@@ -3244,6 +3262,82 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 			TotalCount:        total,
 			NewEventOrgID:     newEventOrgID,
 			NewEventOrgName:   newEventOrgName,
+		}))
+	}
+}
+
+// ── Admin instructor dashboard (/admin/instructor/{id}) ──────────────────────
+
+type AdminInstructorDashboardData struct {
+	Instructor        Instructor
+	Events            []Event
+	OrgMap            map[int]string
+	Locations         []Location
+	Dances            []Dance
+	AllTags           []Tag
+	Series            []EventSeries
+	Templates         []EventTemplate
+	FilterIncludePast bool
+	TotalCount        int
+}
+
+func adminInstructorDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		instructor, err := client.GetInstructor(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		token := getSessionToken(r)
+
+		orgs, _ := client.GetOrganizations(r.Context())
+		orgMap := make(map[int]string, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o.Name
+		}
+
+		includePast := r.URL.Query().Get("include_past") == "1"
+		params := url.Values{}
+		params.Set("instructor_id", strconv.Itoa(id))
+		params.Set("limit", "1000")
+		if includePast {
+			params.Set("include_past", "true")
+		}
+
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
+
+		locs, _ := client.GetLocations(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		allTags, _ := client.GetTags(r.Context())
+		series, _ := client.GetSeriesListForInstructor(r.Context(), id, token)
+		templates, _ := listTemplatesForInstructor(db, id)
+
+		renderTemplate(w, tmpls.adminInstructorDashboard, tmplData(r, cfg, i18n, instructor.Name, AdminInstructorDashboardData{
+			Instructor:        instructor,
+			Events:            events,
+			OrgMap:            orgMap,
+			Locations:         locs,
+			Dances:            dances,
+			AllTags:           allTags,
+			Series:            series,
+			Templates:         templates,
+			FilterIncludePast: includePast,
+			TotalCount:        total,
 		}))
 	}
 }

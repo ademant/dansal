@@ -869,6 +869,27 @@ func (c *DansalClient) GetAllPublicEventsByMusician(ctx context.Context, musicia
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?musician_id=%d&include_past=true", musicianID), &events)
 }
 
+func (c *DansalClient) GetEventsByInstructor(ctx context.Context, instructorID int, token string) ([]Event, error) {
+	path := fmt.Sprintf("/api/v1/events?instructor_id=%d", instructorID)
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var events []Event
+	return events, json.NewDecoder(resp.Body).Decode(&events)
+}
+
+func (c *DansalClient) GetPublicEventsByInstructor(ctx context.Context, instructorID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?instructor_id=%d", instructorID), &events)
+}
+
+func (c *DansalClient) GetAllPublicEventsByInstructor(ctx context.Context, instructorID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?instructor_id=%d&include_past=true", instructorID), &events)
+}
+
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
 		var ms []Musician
@@ -3353,6 +3374,34 @@ type EventSeries struct {
 
 func (c *DansalClient) GetSeriesList(ctx context.Context, token string) ([]EventSeries, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/series", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var out []EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) GetSeriesListForInstructor(ctx context.Context, instructorID int, token string) ([]EventSeries, error) {
+	path := fmt.Sprintf("/api/v1/series?instructor_id=%d", instructorID)
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var out []EventSeries
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) GetSeriesListForMusician(ctx context.Context, musicianID int, token string) ([]EventSeries, error) {
+	path := fmt.Sprintf("/api/v1/series?musician_id=%d", musicianID)
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
 	if err != nil {
 		return nil, err
 	}

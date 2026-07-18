@@ -2902,25 +2902,31 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 // ── Admin org dashboard (/admin/organization/{slug}) ─────────────────────────
 
 type AdminOrgDashboardData struct {
-	Org               Organization
-	Slug              string
-	Events            []Event
-	OrgMap            map[int]string
-	Locations         []Location
-	Dances            []Dance
-	AllTags           []Tag
-	Series            []EventSeries
-	FilterIncludePast bool
-	FilterLocationID  int
-	TotalCount        int
-	IsMember          bool   // admin or member of this org
-	NewEventOrgID     int    // org to pre-assign "new event" to
-	NewEventOrgName   string // org name shown on the button when not a member
-	OrgLocations      []Location
-	LocEventCounts    map[int]int
+	Org                 Organization
+	Slug                string
+	Events              []Event
+	OrgMap              map[int]string
+	Locations           []Location
+	Dances              []Dance
+	AllTags             []Tag
+	Series              []EventSeries
+	FilterIncludePast   bool
+	FilterType          string
+	FilterDance         string
+	FilterLocationIDs   []int
+	FilterLocationIDSet map[int]bool
+	FilterLocationNames []string
+	TotalCount          int
+	IsMember            bool   // admin or member of this org
+	NewEventOrgID       int    // org to pre-assign "new event" to
+	NewEventOrgName     string // org name shown on the button when not a member
+	OrgLocations        []Location
+	LocEventCounts      map[int]int
+	OrgTemplates        []EventTemplate
+	OrgSeries           []EventSeries
 }
 
-func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -2982,7 +2988,18 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 
 		includePast := r.URL.Query().Get("include_past") == "1"
-		filterLocationID, _ := strconv.Atoi(r.URL.Query().Get("location_id"))
+		filterType := r.URL.Query().Get("type")
+		filterDance := r.URL.Query().Get("dance")
+		var filterLocationIDs []int
+		for _, v := range r.URL.Query()["location_id"] {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				filterLocationIDs = append(filterLocationIDs, n)
+			}
+		}
+		filterLocationIDSet := make(map[int]bool, len(filterLocationIDs))
+		for _, id := range filterLocationIDs {
+			filterLocationIDSet[id] = true
+		}
 
 		baseParams := url.Values{}
 		baseParams.Set("organization_id", strconv.Itoa(org.ID))
@@ -2993,7 +3010,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClien
 
 		// Fetched without the location filter so per-location event counts in
 		// the "assigned locations" section stay stable regardless of which
-		// location the bottom list is currently filtered to.
+		// location(s) the bottom list is currently filtered to.
 		allOrgEvents, _, err := client.GetAdminEventsWithTotal(r.Context(), token, baseParams)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
@@ -3004,16 +3021,56 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		for k, v := range baseParams {
 			params[k] = v
 		}
-		if filterLocationID != 0 {
-			params.Set("location_id", strconv.Itoa(filterLocationID))
+		if len(filterLocationIDs) > 0 {
+			ids := make([]string, len(filterLocationIDs))
+			for i, id := range filterLocationIDs {
+				ids[i] = strconv.Itoa(id)
+			}
+			params.Set("location_id", strings.Join(ids, ","))
 		}
 		events, total := allOrgEvents, len(allOrgEvents)
-		if filterLocationID != 0 {
+		if len(filterLocationIDs) > 0 {
 			events, total, err = client.GetAdminEventsWithTotal(r.Context(), token, params)
 			if err != nil {
 				http.Error(w, "could not load events", http.StatusBadGateway)
 				return
 			}
+		}
+
+		// type/dance are narrowed in-memory (mirroring adminEventsHandler,
+		// which has no matching API params for these either) since the API's
+		// applyEventFilters already covers the server-safe filters above.
+		if filterType != "" {
+			filtered := events[:0]
+			for _, e := range events {
+				switch filterType {
+				case "ball":
+					if e.HasBall {
+						filtered = append(filtered, e)
+					}
+				case "workshop":
+					if e.HasWorkshop {
+						filtered = append(filtered, e)
+					}
+				case "festival":
+					if e.HasFestival {
+						filtered = append(filtered, e)
+					}
+				}
+			}
+			events = filtered
+		}
+		if filterDance != "" {
+			filtered := events[:0]
+			for _, e := range events {
+				for _, d := range e.DanceNames {
+					if d == filterDance {
+						filtered = append(filtered, e)
+						break
+					}
+				}
+			}
+			events = filtered
 		}
 
 		locs, _ := client.GetLocations(r.Context())
@@ -3036,24 +3093,47 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				}
 			}
 		}
+		var filterLocationNames []string
+		for _, l := range orgLocations {
+			if filterLocationIDSet[l.ID] {
+				filterLocationNames = append(filterLocationNames, locationDisplayName(l))
+			}
+		}
+
+		var orgTemplates []EventTemplate
+		if tmpls2, err := listTemplatesForOrg(db, org.ID); err == nil {
+			orgTemplates = tmpls2
+		}
+		var orgSeries []EventSeries
+		for _, s := range series {
+			if s.OrganizationID != nil && *s.OrganizationID == org.ID {
+				orgSeries = append(orgSeries, s)
+			}
+		}
 
 		renderTemplate(w, tmpls.adminOrgDashboard, tmplData(r, cfg, i18n, org.Name, AdminOrgDashboardData{
-			Org:               org,
-			Slug:              slug,
-			Events:            events,
-			OrgMap:            orgMap,
-			Locations:         locs,
-			Dances:            dances,
-			AllTags:           allTags,
-			Series:            series,
-			FilterIncludePast: includePast,
-			FilterLocationID:  filterLocationID,
-			TotalCount:        total,
-			IsMember:          isMember,
-			NewEventOrgID:     newEventOrgID,
-			NewEventOrgName:   newEventOrgName,
-			OrgLocations:      orgLocations,
-			LocEventCounts:    locEventCounts,
+			Org:                  org,
+			Slug:                 slug,
+			Events:               events,
+			OrgMap:               orgMap,
+			Locations:            locs,
+			Dances:               dances,
+			AllTags:              allTags,
+			Series:               series,
+			FilterIncludePast:    includePast,
+			FilterType:           filterType,
+			FilterDance:          filterDance,
+			FilterLocationIDs:    filterLocationIDs,
+			FilterLocationIDSet:  filterLocationIDSet,
+			FilterLocationNames:  filterLocationNames,
+			TotalCount:           total,
+			IsMember:             isMember,
+			NewEventOrgID:        newEventOrgID,
+			NewEventOrgName:      newEventOrgName,
+			OrgLocations:         orgLocations,
+			LocEventCounts:       locEventCounts,
+			OrgTemplates:         orgTemplates,
+			OrgSeries:            orgSeries,
 		}))
 	}
 }

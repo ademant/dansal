@@ -624,6 +624,29 @@ func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error
 	return ts, nil
 }
 
+// listTemplatesForOrg returns every preset scoped to orgID, regardless of who
+// created it — unlike listTemplates' owner-or-member rule, any member
+// browsing /admin/organization/{slug} should see all of the org's presets.
+func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
+	rows, err := db.Query(
+		"SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE org_id = ? ORDER BY name",
+		orgID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ts []EventTemplate
+	for rows.Next() {
+		var t EventTemplate
+		if err := rows.Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		ts = append(ts, t)
+	}
+	return ts, nil
+}
+
 func getTemplate(db *sql.DB, id int) (EventTemplate, error) {
 	var t EventTemplate
 	err := db.QueryRow(

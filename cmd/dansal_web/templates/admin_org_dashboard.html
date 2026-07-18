@@ -36,6 +36,55 @@
 </details>
 {{end}}
 
+{{if .OrgTemplates}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_presets"}} ({{len .OrgTemplates}})</summary>
+  <div class="dash-orgs-list">
+    <div class="dash-org-row">
+      <a href="/admin/templates/new?org_id={{.Org.ID}}" class="btn-sm">+ {{$.Strings.T "admin_template_new_title"}}</a>
+    </div>
+    {{range .OrgTemplates}}
+    <div class="dash-org-row">
+      <span class="dash-org-name">{{.Name}}</span>
+      <div class="dash-org-actions">
+        <a href="/admin/events/new?tpl_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{else}}
+<div class="dash-actions">
+  <a href="/admin/templates/new?org_id={{.Org.ID}}" class="dash-btn">+ {{$.Strings.T "admin_template_new_title"}}</a>
+</div>
+{{end}}
+
+{{if .OrgSeries}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_series"}} ({{len .OrgSeries}})</summary>
+  <div class="dash-orgs-list">
+    <div class="dash-org-row">
+      <a href="/admin/series/new?org_id={{.Org.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+    </div>
+    {{range .OrgSeries}}
+    <div class="dash-org-row">
+      <a href="/admin/series/{{.ID}}" class="dash-org-name">{{.Title}}</a>
+      <div class="dash-org-mini-stats">
+        <span title="{{$.Strings.T "series_events"}}">📅 {{.EventCount}}</span>
+      </div>
+      <div class="dash-org-actions">
+        <a href="/admin/series/{{.ID}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{else}}
+<div class="dash-actions">
+  <a href="/admin/series/new?org_id={{.Org.ID}}" class="dash-btn">+ {{$.Strings.T "series_new"}}</a>
+</div>
+{{end}}
+
 {{if .NewEventOrgID}}
 <div class="dash-actions">
   <a href="/admin/events/new?org_id={{.NewEventOrgID}}" class="dash-btn">
@@ -54,27 +103,29 @@
   </label>
   <select name="type" onchange="this.form.submit()">
     <option value="">{{$.Strings.T "filter_all_types"}}</option>
-    <option value="ball">{{$.Strings.T "filter_type_ball"}}</option>
-    <option value="workshop">{{$.Strings.T "filter_type_workshop"}}</option>
-    <option value="festival">{{$.Strings.T "filter_type_festival"}}</option>
+    <option value="ball" {{if eq .FilterType "ball"}}selected{{end}}>{{$.Strings.T "filter_type_ball"}}</option>
+    <option value="workshop" {{if eq .FilterType "workshop"}}selected{{end}}>{{$.Strings.T "filter_type_workshop"}}</option>
+    <option value="festival" {{if eq .FilterType "festival"}}selected{{end}}>{{$.Strings.T "filter_type_festival"}}</option>
   </select>
   <select name="dance" onchange="this.form.submit()">
     <option value="">{{$.Strings.T "filter_all_dances"}}</option>
-    {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
+    {{range .Dances}}<option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>{{end}}
   </select>
-  {{if .FilterLocationID}}<input type="hidden" name="location_id" value="{{.FilterLocationID}}">{{end}}
+  {{if .OrgLocations}}
+  <select name="location_id" multiple class="loc-multi-select" onchange="this.form.submit()" title="{{$.Strings.T "col_location"}}">
+    {{range .OrgLocations}}
+    <option value="{{.ID}}" {{if index $.Data.FilterLocationIDSet .ID}}selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
+    {{end}}
+  </select>
+  {{end}}
   <a href="/admin/organization/{{.Slug}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
 
-{{if .FilterLocationID}}
-{{range .OrgLocations}}
-{{if eq .ID $.Data.FilterLocationID}}
+{{if .FilterLocationIDs}}
 <p class="loc-filter-pill">
-  📍 {{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}
-  <a href="/admin/organization/{{$.Data.Slug}}{{if $.Data.FilterIncludePast}}?include_past=1{{end}}" title="{{$.Strings.T "filter_clear"}}">✕</a>
+  📍 {{join .FilterLocationNames}}
+  <a href="/admin/organization/{{.Slug}}{{if .FilterIncludePast}}?include_past=1{{end}}" title="{{$.Strings.T "filter_clear"}}">✕</a>
 </p>
-{{end}}
-{{end}}
 {{end}}
 
 {{if .Events}}
@@ -248,6 +299,7 @@
 .dash-btn-import:hover{background:#155727}
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px}
 .event-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:var(--bg-card)}
+.loc-multi-select{min-height:2.1rem;max-height:6rem}
 .filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
 .btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:var(--fg-dim);text-decoration:none;background:var(--bg-card)}
 .btn-reset:hover{background:var(--bg-hover)}

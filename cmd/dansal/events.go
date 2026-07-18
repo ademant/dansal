@@ -634,9 +634,20 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		}
 	}
 	if v := q.Get("location_id"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			*query += " AND e.location_id = ?"
-			*args = append(*args, n)
+		parts := strings.Split(v, ",")
+		ids := make([]int, 0, len(parts))
+		for _, p := range parts {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+				ids = append(ids, n)
+			}
+		}
+		if len(ids) > 0 {
+			placeholders := strings.Repeat("?,", len(ids))
+			placeholders = placeholders[:len(placeholders)-1]
+			*query += " AND e.location_id IN (" + placeholders + ")"
+			for _, n := range ids {
+				*args = append(*args, n)
+			}
 		}
 	}
 	if v := q.Get("series_id"); v != "" {

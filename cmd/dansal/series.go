@@ -19,6 +19,8 @@ type EventSeries struct {
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
+	MusicianID        *int            `json:"musician_id,omitempty"`
+	InstructorID      *int            `json:"instructor_id,omitempty"`
 	DefaultLocationID *int            `json:"default_location_id,omitempty"`
 	DefaultStartTime  string          `json:"default_start_time"`
 	DefaultEndTime    string          `json:"default_end_time"`
@@ -159,12 +161,12 @@ func uniqueSlug(base string, excludeID int) string {
 // scanSeries scans one row from event_series.
 func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
 	var s EventSeries
-	var orgID, locID sql.NullInt64
+	var orgID, musicianID, instructorID, locID sql.NullInt64
 	var inviteToken sql.NullString
 	var templateData string
 	if err := row.Scan(
 		&s.ID, &s.Slug, &s.Title, &s.Description,
-		&orgID, &locID,
+		&orgID, &musicianID, &instructorID, &locID,
 		&s.DefaultStartTime, &s.DefaultEndTime,
 		&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
 	); err != nil {
@@ -173,6 +175,14 @@ func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		s.OrganizationID = &v
+	}
+	if musicianID.Valid {
+		v := int(musicianID.Int64)
+		s.MusicianID = &v
+	}
+	if instructorID.Valid {
+		v := int(instructorID.Int64)
+		s.InstructorID = &v
 	}
 	if locID.Valid {
 		v := int(locID.Int64)
@@ -186,7 +196,7 @@ func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
 }
 
 const seriesSelectCols = `id, slug, title, COALESCE(description,''),
-	organization_id, default_location_id,
+	organization_id, musician_id, instructor_id, default_location_id,
 	COALESCE(default_start_time,''), COALESCE(default_end_time,''),
 	invite_token, created_at, COALESCE(updated_at,0), COALESCE(template_data,'{}')`
 
@@ -262,8 +272,36 @@ func checkSeriesAccess(w http.ResponseWriter, r *http.Request) (series EventSeri
 		ok = true
 		return
 	}
+	if series.MusicianID != nil && isMusicianOwner(callerID, *series.MusicianID) {
+		ok = true
+		return
+	}
+	if series.InstructorID != nil && isInstructorOwner(callerID, *series.InstructorID) {
+		ok = true
+		return
+	}
 	writeError(w, "forbidden", http.StatusForbidden)
 	return
+}
+
+// isMusicianOwner reports whether callerID is the user who created musicianID
+// — the only ownership link musicians have, mirroring the check already used
+// by deleteMusician.
+func isMusicianOwner(callerID, musicianID int) bool {
+	var createdBy sql.NullInt64
+	if err := db.QueryRow("SELECT created_by_id FROM musicians WHERE id=?", musicianID).Scan(&createdBy); err != nil {
+		return false
+	}
+	return createdBy.Valid && int(createdBy.Int64) == callerID
+}
+
+// isInstructorOwner is the instructor equivalent of isMusicianOwner.
+func isInstructorOwner(callerID, instructorID int) bool {
+	var createdBy sql.NullInt64
+	if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id=?", instructorID).Scan(&createdBy); err != nil {
+		return false
+	}
+	return createdBy.Valid && int(createdBy.Int64) == callerID
 }
 
 // GET /api/v1/series
@@ -278,29 +316,47 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	orgIDFilter := r.URL.Query().Get("org_id")
+	musicianIDFilter := r.URL.Query().Get("musician_id")
+	instructorIDFilter := r.URL.Query().Get("instructor_id")
 
 	if role == RoleAdmin {
-		if orgIDFilter != "" {
+		switch {
+		case orgIDFilter != "":
 			oid, _ := strconv.Atoi(orgIDFilter)
 			rows, err = db.Query(`
 				SELECT `+seriesSelectCols+`,
 				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
 				FROM event_series WHERE organization_id=? ORDER BY id DESC`, oid)
-		} else {
+		case musicianIDFilter != "":
+			mid, _ := strconv.Atoi(musicianIDFilter)
+			rows, err = db.Query(`
+				SELECT `+seriesSelectCols+`,
+				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
+				FROM event_series WHERE musician_id=? ORDER BY id DESC`, mid)
+		case instructorIDFilter != "":
+			iid, _ := strconv.Atoi(instructorIDFilter)
+			rows, err = db.Query(`
+				SELECT `+seriesSelectCols+`,
+				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
+				FROM event_series WHERE instructor_id=? ORDER BY id DESC`, iid)
+		default:
 			rows, err = db.Query(`
 				SELECT ` + seriesSelectCols + `,
 				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
 				FROM event_series ORDER BY id DESC`)
 		}
 	} else {
-		// Non-admins only see series for orgs they belong to.
+		// Non-admins only see series for orgs they belong to, or series they
+		// own directly via a musician/instructor they created.
 		rows, err = db.Query(`
 			SELECT `+seriesSelectCols+`,
 			       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
 			FROM event_series
 			WHERE organization_id IN (
 			      SELECT organization_id FROM organization_members WHERE user_id=?)
-			ORDER BY id DESC`, callerID)
+			   OR musician_id IN (SELECT id FROM musicians WHERE created_by_id=?)
+			   OR instructor_id IN (SELECT id FROM instructors WHERE created_by_id=?)
+			ORDER BY id DESC`, callerID, callerID, callerID)
 	}
 	if err != nil {
 		writeInternalError(w, err)
@@ -311,12 +367,12 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 	result := []EventSeries{}
 	for rows.Next() {
 		var s EventSeries
-		var orgID, locID sql.NullInt64
+		var orgID, musicianID, instructorID, locID sql.NullInt64
 		var inviteToken sql.NullString
 		var templateData string
 		if err := rows.Scan(
 			&s.ID, &s.Slug, &s.Title, &s.Description,
-			&orgID, &locID,
+			&orgID, &musicianID, &instructorID, &locID,
 			&s.DefaultStartTime, &s.DefaultEndTime,
 			&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
 			&s.EventCount,
@@ -327,6 +383,14 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 		if orgID.Valid {
 			v := int(orgID.Int64)
 			s.OrganizationID = &v
+		}
+		if musicianID.Valid {
+			v := int(musicianID.Int64)
+			s.MusicianID = &v
+		}
+		if instructorID.Valid {
+			v := int(instructorID.Int64)
+			s.InstructorID = &v
 		}
 		if locID.Valid {
 			v := int(locID.Int64)
@@ -354,6 +418,8 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		Title             string          `json:"title"`
 		Description       string          `json:"description"`
 		OrganizationID    *int            `json:"organization_id"`
+		MusicianID        *int            `json:"musician_id"`
+		InstructorID      *int            `json:"instructor_id"`
 		DefaultLocationID *int            `json:"default_location_id"`
 		DefaultStartTime  string          `json:"default_start_time"`
 		DefaultEndTime    string          `json:"default_end_time"`
@@ -381,14 +447,27 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		templateDataStr = string(req.TemplateData)
 	}
 
-	// Auth check
+	// Auth check — a series must be owned by something the caller has rights
+	// over: an org they belong to, or a musician/instructor they created.
 	if role != RoleAdmin {
-		if req.OrganizationID == nil {
-			writeError(w, "organization_id required for non-admin", http.StatusBadRequest)
-			return
-		}
-		if !isOrgMember(callerID, *req.OrganizationID) {
-			writeError(w, "forbidden", http.StatusForbidden)
+		switch {
+		case req.OrganizationID != nil:
+			if !isOrgMember(callerID, *req.OrganizationID) {
+				writeError(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		case req.MusicianID != nil:
+			if !isMusicianOwner(callerID, *req.MusicianID) {
+				writeError(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		case req.InstructorID != nil:
+			if !isInstructorOwner(callerID, *req.InstructorID) {
+				writeError(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		default:
+			writeError(w, "organization_id, musician_id or instructor_id required for non-admin", http.StatusBadRequest)
 			return
 		}
 	}
@@ -457,26 +536,15 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 
 	slug := uniqueSlug(baseSlug, 0)
 
-	var result sql.Result
-	if req.OrganizationID != nil {
-		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, organization_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-			slug, req.Title, req.Description,
-			*req.OrganizationID, optionalInt(req.DefaultLocationID),
-			startTimeStr, endTimeStr,
-			time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
-		)
-	} else {
-		result, err = tx.Exec(`INSERT INTO event_series
-			(slug, title, description, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
-			VALUES (?,?,?,?,?,?,?,?,?,?)`,
-			slug, req.Title, req.Description,
-			optionalInt(req.DefaultLocationID),
-			startTimeStr, endTimeStr,
-			time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
-		)
-	}
+	result, err := tx.Exec(`INSERT INTO event_series
+		(slug, title, description, organization_id, musician_id, instructor_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		slug, req.Title, req.Description,
+		optionalInt(req.OrganizationID), optionalInt(req.MusicianID), optionalInt(req.InstructorID),
+		optionalInt(req.DefaultLocationID),
+		startTimeStr, endTimeStr,
+		time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
+	)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -513,7 +581,14 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		evID64, _ := evResult.LastInsertId()
-		if err := applySeriesTemplate(tx, int(evID64), td); err != nil {
+		evID := int(evID64)
+		if req.MusicianID != nil {
+			tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", evID, *req.MusicianID)
+		}
+		if req.InstructorID != nil {
+			tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *req.InstructorID)
+		}
+		if err := applySeriesTemplate(tx, evID, td); err != nil {
 			writeError(w, "failed to apply series defaults: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -569,6 +644,8 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 		DefaultStartTime  string          `json:"default_start_time"`
 		DefaultEndTime    string          `json:"default_end_time"`
 		OrganizationID    *int            `json:"organization_id"`
+		MusicianID        *int            `json:"musician_id"`
+		InstructorID      *int            `json:"instructor_id"`
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -581,11 +658,29 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgID := series.OrganizationID
-	if role == RoleAdmin && req.OrganizationID != nil {
-		if *req.OrganizationID == 0 {
-			orgID = nil
-		} else {
-			orgID = req.OrganizationID
+	musicianID := series.MusicianID
+	instructorID := series.InstructorID
+	if role == RoleAdmin {
+		if req.OrganizationID != nil {
+			if *req.OrganizationID == 0 {
+				orgID = nil
+			} else {
+				orgID = req.OrganizationID
+			}
+		}
+		if req.MusicianID != nil {
+			if *req.MusicianID == 0 {
+				musicianID = nil
+			} else {
+				musicianID = req.MusicianID
+			}
+		}
+		if req.InstructorID != nil {
+			if *req.InstructorID == 0 {
+				instructorID = nil
+			} else {
+				instructorID = req.InstructorID
+			}
 		}
 	}
 	templateDataStr := string(series.TemplateData)
@@ -599,12 +694,12 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,
-		    organization_id=?, updated_at=?, updated_by=?, template_data=?
+		    organization_id=?, musician_id=?, instructor_id=?, updated_at=?, updated_by=?, template_data=?
 		WHERE id=?`,
 		req.Title, req.Description,
 		optionalInt(req.DefaultLocationID),
 		req.DefaultStartTime, req.DefaultEndTime,
-		optionalInt(orgID),
+		optionalInt(orgID), optionalInt(musicianID), optionalInt(instructorID),
 		time.Now().Unix(), resolveDisplayName(callerID), templateDataStr,
 		series.ID,
 	)
@@ -695,7 +790,14 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	evID64, _ := result.LastInsertId()
-	if err := applySeriesTemplate(db, int(evID64), parseSeriesTemplateData(series.TemplateData)); err != nil {
+	evID := int(evID64)
+	if series.MusicianID != nil {
+		db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", evID, *series.MusicianID)
+	}
+	if series.InstructorID != nil {
+		db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *series.InstructorID)
+	}
+	if err := applySeriesTemplate(db, evID, parseSeriesTemplateData(series.TemplateData)); err != nil {
 		writeInternalError(w, err)
 		return
 	}

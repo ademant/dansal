@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS event_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     org_id INTEGER,
+    musician_id INTEGER,
+    instructor_id INTEGER,
     name TEXT NOT NULL,
     data TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -161,6 +163,27 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 			db.Exec("INSERT OR IGNORE INTO city_aliases(alias, canonical) VALUES(?,?)", s[0], s[1])
 		}
 		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (2)")
+	}
+
+	// Migration v3: event_templates.musician_id/instructor_id — let a preset
+	// be owned directly by a musician or instructor instead of only an org,
+	// mirroring event_series.musician_id/instructor_id in calendar.db.
+	if !migrationApplied(db, 3) {
+		db.Exec("ALTER TABLE event_templates ADD COLUMN musician_id INTEGER")
+		db.Exec("ALTER TABLE event_templates ADD COLUMN instructor_id INTEGER")
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (3)")
+	}
+	// Safety net: ensure the columns exist even if v3 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_templates') WHERE name='musician_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE event_templates ADD COLUMN musician_id INTEGER")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_templates') WHERE name='instructor_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE event_templates ADD COLUMN instructor_id INTEGER")
+		}
 	}
 
 	return db
@@ -592,16 +615,26 @@ func listFederatedEvents(db *sql.DB) ([]FederatedEvent, error) {
 }
 
 type EventTemplate struct {
-	ID        int
-	UserID    int
-	OrgID     *int
-	Name      string
-	Data      string
-	CreatedAt string
+	ID           int
+	UserID       int
+	OrgID        *int
+	MusicianID   *int
+	InstructorID *int
+	Name         string
+	Data         string
+	CreatedAt    string
+}
+
+const eventTemplateCols = "id, user_id, org_id, musician_id, instructor_id, name, data, created_at"
+
+func scanEventTemplate(row interface{ Scan(...any) error }) (EventTemplate, error) {
+	var t EventTemplate
+	err := row.Scan(&t.ID, &t.UserID, &t.OrgID, &t.MusicianID, &t.InstructorID, &t.Name, &t.Data, &t.CreatedAt)
+	return t, err
 }
 
 func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error) {
-	query := "SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE user_id = ?"
+	query := "SELECT " + eventTemplateCols + " FROM event_templates WHERE user_id = ?"
 	args := []any{userID}
 	for _, oid := range orgIDs {
 		query += " OR org_id = ?"
@@ -615,8 +648,8 @@ func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error
 	defer rows.Close()
 	var ts []EventTemplate
 	for rows.Next() {
-		var t EventTemplate
-		if err := rows.Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt); err != nil {
+		t, err := scanEventTemplate(rows)
+		if err != nil {
 			return nil, err
 		}
 		ts = append(ts, t)
@@ -629,7 +662,7 @@ func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error
 // browsing /admin/organization/{slug} should see all of the org's presets.
 func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
 	rows, err := db.Query(
-		"SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE org_id = ? ORDER BY name",
+		"SELECT "+eventTemplateCols+" FROM event_templates WHERE org_id = ? ORDER BY name",
 		orgID,
 	)
 	if err != nil {
@@ -638,8 +671,51 @@ func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
 	defer rows.Close()
 	var ts []EventTemplate
 	for rows.Next() {
-		var t EventTemplate
-		if err := rows.Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt); err != nil {
+		t, err := scanEventTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		ts = append(ts, t)
+	}
+	return ts, nil
+}
+
+// listTemplatesForMusician / listTemplatesForInstructor are the musician/
+// instructor equivalents of listTemplatesForOrg, for the admin musician/
+// instructor dashboards.
+func listTemplatesForMusician(db *sql.DB, musicianID int) ([]EventTemplate, error) {
+	rows, err := db.Query(
+		"SELECT "+eventTemplateCols+" FROM event_templates WHERE musician_id = ? ORDER BY name",
+		musicianID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ts []EventTemplate
+	for rows.Next() {
+		t, err := scanEventTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		ts = append(ts, t)
+	}
+	return ts, nil
+}
+
+func listTemplatesForInstructor(db *sql.DB, instructorID int) ([]EventTemplate, error) {
+	rows, err := db.Query(
+		"SELECT "+eventTemplateCols+" FROM event_templates WHERE instructor_id = ? ORDER BY name",
+		instructorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ts []EventTemplate
+	for rows.Next() {
+		t, err := scanEventTemplate(rows)
+		if err != nil {
 			return nil, err
 		}
 		ts = append(ts, t)
@@ -648,17 +724,16 @@ func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
 }
 
 func getTemplate(db *sql.DB, id int) (EventTemplate, error) {
-	var t EventTemplate
-	err := db.QueryRow(
-		"SELECT id, user_id, org_id, name, data, created_at FROM event_templates WHERE id = ?", id,
-	).Scan(&t.ID, &t.UserID, &t.OrgID, &t.Name, &t.Data, &t.CreatedAt)
-	return t, err
+	return scanEventTemplate(db.QueryRow("SELECT "+eventTemplateCols+" FROM event_templates WHERE id = ?", id))
 }
 
-func saveTemplate(db *sql.DB, userID int, orgID *int, name, data string) (int64, error) {
+// saveTemplate persists a preset owned by at most one of org/musician/instructor
+// (mirroring event_series' ownership model). Existing callers pass nil for
+// musicianID/instructorID, preserving today's org-or-nothing behavior.
+func saveTemplate(db *sql.DB, userID int, orgID, musicianID, instructorID *int, name, data string) (int64, error) {
 	res, err := db.Exec(
-		"INSERT INTO event_templates (user_id, org_id, name, data) VALUES (?, ?, ?, ?)",
-		userID, orgID, name, data,
+		"INSERT INTO event_templates (user_id, org_id, musician_id, instructor_id, name, data) VALUES (?, ?, ?, ?, ?, ?)",
+		userID, orgID, musicianID, instructorID, name, data,
 	)
 	if err != nil {
 		return 0, err

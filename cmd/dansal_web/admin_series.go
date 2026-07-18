@@ -56,6 +56,8 @@ type AdminSeriesEditData struct {
 	Series      EventSeries
 	Locations   []Location
 	Orgs        []Organization
+	Musicians   []Musician
+	Instructors []Instructor
 	IsAdmin     bool
 	BaseURL     string
 	ErrorKey    string
@@ -71,19 +73,23 @@ type PrefillDate struct {
 }
 
 type AdminSeriesNewData struct {
-	Locations        []Location
-	Orgs             []Organization
-	Series           []EventSeries
-	IsAdmin          bool
-	ErrorKey         string
-	PrefillTitle     string
-	PrefillLocID     int
-	PrefillStart     string
-	PrefillEnd       string
-	PrefillOrgID     int
-	PrefillEventIDs  []int
-	PrefillDates     []PrefillDate
-	PrefillDateCount int // number of pre-filled rows; handler skips these when calling AddSeriesDate
+	Locations           []Location
+	Orgs                []Organization
+	Musicians           []Musician
+	Instructors         []Instructor
+	Series              []EventSeries
+	IsAdmin             bool
+	ErrorKey            string
+	PrefillTitle        string
+	PrefillLocID        int
+	PrefillStart        string
+	PrefillEnd          string
+	PrefillOrgID        int
+	PrefillMusicianID   int
+	PrefillInstructorID int
+	PrefillEventIDs     []int
+	PrefillDates        []PrefillDate
+	PrefillDateCount    int // number of pre-filled rows; handler skips these when calling AddSeriesDate
 }
 
 // parseTimeOnly extracts HH:MM from an RFC3339 timestamp, preserving the
@@ -145,11 +151,15 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		token := getSessionToken(r)
 		locs, _ := client.GetLocations(r.Context())
 		orgs, _ := client.GetOrganizations(r.Context())
+		musicians, _ := client.GetMusicians(r.Context())
+		instructors, _ := client.GetInstructors(r.Context())
 
 		data := AdminSeriesNewData{
-			Locations: locs,
-			Orgs:      orgs,
-			IsAdmin:   user.Role == "admin",
+			Locations:   locs,
+			Orgs:        orgs,
+			Musicians:   musicians,
+			Instructors: instructors,
+			IsAdmin:     user.Role == "admin",
 		}
 
 		// Pre-fill from event IDs passed by bulk-assign-series
@@ -162,6 +172,12 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		}
 		if orgIDStr := r.URL.Query().Get("org_id"); orgIDStr != "" {
 			data.PrefillOrgID, _ = strconv.Atoi(orgIDStr)
+		}
+		if musicianIDStr := r.URL.Query().Get("musician_id"); musicianIDStr != "" {
+			data.PrefillMusicianID, _ = strconv.Atoi(musicianIDStr)
+		}
+		if instructorIDStr := r.URL.Query().Get("instructor_id"); instructorIDStr != "" {
+			data.PrefillInstructorID, _ = strconv.Atoi(instructorIDStr)
 		}
 		if prefillID, err := strconv.Atoi(r.URL.Query().Get("prefill_event_id")); err == nil && prefillID > 0 {
 			if ev, err := client.GetEventAuthed(r.Context(), prefillID, token); err == nil {
@@ -226,6 +242,16 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if v := r.FormValue("organization_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
 				body["organization_id"] = n
+			}
+		}
+		if v := r.FormValue("musician_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				body["musician_id"] = n
+			}
+		}
+		if v := r.FormValue("instructor_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				body["instructor_id"] = n
 			}
 		}
 		if v := r.FormValue("default_location_id"); v != "" {
@@ -308,6 +334,8 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		}
 		locs, _ := client.GetLocations(r.Context())
 		orgs, _ := client.GetOrganizations(r.Context())
+		musicians, _ := client.GetMusicians(r.Context())
+		instructors, _ := client.GetInstructors(r.Context())
 		dances, _ := client.GetDances(r.Context())
 		td := parseSeriesDefaults(series.TemplateData)
 		danceIDSet := make(map[int]bool, len(td.DanceIDs))
@@ -319,6 +347,8 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Series:      series,
 			Locations:   locs,
 			Orgs:        orgs,
+			Musicians:   musicians,
+			Instructors: instructors,
 			IsAdmin:     user.Role == "admin",
 			BaseURL:     cfg.publicBaseURL(),
 			TplDefaults: td,
@@ -411,6 +441,22 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 				body["organization_id"] = n
 			} else {
 				body["organization_id"] = 0
+			}
+		}
+		if vals, ok := r.Form["musician_id"]; ok {
+			n, _ := strconv.Atoi(vals[0])
+			if n > 0 {
+				body["musician_id"] = n
+			} else {
+				body["musician_id"] = 0
+			}
+		}
+		if vals, ok := r.Form["instructor_id"]; ok {
+			n, _ := strconv.Atoi(vals[0])
+			if n > 0 {
+				body["instructor_id"] = n
+			} else {
+				body["instructor_id"] = 0
 			}
 		}
 		body["template_data"] = json.RawMessage(seriesDefaultsFromForm(r, parseSeriesDefaults(existing.TemplateData).Timetable))

@@ -32,6 +32,30 @@
   </section>
   {{end}}
 
+  {{if .Musicians}}
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_owner_musician"}}</h2>
+    <select name="musician_id" style="width:100%">
+      <option value="">—</option>
+      {{range .Musicians}}
+      <option value="{{.ID}}"{{if eq $.Data.PrefillMusicianID .ID}} selected{{end}}>{{.Bandname}}</option>
+      {{end}}
+    </select>
+  </section>
+  {{end}}
+
+  {{if .Instructors}}
+  <section class="form-section">
+    <h2>{{$.Strings.T "series_owner_instructor"}}</h2>
+    <select name="instructor_id" style="width:100%">
+      <option value="">—</option>
+      {{range .Instructors}}
+      <option value="{{.ID}}"{{if eq $.Data.PrefillInstructorID .ID}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </section>
+  {{end}}
+
   <section class="form-section">
     <h2>{{$.Strings.T "series_default_location"}}</h2>
     <div class="loc-filter-wrap">

@@ -1838,7 +1838,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			renderErr("admin_save_error")
 			return
 		}
-		if _, err := saveTemplate(db, su.ID, tplOrgID, name, string(data)); err != nil {
+		if _, err := saveTemplate(db, su.ID, tplOrgID, nil, nil, name, string(data)); err != nil {
 			log.Printf("save template error: %v", err)
 			renderErr("admin_save_error")
 			return

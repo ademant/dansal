@@ -3338,6 +3338,8 @@ type EventSeries struct {
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
+	MusicianID        *int            `json:"musician_id,omitempty"`
+	InstructorID      *int            `json:"instructor_id,omitempty"`
 	DefaultLocationID *int            `json:"default_location_id,omitempty"`
 	DefaultStartTime  string          `json:"default_start_time"`
 	DefaultEndTime    string          `json:"default_end_time"`

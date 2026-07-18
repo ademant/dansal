@@ -1495,6 +1495,26 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE musicians ADD COLUMN email TEXT`)
 		}
 	}
+	// v14: event_series.musician_id/instructor_id — let a series be owned
+	// directly by a musician or instructor instead of only an organization
+	// (e.g. an instructor's VHS dance course with no org involved).
+	if !applied(14) {
+		db.Exec(`ALTER TABLE event_series ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL`)
+		db.Exec(`ALTER TABLE event_series ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL`)
+		mark(14)
+	}
+	// Safety net: ensure event_series.musician_id/instructor_id exist even if v14 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_series') WHERE name='musician_id'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE event_series ADD COLUMN musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_series') WHERE name='instructor_id'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE event_series ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2504,6 +2524,8 @@ func createTables() error {
 		title TEXT NOT NULL,
 		description TEXT DEFAULT '',
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+		musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL,
+		instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL,
 		default_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
 		default_start_time TEXT DEFAULT '',
 		default_end_time TEXT DEFAULT '',
@@ -2926,6 +2948,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(13)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(14)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

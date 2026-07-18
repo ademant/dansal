@@ -42,6 +42,26 @@
     <span style="font-weight:500">{{.Series.OrganizationID}}</span>
   </section>
   {{end}}
+  {{if .IsAdmin}}
+  <section class="form-section">
+    <label>{{$.Strings.T "series_owner_musician"}}</label>
+    <select name="musician_id" style="width:100%">
+      <option value="">—</option>
+      {{range .Musicians}}
+      <option value="{{.ID}}" {{if and $.Data.Series.MusicianID (eq .ID (derefInt $.Data.Series.MusicianID))}}selected{{end}}>{{.Bandname}}</option>
+      {{end}}
+    </select>
+  </section>
+  <section class="form-section">
+    <label>{{$.Strings.T "series_owner_instructor"}}</label>
+    <select name="instructor_id" style="width:100%">
+      <option value="">—</option>
+      {{range .Instructors}}
+      <option value="{{.ID}}" {{if and $.Data.Series.InstructorID (eq .ID (derefInt $.Data.Series.InstructorID))}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </section>
+  {{end}}
   <section class="form-section">
     <label>{{$.Strings.T "series_default_location"}}</label>
     <div class="loc-filter-wrap">

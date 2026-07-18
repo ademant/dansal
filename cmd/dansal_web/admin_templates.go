@@ -55,7 +55,7 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 // form first, then calls this against the freshly-saved event).
 func saveEventAsTemplate(db *sql.DB, userID int, orgID *int, name string, ev Event) (int64, error) {
 	data, _ := json.Marshal(templateDataFromEvent(ev))
-	return saveTemplate(db, userID, orgID, name, string(data))
+	return saveTemplate(db, userID, orgID, nil, nil, name, string(data))
 }
 
 func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {

@@ -45,12 +45,14 @@
   <button type="button" class="mt-btn" id="mt-actions-btn" title="{{.Strings.T "mobile_bulk_actions"}}" aria-label="{{.Strings.T "mobile_bulk_actions"}}" hidden>☰<span id="mt-ms-count"></span></button>
   <button type="button" class="mt-btn mt-spacer" id="mt-ms-close" title="{{.Strings.T "admin_magic_link_close"}}" aria-label="{{.Strings.T "admin_magic_link_close"}}" hidden>✕</button>
 </div>
-<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-  <h1 style="margin:0">{{.Strings.T "admin_events_title"}}</h1>
-  <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
-  <a href="/admin/events/import" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#217a3c;color:#fff;border-radius:4px;font-size:.9rem">↑ {{.Strings.T "admin_import_title"}}</a>
-  <a href="/admin/events?unpublished=1" style="text-decoration:none;padding:.4rem 1rem;background:#6c5ce7;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_unpublished"}}{{if .PendingSuggestionCount}} *{{end}}</a>
-  <a href="/admin/events?flagged=1&include_past=1" style="text-decoration:none;padding:.4rem 1rem;background:#c0392b;color:#fff;border-radius:4px;font-size:.9rem">{{.Strings.T "admin_filter_duplicates"}}{{if .PossibleDuplicateCount}} *{{end}}</a>
+<div class="evt-header">
+  <h1>{{.Strings.T "admin_events_title"}}</h1>
+  <div class="evt-hdr-actions">
+    <a href="/admin/events/new" class="evt-hdr-btn evt-hdr-new" title="{{.Strings.T "admin_event_new_title"}}" aria-label="{{.Strings.T "admin_event_new_title"}}"><span class="ehb-icon">➕</span><span class="ehb-label">{{.Strings.T "admin_event_new_title"}}</span></a>
+    <a href="/admin/events/import" class="evt-hdr-btn evt-hdr-import" title="{{.Strings.T "admin_import_title"}}" aria-label="{{.Strings.T "admin_import_title"}}"><span class="ehb-icon">⬆️</span><span class="ehb-label">{{.Strings.T "admin_import_title"}}</span></a>
+    <a href="/admin/events?unpublished=1" class="evt-hdr-btn evt-hdr-unpub{{if .PendingSuggestionCount}} has-badge{{end}}" title="{{.Strings.T "admin_filter_unpublished"}}" aria-label="{{.Strings.T "admin_filter_unpublished"}}"><span class="ehb-icon">👁️</span><span class="ehb-label">{{.Strings.T "admin_filter_unpublished"}}{{if .PendingSuggestionCount}} *{{end}}</span></a>
+    <a href="/admin/events?flagged=1&include_past=1" class="evt-hdr-btn evt-hdr-dup{{if .PossibleDuplicateCount}} has-badge{{end}}" title="{{.Strings.T "admin_filter_duplicates"}}" aria-label="{{.Strings.T "admin_filter_duplicates"}}"><span class="ehb-icon">⚠️</span><span class="ehb-label">{{.Strings.T "admin_filter_duplicates"}}{{if .PossibleDuplicateCount}} *{{end}}</span></a>
+  </div>
 </div>
 {{with .Data}}{{if .FilterCreatedAfter}}
 <p class="import-notice">{{$.Strings.T "admin_import_recent_filter"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
@@ -261,6 +263,19 @@
 {{end}}
 
 <style>
+.evt-header{display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+.evt-header h1{margin:0}
+.evt-hdr-actions{display:flex;flex-wrap:wrap;gap:.5rem}
+.evt-hdr-btn{display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;color:#fff;position:relative}
+.evt-hdr-new{background:#1a6eb5}
+.evt-hdr-new:hover{background:#0d4a80}
+.evt-hdr-import{background:#217a3c}
+.evt-hdr-import:hover{background:#155727}
+.evt-hdr-unpub{background:#6c5ce7}
+.evt-hdr-unpub:hover{background:#5541b8}
+.evt-hdr-dup{background:#c0392b}
+.evt-hdr-dup:hover{background:#992d21}
+.ehb-icon{line-height:1}
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .event-filters select,.event-filters input[type=date]{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
 .event-filters .ef-date{order:8}
@@ -342,6 +357,10 @@
   .mt-spacer{margin-left:auto}
   #mt-ms-count{font-size:.7rem;margin-left:.2rem;color:#1a6eb5;font-weight:600}
   body{padding-top:2.6rem}
+
+  .evt-hdr-btn{padding:.45rem;width:2.2rem;height:2.2rem;justify-content:center}
+  .ehb-label{display:none}
+  .evt-hdr-btn.has-badge::after{content:'';position:absolute;top:1px;right:1px;width:.5rem;height:.5rem;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.25)}
 
   .event-filters{display:none;position:fixed;inset:0;z-index:210;flex-direction:column;align-items:stretch;overflow-y:auto;padding:1rem;border-radius:0;margin-bottom:0}
   .event-filters .af-input{max-width:none;width:100%;box-sizing:border-box}

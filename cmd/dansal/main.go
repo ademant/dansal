@@ -1482,6 +1482,19 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE event_series ADD COLUMN template_data TEXT NOT NULL DEFAULT '{}'`)
 		}
 	}
+	// v13: musicians.email — admin-only contact address, mirroring instructors.email.
+	if !applied(13) {
+		db.Exec(`ALTER TABLE musicians ADD COLUMN email TEXT`)
+		mark(13)
+	}
+	// Safety net: ensure musicians.email exists even if v13 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('musicians') WHERE name='email'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE musicians ADD COLUMN email TEXT`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2568,6 +2581,7 @@ func createTables() error {
 		spotify TEXT,
 		deezer TEXT,
 		genre TEXT,
+		email TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT '',
@@ -2911,6 +2925,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(13)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

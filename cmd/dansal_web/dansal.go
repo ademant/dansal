@@ -334,6 +334,7 @@ type Musician struct {
 	Spotify      string `json:"spotify,omitempty"`
 	Deezer       string `json:"deezer,omitempty"`
 	Genre        string `json:"genre,omitempty"`
+	Email        string `json:"email,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`

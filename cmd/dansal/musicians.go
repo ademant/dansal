@@ -29,6 +29,7 @@ type Musician struct {
 	Spotify      string `json:"spotify,omitempty"`
 	Deezer       string `json:"deezer,omitempty"`
 	Genre        string `json:"genre,omitempty"`
+	Email        string `json:"email,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
@@ -58,6 +59,7 @@ type MusicianCreateRequest struct {
 	Spotify      string `json:"spotify"`
 	Deezer       string `json:"deezer"`
 	Genre        string `json:"genre"`
+	Email        string `json:"email"`
 }
 
 // MusicianMergePatchRequest is the body accepted by PATCH
@@ -84,6 +86,7 @@ type MusicianMergePatchRequest struct {
 	Spotify      *string `json:"spotify,omitempty"`
 	Deezer       *string `json:"deezer,omitempty"`
 	Genre        *string `json:"genre,omitempty"`
+	Email        *string `json:"email,omitempty"`
 }
 
 const musicianCols = `id, bandname,
@@ -92,7 +95,7 @@ const musicianCols = `id, bandname,
 	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
 	COALESCE(mastodon,''), COALESCE(instagram,''),
 	COALESCE(facebook,''), COALESCE(soundcloud,''),
-	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')`
+	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), COALESCE(email,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')`
 
 // scanMusician scans a musicianCols row into a Musician. Extra destination
 // pointers (e.g. for appended event-count columns) can be passed via extra.
@@ -101,7 +104,7 @@ func scanMusician(row interface{ Scan(...any) error }, extra ...any) (Musician, 
 	dest := []any{&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
 		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
 		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud,
-		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt, &m.UpdatedAt, &m.UpdatedBy}
+		&m.Spotify, &m.Deezer, &m.Genre, &m.Email, &m.CreatedAt, &m.UpdatedAt, &m.UpdatedBy}
 	err := row.Scan(append(dest, extra...)...)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
@@ -286,12 +289,12 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
-			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre, created_by_id)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre, email, created_by_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 			req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
-			req.Spotify, req.Deezer, req.Genre, callerID,
+			req.Spotify, req.Deezer, req.Genre, req.Email, callerID,
 		))
 		if err != nil {
 			writeInternalError(w, err)
@@ -325,12 +328,12 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
-		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?, email=?,
 		 updated_at=strftime('%s','now'), updated_by=? WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 		req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
-		req.Spotify, req.Deezer, req.Genre, resolveDisplayName(callerID), id,
+		req.Spotify, req.Deezer, req.Genre, req.Email, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -437,17 +440,20 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 	if req.Genre != nil {
 		m.Genre = *req.Genre
 	}
+	if req.Email != nil {
+		m.Email = *req.Email
+	}
 
 	callerID, _ := callerFromRequest(r)
 	if _, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
-		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=?, email=?,
 		 updated_at=strftime('%s','now'), updated_by=? WHERE id=?`,
 		m.Bandname, m.ShortName, m.Internetsite, m.Description, m.MBID,
 		m.WikidataID, m.DiscogsID, m.Country, m.BeginYear, m.Biography, m.MembersJSON, m.AlbumsJSON,
 		m.Mastodon, m.Instagram, m.Facebook, m.Soundcloud,
-		m.Spotify, m.Deezer, m.Genre, resolveDisplayName(callerID), id,
+		m.Spotify, m.Deezer, m.Genre, m.Email, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeInternalError(w, err)
 		return

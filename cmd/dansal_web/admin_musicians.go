@@ -46,6 +46,7 @@ func musicianFromForm(r *http.Request) Musician {
 		Spotify:      strings.TrimSpace(r.FormValue("spotify")),
 		Deezer:       strings.TrimSpace(r.FormValue("deezer")),
 		Genre:        strings.TrimSpace(r.FormValue("genre")),
+		Email:        strings.TrimSpace(r.FormValue("email")),
 	}
 }
 

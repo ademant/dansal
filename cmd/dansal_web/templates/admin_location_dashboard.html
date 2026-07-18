@@ -1,6 +1,5 @@
 {{template "base" .}}
 {{define "content"}}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 {{with .Data}}
 {{with .Location}}
 <div class="loc-page-header">
@@ -8,42 +7,6 @@
   <a href="/location/{{.ID}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/locations/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
 </div>
-
-<div class="loc-meta">
-  {{if or .Address .Town}}
-  <div class="loc-addr">
-    {{if .Address}}<span>{{.Address}}</span><br>{{end}}
-    {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
-    {{if .Country}}<br><span>{{.Country}}</span>{{end}}
-  </div>
-  {{end}}
-  {{if .Internetsite}}
-  <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
-  {{end}}
-  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition}}
-  <div class="loc-attrs">
-    {{if index .Attributes "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
-    {{if index .Attributes "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
-    {{if index .Attributes "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
-    {{if index .Attributes "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
-    {{if index .Attributes "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
-    {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
-    {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
-    {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
-    {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}
-  </div>
-  {{end}}
-  {{if and .Latitude .Longitude}}
-  <div class="loc-map-links">
-    <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
-    <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
-  </div>
-  {{end}}
-</div>
-
-{{if and .Latitude .Longitude}}
-<div id="loc-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="loc-map"></div>
-{{end}}
 
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 {{end}}{{/* .Location */}}
@@ -218,18 +181,6 @@
 <style>
 .loc-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
 .loc-page-header h1{margin:0}
-.loc-meta{margin-bottom:1rem;display:flex;flex-direction:column;gap:.35rem}
-.loc-addr{font-size:.92rem;color:var(--fg-dim);line-height:1.5}
-.loc-website{font-size:.88rem}
-.loc-website a{color:var(--link)}
-.loc-attrs{display:flex;flex-wrap:wrap;gap:.4rem}
-.access-badge{font-size:1.1rem;padding:.1rem .2rem}
-.loc-map-links{display:flex;flex-wrap:wrap;gap:.5rem}
-.loc-map-link{font-size:.85rem;text-decoration:none}
-.loc-map-link:hover{text-decoration:underline}
-.loc-map-link-nav{color:var(--link)}
-.loc-osm-link{color:var(--fg-dim)}
-.loc-map{height:240px;border-radius:6px;border:1px solid var(--border-mid);margin-bottom:1.25rem}
 .loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
@@ -293,17 +244,7 @@
 .ba-ts-label{font-size:.82rem;color:var(--fg-muted);min-width:7rem}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script>
-(function(){
-  var el=document.getElementById('loc-map');
-  if(!el)return;
-  var lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
-  if(isNaN(lat)||isNaN(lng))return;
-  var map=L.map('loc-map').setView([lat,lng],15);
-  attachTileLayer(map);
-  L.marker([lat,lng]).addTo(map);
-})();
 var _afOrgs=[{{range $.Data.OrgMap}}{{end}}];
 (function(){
   // Build org list from OrgMap

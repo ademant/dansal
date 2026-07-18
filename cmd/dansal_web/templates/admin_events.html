@@ -40,6 +40,11 @@
   {{end}}
 {{end}}
 {{define "content"}}
+<div class="mobile-topbar" id="mobile-topbar">
+  <button type="button" class="mt-btn" id="mt-filter-btn" title="{{.Strings.T "mobile_filter_toggle"}}" aria-label="{{.Strings.T "mobile_filter_toggle"}}">🔍</button>
+  <button type="button" class="mt-btn" id="mt-actions-btn" title="{{.Strings.T "mobile_bulk_actions"}}" aria-label="{{.Strings.T "mobile_bulk_actions"}}" hidden>☰<span id="mt-ms-count"></span></button>
+  <button type="button" class="mt-btn mt-spacer" id="mt-ms-close" title="{{.Strings.T "admin_magic_link_close"}}" aria-label="{{.Strings.T "admin_magic_link_close"}}" hidden>✕</button>
+</div>
 <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
   <h1 style="margin:0">{{.Strings.T "admin_events_title"}}</h1>
   <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
@@ -59,7 +64,25 @@
 {{end}}
 
 {{with .Data}}
-<form method="get" action="/admin/events" class="event-filters">
+<div class="filter-overlay-backdrop" id="filter-overlay-backdrop"></div>
+<form method="get" action="/admin/events" class="event-filters" id="event-filters-form">
+  <div class="mobile-filter-header">
+    <span>{{$.Strings.T "mobile_filter_toggle"}}</span>
+    <button type="button" class="mt-btn" id="mt-filter-close" aria-label="{{$.Strings.T "admin_magic_link_close"}}">✕</button>
+  </div>
+  <div class="dpr-wrap ef-date">
+    <button type="button" id="ae-date-btn" class="dpr-btn"></button>
+    <input type="hidden" name="date_from" id="ae-date-from" value="{{.FilterDateFrom}}">
+    <input type="hidden" name="date_to" id="ae-date-to" value="{{.FilterDateTo}}">
+    <div id="ae-date-popup" class="dpr-popup" hidden>
+      <div class="dpr-cal-header">
+        <button type="button" id="ae-cal-prev">‹</button>
+        <span id="ae-cal-title"></span>
+        <button type="button" id="ae-cal-next">›</button>
+      </div>
+      <table class="dpr-cal-grid" id="ae-cal-grid"></table>
+    </div>
+  </div>
   <label class="filter-check">
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
@@ -96,19 +119,6 @@
     <option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>
     {{end}}
   </select>
-  <div class="dpr-wrap">
-    <button type="button" id="ae-date-btn" class="dpr-btn"></button>
-    <input type="hidden" name="date_from" id="ae-date-from" value="{{.FilterDateFrom}}">
-    <input type="hidden" name="date_to" id="ae-date-to" value="{{.FilterDateTo}}">
-    <div id="ae-date-popup" class="dpr-popup" hidden>
-      <div class="dpr-cal-header">
-        <button type="button" id="ae-cal-prev">‹</button>
-        <span id="ae-cal-title"></span>
-        <button type="button" id="ae-cal-next">›</button>
-      </div>
-      <table class="dpr-cal-grid" id="ae-cal-grid"></table>
-    </div>
-  </div>
   <a href="/admin/events" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
 
@@ -133,24 +143,24 @@
       <th></th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="event-tbody">
   {{range .Events}}
-  <tr>
-    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
-    <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
-    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
-    <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
-    <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
-    <td>
+  <tr data-evt-row data-evt-id="{{.ID}}">
+    <td class="col-cb cell-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
+    <td class="cell-date" style="white-space:nowrap" data-val="{{.StartTime}}" data-mobile-icon="📅">{{formatDate $.LangCode .StartTime}}</td>
+    <td class="cell-title"><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
+    <td class="cell-loc" data-mobile-icon="📍">{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
+    <td class="cell-org" style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    <td class="cell-status">
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
       {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
     </td>
-    <td style="white-space:nowrap">
+    <td class="cell-actions" style="white-space:nowrap">
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
-      {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
+      {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm mobile-hide">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
       {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
-      {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
+      {{if .Deletable}}<button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>
   {{end}}
@@ -253,6 +263,8 @@
 <style>
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .event-filters select,.event-filters input[type=date]{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
+.event-filters .ef-date{order:8}
+.mobile-filter-header,.mobile-topbar{display:none}
 .filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
 .af-field{position:relative}
 .af-input{max-width:11rem;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
@@ -322,6 +334,41 @@
   #bulk-quick-form{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
   .bq-group{flex-direction:row;align-items:center;gap:.35rem;width:auto}
   .bq-apply{width:auto}
+}
+.filter-overlay-backdrop{display:none}
+@media(max-width:640px){
+  .mobile-topbar{display:flex;position:fixed;top:0;left:0;right:0;z-index:200;gap:.4rem;padding:.4rem .6rem;background:#f4f6fb;border-bottom:1px solid #e0e4ef;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .mt-btn{background:#fff;border:1px solid #ccc;border-radius:4px;padding:.3rem .55rem;font-size:1rem;cursor:pointer}
+  .mt-spacer{margin-left:auto}
+  #mt-ms-count{font-size:.7rem;margin-left:.2rem;color:#1a6eb5;font-weight:600}
+  body{padding-top:2.6rem}
+
+  .event-filters{display:none;position:fixed;inset:0;z-index:210;flex-direction:column;align-items:stretch;overflow-y:auto;padding:1rem;border-radius:0;margin-bottom:0}
+  .event-filters .af-input{max-width:none;width:100%;box-sizing:border-box}
+  .event-filters select{width:100%}
+  body.filters-open .event-filters{display:flex}
+  body.filters-open .filter-overlay-backdrop{display:block;position:fixed;inset:0;z-index:205;background:rgba(0,0,0,.35)}
+  .mobile-filter-header{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:.5rem}
+  .event-filters .ef-date{order:-1}
+
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .cell-cb{display:none;order:0}
+  .event-table .cell-title{order:1;font-weight:600;max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .event-table .cell-status{order:2}
+  .event-table .cell-actions{order:3;margin-left:auto}
+  .event-table .cell-date{order:4;flex-basis:100%;font-size:.85rem;color:#555}
+  .event-table .cell-date::before{content:attr(data-mobile-icon) " "}
+  .event-table .cell-loc{order:5;font-size:.85rem;color:#555}
+  .event-table .cell-loc::before{content:attr(data-mobile-icon) " "}
+  .event-table .cell-org{order:6;font-size:.85rem;color:#555}
+  .event-table .mobile-hide{display:none}
+
+  body.ms-active .event-table .cell-cb{display:block}
+  #event-bulk-side{display:none}
+  body.actions-open #event-bulk-side{display:flex;position:fixed;inset:auto 0 0 0;z-index:220;max-height:80vh;overflow-y:auto;border-radius:12px 12px 0 0;box-shadow:0 -2px 16px rgba(0,0,0,.25)}
+  body.actions-open .filter-overlay-backdrop{display:block;position:fixed;inset:0;z-index:215;background:rgba(0,0,0,.35)}
 }
 </style>
 <script>
@@ -490,10 +537,12 @@ function pubEvent(id){
   var cbs=document.querySelectorAll('.event-cb');
   var countEls=document.querySelectorAll('.event-bulk-count');
   var actionBtns=document.querySelectorAll('.bulk-action-btn');
+  var msCount=document.getElementById('mt-ms-count');
   function updateCount(){
     var n=document.querySelectorAll('.event-cb:checked').length;
     countEls.forEach(function(el){el.textContent=n>0?n+' ✓':'';});
     actionBtns.forEach(function(btn){btn.disabled=n===0;});
+    if(msCount) msCount.textContent=n>0?n:'';
   }
   cbAll.addEventListener('change',function(){
     cbs.forEach(function(cb){cb.checked=cbAll.checked;});
@@ -509,6 +558,66 @@ function pubEvent(id){
       window.location.href='/admin/events/template-assign?'+p.toString();
     });
   });
+
+  // Mobile: long-press multi-select and bulk-actions overlay (filter popup
+  // toggle is wired separately below since it must work even with no events).
+  var mtActionsBtn=document.getElementById('mt-actions-btn');
+  var mtMsClose=document.getElementById('mt-ms-close');
+  var tbody=document.getElementById('event-tbody');
+
+  function closeActionsOverlay(){ document.body.classList.remove('actions-open'); }
+  if(mtActionsBtn) mtActionsBtn.addEventListener('click',function(){ document.body.classList.toggle('actions-open'); });
+
+  function enterMultiSelect(row){
+    document.body.classList.add('ms-active');
+    if(mtActionsBtn) mtActionsBtn.hidden=false;
+    if(mtMsClose) mtMsClose.hidden=false;
+    if(row){
+      var cb=row.querySelector('.event-cb');
+      if(cb){ cb.checked=true; updateCount(); }
+    }
+  }
+  function exitMultiSelect(){
+    document.body.classList.remove('ms-active','actions-open');
+    if(mtActionsBtn) mtActionsBtn.hidden=true;
+    if(mtMsClose) mtMsClose.hidden=true;
+    cbs.forEach(function(cb){cb.checked=false;});
+    updateCount();
+  }
+  if(mtMsClose) mtMsClose.addEventListener('click',exitMultiSelect);
+
+  if(tbody){
+    var LONG_PRESS_MS=500, MOVE_TOLERANCE=10;
+    var pressTimer=null, startX=0, startY=0, pressRow=null;
+    function clearPressTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } pressRow=null; }
+    tbody.addEventListener('touchstart',function(e){
+      if(!window.matchMedia('(max-width:640px)').matches) return;
+      var row=e.target.closest('tr[data-evt-row]');
+      if(!row) return;
+      pressRow=row;
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      pressTimer=setTimeout(function(){ enterMultiSelect(pressRow); clearPressTimer(); },LONG_PRESS_MS);
+    },{passive:true});
+    tbody.addEventListener('touchmove',function(e){
+      if(!pressTimer) return;
+      var dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
+      if(dx>MOVE_TOLERANCE||dy>MOVE_TOLERANCE) clearPressTimer();
+    },{passive:true});
+    tbody.addEventListener('touchend',clearPressTimer);
+    tbody.addEventListener('touchcancel',clearPressTimer);
+  }
+})();
+
+// Mobile filter popup — wired unconditionally (works even with zero events).
+(function(){
+  var mtFilterBtn=document.getElementById('mt-filter-btn');
+  var mtFilterClose=document.getElementById('mt-filter-close');
+  var backdrop=document.getElementById('filter-overlay-backdrop');
+  if(!mtFilterBtn) return;
+  function closeFilters(){ document.body.classList.remove('filters-open'); }
+  mtFilterBtn.addEventListener('click',function(){ document.body.classList.add('filters-open'); });
+  if(mtFilterClose) mtFilterClose.addEventListener('click',closeFilters);
+  if(backdrop) backdrop.addEventListener('click',function(){ closeFilters(); document.body.classList.remove('actions-open'); });
 })();
 
 // Filter merge form to only include organization data for selected events

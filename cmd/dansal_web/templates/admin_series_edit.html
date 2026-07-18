@@ -24,6 +24,8 @@
     <label>{{$.Strings.T "series_description"}}</label>
     <textarea name="description" rows="3" style="width:100%">{{.Series.Description}}</textarea>
   </section>
+  <details class="series-seg">
+  <summary>{{$.Strings.T "series_seg_org_location"}}</summary>
   {{if .IsAdmin}}
   <section class="form-section">
     <label>{{$.Strings.T "org_name"}}</label>
@@ -67,9 +69,11 @@
       </div>
     </div>
   </section>
+  </details>
 
   <!-- Series defaults: applied to every new occurrence (add-date / generated dates) -->
-  <h2 style="font-size:1.05rem;margin:1.5rem 0 .75rem">{{$.Strings.T "series_defaults_title"}}</h2>
+  <details class="series-seg">
+  <summary>{{$.Strings.T "series_defaults_title"}}</summary>
   <p class="field-hint" style="margin-bottom:1rem">{{$.Strings.T "series_defaults_hint"}}</p>
 
   <section class="form-section">
@@ -173,11 +177,12 @@
     <label for="evt_contact_email">{{$.Strings.T "evt_contact_email"}}</label>
     <input id="evt_contact_email" type="email" name="contact_email" value="{{.TplDefaults.ContactEmail}}">
   </section>
+  </details>
 </form>
 
 <!-- Invite token section -->
-<section style="margin-bottom:2rem;padding:1rem;background:#f8f9fa;border:1px solid #ddd;border-radius:6px">
-  <h2 style="margin:0 0 .75rem;font-size:1rem">{{$.Strings.T "series_invite_link"}}</h2>
+<details class="series-seg" style="margin-bottom:2rem">
+  <summary>{{$.Strings.T "series_invite_link"}}</summary>
   {{if .Series.InviteToken}}
   <p style="margin:.25rem 0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
     <a id="invite-link" href="{{.BaseURL}}/series_token/{{.Series.InviteToken}}" target="_blank" style="word-break:break-all">{{.BaseURL}}/series_token/{{.Series.InviteToken}}</a>
@@ -196,10 +201,16 @@
     <button class="btn-sm">{{$.Strings.T "series_generate_token"}}</button>
   </form>
   {{end}}
-</section>
+</details>
 
 <!-- Events table -->
 <h2 style="font-size:1.05rem;margin-bottom:.5rem">{{$.Strings.T "series_events"}}</h2>
+<div class="series-overlay-backdrop" id="series-overlay-backdrop"></div>
+<div class="series-ms-bar" id="series-ms-bar">
+  <span id="series-ms-count"></span>
+  <button type="button" class="btn-sm" id="series-ms-actions-btn">☰</button>
+  <button type="button" class="btn-sm" id="series-ms-close-btn">✕</button>
+</div>
 <form method="post" action="/admin/series/{{.Series.ID}}/descriptions" id="desc-form">
 <div class="series-bulk-toolbar" id="series-bulk-toolbar">
   <span class="event-bulk-count"></span>
@@ -231,16 +242,16 @@
       <th>{{$.Strings.T "series_actions"}}</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="series-events-tbody">
   {{range .Series.Events}}
-  <tr {{if .IsCancelled}}style="opacity:.55"{{end}}>
-    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="series-event-cb"></td>
-    <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
-    <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
-    <td>{{.LocationName}}</td>
-    <td><textarea name="desc_{{.ID}}" rows="2" class="desc-field">{{.Description}}</textarea></td>
-    <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
-    <td class="col-actions" style="white-space:nowrap">
+  <tr data-evt-row data-evt-id="{{.ID}}" data-cancelled="{{.IsCancelled}}" {{if .IsCancelled}}style="opacity:.55"{{end}}>
+    <td class="col-cb cell-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="series-event-cb"></td>
+    <td class="cell-date" style="white-space:nowrap" data-mobile-icon="📅">{{formatDate $.LangCode .StartTime}}</td>
+    <td class="cell-time" style="white-space:nowrap" data-mobile-icon="🕐" data-start="{{isoTime .StartTime}}" data-end="{{isoTime .EndTime}}">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
+    <td class="cell-loc" data-mobile-icon="📍">{{.LocationName}}</td>
+    <td class="cell-desc" data-preview="{{.Description}}"><textarea name="desc_{{.ID}}" rows="2" class="desc-field">{{.Description}}</textarea></td>
+    <td class="cell-status">{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
+    <td class="col-actions cell-actions" style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="{{$.Strings.T "admin_edit"}}">{{$.Strings.T "admin_edit"}} ↗</a>
       <button class="btn-sm" type="button" onclick="postTo('/admin/events/{{.ID}}/cancel')">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
       <button class="btn-sm btn-del" type="button" onclick="if(confirm('{{$.Strings.T "admin_delete"}}?'))postTo('/admin/events/{{.ID}}/delete')">✕</button>
@@ -256,6 +267,35 @@
   <button type="submit" formaction="/admin/series/{{.Series.ID}}/descriptions" class="btn-sm">{{$.Strings.T "series_save_descriptions"}}</button>
 </div>
 </form>
+
+<!-- Mobile quick-edit popup for a single event card -->
+<dialog id="series-evt-popup" class="series-evt-popup">
+  <h3 style="margin:0 0 .75rem;font-size:1rem" id="sep-title"></h3>
+  <p id="sep-date" style="margin:0 0 .75rem;color:#555;font-size:.9rem"></p>
+  <div class="field-row">
+    <div>
+      <label>{{$.Strings.T "series_start_time"}}</label>
+      <input type="time" id="sep-start-time">
+    </div>
+    <div>
+      <label>{{$.Strings.T "series_end_time"}}</label>
+      <input type="time" id="sep-end-time">
+    </div>
+  </div>
+  <button type="button" class="btn-sm btn-assign" id="sep-save-time" style="margin-top:.5rem">{{$.Strings.T "series_save_time_btn"}}</button>
+
+  <label style="display:block;margin-top:1rem">{{$.Strings.T "series_description"}}</label>
+  <textarea id="sep-desc" rows="3" style="width:100%;box-sizing:border-box"></textarea>
+  <button type="button" class="btn-sm btn-assign" id="sep-save-desc" style="margin-top:.5rem">{{$.Strings.T "series_save_description"}}</button>
+
+  <div style="display:flex;gap:.5rem;justify-content:space-between;margin-top:1.25rem;flex-wrap:wrap">
+    <div style="display:flex;gap:.5rem">
+      <button type="button" class="btn-sm" id="sep-cancel-evt"></button>
+      <a class="btn-sm" id="sep-full-edit" href="#">{{$.Strings.T "series_edit_full_form"}} ↗</a>
+    </div>
+    <button type="button" class="btn-sm" id="sep-close">{{$.Strings.T "admin_magic_link_close"}}</button>
+  </div>
+</dialog>
 
 <!-- Add date form -->
 <form method="post" action="/admin/series/{{.Series.ID}}/add-date" class="add-date-form" style="margin-top:1rem;display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap">
@@ -318,6 +358,37 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
 .check-label input{width:auto}
 .field-hint{font-size:.82rem;color:#666;margin:.15rem 0 .6rem}
+.series-seg{border:1px solid #e0e4ef;border-radius:6px;margin-bottom:1rem;padding:0 .9rem}
+.series-seg summary{cursor:pointer;font-weight:600;font-size:.95rem;padding:.7rem 0;color:#333}
+.series-seg[open] summary{border-bottom:1px solid #eee;margin-bottom:.9rem}
+.series-seg:last-of-type{padding-bottom:.9rem}
+.series-evt-popup{padding:1.25rem;border:1px solid #ccc;border-radius:8px;min-width:300px;max-width:420px;width:90vw}
+.series-evt-popup::backdrop{background:rgba(0,0,0,.4)}
+.series-ms-bar,.series-overlay-backdrop{display:none}
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .cell-cb{display:none;order:0}
+  .event-table .cell-date{order:1;font-weight:600}
+  .event-table .cell-time{order:2}
+  .event-table .cell-time::before{content:attr(data-mobile-icon) " "}
+  .event-table .cell-loc{order:3;font-size:.85rem;color:#555}
+  .event-table .cell-loc::before{content:attr(data-mobile-icon) " "}
+  .event-table .cell-desc{order:4;flex-basis:100%;font-size:.85rem;color:#555}
+  .event-table .cell-desc textarea{display:none}
+  .event-table .cell-desc::before{content:attr(data-preview)}
+  .event-table .cell-status,.event-table .cell-actions{display:none}
+
+  .series-ms-bar{position:fixed;top:0;left:0;right:0;z-index:200;gap:.5rem;align-items:center;padding:.4rem .6rem;background:#f4f6fb;border-bottom:1px solid #e0e4ef;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  body.series-ms-active .series-ms-bar{display:flex}
+  #series-ms-count{font-size:.8rem;color:#1a6eb5;font-weight:600;margin-right:auto}
+  #series-bulk-toolbar{display:none}
+  body.series-actions-open #series-bulk-toolbar{display:flex;position:fixed;inset:auto 0 0 0;z-index:220;max-height:80vh;overflow-y:auto;border-radius:12px 12px 0 0;box-shadow:0 -2px 16px rgba(0,0,0,.25);margin-bottom:0}
+  body.series-ms-active,body.series-actions-open{padding-top:2.6rem}
+  body.series-actions-open .series-overlay-backdrop{display:block;position:fixed;inset:0;z-index:215;background:rgba(0,0,0,.35)}
+  body.series-ms-active .event-table .cell-cb{display:block}
+}
 </style>
 <script>
 function copyInviteLink(btn){
@@ -347,16 +418,124 @@ function filterLocOptions(q){
   var cbs=document.querySelectorAll('.series-event-cb');
   var countEls=document.querySelectorAll('.event-bulk-count');
   var actionBtns=document.querySelectorAll('.bulk-action-btn');
+  var msCount=document.getElementById('series-ms-count');
   function updateCount(){
     var n=document.querySelectorAll('.series-event-cb:checked').length;
     countEls.forEach(function(el){el.textContent=n>0?n+' ✓':'';});
     actionBtns.forEach(function(btn){btn.disabled=n===0;});
+    if(msCount) msCount.textContent=n>0?n+' ✓':'';
   }
   cbAll.addEventListener('change',function(){
     cbs.forEach(function(cb){cb.checked=cbAll.checked;});
     updateCount();
   });
   cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+
+  // Mobile: long-press enters multi-select mode; a sticky bar's actions
+  // button then opens the existing bulk toolbar as a bottom-sheet overlay.
+  var tbody=document.getElementById('series-events-tbody');
+  var msActionsBtn=document.getElementById('series-ms-actions-btn');
+  var msCloseBtn=document.getElementById('series-ms-close-btn');
+  var backdrop=document.getElementById('series-overlay-backdrop');
+
+  function enterMultiSelect(row){
+    document.body.classList.add('series-ms-active');
+    if(row){
+      var cb=row.querySelector('.series-event-cb');
+      if(cb){ cb.checked=true; updateCount(); }
+    }
+  }
+  function exitMultiSelect(){
+    document.body.classList.remove('series-ms-active','series-actions-open');
+    cbs.forEach(function(cb){cb.checked=false;});
+    updateCount();
+  }
+  if(msActionsBtn) msActionsBtn.addEventListener('click',function(){ document.body.classList.toggle('series-actions-open'); });
+  if(msCloseBtn) msCloseBtn.addEventListener('click',exitMultiSelect);
+  if(backdrop) backdrop.addEventListener('click',function(){ document.body.classList.remove('series-actions-open'); });
+
+  if(tbody){
+    var LONG_PRESS_MS=500, MOVE_TOLERANCE=10;
+    var pressTimer=null, startX=0, startY=0, pressRow=null, suppressClick=false;
+    function clearPressTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } pressRow=null; }
+    tbody.addEventListener('touchstart',function(e){
+      if(!window.matchMedia('(max-width:640px)').matches) return;
+      var row=e.target.closest('tr[data-evt-row]');
+      if(!row) return;
+      pressRow=row;
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      pressTimer=setTimeout(function(){ enterMultiSelect(pressRow); suppressClick=true; clearPressTimer(); },LONG_PRESS_MS);
+    },{passive:true});
+    tbody.addEventListener('touchmove',function(e){
+      if(!pressTimer) return;
+      var dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
+      if(dx>MOVE_TOLERANCE||dy>MOVE_TOLERANCE) clearPressTimer();
+    },{passive:true});
+    tbody.addEventListener('touchend',clearPressTimer);
+    tbody.addEventListener('touchcancel',clearPressTimer);
+
+    tbody.addEventListener('click',function(e){
+      if(suppressClick){ suppressClick=false; return; }
+      if(!window.matchMedia('(max-width:640px)').matches) return;
+      if(document.body.classList.contains('series-ms-active')) return;
+      var row=e.target.closest('tr[data-evt-row]');
+      if(!row) return;
+      if(e.target.closest('input,button,a,textarea')) return;
+      openEvtPopup(row);
+    });
+  }
+})();
+
+// Mobile quick-edit popup for a single event card.
+(function(){
+  var popup=document.getElementById('series-evt-popup');
+  if(!popup) return;
+  var titleEl=document.getElementById('sep-title');
+  var dateEl=document.getElementById('sep-date');
+  var startEl=document.getElementById('sep-start-time');
+  var endEl=document.getElementById('sep-end-time');
+  var descEl=document.getElementById('sep-desc');
+  var cancelBtn=document.getElementById('sep-cancel-evt');
+  var fullEditLink=document.getElementById('sep-full-edit');
+  var saveTimeBtn=document.getElementById('sep-save-time');
+  var saveDescBtn=document.getElementById('sep-save-desc');
+  var closeBtn=document.getElementById('sep-close');
+  var currentRow=null;
+
+  window.openEvtPopup=function(row){
+    currentRow=row;
+    var id=row.dataset.evtId;
+    var cancelled=row.dataset.cancelled==='true';
+    titleEl.textContent='#'+id;
+    dateEl.textContent=row.querySelector('.cell-date').textContent.trim();
+    var timeCell=row.querySelector('.cell-time');
+    startEl.value=timeCell.dataset.start||'';
+    endEl.value=timeCell.dataset.end||'';
+    descEl.value=row.querySelector('.cell-desc textarea').value;
+    cancelBtn.textContent=cancelled?'↩':'{{$.Strings.T "badge_cancelled"}}';
+    fullEditLink.href='/admin/events/'+id+'/edit';
+    popup.showModal();
+  };
+  if(closeBtn) closeBtn.addEventListener('click',function(){ popup.close(); });
+  if(cancelBtn) cancelBtn.addEventListener('click',function(){
+    if(!currentRow) return;
+    postTo('/admin/events/'+currentRow.dataset.evtId+'/cancel');
+  });
+  if(saveTimeBtn) saveTimeBtn.addEventListener('click',function(){
+    if(!currentRow) return;
+    var f=document.createElement('form');
+    f.method='POST'; f.action='/admin/events/bulk-set-time';
+    function addField(name,val){ var i=document.createElement('input'); i.type='hidden'; i.name=name; i.value=val; f.appendChild(i); }
+    addField('event_ids',currentRow.dataset.evtId);
+    addField('bulk_start_time',startEl.value);
+    addField('bulk_end_time',endEl.value);
+    document.body.appendChild(f); f.submit();
+  });
+  if(saveDescBtn) saveDescBtn.addEventListener('click',function(){
+    if(!currentRow) return;
+    currentRow.querySelector('.cell-desc textarea').value=descEl.value;
+    document.getElementById('desc-form').requestSubmit ? document.getElementById('desc-form').requestSubmit() : document.getElementById('desc-form').submit();
+  });
 })();
 
 var _formDirty=false;

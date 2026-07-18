@@ -1,6 +1,6 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{if .Data.IsNew}}{{.Strings.T "admin_event_new_title"}}{{else}}{{.Strings.T "admin_event_edit_title"}}{{end}}</h1>
+<h1>{{if .Data.IsTemplateMode}}{{.Strings.T "admin_template_new_title"}}{{else if .Data.IsNew}}{{.Strings.T "admin_event_new_title"}}{{else}}{{.Strings.T "admin_event_edit_title"}}{{end}}</h1>
 {{if .Data.Event.ChangedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix (parseChangedAt .Data.Event.ChangedAt)}}{{if eq .Data.Event.ChangedBy "fetch"}} ({{.Strings.T "recent_changes_via_fetch"}}){{end}}</p>{{end}}
 
 {{with .Data}}
@@ -12,11 +12,13 @@
 
 <div class="evt-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  {{if not .IsTemplateMode}}
   <button type="submit" id="save-btn" class="btn-primary" form="evt-form" disabled>{{$.Strings.T "admin_save"}}</button>
   <button type="submit" name="intent" value="clone" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_clone"}}</button>
   {{if and (not .IsNew) .CanDelete}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
+  {{end}}
 </div>
 
 <div class="evt-edit-layout">
@@ -29,12 +31,14 @@
   </div>
   <hr class="evt-nav-sep">
   <div class="evt-nav-group">
-    <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>
+    {{if not .IsTemplateMode}}<button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>{{end}}
     <button type="button" class="evt-nav-item" data-target="sec-pricing"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_admission"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-tickets"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_tickets_section"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-timetable"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_timetable"}}</button>
+    {{if not .IsTemplateMode}}
     <button type="button" class="evt-nav-item" data-target="sec-musicians"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_musicians"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-instructors"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_instructors"}}</button>
+    {{end}}
     <button type="button" class="evt-nav-item" data-target="sec-dances"><span class="evt-nav-dot"></span>Dance styles</button>
     <button type="button" class="evt-nav-item" data-target="sec-contact"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_contact_override"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-fooddrink"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_food_drink"}}</button>
@@ -56,14 +60,18 @@
   <section class="form-section" id="sec-basic">
     <h2>{{$.Strings.T "evt_basic_info"}} <a href="/help#event-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
 
+    {{if not .IsTemplateMode}}
     <label for="title">{{$.Strings.T "evt_title"}} *</label>
     <input id="title" type="text" name="title" required value="{{.Event.Title}}" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
+    {{end}}
 
     <div class="field-row">
+      {{if not .IsTemplateMode}}
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
         <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value)">
       </div>
+      {{end}}
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
         <input id="start_time" type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="start_time" value="{{if and .Prefill (not .Event.StartTime)}}{{.Prefill.StartTime}}{{else}}{{isoTime .Event.StartTime}}{{end}}">
@@ -72,6 +80,7 @@
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
         <input id="end_time" type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="end_time" value="{{if and .Prefill (not .Event.EndTime)}}{{.Prefill.EndTime}}{{else}}{{isoTime .Event.EndTime}}{{end}}">
       </div>
+      {{if not .IsTemplateMode}}
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
         <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}" onchange="this.removeAttribute('data-auto')">
@@ -87,6 +96,7 @@
           <table class="dpr-cal-grid" id="ef-cal-grid"></table>
         </div>
       </div>
+      {{end}}
     </div>
 
     <div class="check-row">
@@ -98,10 +108,12 @@
       <label class="check-label"><input type="checkbox" name="tags" value="session"{{if hasTag .Event.Tags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="concert"{{if hasTag .Event.Tags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
     </div>
+    {{if not .IsTemplateMode}}
     <div class="check-row" style="margin-top:.25rem">
       <label class="check-label"><input type="checkbox" name="is_published"{{if or .Event.IsPublished .IsNew}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
       <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
     </div>
+    {{end}}
     <div id="workshop-difficulty"{{if and (not (hasTag .Event.Tags "dance-workshop")) (not (hasTag .Event.Tags "musician-workshop"))}} hidden{{end}} style="margin-top:.5rem">
       <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
       <div class="check-row">
@@ -111,6 +123,7 @@
       </div>
     </div>
 
+    {{if not .IsTemplateMode}}
     <label for="description">{{$.Strings.T "evt_description"}} <span class="field-hint">{{$.Strings.T "md_label_hint"}}</span></label>
     <div class="desc-row">
       <textarea id="description" name="description" rows="10">{{.Event.Description}}</textarea>
@@ -143,6 +156,7 @@
       <span>📋 {{$.Strings.T "paste_md_converted"}}</span>
       <button type="button" onclick="this.parentElement.hidden=true" aria-label="×">×</button>
     </div>
+    {{end}}
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
     <input id="url" type="url" name="url" value="{{.Event.URL}}" placeholder="https://...">
@@ -323,6 +337,7 @@
     </div>
   </section>
 
+  {{if not .IsTemplateMode}}
   <!-- Image -->
   <section class="form-section optional-section" id="sec-image">
     <h2>{{$.Strings.T "evt_image"}}</h2>
@@ -337,6 +352,7 @@
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
     </div>
   </section>
+  {{end}}
 
   <!-- Pricing -->
   <section class="form-section optional-section" id="sec-pricing">
@@ -453,6 +469,7 @@
     <input type="hidden" name="timetable_edited" id="tt-edited" value="0">
   </section>
 
+  {{if not .IsTemplateMode}}
   <!-- Musicians -->
   <section class="form-section optional-section" id="sec-musicians">
     <h2>{{$.Strings.T "evt_musicians"}} <a href="/help#musicians" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
@@ -627,6 +644,7 @@
     });
     </script>
   </section>
+  {{end}}
 
   <!-- Dance styles -->
   <section class="form-section optional-section" id="sec-dances">
@@ -702,6 +720,7 @@
 </div>
 </div>
 
+{{if not .IsTemplateMode}}
 <!-- Series assignment -->
 <div class="save-tpl-details" style="margin-top:1rem">
   <div style="font-weight:600;font-size:.9rem;color:#1a6eb5;margin-bottom:.6rem">{{$.Strings.T "evt_series_section"}}</div>
@@ -752,17 +771,18 @@
   </div>
 </details>
 {{end}}
+{{end}}
 
-{{if .UserOrgs}}
-<details class="save-tpl-details" style="margin-top:1rem">
-  <summary>{{$.Strings.T "admin_save_as_template"}}</summary>
+{{if or .UserOrgs .IsTemplateMode}}
+<details class="save-tpl-details" style="margin-top:1rem"{{if .IsTemplateMode}} open{{end}}>
+  <summary{{if .IsTemplateMode}} hidden{{end}}>{{$.Strings.T "admin_save_as_template"}}</summary>
   <div class="save-tpl-form">
-    <label for="tpl-name" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_name_label"}}</label>
-    <input id="tpl-name" type="text" name="tpl_name" form="evt-form" placeholder="{{$.Strings.T "admin_template_name_placeholder"}}" style="width:100%;max-width:320px;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
+    <label for="tpl-name" style="display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_name_label"}}{{if .IsTemplateMode}} *{{end}}</label>
+    <input id="tpl-name" type="text" name="tpl_name" form="evt-form" {{if .IsTemplateMode}}required{{end}} placeholder="{{$.Strings.T "admin_template_name_placeholder"}}" style="width:100%;max-width:320px;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
     <label for="tpl-org" style="margin-top:.5rem;display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.2rem">{{$.Strings.T "admin_template_org_label"}}</label>
     <select id="tpl-org" name="tpl_org_id" form="evt-form" style="padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem">
       <option value="">{{$.Strings.T "admin_template_personal"}}</option>
-      {{range .UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      {{range .UserOrgs}}<option value="{{.ID}}"{{if and $.Data.Prefill (eq .ID $.Data.Prefill.OrgID)}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
     <div style="margin-top:.75rem">
       <button type="submit" name="intent" value="save-template" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_template_save_btn"}}</button>

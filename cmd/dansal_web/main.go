@@ -320,6 +320,8 @@ func main() {
 		r.HandleFunc("GET /admin/events/template-assign", adminTemplateAssignPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/events/template-assign", adminRateLimit(adminTemplateAssignApplyHandler(cfg, db, client)))
 		r.HandleFunc("GET /admin/templates", adminTemplatesHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("GET /admin/templates/new", adminTemplateNewPageHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/templates/new", adminRateLimit(adminTemplateCreateHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/templates/{id}/delete", adminRateLimit(adminTemplateDeleteHandler(db)))
 		r.HandleFunc("GET /admin/templates/{id}/data", adminTemplateDataHandler(db))
 		r.HandleFunc("POST /admin/templates/{id}/pin", adminRateLimit(adminTemplatePinHandler(db)))

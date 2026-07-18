@@ -148,6 +148,7 @@ type AdminEventFormData struct {
 	Prefill            *EventPrefill // new-event only: clone/suggestion prefill metadata for JS
 	CanDelete          bool          // whether the current user is allowed to hard-delete this event
 	TimetableError     string        // raw message when the timetable failed to save (see #808 follow-up)
+	IsTemplateMode     bool          // rendering /admin/templates/new: hide event-only fields, save as a template instead of an event
 }
 
 // eventFromPrefill synthesizes an Event from prefill data so the unified
@@ -994,6 +995,17 @@ func isoTimeStr(t string) string {
 	return ""
 }
 
+// templateTimeString wraps a bare "HH:MM" (from a <input type=time>) in a
+// placeholder-date RFC3339 string, since templateEventData.StartTime/EndTime
+// (unlike Timetable entries, which store bare "HH:MM") is read back via
+// isoTimeStr, which expects a full timestamp of at least 16 characters.
+func templateTimeString(hhmm string) string {
+	if hhmm == "" {
+		return ""
+	}
+	return "2000-01-01T" + hhmm + ":00Z"
+}
+
 // mergeTemplateTime handles both HH:MM (old template format) and full RFC3339
 // (new format). For HH:MM it replaces the time portion of eventTime while
 // keeping its date and timezone suffix, avoiding a 400 from the API.
@@ -1560,6 +1572,278 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			Templates:          tmpls2,
 			Prefill:            prefill,
 		}))
+	}
+}
+
+// ── Dedicated template-creation mode (#841) ──────────────────────────────────
+//
+// /admin/templates/new reuses admin_event_form.html (IsTemplateMode:true hides
+// Title/Description/Date and the apply-template panel, and promotes the
+// name/org fields) but never calls client.CreateEvent — it builds a
+// templateEventData directly from the submitted fields and saves it, so no
+// draft event is created as a side effect the way the old "save as template"
+// intent on a real event did.
+
+func adminTemplateNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		bundle := client.FetchRefBundle(r.Context())
+		token := getSessionToken(r)
+
+		var userOrgs []Organization
+		if su.Role == "admin" {
+			userOrgs = bundle.Orgs
+		} else {
+			orgIDSet := make(map[int]bool)
+			for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
+				orgIDSet[oid] = true
+			}
+			for _, o := range bundle.Orgs {
+				if orgIDSet[o.ID] {
+					userOrgs = append(userOrgs, o)
+				}
+			}
+		}
+
+		var prefill *EventPrefill
+		oid, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
+		if oid > 0 {
+			prefill = &EventPrefill{OrgID: oid}
+		}
+		event := eventFromPrefill(prefill)
+		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+
+		title := i18n.T(r, "admin_template_new_title")
+		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+			IsNew:          true,
+			IsTemplateMode: true,
+			Event:          event,
+			Organizations:  bundle.Orgs,
+			Locations:      bundle.Locations,
+			LocOrgFirst:    locOrgFirst,
+			LocOthers:      locOthers,
+			Dances:         bundle.Dances,
+			UserOrgs:       userOrgs,
+			Prefill:        prefill,
+		}))
+	}
+}
+
+func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		bundle := client.FetchRefBundle(r.Context())
+		token := getSessionToken(r)
+
+		var userOrgs []Organization
+		if su.Role == "admin" {
+			userOrgs = bundle.Orgs
+		} else {
+			orgIDSet := make(map[int]bool)
+			for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
+				orgIDSet[oid] = true
+			}
+			for _, o := range bundle.Orgs {
+				if orgIDSet[o.ID] {
+					userOrgs = append(userOrgs, o)
+				}
+			}
+		}
+
+		renderErr := func(errKey string) {
+			title := i18n.T(r, "admin_template_new_title")
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:          true,
+				IsTemplateMode: true,
+				Organizations:  bundle.Orgs,
+				Locations:      bundle.Locations,
+				Dances:         bundle.Dances,
+				UserOrgs:       userOrgs,
+				ErrorKey:       errKey,
+			}))
+		}
+
+		name := strings.TrimSpace(r.FormValue("tpl_name"))
+		if name == "" {
+			renderErr("admin_template_name_required")
+			return
+		}
+
+		var tplOrgID *int
+		if v := strings.TrimSpace(r.FormValue("tpl_org_id")); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				tplOrgID = &n
+			}
+		}
+
+		var orgID int
+		switch r.FormValue("org_choice") {
+		case "existing":
+			if v := r.FormValue("org_id"); v != "" {
+				orgID, _ = strconv.Atoi(v)
+			}
+		case "new":
+			newOrgName := strings.TrimSpace(r.FormValue("new_org_name"))
+			if newOrgName != "" {
+				created, err := client.CreateOrganization(r.Context(), Organization{Name: newOrgName}, token)
+				if err != nil {
+					renderErr("admin_save_error")
+					return
+				}
+				orgID = created.ID
+			}
+		}
+
+		var locID int
+		if r.FormValue("loc_choice") == "existing" {
+			if v := r.FormValue("loc_id"); v != "" {
+				locID, _ = strconv.Atoi(v)
+			}
+		}
+
+		var pricing *Pricing
+		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
+			p := &Pricing{Type: pt}
+			switch pt {
+			case "single":
+				if amt := r.FormValue("pricing_amount"); amt != "" {
+					if f, err := strconv.ParseFloat(amt, 64); err == nil {
+						p.Amount = f
+					}
+				}
+				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+			case "multiple":
+				labels := r.Form["pl_label"]
+				amounts := r.Form["pl_amount"]
+				for i, lbl := range labels {
+					lbl = strings.TrimSpace(lbl)
+					if lbl == "" {
+						continue
+					}
+					var amt float64
+					if i < len(amounts) {
+						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
+							amt = f
+						}
+					}
+					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+				}
+				if len(p.Prices) == 0 {
+					p = nil
+				}
+			}
+			pricing = p
+		}
+
+		tags := r.Form["tags"]
+		var danceIDs []int
+		for _, v := range r.Form["dance_ids"] {
+			if n, err := strconv.Atoi(v); err == nil {
+				danceIDs = append(danceIDs, n)
+			}
+		}
+
+		starts := r.Form["tt_start"]
+		ends := r.Form["tt_end"]
+		titles := r.Form["tt_title"]
+		descs := r.Form["tt_desc"]
+		rooms := r.Form["tt_room"]
+		ttTypes := r.Form["tt_type"]
+		locIDs := r.Form["tt_loc_id"]
+		musIDs := r.Form["tt_musician_id"]
+		var ttEntries []TimetableEntry
+		for i, s := range starts {
+			s = strings.TrimSpace(s)
+			if i >= len(titles) {
+				break
+			}
+			t := strings.TrimSpace(titles[i])
+			if s == "" && t == "" {
+				continue
+			}
+			entry := TimetableEntry{StartTime: s, Title: t}
+			if i < len(ends) {
+				entry.EndTime = strings.TrimSpace(ends[i])
+			}
+			if i < len(descs) {
+				entry.Description = strings.TrimSpace(descs[i])
+			}
+			if i < len(rooms) {
+				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(ttTypes) {
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
+					entry.EntryType = "workshop"
+				} else {
+					entry.EntryType = "bal"
+				}
+			}
+			if i < len(locIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+					entry.LocationID = &v
+				}
+			}
+			if i < len(musIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
+					entry.MusicianID = &v
+				}
+			}
+			ttEntries = append(ttEntries, entry)
+		}
+
+		td := templateEventData{
+			URL:                strings.TrimSpace(r.FormValue("url")),
+			BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
+			StartTime:          templateTimeString(r.FormValue("start_time")),
+			EndTime:            templateTimeString(r.FormValue("end_time")),
+			HasBall:            sliceContains(tags, "bal-folk"),
+			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival:        sliceContains(tags, "festival"),
+			WorkshopDifficulty: r.FormValue("workshop_difficulty"),
+			OrgID:              orgID,
+			LocID:              locID,
+			Tags:               tags,
+			DanceIDs:           danceIDs,
+			Food:               r.FormValue("food"),
+			Drink:              r.FormValue("drink"),
+			FloorCondition:     r.FormValue("floor_condition"),
+			Attributes:         eventAttrsFromForm(r),
+			ContactName:        strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail:       strings.TrimSpace(r.FormValue("contact_email")),
+			BookingEnabled:     r.FormValue("booking_enabled") != "",
+			Timetable:          ttEntries,
+		}
+		if pricing != nil {
+			td.PricingType = pricing.Type
+			td.PricingAmount = pricing.Amount
+			td.PricingCurrency = pricing.Currency
+			td.PricingLines = pricing.Prices
+		}
+		if n, err := strconv.Atoi(r.FormValue("tickets_total")); err == nil {
+			td.TicketsTotal = n
+		}
+
+		data, err := json.Marshal(td)
+		if err != nil {
+			renderErr("admin_save_error")
+			return
+		}
+		if _, err := saveTemplate(db, su.ID, tplOrgID, name, string(data)); err != nil {
+			log.Printf("save template error: %v", err)
+			renderErr("admin_save_error")
+			return
+		}
+		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
 	}
 }
 

@@ -1,6 +1,9 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "admin_templates_title"}}</h1>
+<div class="page-header">
+  <h1>{{.Strings.T "admin_templates_title"}}</h1>
+  <a href="/admin/templates/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_template_new_title"}}</a>
+</div>
 
 {{with .Data}}
 {{if .Templates}}
@@ -121,6 +124,8 @@ function escHtml(s) {
 </script>
 
 <style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
 .admin-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .admin-table th{text-align:left;padding:.4rem .6rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:2px solid #ddd}
 .admin-table td{padding:.4rem .6rem;border-bottom:1px solid #f0f0f0;vertical-align:middle}

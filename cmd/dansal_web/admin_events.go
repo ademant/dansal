@@ -57,6 +57,8 @@ type AdminEventsData struct {
 	FilterUnpublished  bool
 	FilterFlagged      bool
 	TotalCount         int
+	PrevURL            string
+	NextURL            string
 }
 
 type EventPrefill struct {
@@ -1228,8 +1230,27 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
 			filterCity != "" || createdAfter != "" || filterSource != "" ||
 			filterUnpublished || filterFlagged
+		limit := 100
 		if hasFilter {
+			limit = 1000
 			params.Set("limit", "1000")
+		} else {
+			params.Set("limit", strconv.Itoa(limit))
+		}
+
+		// org/type/dance/city/flagged are narrowed in-memory below (the API has
+		// no matching query params for them), which decouples the API's `total`
+		// from what's actually displayed. Offset-based pagination is therefore
+		// only offered when none of those are active, so Prev/Next stay accurate.
+		clientFilterActive := orgID != 0 || filterType != "" || filterDance != "" || filterCity != "" || filterFlagged
+		offset := 0
+		if !clientFilterActive {
+			if o, err := strconv.Atoi(q.Get("offset")); err == nil && o > 0 {
+				offset = o
+			}
+		}
+		if offset > 0 {
+			params.Set("offset", strconv.Itoa(offset))
 		}
 
 		token := getSessionToken(r)
@@ -1307,6 +1328,32 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			events = filtered
 		}
 
+		var prevURL, nextURL string
+		if !clientFilterActive {
+			pageURL := func(off int) string {
+				v := url.Values{}
+				for k, vv := range r.URL.Query() {
+					v[k] = vv
+				}
+				if off > 0 {
+					v.Set("offset", strconv.Itoa(off))
+				} else {
+					v.Del("offset")
+				}
+				return "/admin/events?" + v.Encode()
+			}
+			if offset > 0 {
+				p := offset - limit
+				if p < 0 {
+					p = 0
+				}
+				prevURL = pageURL(p)
+			}
+			if offset+len(events) < total {
+				nextURL = pageURL(offset + limit)
+			}
+		}
+
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
@@ -1373,6 +1420,8 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterUnpublished:  filterUnpublished,
 			FilterFlagged:      filterFlagged,
 			TotalCount:         total,
+			PrevURL:            prevURL,
+			NextURL:            nextURL,
 		}))
 	}
 }

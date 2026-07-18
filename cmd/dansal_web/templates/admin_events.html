@@ -129,7 +129,7 @@
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "col_location"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
-      <th data-sort="str">Status</th>
+      <th data-sort="str">{{$.Strings.T "col_status"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -157,6 +157,12 @@
   </tbody>
 </table>
 </div>
+{{if or .PrevURL .NextURL}}
+<div class="pagination-nav">
+  {{if .PrevURL}}<a href="{{.PrevURL}}" class="btn-sm">← {{$.Strings.T "pagination_prev"}}</a>{{else}}<span></span>{{end}}
+  {{if .NextURL}}<a href="{{.NextURL}}" class="btn-sm">{{$.Strings.T "pagination_next"}} →</a>{{end}}
+</div>
+{{end}}
 </div>
 </div>
 </form>
@@ -257,6 +263,7 @@
 .btn-reset:hover{background:#f0f0f0;border-color:#888}
 .import-notice{font-size:.875rem;color:#155724;background:#d4edda;border:1px solid #c3e6cb;border-radius:4px;padding:.4rem .75rem;margin-bottom:.5rem}
 .result-count{font-size:.85rem;color:#666;margin:.25rem 0 .5rem}
+.pagination-nav{display:flex;justify-content:space-between;align-items:center;margin-top:.75rem}
 .table-wrap{overflow-x:auto}
 .ext-link{font-size:.75rem;color:#888;text-decoration:none;vertical-align:super;margin-left:.15rem}
 .ext-link:hover{color:#1a6eb5}

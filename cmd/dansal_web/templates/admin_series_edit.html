@@ -102,7 +102,7 @@
   </section>
 
   <section class="form-section">
-    <label>Dance styles</label>
+    <label>{{$.Strings.T "evt_bulk_attrs_dances"}}</label>
     <div class="check-row">
       {{range .Dances}}
       <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"{{if index $.Data.DanceIDSet .ID}} checked{{end}}> {{.Name}}</label>
@@ -227,7 +227,7 @@
       <th>{{$.Strings.T "evt_start"}}</th>
       <th>{{$.Strings.T "col_location"}}</th>
       <th style="min-width:220px">{{$.Strings.T "series_description"}}</th>
-      <th>Status</th>
+      <th>{{$.Strings.T "col_status"}}</th>
       <th>{{$.Strings.T "series_actions"}}</th>
     </tr>
   </thead>
@@ -241,7 +241,7 @@
     <td><textarea name="desc_{{.ID}}" rows="2" class="desc-field">{{.Description}}</textarea></td>
     <td>{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
     <td class="col-actions" style="white-space:nowrap">
-      <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="Bearbeiten">{{$.Strings.T "admin_edit"}} ↗</a>
+      <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="{{$.Strings.T "admin_edit"}}">{{$.Strings.T "admin_edit"}} ↗</a>
       <button class="btn-sm" type="button" onclick="postTo('/admin/events/{{.ID}}/cancel')">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
       <button class="btn-sm btn-del" type="button" onclick="if(confirm('{{$.Strings.T "admin_delete"}}?'))postTo('/admin/events/{{.ID}}/delete')">✕</button>
     </td>

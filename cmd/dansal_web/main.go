@@ -325,7 +325,7 @@ func main() {
 		r.HandleFunc("POST /admin/templates/{id}/pin", adminRateLimit(adminTemplatePinHandler(db)))
 		r.HandleFunc("POST /admin/templates/{id}/unpin", adminRateLimit(adminTemplateUnpinHandler(db)))
 
-		r.HandleFunc("GET /admin/organization/{slug}", adminOrgDashboardHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("GET /admin/organization/{slug}", adminOrgDashboardHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/location/{id}", adminLocationDashboardHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client))

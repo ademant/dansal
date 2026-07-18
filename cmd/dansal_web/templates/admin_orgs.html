@@ -15,20 +15,18 @@
       <th>{{$.Strings.T "org_description"}}</th>
       <th class="col-num" data-sort="num">{{$.Strings.T "org_events_title"}}</th>
       <th class="col-num" data-sort="num">{{$.Strings.T "org_locations"}}</th>
-      <th class="col-num" data-sort="num">{{$.Strings.T "org_feeds"}}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
   {{range .Stats}}
   <tr>
-    <td><a href="/admin/organization/{{.Slug}}">{{.Org.Name}}</a></td>
-    <td class="muted">{{.MainTown}}</td>
-    <td class="desc-cell md-content" title="{{.Org.Description}}">{{markdownHTML .Org.Description}}</td>
-    <td class="col-num">{{.EventCount}}</td>
-    <td class="col-num">{{.LocationCount}}</td>
-    <td class="col-num">{{len .FetchSources}}</td>
-    <td class="col-actions" style="white-space:nowrap">
+    <td class="cell-name"><a href="/admin/organization/{{.Slug}}">{{.Org.Name}}</a></td>
+    <td class="muted cell-loc">{{.MainTown}}</td>
+    <td class="desc-cell md-content cell-desc" title="{{.Org.Description}}">{{markdownHTML .Org.Description}}</td>
+    <td class="col-num cell-events" data-mobile-icon="📅">{{.EventCount}}</td>
+    <td class="col-num cell-locs" data-mobile-icon="📍">{{.LocationCount}}</td>
+    <td class="col-actions cell-actions" style="white-space:nowrap">
       {{if .CanEdit}}
       <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       {{if .FetchSources}}
@@ -36,7 +34,7 @@
         <button type="submit" class="btn-icon btn-run" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}">🔄</button>
       </form>
       {{end}}
-      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">🗑️</button>
+      <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">🗑️</button>
       {{end}}
     </td>
   </tr>
@@ -64,6 +62,19 @@
 .btn-run:hover{background:#c5e3ff;color:#0d4a80}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .cell-name{order:1;font-weight:600}
+  .event-table .cell-loc{order:2}
+  .event-table .cell-actions{order:3;margin-left:auto}
+  .event-table .cell-desc{order:4;flex-basis:100%;max-width:none;white-space:normal;font-size:.85rem;color:#555}
+  .event-table .cell-events,.event-table .cell-locs{order:5;text-align:left;width:auto}
+  .event-table .cell-events::before{content:attr(data-mobile-icon) " "}
+  .event-table .cell-locs::before{content:attr(data-mobile-icon) " "}
+  .event-table .mobile-hide{display:none}
+}
 </style>
 <div id="ctd-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.5rem;max-width:440px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">

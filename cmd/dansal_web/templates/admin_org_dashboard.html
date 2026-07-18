@@ -16,27 +16,25 @@
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
 {{with .Org.NotesMd}}<div class="org-notes">{{markdownHTML .}}</div>{{end}}
 
-{{if or .Org.Website .Org.ContactEmail .Org.Mastodon .Org.Instagram .Org.Facebook}}
-<div class="org-links">
-  {{with .Org.Website}}<a href="{{.}}" class="org-link org-link-web" target="_blank" rel="noopener">{{$.Strings.T "org_website"}}</a>{{end}}
-  {{with .Org.ContactEmail}}<a href="mailto:{{.}}" class="org-link org-link-email">{{$.Strings.T "org_contact_email"}}</a>{{end}}
-  {{with .Org.Mastodon}}<a href="{{mastodonURL .}}" class="org-link org-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>{{end}}
-  {{with .Org.Instagram}}<a href="https://instagram.com/{{.}}" class="org-link org-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
-  {{with .Org.Facebook}}<a href="https://facebook.com/{{.}}" class="org-link org-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
-</div>
+{{if .OrgLocations}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_locations"}} ({{len .OrgLocations}})</summary>
+  <div class="dash-orgs-list">
+    {{range .OrgLocations}}
+    <div class="dash-org-row">
+      <a href="/admin/location/{{.ID}}" class="dash-org-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</a>
+      <div class="dash-org-mini-stats">
+        <span title="{{$.Strings.T "loc_event_count"}}">📅 {{index $.Data.LocEventCounts .ID}}</span>
+      </div>
+      <div class="dash-org-actions">
+        <a href="/admin/events/new?org_id={{$.Data.Org.ID}}&amp;location_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+        <a href="/admin/organization/{{$.Data.Slug}}?location_id={{.ID}}{{if $.Data.FilterIncludePast}}&amp;include_past=1{{end}}" class="btn-sm" title="{{$.Strings.T "org_loc_filter_btn"}}">🔍</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
 {{end}}
-
-<div class="fediverse">
-  <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
-  <span class="fediverse-followers">{{$.Strings.TF "org_followers" .FollowerCount}}</span>
-</div>
-
-<div class="feed-links">
-  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
-  <a href="/feed/org/{{.Slug}}/events.ical" class="feed-link">iCal</a>
-  <a href="/feed/org/{{.Slug}}/events.rss" class="feed-link">RSS</a>
-  <a href="/feed/org/{{.Slug}}/events.json" class="feed-link">JSON</a>
-</div>
 
 {{if .NewEventOrgID}}
 <div class="dash-actions">
@@ -64,8 +62,20 @@
     <option value="">{{$.Strings.T "filter_all_dances"}}</option>
     {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
   </select>
+  {{if .FilterLocationID}}<input type="hidden" name="location_id" value="{{.FilterLocationID}}">{{end}}
   <a href="/admin/organization/{{.Slug}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
+
+{{if .FilterLocationID}}
+{{range .OrgLocations}}
+{{if eq .ID $.Data.FilterLocationID}}
+<p class="loc-filter-pill">
+  📍 {{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}
+  <a href="/admin/organization/{{$.Data.Slug}}{{if $.Data.FilterIncludePast}}?include_past=1{{end}}" title="{{$.Strings.T "filter_clear"}}">✕</a>
+</p>
+{{end}}
+{{end}}
+{{end}}
 
 {{if .Events}}
 <p class="result-count">{{if and .TotalCount (gt .TotalCount (len .Events))}}{{.TotalCount}}{{else}}{{len .Events}}{{end}} {{$.Strings.T "admin_events_count"}}</p>
@@ -219,15 +229,18 @@
 .org-desc,.org-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .org-desc p,.org-notes p{margin:.5rem 0}
 .org-desc a,.org-notes a{color:var(--link)}
-.org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
-.org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
-.org-link-web{background:#1a6eb5}.org-link-email{background:#555}.org-link-mastodon{background:#563acc}.org-link-instagram{background:#c13584}.org-link-facebook{background:#1877f2}
-.fediverse{background:var(--fedi-bg);border:1px solid var(--fedi-border);border-radius:6px;padding:.6rem .9rem;margin:1rem 0;font-size:.9rem}
-.fediverse code{font-size:.85rem;color:var(--fg-dim)}
-.fediverse-followers{margin-left:.6rem;font-size:.82rem;color:var(--fg-muted);background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:12px;padding:.1rem .55rem}
-.feed-links{margin:.75rem 0 1.25rem;font-size:.85rem;color:var(--fg-muted)}
-.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
-.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
+.dash-orgs{margin-bottom:1.25rem}
+.dash-orgs summary{cursor:pointer;font-size:1rem;font-weight:600;padding:.4rem 0}
+.dash-orgs-list{padding:.5rem 0}
+.dash-org-row{display:flex;align-items:center;gap:1rem;padding:.4rem 0;border-bottom:1px solid var(--border-lite,#eee)}
+.dash-org-row:last-child{border-bottom:none}
+.dash-org-name{font-weight:500;flex:1}
+.dash-org-mini-stats{display:flex;gap:.8rem;font-size:.85rem;color:var(--fg-muted);flex-shrink:0}
+.dash-org-actions{display:flex;gap:.5rem;flex-shrink:0}
+@media(max-width:480px){.dash-org-row{flex-direction:column;align-items:flex-start}}
+.loc-filter-pill{display:inline-flex;align-items:center;gap:.4rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:20px;padding:.25rem .8rem;font-size:.85rem;margin:-.5rem 0 1rem}
+.loc-filter-pill a{color:var(--fg-muted);text-decoration:none;font-weight:700}
+.loc-filter-pill a:hover{color:var(--fg)}
 .dash-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
 .dash-btn{display:inline-block;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;text-decoration:none;color:#fff;background:#1a6eb5}
 .dash-btn:hover{background:#0d4a80}

@@ -2571,8 +2571,6 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 type AdminOrgDashboardData struct {
 	Org               Organization
 	Slug              string
-	Handle            string
-	FollowerCount     int
 	Events            []Event
 	OrgMap            map[int]string
 	Locations         []Location
@@ -2580,13 +2578,16 @@ type AdminOrgDashboardData struct {
 	AllTags           []Tag
 	Series            []EventSeries
 	FilterIncludePast bool
+	FilterLocationID  int
 	TotalCount        int
 	IsMember          bool   // admin or member of this org
 	NewEventOrgID     int    // org to pre-assign "new event" to
 	NewEventOrgName   string // org name shown on the button when not a member
+	OrgLocations      []Location
+	LocEventCounts    map[int]int
 }
 
-func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -2647,21 +2648,39 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
-		followerCount, _ := countFollowers(db, org.ID)
-		handle := "@" + slug + "@" + cfg.Domain
-
 		includePast := r.URL.Query().Get("include_past") == "1"
-		params := url.Values{}
-		params.Set("organization_id", strconv.Itoa(org.ID))
-		params.Set("limit", "1000")
+		filterLocationID, _ := strconv.Atoi(r.URL.Query().Get("location_id"))
+
+		baseParams := url.Values{}
+		baseParams.Set("organization_id", strconv.Itoa(org.ID))
+		baseParams.Set("limit", "1000")
 		if includePast {
-			params.Set("include_past", "true")
+			baseParams.Set("include_past", "true")
 		}
 
-		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+		// Fetched without the location filter so per-location event counts in
+		// the "assigned locations" section stay stable regardless of which
+		// location the bottom list is currently filtered to.
+		allOrgEvents, _, err := client.GetAdminEventsWithTotal(r.Context(), token, baseParams)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
+		}
+
+		params := url.Values{}
+		for k, v := range baseParams {
+			params[k] = v
+		}
+		if filterLocationID != 0 {
+			params.Set("location_id", strconv.Itoa(filterLocationID))
+		}
+		events, total := allOrgEvents, len(allOrgEvents)
+		if filterLocationID != 0 {
+			events, total, err = client.GetAdminEventsWithTotal(r.Context(), token, params)
+			if err != nil {
+				http.Error(w, "could not load events", http.StatusBadGateway)
+				return
+			}
 		}
 
 		locs, _ := client.GetLocations(r.Context())
@@ -2669,11 +2688,25 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		allTags, _ := client.GetTags(r.Context())
 		series, _ := client.GetSeriesList(r.Context(), token)
 
+		locEventCounts := make(map[int]int, len(locs))
+		for _, ev := range allOrgEvents {
+			if ev.LocationID != nil {
+				locEventCounts[*ev.LocationID]++
+			}
+		}
+		var orgLocations []Location
+		for _, l := range locs {
+			for _, oid := range l.OrganizationIDs {
+				if oid == org.ID {
+					orgLocations = append(orgLocations, l)
+					break
+				}
+			}
+		}
+
 		renderTemplate(w, tmpls.adminOrgDashboard, tmplData(r, cfg, i18n, org.Name, AdminOrgDashboardData{
 			Org:               org,
 			Slug:              slug,
-			Handle:            handle,
-			FollowerCount:     followerCount,
 			Events:            events,
 			OrgMap:            orgMap,
 			Locations:         locs,
@@ -2681,10 +2714,13 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			AllTags:           allTags,
 			Series:            series,
 			FilterIncludePast: includePast,
+			FilterLocationID:  filterLocationID,
 			TotalCount:        total,
 			IsMember:          isMember,
 			NewEventOrgID:     newEventOrgID,
 			NewEventOrgName:   newEventOrgName,
+			OrgLocations:      orgLocations,
+			LocEventCounts:    locEventCounts,
 		}))
 	}
 }

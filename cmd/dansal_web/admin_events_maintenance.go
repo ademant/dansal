@@ -14,6 +14,8 @@ type AdminEventsMaintenanceData struct {
 	SeriesMap          map[int]string
 	Organizations      []Organization
 	Locations          []Location
+	Musicians          []Musician
+	Instructors        []Instructor
 	Dances             []Dance
 	FormatTags         []Tag
 	Series             []EventSeries
@@ -130,6 +132,8 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
+		musicians, _ := client.GetMusicians(r.Context())
+		instructors, _ := client.GetInstructors(r.Context())
 		dances, _ := client.GetDances(r.Context())
 		allTags, _ := client.GetTags(r.Context())
 		series, _ := client.GetSeriesList(r.Context(), token)
@@ -186,6 +190,8 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			SeriesMap:          seriesMap,
 			Organizations:      orgs,
 			Locations:          locs,
+			Musicians:          musicians,
+			Instructors:        instructors,
 			Dances:             dances,
 			FormatTags:         formatTags,
 			Series:             series,

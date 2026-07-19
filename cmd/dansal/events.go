@@ -2985,9 +2985,10 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tags)
 }
 
-// POST /api/v1/events/bulk-set-attributes — set org, tags, dances, food/drink,
-// accessibility attributes, and/or pricing type on multiple events.
-// Nil fields are skipped. Tags and dances are additive (existing kept).
+// POST /api/v1/events/bulk-set-attributes — set org, tags, dances, musicians,
+// instructors, food/drink, accessibility attributes, and/or pricing type on
+// multiple events. Nil fields are skipped. Tags, dances, musicians and
+// instructors are additive (existing kept).
 func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser {
@@ -2995,16 +2996,18 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		IDs         []int    `json:"ids"`
-		OrgID       *int     `json:"org_id"`       // nil = skip; set to apply (can be 0 to unset)
-		AddTags     []string `json:"add_tags"`     // nil = skip; additive
-		AddDances   []int    `json:"add_dances"`   // nil = skip; additive (dance IDs)
-		Food        *string  `json:"food"`         // nil = skip; "" unsets
-		Drink       *string  `json:"drink"`        // nil = skip; "" unsets
-		Wheelchair  *bool    `json:"wheelchair"`   // nil = skip
-		Bar         *bool    `json:"bar"`          // nil = skip
-		Kitchen     *bool    `json:"kitchen"`      // nil = skip
-		PricingType *string  `json:"pricing_type"` // nil = skip; "free"/"donation"
+		IDs            []int    `json:"ids"`
+		OrgID          *int     `json:"org_id"`          // nil = skip; set to apply (can be 0 to unset)
+		AddTags        []string `json:"add_tags"`        // nil = skip; additive
+		AddDances      []int    `json:"add_dances"`      // nil = skip; additive (dance IDs)
+		AddMusicians   []int    `json:"add_musicians"`   // nil = skip; additive (musician IDs)
+		AddInstructors []int    `json:"add_instructors"` // nil = skip; additive (instructor IDs)
+		Food           *string  `json:"food"`            // nil = skip; "" unsets
+		Drink          *string  `json:"drink"`           // nil = skip; "" unsets
+		Wheelchair     *bool    `json:"wheelchair"`      // nil = skip
+		Bar            *bool    `json:"bar"`             // nil = skip
+		Kitchen        *bool    `json:"kitchen"`         // nil = skip
+		PricingType    *string  `json:"pricing_type"`    // nil = skip; "free"/"donation"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
@@ -3053,6 +3056,12 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.AddDances != nil {
 			batchInsertPairs(db, "event_dances", "event_id", "dance_id", id, req.AddDances)
+		}
+		if req.AddMusicians != nil {
+			batchInsertPairs(db, "event_musicians", "event_id", "musician_id", id, req.AddMusicians)
+		}
+		if req.AddInstructors != nil {
+			batchInsertPairs(db, "event_instructors", "event_id", "instructor_id", id, req.AddInstructors)
 		}
 		if req.Food != nil {
 			db.Exec("UPDATE events SET food=? WHERE id=?", *req.Food, id)

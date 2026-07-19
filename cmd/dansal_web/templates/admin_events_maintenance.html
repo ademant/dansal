@@ -77,6 +77,26 @@
     </div>
   </div>
 
+  {{/* Assign musician */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "nav_musicians"}}</label>
+    <div class="af-field">
+      <input type="text" id="em-bq-musician-input" class="af-input em-bq-input" placeholder="—" autocomplete="off">
+      <input type="hidden" name="musician_id" id="em-bq-musician-id">
+      <div id="em-bq-musician-suggest" class="af-suggest" hidden></div>
+    </div>
+  </div>
+
+  {{/* Assign instructor */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label">{{$.Strings.T "nav_instructors"}}</label>
+    <div class="af-field">
+      <input type="text" id="em-bq-instructor-input" class="af-input em-bq-input" placeholder="—" autocomplete="off">
+      <input type="hidden" name="instructor_id" id="em-bq-instructor-id">
+      <div id="em-bq-instructor-suggest" class="af-suggest" hidden></div>
+    </div>
+  </div>
+
   {{/* Assign series */}}
   <div class="em-bulk-group">
     <label class="em-bulk-label">{{$.Strings.T "nav_admin_series"}}</label>
@@ -265,6 +285,8 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 
 var _emOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
 var _emLocs = {{locationsJSON $.Data.Locations}};
+var _emMusicians = [{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
+var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
 
 (function(){
   // Build city list
@@ -350,6 +372,16 @@ var _emLocs = {{locationsJSON $.Data.Locations}};
     inputId: 'em-bq-loc-input', hiddenId: 'em-bq-loc-id', suggestId: 'em-bq-loc-suggest',
     noSubmit: true,
     items: function() { return _emLocs.map(function(l){ return {id:l.id, label:l.label}; }); }
+  });
+  setupSuggest({
+    inputId: 'em-bq-musician-input', hiddenId: 'em-bq-musician-id', suggestId: 'em-bq-musician-suggest',
+    noSubmit: true,
+    items: function() { return _emMusicians.map(function(m){ return {id:m.id, label:m.name}; }); }
+  });
+  setupSuggest({
+    inputId: 'em-bq-instructor-input', hiddenId: 'em-bq-instructor-id', suggestId: 'em-bq-instructor-suggest',
+    noSubmit: true,
+    items: function() { return _emInstructors.map(function(i){ return {id:i.id, label:i.name}; }); }
   });
 
   // Checkbox select-all and count

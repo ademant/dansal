@@ -555,6 +555,16 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 				payload["add_dances"] = danceIDs
 			}
 		}
+		if v := r.FormValue("musician_id"); v != "" {
+			if id, err := strconv.Atoi(v); err == nil && id > 0 {
+				payload["add_musicians"] = []int{id}
+			}
+		}
+		if v := r.FormValue("instructor_id"); v != "" {
+			if id, err := strconv.Atoi(v); err == nil && id > 0 {
+				payload["add_instructors"] = []int{id}
+			}
+		}
 		if v := r.FormValue("food"); v != "" && v != "__skip__" {
 			s := v
 			if s == "__unset__" {

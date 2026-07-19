@@ -31,7 +31,10 @@
   <div>
     <div class="musician-title-row">
       <h1>{{.Musician.Bandname}}{{with .Musician.ShortName}} <small class="short-name">({{.}})</small>{{end}}</h1>
-      {{if $.User}}<a href="/admin/musicians/{{.Musician.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+      {{if $.User}}
+      <a href="/admin/musician/{{.Musician.ID}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
+      <a href="/admin/musicians/{{.Musician.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      {{end}}
     </div>
     <div class="musician-meta">
       {{if .Musician.Country}}<span class="chip">{{.Musician.Country}}</span>{{end}}

@@ -324,6 +324,18 @@ func locWeekday(lang string, w time.Weekday) string {
 	return locWeekdays["en"][w]
 }
 
+func formatDateStr(lang, s string) string {
+	t, ok := parseTime(s)
+	if !ok {
+		return s
+	}
+	mo := locMonth(lang, t.Month())
+	if lang == "de" {
+		return fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
+	}
+	return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
+}
+
 var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"}
 
 func parseTime(s string) (time.Time, bool) {
@@ -547,15 +559,7 @@ var tmplFuncMap = template.FuncMap{
 		return fmt.Sprintf("%s %02d %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
 	},
 	"formatDate": func(lang, s string) string {
-		t, ok := parseTime(s)
-		if !ok {
-			return s
-		}
-		mo := locMonth(lang, t.Month())
-		if lang == "de" {
-			return fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
-		}
-		return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
+		return formatDateStr(lang, s)
 	},
 	"isoDate": func(s string) string {
 		if t, ok := parseTime(s); ok {
@@ -1398,7 +1402,12 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		bookingError := r.URL.Query().Get("book_error")
 
 		clientIP := getClientIP(r)
-		td := tmplData(r, cfg, i18n, event.Title, EventData{
+		lang := i18n.detectLang(r)
+		pageTitle := event.Title
+		if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
+			pageTitle = event.Title + " – " + d
+		}
+		td := tmplData(r, cfg, i18n, pageTitle, EventData{
 			Event:             event,
 			Org:               org,
 			OrgSlug:           slug,

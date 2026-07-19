@@ -681,7 +681,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
 	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
-		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for 72 hours.", setupURL))
+		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

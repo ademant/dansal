@@ -273,6 +273,9 @@ type Instructor struct {
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+
+	FutureEventCount int `json:"future_event_count,omitempty"`
+	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
 type Room struct {
@@ -949,7 +952,7 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 
 func (c *DansalClient) GetInstructors(ctx context.Context) ([]Instructor, error) {
 	var out []Instructor
-	return out, c.get(ctx, "/api/v1/instructors?limit=1000", &out)
+	return out, c.get(ctx, "/api/v1/instructors?limit=1000&with_event_counts=true", &out)
 }
 
 func (c *DansalClient) GetInstructor(ctx context.Context, id int) (Instructor, error) {

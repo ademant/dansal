@@ -20,7 +20,7 @@
   <tbody>
   {{range .Musicians}}
   <tr>
-    <td class="cell-name"><a href="/musicians/{{.ID}}">{{.Bandname}}</a></td>
+    <td class="cell-name"><a href="/admin/musician/{{.ID}}">{{.Bandname}}</a></td>
     <td class="cell-short muted">{{.ShortName}}</td>
     <td class="cell-country muted">{{.Country}}</td>
     <td class="cell-events" data-mobile-icon="📅" data-val="{{.FutureEventCount}}">{{if .FutureEventCount}}{{.FutureEventCount}}{{end}}</td>

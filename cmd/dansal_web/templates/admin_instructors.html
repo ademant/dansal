@@ -12,17 +12,19 @@
     <tr>
       <th data-sort="str">{{$.Strings.T "instructor_name"}}</th>
       <th data-sort="str">{{$.Strings.T "instructor_website"}}</th>
+      <th data-sort="num">{{$.Strings.T "musician_future_events"}}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
   {{range .Instructors}}
   <tr>
-    <td>{{.Name}}</td>
-    <td>{{if .Website}}<a href="{{.Website}}" target="_blank" rel="noopener">{{.Website}}</a>{{end}}</td>
-    <td class="col-actions">
+    <td class="cell-name"><a href="/admin/instructor/{{.ID}}">{{.Name}}</a></td>
+    <td class="cell-website muted">{{if .Website}}<a href="{{.Website}}" target="_blank" rel="noopener">{{.Website}} ↗</a>{{end}}</td>
+    <td class="cell-events" data-mobile-icon="📅" data-val="{{.FutureEventCount}}">{{if .FutureEventCount}}{{.FutureEventCount}}{{end}}</td>
+    <td class="cell-actions col-actions">
       <a href="/admin/instructors/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
-      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+      <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
               onclick="if(confirm('{{$.Strings.T "instructor_confirm_delete"}}'))delInstructor({{.ID}})">🗑️</button>
     </td>
   </tr>
@@ -49,9 +51,21 @@ function delInstructor(id) {
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
 .event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
 .event-table tbody tr:hover{background:#f9f9ff}
+.muted{color:#888;font-size:.9rem}
 .col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
 .btn-del{color:#c33;border-color:#faa}
 .btn-del:hover{background:#fff0f0}
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .cell-name{order:1;font-weight:600}
+  .event-table .cell-actions{order:2;margin-left:auto}
+  .event-table .cell-website{order:3;flex-basis:100%}
+  .event-table .cell-events{order:4}
+  .event-table .cell-events:not(:empty)::before{content:attr(data-mobile-icon) " "}
+  .event-table .mobile-hide{display:none}
+}
 </style>
 {{end}}

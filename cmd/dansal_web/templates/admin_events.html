@@ -50,8 +50,8 @@
   <div class="evt-hdr-actions">
     <a href="/admin/events/new" class="evt-hdr-btn evt-hdr-new" title="{{.Strings.T "admin_event_new_title"}}" aria-label="{{.Strings.T "admin_event_new_title"}}"><span class="ehb-icon">➕</span><span class="ehb-label">{{.Strings.T "admin_event_new_title"}}</span></a>
     <a href="/admin/events/import" class="evt-hdr-btn evt-hdr-import" title="{{.Strings.T "admin_import_title"}}" aria-label="{{.Strings.T "admin_import_title"}}"><span class="ehb-icon">⬆️</span><span class="ehb-label">{{.Strings.T "admin_import_title"}}</span></a>
-    <a href="/admin/events?unpublished=1" class="evt-hdr-btn evt-hdr-unpub{{if .PendingSuggestionCount}} has-badge{{end}}" title="{{.Strings.T "admin_filter_unpublished"}}" aria-label="{{.Strings.T "admin_filter_unpublished"}}"><span class="ehb-icon">👁️</span><span class="ehb-label">{{.Strings.T "admin_filter_unpublished"}}{{if .PendingSuggestionCount}} *{{end}}</span></a>
-    <a href="/admin/events?flagged=1&include_past=1" class="evt-hdr-btn evt-hdr-dup{{if .PossibleDuplicateCount}} has-badge{{end}}" title="{{.Strings.T "admin_filter_duplicates"}}" aria-label="{{.Strings.T "admin_filter_duplicates"}}"><span class="ehb-icon">⚠️</span><span class="ehb-label">{{.Strings.T "admin_filter_duplicates"}}{{if .PossibleDuplicateCount}} *{{end}}</span></a>
+    <a href="{{if .Data.FilterUnpublished}}/admin/events{{else}}/admin/events?unpublished=1{{end}}" class="evt-hdr-btn evt-hdr-unpub{{if .Data.FilterUnpublished}} evt-hdr-active{{end}}{{if .PendingSuggestionCount}} has-badge{{end}}" role="button" aria-pressed="{{if .Data.FilterUnpublished}}true{{else}}false{{end}}" title="{{if .Data.FilterUnpublished}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_unpublished"}}{{end}}" aria-label="{{if .Data.FilterUnpublished}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_unpublished"}}{{end}}"><span class="ehb-icon">👁️</span><span class="ehb-label">{{.Strings.T "admin_filter_unpublished"}}{{if .PendingSuggestionCount}} *{{end}}</span></a>
+    <a href="{{if .Data.FilterFlagged}}/admin/events{{else}}/admin/events?flagged=1&include_past=1{{end}}" class="evt-hdr-btn evt-hdr-dup{{if .Data.FilterFlagged}} evt-hdr-active{{end}}{{if .PossibleDuplicateCount}} has-badge{{end}}" role="button" aria-pressed="{{if .Data.FilterFlagged}}true{{else}}false{{end}}" title="{{if .Data.FilterFlagged}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_duplicates"}}{{end}}" aria-label="{{if .Data.FilterFlagged}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_duplicates"}}{{end}}"><span class="ehb-icon">⚠️</span><span class="ehb-label">{{.Strings.T "admin_filter_duplicates"}}{{if .PossibleDuplicateCount}} *{{end}}</span></a>
   </div>
 </div>
 {{with .Data}}{{if .FilterCreatedAfter}}
@@ -275,6 +275,7 @@
 .evt-hdr-unpub:hover{background:#5541b8}
 .evt-hdr-dup{background:#c0392b}
 .evt-hdr-dup:hover{background:#992d21}
+.evt-hdr-btn.evt-hdr-active{box-shadow:inset 0 0 0 2px rgba(255,255,255,.9);filter:brightness(.82)}
 .ehb-icon{line-height:1}
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
 .event-filters select,.event-filters input[type=date]{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}

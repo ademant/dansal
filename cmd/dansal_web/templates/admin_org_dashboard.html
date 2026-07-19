@@ -112,11 +112,19 @@
     {{range .Dances}}<option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>{{end}}
   </select>
   {{if .OrgLocations}}
-  <select name="location_id" multiple class="loc-multi-select" onchange="this.form.submit()" title="{{$.Strings.T "col_location"}}">
-    {{range .OrgLocations}}
-    <option value="{{.ID}}" {{if index $.Data.FilterLocationIDSet .ID}}selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>
-    {{end}}
-  </select>
+  <div class="loc-dropdown" id="loc-dropdown">
+    <button type="button" class="loc-dropdown-toggle" id="loc-dropdown-toggle" aria-haspopup="true" aria-expanded="false" data-default-label="{{$.Strings.T "col_location"}}" data-selected-label="{{$.Strings.T "filter_locations_selected"}}">
+      📍 <span id="loc-dropdown-label">{{$.Strings.T "col_location"}}</span>
+    </button>
+    <div class="loc-dropdown-panel" id="loc-dropdown-panel" hidden>
+      {{range .OrgLocations}}
+      <label class="loc-dropdown-item">
+        <input type="checkbox" name="location_id" value="{{.ID}}" {{if index $.Data.FilterLocationIDSet .ID}}checked{{end}}>
+        {{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}
+      </label>
+      {{end}}
+    </div>
+  </div>
   {{end}}
   <a href="/admin/organization/{{.Slug}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
@@ -299,7 +307,12 @@
 .dash-btn-import:hover{background:#155727}
 .event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px}
 .event-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:var(--bg-card)}
-.loc-multi-select{min-height:2.1rem;max-height:6rem}
+.loc-dropdown{position:relative;display:inline-block}
+.loc-dropdown-toggle{padding:.3rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:var(--bg-card);color:var(--fg);cursor:pointer}
+.loc-dropdown-toggle:hover{background:var(--bg-hover)}
+.loc-dropdown-panel{position:absolute;top:100%;left:0;z-index:20;margin-top:.25rem;background:var(--bg-card);border:1px solid #ccc;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.15);padding:.4rem;min-width:12rem;max-height:14rem;overflow-y:auto}
+.loc-dropdown-item{display:flex;align-items:center;gap:.4rem;padding:.25rem .3rem;font-size:.85rem;white-space:nowrap;cursor:pointer}
+.loc-dropdown-item:hover{background:var(--bg-hover)}
 .filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
 .btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:var(--fg-dim);text-decoration:none;background:var(--bg-card)}
 .btn-reset:hover{background:var(--bg-hover)}
@@ -424,6 +437,37 @@ function delEvent(id){var f=document.createElement('form');f.method='post';f.act
   });
 })();
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+(function(){
+  var wrap=document.getElementById('loc-dropdown');
+  if(!wrap)return;
+  var toggle=document.getElementById('loc-dropdown-toggle');
+  var panel=document.getElementById('loc-dropdown-panel');
+  var label=document.getElementById('loc-dropdown-label');
+  var defaultLabel=toggle.dataset.defaultLabel;
+  var selectedLabel=toggle.dataset.selectedLabel;
+  function updateLabel(){
+    var checked=panel.querySelectorAll('input[type=checkbox]:checked');
+    if(!checked.length){label.textContent=defaultLabel;return;}
+    if(checked.length===1){label.textContent=checked[0].parentElement.textContent.trim();return;}
+    label.textContent=checked.length+' '+selectedLabel;
+  }
+  function close(){panel.hidden=true;toggle.setAttribute('aria-expanded','false');}
+  function open(){panel.hidden=false;toggle.setAttribute('aria-expanded','true');}
+  toggle.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(panel.hidden)open();else close();
+  });
+  document.addEventListener('click',function(e){
+    if(!wrap.contains(e.target))close();
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape')close();
+  });
+  panel.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    cb.addEventListener('change',function(){wrap.closest('form').submit();});
+  });
+  updateLabel();
+})();
 (function(){
   var mergeForm=document.getElementById('event-bulk-form');
   if(!mergeForm)return;

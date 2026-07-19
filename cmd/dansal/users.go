@@ -530,7 +530,7 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM invite_links WHERE id=?", id)
 
 	// Create a fresh one.
-	expiresAtTime := time.Now().UTC().Add(72 * time.Hour)
+	expiresAtTime := time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
 	var orgVal any
 	var orgIDPtr *int
 	if orgID.Valid {
@@ -554,7 +554,7 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 	base := buildBaseURL(r)
 	setupURL := base + "/invites/" + newToken
 	go notifyUser("", presetEmail, "Your account setup link has been renewed",
-		fmt.Sprintf("A new account setup link has been generated for you.\n\n%s\n\nThe link is valid for 72 hours.", setupURL))
+		fmt.Sprintf("A new account setup link has been generated for you.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"invite_url": setupURL})

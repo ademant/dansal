@@ -25,15 +25,17 @@ GET /org/{name}             # organization profile + upcoming events (also serve
 GET /location/{id}          # location profile + upcoming events at that venue
 GET /musicians              # musician directory
 GET /musicians/{id}         # single musician profile + upcoming events
+GET /instructors            # instructor directory
+GET /instructors/{id}       # single instructor profile + upcoming events
 GET /organizations          # organization directory
 GET /board                  # community ride-share/ticket/lost-and-found board
 GET /search                 # search form
 GET /search/results         # search results (same query params as GET /api/v1/events, proxied)
 ```
 
-All public. Each event/org/location/musician page carries `schema.org` JSON-LD
-(`Event`/`Organization`/`Place`/`MusicGroup`) and Open Graph tags for link
-previews and search-engine structured data.
+All public. Each event/org/location/musician/instructor page carries `schema.org`
+JSON-LD (`Event`/`Organization`/`Place`/`MusicGroup`/`Person`) and Open Graph
+tags for link previews and search-engine structured data.
 
 `/org/{name}` doubles as the ActivityPub actor URL — `Accept:
 application/activity+json` returns the Actor object instead of HTML; see
@@ -70,10 +72,11 @@ GET /.well-known/nodeinfo            # ActivityPub server metadata pointer
 GET /.well-known/security.txt        # security contact (RFC 9116)
 ```
 
-`sitemap.xml` includes: the homepage, `/musicians`, `/organizations`, all
-published events (past and future), all locations, all organizations (at
-their `effectiveSlug()`), and all musicians. It does not include feed URLs,
-embeds, or the internal web-app flows excluded from this document.
+`sitemap.xml` includes: the homepage, `/musicians`, `/instructors`,
+`/organizations`, all published events (past and future), all locations, all
+organizations (at their `effectiveSlug()`), all musicians, and all instructors.
+It does not include feed URLs, embeds, or the internal web-app flows excluded
+from this document.
 
 ## Embeds
 

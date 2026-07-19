@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Room struct {
@@ -1301,9 +1302,9 @@ func deleteLocationRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/v1/locations/event-counts — returns a map of location_id → event count.
+// GET /api/v1/locations/event-counts — returns a map of location_id → future event count.
 func locationEventCounts(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(`SELECT location_id, COUNT(*) FROM events WHERE location_id IS NOT NULL GROUP BY location_id`)
+	rows, err := db.Query(`SELECT location_id, COUNT(*) FROM events WHERE location_id IS NOT NULL AND end_time >= ? GROUP BY location_id`, time.Now().Unix())
 	if err != nil {
 		writeInternalError(w, err)
 		return

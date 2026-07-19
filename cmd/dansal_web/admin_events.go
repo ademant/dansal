@@ -3342,6 +3342,82 @@ func adminInstructorDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, 
 	}
 }
 
+// ── Admin musician dashboard (/admin/musician/{id}) ──────────────────────────
+
+type AdminMusicianDashboardData struct {
+	Musician          Musician
+	Events            []Event
+	OrgMap            map[int]string
+	Locations         []Location
+	Dances            []Dance
+	AllTags           []Tag
+	Series            []EventSeries
+	Templates         []EventTemplate
+	FilterIncludePast bool
+	TotalCount        int
+}
+
+func adminMusicianDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		musician, err := client.GetMusician(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		token := getSessionToken(r)
+
+		orgs, _ := client.GetOrganizations(r.Context())
+		orgMap := make(map[int]string, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o.Name
+		}
+
+		includePast := r.URL.Query().Get("include_past") == "1"
+		params := url.Values{}
+		params.Set("musician_id", strconv.Itoa(id))
+		params.Set("limit", "1000")
+		if includePast {
+			params.Set("include_past", "true")
+		}
+
+		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
+
+		locs, _ := client.GetLocations(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		allTags, _ := client.GetTags(r.Context())
+		series, _ := client.GetSeriesListForMusician(r.Context(), id, token)
+		templates, _ := listTemplatesForMusician(db, id)
+
+		renderTemplate(w, tmpls.adminMusicianDashboard, tmplData(r, cfg, i18n, musician.Bandname, AdminMusicianDashboardData{
+			Musician:          musician,
+			Events:            events,
+			OrgMap:            orgMap,
+			Locations:         locs,
+			Dances:            dances,
+			AllTags:           allTags,
+			Series:            series,
+			Templates:         templates,
+			FilterIncludePast: includePast,
+			TotalCount:        total,
+		}))
+	}
+}
+
 // POST /admin/api/instructor/quick-create — inline instructor creation from event form.
 // Normalises the requested name, returns an existing instructor on a name match, or creates a new one.
 func adminInstructorQuickCreateHandler(client *DansalClient) http.HandlerFunc {

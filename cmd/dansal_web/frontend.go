@@ -1035,6 +1035,7 @@ type Templates struct {
 	adminOrgDashboard         *template.Template
 	adminLocationDashboard    *template.Template
 	adminInstructorDashboard  *template.Template
+	adminMusicianDashboard    *template.Template
 	seriesToken               *template.Template
 	embedEvents               *template.Template
 	embedEvent                *template.Template
@@ -1127,6 +1128,7 @@ func loadTemplates() *Templates {
 		adminOrgDashboard:         load("admin_org_dashboard"),
 		adminLocationDashboard:    load("admin_location_dashboard"),
 		adminInstructorDashboard:  load("admin_instructor_dashboard"),
+		adminMusicianDashboard:    load("admin_musician_dashboard"),
 		seriesToken:               load("series_token"),
 		embedEvents:               loadEmbed("embed_events"),
 		embedEvent:                loadEmbed("embed_event"),

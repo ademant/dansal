@@ -1,0 +1,227 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<div class="loc-page-header">
+  <h1>{{.Musician.Bandname}}{{if .Musician.ShortName}} <small>({{.Musician.ShortName}})</small>{{end}}</h1>
+  <a href="/musicians/{{.Musician.ID}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
+  <a href="/admin/musicians/{{.Musician.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+</div>
+
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "musician_dash_details"}}</summary>
+  <div class="dash-orgs-list">
+    <div class="dash-org-row">
+      <span class="dash-org-name">{{$.Strings.T "musician_website"}}</span>
+      <div class="dash-org-actions">{{if .Musician.Internetsite}}<a href="{{.Musician.Internetsite}}" target="_blank" rel="noopener" class="btn-sm">{{.Musician.Internetsite}} ↗</a>{{end}}</div>
+    </div>
+    {{if .Musician.Country}}
+    <div class="dash-org-row">
+      <span class="dash-org-name">{{$.Strings.T "musician_country"}}</span>
+      <div class="dash-org-actions">{{.Musician.Country}}</div>
+    </div>
+    {{end}}
+    {{if .Musician.BeginYear}}
+    <div class="dash-org-row">
+      <span class="dash-org-name">{{$.Strings.T "musician_begin_year"}}</span>
+      <div class="dash-org-actions">{{.Musician.BeginYear}}</div>
+    </div>
+    {{end}}
+    {{with .Musician.Biography}}<div class="dash-org-row"><div class="md-content">{{markdownHTML .}}</div></div>{{end}}
+  </div>
+</details>
+
+{{if .Templates}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_presets"}} ({{len .Templates}})</summary>
+  <div class="dash-orgs-list">
+    {{range .Templates}}
+    <div class="dash-org-row">
+      <span class="dash-org-name">{{.Name}}</span>
+      <div class="dash-org-actions">
+        <a href="/admin/events/new?tpl_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{end}}
+
+{{if .Series}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_series"}} ({{len .Series}})</summary>
+  <div class="dash-orgs-list">
+    <div class="dash-org-row">
+      <a href="/admin/series/new?musician_id={{.Musician.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+    </div>
+    {{range .Series}}
+    <div class="dash-org-row">
+      <a href="/admin/series/{{.ID}}" class="dash-org-name">{{.Title}}</a>
+      <div class="dash-org-mini-stats">
+        <span title="{{$.Strings.T "series_events"}}">📅 {{.EventCount}}</span>
+      </div>
+      <div class="dash-org-actions">
+        <a href="/admin/series/{{.ID}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{else}}
+<div class="dash-actions">
+  <a href="/admin/series/new?musician_id={{.Musician.ID}}" class="dash-btn">+ {{$.Strings.T "series_new"}}</a>
+</div>
+{{end}}
+
+<div class="dash-actions">
+  <a href="/admin/events/new?musician_id={{.Musician.ID}}" class="dash-btn">
+    + {{$.Strings.T "admin_event_new_title"}}
+  </a>
+</div>
+
+<form method="get" action="/admin/musician/{{.Musician.ID}}" class="event-filters">
+  <label class="filter-check">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "filter_include_past"}}
+  </label>
+  <a href="/admin/musician/{{.Musician.ID}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
+</form>
+
+{{if .Events}}
+<p class="result-count">{{if and .TotalCount (gt .TotalCount (len .Events))}}{{.TotalCount}}{{else}}{{len .Events}}{{end}} {{$.Strings.T "admin_events_count"}}</p>
+{{end}}
+
+<form method="post" action="/admin/events/merge" id="event-bulk-form">
+<div class="bulk-edit-layout">
+<aside class="bulk-side" id="event-bulk-side">
+  <span class="event-bulk-count"></span>
+  <button type="submit" class="btn-sm btn-merge bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+  <button type="button" class="btn-sm event-bulk-tpl-btn bulk-action-btn" disabled>{{$.Strings.T "evt_apply_template_btn"}}</button>
+  <span class="bulk-sep"></span>
+  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+  {{if eq $.User.Role "admin"}}
+  <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_delete"}}')">{{$.Strings.T "evt_bulk_delete_btn"}}</button>
+  {{end}}
+</aside>
+<div class="bulk-main">
+{{if .Events}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th class="col-cb"><input type="checkbox" id="event-cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>
+      <th data-sort="str">{{$.Strings.T "col_date"}}</th>
+      <th data-sort="str">{{$.Strings.T "col_title"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str">Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Events}}
+  <tr>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{derefInt .OrganizationID}}{{end}}"></td>
+    <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}</td>
+    <td style="font-size:.85rem;color:var(--fg-muted)">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    <td>
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
+      {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+    </td>
+    <td style="white-space:nowrap">
+      {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty-msg">{{$.Strings.T "no_events_found"}}</p>
+{{end}}
+</div>
+</div>
+</form>
+
+{{end}}{{/* .Data */}}
+<style>
+.loc-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
+.loc-page-header h1{margin:0}
+.dash-orgs{border:1px solid #e0e4ef;border-radius:6px;margin-bottom:1rem;padding:0 .9rem}
+.dash-orgs summary{cursor:pointer;font-size:1rem;font-weight:600;padding:.4rem 0}
+.dash-orgs-list{padding:.2rem 0 .8rem}
+.dash-org-row{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.35rem 0;border-top:1px solid #eee}
+.dash-org-row:first-child{border-top:none}
+.dash-org-name{font-weight:500}
+.dash-org-mini-stats{font-size:.8rem;color:#666;display:flex;gap:.5rem}
+.dash-org-actions{display:flex;gap:.4rem;margin-left:auto}
+.dash-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
+.dash-btn{display:inline-block;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;text-decoration:none;color:#fff;background:#1a6eb5}
+.dash-btn:hover{background:#0d4a80}
+.event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px}
+.filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
+.btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:var(--fg-dim);text-decoration:none;background:var(--bg-card)}
+.btn-reset:hover{background:var(--bg-hover)}
+.result-count{font-size:.85rem;color:var(--fg-muted);margin:.25rem 0 .5rem}
+.table-wrap{overflow-x:auto}
+.ext-link{font-size:.75rem;color:#888;text-decoration:none;vertical-align:super;margin-left:.15rem}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border-lite);vertical-align:top}
+.event-table thead th{background:var(--bg-subtle);font-weight:600;color:var(--fg-2);white-space:nowrap}
+.event-table tbody tr:hover{background:var(--bg-hover)}
+.badge.pub{background:#d4edda;color:#155724}
+.badge.unpub{background:#fff3cd;color:#856404}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
+.btn-sm:hover{background:#f0f0f0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+.btn-merge{background:#856404;color:#fff;border:none}
+.btn-merge:hover{background:#664e03}
+.btn-cancel-bulk{background:#e07b00;color:#fff;border:none}
+.btn-cancel-bulk:hover{background:#b85f00}
+.bulk-sep{width:1px;height:1.4em;background:#ccc;margin:0 .1rem}
+.bulk-action-btn:disabled{opacity:.45;cursor:default}
+.bulk-edit-layout{display:grid;grid-template-columns:160px 1fr;gap:1.25rem;align-items:start}
+.bulk-side{position:sticky;top:1rem;display:flex;flex-direction:column;gap:.5rem;background:var(--bg-subtle);padding:.6rem;border-radius:6px;border:1px solid var(--border)}
+.bulk-side .bulk-sep{display:none}
+.bulk-side .event-bulk-count{font-size:.85rem;color:var(--fg-dim);text-align:center}
+@media(max-width:900px){.bulk-edit-layout{display:block}.bulk-side{position:static;flex-direction:row;flex-wrap:wrap;margin-bottom:.75rem}.bulk-side .bulk-sep{display:block}.bulk-side .event-bulk-count{text-align:left}}
+.col-cb{width:2rem;text-align:center}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+</style>
+<script>
+function delEvent(id){var f=document.createElement('form');f.method='post';f.action='/admin/events/'+id+'/delete';document.body.appendChild(f);f.submit();}
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+(function(){
+  var cbAll=document.getElementById('event-cb-all');
+  if(!cbAll)return;
+  var cbs=document.querySelectorAll('.event-cb');
+  var countEls=document.querySelectorAll('.event-bulk-count');
+  var actionBtns=document.querySelectorAll('.bulk-action-btn');
+  function updateCount(){
+    var n=document.querySelectorAll('.event-cb:checked').length;
+    countEls.forEach(function(el){el.textContent=n>0?n+' ✓':'';});
+    actionBtns.forEach(function(btn){btn.disabled=n===0;});
+  }
+  cbAll.addEventListener('change',function(){cbs.forEach(function(cb){cb.checked=cbAll.checked;});updateCount();});
+  cbs.forEach(function(cb){cb.addEventListener('change',updateCount);});
+  document.querySelectorAll('.event-bulk-tpl-btn').forEach(function(tplBtn){
+    tplBtn.addEventListener('click',function(){
+      var checked=document.querySelectorAll('.event-cb:checked');if(!checked.length)return;
+      var p=new URLSearchParams();checked.forEach(function(cb){p.append('event_ids',cb.value);});
+      window.location.href='/admin/templates/assign?'+p.toString();
+    });
+  });
+})();
+(function(){
+  var mergeForm=document.getElementById('event-bulk-form');
+  if(!mergeForm)return;
+  mergeForm.addEventListener('submit',function(){
+    var ids={};document.querySelectorAll('.event-cb:checked').forEach(function(cb){ids[cb.value]=true;});
+    mergeForm.querySelectorAll('input[name^="event_org_"]').forEach(function(inp){if(!ids[inp.name.replace('event_org_','')])inp.remove();});
+  });
+})();
+</script>
+{{end}}

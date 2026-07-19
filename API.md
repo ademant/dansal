@@ -630,7 +630,7 @@ POST   /api/v1/events/{id}/assign-org       # admin/user (member of the target o
 POST   /api/v1/events/{id}/enrich           # admin/publisher: attach musicians/pricing from an external lookup
 POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event's org)
 POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
-POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/amenities to event IDs
+POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/musicians/instructors/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
 POST   /api/v1/events/bulk-set-time         # admin/user: bulk-update start/end time-of-day for event IDs
 

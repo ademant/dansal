@@ -550,6 +550,8 @@ List and get are public. Locations support `Accept: application/geo+json` on the
 
 **Rooms** are named sub-locations (e.g. "Grand Hall", "Studio 2") within a venue, selectable per-event via `Event.room_id`. `GET .../rooms` is public. `POST`/`DELETE` require the caller to be an admin or a member of one of the location's organizations. `GET /api/v1/locations` and `GET /api/v1/locations/{id}` embed a location's rooms as `"rooms": [{"id": N, "name": "..."}]` (omitted when empty). Deleting a room sets `room_id` to `NULL` on any events that referenced it (`ON DELETE SET NULL`) rather than blocking the delete.
 
+**`GET /api/v1/locations/event-counts`** returns `{"location_id": count}` for every location with at least one event. The count is **future events only** (`end_time` in the future, any publish status) — it intentionally matches the location dashboard's default (future-only) view rather than the location's lifetime event total.
+
 ```json
 POST /api/v1/locations/42/rooms
 { "name": "Grand Hall" }

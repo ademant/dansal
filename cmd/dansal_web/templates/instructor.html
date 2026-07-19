@@ -16,7 +16,10 @@
   <div>
     <div class="musician-title-row">
       <h1>{{.Instructor.Name}}</h1>
-      {{if $.User}}<a href="/admin/instructors/{{.Instructor.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
+      {{if $.User}}
+      <a href="/admin/instructor/{{.Instructor.ID}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
+      <a href="/admin/instructors/{{.Instructor.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      {{end}}
     </div>
   </div>
 </div>

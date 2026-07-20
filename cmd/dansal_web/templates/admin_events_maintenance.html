@@ -195,7 +195,7 @@
     <td class="col-changed muted">{{isoDate .ChangedAt}}</td>
     <td class="col-actions" style="white-space:nowrap">
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit?from={{$.Data.ReturnURL | urlquery}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
-      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<button type="button" class="btn-icon em-cancel-btn" data-id="{{.ID}}" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button>{{end}}
     </td>
   </tr>
   {{end}}
@@ -434,6 +434,23 @@ var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsS
       document.getElementById('em-date-to').value   = t;
       document.getElementById('em-filter-form').submit();
     }
+  });
+})();
+
+// Cancel buttons: use a detached form to avoid breaking the outer bulk form.
+// Nested <form> elements are invalid HTML — the inner </form> would close the
+// outer em-bulk-form and leave event checkboxes outside it.
+(function(){
+  var cancelMsg = {{$.Strings.T "admin_event_confirm_cancel" | jsStr}};
+  document.querySelectorAll('.em-cancel-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm(cancelMsg)) return;
+      var f = document.createElement('form');
+      f.method = 'post';
+      f.action = '/admin/events/' + btn.dataset.id + '/cancel';
+      document.body.appendChild(f);
+      f.submit();
+    });
   });
 })();
 </script>

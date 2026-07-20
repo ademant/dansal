@@ -373,6 +373,55 @@ func fillAddressFromApple(addr string, loc *EventLocationRequest) {
 	}
 }
 
+// xprop returns the value of an arbitrary X-* iCal property, or "" when absent.
+func xprop(vevent *ics.VEvent, name string) string {
+	if v := vevent.GetProperty(ics.ComponentProperty(name)); v != nil {
+		return icalUnescapeText(v.Value)
+	}
+	return ""
+}
+
+// parseICalLocation builds an EventLocationRequest from a VEVENT, trying
+// X-APPLE-STRUCTURED-LOCATION first, then IONAS/TVM X-STREET-ADDRESS /
+// X-POSTAL-CODE / X-LOCALITY extensions, then falling back to the plain
+// LOCATION string and an optional GEO property.
+func parseICalLocation(vevent *ics.VEvent) EventLocationRequest {
+	name := func() string { // helper: plain LOCATION value
+		if v := vevent.GetProperty(ics.ComponentPropertyLocation); v != nil {
+			return icalUnescapeText(v.Value)
+		}
+		return ""
+	}()
+	lat, lon := parseICalGeo(func() string {
+		if v := vevent.GetProperty(ics.ComponentPropertyGeo); v != nil {
+			return v.Value
+		}
+		return ""
+	}())
+
+	if apple := parseAppleStructuredLocation(vevent); apple != nil {
+		if apple.Location == "" {
+			apple.Location = name
+		}
+		if apple.Latitude == nil {
+			apple.Latitude, apple.Longitude = lat, lon
+		}
+		return *apple
+	}
+
+	loc := EventLocationRequest{Location: name, Latitude: lat, Longitude: lon}
+	if street := xprop(vevent, "X-STREET-ADDRESS"); street != "" {
+		loc.Address = street
+	}
+	if zip := xprop(vevent, "X-POSTAL-CODE"); zip != "" {
+		loc.Zipcode = zip
+	}
+	if locality := xprop(vevent, "X-LOCALITY"); locality != "" {
+		loc.Town = locality
+	}
+	return loc
+}
+
 // parseAppleStructuredLocation extracts location data from the non-standard
 // X-APPLE-STRUCTURED-LOCATION property.  Returns nil when the property is absent.
 func parseAppleStructuredLocation(vevent *ics.VEvent) *EventLocationRequest {
@@ -1035,23 +1084,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
 			}
 
-			var loc EventLocationRequest
-			if apple := parseAppleStructuredLocation(vevent); apple != nil {
-				if apple.Location == "" {
-					apple.Location = prop(ics.ComponentPropertyLocation)
-				}
-				if apple.Latitude == nil {
-					apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
-				}
-				loc = *apple
-			} else {
-				lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
-				loc = EventLocationRequest{
-					Location:  prop(ics.ComponentPropertyLocation),
-					Latitude:  lat,
-					Longitude: lon,
-				}
-			}
+			loc := parseICalLocation(vevent)
 
 			reqs = append(reqs, EventCreateRequest{
 				UID:                uid,
@@ -1182,23 +1215,7 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 					URL:            attachURL(vevent),
 					OrganizationID: orgID,
 					Dances:         src.DanceIDs,
-					Location: func() EventLocationRequest {
-						if apple := parseAppleStructuredLocation(vevent); apple != nil {
-							if apple.Location == "" {
-								apple.Location = prop(ics.ComponentPropertyLocation)
-							}
-							if apple.Latitude == nil {
-								apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
-							}
-							return *apple
-						}
-						lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
-						return EventLocationRequest{
-							Location:  prop(ics.ComponentPropertyLocation),
-							Latitude:  lat,
-							Longitude: lon,
-						}
-					}(),
+					Location: parseICalLocation(vevent),
 				},
 			}
 

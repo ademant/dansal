@@ -211,7 +211,7 @@
   <section class="form-section" id="sec-location">
     <h2>{{$.Strings.T "evt_location"}} <a href="/help#location-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
 
-    <input type="hidden" id="loc_choice" name="loc_choice" value="{{if .Event.LocationID}}existing{{end}}">
+    <input type="hidden" id="loc_choice" name="loc_choice" value="{{if .Event.LocationID}}existing{{else if .Event.Location}}new{{end}}">
     <select id="loc_id" name="loc_id" hidden>
       <option value="">—</option>
       {{range .LocOrgFirst}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
@@ -224,7 +224,7 @@
       <button type="button" class="btn-sm btn-del" onclick="removeLocAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
-    <button type="button" id="loc-add-btn" class="btn-secondary btn-sm-secondary"{{if .Event.LocationID}} hidden{{end}} onclick="openLocPicker()">{{$.Strings.T "evt_loc_add_btn"}}</button>
+    <button type="button" id="loc-add-btn" class="btn-secondary btn-sm-secondary"{{if or .Event.LocationID .Event.Location}} hidden{{end}} onclick="openLocPicker()">{{$.Strings.T "evt_loc_add_btn"}}</button>
 
     <div id="loc-picker-panel" class="assign-picker-panel" hidden>
       <input type="text" class="assign-picker-filter" id="loc-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('loc-picker-table', this.value)">
@@ -258,26 +258,26 @@
       </div>
     </div>
 
-    <div id="loc-new" style="display:none" class="loc-new-fields">
+    <div id="loc-new" style="{{if and .Event.Location (not .Event.LocationID)}}{{else}}display:none;{{end}}" class="loc-new-fields">
       <button type="button" class="btn-sm-secondary" style="align-self:flex-start" onclick="cancelLocCreateNew()">{{$.Strings.T "admin_cancel"}}</button>
       <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
-      <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
+      <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}" value="{{with .Event.Location}}{{.Location}}{{end}}">
       <label for="new_loc_short_name">{{$.Strings.T "loc_short_name"}}</label>
       <input id="new_loc_short_name" type="text" name="new_loc_short_name">
       <label for="new_loc_address">{{$.Strings.T "loc_address"}}</label>
-      <input id="new_loc_address" type="text" name="new_loc_address">
+      <input id="new_loc_address" type="text" name="new_loc_address" value="{{with .Event.Location}}{{.Address}}{{end}}">
       <div class="field-row">
         <div>
           <label for="new_loc_zip">{{$.Strings.T "loc_zipcode"}}</label>
-          <input id="new_loc_zip" type="text" name="new_loc_zip" style="width:8rem">
+          <input id="new_loc_zip" type="text" name="new_loc_zip" style="width:8rem" value="{{with .Event.Location}}{{.Zipcode}}{{end}}">
         </div>
         <div>
           <label for="new_loc_town">{{$.Strings.T "loc_town"}}</label>
-          <input id="new_loc_town" type="text" name="new_loc_town">
+          <input id="new_loc_town" type="text" name="new_loc_town" value="{{with .Event.Location}}{{.Town}}{{end}}">
         </div>
         <div>
           <label for="new_loc_country">{{$.Strings.T "loc_country"}}</label>
-          <input id="new_loc_country" type="text" name="new_loc_country">
+          <input id="new_loc_country" type="text" name="new_loc_country" value="{{with .Event.Location}}{{.Country}}{{end}}">
         </div>
       </div>
       <input type="hidden" id="new_loc_region" name="new_loc_region">

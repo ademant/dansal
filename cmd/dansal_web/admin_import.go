@@ -148,6 +148,12 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			if e.Location.Location != "" {
 				q.Set("location", e.Location.Location)
 			}
+			if e.Location.Address != "" {
+				q.Set("address", e.Location.Address)
+			}
+			if e.Location.Zipcode != "" {
+				q.Set("zipcode", e.Location.Zipcode)
+			}
 			if e.Location.Town != "" {
 				q.Set("town", e.Location.Town)
 			}

@@ -65,7 +65,7 @@ type EventPrefill struct {
 	Title, Description, URL, BookingURL string
 	Date, EndDate                       string
 	StartTime, EndTime                  string
-	Location, Town, Country             string
+	Location, Address, Zipcode, Town, Country string
 	HasBall, HasWorkshop, HasFestival   bool
 	WorkshopDifficulty                  string
 	OrgID                               int
@@ -178,7 +178,7 @@ func eventFromPrefill(pf *EventPrefill) Event {
 		ev.EndTime = endDate + "T" + pf.EndTime + ":00"
 	}
 	if pf.Location != "" {
-		ev.Location = &Location{Location: pf.Location, Town: pf.Town, Country: pf.Country}
+		ev.Location = &Location{Location: pf.Location, Address: pf.Address, Zipcode: pf.Zipcode, Town: pf.Town, Country: pf.Country}
 	}
 	if pf.OrgID > 0 {
 		oid := pf.OrgID
@@ -1531,6 +1531,8 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				StartTime:   r.URL.Query().Get("start_time"),
 				EndTime:     r.URL.Query().Get("end_time"),
 				Location:    r.URL.Query().Get("location"),
+				Address:     r.URL.Query().Get("address"),
+				Zipcode:     r.URL.Query().Get("zipcode"),
 				Town:        r.URL.Query().Get("town"),
 				Country:     r.URL.Query().Get("country"),
 				Tags:        prefillTags,

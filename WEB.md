@@ -37,6 +37,14 @@ All public. Each event/org/location/musician/instructor page carries `schema.org
 JSON-LD (`Event`/`Organization`/`Place`/`MusicGroup`/`Person`) and Open Graph
 tags for link previews and search-engine structured data.
 
+Event page `<title>` includes the event's start date (e.g. "Balfolk im
+Stadtgarten – 19 Sep 2027") so that recurring events at the same venue get a
+unique title per date instead of sharing one across occurrences. The meta
+description uses the event's own description when set; otherwise one is
+auto-assembled from structured fields (type tag, date, location,
+musicians/instructors) so every event page still gets a distinct, non-generic
+description.
+
 `/org/{name}` doubles as the ActivityPub actor URL — `Accept:
 application/activity+json` returns the Actor object instead of HTML; see
 `/.well-known/webfinger` under [Discovery Files](#discovery-files).
@@ -70,7 +78,16 @@ GET /opensearch.xml                  # OpenSearch description for browser search
 GET /.well-known/webfinger           # ActivityPub actor discovery (?resource=acct:...)
 GET /.well-known/nodeinfo            # ActivityPub server metadata pointer
 GET /.well-known/security.txt        # security contact (RFC 9116)
+GET /{indexnow-key}.txt              # IndexNow ownership verification (only if a key is configured)
 ```
+
+`/{indexnow-key}.txt` is served dynamically from the `indexnow_key` set in
+webmin's site-config — the path segment must exactly match `{key}.txt`, any
+other value 404s. When a key is configured, dansal-web pings the IndexNow API
+(`https://api.indexnow.org/indexnow`) in the background after admin
+create/save/cancel, bulk-publish/bulk-cancel, and feed-import confirm, so
+Bing/Yandex/Seznam can (re)index the affected event pages immediately instead
+of waiting for their next crawl.
 
 `sitemap.xml` includes: the homepage, `/musicians`, `/instructors`,
 `/organizations`, all published events (past and future), all locations, all

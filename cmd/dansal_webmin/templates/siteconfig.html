@@ -78,6 +78,21 @@
 </div>
 
 <div class="card">
+  <div class="card-title">IndexNow (Bing / Yandex / Seznam)</div>
+  <div class="form-group">
+    <label>API key</label>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <input type="text" name="indexnow_key" id="indexnow_key" value="{{.IndexNowKey}}" placeholder="Leave blank to disable" style="flex:1;font-family:monospace">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('indexnow_key').value=crypto.randomUUID()">Generate</button>
+    </div>
+    <div class="hint">
+      When set, dansal-web serves <code>/{key}.txt</code> for ownership verification and notifies IndexNow after events are published, updated, or cancelled.
+      After generating a new key, save, then <a href="https://www.bing.com/indexnow" target="_blank" rel="noopener">register it with Bing</a>.
+    </div>
+  </div>
+</div>
+
+<div class="card">
   <div class="card-title">Impressum / Legal notice</div>
   <div class="hint" style="margin-bottom:.75rem">One text per language. Shown at <code>/impressum</code>. Leave blank to use the default from <code>pages_file</code> (web.yaml).</div>
   {{range .ImpressumLangs}}

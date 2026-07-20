@@ -237,6 +237,7 @@ func adminEventCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.Error(w, "cancel failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{id})
 		http.Redirect(w, r, safeReferer(r, fmt.Sprintf("/events/%d", id)), http.StatusSeeOther)
 	}
 }
@@ -272,11 +273,15 @@ func adminEventBulkPublishHandler(cfg *Config, client *DansalClient) http.Handle
 			return
 		}
 		token := getSessionToken(r)
+		var publishedIDs []int
 		for _, s := range r.Form["event_ids"] {
 			if id, err := strconv.Atoi(s); err == nil {
-				_ = client.PublishEvent(r.Context(), id, token)
+				if client.PublishEvent(r.Context(), id, token) == nil {
+					publishedIDs = append(publishedIDs, id)
+				}
 			}
 		}
+		go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), publishedIDs)
 		http.Redirect(w, r, safeReferer(r, "/admin/events/maintenance"), http.StatusSeeOther)
 	}
 }
@@ -292,11 +297,15 @@ func adminEventBulkCancelHandler(cfg *Config, client *DansalClient) http.Handler
 			return
 		}
 		token := getSessionToken(r)
+		var cancelledIDs []int
 		for _, s := range r.Form["event_ids"] {
 			if id, err := strconv.Atoi(s); err == nil {
-				_ = client.CancelEvent(r.Context(), id, token)
+				if client.CancelEvent(r.Context(), id, token) == nil {
+					cancelledIDs = append(cancelledIDs, id)
+				}
 			}
 		}
+		go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), cancelledIDs)
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
@@ -2255,6 +2264,10 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		if event.IsPublished {
+			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{event.ID})
+		}
+
 		switch intent {
 		case "clone":
 			http.Redirect(w, r, fmt.Sprintf("/admin/events/new?clone_from=%d", event.ID), http.StatusSeeOther)
@@ -2878,6 +2891,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 
 		if req.IsPublished {
 			go deliverUpdateToFollowers(cfg, db, client, id)
+			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{id})
 		}
 
 		// editRedirect appends a tt_error query param (surfacing a timetable

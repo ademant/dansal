@@ -352,7 +352,15 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		}
 
 		if len(selected) > 0 {
-			client.CreateEventBatch(r.Context(), selected, token)
+			if created, err := client.CreateEventBatch(r.Context(), selected, token); err == nil {
+				var ids []int
+				for _, e := range created {
+					if e.IsPublished {
+						ids = append(ids, e.ID)
+					}
+				}
+				go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), ids)
+			}
 		}
 
 		feedURL := r.FormValue("feed_url")

@@ -152,6 +152,7 @@ func main() {
 		r.HandleFunc("GET /health", healthHandler())
 		r.HandleFunc("GET /robots.txt", robotsTxtHandler(cfg))
 		r.HandleFunc("GET /sitemap.xml", sitemapHandler(cfg, client))
+		r.HandleFunc("GET /{name}", indexNowKeyFileHandler)
 		r.HandleFunc("GET /llms.txt", llmsTxtHandler(cfg))
 		r.HandleFunc("GET /manifest.json", manifestHandler(cfg))
 		r.HandleFunc("GET /opensearch.xml", opensearchHandler(cfg))

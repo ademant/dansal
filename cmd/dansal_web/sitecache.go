@@ -13,11 +13,12 @@ type siteSettingsCache struct {
 	db  *sql.DB
 	ttl time.Duration
 
-	mu        sync.RWMutex
-	at        time.Time
-	contact   string
-	siteName  string
-	impressum map[string]string
+	mu          sync.RWMutex
+	at          time.Time
+	contact     string
+	siteName    string
+	impressum   map[string]string
+	indexNowKey string
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -27,6 +28,7 @@ func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
 func (c *siteSettingsCache) load() {
 	contact := getSiteSetting(c.db, "contact")
 	siteName := getSiteSetting(c.db, "site_name")
+	indexNowKey := getSiteSetting(c.db, "indexnow_key")
 	imp := make(map[string]string)
 	for _, lang := range impressumLangs {
 		if v := getSiteSetting(c.db, "impressum_"+lang); v != "" {
@@ -34,7 +36,7 @@ func (c *siteSettingsCache) load() {
 		}
 	}
 	c.mu.Lock()
-	c.contact, c.siteName, c.impressum, c.at = contact, siteName, imp, time.Now()
+	c.contact, c.siteName, c.impressum, c.indexNowKey, c.at = contact, siteName, imp, indexNowKey, time.Now()
 	c.mu.Unlock()
 }
 
@@ -59,6 +61,13 @@ func (c *siteSettingsCache) SiteName() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.siteName
+}
+
+func (c *siteSettingsCache) IndexNowKey() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.indexNowKey
 }
 
 func (c *siteSettingsCache) Impressum() map[string]string {

@@ -161,6 +161,110 @@ func metaDesc(s string, maxLen int) string {
 
 var reMetaMD = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)|[*_~` + "`" + `#>]+`)
 
+var tagDisplayNames = map[string]string{
+	"bal-folk":          "Bal-folk",
+	"fest-noz":          "Fest-noz",
+	"session":           "Session",
+	"concert":           "Concert",
+	"festival":          "Festival",
+	"open-air":          "Open-air",
+	"workshop":          "Workshop",
+	"music-course":      "Music course",
+	"dance-workshop":    "Dance workshop",
+	"musician-workshop": "Musician workshop",
+}
+
+// eventMetaDesc returns a concise meta description for an event page.
+// If the event has a description, it is used (markdown-stripped). Otherwise
+// a unique description is assembled from structured fields (type tag, date,
+// location, musicians/instructors) so that every page gets a distinct value.
+func eventMetaDesc(event Event, lang string) string {
+	if event.Description != "" {
+		return metaDesc(event.Description, 155)
+	}
+
+	var parts []string
+
+	// Lead with format/type tag if present.
+	for _, tag := range event.Tags {
+		if name, ok := tagDisplayNames[tag]; ok {
+			// Append level qualifier if any.
+			for _, t2 := range event.Tags {
+				switch t2 {
+				case "beginners", "intermediate", "advanced":
+					name += " (" + t2 + ")"
+				}
+			}
+			parts = append(parts, name)
+			break
+		}
+	}
+	if len(parts) == 0 {
+		parts = append(parts, event.Title)
+	}
+
+	// Date.
+	if t, ok := parseTime(event.StartTime); ok {
+		mo := locMonth(lang, t.Month())
+		var d string
+		if lang == "de" {
+			d = fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
+		} else {
+			d = fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
+		}
+		parts = append(parts, d)
+	}
+
+	// Location name + city.
+	if event.Location != nil {
+		loc := event.Location.Location
+		if event.Location.Town != "" {
+			loc += ", " + event.Location.Town
+		}
+		parts = append(parts, loc)
+	}
+
+	desc := strings.Join(parts, " · ")
+
+	// Musicians (up to 3).
+	if len(event.Musicians) > 0 {
+		names := make([]string, 0, min(3, len(event.Musicians)))
+		for i, m := range event.Musicians {
+			if i >= 3 {
+				break
+			}
+			names = append(names, m.Bandname)
+		}
+		suffix := ""
+		if len(event.Musicians) > 3 {
+			suffix = "…"
+		}
+		desc += ". " + strings.Join(names, ", ") + suffix
+	}
+
+	// Instructors (up to 3).
+	if len(event.Instructors) > 0 {
+		names := make([]string, 0, min(3, len(event.Instructors)))
+		for i, inst := range event.Instructors {
+			if i >= 3 {
+				break
+			}
+			names = append(names, inst.Name)
+		}
+		suffix := ""
+		if len(event.Instructors) > 3 {
+			suffix = "…"
+		}
+		desc += ". " + strings.Join(names, ", ") + suffix
+	}
+
+	if len([]rune(desc)) > 155 {
+		runes := []rune(desc)[:155]
+		desc = string(runes[:strings.LastIndex(string(runes), " ")]) + "…"
+	}
+	return desc
+}
+
 
 type IndexData struct {
 	Events          []Event
@@ -1427,7 +1531,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			PrevEvent:         prevEvent,
 			NextEvent:         nextEvent,
 		})
-		td.MetaDescription = metaDesc(event.Description, 155)
+		td.MetaDescription = eventMetaDesc(event, lang)
 		if event.ImageURL != "" {
 			td.OGImage = "https://" + cfg.Domain + event.ImageURL
 		}

@@ -165,6 +165,7 @@ type siteConfigData struct {
 	ImpressumTexts  map[string]string
 	ImpressumLangs  []string
 	HolidayCountry  string
+	IndexNowKey     string
 	NoDB            bool
 	NoImagesDir     bool
 }
@@ -188,6 +189,7 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.SiteName = getSiteSetting(db, "site_name")
 		data.Contact = getSiteSetting(db, "contact")
 		data.HolidayCountry = getSiteSetting(db, "holiday_country")
+		data.IndexNowKey = getSiteSetting(db, "indexnow_key")
 
 		impTexts := make(map[string]string)
 		for _, lang := range siteConfigLangs {
@@ -229,6 +231,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		setSiteSetting(db, "site_name", strings.TrimSpace(r.FormValue("site_name")))
 		setSiteSetting(db, "contact", strings.TrimSpace(r.FormValue("contact")))
 		setSiteSetting(db, "holiday_country", strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country"))))
+		setSiteSetting(db, "indexnow_key", strings.TrimSpace(r.FormValue("indexnow_key")))
 
 		for _, lang := range siteConfigLangs {
 			setSiteSetting(db, "impressum_"+lang, strings.TrimSpace(r.FormValue("impressum_"+lang)))
@@ -273,7 +276,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

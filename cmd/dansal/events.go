@@ -1435,7 +1435,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		query += " AND e.is_published = 1"
 		// Cache fingerprint for public clients: count + latest creation time.
 		if !strings.Contains(accept, "text/calendar") {
-			if checkPublicCacheHeaders(w, r, "SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1") {
+			if checkPublicCacheHeaders(w, r, "SELECT COUNT(*), MAX(COALESCE(datetime(changed_at,'unixepoch'), created_at)) FROM events WHERE is_published = 1") {
 				return
 			}
 		}
@@ -2723,7 +2723,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	tag := r.URL.Query().Get("tag")
 	loc := r.URL.Query().Get("location")
 
-	cntQ := "SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
+	cntQ := "SELECT COUNT(*), MAX(COALESCE(datetime(e.changed_at,'unixepoch'), e.created_at)) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
 	cntArgs := []any{now}
 	if tag != "" {
 		cntQ += " AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = e.id AND et.tag = ?)"
@@ -2799,7 +2799,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	tag := r.PathValue("tag")
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
-		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = events.id AND et.tag = ?)",
+		"SELECT COUNT(*), MAX(COALESCE(datetime(changed_at,'unixepoch'), created_at)) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM event_tags et WHERE et.event_id = events.id AND et.tag = ?)",
 		now, tag) {
 		return
 	}
@@ -2833,7 +2833,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	escapedTown := "%" + escapeLike(town) + "%"
 	if checkPublicCacheHeaders(w, r,
-		`SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ESCAPE '\'`,
+		`SELECT COUNT(*), MAX(COALESCE(datetime(e.changed_at,'unixepoch'), e.created_at)) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ESCAPE '\'`,
 		now, escapedTown) {
 		return
 	}
@@ -2890,7 +2890,7 @@ func icsRouter(next http.Handler) http.Handler {
 	})
 }
 
-// checkPublicCacheHeaders runs cntQuery (must SELECT COUNT(*), MAX(created_at))
+// checkPublicCacheHeaders runs cntQuery (must SELECT COUNT(*), MAX(last_modified))
 // and emits ETag/Last-Modified/Cache-Control headers. Returns true and writes
 // 304 when the client's cached copy is still fresh; caller must return immediately.
 func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery string, args ...any) bool {

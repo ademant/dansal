@@ -531,19 +531,11 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 
-		// Sort oldest-to-newest: lowest ID is the canonical survivor because
-		// external subscribers (iCal, etc.) have that ID bookmarked.
-		sort.Slice(locs, func(i, j int) bool {
-			if locs[i].CreatedAt != locs[j].CreatedAt {
-				return locs[i].CreatedAt < locs[j].CreatedAt
-			}
-			return locs[i].ID < locs[j].ID
-		})
-		// Start with the oldest location's data, then walk through the rest
-		// oldest-to-newest and overwrite each field with the newer non-empty
-		// value. This means the most-recently-set value wins for every field,
-		// whether it was entered by a user or imported by fetchurl — while the
-		// surviving record always keeps the lowest (canonical) ID.
+		// Survivor is always the location with the lowest ID so external
+		// subscribers (iCal feeds, bookmarked URLs) keep their reference stable.
+		sort.Slice(locs, func(i, j int) bool { return locs[i].ID < locs[j].ID })
+		// Base keeps all its existing fields. Values from the other locations
+		// only fill in fields that are blank on the base — never overwrite.
 		base := locs[0]
 		orgSet := make(map[int]bool)
 		for _, oid := range base.OrganizationIDs {
@@ -554,60 +546,62 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			aliasSet[a] = true
 		}
 		for _, l := range locs[1:] {
-			if l.Location != "" {
+			if base.Location == "" {
 				base.Location = l.Location
 			}
-			if l.ShortName != "" {
+			if base.ShortName == "" {
 				base.ShortName = l.ShortName
 			}
-			if l.Address != "" {
+			if base.Address == "" {
 				base.Address = l.Address
 			}
-			if l.Zipcode != "" {
+			if base.Zipcode == "" {
 				base.Zipcode = l.Zipcode
 			}
-			if l.Town != "" {
+			if base.Town == "" {
 				base.Town = l.Town
 			}
-			if l.Country != "" {
+			if base.Country == "" {
 				base.Country = l.Country
 			}
-			if l.CountryCode != "" {
+			if base.CountryCode == "" {
 				base.CountryCode = l.CountryCode
 			}
-			if l.Region != "" {
+			if base.Region == "" {
 				base.Region = l.Region
 			}
-			if l.Latitude != nil {
+			if base.Latitude == nil {
 				base.Latitude = l.Latitude
 			}
-			if l.Longitude != nil {
+			if base.Longitude == nil {
 				base.Longitude = l.Longitude
 			}
-			if l.Internetsite != "" {
+			if base.Internetsite == "" {
 				base.Internetsite = l.Internetsite
 			}
-			if l.OsmID != nil {
+			if base.OsmID == nil {
 				base.OsmID = l.OsmID
 			}
-			if l.OsmType != "" {
+			if base.OsmType == "" {
 				base.OsmType = l.OsmType
 			}
-			if l.NotesMd != "" {
+			if base.NotesMd == "" {
 				base.NotesMd = l.NotesMd
 			}
-			if l.Parking != "" {
+			if base.Parking == "" {
 				base.Parking = l.Parking
 			}
-			if l.FloorCondition != "" {
+			if base.FloorCondition == "" {
 				base.FloorCondition = l.FloorCondition
 			}
-			// Merge attribute maps: newer value for each key wins.
+			// Attribute map: base value wins per key; only add keys base lacks.
 			for k, v := range l.Attributes {
 				if base.Attributes == nil {
 					base.Attributes = make(map[string]bool)
 				}
-				base.Attributes[k] = v
+				if _, exists := base.Attributes[k]; !exists {
+					base.Attributes[k] = v
+				}
 			}
 			for _, oid := range l.OrganizationIDs {
 				orgSet[oid] = true

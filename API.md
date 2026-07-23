@@ -467,10 +467,11 @@ Authentication required.
 GET    /api/v1/apikeys
 POST   /api/v1/apikeys
 DELETE /api/v1/apikeys/{id}
-POST   /api/v1/apikeys/renew   # self-service rotation; see below
+DELETE /api/v1/apikeys/current   # self-revoke; see below
+POST   /api/v1/apikeys/renew     # self-service rotation; see below
 ```
 
-Authentication required (except `renew`, which authenticates via the key being renewed).
+Authentication required (except `current` and `renew`, which authenticate via the key itself).
 
 **Create request:**
 ```json
@@ -485,6 +486,15 @@ Authentication required (except `renew`, which authenticates via the key being r
 The full key value (prefix `ak_`) is returned only once, at creation — keys are stored hashed (SHA-256) and cannot be retrieved again afterward.
 
 Admins can also create keys for other users by passing `"user_id": <id>`.
+
+**Self-revoke (`DELETE /api/v1/apikeys/current`):** for a headless integration (e.g. wp-dansal on uninstall/disconnect) to retire its own key without admin credentials, instead of leaving an orphaned live key behind. Send the key to be revoked as the bearer token:
+
+```http
+DELETE /api/v1/apikeys/current
+Authorization: Bearer ak_<key-to-revoke>
+```
+
+`204 No Content` on success (the key is deleted immediately); `401` if the key is already invalid/deleted. Deliberately scoped to "current" (implicit from the auth header) rather than `DELETE /api/v1/apikeys/{id}`, so a key can only ever revoke itself, never a sibling key.
 
 **Renewal (`POST /api/v1/apikeys/renew`):** for a headless integration (e.g. a publisher key held by a WordPress plugin) to rotate its own key without an admin/user session. Send the current key itself as the bearer token:
 

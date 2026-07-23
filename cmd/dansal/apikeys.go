@@ -343,3 +343,45 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		"expires_at": newExpiry.UTC().Format(time.RFC3339),
 	})
 }
+
+// DELETE /api/v1/apikeys/current — self-revoke, authenticated by presenting
+// the key being revoked. Lets a publisher client (e.g. wp-dansal on
+// uninstall/disconnect) retire its own key without admin credentials,
+// instead of leaving an orphaned live key behind.
+func revokeCurrentAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	authHeader := r.Header.Get("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		return
+	}
+	presentedKey := parts[1]
+
+	var keyID int
+	err := db.QueryRow(
+		"SELECT api_keys.id FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
+		hashAPIKey(presentedKey),
+	).Scan(&keyID)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+
+	if _, err := db.Exec("DELETE FROM api_keys WHERE id = ?", keyID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to revoke API key"})
+		return
+	}
+
+	credentials.invalidate(presentedKey)
+	w.WriteHeader(http.StatusNoContent)
+}

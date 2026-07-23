@@ -3339,6 +3339,9 @@ func main() {
 	// (needs its id/expires_at/created_at, which resolveCaller doesn't expose)
 	// rather than going through the generic session/API-key resolver.
 	smux.Handle("POST /api/v1/apikeys/renew", http.HandlerFunc(renewAPIKey))
+	// Not wrapped in auth(): revokeCurrentAPIKey authenticates by the presented
+	// key itself (self-revoke), same reasoning as renewAPIKey above.
+	smux.Handle("DELETE /api/v1/apikeys/current", http.HandlerFunc(revokeCurrentAPIKey))
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
 	smux.Handle("POST /api/v1/publishers/token", auth(publisherToken))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))

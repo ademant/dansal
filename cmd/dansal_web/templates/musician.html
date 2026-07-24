@@ -110,6 +110,13 @@
     {{end}}
   </div>
 
+  <div class="feed-links">
+    <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+    <a href="/feed/musician/{{.Slug}}/events.ical" class="feed-link">iCal</a>
+    <a href="/feed/musician/{{.Slug}}/events.rss"  class="feed-link">RSS</a>
+    <a href="/feed/musician/{{.Slug}}/events.json" class="feed-link">JSON</a>
+  </div>
+
   {{if .Events}}
   {{/* Map — only rendered if at least one event has coordinates */}}
   <div id="mmap-wrap" hidden>
@@ -163,6 +170,9 @@
 .detail-list{margin:.25rem 0;padding-left:1.25rem;color:var(--fg-dim);font-size:.95rem}
 .detail-list li{margin-bottom:.2rem}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
+.feed-links{margin:.5rem 0 1rem;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
 .events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
 .events-heading-row .section-heading{margin:0}
 .past-toggle{margin:0}

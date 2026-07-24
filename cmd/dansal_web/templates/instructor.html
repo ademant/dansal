@@ -52,6 +52,13 @@
     {{end}}
   </div>
 
+  <div class="feed-links">
+    <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+    <a href="/feed/instructor/{{.Instructor.ID}}/events.ical" class="feed-link">iCal</a>
+    <a href="/feed/instructor/{{.Instructor.ID}}/events.rss"  class="feed-link">RSS</a>
+    <a href="/feed/instructor/{{.Instructor.ID}}/events.json" class="feed-link">JSON</a>
+  </div>
+
   {{if .Events}}
   {{/* Map — only rendered if at least one event has coordinates */}}
   <div id="mmap-wrap" hidden>
@@ -92,6 +99,9 @@
 .musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
 .m-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
 .m-link-web{background:#1a6eb5}.m-link-web:hover{background:#0d4a80}
+.feed-links{margin:.5rem 0 1rem;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 .events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
 .events-heading-row .section-heading{margin:0}

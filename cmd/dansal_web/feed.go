@@ -119,6 +119,24 @@ func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	}
 }
 
+// feedInstructorHandler serves events for one instructor, identified by numeric ID.
+func feedInstructorHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		instructor, err := client.GetInstructor(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		events, _ := client.GetPublicEventsByInstructor(r.Context(), id)
+		serveEventFeed(w, r, cfg, instructor.Name, events)
+	}
+}
+
 // feedLocationHandler serves events at one location, identified by slug.
 func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -347,6 +365,7 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 	mainH := feedMainHandler(cfg, db, client)
 	orgH := feedOrgHandler(cfg, db, client)
 	musicianH := feedMusicianHandler(cfg, client)
+	instructorH := feedInstructorHandler(cfg, client)
 	locationH := feedLocationHandler(cfg, client)
 	ballH := feedTypeHandler(cfg, client, "ball")
 	workshopH := feedTypeHandler(cfg, client, "workshop")
@@ -380,6 +399,15 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 					r.SetPathValue("slug", rest[:i])
 					r.SetPathValue("format", rest[i+len(evDot):])
 					musicianH.ServeHTTP(w, r)
+				} else {
+					next.ServeHTTP(w, r)
+				}
+			case strings.HasPrefix(p, "/feed/instructor/"):
+				rest := strings.TrimPrefix(p, "/feed/instructor/")
+				if i := strings.LastIndex(rest, evDot); i >= 0 {
+					r.SetPathValue("id", rest[:i])
+					r.SetPathValue("format", rest[i+len(evDot):])
+					instructorH.ServeHTTP(w, r)
 				} else {
 					next.ServeHTTP(w, r)
 				}

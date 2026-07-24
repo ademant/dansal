@@ -718,8 +718,9 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 			http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 			return
 		}
+		floorCondition := r.FormValue("floor_condition")
 		token := getSessionToken(r)
-		_, _ = client.CreateLocationRoom(r.Context(), id, name, token)
+		_, _ = client.CreateLocationChild(r.Context(), id, name, floorCondition, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -742,7 +743,7 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.DeleteLocationRoom(r.Context(), locID, roomID, token)
+		_ = client.DeleteLocationChild(r.Context(), roomID, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
 	}

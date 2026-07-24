@@ -751,6 +751,20 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return *p
 	},
+	// topLocationID resolves the top-level (building) location ID for an
+	// event whose location may itself be a room (#687): a room is a child
+	// Location with ParentID set, but venue pickers only ever offer the
+	// top-level building, so callers select against this instead of
+	// Event.LocationID directly.
+	"topLocationID": func(e Event) int {
+		if e.Location == nil {
+			return 0
+		}
+		if e.Location.ParentID != nil {
+			return *e.Location.ParentID
+		}
+		return e.Location.ID
+	},
 	"joinInts": func(ids []int) string {
 		parts := make([]string, len(ids))
 		for i, id := range ids {
@@ -1667,6 +1681,16 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			return
 		}
 		events, _ := client.GetEventsByLocation(r.Context(), id)
+		// A parent (building) page aggregates events across all its rooms
+		// (#687) — a room is a child Location, so its events live under its
+		// own location_id and wouldn't otherwise show up on the building page.
+		for _, child := range loc.Children {
+			childEvents, _ := client.GetEventsByLocation(r.Context(), child.ID)
+			events = append(events, childEvents...)
+		}
+		if len(loc.Children) > 0 {
+			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
+		}
 		title := loc.ShortName
 		if title == "" {
 			title = loc.Location

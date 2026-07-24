@@ -60,6 +60,21 @@
 
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 
+{{if .Children}}
+<div class="loc-rooms">
+  <h2 class="section-heading">{{$.Strings.T "loc_rooms_title"}}</h2>
+  <ul class="loc-rooms-list">
+    {{range .Children}}
+    <li><a href="/location/{{.ID}}">{{.Location}}</a>{{if .FloorCondition}} <span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .ParentID}}
+<p class="loc-parent-link"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>
+{{end}}
+
 {{end}}{{/* .Location */}}
 
 <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
@@ -106,6 +121,12 @@
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
+.loc-rooms{margin-bottom:1.25rem}
+.loc-rooms-list{list-style:none;padding:0;display:flex;flex-direction:column;gap:.35rem}
+.loc-rooms-list a{color:var(--link)}
+.loc-parent-link{margin-bottom:1rem;font-size:.9rem}
+.loc-parent-link a{color:var(--link);text-decoration:none}
+.loc-parent-link a:hover{text-decoration:underline}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>

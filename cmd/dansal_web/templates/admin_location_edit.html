@@ -214,15 +214,17 @@
 {{if .Location.ID}}
 <fieldset class="members-fieldset">
   <legend>Rooms</legend>
-  {{if .Location.Rooms}}
+  <p class="field-hint">A room is its own location (#687), inheriting this building's address and coordinates — only its name and floor differ.</p>
+  {{if .Location.Children}}
   <table class="members-table">
     <tbody>
-    {{range .Location.Rooms}}
+    {{range .Location.Children}}
     <tr>
-      <td>{{.Name}}</td>
+      <td>{{.Location}}</td>
+      <td>{{if .FloorCondition}}{{$.Strings.T (print "floor_" .FloorCondition)}}{{end}}</td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('Delete room «{{.Name}}»?')">
+              onsubmit="return confirm('Delete room «{{.Location}}»?')">
           <button type="submit" class="btn-sm btn-del">Delete</button>
         </form>
       </td>
@@ -235,6 +237,16 @@
   {{end}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/rooms/new" class="room-add-form">
     <input type="text" name="name" placeholder="New room name…" required class="room-add-input">
+    <select name="floor_condition">
+      <option value="">{{$.Strings.T "floor_label"}}…</option>
+      <option value="parquet">{{$.Strings.T "floor_parquet"}}</option>
+      <option value="stone">{{$.Strings.T "floor_stone"}}</option>
+      <option value="tiles">{{$.Strings.T "floor_tiles"}}</option>
+      <option value="grass">{{$.Strings.T "floor_grass"}}</option>
+      <option value="sand">{{$.Strings.T "floor_sand"}}</option>
+      <option value="pavement">{{$.Strings.T "floor_pavement"}}</option>
+      <option value="carpet">{{$.Strings.T "floor_carpet"}}</option>
+    </select>
     <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
   </form>
 </fieldset>

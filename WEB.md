@@ -45,6 +45,13 @@ auto-assembled from structured fields (type tag, date, location,
 musicians/instructors) so every event page still gets a distinct, non-generic
 description.
 
+A room (e.g. "Grand Hall" within a larger venue) is a normal location whose
+`parent_id` points at its building — `GET /location/{id}` on the building
+lists its rooms with a link to each one's own page; a room's own page links
+back to its building. Events assigned to any of a building's rooms are
+aggregated into that building's own upcoming-events list, in addition to
+appearing on the room's own page.
+
 `/org/{name}` doubles as the ActivityPub actor URL — `Accept:
 application/activity+json` returns the Actor object instead of HTML; see
 `/.well-known/webfinger` under [Discovery Files](#discovery-files).

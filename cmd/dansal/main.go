@@ -1515,6 +1515,66 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE event_series ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL`)
 		}
 	}
+	// v15: #687 parent-child locations. A room is now a normal locations row
+	// with parent_id set, inheriting address/coordinates from its parent at
+	// read time (resolvedLocation()) rather than copying them in. Migrates
+	// the old rooms table (name-only sub-locations) into locations, repoints
+	// events.room_id onto events.location_id, then drops rooms/room_id.
+	if !applied(15) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id)`)
+		db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
+			ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL`)
+		var hasRooms int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='rooms'").Scan(&hasRooms)
+		if hasRooms > 0 {
+			db.Exec(`INSERT INTO locations (location, parent_id) SELECT name, location_id FROM rooms`)
+			db.Exec(`UPDATE events SET location_id = (
+				SELECT loc.id FROM rooms rm
+				JOIN locations loc ON loc.parent_id = rm.location_id AND loc.location = rm.name
+				WHERE rm.id = events.room_id
+			) WHERE room_id IS NOT NULL`)
+			db.Exec(`DROP TABLE rooms`)
+		}
+		var hasRoomID int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='room_id'").Scan(&hasRoomID)
+		if hasRoomID > 0 {
+			db.Exec(`ALTER TABLE events DROP COLUMN room_id`)
+		}
+		mark(15)
+	}
+	// Safety net: ensure locations.parent_id and the geohash partial-unique
+	// index exist even if v15 was pre-marked (legacy schema_migrations gap).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='parent_id'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE`)
+		}
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id)`)
+		db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
+			ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL`)
+	}
+	// Safety net: ensure the old rooms table/events.room_id are gone even if
+	// v15 was pre-marked without the DROP running (e.g. interrupted upgrade).
+	{
+		var hasRooms int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='rooms'").Scan(&hasRooms)
+		if hasRooms > 0 {
+			db.Exec(`INSERT INTO locations (location, parent_id) SELECT name, location_id FROM rooms`)
+			db.Exec(`UPDATE events SET location_id = (
+				SELECT loc.id FROM rooms rm
+				JOIN locations loc ON loc.parent_id = rm.location_id AND loc.location = rm.name
+				WHERE rm.id = events.room_id
+			) WHERE room_id IS NOT NULL`)
+			db.Exec(`DROP TABLE rooms`)
+		}
+		var hasRoomID int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='room_id'").Scan(&hasRoomID)
+		if hasRoomID > 0 {
+			db.Exec(`ALTER TABLE events DROP COLUMN room_id`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2508,16 +2568,11 @@ func createTables() error {
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
 		-- requires organization_id; sub-resource PUT .../location requires location_id).
-		room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+		-- A room is just a location with parent_id set (#687) — location_id
+		-- points at the child directly when a room is selected.
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
-	CREATE TABLE IF NOT EXISTS rooms (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-		name TEXT NOT NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_rooms_location_id ON rooms(location_id);
 	CREATE TABLE IF NOT EXISTS event_series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		slug TEXT UNIQUE NOT NULL,
@@ -2572,10 +2627,14 @@ func createTables() error {
 		parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
 		floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
 		no_street_shoes INTEGER DEFAULT 0,
+		parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
 	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
+		ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id);
 	CREATE TABLE IF NOT EXISTS location_aliases (
 		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
 		alias TEXT NOT NULL,
@@ -2949,6 +3008,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(13)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(14)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(15)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3231,9 +3291,8 @@ func main() {
 	smux.Handle("PUT /api/v1/locations/{id}", auth(accountMutationLimit(putLocation)))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(accountMutationLimit(patchLocation)))
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
-	smux.Handle("GET /api/v1/locations/{id}/rooms", optAuth(http.HandlerFunc(getLocationRooms)))
-	smux.Handle("POST /api/v1/locations/{id}/rooms", auth(createLocationRoom))
-	smux.Handle("DELETE /api/v1/locations/{id}/rooms/{room_id}", auth(deleteLocationRoom))
+	smux.Handle("GET /api/v1/locations/{id}/children", optAuth(http.HandlerFunc(getLocationChildren)))
+	smux.Handle("POST /api/v1/locations/{id}/children", auth(createLocationChild))
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
 	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])

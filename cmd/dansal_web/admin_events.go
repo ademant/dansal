@@ -1613,7 +1613,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			Event:              event,
 			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
-			Locations:          bundle.Locations,
+			Locations:          topLevelLocations(bundle.Locations),
 			LocOrgFirst:        locOrgFirst,
 			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
@@ -1674,7 +1674,7 @@ func adminTemplateNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			IsTemplateMode: true,
 			Event:          event,
 			Organizations:  bundle.Orgs,
-			Locations:      bundle.Locations,
+			Locations:      topLevelLocations(bundle.Locations),
 			LocOrgFirst:    locOrgFirst,
 			LocOthers:      locOthers,
 			Dances:         bundle.Dances,
@@ -1718,7 +1718,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				IsNew:          true,
 				IsTemplateMode: true,
 				Organizations:  bundle.Orgs,
-				Locations:      bundle.Locations,
+				Locations:      topLevelLocations(bundle.Locations),
 				Dances:         bundle.Dances,
 				UserOrgs:       userOrgs,
 				ErrorKey:       errKey,
@@ -1917,7 +1917,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
 				IsNew:         true,
 				Organizations: bundle.Orgs,
-				Locations:     bundle.Locations,
+				Locations:     topLevelLocations(bundle.Locations),
 				Musicians:     bundle.Musicians,
 				Instructors:   bundle.Instructors,
 				Dances:        bundle.Dances,
@@ -2056,10 +2056,13 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
-		var createRoomID *int
+		// A room is just a child location (#687): if one was picked, point
+		// location_id straight at it, taking precedence over the venue-name
+		// match derived from locReq below.
+		var createLocationID *int
 		if v := r.FormValue("room_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				createRoomID = &n
+				createLocationID = &n
 			}
 		}
 		req := EventCreateReq{
@@ -2085,7 +2088,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
-			RoomID:         createRoomID,
+			LocationID:     createLocationID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -2160,7 +2163,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Event:              ev,
 				Org:                eventOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
@@ -2479,7 +2482,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			Event:              event,
 			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
-			Locations:          bundle.Locations,
+			Locations:          topLevelLocations(bundle.Locations),
 			LocOrgFirst:        locOrgFirst,
 			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
@@ -2533,7 +2536,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Event:              event,
 				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
@@ -2671,10 +2674,13 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 
-		var saveRoomID *int
+		// A room is just a child location (#687): if one was picked, point
+		// location_id straight at it, taking precedence over the venue-name
+		// match derived from locReq below.
+		var saveLocationID *int
 		if v := r.FormValue("room_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				saveRoomID = &n
+				saveLocationID = &n
 			}
 		}
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
@@ -2706,7 +2712,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
-			RoomID:         saveRoomID,
+			LocationID:     saveLocationID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -2790,7 +2796,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Event:              event,
 				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,

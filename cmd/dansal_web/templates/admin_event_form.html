@@ -211,16 +211,19 @@
   <section class="form-section" id="sec-location">
     <h2>{{$.Strings.T "evt_location"}} <a href="/help#location-form" class="help-badge" title="{{$.Strings.T "nav_help"}}">?</a></h2>
 
+    {{/* A room is a child Location (#687): the venue picker only ever offers
+         the top-level building, so when the event is assigned to a room,
+         topLocationID resolves to the room's parent for selection purposes. */}}
     <input type="hidden" id="loc_choice" name="loc_choice" value="{{if .Event.LocationID}}existing{{else if .Event.Location}}new{{end}}">
     <select id="loc_id" name="loc_id" hidden>
       <option value="">—</option>
-      {{range .LocOrgFirst}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+      {{range .LocOrgFirst}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if eq .ID (topLocationID $.Data.Event)}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
       {{if and .LocOrgFirst .LocOthers}}<option disabled class="loc-sep">— {{$.Strings.T "loc_sep_no_org"}} —</option>{{end}}
-      {{range .LocOthers}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+      {{range .LocOthers}}<option value="{{.ID}}" data-orgs="{{joinInts .OrganizationIDs}}"{{if eq .ID (topLocationID $.Data.Event)}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
     </select>
 
     <div id="loc-assigned-chip" class="assign-chip"{{if not .Event.LocationID}} hidden{{end}}>
-      <span class="assign-chip-name" id="loc-assigned-name">{{range .LocOrgFirst}}{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}{{range .LocOthers}}{{if and $.Data.Event.LocationID (eq .ID (derefInt $.Data.Event.LocationID))}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}</span>
+      <span class="assign-chip-name" id="loc-assigned-name">{{range .LocOrgFirst}}{{if eq .ID (topLocationID $.Data.Event)}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}{{range .LocOthers}}{{if eq .ID (topLocationID $.Data.Event)}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}</span>
       <button type="button" class="btn-sm btn-del" onclick="removeLocAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
@@ -442,7 +445,7 @@
           <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></td>
           <td><input type="text" name="tt_title" value="{{.Title}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_room" value="{{.Room}}"></td>
-          <td><select name="tt_loc_id"><option value="">—</option>{{range $.Data.Locations}}<option value="{{.ID}}"{{if and $entry.LocationID (eq .ID (derefInt $entry.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}</select></td>
+          <td><select name="tt_loc_id" data-current="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><option value="">—</option>{{range $.Data.Locations}}<option value="{{.ID}}"{{if and $entry.LocationID (eq .ID (derefInt $entry.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}</select></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
@@ -1115,9 +1118,9 @@ function cancelLocCreateNew(){
   document.getElementById('loc_choice').value=document.getElementById('loc_id').value?'existing':'';
   syncLocUI();
 }
-// Room selector: map from location ID → [{id, name}, ...]
+// Room selector: map from building location ID → [{id, name}, ...] of its children.
 var locRooms={
-{{range $.Data.Locations}}{{if .Rooms}}{{.ID}}:[{{range .Rooms}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}],{{end}}{{end}}
+{{range $.Data.Locations}}{{if .Children}}{{.ID}}:[{{range .Children}}{id:{{.ID}},name:{{.Location | jsStr}}},{{end}}],{{end}}{{end}}
 };
 function updateRoomSel(locID){
   var wrap=document.getElementById('room-sel-wrap');
@@ -1140,7 +1143,7 @@ function updateRoomSel(locID){
   var locSel=document.getElementById('loc_id');
   if(locSel){
     locSel.addEventListener('change',function(){updateRoomSel(this.value);});
-    var initialRoom={{if $.Data.Event.RoomID}}{{derefInt $.Data.Event.RoomID}}{{else}}0{{end}};
+    var initialRoom={{if and $.Data.Event.Location $.Data.Event.Location.ParentID}}{{$.Data.Event.Location.ID}}{{else}}0{{end}};
     var roomSel=document.getElementById('room_id');
     if(initialRoom) roomSel.dataset.initial=String(initialRoom);
     updateRoomSel(locSel.value);
@@ -1325,6 +1328,11 @@ function geocodeLocation(){
 }
 
 var _ttLocs={{locationsJSON $.Data.Locations}};
+{{/* Offer the event's own building's rooms (child locations) as timetable
+     picks too, alongside other top-level venues (#687). */}}
+{{range $.Data.Locations}}{{if and (eq .ID (topLocationID $.Data.Event)) .Children}}
+_ttLocs=_ttLocs.concat({{locationsJSON .Children}}.map(function(r){r.label='↳ '+r.label;return r;}));
+{{end}}{{end}}
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
 var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
 function _buildLocOpts(selectedID){
@@ -1486,7 +1494,9 @@ function addTTRow(){
 (function(){
   function refreshTTLocs(){
     document.querySelectorAll('#tt-body select[name="tt_loc_id"]').forEach(function(sel){
-      var cur=parseInt(sel.value,10)||0;sel.innerHTML=_buildLocOpts(cur);
+      var cur=parseInt(sel.dataset.current,10)||parseInt(sel.value,10)||0;
+      delete sel.dataset.current;
+      sel.innerHTML=_buildLocOpts(cur);
     });
   }
   refreshTTLocs();

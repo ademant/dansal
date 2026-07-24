@@ -11,30 +11,6 @@ import (
 	"time"
 )
 
-type Room struct {
-	ID         int    `json:"id"`
-	LocationID int    `json:"location_id,omitempty"`
-	Name       string `json:"name"`
-}
-
-// fetchLocationRooms returns all rooms for a location ordered by id (insertion order).
-func fetchLocationRooms(locationID int) []Room {
-	rows, err := db.Query("SELECT id, name FROM rooms WHERE location_id=? ORDER BY id", locationID)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var rooms []Room
-	for rows.Next() {
-		var rm Room
-		if rows.Scan(&rm.ID, &rm.Name) == nil {
-			rm.LocationID = locationID
-			rooms = append(rooms, rm)
-		}
-	}
-	return rooms
-}
-
 type Location struct {
 	ID               int             `json:"id"`
 	Location         string          `json:"location"`
@@ -66,7 +42,8 @@ type Location struct {
 	Aliases          []string        `json:"aliases,omitempty"`
 	FutureEventCount int             `json:"future_event_count,omitempty"`
 	PastEventCount   int             `json:"past_event_count,omitempty"`
-	Rooms            []Room          `json:"rooms,omitempty"`
+	ParentID         *int            `json:"parent_id,omitempty"`
+	Children         []Location      `json:"children,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -107,6 +84,7 @@ type LocationCreateRequest struct {
 	FloorCondition  string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
+	ParentID        *int            `json:"parent_id,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -116,7 +94,7 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,'')`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,''), l.parent_id`
 
 // scanLocation scans a locationCols row into loc. Extra destination pointers
 // (e.g. for appended future/past event count columns) can be passed via extra.
@@ -126,7 +104,7 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy}
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy, &loc.ParentID}
 	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -141,6 +119,57 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 		loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	return nil
+}
+
+// inheritLocationFields fills child's empty address/coordinate fields from
+// an already-loaded parent. A room (child location) is stored without its
+// own address/geo so building corrections propagate automatically instead
+// of drifting out of sync with copies (#687).
+func inheritLocationFields(child, parent *Location) {
+	if child.Address == "" {
+		child.Address = parent.Address
+	}
+	if child.Zipcode == "" {
+		child.Zipcode = parent.Zipcode
+	}
+	if child.Town == "" {
+		child.Town = parent.Town
+	}
+	if child.Country == "" {
+		child.Country = parent.Country
+	}
+	if child.CountryCode == "" {
+		child.CountryCode = parent.CountryCode
+	}
+	if child.Region == "" {
+		child.Region = parent.Region
+	}
+	if child.Latitude == nil {
+		child.Latitude = parent.Latitude
+	}
+	if child.Longitude == nil {
+		child.Longitude = parent.Longitude
+	}
+	if child.Geohash == "" {
+		child.Geohash = parent.Geohash
+	}
+}
+
+// resolvedLocation looks up loc's parent (if any) and fills inherited
+// fields via inheritLocationFields. Use when the parent wasn't already
+// loaded in the same batch (see getLocations for the batched variant).
+func resolvedLocation(loc *Location) {
+	if loc.ParentID == nil {
+		return
+	}
+	var parent Location
+	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.id=? GROUP BY l.id`, *loc.ParentID), &parent)
+	if err != nil {
+		return
+	}
+	inheritLocationFields(loc, &parent)
 }
 
 func attrsJSON(attrs map[string]bool) string {
@@ -290,6 +319,7 @@ type LocationMergePatchRequest struct {
 	FloorCondition  *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
 	NoStreetShoes   *bool            `json:"no_street_shoes,omitempty"`
 	Aliases         *[]string        `json:"aliases,omitempty"`
+	ParentID        *int             `json:"parent_id,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -418,23 +448,29 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		locations = append(locations, location)
 	}
 
-	// Attach rooms in a single batch query to avoid N+1.
+	// Attach children (rooms) in a single batch query to avoid N+1, inheriting
+	// address/coordinates from the parent already loaded in this same result set.
 	if len(locations) > 0 {
-		roomRows, err := db.Query("SELECT id, location_id, name FROM rooms ORDER BY location_id, id")
+		byID := make(map[int]*Location, len(locations))
+		ids := make([]string, len(locations))
+		for i := range locations {
+			byID[locations[i].ID] = &locations[i]
+			ids[i] = strconv.Itoa(locations[i].ID)
+		}
+		childRows, err := db.Query(`SELECT `+locationCols+`
+			FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+			WHERE l.parent_id IN (`+strings.Join(ids, ",")+`) GROUP BY l.id ORDER BY l.parent_id, l.id`)
 		if err == nil {
-			byLoc := make(map[int][]Room)
-			for roomRows.Next() {
-				var rm Room
-				if roomRows.Scan(&rm.ID, &rm.LocationID, &rm.Name) == nil {
-					byLoc[rm.LocationID] = append(byLoc[rm.LocationID], rm)
+			for childRows.Next() {
+				var child Location
+				if scanLocation(childRows, &child) == nil && child.ParentID != nil {
+					if parent, ok := byID[*child.ParentID]; ok {
+						inheritLocationFields(&child, parent)
+						parent.Children = append(parent.Children, child)
+					}
 				}
 			}
-			roomRows.Close()
-			for i := range locations {
-				if rms, ok := byLoc[locations[i].ID]; ok {
-					locations[i].Rooms = rms
-				}
-			}
+			childRows.Close()
 		}
 	}
 
@@ -486,6 +522,20 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		if !validFloorCondition(req.FloorCondition) {
 			writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 			return
+		}
+		if req.ParentID != nil {
+			var parentParentID sql.NullInt64
+			if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *req.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
+				writeError(w, "parent_id not found", http.StatusBadRequest)
+				return
+			} else if err != nil {
+				writeInternalError(w, err)
+				return
+			}
+			if parentParentID.Valid {
+				writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
+				return
+			}
 		}
 	}
 	if requesterRole != RoleAdmin {
@@ -545,8 +595,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -575,6 +625,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			Attributes:      req.Attributes,
 			Parking:         req.Parking,
 			FloorCondition:  req.FloorCondition,
+			ParentID:        req.ParentID,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -601,7 +652,20 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	location.Rooms = fetchLocationRooms(location.ID)
+	resolvedLocation(&location)
+	childRows, err := db.Query(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.parent_id=? GROUP BY l.id ORDER BY l.id`, location.ID)
+	if err == nil {
+		for childRows.Next() {
+			var child Location
+			if scanLocation(childRows, &child) == nil {
+				inheritLocationFields(&child, &location)
+				location.Children = append(location.Children, child)
+			}
+		}
+		childRows.Close()
+	}
 
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/geo+json") {
@@ -736,6 +800,24 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
+	if req.ParentID != nil {
+		if strconv.Itoa(*req.ParentID) == id {
+			writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
+			return
+		}
+		var parentParentID sql.NullInt64
+		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *req.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
+			writeError(w, "parent_id not found", http.StatusBadRequest)
+			return
+		} else if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		if parentParentID.Valid {
+			writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
+			return
+		}
+	}
 
 	if req.OsmID != nil && req.OsmType != "" {
 		var existingID int
@@ -751,8 +833,8 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, resolveDisplayName(callerID), id,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -885,6 +967,28 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	if req.Aliases != nil {
 		loc.Aliases = *req.Aliases
 	}
+	if req.ParentID != nil {
+		loc.ParentID = req.ParentID
+	}
+
+	if loc.ParentID != nil {
+		if *loc.ParentID == loc.ID {
+			writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
+			return
+		}
+		var parentParentID sql.NullInt64
+		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *loc.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
+			writeError(w, "parent_id not found", http.StatusBadRequest)
+			return
+		} else if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		if parentParentID.Valid {
+			writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
+			return
+		}
+	}
 
 	if loc.OsmID != nil && loc.OsmType != "" {
 		var existingID int
@@ -900,8 +1004,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, resolveDisplayName(callerID), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, resolveDisplayName(callerID), loc.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -1228,78 +1332,94 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// GET /api/v1/locations/{id}/rooms — list rooms for a location.
-func getLocationRooms(w http.ResponseWriter, r *http.Request) {
+// GET /api/v1/locations/{id}/children — list a location's child locations
+// (rooms), with address/coordinates inherited from this location.
+func getLocationChildren(w http.ResponseWriter, r *http.Request) {
 	locID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var exists int
-	if db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", locID).Scan(&exists); exists == 0 {
+	var parent Location
+	err = scanLocation(db.QueryRow(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.id=? GROUP BY l.id`, locID), &parent)
+	if err == sql.ErrNoRows {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
-	rooms := fetchLocationRooms(locID)
-	if rooms == nil {
-		rooms = []Room{}
+	if err != nil {
+		writeInternalError(w, err)
+		return
 	}
+
+	children := []Location{}
+	childRows, err := db.Query(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.parent_id=? GROUP BY l.id ORDER BY l.id`, locID)
+	if err == nil {
+		for childRows.Next() {
+			var child Location
+			if scanLocation(childRows, &child) == nil {
+				inheritLocationFields(&child, &parent)
+				children = append(children, child)
+			}
+		}
+		childRows.Close()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rooms)
+	json.NewEncoder(w).Encode(children)
 }
 
-// POST /api/v1/locations/{id}/rooms — create a room for a location.
+// POST /api/v1/locations/{id}/children — create a child location (room)
+// under this location. Only name/floor_condition/no_street_shoes/attributes
+// are accepted — address/coordinates are always inherited from the parent
+// (#687), never copied, so building corrections stay in sync.
 // Requires admin or membership in one of the location's organizations.
-func createLocationRoom(w http.ResponseWriter, r *http.Request) {
+func createLocationChild(w http.ResponseWriter, r *http.Request) {
 	callerID, requesterRole := callerFromRequest(r)
 	id := r.PathValue("id")
 	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name           string          `json:"name"`
+		FloorCondition string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
+		NoStreetShoes  bool            `json:"no_street_shoes,omitempty"`
+		Attributes     map[string]bool `json:"attributes,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
+	if !validFloorCondition(req.FloorCondition) {
+		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
+		return
+	}
 	locID, _ := strconv.Atoi(id)
-	result, err := db.Exec("INSERT INTO rooms (location_id, name) VALUES (?, ?)", locID, strings.TrimSpace(req.Name))
+	var parentOfParent sql.NullInt64
+	if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", locID).Scan(&parentOfParent); err != nil {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if parentOfParent.Valid {
+		writeError(w, "cannot add a child under a location that is itself a child", http.StatusBadRequest)
+		return
+	}
+	result, err := db.Exec(
+		"INSERT INTO locations (location, floor_condition, no_street_shoes, attributes, parent_id) VALUES (?, ?, ?, ?, ?)",
+		strings.TrimSpace(req.Name), req.FloorCondition, req.NoStreetShoes, attrsJSON(req.Attributes), locID,
+	)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
-	roomID, _ := result.LastInsertId()
+	childID, _ := result.LastInsertId()
+	child := Location{ID: int(childID), Location: strings.TrimSpace(req.Name), FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(Room{ID: int(roomID), LocationID: locID, Name: strings.TrimSpace(req.Name)})
-}
-
-// DELETE /api/v1/locations/{id}/rooms/{room_id} — delete a room.
-// Requires admin or membership in one of the location's organizations.
-// Cascades: events with this room_id will have room_id set to NULL (ON DELETE SET NULL).
-func deleteLocationRoom(w http.ResponseWriter, r *http.Request) {
-	callerID, requesterRole := callerFromRequest(r)
-	id := r.PathValue("id")
-	if !checkLocationWriteAccess(w, callerID, requesterRole, id) {
-		return
-	}
-	roomID, err := strconv.Atoi(r.PathValue("room_id"))
-	if err != nil {
-		writeError(w, "invalid room_id", http.StatusBadRequest)
-		return
-	}
-	locID, _ := strconv.Atoi(id)
-	result, err := db.Exec("DELETE FROM rooms WHERE id=? AND location_id=?", roomID, locID)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "Room not found", http.StatusNotFound)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	json.NewEncoder(w).Encode(child)
 }
 
 // GET /api/v1/locations/event-counts — returns a map of location_id → future event count.

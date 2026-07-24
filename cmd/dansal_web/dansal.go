@@ -235,8 +235,6 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
-	RoomID               *int             `json:"room_id,omitempty"`
-	RoomName             string           `json:"room_name,omitempty"`
 }
 
 type Dance struct {
@@ -278,11 +276,6 @@ type Instructor struct {
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
-type Room struct {
-	ID         int    `json:"id"`
-	LocationID int    `json:"location_id,omitempty"`
-	Name       string `json:"name"`
-}
 
 type Organization struct {
 	ID            int    `json:"id"`
@@ -374,7 +367,10 @@ type Location struct {
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
 	UpdatedBy       string          `json:"updated_by,omitempty"`
 
-	Rooms []Room `json:"rooms,omitempty"`
+	// A room is a child Location with ParentID set, inheriting
+	// address/coordinates from its parent (#687) rather than copying them.
+	ParentID *int       `json:"parent_id,omitempty"`
+	Children []Location `json:"children,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
@@ -1355,33 +1351,35 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	return nil
 }
 
-func (c *DansalClient) GetLocationRooms(ctx context.Context, locationID int) ([]Room, error) {
-	var rooms []Room
-	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), &rooms); err != nil {
+func (c *DansalClient) GetLocationChildren(ctx context.Context, locationID int) ([]Location, error) {
+	var children []Location
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/children", locationID), &children); err != nil {
 		return nil, err
 	}
-	return rooms, nil
+	return children, nil
 }
 
-func (c *DansalClient) CreateLocationRoom(ctx context.Context, locationID int, name string, token string) (Room, error) {
-	body, _ := json.Marshal(map[string]string{"name": name})
-	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), token, body)
+func (c *DansalClient) CreateLocationChild(ctx context.Context, locationID int, name, floorCondition string, token string) (Location, error) {
+	body, _ := json.Marshal(map[string]any{"name": name, "floor_condition": floorCondition})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/children", locationID), token, body)
 	if err != nil {
-		return Room{}, err
+		return Location{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return Room{}, apiErr(resp)
+		return Location{}, apiErr(resp)
 	}
-	var room Room
-	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
-		return Room{}, err
+	var child Location
+	if err := json.NewDecoder(resp.Body).Decode(&child); err != nil {
+		return Location{}, err
 	}
-	return room, nil
+	return child, nil
 }
 
-func (c *DansalClient) DeleteLocationRoom(ctx context.Context, locationID, roomID int, token string) error {
-	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/rooms/%d", locationID, roomID), token, nil)
+// DeleteLocationChild removes a child location — a room is just a location,
+// so this is the same DELETE /api/v1/locations/{id} endpoint used everywhere else.
+func (c *DansalClient) DeleteLocationChild(ctx context.Context, childID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d", childID), token, nil)
 	if err != nil {
 		return err
 	}
@@ -1675,7 +1673,6 @@ type EventCreateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
-	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventUpdateReq struct {
@@ -1708,7 +1705,6 @@ type EventUpdateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
-	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventLocReq struct {

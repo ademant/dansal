@@ -174,6 +174,15 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}
 		}
 		org := orgFromForm(r)
+		if err := validateURLDomain(r.Context(), org.Website); err != nil {
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+				Org:      org,
+				ErrorKey: "url_domain_not_found",
+				IsAdmin:  user.Role == "admin",
+			}))
+			return
+		}
 		token := getSessionToken(r)
 		created, err := client.CreateOrganization(r.Context(), org, token)
 		if err != nil {
@@ -524,6 +533,16 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		}
 		from := safeReturnPath(r.FormValue("from"))
 		org := orgFromForm(r)
+		if err := validateURLDomain(r.Context(), org.Website); err != nil {
+			title := i18n.T(r, "admin_edit")
+			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+				Org:      org,
+				ErrorKey: "url_domain_not_found",
+				IsAdmin:  user.Role == "admin",
+				From:     from,
+			}))
+			return
+		}
 		if err := client.UpdateOrganization(r.Context(), id, org, token); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{

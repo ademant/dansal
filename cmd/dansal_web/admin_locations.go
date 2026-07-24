@@ -213,6 +213,12 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			NoStreetShoes:   existing.NoStreetShoes,
 			Aliases:         existing.Aliases,
 		}
+		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			b, _ := json.Marshal(map[string]string{"error": err.Error()})
+			w.Write(b)
+			return
+		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -314,6 +320,15 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			if orgID, err2 := strconv.Atoi(idStr); err2 == nil && orgID > 0 {
 				loc.OrganizationIDs = append(loc.OrganizationIDs, orgID)
 			}
+		}
+		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+				Location: loc,
+				ErrorKey: "url_domain_not_found",
+				UserOrgs: newLocationUserOrgs(r, user, client),
+			}))
+			return
 		}
 		token := getSessionToken(r)
 		_, err := client.CreateLocation(r.Context(), loc, token)
@@ -442,6 +457,16 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		from := safeReturnPath(r.FormValue("from"))
+		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
+			title := i18n.T(r, "admin_edit")
+			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+				Location:  loc,
+				ErrorKey:  "url_domain_not_found",
+				ReturnURL: returnURL,
+				From:      from,
+			}))
+			return
+		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			title := i18n.T(r, "admin_edit")

@@ -180,14 +180,17 @@
   <aside class="evt-sidebar">
 
     {{/* Type + difficulty badges */}}
-    {{if or .HasBall (or .HasWorkshop .HasFestival)}}
+    {{$hasBall := or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}
+    {{$hasWorkshop := or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}
+    {{$hasFestival := hasTag .Tags "festival"}}
+    {{if or $hasBall (or $hasWorkshop $hasFestival)}}
     <div class="sidebar-block">
-      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-      {{if .HasWorkshop}}
+      {{if $hasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+      {{if $hasWorkshop}}
         <span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>
         {{if .WorkshopDifficulty}}<span class="badge badge-difficulty">{{$.Strings.T (print "workshop_difficulty_" .WorkshopDifficulty)}}</span>{{end}}
       {{end}}
-      {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+      {{if $hasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
     </div>
     {{end}}
 

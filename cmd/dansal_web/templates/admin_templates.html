@@ -79,11 +79,15 @@ function renderPreview(d) {
     parts.push(chip(ORG_MAP[d.org_id], 'tpl-chip-org'));
   }
 
-  // Event type
-  if (d.has_ball)     parts.push(chip('{{$.Strings.T "filter_type_ball"}}',     'badge'));
-  if (d.has_workshop) parts.push(chip('{{$.Strings.T "filter_type_workshop"}}', 'badge workshop'));
-  if (d.has_festival) parts.push(chip('{{$.Strings.T "filter_type_festival"}}', 'badge festival'));
-  if (d.has_workshop && d.workshop_difficulty)
+  // Event type (derived from tags, same as the rest of the UI)
+  const tags = Array.isArray(d.tags) ? d.tags : [];
+  const hasBall     = tags.includes('bal-folk') || tags.includes('fest-noz');
+  const hasWorkshop = tags.includes('workshop') || tags.includes('dance-workshop') || tags.includes('musician-workshop') || tags.includes('music-course');
+  const hasFestival = tags.includes('festival');
+  if (hasBall)     parts.push(chip('{{$.Strings.T "filter_type_ball"}}',     'badge'));
+  if (hasWorkshop) parts.push(chip('{{$.Strings.T "filter_type_workshop"}}', 'badge workshop'));
+  if (hasFestival) parts.push(chip('{{$.Strings.T "filter_type_festival"}}', 'badge festival'));
+  if (hasWorkshop && d.workshop_difficulty)
     parts.push(chip(d.workshop_difficulty, 'badge badge-difficulty'));
 
   // Pricing

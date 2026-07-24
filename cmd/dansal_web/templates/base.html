@@ -649,9 +649,9 @@ document.addEventListener('keydown',function(e){
     data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
     data-country="{{if .Location}}{{.Location.Country}}{{end}}"
     data-region="{{if .Location}}{{.Location.Region}}{{end}}"
-    data-ball="{{if .HasBall}}1{{else}}0{{end}}"
-    data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
-    data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
+    data-ball="{{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}1{{else}}0{{end}}"
+    data-workshop="{{if or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}1{{else}}0{{end}}"
+    data-festival="{{if hasTag .Tags "festival"}}1{{else}}0{{end}}"
     data-session="{{if hasTag .Tags "session"}}1{{else}}0{{end}}"
     data-concert="{{if hasTag .Tags "concert"}}1{{else}}0{{end}}"
     data-organizer="{{$org}}"
@@ -681,13 +681,13 @@ document.addEventListener('keydown',function(e){
     {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
   </td>
   <td class="col-type">
-    {{if .HasBall}}<span class="badge">💃 {{$.Strings.T "filter_type_ball"}}</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-    {{if .HasFestival}}<span class="badge festival">🎪 {{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}<span class="badge">💃 {{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}<span class="badge workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if hasTag .Tags "festival"}}<span class="badge festival">🎪 {{$.Strings.T "filter_type_festival"}}</span>{{end}}
     {{if hasTag .Tags "session"}}<span class="badge session">🎶 {{$.Strings.T "tag_session"}}</span>{{end}}
     {{if hasTag .Tags "concert"}}<span class="badge concert">🎸 {{$.Strings.T "tag_concert"}}</span>{{end}}
-    {{range limitTags .HasBall .HasWorkshop .HasFestival .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
-    {{$hidden := hiddenTagCount .HasBall .HasWorkshop .HasFestival .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
+    {{range limitTags .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
+    {{$hidden := hiddenTagCount .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
   </td>
   <td class="col-attr">
     {{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}

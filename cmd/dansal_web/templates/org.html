@@ -109,9 +109,9 @@
     {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
     {{if .Location}}&mdash; {{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}{{if .Location.Town}}, {{.Location.Town}}{{end}}{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
-    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-    {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    {{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if hasTag .Tags "festival"}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
   </div>
   <div class="event-attr-row">{{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}</div>
   {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}

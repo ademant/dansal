@@ -820,15 +820,15 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(out)
 		return template.JS(b)
 	},
-	"limitTags": func(hasBall, hasWorkshop, hasFestival bool, tags []string) []string {
+	"limitTags": func(tags []string) []string {
 		typeCount := 0
-		if hasBall {
+		if sliceContains(tags, "bal-folk") || sliceContains(tags, "fest-noz") {
 			typeCount++
 		}
-		if hasWorkshop {
+		if sliceContains(tags, "workshop") || sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop") || sliceContains(tags, "music-course") {
 			typeCount++
 		}
-		if hasFestival {
+		if sliceContains(tags, "festival") {
 			typeCount++
 		}
 		limit := 5 - typeCount
@@ -840,15 +840,15 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return tags[:limit]
 	},
-	"hiddenTagCount": func(hasBall, hasWorkshop, hasFestival bool, tags []string) int {
+	"hiddenTagCount": func(tags []string) int {
 		typeCount := 0
-		if hasBall {
+		if sliceContains(tags, "bal-folk") || sliceContains(tags, "fest-noz") {
 			typeCount++
 		}
-		if hasWorkshop {
+		if sliceContains(tags, "workshop") || sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop") || sliceContains(tags, "music-course") {
 			typeCount++
 		}
-		if hasFestival {
+		if sliceContains(tags, "festival") {
 			typeCount++
 		}
 		limit := 5 - typeCount

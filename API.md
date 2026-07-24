@@ -668,7 +668,14 @@ DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 { "ids": [1, 2, 3], "start_time": "19:00", "end_time": "23:00" }
 ```
 
-**`PUT` vs `PATCH`:** `PUT` replaces the entire event — send the complete object; any field omitted from the body is cleared to its zero value, and `location` may be a full nested object (find-or-create by name/address). `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array fields (`tags`, `musicians`, `instructors`, `dances`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element; `has_ball`/`has_workshop`/`has_festival` still auto-derive their associated tags whenever either the booleans or `tags` are part of the patch. `PATCH` has no nested `location` object — repoint an event at an existing location via `location_id`, or use `PUT` to also create/update the location itself. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
+**`PUT` vs `PATCH`:** `PUT` replaces the entire event — send the complete object; any field omitted from the body is cleared to its zero value, and `location` may be a full nested object (find-or-create by name/address). `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array fields (`tags`, `musicians`, `instructors`, `dances`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element; `has_ball`/`has_workshop`/`has_festival` *(deprecated — use `tags` instead; see below)* still auto-derive their associated tags for backward compatibility whenever either the booleans or `tags` are part of the patch. `PATCH` has no nested `location` object — repoint an event at an existing location via `location_id`, or use `PUT` to also create/update the location itself. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
+
+> **Deprecated: `has_ball`, `has_workshop`, `has_festival` (tracked in issue #871).** These boolean convenience fields predate the tag system and remain accepted on write for backward compatibility, but `tags` is the authoritative field on both read and write. Prefer tags for new integrations:
+> - `has_ball=true` → `"tags": ["bal-folk"]` or `"tags": ["fest-noz"]`
+> - `has_workshop=true` → `"tags": ["workshop"]`, `"dance-workshop"`, `"musician-workshop"`, or `"music-course"`
+> - `has_festival=true` → `"tags": ["festival"]`
+>
+> The `type=ball,workshop,festival` query filter is deprecated for the same reason — use `tag=bal-folk`, `tag=workshop`, `tag=festival`, etc. instead. Both the booleans and the `type` filter continue to work but will be removed in a future release.
 
 **Query parameters for GET /api/v1/events:**
 
@@ -682,7 +689,7 @@ Time range (all timestamps are Unix epoch integers):
 Content filters:
 - `title=` — substring match on title
 - `description=` — substring match on description
-- `type=ball,workshop,festival` — comma-separated; matches events with any of the named types
+- `type=ball,workshop,festival` — comma-separated; matches events with any of the named types *(deprecated — use `tag=bal-folk`, `tag=workshop`, `tag=festival`, etc.)*
 - `tag=` — filter by tag slug (single value)
 - `dance=` — filter by dance name
 - `dance_id=N` — filter by dance ID

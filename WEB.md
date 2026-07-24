@@ -56,6 +56,7 @@ GET /events/{id}.ics                        # single event, iCal download
 GET /feed/events.{format}                   # all upcoming events
 GET /feed/org/{slug}/events.{format}        # one organization's events
 GET /feed/musician/{slug}/events.{format}   # one musician's events
+GET /feed/instructor/{id}/events.{format}   # one instructor's events
 GET /feed/location/{slug}/events.{format}   # one location's events
 GET /feed/ball/events.{format}              # events tagged as a ball/bal
 GET /feed/workshop/events.{format}          # events tagged as a workshop
@@ -64,8 +65,9 @@ GET /feed/festival/events.{format}          # events tagged as a festival
 
 `{format}` is `ical` (or `ics`), `rss`, or `json`. `{slug}` for org/musician/
 location feeds is the same slug used in that entity's page URL
-(`orgSlug`/`effectiveSlug`) — not the numeric ID. All feeds are public and
-contain only published events.
+(`orgSlug`/`effectiveSlug`) — not the numeric ID. Instructor feeds use the
+numeric `{id}` (matching the `/instructors/{id}` page URL) because instructors
+have no unique slug. All feeds are public and contain only published events.
 
 ## Discovery Files
 

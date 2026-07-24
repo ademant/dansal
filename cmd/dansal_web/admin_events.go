@@ -553,6 +553,9 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 		if tags := r.Form["add_tags"]; len(tags) > 0 {
 			payload["add_tags"] = tags
 		}
+		if tags := r.Form["remove_tags"]; len(tags) > 0 {
+			payload["remove_tags"] = tags
+		}
 		if danceStrs := r.Form["add_dances"]; len(danceStrs) > 0 {
 			var danceIDs []int
 			for _, s := range danceStrs {
@@ -562,6 +565,17 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 			}
 			if len(danceIDs) > 0 {
 				payload["add_dances"] = danceIDs
+			}
+		}
+		if danceStrs := r.Form["remove_dances"]; len(danceStrs) > 0 {
+			var danceIDs []int
+			for _, s := range danceStrs {
+				if id, err := strconv.Atoi(s); err == nil {
+					danceIDs = append(danceIDs, id)
+				}
+			}
+			if len(danceIDs) > 0 {
+				payload["remove_dances"] = danceIDs
 			}
 		}
 		if v := r.FormValue("musician_id"); v != "" {
@@ -2162,6 +2176,10 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			renderErrFull("evt_title_required")
 			return
 		}
+		if err := validateURLDomain(r.Context(), req.URL); err != nil {
+			renderErrFull("url_domain_not_found")
+			return
+		}
 
 		event, err := client.CreateEvent(r.Context(), req, token)
 		if err != nil {
@@ -2786,6 +2804,10 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 
 		if req.Title == "" {
 			renderErrFull("evt_title_required")
+			return
+		}
+		if err := validateURLDomain(r.Context(), req.URL); err != nil {
+			renderErrFull("url_domain_not_found")
 			return
 		}
 

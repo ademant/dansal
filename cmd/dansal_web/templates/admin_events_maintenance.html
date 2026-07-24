@@ -106,22 +106,24 @@
     </select>
   </div>
 
-  {{/* Assign event type (format tags) */}}
+  {{/* Tristate tag selector — ✓ = add to all, □ = remove from all, – = no change */}}
   <div class="em-bulk-group">
     <label class="em-bulk-label">{{$.Strings.T "filter_all_types"}}</label>
-    <select name="add_tags" id="em-bq-type" class="em-bq-select">
-      <option value="">—</option>
-      {{range .FormatTags}}<option value="{{.Slug}}">{{.Name}}</option>{{end}}
-    </select>
+    <div class="em-tristate-list" id="em-tag-list">
+      {{range .FormatTags}}
+      <label class="em-tri-label"><input type="checkbox" class="em-tri-tag" data-slug="{{.Slug}}"> {{.Name}}</label>
+      {{end}}
+    </div>
   </div>
 
-  {{/* Assign dance style */}}
+  {{/* Tristate dance selector */}}
   <div class="em-bulk-group">
     <label class="em-bulk-label">{{$.Strings.T "filter_all_dances"}}</label>
-    <select name="add_dances" id="em-bq-dance" class="em-bq-select">
-      <option value="">—</option>
-      {{range .Dances}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
+    <div class="em-tristate-list" id="em-dance-list">
+      {{range .Dances}}
+      <label class="em-tri-label"><input type="checkbox" class="em-tri-dance" data-id="{{.ID}}" data-name="{{.Name}}"> {{.Name}}</label>
+      {{end}}
+    </div>
   </div>
 
   <div class="em-bulk-actions">
@@ -171,7 +173,8 @@
   {{$sameDay   := eq $startDate $endDate}}
   {{$locName   := ""}}
   {{if .Location}}{{if and .Location.ShortName .Location.Town}}{{$locName = printf "%s, %s" .Location.ShortName .Location.Town}}{{else if .Location.ShortName}}{{$locName = .Location.ShortName}}{{else if .Location.Location}}{{$locName = .Location.Location}}{{end}}{{end}}
-  <tr class="{{if .IsCancelled}}ev-cancelled{{else if not .IsPublished}}ev-unpublished{{end}}">
+  <tr class="{{if .IsCancelled}}ev-cancelled{{else if not .IsPublished}}ev-unpublished{{end}}"
+      data-tags="{{join .Tags}}" data-dances="{{join .DanceNames}}">
     <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="em-cb"></td>
     <td class="col-id muted">{{.ID}}</td>
     <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a>{{if not .IsPublished}}<span class="badge unpub" title="{{$.Strings.T "musician_unpublished"}}">⊘</span>{{end}}</td>
@@ -186,9 +189,9 @@
     <td class="col-org muted">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
     <td class="col-loc">{{$locName}}</td>
     <td class="col-type">
-      {{if .HasBall}}<span title="{{$.Strings.T "filter_type_ball"}}">💃</span>{{end}}
-      {{if .HasWorkshop}}<span title="{{$.Strings.T "filter_type_workshop"}}">🎓</span>{{end}}
-      {{if .HasFestival}}<span title="{{$.Strings.T "filter_type_festival"}}">🎪</span>{{end}}
+      {{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}<span title="{{$.Strings.T "filter_type_ball"}}">💃</span>{{end}}
+      {{if or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}<span title="{{$.Strings.T "filter_type_workshop"}}">🎓</span>{{end}}
+      {{if hasTag .Tags "festival"}}<span title="{{$.Strings.T "filter_type_festival"}}">🎪</span>{{end}}
     </td>
     <td class="col-dances muted">{{join .DanceNames}}</td>
     <td class="col-series">{{if .SeriesID}}<span title="{{index $.Data.SeriesMap (derefInt .SeriesID)}}">~</span>{{end}}</td>
@@ -248,6 +251,9 @@ main:has(.em-table-wrap){max-width:none}
 .em-bulk-bar{display:flex;flex-wrap:wrap;gap:.4rem .75rem;align-items:flex-end;padding:.5rem;background:var(--bg-card,#f4f6fb);border-bottom:1px solid var(--border,#e0e4ef)}
 .em-bulk-group{display:flex;flex-direction:column;gap:.15rem}
 .em-bulk-label{font-size:.72rem;font-weight:600;color:var(--fg-2,#666)}
+.em-tristate-list{display:flex;flex-wrap:wrap;gap:.2rem .6rem;margin-top:.15rem}
+.em-tri-label{display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;white-space:nowrap;user-select:none}
+.em-tri-label input{cursor:pointer}
 .em-bq-input{max-width:10rem;padding:.3rem .45rem}
 .em-bq-select{padding:.28rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.82rem;max-width:9rem}
 .em-bulk-count{font-size:.82rem;color:var(--fg-2,#555);align-self:center}
@@ -395,14 +401,89 @@ var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsS
     cbAll.addEventListener('change', function() {
       document.querySelectorAll('.em-cb').forEach(function(cb){ cb.checked = cbAll.checked; });
       updateCount();
+      updateTristate();
     });
   }
   document.querySelectorAll('.em-cb').forEach(function(cb){
     cb.addEventListener('change', function(){
       if (!cb.checked && cbAll) cbAll.checked = false;
       updateCount();
+      updateTristate();
     });
   });
+
+  // Tristate selectors for tags and dances
+  // States: 'indeterminate' (–, no change), 'checked' (add all), 'unchecked' (remove all)
+  // Click cycle: indeterminate → checked → unchecked → indeterminate
+  var danceNameToID = {};
+  {{range .Data.Dances}}danceNameToID[{{.Name | jsStr}}] = {{.ID}};{{end}}
+
+  function setTriState(cb, state) {
+    cb.dataset.triState = state;
+    if (state === 'indeterminate') {
+      cb.indeterminate = true;
+      cb.checked = false;
+    } else {
+      cb.indeterminate = false;
+      cb.checked = state === 'checked';
+    }
+  }
+
+  function updateTristate() {
+    var rows = Array.from(document.querySelectorAll('.em-cb:checked')).map(function(c){
+      return c.closest('tr');
+    });
+    document.querySelectorAll('.em-tri-tag').forEach(function(cb) {
+      if (rows.length === 0) { setTriState(cb, 'indeterminate'); return; }
+      var slug = cb.dataset.slug;
+      var allHave  = rows.every(function(r){ return r.dataset.tags.split(',').map(function(t){return t.trim();}).indexOf(slug) >= 0; });
+      var noneHave = rows.every(function(r){ return r.dataset.tags.split(',').map(function(t){return t.trim();}).indexOf(slug) < 0; });
+      setTriState(cb, allHave ? 'checked' : noneHave ? 'unchecked' : 'indeterminate');
+    });
+    document.querySelectorAll('.em-tri-dance').forEach(function(cb) {
+      if (rows.length === 0) { setTriState(cb, 'indeterminate'); return; }
+      var name = cb.dataset.name;
+      var allHave  = rows.every(function(r){ return r.dataset.dances.split(',').map(function(t){return t.trim();}).indexOf(name) >= 0; });
+      var noneHave = rows.every(function(r){ return r.dataset.dances.split(',').map(function(t){return t.trim();}).indexOf(name) < 0; });
+      setTriState(cb, allHave ? 'checked' : noneHave ? 'unchecked' : 'indeterminate');
+    });
+  }
+
+  document.querySelectorAll('.em-tri-tag, .em-tri-dance').forEach(function(cb) {
+    cb.addEventListener('click', function(e) {
+      e.preventDefault();
+      var cur = cb.dataset.triState || 'indeterminate';
+      var next = cur === 'indeterminate' ? 'checked' : cur === 'checked' ? 'unchecked' : 'indeterminate';
+      setTriState(cb, next);
+    });
+  });
+
+  // On assign-submit, inject hidden add_tags / remove_tags / add_dances / remove_dances inputs
+  var assignBtn = document.getElementById('em-btn-assign');
+  if (assignBtn) {
+    assignBtn.closest('form').addEventListener('submit', function(e) {
+      if (e.submitter !== assignBtn) return;
+      document.querySelectorAll('.em-tri-hidden').forEach(function(el){ el.remove(); });
+      var form = assignBtn.closest('form');
+      function addHidden(name, value) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = name; inp.value = value; inp.className = 'em-tri-hidden';
+        form.appendChild(inp);
+      }
+      document.querySelectorAll('.em-tri-tag').forEach(function(cb) {
+        var state = cb.dataset.triState || 'indeterminate';
+        if (state === 'checked')   addHidden('add_tags',    cb.dataset.slug);
+        if (state === 'unchecked') addHidden('remove_tags', cb.dataset.slug);
+      });
+      document.querySelectorAll('.em-tri-dance').forEach(function(cb) {
+        var state = cb.dataset.triState || 'indeterminate';
+        var id = danceNameToID[cb.dataset.name];
+        if (!id) return;
+        if (state === 'checked')   addHidden('add_dances',    id);
+        if (state === 'unchecked') addHidden('remove_dances', id);
+      });
+    });
+  }
 
   // Copy filter params into bulk form so merge handler can rebuild redirect URL
   var filterForm = document.getElementById('em-filter-form');

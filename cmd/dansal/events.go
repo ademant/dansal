@@ -2999,7 +2999,9 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		IDs            []int    `json:"ids"`
 		OrgID          *int     `json:"org_id"`          // nil = skip; set to apply (can be 0 to unset)
 		AddTags        []string `json:"add_tags"`        // nil = skip; additive
+		RemoveTags     []string `json:"remove_tags"`     // nil = skip; subtractive
 		AddDances      []int    `json:"add_dances"`      // nil = skip; additive (dance IDs)
+		RemoveDances   []int    `json:"remove_dances"`   // nil = skip; subtractive
 		AddMusicians   []int    `json:"add_musicians"`   // nil = skip; additive (musician IDs)
 		AddInstructors []int    `json:"add_instructors"` // nil = skip; additive (instructor IDs)
 		Food           *string  `json:"food"`            // nil = skip; "" unsets
@@ -3054,8 +3056,20 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 			}
 			batchInsertPairs(db, "event_tags", "event_id", "tag", id, clean)
 		}
+		if req.RemoveTags != nil {
+			for _, t := range req.RemoveTags {
+				if t = strings.TrimSpace(t); t != "" {
+					db.Exec("DELETE FROM event_tags WHERE event_id=? AND tag=?", id, t)
+				}
+			}
+		}
 		if req.AddDances != nil {
 			batchInsertPairs(db, "event_dances", "event_id", "dance_id", id, req.AddDances)
+		}
+		if req.RemoveDances != nil {
+			for _, did := range req.RemoveDances {
+				db.Exec("DELETE FROM event_dances WHERE event_id=? AND dance_id=?", id, did)
+			}
 		}
 		if req.AddMusicians != nil {
 			batchInsertPairs(db, "event_musicians", "event_id", "musician_id", id, req.AddMusicians)

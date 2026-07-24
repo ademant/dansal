@@ -450,8 +450,7 @@ var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsS
   }
 
   document.querySelectorAll('.em-tri-tag, .em-tri-dance').forEach(function(cb) {
-    cb.addEventListener('click', function(e) {
-      e.preventDefault();
+    cb.addEventListener('change', function() {
       var cur = cb.dataset.triState || 'indeterminate';
       var next = cur === 'indeterminate' ? 'checked' : cur === 'checked' ? 'unchecked' : 'indeterminate';
       setTriState(cb, next);

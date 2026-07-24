@@ -175,3 +175,13 @@ Use `geo:lat,lon?q=lat,lon` links alongside OpenStreetMap links to let mobile us
 - `format`: `bal-folk`, `fest-noz`, `session`, `concert`, `festival`, `open-air`, `workshop`, `music-course`
 - `type`: `dance-workshop`, `musician-workshop`
 - `level`: `beginners`, `intermediate`, `advanced`
+
+## has_* boolean fields (legacy — prefer tags)
+
+`has_ball`, `has_workshop`, `has_festival` are legacy boolean columns on the `events` table that predate the tag system. The tag system is the authoritative source of truth. **Whenever a change touches any `has_*` field, switch that code path to use tags instead:**
+
+- `has_ball` → `sliceContains(e.Tags, "bal-folk") || sliceContains(e.Tags, "fest-noz")`
+- `has_workshop` → `sliceContains(e.Tags, "workshop") || sliceContains(e.Tags, "dance-workshop") || sliceContains(e.Tags, "musician-workshop") || sliceContains(e.Tags, "music-course")`
+- `has_festival` → `sliceContains(e.Tags, "festival")`
+
+Full removal of `has_*` from the API and DB is tracked in issue #871 (Layer 1: `dansal_web` display) and a future Layer 2 issue (API + DB + wp-dansal).

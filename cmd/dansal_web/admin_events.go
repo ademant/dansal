@@ -1311,19 +1311,18 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		if filterType != "" {
 			filtered := events[:0]
 			for _, e := range events {
+				var match bool
 				switch filterType {
 				case "ball":
-					if e.HasBall {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "bal-folk") || sliceContains(e.Tags, "fest-noz")
 				case "workshop":
-					if e.HasWorkshop {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "workshop") || sliceContains(e.Tags, "dance-workshop") ||
+						sliceContains(e.Tags, "musician-workshop") || sliceContains(e.Tags, "music-course")
 				case "festival":
-					if e.HasFestival {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "festival")
+				}
+				if match {
+					filtered = append(filtered, e)
 				}
 			}
 			events = filtered
@@ -3087,19 +3086,18 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		if filterType != "" {
 			filtered := events[:0]
 			for _, e := range events {
+				var match bool
 				switch filterType {
 				case "ball":
-					if e.HasBall {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "bal-folk") || sliceContains(e.Tags, "fest-noz")
 				case "workshop":
-					if e.HasWorkshop {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "workshop") || sliceContains(e.Tags, "dance-workshop") ||
+						sliceContains(e.Tags, "musician-workshop") || sliceContains(e.Tags, "music-course")
 				case "festival":
-					if e.HasFestival {
-						filtered = append(filtered, e)
-					}
+					match = sliceContains(e.Tags, "festival")
+				}
+				if match {
+					filtered = append(filtered, e)
 				}
 			}
 			events = filtered

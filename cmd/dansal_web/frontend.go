@@ -1827,6 +1827,7 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 				Discoverable:              true,
 				Indexable:                 true,
 				Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
+				AlsoKnownAs:               cfg.RelayAlsoKnownAs,
 				PublicKey: PublicKey{
 					ID:           base + "#main-key",
 					Owner:        base,

@@ -44,6 +44,7 @@ type Actor struct {
 	Discoverable              bool         `json:"discoverable"`
 	Indexable                 bool         `json:"indexable"`
 	Endpoints                 *APEndpoints `json:"endpoints,omitempty"`
+	AlsoKnownAs               []string     `json:"alsoKnownAs,omitempty"`
 	Icon                      *APDocument  `json:"icon,omitempty"`
 	PublicKey                 PublicKey    `json:"publicKey"`
 }

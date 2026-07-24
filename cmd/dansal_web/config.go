@@ -38,8 +38,9 @@ type Config struct {
 	SecurityPolicy  string `yaml:"security_policy"`  // optional URL to security policy page
 
 	// Federation
-	RelayActorName      string `yaml:"relay_actor_name"`
-	ShowFederatedEvents bool   `yaml:"show_federated_events"`
+	RelayActorName      string   `yaml:"relay_actor_name"`
+	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
+	ShowFederatedEvents bool     `yaml:"show_federated_events"`
 
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg

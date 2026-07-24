@@ -246,16 +246,26 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 		}
 
 		base := actorURL(cfg, actor.OrgSlug)
+		var aliases []string
+		var links []WebFingerLink
+		// During relay migration: the primary self link must be the old actor URL
+		// so Mastodon's WebFinger loopback check passes when verifying the Move.
+		// After migration, remove relay_also_known_as from config to restore normal order.
+		if actor.OrgID == 0 && len(cfg.RelayAlsoKnownAs) > 0 {
+			for _, oldURL := range cfg.RelayAlsoKnownAs {
+				links = append(links, WebFingerLink{Rel: "self", Type: "application/activity+json", Href: oldURL})
+				aliases = append(aliases, oldURL)
+			}
+			links = append(links, WebFingerLink{Rel: "self", Type: "application/activity+json", Href: base})
+			aliases = append(aliases, base)
+		} else {
+			aliases = []string{base}
+			links = []WebFingerLink{{Rel: "self", Type: "application/activity+json", Href: base}}
+		}
 		wf := WebFinger{
 			Subject: "acct:" + actor.OrgSlug + "@" + cfg.Domain,
-			Aliases: []string{base},
-			Links: []WebFingerLink{
-				{
-					Rel:  "self",
-					Type: "application/activity+json",
-					Href: base,
-				},
-			},
+			Aliases: aliases,
+			Links:   links,
 		}
 		w.Header().Set("Content-Type", "application/jrd+json")
 		json.NewEncoder(w).Encode(wf)

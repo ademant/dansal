@@ -93,7 +93,7 @@ type LocationCreateRequest struct {
 
 // locationCols is the shared SELECT column list used by all location queries.
 // Must match the scanLocation scan order exactly.
-const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, COALESCE(l.zipcode,''),
+const locationCols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
 	l.town, COALESCE(l.country,''), COALESCE(l.country_code,''), COALESCE(l.region,''),
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),

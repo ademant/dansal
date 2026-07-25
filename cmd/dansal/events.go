@@ -262,7 +262,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -319,7 +319,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	var danceNamesCSV string
 	var locLat, locLng sql.NullFloat64
-	var createdByID, seriesID, duplicateOfID sql.NullInt64
+	var createdByID, seriesID, duplicateOfID, locParentID sql.NullInt64
 	var needsDuplicateReviewInt int
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
@@ -333,7 +333,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
-		&needsDuplicateReviewInt, &duplicateOfID); err != nil {
+		&needsDuplicateReviewInt, &duplicateOfID, &locParentID); err != nil {
 		return Event{}, err
 	}
 	event.NeedsDuplicateReview = needsDuplicateReviewInt == 1
@@ -375,6 +375,10 @@ func scanEventRow(s scanner) (Event, error) {
 		id := int(locID.Int64)
 		event.LocationID = &id
 		loc.ID = id
+		if locParentID.Valid {
+			v := int(locParentID.Int64)
+			loc.ParentID = &v
+		}
 		if locLat.Valid {
 			v := locLat.Float64
 			loc.Latitude = &v
@@ -385,6 +389,11 @@ func scanEventRow(s scanner) (Event, error) {
 		}
 		if locAttrsJSON != "" && locAttrsJSON != "{}" {
 			json.Unmarshal([]byte(locAttrsJSON), &loc.Attributes)
+		}
+		// A room (loc.ParentID set) inherits address/coordinates from its
+		// building at read time (#687) — same rule as getLocation().
+		if loc.ParentID != nil {
+			resolvedLocation(&loc)
 		}
 		if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
 			loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)

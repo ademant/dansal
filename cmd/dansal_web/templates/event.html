@@ -200,7 +200,7 @@
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
       {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ID}}<a href="/location/{{.ID}}" class="evt-loc-link">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a>{{else}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{end}}</div>{{end}}
-      {{with $.Data.Event.RoomName}}<div class="evt-loc-room">{{.}}</div>{{end}}
+      {{if .ParentID}}<p class="evt-loc-room"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>{{end}}
       {{if or .Address .Zipcode .Town}}
       <div class="evt-loc-addr">
         {{if .Address}}<span>{{.Address}}</span><br>{{end}}

@@ -3212,6 +3212,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 type AdminLocationDashboardData struct {
 	Location          Location
+	Parent            *Location // set when Location.ParentID is set — the building this room belongs to
 	Events            []Event
 	OrgMap            map[int]string
 	Locations         []Location
@@ -3242,6 +3243,13 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if err != nil {
 			http.NotFound(w, r)
 			return
+		}
+
+		var parent *Location
+		if loc.ParentID != nil {
+			if p, err := client.GetLocation(r.Context(), *loc.ParentID); err == nil {
+				parent = &p
+			}
 		}
 
 		token := getSessionToken(r)
@@ -3325,6 +3333,7 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 
 		renderTemplate(w, tmpls.adminLocationDashboard, tmplData(r, cfg, i18n, locTitle, AdminLocationDashboardData{
 			Location:          loc,
+			Parent:            parent,
 			Events:            events,
 			OrgMap:            orgMap,
 			Locations:         locs,

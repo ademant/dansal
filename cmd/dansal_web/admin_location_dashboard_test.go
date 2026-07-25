@@ -60,4 +60,14 @@ func TestSmokeRenderAdminLocationDashboard(t *testing.T) {
 		RoomEventCounts: map[int]int{55: 3},
 		FilterRoomID:    55,
 	})
+
+	buildingID := 4
+	render("room-view-with-parent", AdminLocationDashboardData{
+		Location: Location{ID: 55, Location: "Room A", ParentID: &buildingID},
+		Parent:   &Location{ID: 4, Location: "Bürgerhaus Stollwerck"},
+	})
+
+	render("room-view-without-loaded-parent", AdminLocationDashboardData{
+		Location: Location{ID: 55, Location: "Room A", ParentID: &buildingID},
+	})
 }

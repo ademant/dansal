@@ -11,6 +11,12 @@
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 {{end}}{{/* .Location */}}
 
+{{if $.Data.Location.ParentID}}
+<p class="loc-parent-link">
+  <a href="/admin/location/{{derefInt $.Data.Location.ParentID}}">← {{$.Strings.T "loc_back_to_building"}}{{if $.Data.Parent}}: {{if $.Data.Parent.ShortName}}{{$.Data.Parent.ShortName}}{{else}}{{$.Data.Parent.Location}}{{end}}{{end}}</a>
+</p>
+{{end}}
+
 {{if $.Data.Location.Children}}
 <details class="loc-rooms-mgmt" open>
   <summary>{{$.Strings.T "loc_rooms_title"}} ({{len $.Data.Location.Children}})</summary>
@@ -213,6 +219,9 @@
 .loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
+.loc-parent-link{margin-bottom:1rem;font-size:.9rem}
+.loc-parent-link a{color:var(--link);text-decoration:none}
+.loc-parent-link a:hover{text-decoration:underline}
 .loc-rooms-mgmt{margin-bottom:1.25rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px;padding:.4rem .75rem}
 .loc-rooms-mgmt summary{cursor:pointer;font-weight:600;font-size:.9rem;padding:.3rem 0}
 .loc-rooms-mgmt .members-table{margin-top:.5rem}

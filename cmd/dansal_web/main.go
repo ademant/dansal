@@ -128,7 +128,7 @@ func main() {
 	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,
-		HTTP:           &http.Client{Timeout: 15 * time.Second},
+		HTTP:           &http.Client{Timeout: 60 * time.Second},
 		InternalSecret: cfg.InternalSharedSecret,
 	}
 

@@ -63,6 +63,7 @@
   <aside class="loc-nav" id="loc-nav">
     <button type="button" class="loc-nav-item loc-nav-fixed" data-target="sec-base">{{$.Strings.T "org_section_base"}}</button>
     <hr class="loc-nav-sep">
+    <button type="button" class="loc-nav-item" data-target="sec-address"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_section_address"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-website"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_website"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-access"><span class="loc-nav-dot"></span>{{$.Strings.T "access_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-kitchenbar"><span class="loc-nav-dot"></span>{{$.Strings.T "section_kitchen_bar"}}</button>
@@ -80,9 +81,36 @@
     <label for="short_name">{{$.Strings.T "loc_short_name"}}</label>
     <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
 
+    <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
+    <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
+
+    <div class="loc-meta">
+      <span><strong>ID</strong> {{.Location.ID}}</span>
+      {{if .Location.OsmID}}
+      <span><strong>OSM</strong>
+        {{if .Location.OsmType}}<a href="https://www.openstreetmap.org/{{.Location.OsmType}}/{{int64Val .Location.OsmID}}" target="_blank" rel="noopener">{{int64Val .Location.OsmID}} ({{.Location.OsmType}})</a>{{else}}{{int64Val .Location.OsmID}}{{end}}
+      </span>
+      {{end}}
+      {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
+      {{if .Location.UpdatedAt}}<span><strong>{{$.Strings.T "last_updated_label"}}</strong> {{fmtUnix .Location.UpdatedAt}}</span>{{end}}
+    </div>
+
+    {{if and (not .Location.ID) .UserOrgs}}
+    <fieldset class="org-assign-new">
+      <legend>{{$.Strings.T "fetch_org"}}</legend>
+      {{range .UserOrgs}}
+      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"{{if eq (len $.Data.UserOrgs) 1}} checked{{end}}> {{.Name}}</label>
+      {{end}}
+    </fieldset>
+    {{end}}
+  </section>
+
+  <section class="form-section" id="sec-address"{{if .Location.ParentID}} data-force-collapsed="1"{{end}}>
+    <h2>{{$.Strings.T "loc_section_address"}}</h2>
+    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
+
     <label for="address">{{$.Strings.T "loc_address"}}</label>
     <input id="address" type="text" name="address" value="{{.Location.Address}}"{{if .Location.ParentID}} disabled{{end}}>
-    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
 
     <div class="form-row">
       <div>
@@ -120,29 +148,6 @@
         <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050"{{if .Location.ParentID}} disabled{{end}}>
       </div>
     </div>
-
-    <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
-    <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
-
-    <div class="loc-meta">
-      <span><strong>ID</strong> {{.Location.ID}}</span>
-      {{if .Location.OsmID}}
-      <span><strong>OSM</strong>
-        {{if .Location.OsmType}}<a href="https://www.openstreetmap.org/{{.Location.OsmType}}/{{int64Val .Location.OsmID}}" target="_blank" rel="noopener">{{int64Val .Location.OsmID}} ({{.Location.OsmType}})</a>{{else}}{{int64Val .Location.OsmID}}{{end}}
-      </span>
-      {{end}}
-      {{if .Location.CreatedAt}}<span><strong>{{$.Strings.T "loc_created_at"}}</strong> {{.Location.CreatedAt}}</span>{{end}}
-      {{if .Location.UpdatedAt}}<span><strong>{{$.Strings.T "last_updated_label"}}</strong> {{fmtUnix .Location.UpdatedAt}}</span>{{end}}
-    </div>
-
-    {{if and (not .Location.ID) .UserOrgs}}
-    <fieldset class="org-assign-new">
-      <legend>{{$.Strings.T "fetch_org"}}</legend>
-      {{range .UserOrgs}}
-      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"{{if eq (len $.Data.UserOrgs) 1}} checked{{end}}> {{.Name}}</label>
-      {{end}}
-    </fieldset>
-    {{end}}
   </section>
 
   <section class="form-section" id="sec-website">
@@ -697,6 +702,12 @@
   if(toggle) toggle.addEventListener('click',function(){nav.classList.toggle('is-open-drawer');});
 
   var hasData={
+    'sec-address':function(){
+      return ['address','zipcode','town','country','country_code','region','latitude','longitude'].some(function(id){
+        var el=document.getElementById(id);
+        return el && el.value.trim();
+      });
+    },
     'sec-website':function(){return !!document.getElementById('internetsite').value.trim();},
     'sec-access':function(){
       return document.querySelector('#sec-access input[type=checkbox]:checked')!==null;
@@ -732,8 +743,9 @@
     });
   });
   Object.keys(hasData).forEach(function(id){
+    var sec=document.getElementById(id);
+    if(sec && sec.dataset.forceCollapsed) return; // e.g. sec-address on a room: always starts collapsed
     if(hasData[id]()){
-      var sec=document.getElementById(id);
       var btn=nav.querySelector('[data-target="'+id+'"]');
       if(sec) sec.classList.add('is-open');
       if(btn) btn.classList.add('is-active');

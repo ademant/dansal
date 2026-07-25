@@ -372,6 +372,11 @@ type Location struct {
 	ParentID *int       `json:"parent_id,omitempty"`
 	Children []Location `json:"children,omitempty"`
 
+	// Capacity/size are informal, display-only hints (#875) — not inherited
+	// from a parent since they describe the room itself, not the building.
+	Capacity *int `json:"capacity,omitempty"`
+	SizeSqm  *int `json:"size_sqm,omitempty"`
+
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
@@ -1359,8 +1364,8 @@ func (c *DansalClient) GetLocationChildren(ctx context.Context, locationID int) 
 	return children, nil
 }
 
-func (c *DansalClient) CreateLocationChild(ctx context.Context, locationID int, name, floorCondition string, token string) (Location, error) {
-	body, _ := json.Marshal(map[string]any{"name": name, "floor_condition": floorCondition})
+func (c *DansalClient) CreateLocationChild(ctx context.Context, locationID int, name, floorCondition string, capacity, sizeSqm *int, token string) (Location, error) {
+	body, _ := json.Marshal(map[string]any{"name": name, "floor_condition": floorCondition, "capacity": capacity, "size_sqm": sizeSqm})
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/children", locationID), token, body)
 	if err != nil {
 		return Location{}, err

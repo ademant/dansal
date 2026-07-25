@@ -33,7 +33,7 @@
   {{if .Internetsite}}
   <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
   {{end}}
-  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition}}
+  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition .Capacity .SizeSqm}}
   <div class="loc-attrs">
     {{if index .Attributes "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
     {{if index .Attributes "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
@@ -44,6 +44,8 @@
     {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
     {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
     {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}
+    {{if .Capacity}}<span class="access-badge" title="{{$.Strings.T "loc_capacity"}}">🧑‍🤝‍🧑 {{derefInt .Capacity}}</span>{{end}}
+    {{if .SizeSqm}}<span class="access-badge" title="{{$.Strings.T "loc_size_sqm"}}">📐 {{derefInt .SizeSqm}} m²</span>{{end}}
   </div>
   {{end}}
   {{if and .Latitude .Longitude}}
@@ -65,7 +67,7 @@
   <h2 class="section-heading">{{$.Strings.T "loc_rooms_title"}}</h2>
   <ul class="loc-rooms-list">
     {{range .Children}}
-    <li><a href="/location/{{.ID}}">{{.Location}}</a>{{if .FloorCondition}} <span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}</li>
+    <li><a href="/location/{{.ID}}">{{.Location}}</a>{{if .FloorCondition}} <span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}{{if .Capacity}} <span class="access-badge" title="{{$.Strings.T "loc_capacity"}}">🧑‍🤝‍🧑 {{derefInt .Capacity}}</span>{{end}}{{if .SizeSqm}} <span class="access-badge" title="{{$.Strings.T "loc_size_sqm"}}">📐 {{derefInt .SizeSqm}} m²</span>{{end}}</li>
     {{end}}
   </ul>
 </div>

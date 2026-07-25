@@ -44,6 +44,8 @@ type Location struct {
 	PastEventCount   int             `json:"past_event_count,omitempty"`
 	ParentID         *int            `json:"parent_id,omitempty"`
 	Children         []Location      `json:"children,omitempty"`
+	Capacity         *int            `json:"capacity,omitempty"`
+	SizeSqm          *int            `json:"size_sqm,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -85,6 +87,8 @@ type LocationCreateRequest struct {
 	NoStreetShoes   bool            `json:"no_street_shoes,omitempty"`
 	Aliases         []string        `json:"aliases,omitempty"`
 	ParentID        *int            `json:"parent_id,omitempty"`
+	Capacity        *int            `json:"capacity,omitempty"`
+	SizeSqm         *int            `json:"size_sqm,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -94,7 +98,7 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), l.address, CO
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,''), l.parent_id`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,''), l.parent_id, l.capacity, l.size_sqm`
 
 // scanLocation scans a locationCols row into loc. Extra destination pointers
 // (e.g. for appended future/past event count columns) can be passed via extra.
@@ -104,7 +108,7 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy, &loc.ParentID}
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy, &loc.ParentID, &loc.Capacity, &loc.SizeSqm}
 	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -320,6 +324,8 @@ type LocationMergePatchRequest struct {
 	NoStreetShoes   *bool            `json:"no_street_shoes,omitempty"`
 	Aliases         *[]string        `json:"aliases,omitempty"`
 	ParentID        *int             `json:"parent_id,omitempty"`
+	Capacity        *int             `json:"capacity,omitempty"`
+	SizeSqm         *int             `json:"size_sqm,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -595,8 +601,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, capacity, size_sqm, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -626,6 +632,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			Parking:         req.Parking,
 			FloorCondition:  req.FloorCondition,
 			ParentID:        req.ParentID,
+			Capacity:        req.Capacity,
+			SizeSqm:         req.SizeSqm,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -833,8 +841,8 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, resolveDisplayName(callerID), id,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -970,6 +978,12 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	if req.ParentID != nil {
 		loc.ParentID = req.ParentID
 	}
+	if req.Capacity != nil {
+		loc.Capacity = req.Capacity
+	}
+	if req.SizeSqm != nil {
+		loc.SizeSqm = req.SizeSqm
+	}
 
 	if loc.ParentID != nil {
 		if *loc.ParentID == loc.ID {
@@ -1004,8 +1018,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, resolveDisplayName(callerID), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, loc.Capacity, loc.SizeSqm, resolveDisplayName(callerID), loc.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -1388,6 +1402,8 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 		FloorCondition string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement,carpet"`
 		NoStreetShoes  bool            `json:"no_street_shoes,omitempty"`
 		Attributes     map[string]bool `json:"attributes,omitempty"`
+		Capacity       *int            `json:"capacity,omitempty"`
+		SizeSqm        *int            `json:"size_sqm,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
@@ -1408,15 +1424,15 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := db.Exec(
-		"INSERT INTO locations (location, floor_condition, no_street_shoes, attributes, parent_id) VALUES (?, ?, ?, ?, ?)",
-		strings.TrimSpace(req.Name), req.FloorCondition, req.NoStreetShoes, attrsJSON(req.Attributes), locID,
+		"INSERT INTO locations (location, floor_condition, no_street_shoes, attributes, parent_id, capacity, size_sqm) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		strings.TrimSpace(req.Name), req.FloorCondition, req.NoStreetShoes, attrsJSON(req.Attributes), locID, req.Capacity, req.SizeSqm,
 	)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
 	childID, _ := result.LastInsertId()
-	child := Location{ID: int(childID), Location: strings.TrimSpace(req.Name), FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID}
+	child := Location{ID: int(childID), Location: strings.TrimSpace(req.Name), FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID, Capacity: req.Capacity, SizeSqm: req.SizeSqm}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(child)

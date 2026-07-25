@@ -751,6 +751,12 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return *p
 	},
+	"intVal": func(p *int) string {
+		if p == nil {
+			return ""
+		}
+		return strconv.Itoa(*p)
+	},
 	// topLocationID resolves the top-level (building) location ID for an
 	// event whose location may itself be a room (#687): a room is a child
 	// Location with ParentID set, but venue pickers only ever offer the

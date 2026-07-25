@@ -60,6 +60,7 @@
     <button type="button" class="loc-nav-item" data-target="sec-kitchenbar"><span class="loc-nav-dot"></span>{{$.Strings.T "section_kitchen_bar"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-capacity"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_capacity_section"}}</button>
   </aside>
   <div class="loc-main">
 
@@ -181,6 +182,21 @@
     <label class="check-label"><input type="checkbox" name="no_street_shoes" value="1"{{if .Location.NoStreetShoes}} checked{{end}}> {{$.Strings.T "no_street_shoes_label"}}</label>
   </section>
 
+  <section class="form-section" id="sec-capacity">
+    <h2>{{$.Strings.T "loc_capacity_section"}}</h2>
+    <p class="field-hint">{{$.Strings.T "loc_capacity_hint"}}</p>
+    <div class="form-row">
+      <div>
+        <label for="capacity">{{$.Strings.T "loc_capacity"}}</label>
+        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{intVal .Location.Capacity}}">
+      </div>
+      <div>
+        <label for="size_sqm">{{$.Strings.T "loc_size_sqm"}}</label>
+        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{intVal .Location.SizeSqm}}">
+      </div>
+    </div>
+  </section>
+
   </div><!-- loc-main -->
   </div><!-- loc-edit-layout -->
 
@@ -222,6 +238,7 @@
     <tr>
       <td>{{.Location}}</td>
       <td>{{if .FloorCondition}}{{$.Strings.T (print "floor_" .FloorCondition)}}{{end}}</td>
+      <td>{{if .Capacity}}🧑‍🤝‍🧑 {{derefInt .Capacity}}{{end}}{{if .SizeSqm}} 📐 {{derefInt .SizeSqm}} m²{{end}}</td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
               onsubmit="return confirm('Delete room «{{.Location}}»?')">
@@ -247,6 +264,8 @@
       <option value="pavement">{{$.Strings.T "floor_pavement"}}</option>
       <option value="carpet">{{$.Strings.T "floor_carpet"}}</option>
     </select>
+    <input type="number" min="0" step="1" name="capacity" placeholder="{{$.Strings.T "loc_capacity"}}" class="room-add-input" style="flex:0 0 6rem">
+    <input type="number" min="0" step="1" name="size_sqm" placeholder="{{$.Strings.T "loc_size_sqm"}}" class="room-add-input" style="flex:0 0 6rem">
     <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
   </form>
 </fieldset>
@@ -674,6 +693,9 @@
     'sec-parking':function(){return !!document.getElementById('parking').value;},
     'sec-floor':function(){
       return !!document.getElementById('floor_condition').value || document.querySelector('#sec-floor input[type=checkbox]:checked')!==null;
+    },
+    'sec-capacity':function(){
+      return !!document.getElementById('capacity').value || !!document.getElementById('size_sqm').value;
     }
   };
   function refreshDots(){

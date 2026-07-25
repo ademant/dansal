@@ -212,6 +212,8 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			FloorCondition:  existing.FloorCondition,
 			NoStreetShoes:   existing.NoStreetShoes,
 			Aliases:         existing.Aliases,
+			Capacity:        existing.Capacity,
+			SizeSqm:         existing.SizeSqm,
 		}
 		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -313,6 +315,8 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			OsmType:       strings.TrimSpace(r.FormValue("osm_type")),
 			Aliases:       parseAliases(r.FormValue("aliases")),
 			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
+			Capacity:      parseFormOptionalInt(r.Form, "capacity"),
+			SizeSqm:       parseFormOptionalInt(r.Form, "size_sqm"),
 		}
 		// Parse multi-value organization_ids checkboxes. Non-admin callers must
 		// include these so the API can authorize the create request.
@@ -454,6 +458,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			FloorCondition:  r.FormValue("floor_condition"),
 			NoStreetShoes:   r.FormValue("no_street_shoes") == "1",
 			Aliases:         existing.Aliases,
+			Capacity:        parseFormOptionalInt(r.Form, "capacity"),
+			SizeSqm:         parseFormOptionalInt(r.Form, "size_sqm"),
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		from := safeReturnPath(r.FormValue("from"))
@@ -720,7 +726,9 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		}
 		floorCondition := r.FormValue("floor_condition")
 		token := getSessionToken(r)
-		_, _ = client.CreateLocationChild(r.Context(), id, name, floorCondition, token)
+		capacity := parseFormOptionalInt(r.Form, "capacity")
+		sizeSqm := parseFormOptionalInt(r.Form, "size_sqm")
+		_, _ = client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}

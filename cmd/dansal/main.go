@@ -1575,6 +1575,25 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE events DROP COLUMN room_id`)
 		}
 	}
+	// v16: add informal capacity (max people) and size_sqm (floor area) fields
+	// to locations, shown as optional hints on any location or room (#875).
+	if !applied(16) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN capacity INTEGER`)
+		db.Exec(`ALTER TABLE locations ADD COLUMN size_sqm INTEGER`)
+		mark(16)
+	}
+	// Safety net: ensure locations.capacity/size_sqm exist even if v16 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='capacity'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN capacity INTEGER`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='size_sqm'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN size_sqm INTEGER`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2628,6 +2647,8 @@ func createTables() error {
 		floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
 		no_street_shoes INTEGER DEFAULT 0,
 		parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+		capacity INTEGER,
+		size_sqm INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
@@ -3009,6 +3030,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(13)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(14)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(15)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(16)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

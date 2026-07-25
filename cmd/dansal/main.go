@@ -2623,6 +2623,10 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
+	-- The parent_id/geohash-partial-unique and parent_id indexes are created by
+	-- migrateDB()'s unconditional safety net, not here: on an existing DB where
+	-- this CREATE TABLE is a no-op (table predates parent_id), an index on that
+	-- column here would fail before migrateDB() gets a chance to add it.
 	CREATE TABLE IF NOT EXISTS locations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		location TEXT NOT NULL,
@@ -2653,9 +2657,6 @@ func createTables() error {
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
 	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
-		ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL;
-	CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id);
 	CREATE TABLE IF NOT EXISTS location_aliases (
 		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
 		alias TEXT NOT NULL,

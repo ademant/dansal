@@ -86,6 +86,10 @@ func (sc *statusCapture) Write(b []byte) (int, error) {
 	return sc.ResponseWriter.Write(b)
 }
 
+// Unwrap lets http.ResponseController (e.g. SetWriteDeadline) see through
+// this wrapper to the underlying ResponseWriter, per its documented contract.
+func (sc *statusCapture) Unwrap() http.ResponseWriter { return sc.ResponseWriter }
+
 // MetricsMiddleware records per-request HTTP metrics. It accepts the ServeMux
 // so it can resolve the matched route pattern for accurate label cardinality.
 // Register it as the outermost wrapper so it captures status codes from all

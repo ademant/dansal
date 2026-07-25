@@ -104,6 +104,10 @@ func (e *errorIDWriter) Write(b []byte) (int, error) {
 	return e.ResponseWriter.Write(b)
 }
 
+// Unwrap lets http.ResponseController (e.g. SetWriteDeadline) see through
+// this wrapper to the underlying ResponseWriter, per its documented contract.
+func (e *errorIDWriter) Unwrap() http.ResponseWriter { return e.ResponseWriter }
+
 func (e *errorIDWriter) flush() {
 	if !e.capture {
 		return

@@ -24,8 +24,9 @@ type HeartbeatStatus struct {
 }
 
 var (
-	heartbeatMu     sync.RWMutex
-	heartbeatResult HeartbeatStatus
+	heartbeatMu      sync.RWMutex
+	heartbeatResult  HeartbeatStatus
+	lastHeartbeatRun time.Time
 )
 
 func runHeartbeat() {
@@ -34,16 +35,13 @@ func runHeartbeat() {
 		if interval <= 0 {
 			interval = 5 * time.Minute
 		}
-		next := heartbeatResult.Email.LastChecked
-		if t := heartbeatResult.Telegram.LastChecked; t.After(next) {
-			next = t
-		}
-		if t := heartbeatResult.Matrix.LastChecked; t.After(next) {
-			next = t
-		}
-		// Sleep until next scheduled probe, or fire immediately if never run.
-		if !next.IsZero() {
-			wait := time.Until(next.Add(interval))
+		// Sleep until the next scheduled probe, or fire immediately on first run.
+		// lastHeartbeatRun (unlike the per-channel LastChecked fields) is always
+		// set below regardless of which channels are configured, so an instance
+		// with e.g. no Telegram/Matrix configured still paces itself correctly
+		// instead of busy-looping.
+		if !lastHeartbeatRun.IsZero() {
+			wait := time.Until(lastHeartbeatRun.Add(interval))
 			if wait > 0 {
 				time.Sleep(wait)
 			}
@@ -53,6 +51,7 @@ func runHeartbeat() {
 		telegram := probeTelegram()
 		matrix := probeMatrix()
 
+		lastHeartbeatRun = time.Now()
 		heartbeatMu.Lock()
 		heartbeatResult = HeartbeatStatus{
 			Email:    email,

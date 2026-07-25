@@ -25,6 +25,7 @@ type AdminLocationsData struct {
 
 type AdminLocationEditData struct {
 	Location      Location
+	Parent        *Location // set when Location.ParentID is set — the building this room belongs to
 	UserOrgs      []Organization
 	AssignedOrgs  []Organization
 	AvailableOrgs []Organization
@@ -403,9 +404,17 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		sort.Slice(assignedOrgs, func(i, j int) bool { return assignedOrgs[i].Name < assignedOrgs[j].Name })
 		sort.Slice(availableOrgs, func(i, j int) bool { return availableOrgs[i].Name < availableOrgs[j].Name })
 
+		var parent *Location
+		if loc.ParentID != nil {
+			if p, err := client.GetLocation(r.Context(), *loc.ParentID); err == nil {
+				parent = &p
+			}
+		}
+
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 			Location:      loc,
+			Parent:        parent,
 			ReadOnly:      readOnly,
 			ReturnURL:     safeLocationsReturnURL(r.URL.Query().Get("return")),
 			From:          safeReturnPath(r.URL.Query().Get("from")),

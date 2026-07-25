@@ -15,6 +15,12 @@
   </form>{{end}}
 </div>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
+{{if .Location.ParentID}}
+<div class="room-edit-notice">
+  {{$.Strings.T "loc_editing_room_notice"}}
+  {{if .Parent}}<a href="/admin/locations/{{.Parent.ID}}/edit">{{if .Parent.ShortName}}{{.Parent.ShortName}}{{else}}{{.Parent.Location}}{{end}}</a>{{end}}
+</div>
+{{end}}
 
 <div class="loc-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
@@ -27,6 +33,7 @@
   {{end}}
 </div>
 
+{{if not .Location.ParentID}}
 <button type="button" id="geo-toggle-btn" class="geo-toggle-btn">📍 {{$.Strings.T "loc_geocode_search"}}</button>
 <div id="geo-collapsible">
 <!-- Nominatim geocoding widget -->
@@ -45,6 +52,7 @@
 
 <div id="map" class="geo-map"></div>
 </div>
+{{end}}
 
 <form method="post" class="edit-form" id="loc-edit-form">
   <input type="hidden" name="return" value="{{.ReturnURL}}">
@@ -73,42 +81,43 @@
     <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
 
     <label for="address">{{$.Strings.T "loc_address"}}</label>
-    <input id="address" type="text" name="address" value="{{.Location.Address}}">
+    <input id="address" type="text" name="address" value="{{.Location.Address}}"{{if .Location.ParentID}} disabled{{end}}>
+    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
 
     <div class="form-row">
       <div>
         <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
-        <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}">
+        <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}"{{if .Location.ParentID}} disabled{{end}}>
       </div>
       <div style="flex:2">
         <label for="town">{{$.Strings.T "loc_town"}}</label>
-        <input id="town" type="text" name="town" value="{{.Location.Town}}" required>
+        <input id="town" type="text" name="town" value="{{.Location.Town}}"{{if not .Location.ParentID}} required{{else}} disabled{{end}}>
       </div>
     </div>
 
     <label for="country">{{$.Strings.T "loc_country"}}</label>
-    <input id="country" type="text" name="country" value="{{.Location.Country}}">
+    <input id="country" type="text" name="country" value="{{.Location.Country}}"{{if .Location.ParentID}} disabled{{end}}>
 
     <div class="form-row">
       <div>
         <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
-        <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off">
+        <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off"{{if .Location.ParentID}} disabled{{end}}>
         <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
       </div>
       <div style="flex:3">
         <label for="region">{{$.Strings.T "loc_region"}}</label>
-        <input id="region" type="text" name="region" value="{{.Location.Region}}">
+        <input id="region" type="text" name="region" value="{{.Location.Region}}"{{if .Location.ParentID}} disabled{{end}}>
       </div>
     </div>
 
     <div class="form-row">
       <div>
         <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
-        <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
+        <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200"{{if .Location.ParentID}} disabled{{end}}>
       </div>
       <div>
         <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
-        <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050">
+        <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050"{{if .Location.ParentID}} disabled{{end}}>
       </div>
     </div>
 
@@ -227,9 +236,9 @@
   {{end}}
 </form>
 
-{{if .Location.ID}}
+{{if and .Location.ID (not .Location.ParentID)}}
 <fieldset class="members-fieldset">
-  <legend>Rooms</legend>
+  <legend>{{$.Strings.T "loc_rooms_title"}}</legend>
   <p class="field-hint">A room is its own location (#687), inheriting this building's address and coordinates — only its name and floor differ.</p>
   {{if .Location.Children}}
   <table class="members-table">
@@ -269,7 +278,9 @@
     <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
   </form>
 </fieldset>
+{{end}}
 
+{{if .Location.ID}}
 <fieldset class="members-fieldset">
   <legend>Organisations</legend>
   {{if .AssignedOrgs}}
@@ -320,6 +331,8 @@
 .edit-wrap{max-width:1100px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.room-edit-notice{background:#f0f7ff;color:#1a5f8a;border:1px solid #b3d4f5;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.room-edit-notice a{color:#1a6eb5;font-weight:600}
 .loc-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
 .geo-toggle-btn{display:block;width:100%;text-align:left;padding:.5rem .75rem;background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;font-size:.9rem;color:#1a6eb5;cursor:pointer;margin-bottom:.75rem}
 .geo-toggle-btn:hover{background:#e3f0ff}
@@ -445,6 +458,7 @@
   var latInp  = document.getElementById('latitude');
   var lonInp  = document.getElementById('longitude');
   var mapDiv  = document.getElementById('map');
+  if (!btn || !mapDiv) return; // hidden entirely on a room's edit page (#876)
 
   /* ── Leaflet map ── */
   var map, selectedMarker, resultMarkers = [];

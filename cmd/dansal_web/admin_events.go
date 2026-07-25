@@ -3222,6 +3222,8 @@ type AdminLocationDashboardData struct {
 	TotalCount        int
 	NewEventOrgID     int    // org to pre-assign "new event" to
 	NewEventOrgName   string // shown on the button
+	RoomEventCounts   map[int]int // room location ID -> future event count, for the Rooms section
+	FilterRoomID      int         // >0 when the event list is narrowed to a single room via ?room_id=
 }
 
 func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -3279,8 +3281,22 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		includePast := r.URL.Query().Get("include_past") == "1"
+		filterRoomID, _ := strconv.Atoi(r.URL.Query().Get("room_id"))
+
+		// A building's dashboard aggregates its own events with all its rooms'
+		// events (matching the public /location/{id} page's behavior, #876) —
+		// ?room_id= narrows the same list down to a single room instead.
+		locIDs := []string{strconv.Itoa(id)}
+		if filterRoomID > 0 {
+			locIDs = []string{strconv.Itoa(filterRoomID)}
+		} else {
+			for _, child := range loc.Children {
+				locIDs = append(locIDs, strconv.Itoa(child.ID))
+			}
+		}
+
 		params := url.Values{}
-		params.Set("location_id", strconv.Itoa(id))
+		params.Set("location_id", strings.Join(locIDs, ","))
 		params.Set("limit", "1000")
 		if includePast {
 			params.Set("include_past", "true")
@@ -3296,6 +3312,11 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		dances, _ := client.GetDances(r.Context())
 		allTags, _ := client.GetTags(r.Context())
 		series, _ := client.GetSeriesList(r.Context(), token)
+
+		var roomEventCounts map[int]int
+		if len(loc.Children) > 0 {
+			roomEventCounts, _ = client.GetLocationEventCounts(r.Context(), token)
+		}
 
 		locTitle := loc.ShortName
 		if locTitle == "" {
@@ -3314,6 +3335,8 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 			TotalCount:        total,
 			NewEventOrgID:     newEventOrgID,
 			NewEventOrgName:   newEventOrgName,
+			RoomEventCounts:   roomEventCounts,
+			FilterRoomID:      filterRoomID,
 		}))
 	}
 }

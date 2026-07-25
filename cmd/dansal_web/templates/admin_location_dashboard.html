@@ -11,6 +11,27 @@
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 {{end}}{{/* .Location */}}
 
+{{if $.Data.Location.Children}}
+<details class="loc-rooms-mgmt" open>
+  <summary>{{$.Strings.T "loc_rooms_title"}} ({{len $.Data.Location.Children}})</summary>
+  <table class="members-table">
+    <tbody>
+    {{range $.Data.Location.Children}}
+    <tr{{if eq .ID $.Data.FilterRoomID}} class="is-active-filter"{{end}}>
+      <td><a href="/admin/location/{{.ID}}">{{.Location}}</a></td>
+      <td class="loc-room-count">{{if index $.Data.RoomEventCounts .ID}}{{index $.Data.RoomEventCounts .ID}} {{$.Strings.T "admin_events_count"}}{{else}}—{{end}}</td>
+      <td style="white-space:nowrap">
+        <a href="/admin/locations/{{.ID}}/edit?return={{urlquery (print "/admin/location/" $.Data.Location.ID)}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+        <a href="/admin/events/new?loc_id={{.ID}}{{if $.Data.NewEventOrgID}}&org_id={{$.Data.NewEventOrgID}}{{end}}" class="btn-icon" title="{{$.Strings.T "admin_event_new_title"}}" aria-label="{{$.Strings.T "admin_event_new_title"}}">➕</a>
+        <a href="/admin/location/{{$.Data.Location.ID}}?room_id={{.ID}}{{if $.Data.FilterIncludePast}}&include_past=1{{end}}" class="btn-sm" title="{{$.Strings.T "loc_filter_to_room"}}">🔎</a>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</details>
+{{end}}
+
 {{if $.Data.NewEventOrgID}}
 <div class="dash-actions">
   <a href="/admin/events/new?loc_id={{$.Data.Location.ID}}{{if $.Data.NewEventOrgID}}&org_id={{$.Data.NewEventOrgID}}{{end}}" class="dash-btn">
@@ -19,7 +40,15 @@
 </div>
 {{end}}
 
+{{if $.Data.FilterRoomID}}
+<p class="loc-room-filter-active">
+  {{$.Strings.T "loc_filtered_to_room"}}
+  {{range .Location.Children}}{{if eq .ID $.Data.FilterRoomID}}<strong>{{.Location}}</strong>{{end}}{{end}}
+  <a href="/admin/location/{{.Location.ID}}{{if $.Data.FilterIncludePast}}?include_past=1{{end}}">{{$.Strings.T "filter_clear"}}</a>
+</p>
+{{end}}
 <form method="get" action="/admin/location/{{.Location.ID}}" class="event-filters">
+  {{if $.Data.FilterRoomID}}<input type="hidden" name="room_id" value="{{$.Data.FilterRoomID}}">{{end}}
   <label class="filter-check">
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
@@ -184,6 +213,13 @@
 .loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
+.loc-rooms-mgmt{margin-bottom:1.25rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px;padding:.4rem .75rem}
+.loc-rooms-mgmt summary{cursor:pointer;font-weight:600;font-size:.9rem;padding:.3rem 0}
+.loc-rooms-mgmt .members-table{margin-top:.5rem}
+.loc-rooms-mgmt tr.is-active-filter{background:var(--bg-hover)}
+.loc-room-count{font-size:.85rem;color:var(--fg-muted);white-space:nowrap}
+.loc-room-filter-active{font-size:.9rem;background:#f0f7ff;border:1px solid #b3d4f5;color:#1a5f8a;border-radius:4px;padding:.5rem .75rem;margin-bottom:.75rem}
+.loc-room-filter-active a{color:#1a6eb5;margin-left:.5rem}
 .dash-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
 .dash-btn{display:inline-block;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;text-decoration:none;color:#fff;background:#1a6eb5}
 .dash-btn:hover{background:#0d4a80}

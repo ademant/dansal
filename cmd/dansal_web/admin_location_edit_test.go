@@ -58,4 +58,12 @@ func TestSmokeRenderAdminLocationEdit(t *testing.T) {
 	render("room-without-loaded-parent", AdminLocationEditData{
 		Location: Location{ID: 55, Location: "Room A", ParentID: &buildingID},
 	})
+
+	x, y := 0.42, 0.61
+	render("building-with-siteplan", AdminLocationEditData{
+		Location: Location{ID: 4, Location: "Bürgerhaus Stollwerck", SitePlanURL: "/api/v1/location-images/4", Children: []Location{
+			{ID: 55, Location: "Room A", PlanX: &x, PlanY: &y},
+			{ID: 56, Location: "Room B"},
+		}},
+	})
 }

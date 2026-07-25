@@ -569,6 +569,16 @@ An event's `location_id` points directly at whichever level was chosen — the b
 
 **`GET /api/v1/locations/event-counts`** returns `{"location_id": count}` for every location with at least one event. The count is **future events only** (`end_time` in the future, any publish status) — it intentionally matches the location dashboard's default (future-only) view rather than the location's lifetime event total.
 
+**Site plan (#877).** A top-level location can have a site-plan image (floor plan/map showing where its rooms are), with each room positioned on it via `plan_x`/`plan_y` (floats 0–1, percentage position on the *parent's* site-plan image — only meaningful on a room, set via the standard `PATCH /api/v1/locations/{id}` merge-patch with just those two fields). The image itself uses a separate small endpoint group, mirroring the org/musician image pattern:
+
+```
+POST   /api/v1/locations/{id}/site-plan     # multipart upload, field name "image"; 400 if {id} is itself a room
+DELETE /api/v1/locations/{id}/site-plan
+GET    /api/v1/location-images/{id}         # serves the image; public, no auth
+```
+
+`Location.site_plan_url` is set (to `/api/v1/location-images/{id}`) when a top-level location has an uploaded site-plan image; omitted otherwise. Same auth rules as editing the location itself (admin or member of one of its organizations).
+
 ```json
 POST /api/v1/locations/42/children
 { "name": "Grand Hall", "floor_condition": "parquet" }

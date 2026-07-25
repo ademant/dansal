@@ -46,6 +46,9 @@ type Location struct {
 	Children         []Location      `json:"children,omitempty"`
 	Capacity         *int            `json:"capacity,omitempty"`
 	SizeSqm          *int            `json:"size_sqm,omitempty"`
+	PlanX            *float64        `json:"plan_x,omitempty"` // room's position (0-1) on the parent building's site-plan image (#877)
+	PlanY            *float64        `json:"plan_y,omitempty"`
+	SitePlanURL      string          `json:"site_plan_url,omitempty"` // set when this (top-level) location has an uploaded site-plan image
 }
 
 func validCountryCode(code string) bool {
@@ -61,6 +64,12 @@ func validCountryCode(code string) bool {
 		}
 	}
 	return true
+}
+
+// validPlanCoord accepts nil (not set) or a value within the 0-1 percentage
+// range used for a room's position on its building's site-plan image (#877).
+func validPlanCoord(v *float64) bool {
+	return v == nil || (*v >= 0 && *v <= 1)
 }
 
 type LocationCreateRequest struct {
@@ -89,6 +98,8 @@ type LocationCreateRequest struct {
 	ParentID        *int            `json:"parent_id,omitempty"`
 	Capacity        *int            `json:"capacity,omitempty"`
 	SizeSqm         *int            `json:"size_sqm,omitempty"`
+	PlanX           *float64        `json:"plan_x,omitempty"`
+	PlanY           *float64        `json:"plan_y,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -98,7 +109,7 @@ const locationCols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.ad
 	l.latitude, l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
 	COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
 	l.created_at, COALESCE(l.updated_at,0), COALESCE(GROUP_CONCAT(lo.organization_id),''), COALESCE(l.notes_md,''),
-	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,''), l.parent_id, l.capacity, l.size_sqm`
+	COALESCE(l.attributes,'{}'), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(l.no_street_shoes,0), COALESCE((SELECT GROUP_CONCAT(la.alias,'||') FROM location_aliases la WHERE la.location_id=l.id),''), COALESCE(l.updated_by,''), l.parent_id, l.capacity, l.size_sqm, l.plan_x, l.plan_y`
 
 // scanLocation scans a locationCols row into loc. Extra destination pointers
 // (e.g. for appended future/past event count columns) can be passed via extra.
@@ -108,9 +119,12 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 		&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
 		&loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.OsmID, &loc.OsmType,
 		&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
-		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy, &loc.ParentID, &loc.Capacity, &loc.SizeSqm}
+		&loc.CreatedAt, &loc.UpdatedAt, &orgIDsStr, &loc.NotesMd, &attrsJSON, &loc.Parking, &loc.FloorCondition, &loc.NoStreetShoes, &aliasesStr, &loc.UpdatedBy, &loc.ParentID, &loc.Capacity, &loc.SizeSqm, &loc.PlanX, &loc.PlanY}
 	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return err
+	}
+	if hasLocationImage(loc.ID) {
+		loc.SitePlanURL = "/api/v1/location-images/" + strconv.Itoa(loc.ID)
 	}
 	if attrsJSON != "" && attrsJSON != "{}" {
 		json.Unmarshal([]byte(attrsJSON), &loc.Attributes)
@@ -326,6 +340,8 @@ type LocationMergePatchRequest struct {
 	ParentID        *int             `json:"parent_id,omitempty"`
 	Capacity        *int             `json:"capacity,omitempty"`
 	SizeSqm         *int             `json:"size_sqm,omitempty"`
+	PlanX           *float64         `json:"plan_x,omitempty"`
+	PlanY           *float64         `json:"plan_y,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -529,6 +545,10 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 			return
 		}
+		if !validPlanCoord(req.PlanX) || !validPlanCoord(req.PlanY) {
+			writeError(w, "plan_x/plan_y must be between 0 and 1", http.StatusBadRequest)
+			return
+		}
 		if req.ParentID != nil {
 			var parentParentID sql.NullInt64
 			if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *req.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
@@ -601,8 +621,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, capacity, size_sqm, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, capacity, size_sqm, plan_x, plan_y, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, req.PlanX, req.PlanY,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -634,6 +654,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			ParentID:        req.ParentID,
 			Capacity:        req.Capacity,
 			SizeSqm:         req.SizeSqm,
+			PlanX:           req.PlanX,
+			PlanY:           req.PlanY,
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -802,6 +824,10 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
 		return
 	}
+	if !validPlanCoord(req.PlanX) || !validPlanCoord(req.PlanY) {
+		writeError(w, "plan_x/plan_y must be between 0 and 1", http.StatusBadRequest)
+		return
+	}
 
 	var existing int
 	if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&existing); err != nil || existing == 0 {
@@ -841,8 +867,8 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, resolveDisplayName(callerID), id,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, req.PlanX, req.PlanY, resolveDisplayName(callerID), id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -893,6 +919,10 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.FloorCondition != nil && !validFloorCondition(*req.FloorCondition) {
 		writeError(w, "invalid floor_condition value", http.StatusBadRequest)
+		return
+	}
+	if !validPlanCoord(req.PlanX) || !validPlanCoord(req.PlanY) {
+		writeError(w, "plan_x/plan_y must be between 0 and 1", http.StatusBadRequest)
 		return
 	}
 
@@ -984,6 +1014,12 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	if req.SizeSqm != nil {
 		loc.SizeSqm = req.SizeSqm
 	}
+	if req.PlanX != nil {
+		loc.PlanX = req.PlanX
+	}
+	if req.PlanY != nil {
+		loc.PlanY = req.PlanY
+	}
 
 	if loc.ParentID != nil {
 		if *loc.ParentID == loc.ID {
@@ -1018,8 +1054,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
 	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, loc.Capacity, loc.SizeSqm, resolveDisplayName(callerID), loc.ID,
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, loc.Capacity, loc.SizeSqm, loc.PlanX, loc.PlanY, resolveDisplayName(callerID), loc.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return

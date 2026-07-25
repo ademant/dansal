@@ -757,6 +757,26 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strconv.Itoa(*p)
 	},
+	// unplacedRooms/placedRooms split a building's Children (#877) by whether
+	// they've been dragged onto the building's site-plan image yet.
+	"unplacedRooms": func(children []Location) []Location {
+		var out []Location
+		for _, c := range children {
+			if c.PlanX == nil || c.PlanY == nil {
+				out = append(out, c)
+			}
+		}
+		return out
+	},
+	"placedRooms": func(children []Location) []Location {
+		var out []Location
+		for _, c := range children {
+			if c.PlanX != nil && c.PlanY != nil {
+				out = append(out, c)
+			}
+		}
+		return out
+	},
 	// topLocationID resolves the top-level (building) location ID for an
 	// event whose location may itself be a room (#687): a room is a child
 	// Location with ParentID set, but venue pickers only ever offer the

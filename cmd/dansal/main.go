@@ -1594,6 +1594,25 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE locations ADD COLUMN size_sqm INTEGER`)
 		}
 	}
+	// v17: add plan_x/plan_y — a room's position (0-1 percentage) on its
+	// parent building's site-plan image (#877).
+	if !applied(17) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN plan_x REAL`)
+		db.Exec(`ALTER TABLE locations ADD COLUMN plan_y REAL`)
+		mark(17)
+	}
+	// Safety net: ensure locations.plan_x/plan_y exist even if v17 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='plan_x'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN plan_x REAL`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='plan_y'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN plan_y REAL`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2653,6 +2672,8 @@ func createTables() error {
 		parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
 		capacity INTEGER,
 		size_sqm INTEGER,
+		plan_x REAL,
+		plan_y REAL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
@@ -3032,6 +3053,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(14)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(15)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(16)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(17)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3145,6 +3167,7 @@ func main() {
 	initImageCache(config.Server.ImagesDir)
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
+	initLocationImageCache(config.Server.ImagesDir + "/locations")
 	initMetrics()
 	startTokenCleanup()
 	startScheduledBackup()
@@ -3316,6 +3339,9 @@ func main() {
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
 	smux.Handle("GET /api/v1/locations/{id}/children", optAuth(http.HandlerFunc(getLocationChildren)))
 	smux.Handle("POST /api/v1/locations/{id}/children", auth(createLocationChild))
+	smux.Handle("POST /api/v1/locations/{id}/site-plan", auth(uploadLocationSitePlan))
+	smux.Handle("DELETE /api/v1/locations/{id}/site-plan", auth(deleteLocationSitePlan))
+	smux.HandleFunc("GET /api/v1/location-images/{id}", getLocationImage)
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
 	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])

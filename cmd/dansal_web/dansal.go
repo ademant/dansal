@@ -377,6 +377,13 @@ type Location struct {
 	Capacity *int `json:"capacity,omitempty"`
 	SizeSqm  *int `json:"size_sqm,omitempty"`
 
+	// A room's position (0-1 percentage) on its building's site-plan image
+	// (#877). SitePlanURL is set on the building itself when it has an
+	// uploaded site-plan image.
+	PlanX       *float64 `json:"plan_x,omitempty"`
+	PlanY       *float64 `json:"plan_y,omitempty"`
+	SitePlanURL string   `json:"site_plan_url,omitempty"`
+
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
@@ -1101,6 +1108,58 @@ func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, 
 		return apiErr(resp)
 	}
 	return nil
+}
+
+func (c *DansalClient) UploadLocationSitePlan(ctx context.Context, id int, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/locations/%d/site-plan", c.BaseURL, id), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
+func (c *DansalClient) DeleteLocationSitePlan(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/site-plan", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
+// UpdateLocationPlanPosition saves a room's position (0-1 percentage) on its
+// building's site-plan image (#877), via the same merge-patch endpoint
+// UpdateLocation uses — only plan_x/plan_y are sent, so nothing else on the
+// room is touched.
+func (c *DansalClient) UpdateLocationPlanPosition(ctx context.Context, id int, x, y float64, token string) error {
+	return c.UpdateLocation(ctx, id, Location{PlanX: &x, PlanY: &y}, token)
 }
 
 func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {

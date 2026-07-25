@@ -54,7 +54,7 @@
 </div>
 {{end}}
 
-<form method="post" class="edit-form" id="loc-edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form" id="loc-edit-form">
   <input type="hidden" name="return" value="{{.ReturnURL}}">
   <input type="hidden" name="from" value="{{.From}}">
 
@@ -70,6 +70,7 @@
     <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-capacity"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_capacity_section"}}</button>
+    {{if not .Location.ParentID}}<button type="button" class="loc-nav-item" data-target="sec-siteplan"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_siteplan_section"}}</button>{{end}}
   </aside>
   <div class="loc-main">
 
@@ -210,6 +211,38 @@
       </div>
     </div>
   </section>
+
+  {{if not .Location.ParentID}}
+  <section class="form-section" id="sec-siteplan">
+    <h2>{{$.Strings.T "loc_siteplan_section"}}</h2>
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_hint"}}</p>
+    <input type="file" name="site_plan" accept="image/*">
+
+    {{if .Location.SitePlanURL}}
+    <label class="check-label"><input type="checkbox" name="remove_site_plan" value="1"> {{$.Strings.T "loc_siteplan_remove"}}</label>
+
+    <div id="siteplan-canvas" class="siteplan-canvas">
+      <img src="{{.Location.SitePlanURL}}" alt="" draggable="false">
+      {{range placedRooms .Location.Children}}
+      <div class="siteplan-marker" draggable="true" data-room-id="{{.ID}}" style="left:{{floatVal .PlanX}}%;top:{{floatVal .PlanY}}%">
+        <span class="siteplan-marker-label">{{.Location}}</span>
+      </div>
+      {{end}}
+    </div>
+
+    {{if unplacedRooms .Location.Children}}
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_unplaced_hint"}}</p>
+    <ul id="siteplan-unplaced" class="siteplan-unplaced">
+      {{range unplacedRooms .Location.Children}}
+      <li draggable="true" data-room-id="{{.ID}}">{{.Location}}</li>
+      {{end}}
+    </ul>
+    {{end}}
+    {{else if .Location.Children}}
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_upload_first_hint"}}</p>
+    {{end}}
+  </section>
+  {{end}}
 
   </div><!-- loc-main -->
   </div><!-- loc-edit-layout -->
@@ -424,6 +457,14 @@
 .btn-del{background:#b00020;color:#fff}
 .btn-del:hover{background:#800016}
 .field-hint{font-weight:400;color:#888;font-size:.82rem}
+.siteplan-canvas{position:relative;max-width:100%;margin-top:.5rem;border:1px solid var(--border-mid,#ddd);border-radius:6px;overflow:hidden;background:#f4f4f4}
+.siteplan-canvas img{display:block;width:100%;height:auto;pointer-events:none}
+.siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:#1a6eb5;color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,.3);user-select:none}
+.siteplan-marker:active{cursor:grabbing}
+.siteplan-unplaced{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0 0}
+.siteplan-unplaced li{background:#eef2f8;border:1px dashed #9ab;border-radius:12px;padding:.2rem .6rem;font-size:.82rem;cursor:grab}
+.siteplan-unplaced li:active{cursor:grabbing}
+.siteplan-canvas.is-dragover{outline:2px dashed #1a6eb5;outline-offset:-2px}
 .md-paste-hint{display:flex;align-items:center;justify-content:space-between;background:#e8f4fd;border:1px solid #b3d7f5;border-radius:4px;padding:.35rem .6rem;font-size:.82rem;color:#1a5f8a;margin-top:.25rem}
 .md-paste-hint button{background:none;border:none;color:#1a5f8a;cursor:pointer;padding:0 .25rem;font-size:1rem;line-height:1;flex-shrink:0}
 .md-paste-hint button:hover{color:#0d3f6a}
@@ -721,6 +762,9 @@
     },
     'sec-capacity':function(){
       return !!document.getElementById('capacity').value || !!document.getElementById('size_sqm').value;
+    },
+    'sec-siteplan':function(){
+      return !!document.getElementById('siteplan-canvas');
     }
   };
   function refreshDots(){
@@ -754,6 +798,74 @@
   refreshDots();
   document.querySelector('.loc-main').addEventListener('input',refreshDots);
   document.querySelector('.loc-main').addEventListener('change',refreshDots);
+})();
+</script>
+<script>
+(function(){
+  var canvas = document.getElementById('siteplan-canvas');
+  if (!canvas) return; // no site plan uploaded yet, or this is a room's edit page
+  var unplacedList = document.getElementById('siteplan-unplaced');
+  var draggingRoomID = null;
+
+  function savePosition(roomID, x, y) {
+    fetch('/admin/locations/' + roomID + '/plan-position', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: x, y: y})
+    }).then(function(r){
+      if (!r.ok) throw new Error('save failed');
+    }).catch(function(){
+      alert('{{$.Strings.T "loc_siteplan_save_error"}}');
+    });
+  }
+
+  function attachMarkerDrag(el) {
+    el.addEventListener('dragstart', function(e){
+      draggingRoomID = el.dataset.roomId;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  }
+
+  canvas.querySelectorAll('.siteplan-marker').forEach(attachMarkerDrag);
+  if (unplacedList) {
+    unplacedList.querySelectorAll('li').forEach(attachMarkerDrag);
+  }
+
+  canvas.addEventListener('dragover', function(e){
+    e.preventDefault();
+    canvas.classList.add('is-dragover');
+  });
+  canvas.addEventListener('dragleave', function(){
+    canvas.classList.remove('is-dragover');
+  });
+  canvas.addEventListener('drop', function(e){
+    e.preventDefault();
+    canvas.classList.remove('is-dragover');
+    if (!draggingRoomID) return;
+    var roomID = draggingRoomID;
+    draggingRoomID = null;
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    var y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+
+    var marker = canvas.querySelector('.siteplan-marker[data-room-id="' + roomID + '"]');
+    if (!marker) {
+      var li = unplacedList && unplacedList.querySelector('li[data-room-id="' + roomID + '"]');
+      var label = li ? li.textContent : '';
+      if (li) li.remove();
+      marker = document.createElement('div');
+      marker.className = 'siteplan-marker';
+      marker.draggable = true;
+      marker.dataset.roomId = roomID;
+      marker.innerHTML = '<span class="siteplan-marker-label"></span>';
+      marker.querySelector('.siteplan-marker-label').textContent = label;
+      attachMarkerDrag(marker);
+      canvas.appendChild(marker);
+    }
+    marker.style.left = (x * 100) + '%';
+    marker.style.top = (y * 100) + '%';
+    savePosition(roomID, x, y);
+  });
 })();
 </script>
 <script>

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -441,9 +443,11 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		loc := Location{
 			ID:              id,
@@ -498,6 +502,17 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			}
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
+		}
+		if loc.ParentID == nil {
+			if r.FormValue("remove_site_plan") == "1" {
+				_ = client.DeleteLocationSitePlan(r.Context(), id, token)
+			} else if file, header, ferr := r.FormFile("site_plan"); ferr == nil {
+				data, _ := io.ReadAll(file)
+				file.Close()
+				if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
+					log.Printf("upload location site plan error: %v", uerr)
+				}
+			}
 		}
 		target := returnURL
 		if from != "" {
@@ -763,5 +778,41 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 		_ = client.DeleteLocationChild(r.Context(), roomID, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
+	}
+}
+
+// POST /admin/locations/{room_id}/plan-position — saves a room's dragged
+// position on its building's site-plan image (#877). Called via fetch() from
+// the drag-and-drop JS on the building's edit page, not a full page submit.
+func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		roomID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"invalid id"}`))
+			return
+		}
+		var req struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.X < 0 || req.X > 1 || req.Y < 0 || req.Y > 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"x/y must be between 0 and 1"}`))
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.UpdateLocationPlanPosition(r.Context(), roomID, req.X, req.Y, token); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			b, _ := json.Marshal(map[string]string{"error": err.Error()})
+			w.Write(b)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
 	}
 }

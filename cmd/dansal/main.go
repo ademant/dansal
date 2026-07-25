@@ -3484,7 +3484,7 @@ func main() {
 	go runHeartbeat()
 
 	listenAddr := getListenAddr()
-	log.Printf("Server starting on %s\n", listenAddr)
+	log.Printf("dansal %s (built %s) starting on %s\n", Version, BuildTime, listenAddr)
 	srv := &http.Server{
 		Addr:              listenAddr,
 		Handler:           handler,

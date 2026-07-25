@@ -453,8 +453,8 @@ func main() {
 	}
 	go startDelivery(cfg, db, client, relayActor)
 
-	log.Printf("web server listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
-		cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
+	log.Printf("dansal-web %s (built %s) listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
+		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           securityHeadersMiddleware(&live),

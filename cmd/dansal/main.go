@@ -163,6 +163,10 @@ type gzipResponseWriter struct {
 }
 
 func (g *gzipResponseWriter) Write(b []byte) (int, error) { return g.gz.Write(b) }
+
+// Unwrap lets http.ResponseController (e.g. SetWriteDeadline) see through
+// this wrapper to the underlying ResponseWriter, per its documented contract.
+func (g *gzipResponseWriter) Unwrap() http.ResponseWriter { return g.ResponseWriter }
 func (g *gzipResponseWriter) WriteHeader(code int) {
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)

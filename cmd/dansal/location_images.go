@@ -98,7 +98,7 @@ func uploadLocationSitePlan(w http.ResponseWriter, r *http.Request) {
 	// AVIF re-encode (WASM-based) can take well over the server's default
 	// 30s WriteTimeout for a detailed site-plan photo — extend the deadline
 	// for this request rather than raising it server-wide.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(90 * time.Second))
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		writeError(w, "Invalid location ID", http.StatusBadRequest)

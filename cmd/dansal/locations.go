@@ -664,6 +664,37 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+// attachSitePlanData populates loc.Children and loc.SitePlanURL from loc's
+// building — loc itself if it's already a top-level location, or its parent
+// if loc is a room — for callers (e.g. getEvent, #885) that only fetch a
+// single location row via a plain JOIN and so miss the two fields getLocation
+// and getLocations both populate via their own batched child-fetch queries.
+func attachSitePlanData(loc *Location) {
+	if loc == nil {
+		return
+	}
+	buildingID := loc.ID
+	if loc.ParentID != nil {
+		buildingID = *loc.ParentID
+	}
+	if hasLocationImage(buildingID) {
+		loc.SitePlanURL = "/api/v1/location-images/" + strconv.Itoa(buildingID)
+	}
+	rows, err := db.Query(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.parent_id=? GROUP BY l.id ORDER BY l.id`, buildingID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var child Location
+		if scanLocation(rows, &child) == nil {
+			loc.Children = append(loc.Children, child)
+		}
+	}
+}
+
 // GET /api/v1/locations/{id} - Get a specific location
 func getLocation(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

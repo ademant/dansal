@@ -799,6 +799,18 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return out
 	},
+	// usedRoomIDs collects the distinct real room references (LocationID) across
+	// an event's timetable entries — free-text Room strings can't be placed on
+	// a site plan, so those entries are ignored (#885).
+	"usedRoomIDs": func(entries []TimetableEntry) map[int]bool {
+		ids := map[int]bool{}
+		for _, e := range entries {
+			if e.LocationID != nil {
+				ids[*e.LocationID] = true
+			}
+		}
+		return ids
+	},
 	// topLocationID resolves the top-level (building) location ID for an
 	// event whose location may itself be a room (#687): a room is a child
 	// Location with ParentID set, but venue pickers only ever offer the

@@ -1806,6 +1806,11 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only the single-event fetch needs the building's rooms/site-plan (#885,
+	// for showing which room each timetable slot is in) — list queries don't
+	// pay for this extra per-row query.
+	attachSitePlanData(event.Location)
+
 	inOrg := (userRole == RoleUser || userRole == RolePublisher) && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID)
 	editable := userRole == RoleAdmin || inOrg
 	cancelable := editable

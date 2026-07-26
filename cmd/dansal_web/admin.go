@@ -102,6 +102,20 @@ func topLevelLocations(locs []Location) []Location {
 	return out
 }
 
+// rollUpChildEventCounts adds each room's event count onto its parent
+// building's entry in counts (keyed by location ID), so a building's total
+// reflects events held in any of its rooms too (#882) — counts otherwise
+// only reflect exact location_id matches, undercounting any building with
+// rooms since events assigned to a room carry the room's location_id, not
+// the building's.
+func rollUpChildEventCounts(locs []Location, counts map[int]int) {
+	for _, loc := range locs {
+		for _, child := range loc.Children {
+			counts[loc.ID] += counts[child.ID]
+		}
+	}
+}
+
 // splitEventLocations divides top-level locations into two groups for the
 // event-edit location dropdown: org-first (locations belonging to the
 // event's organization, and/or sharing an org with the event's pre-assigned

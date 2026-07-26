@@ -82,15 +82,19 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.Error(w, "could not load locations", http.StatusBadGateway)
 			return
 		}
+		orgs, _ := client.GetOrganizations(r.Context())
+		token := getSessionToken(r)
+		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
+		rollUpChildEventCounts(locs, eventCounts)
+		// Rooms are shown nested under their building (.Children), not as
+		// separate top-level rows (#882).
+		locs = topLevelLocations(locs)
 		sort.Slice(locs, func(i, j int) bool {
 			if locs[i].Town != locs[j].Town {
 				return locs[i].Town < locs[j].Town
 			}
 			return locs[i].Location < locs[j].Location
 		})
-		orgs, _ := client.GetOrganizations(r.Context())
-		token := getSessionToken(r)
-		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
 		isAdmin := user.Role == "admin"
 		var editableIDs map[int]bool
 		var userOrgs []Organization

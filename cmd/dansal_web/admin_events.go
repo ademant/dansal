@@ -1814,6 +1814,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		locIDs := r.Form["tt_loc_id"]
 		musIDs := r.Form["tt_musician_id"]
 		insIDs := r.Form["tt_instructor_id"]
+		dates := r.Form["tt_entry_date"]
 		var ttEntries []TimetableEntry
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -1855,6 +1856,9 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
 					entry.InstructorID = &v
 				}
+			}
+			if i < len(dates) {
+				entry.EntryDate = strings.TrimSpace(dates[i])
 			}
 			ttEntries = append(ttEntries, entry)
 		}
@@ -2240,6 +2244,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		musNames := r.MultipartForm.Value["tt_musician_name"]
 		insIDs := r.MultipartForm.Value["tt_instructor_id"]
 		insNames := r.MultipartForm.Value["tt_instructor_name"]
+		dates := r.MultipartForm.Value["tt_entry_date"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2299,6 +2304,9 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 						log.Printf("create instructor %q: %v", name, ierr)
 					}
 				}
+			}
+			if i < len(dates) {
+				entry.EntryDate = strings.TrimSpace(dates[i])
 			}
 			ttEntries = append(ttEntries, entry)
 		}
@@ -2864,6 +2872,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 					Title:        e.Title,
 					Description:  e.Description,
 					Room:         e.Room,
+					EntryDate:    e.EntryDate,
 					LocationID:   e.LocationID,
 					MusicianID:   e.MusicianID,
 					InstructorID: e.InstructorID,

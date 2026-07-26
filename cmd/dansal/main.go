@@ -1637,6 +1637,23 @@ func migrateDB() {
 		}
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
 	}
+	// v19: entry_date on timetable_entries, so a row can be pinned to a
+	// specific day of a multi-day event (festival/workshop weekend) (#894).
+	// NULL/empty means "same as the event's own start date" — the default
+	// for all existing single-day events.
+	if !applied(19) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_date TEXT")
+		mark(19)
+	}
+	// Safety net: ensure timetable_entries.entry_date exists even if v19 was
+	// pre-marked by createTables()'s catch-all schema_migrations insert.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='entry_date'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_date TEXT")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2854,6 +2871,7 @@ func createTables() error {
 		musician_id INTEGER,
 		instructor_id INTEGER,
 		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop')),
+		entry_date TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
@@ -3082,6 +3100,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(16)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(17)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(18)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(19)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

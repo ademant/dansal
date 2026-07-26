@@ -18,6 +18,7 @@ type TimetableEntry struct {
 	Description    string `json:"description,omitempty"`
 	Room           string `json:"room,omitempty"`
 	EntryType      string `json:"entry_type,omitempty"`
+	EntryDate      string `json:"entry_date,omitempty"`
 	LocationID     *int   `json:"location_id,omitempty"`
 	LocationName   string `json:"location_name,omitempty"`
 	MusicianID     *int   `json:"musician_id,omitempty"`
@@ -34,19 +35,21 @@ type TimetableEntryRequest struct {
 	Description  string `json:"description"`
 	Room         string `json:"room"`
 	EntryType    string `json:"entry_type"`
+	EntryDate    string `json:"entry_date"`
 	LocationID   *int   `json:"location_id"`
 	MusicianID   *int   `json:"musician_id"`
 	InstructorID *int   `json:"instructor_id"`
 }
 
 var timeSlotRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
+var dateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 func validTimeSlot(s string) bool { return timeSlotRe.MatchString(s) }
 
 func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	var e TimetableEntry
 	var locID, musID, insID sql.NullInt64
-	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &locID, &musID, &insID, &e.CreatedAt); err != nil {
+	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &musID, &insID, &e.CreatedAt); err != nil {
 		return TimetableEntry{}, err
 	}
 	if locID.Valid {
@@ -64,20 +67,20 @@ func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	return e, nil
 }
 
-const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), location_id, musician_id, instructor_id, created_at"
+const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), COALESCE(entry_date,''), location_id, musician_id, instructor_id, created_at"
 
 // fetchTimetable returns all entries for an event ordered by start_time,
 // including the location, musician, and instructor names via LEFT JOINs.
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
-		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), t.location_id, COALESCE(l.location,''),
+		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), COALESCE(t.entry_date,''), t.location_id, COALESCE(l.location,''),
 		        t.musician_id, COALESCE(m.bandname,''), t.instructor_id, COALESCE(i.name,''), t.created_at
 		 FROM timetable_entries t
 		 LEFT JOIN locations l ON t.location_id = l.id
 		 LEFT JOIN musicians m ON t.musician_id = m.id
 		 LEFT JOIN instructors i ON t.instructor_id = i.id
-		 WHERE t.event_id = ? ORDER BY t.start_time, t.id`,
+		 WHERE t.event_id = ? ORDER BY COALESCE(NULLIF(t.entry_date,''), '0000-00-00'), t.start_time, t.id`,
 		eventID,
 	)
 	if err != nil {
@@ -89,7 +92,7 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 		var e TimetableEntry
 		var locID, musID, insID sql.NullInt64
 		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
-			&e.Description, &e.Room, &e.EntryType, &locID, &e.LocationName, &musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt); err != nil {
+			&e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &e.LocationName, &musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		if locID.Valid {
@@ -116,6 +119,9 @@ func validateTimetableRequests(reqs []TimetableEntryRequest) error {
 		}
 		if !validTimeSlot(req.StartTime) || !validTimeSlot(req.EndTime) {
 			return fmt.Errorf("invalid time %q–%q; use HH:MM", req.StartTime, req.EndTime)
+		}
+		if req.EntryDate != "" && !dateRe.MatchString(req.EntryDate) {
+			return fmt.Errorf("invalid entry_date %q; use YYYY-MM-DD", req.EntryDate)
 		}
 	}
 	return nil
@@ -171,9 +177,13 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 	if entryType != "workshop" {
 		entryType = "bal"
 	}
+	var entryDateArg any
+	if req.EntryDate != "" {
+		entryDateArg = req.EntryDate
+	}
 	return scanTimetableRow(q.QueryRow(
-		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, entry_type, location_id, musician_id, instructor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
-		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, entryType, locIDArg, musIDArg, insIDArg,
+		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, entry_type, entry_date, location_id, musician_id, instructor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
+		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, entryType, entryDateArg, locIDArg, musIDArg, insIDArg,
 	))
 }
 

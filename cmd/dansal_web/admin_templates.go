@@ -350,6 +350,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 						Title:        e.Title,
 						Description:  e.Description,
 						Room:         e.Room,
+						EntryDate:    e.EntryDate,
 						LocationID:   e.LocationID,
 						MusicianID:   e.MusicianID,
 						InstructorID: e.InstructorID,

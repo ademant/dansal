@@ -171,9 +171,15 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
-      {{$grid := timetableGrid .Timetable}}
+      {{$days := timetableDays .Timetable .StartTime}}
+      {{$multiDay := gt (len $days) 1}}
+      {{range $days}}
+      {{$dayEntries := .Entries}}
+      <div class="tt-day">
+      {{if $multiDay}}<h3 class="tt-day-heading">{{formatDate $.LangCode .Date}}</h3>{{end}}
+      {{$grid := timetableGrid $dayEntries}}
       {{if gt (len $grid.Columns) 1}}
-      <div class="tt-room-pills" id="tt-room-pills">
+      <div class="tt-room-pills">
         {{range $i, $col := $grid.Columns}}
         <button type="button" class="tt-pill{{if eq $i 0}} active{{end}}" data-idx="{{$i}}">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</button>
         {{end}}
@@ -182,7 +188,7 @@
         <div class="tt-cal-axis" style="height:{{$grid.HeightPx}}px">
           {{range $grid.Marks}}<div class="tt-cal-mark" style="top:{{.TopPx}}px">{{.Label}}</div>{{end}}
         </div>
-        <div class="tt-columns" id="tt-columns">
+        <div class="tt-columns">
           {{range $i, $col := $grid.Columns}}
           <div class="tt-column{{if eq $i 0}} tt-column-active{{end}}" data-idx="{{$i}}">
             <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
@@ -201,36 +207,11 @@
           {{end}}
         </div>
       </div>
-      <script>
-      (function(){
-        var wrap=document.getElementById('tt-columns');
-        if(!wrap)return;
-        var cols=Array.prototype.slice.call(wrap.querySelectorAll('.tt-column'));
-        var pills=Array.prototype.slice.call(document.querySelectorAll('#tt-room-pills .tt-pill'));
-        if(cols.length<2)return;
-        var active=0;
-        function show(i){
-          if(i<0)i=cols.length-1;
-          if(i>=cols.length)i=0;
-          active=i;
-          cols.forEach(function(c,idx){c.classList.toggle('tt-column-active',idx===active);});
-          pills.forEach(function(p,idx){p.classList.toggle('active',idx===active);});
-        }
-        pills.forEach(function(p,idx){p.addEventListener('click',function(){show(idx);});});
-        var sx=null;
-        wrap.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
-        wrap.addEventListener('touchend',function(e){
-          if(sx===null)return;
-          var dx=e.changedTouches[0].clientX-sx;sx=null;
-          if(Math.abs(dx)>50&&window.matchMedia('(max-width:680px)').matches){
-            show(active+(dx<0?1:-1));
-          }
-        },{passive:true});
-      })();
-      </script>
       {{else}}
       <div class="evt-timetable">
-        {{range .Timetable}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
+        {{range $dayEntries}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
+      </div>
+      {{end}}
       </div>
       {{end}}
       <dialog id="tt-detail-dialog" class="tt-detail-dialog">
@@ -254,6 +235,33 @@
         if(!dlg)return;
         dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
       })();
+      // Each multi-room day gets its own independent room-pill switcher —
+      // scoped per .tt-day so multiple festival days don't collide on ids.
+      document.querySelectorAll('.tt-day').forEach(function(dayEl){
+        var wrap=dayEl.querySelector('.tt-columns');
+        if(!wrap)return;
+        var cols=Array.prototype.slice.call(wrap.querySelectorAll('.tt-column'));
+        var pills=Array.prototype.slice.call(dayEl.querySelectorAll('.tt-room-pills .tt-pill'));
+        if(cols.length<2)return;
+        var active=0;
+        function show(i){
+          if(i<0)i=cols.length-1;
+          if(i>=cols.length)i=0;
+          active=i;
+          cols.forEach(function(c,idx){c.classList.toggle('tt-column-active',idx===active);});
+          pills.forEach(function(p,idx){p.classList.toggle('active',idx===active);});
+        }
+        pills.forEach(function(p,idx){p.addEventListener('click',function(){show(idx);});});
+        var sx=null;
+        wrap.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+        wrap.addEventListener('touchend',function(e){
+          if(sx===null)return;
+          var dx=e.changedTouches[0].clientX-sx;sx=null;
+          if(Math.abs(dx)>50&&window.matchMedia('(max-width:680px)').matches){
+            show(active+(dx<0?1:-1));
+          }
+        },{passive:true});
+      });
       </script>
     </section>
     {{end}}
@@ -687,6 +695,8 @@
 .tt-panel .tt-panel-title{font-weight:600;font-size:.88rem;color:var(--heading)}
 .tt-panel .tt-meta{font-size:.78rem;color:var(--fg-faint);margin-top:.1rem}
 .tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}
+.tt-day+.tt-day{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--border)}
+.tt-day-heading{font-size:1rem;font-weight:700;color:var(--heading);margin:0 0 .6rem}
 .tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 .tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
 .tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}

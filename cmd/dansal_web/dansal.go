@@ -256,6 +256,7 @@ type TimetableEntry struct {
 	Description    string `json:"description,omitempty"`
 	Room           string `json:"room,omitempty"`
 	EntryType      string `json:"entry_type,omitempty"`
+	EntryDate      string `json:"entry_date,omitempty"`
 	LocationID     *int   `json:"location_id,omitempty"`
 	LocationName   string `json:"location_name,omitempty"`
 	MusicianID     *int   `json:"musician_id,omitempty"`
@@ -1850,6 +1851,7 @@ type TimetableEntryReq struct {
 	Description  string `json:"description,omitempty"`
 	Room         string `json:"room,omitempty"`
 	EntryType    string `json:"entry_type,omitempty"`
+	EntryDate    string `json:"entry_date,omitempty"`
 	LocationID   *int   `json:"location_id,omitempty"`
 	MusicianID   *int   `json:"musician_id,omitempty"`
 	InstructorID *int   `json:"instructor_id,omitempty"`

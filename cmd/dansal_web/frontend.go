@@ -664,6 +664,42 @@ func parseTimetableClock(s string) (int, bool) {
 	return h*60 + m, true
 }
 
+// TimetableDay groups timetable entries under the calendar date they
+// belong to, for multi-day events (festivals, workshop weekends, #894).
+type TimetableDay struct {
+	Date    string // YYYY-MM-DD
+	Entries []TimetableEntry
+}
+
+// timetableDays splits entries into day buckets, ordered by date. An entry
+// without its own EntryDate belongs to the event's own start date — the
+// default for every entry on a single-day event, so single-day events
+// always yield exactly one day (no visible change from before #894).
+func timetableDays(entries []TimetableEntry, eventStart string) []TimetableDay {
+	defaultDate := eventStart
+	if t, ok := parseTime(eventStart); ok {
+		defaultDate = t.Format("2006-01-02")
+	}
+	var order []string
+	byDate := map[string][]TimetableEntry{}
+	for _, e := range entries {
+		d := strings.TrimSpace(e.EntryDate)
+		if d == "" {
+			d = defaultDate
+		}
+		if _, ok := byDate[d]; !ok {
+			order = append(order, d)
+		}
+		byDate[d] = append(byDate[d], e)
+	}
+	sort.Strings(order)
+	days := make([]TimetableDay, 0, len(order))
+	for _, d := range order {
+		days = append(days, TimetableDay{Date: d, Entries: byDate[d]})
+	}
+	return days
+}
+
 // timetableColumnKey returns the grouping key/label/other-flag for one
 // timetable entry, shared by timetableGrid's column bucketing.
 func timetableColumnKey(e TimetableEntry) (key, label string, isOther bool) {
@@ -913,6 +949,7 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return out
 	},
+	"timetableDays": timetableDays,
 	// usedRoomIDs collects the distinct real room references (LocationID) across
 	// an event's timetable entries — free-text Room strings can't be placed on
 	// a site plan, so those entries are ignored (#885).

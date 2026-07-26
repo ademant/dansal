@@ -434,7 +434,7 @@
       {{range .Event.Timetable}}{{$entry := .}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><input type="date" name="tt_entry_date" value="{{.EntryDate}}"></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}"></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" value="{{.StartTime}}"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
@@ -452,7 +452,7 @@
       {{end}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><input type="date" name="tt_entry_date" value=""></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value=""></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
@@ -1433,10 +1433,37 @@ function growTTTable(el){
 // Per-entry date is only relevant (and editable) when the event itself
 // spans more than one calendar day — for the common single-day case it
 // stays hidden and every entry implicitly uses the event's own date (#894).
-function _ttUpdateMultiDay(){
+// The picker is a dropdown restricted to the event's own date range rather
+// than a free date input, since any other date wouldn't make sense anyway.
+function _ttEventDayRange(){
   var s=document.getElementById('date'), e=document.getElementById('end_date');
-  var multi=!!(s&&e&&s.value&&e.value&&s.value!==e.value);
-  document.querySelectorAll('#tt-body .tt-date-wrap').forEach(function(w){w.hidden=!multi;});
+  var dates=[];
+  if(!s||!e||!s.value||!e.value||s.value===e.value) return dates;
+  var d=new Date(s.value+'T00:00:00'), end=new Date(e.value+'T00:00:00');
+  if(end<d) return dates;
+  while(d<=end){
+    dates.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+  return dates;
+}
+function _ttUpdateMultiDay(){
+  var dates=_ttEventDayRange();
+  var multi=dates.length>0;
+  document.querySelectorAll('#tt-body .tt-date-wrap').forEach(function(w){
+    w.hidden=!multi;
+    if(!multi) return;
+    var sel=w.querySelector('select');
+    var cur=sel.value||sel.dataset.value||'';
+    sel.innerHTML='';
+    dates.forEach(function(dt){
+      var opt=document.createElement('option');
+      opt.value=dt;
+      opt.textContent=new Date(dt+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+      if(dt===cur) opt.selected=true;
+      sel.appendChild(opt);
+    });
+  });
 }
 (function(){
   var s=document.getElementById('date'), e=document.getElementById('end_date');
@@ -1714,7 +1741,7 @@ function addTTRow(){
   var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
   entry.innerHTML=
     '<div class="tt-line1">'+
-      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><input type="date" name="tt_entry_date"></span>'+
+      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value=""></select></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_start" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_start"></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end"></span>'+
       _buildTTLocWidget()+

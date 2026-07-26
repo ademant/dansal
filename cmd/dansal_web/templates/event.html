@@ -170,20 +170,34 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
-      {{$cols := timetableColumns .Timetable}}
-      {{if gt (len $cols) 1}}
+      {{$grid := timetableGrid .Timetable}}
+      {{if gt (len $grid.Columns) 1}}
       <div class="tt-room-pills" id="tt-room-pills">
-        {{range $i, $col := $cols}}
+        {{range $i, $col := $grid.Columns}}
         <button type="button" class="tt-pill{{if eq $i 0}} active{{end}}" data-idx="{{$i}}">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</button>
         {{end}}
       </div>
-      <div class="tt-columns" id="tt-columns">
-        {{range $i, $col := $cols}}
-        <div class="tt-column{{if eq $i 0}} tt-column-active{{end}}" data-idx="{{$i}}">
-          <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
-          {{range $col.Entries}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
+      <div class="tt-cal">
+        <div class="tt-cal-axis" style="height:{{$grid.HeightPx}}px">
+          {{range $grid.Marks}}<div class="tt-cal-mark" style="top:{{.TopPx}}px">{{.Label}}</div>{{end}}
         </div>
-        {{end}}
+        <div class="tt-columns" id="tt-columns">
+          {{range $i, $col := $grid.Columns}}
+          <div class="tt-column{{if eq $i 0}} tt-column-active{{end}}" data-idx="{{$i}}">
+            <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
+            <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
+              {{range $col.Panels}}
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px">
+                <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+                {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
+                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+                {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
+              </div>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
       </div>
       <script>
       (function(){
@@ -637,9 +651,18 @@
 .tt-room-pills{display:none;gap:.4rem;overflow-x:auto;margin-bottom:.6rem;padding-bottom:.2rem}
 .tt-pill{border:1px solid var(--border);background:var(--bg-card);color:var(--fg-dim);border-radius:999px;padding:.3rem .8rem;font-size:.82rem;white-space:nowrap;cursor:pointer}
 .tt-pill.active{background:var(--link);color:#fff;border-color:var(--link)}
-.tt-columns{display:flex;gap:1rem}
-.tt-column{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.5rem}
+.tt-cal{display:flex;gap:0}
+.tt-cal-axis{position:relative;flex:0 0 48px;width:48px}
+.tt-cal-mark{position:absolute;left:0;right:.5rem;transform:translateY(-.55em);font-size:.75rem;color:var(--fg-faint);text-align:right}
+.tt-columns{display:flex;gap:1rem;flex:1 1 auto;min-width:0}
+.tt-column{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.3rem}
 .tt-column-title{font-size:.9rem;font-weight:700;color:var(--heading);border-bottom:2px solid var(--border);padding-bottom:.3rem;margin-bottom:.2rem}
+.tt-column-body{position:relative;border-left:1px dashed var(--border)}
+.tt-panel{position:absolute;left:.4rem;right:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem}
+.tt-panel.tt-workshop{border-left:3px solid var(--link)}
+.tt-panel .tt-panel-title{font-weight:600;font-size:.88rem;color:var(--heading)}
+.tt-panel .tt-meta{font-size:.78rem;color:var(--fg-faint);margin-top:.1rem}
+.tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}
 @media(max-width:680px){
   .tt-room-pills{display:flex}
   .tt-columns{display:block}

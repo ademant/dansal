@@ -265,7 +265,6 @@ func eventMetaDesc(event Event, lang string) string {
 	return desc
 }
 
-
 type IndexData struct {
 	Events          []Event
 	TotalEvents     int // true server-side count; may exceed len(Events) when the API's pagination cap truncated the result
@@ -648,6 +647,121 @@ func fmtClock(timeFormat string, h, m int) string {
 	return fmt.Sprintf("%02d:%02d", h, m)
 }
 
+// parseTimetableClock parses an "HH:MM" timetable time into minutes since
+// midnight. Timetable start/end times are always validated to this exact
+// format server-side (cmd/dansal/timetable.go, validTimeSlot), so failure
+// here only happens for legacy/corrupt data.
+func parseTimetableClock(s string) (int, bool) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, false
+	}
+	return h*60 + m, true
+}
+
+// timetableColumnKey returns the grouping key/label/other-flag for one
+// timetable entry, shared by timetableGrid's column bucketing.
+func timetableColumnKey(e TimetableEntry) (key, label string, isOther bool) {
+	switch {
+	case e.LocationID != nil:
+		return fmt.Sprintf("loc:%d", *e.LocationID), e.LocationName, false
+	case strings.TrimSpace(e.Room) != "":
+		label := strings.TrimSpace(e.Room)
+		return "room:" + strings.ToLower(label), label, false
+	default:
+		return "other", "", true
+	}
+}
+
+func timetableGrid(entries []TimetableEntry) TimetableGrid {
+	const minPxPerMin = 1.4
+	const maxPxPerMin = 4.0
+	const minTotalHeightPx = 220.0
+
+	rangeMin, rangeMax := 0, 0
+	haveRange := false
+	type parsed struct {
+		entry            TimetableEntry
+		startMin, endMin int
+	}
+	var parsedEntries []parsed
+	for _, e := range entries {
+		start, ok1 := parseTimetableClock(e.StartTime)
+		end, ok2 := parseTimetableClock(e.EndTime)
+		if !ok1 || !ok2 {
+			continue
+		}
+		if end <= start {
+			end += 24 * 60 // crosses midnight (e.g. a fest-noz running past 00:00)
+		}
+		parsedEntries = append(parsedEntries, parsed{entry: e, startMin: start, endMin: end})
+		if !haveRange || start < rangeMin {
+			rangeMin = start
+		}
+		if !haveRange || end > rangeMax {
+			rangeMax = end
+		}
+		haveRange = true
+	}
+	if !haveRange {
+		return TimetableGrid{}
+	}
+
+	// Pick a mark step from the raw range before rounding, then round the
+	// range itself out to that step so the axis starts/ends on a mark.
+	step := 60
+	if rangeMax-rangeMin <= 180 {
+		step = 30
+	}
+	rangeMin -= rangeMin % step
+	if r := rangeMax % step; r != 0 {
+		rangeMax += step - r
+	}
+	totalMin := rangeMax - rangeMin
+	if totalMin <= 0 {
+		totalMin = step
+		rangeMax = rangeMin + step
+	}
+
+	pxPerMin := minPxPerMin
+	if h := float64(totalMin) * pxPerMin; h < minTotalHeightPx {
+		pxPerMin = minTotalHeightPx / float64(totalMin)
+	}
+	if pxPerMin > maxPxPerMin {
+		pxPerMin = maxPxPerMin
+	}
+
+	grid := TimetableGrid{HeightPx: float64(totalMin) * pxPerMin}
+	for m := rangeMin; m <= rangeMax; m += step {
+		grid.Marks = append(grid.Marks, TimetableGridMark{
+			Label: fmt.Sprintf("%02d:%02d", (m/60)%24, m%60),
+			TopPx: float64(m-rangeMin) * pxPerMin,
+		})
+	}
+
+	colIdx := map[string]int{}
+	for _, p := range parsedEntries {
+		key, label, isOther := timetableColumnKey(p.entry)
+		i, ok := colIdx[key]
+		if !ok {
+			grid.Columns = append(grid.Columns, TimetableGridColumn{Label: label, IsOther: isOther})
+			i = len(grid.Columns) - 1
+			colIdx[key] = i
+		}
+		grid.Columns[i].Panels = append(grid.Columns[i].Panels, TimetablePanel{
+			Entry:    p.entry,
+			TopPx:    float64(p.startMin-rangeMin) * pxPerMin,
+			HeightPx: float64(p.endMin-p.startMin) * pxPerMin,
+		})
+	}
+	return grid
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, timeFormat, s string) string {
 		t, ok := parseTime(s)
@@ -811,39 +925,23 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ids
 	},
-	// timetableColumns groups timetable entries into per-room columns for the
-	// multi-room grid layout (#886): primarily by LocationID (a stable
-	// reference, labeled by LocationName), falling back to the free-text Room
-	// string (trimmed/case-insensitive key) when no LocationID is set, and
-	// finally a single shared "other" column for entries with neither. Column
-	// order follows first appearance, i.e. the timetable's existing time order.
-	"timetableColumns": func(entries []TimetableEntry) []TimetableColumn {
-		var cols []TimetableColumn
-		idx := map[string]int{}
-		for _, e := range entries {
-			var key, label string
-			isOther := false
-			switch {
-			case e.LocationID != nil:
-				key = fmt.Sprintf("loc:%d", *e.LocationID)
-				label = e.LocationName
-			case strings.TrimSpace(e.Room) != "":
-				label = strings.TrimSpace(e.Room)
-				key = "room:" + strings.ToLower(label)
-			default:
-				key = "other"
-				isOther = true
-			}
-			i, ok := idx[key]
-			if !ok {
-				cols = append(cols, TimetableColumn{Label: label, IsOther: isOther})
-				i = len(cols) - 1
-				idx[key] = i
-			}
-			cols[i].Entries = append(cols[i].Entries, e)
-		}
-		return cols
-	},
+	// timetableGrid groups timetable entries into per-room columns and
+	// positions each entry in pixels against one shared time axis, for a
+	// real day-view calendar layout on /event/{id} (#887, refines #886's
+	// independent-per-column stacked lists). Rooms are grouped primarily by
+	// LocationID (a stable reference, labeled by LocationName), falling back
+	// to the free-text Room string (trimmed/case-insensitive key) when no
+	// LocationID is set, and finally a single shared "other" column for
+	// entries with neither. Column order follows first appearance, i.e. the
+	// timetable's existing time order.
+	//
+	// The axis only spans the timetable's own earliest start to latest end
+	// (rounded to a mark boundary), not a fixed 24h range. Entries ending
+	// before they start (e.g. a fest-noz running past midnight) are treated
+	// as ending the next day. Overlapping entries within the same room are a
+	// known, deliberately deferred edge case (#888) — this only lays out
+	// columns/time, it doesn't detect or resolve overlaps.
+	"timetableGrid": timetableGrid,
 	// topLocationID resolves the top-level (building) location ID for an
 	// event whose location may itself be a room (#687): a room is a child
 	// Location with ParentID set, but venue pickers only ever offer the

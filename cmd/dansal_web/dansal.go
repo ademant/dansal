@@ -262,14 +262,37 @@ type TimetableEntry struct {
 	MusicianName string `json:"musician_name,omitempty"`
 }
 
-// TimetableColumn is one room's slice of timetable entries, for the
-// multi-room grid layout on /event/{id} (#886, see timetableColumns in
+// TimetablePanel is one timetable entry positioned within a TimetableGrid
+// column, in pixels relative to the grid's shared time axis (#887).
+type TimetablePanel struct {
+	Entry    TimetableEntry
+	TopPx    float64
+	HeightPx float64
+}
+
+// TimetableGridColumn is one room's positioned entries, for the multi-room
+// calendar grid layout on /event/{id} (#886, #887; see timetableGrid in
 // frontend.go). IsOther marks the shared fallback column for entries with
 // neither a LocationID nor a free-text Room.
-type TimetableColumn struct {
+type TimetableGridColumn struct {
 	Label   string
 	IsOther bool
-	Entries []TimetableEntry
+	Panels  []TimetablePanel
+}
+
+// TimetableGridMark is one hour/half-hour gridline on the shared time axis.
+type TimetableGridMark struct {
+	Label string
+	TopPx float64
+}
+
+// TimetableGrid is the full computed layout for the multi-room timetable
+// calendar grid: columns of positioned panels, sharing one time axis whose
+// range only spans the timetable's own earliest start to latest end (#887).
+type TimetableGrid struct {
+	Columns  []TimetableGridColumn
+	Marks    []TimetableGridMark
+	HeightPx float64
 }
 
 type Instructor struct {
@@ -285,7 +308,6 @@ type Instructor struct {
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
-
 
 type Organization struct {
 	ID            int    `json:"id"`

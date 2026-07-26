@@ -458,7 +458,7 @@
         </tr>
         <tr class="tt-row-detail2">
           <td></td>
-          <td><div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><ul class="tt-ins-suggest" hidden></ul></div></td>
+          <td><div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div></td>
           <td colspan="4"></td>
         </tr>
         {{end}}
@@ -477,7 +477,7 @@
         </tr>
         <tr class="tt-row-detail2">
           <td></td>
-          <td><div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value=""><ul class="tt-ins-suggest" hidden></ul></div></td>
+          <td><div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div></td>
           <td colspan="4"></td>
         </tr>
       </tbody>
@@ -1528,6 +1528,7 @@ function _buildTTInsWidget(){
   return '<div class="tt-ins-wrap">'+
     '<input type="text" class="tt-ins-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_instructor" | jsStr}}+' oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)">'+
     '<input type="hidden" name="tt_instructor_id" value="">'+
+    '<input type="hidden" name="tt_instructor_name" value="">'+
     '<ul class="tt-ins-suggest" hidden></ul></div>';
 }
 function _ttInsKeydown(e,inp){
@@ -1561,9 +1562,11 @@ function _ttInsInput(inp){
   _ttMarkEdited();
   var wrap=inp.closest('.tt-ins-wrap');
   var idInp=wrap.querySelector('input[name="tt_instructor_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_instructor_name"]');
   var suggest=wrap.querySelector('.tt-ins-suggest');
   var q=inp.value.trim();
   idInp.value='';
+  if(nameInp)nameInp.value=q;
   if(q.length<3){suggest.hidden=true;suggest.innerHTML='';return;}
   var ql=q.toLowerCase();
   var hits=_ttInstructors.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
@@ -1575,14 +1578,44 @@ function _ttInsInput(inp){
       e.preventDefault();
       inp.value=m.name;
       idInp.value=m.id;
+      if(nameInp)nameInp.value='';
       suggest.hidden=true;
       suggest.innerHTML='';
       _ttMarkEdited();
     });
     suggest.appendChild(li);
   });
+  var normQ=_musNorm(q);
+  var hasMatch=_ttInstructors.some(function(m){return _musNorm(m.name)===normQ;});
+  if(!hasMatch){
+    var li=document.createElement('li');
+    li.className='tt-mus-create';
+    li.textContent='➕ '+q;
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      _ttInsCreate(inp,q);
+    });
+    suggest.appendChild(li);
+  }
   if(!suggest.children.length){suggest.hidden=true;return;}
   suggest.hidden=false;
+}
+function _ttInsCreate(inp,name){
+  var wrap=inp.closest('.tt-ins-wrap');
+  var idInp=wrap.querySelector('input[name="tt_instructor_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_instructor_name"]');
+  var suggest=wrap.querySelector('.tt-ins-suggest');
+  suggest.hidden=true;suggest.innerHTML='';
+  fetch('/admin/api/instructor/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(ins){
+      _ttInstructors.push({id:ins.id,name:ins.name});
+      allInstructors.push({id:ins.id,name:ins.name});
+      inp.value=ins.name;
+      idInp.value=ins.id;
+      if(nameInp)nameInp.value='';
+    })
+    .catch(function(){alert('Could not create instructor');});
 }
 function _buildTTLocWidget(){
   var label='';

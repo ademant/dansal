@@ -2239,6 +2239,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
 		musNames := r.MultipartForm.Value["tt_musician_name"]
 		insIDs := r.MultipartForm.Value["tt_instructor_id"]
+		insNames := r.MultipartForm.Value["tt_instructor_name"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2288,6 +2289,15 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			if i < len(insIDs) {
 				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
 					entry.InstructorID = &v
+				}
+			}
+			if entry.InstructorID == nil && i < len(insNames) {
+				if name := strings.TrimSpace(insNames[i]); name != "" {
+					if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
+						entry.InstructorID = &ins.ID
+					} else {
+						log.Printf("create instructor %q: %v", name, ierr)
+					}
 				}
 			}
 			ttEntries = append(ttEntries, entry)
@@ -2870,6 +2880,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			musIDs := r.MultipartForm.Value["tt_musician_id"]
 			musNames := r.MultipartForm.Value["tt_musician_name"]
 			insIDs := r.MultipartForm.Value["tt_instructor_id"]
+			insNames := r.MultipartForm.Value["tt_instructor_name"]
 			for i, s := range starts {
 				s = strings.TrimSpace(s)
 				if i >= len(titles) {
@@ -2918,6 +2929,15 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				if i < len(insIDs) {
 					if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
 						entry.InstructorID = &v
+					}
+				}
+				if entry.InstructorID == nil && i < len(insNames) {
+					if name := strings.TrimSpace(insNames[i]); name != "" {
+						if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
+							entry.InstructorID = &ins.ID
+						} else {
+							log.Printf("create instructor %q: %v", name, ierr)
+						}
 					}
 				}
 				ttEntries = append(ttEntries, entry)

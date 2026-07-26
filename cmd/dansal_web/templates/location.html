@@ -63,8 +63,8 @@
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 
 {{if .SitePlanURL}}
-<div class="loc-siteplan">
-  <h2 class="section-heading">{{$.Strings.T "loc_siteplan_section"}}</h2>
+<details class="loc-siteplan">
+  <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>
   <div class="siteplan-canvas">
     <img src="{{.SitePlanURL}}" alt="{{$.Strings.T "loc_siteplan_section"}}">
     {{range placedRooms .Children}}
@@ -73,7 +73,7 @@
     </a>
     {{end}}
   </div>
-</div>
+</details>
 {{end}}
 
 {{if .Children}}
@@ -138,6 +138,7 @@
 .loc-notes a{color:var(--link)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 .loc-siteplan{margin-bottom:1.25rem}
+.loc-siteplan-summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
 .siteplan-canvas{position:relative;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--border-mid);background:var(--bg-subtle)}
 .siteplan-canvas img{display:block;width:100%;height:auto}
 .siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:var(--link);color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}

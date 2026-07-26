@@ -439,7 +439,7 @@
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" value="{{.Room}}" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
-          <select name="tt_type" class="tt-type-sel"><option value="bal"{{if ne .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option></select>
+          <select name="tt_type" class="tt-type-sel"><option value="bal"{{if or (eq .EntryType "") (eq .EntryType "bal")}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option><option value="break"{{if eq .EntryType "break"}} selected{{end}}>{{$.Strings.T "tt_type_break"}}</option></select>
           <button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
@@ -457,7 +457,7 @@
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
-          <select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option></select>
+          <select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option><option value="break">{{$.Strings.T "tt_type_break"}}</option></select>
           <button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
@@ -1745,7 +1745,7 @@ function addTTRow(){
   var entry=document.createElement('div');
   entry.className='tt-entry';
   var _tl='{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}';
-  var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
+  var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option><option value="break">'+{{$.Strings.T "tt_type_break" | jsStr}}+'</option>';
   entry.innerHTML=
     '<div class="tt-line1">'+
       '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" onchange="_ttMarkEdited()"></select></span>'+

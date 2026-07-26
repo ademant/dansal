@@ -1836,8 +1836,8 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				entry.Room = strings.TrimSpace(rooms[i])
 			}
 			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-					entry.EntryType = "workshop"
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+					entry.EntryType = v
 				} else {
 					entry.EntryType = "bal"
 				}
@@ -2266,8 +2266,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				entry.Room = strings.TrimSpace(rooms[i])
 			}
 			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-					entry.EntryType = "workshop"
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+					entry.EntryType = v
 				} else {
 					entry.EntryType = "bal"
 				}
@@ -2911,8 +2911,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 					entry.Room = strings.TrimSpace(rooms[i])
 				}
 				if i < len(ttTypes) {
-					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-						entry.EntryType = "workshop"
+					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+						entry.EntryType = v
 					} else {
 						entry.EntryType = "bal"
 					}

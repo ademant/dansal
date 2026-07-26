@@ -33,10 +33,10 @@
 </script>
 {{end}}{{end}}
 {{define "evt_tt_row"}}
-<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" onclick="openTTDetail(this,true)">
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" onclick="openTTDetail(this,true)">
   <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
   <div class="tt-body">
-    <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+    <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
     {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
     {{if .Entry.LocationName}}<div class="tt-meta">{{.Entry.LocationName}}</div>{{end}}
     {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
@@ -197,8 +197,8 @@
             <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
             <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
               {{range $col.Panels}}
-              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" onclick="openTTDetail(this,false)">
-                <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" onclick="openTTDetail(this,false)">
+                <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
                 {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
                 {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
                 {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
@@ -682,6 +682,7 @@
 .tt-title{font-weight:600;font-size:.95rem;color:var(--heading)}
 .tt-badge-ws{display:inline-block;font-size:.7rem;font-weight:700;background:var(--link);color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-badge-bal{display:inline-block;font-size:.7rem;font-weight:700;background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
+.tt-badge-break{display:inline-block;font-size:.7rem;font-weight:700;background:var(--fg-faint);color:var(--bg-card);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-meta{font-size:.82rem;color:var(--fg-faint);margin-top:.15rem}
 .tt-desc{font-size:.88rem;color:var(--fg-dim);margin-top:.25rem}
 .tt-room-pills{display:none;gap:.4rem;overflow-x:auto;margin-bottom:.6rem;padding-bottom:.2rem}
@@ -696,6 +697,7 @@
 .tt-column-body{position:relative;border-left:1px dashed var(--border)}
 .tt-panel{position:absolute;left:.4rem;right:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem;cursor:pointer}
 .tt-panel.tt-workshop{border-left:3px solid var(--link)}
+.tt-panel.tt-break{border-left:3px solid var(--fg-faint)}
 .tt-panel .tt-panel-title{font-weight:600;font-size:.88rem;color:var(--heading)}
 .tt-panel .tt-meta{font-size:.78rem;color:var(--fg-faint);margin-top:.1rem}
 .tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}

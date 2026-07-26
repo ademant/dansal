@@ -174,7 +174,7 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 		insIDArg = *req.InstructorID
 	}
 	entryType := req.EntryType
-	if entryType != "workshop" {
+	if entryType != "workshop" && entryType != "break" {
 		entryType = "bal"
 	}
 	var entryDateArg any

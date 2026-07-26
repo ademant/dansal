@@ -1986,6 +1986,10 @@ func migrateDB() {
 	migrateEventsEnumChecks()
 	migrateLocationsEnumChecks()
 
+	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
+	// (coffee break / lunch slots), alongside the existing bal/workshop.
+	migrateTimetableEntriesBreakType()
+
 	// #740: migrate locations.aliases JSON column to location_aliases junction table.
 	migrateLocationAliasesToJunction()
 
@@ -2134,6 +2138,70 @@ func migrateFetchSourcesTypeCheck() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
+}
+
+// migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
+// constraint to allow 'break' alongside 'bal'/'workshop' (#895). SQLite can't
+// alter a CHECK constraint in place, so this rebuilds the table exactly like
+// migrateFetchSourcesTypeCheck above.
+func migrateTimetableEntriesBreakType() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='timetable_entries'").Scan(&schema)
+	if strings.Contains(schema, "'break'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateTimetableEntriesBreakType: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE timetable_entries_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			start_time TEXT NOT NULL,
+			end_time TEXT NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT,
+			room TEXT,
+			location_id INTEGER,
+			musician_id INTEGER,
+			instructor_id INTEGER,
+			entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break')),
+			entry_date TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+			FOREIGN KEY (location_id) REFERENCES locations(id),
+			FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+			FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO timetable_entries_chk
+			(id, event_id, start_time, end_time, title, description, room,
+			 location_id, musician_id, instructor_id, entry_type, entry_date, created_at)
+		SELECT id, event_id, start_time, end_time, title, description, room,
+			location_id, musician_id, instructor_id,
+			CASE WHEN entry_type IN ('bal','workshop','break') THEN entry_type ELSE 'bal' END,
+			entry_date, created_at
+		FROM timetable_entries`,
+		`DROP TABLE timetable_entries`,
+		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateTimetableEntriesBreakType: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+	log.Printf("migrateTimetableEntriesBreakType: added 'break' to timetable_entries.entry_type CHECK constraint")
 }
 
 // migrateEventsEnumChecks adds CHECK constraints to events.workshop_difficulty
@@ -2870,7 +2938,7 @@ func createTables() error {
 		location_id INTEGER,
 		musician_id INTEGER,
 		instructor_id INTEGER,
-		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop')),
+		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break')),
 		entry_date TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,

@@ -754,6 +754,19 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strconv.FormatInt(*n, 10)
 	},
+	// roomName looks up which of a building's rooms (children) an event's
+	// LocationID refers to, for the Room column on /admin/location/{id} (#883).
+	"roomName": func(children []Location, id *int) string {
+		if id == nil {
+			return ""
+		}
+		for _, c := range children {
+			if c.ID == *id {
+				return c.Location
+			}
+		}
+		return ""
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0

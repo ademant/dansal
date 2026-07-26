@@ -94,6 +94,16 @@
       {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
     </select>
   </div>
+  {{if .Location.Children}}
+  <div class="bq-group">
+    <label class="bq-label">{{$.Strings.T "loc_rooms_title"}}</label>
+    <select id="bq-room" class="bq-select">
+      <option value="">—</option>
+      <option value="{{.Location.ID}}">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</option>
+      {{range .Location.Children}}<option value="{{.ID}}">{{.Location}}</option>{{end}}
+    </select>
+  </div>
+  {{end}}
   <button type="button" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply" onclick="applyBulkQuick()">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
   <span class="bulk-sep"></span>
   <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_more"}}</button>
@@ -113,6 +123,7 @@
       <th data-sort="str">{{$.Strings.T "col_date"}}</th>
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      {{if .Location.Children}}<th data-sort="str">{{$.Strings.T "loc_rooms_title"}}</th>{{end}}
       <th data-sort="str">Status</th>
       <th></th>
     </tr>
@@ -124,6 +135,7 @@
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
     <td style="font-size:.85rem;color:var(--fg-muted)">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    {{if $.Data.Location.Children}}<td style="font-size:.85rem;color:var(--fg-muted)">{{roomName $.Data.Location.Children .LocationID}}</td>{{end}}
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
@@ -325,6 +337,8 @@ function applyBulkQuick(){
   function addField(n,v){if(!v)return;var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);}
   addField('org_id',document.getElementById('bq-org-id').value);
   addField('series_id',document.getElementById('bq-series').value);
+  var roomSel=document.getElementById('bq-room');
+  if(roomSel)addField('location_id',roomSel.value);
   document.body.appendChild(f);f.submit();
 }
 function openBulkAttrsModal(){

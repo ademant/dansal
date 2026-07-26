@@ -1435,15 +1435,22 @@ function growTTTable(el){
 // stays hidden and every entry implicitly uses the event's own date (#894).
 // The picker is a dropdown restricted to the event's own date range rather
 // than a free date input, since any other date wouldn't make sense anyway.
+function _ttPad2(n){return n<10?'0'+n:''+n;}
+// Date arithmetic is done entirely in UTC (Date.UTC / getUTC*) so a browser
+// timezone ahead of UTC (e.g. Germany, UTC+1) can't roll dates back by one
+// day — new Date(s.value+'T00:00:00').toISOString() would do exactly that,
+// since it builds a *local* midnight and then converts to UTC before slicing.
 function _ttEventDayRange(){
   var s=document.getElementById('date'), e=document.getElementById('end_date');
   var dates=[];
   if(!s||!e||!s.value||!e.value||s.value===e.value) return dates;
-  var d=new Date(s.value+'T00:00:00'), end=new Date(e.value+'T00:00:00');
-  if(end<d) return dates;
-  while(d<=end){
-    dates.push(d.toISOString().slice(0,10));
-    d.setDate(d.getDate()+1);
+  var sp=s.value.split('-'), ep=e.value.split('-');
+  var start=Date.UTC(+sp[0],+sp[1]-1,+sp[2]);
+  var end=Date.UTC(+ep[0],+ep[1]-1,+ep[2]);
+  if(end<start) return dates;
+  for(var t=start;t<=end;t+=86400000){
+    var dt=new Date(t);
+    dates.push(dt.getUTCFullYear()+'-'+_ttPad2(dt.getUTCMonth()+1)+'-'+_ttPad2(dt.getUTCDate()));
   }
   return dates;
 }
@@ -1459,7 +1466,7 @@ function _ttUpdateMultiDay(){
     dates.forEach(function(dt){
       var opt=document.createElement('option');
       opt.value=dt;
-      opt.textContent=new Date(dt+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+      opt.textContent=new Date(dt+'T00:00:00Z').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});
       if(dt===cur) opt.selected=true;
       sel.appendChild(opt);
     });

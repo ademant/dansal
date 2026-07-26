@@ -114,7 +114,7 @@ func TestTemplateImportDataRoundTrip(t *testing.T) {
 		Drink:           "yes",
 		TicketsTotal:    50,
 		BookingEnabled:  true,
-		Timetable: []templateTimetableEntry{
+		Timetable: []TimetableEntryRequest{
 			{StartTime: "20:00", EndTime: "23:00", Title: "Ball", Room: "Main"},
 		},
 	}

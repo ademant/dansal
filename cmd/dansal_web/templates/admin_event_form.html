@@ -434,7 +434,7 @@
       {{range .Event.Timetable}}{{$entry := .}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}"></select></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}" onchange="_ttMarkEdited()"></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" value="{{.StartTime}}"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
@@ -452,7 +452,7 @@
       {{end}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value=""></select></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="" onchange="_ttMarkEdited()"></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
@@ -1748,7 +1748,7 @@ function addTTRow(){
   var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
   entry.innerHTML=
     '<div class="tt-line1">'+
-      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value=""></select></span>'+
+      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" onchange="_ttMarkEdited()"></select></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_start" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_start"></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end"></span>'+
       _buildTTLocWidget()+

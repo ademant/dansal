@@ -68,7 +68,7 @@
   <div class="siteplan-canvas">
     <img src="{{.SitePlanURL}}" alt="{{$.Strings.T "loc_siteplan_section"}}">
     {{range placedRooms .Children}}
-    <a class="siteplan-marker" href="/location/{{.ID}}" style="left:{{floatVal .PlanX}}%;top:{{floatVal .PlanY}}%">
+    <a class="siteplan-marker" href="/location/{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
       <span class="siteplan-marker-label">{{.Location}}</span>
     </a>
     {{end}}

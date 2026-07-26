@@ -1155,11 +1155,36 @@ func (c *DansalClient) DeleteLocationSitePlan(ctx context.Context, id int, token
 }
 
 // UpdateLocationPlanPosition saves a room's position (0-1 percentage) on its
-// building's site-plan image (#877), via the same merge-patch endpoint
-// UpdateLocation uses — only plan_x/plan_y are sent, so nothing else on the
-// room is touched.
+// building's site-plan image (#877). Marshals its own minimal body rather
+// than going through UpdateLocation, which marshals the full Location struct
+// — most of its string fields lack omitempty, so a sparse Location{PlanX,
+// PlanY} literal would still serialize other fields as "" and merge-patch
+// them over the room's real values (#880).
 func (c *DansalClient) UpdateLocationPlanPosition(ctx context.Context, id int, x, y float64, token string) error {
-	return c.UpdateLocation(ctx, id, Location{PlanX: &x, PlanY: &y}, token)
+	body, _ := json.Marshal(struct {
+		PlanX *float64 `json:"plan_x"`
+		PlanY *float64 `json:"plan_y"`
+	}{PlanX: &x, PlanY: &y})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
 }
 
 func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {

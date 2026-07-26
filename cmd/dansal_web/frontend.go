@@ -739,6 +739,15 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strconv.FormatFloat(*f, 'f', -1, 64)
 	},
+	// pct renders a 0-1 fraction (e.g. Location.PlanX/PlanY) as a percentage
+	// number for use in a CSS "%" value — floatVal alone would render 0.6 as
+	// "0.6%" instead of "60%" (#880).
+	"pct": func(f *float64) string {
+		if f == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*f*100, 'f', -1, 64)
+	},
 	"int64Val": func(n *int64) string {
 		if n == nil {
 			return ""

@@ -811,6 +811,39 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ids
 	},
+	// timetableColumns groups timetable entries into per-room columns for the
+	// multi-room grid layout (#886): primarily by LocationID (a stable
+	// reference, labeled by LocationName), falling back to the free-text Room
+	// string (trimmed/case-insensitive key) when no LocationID is set, and
+	// finally a single shared "other" column for entries with neither. Column
+	// order follows first appearance, i.e. the timetable's existing time order.
+	"timetableColumns": func(entries []TimetableEntry) []TimetableColumn {
+		var cols []TimetableColumn
+		idx := map[string]int{}
+		for _, e := range entries {
+			var key, label string
+			isOther := false
+			switch {
+			case e.LocationID != nil:
+				key = fmt.Sprintf("loc:%d", *e.LocationID)
+				label = e.LocationName
+			case strings.TrimSpace(e.Room) != "":
+				label = strings.TrimSpace(e.Room)
+				key = "room:" + strings.ToLower(label)
+			default:
+				key = "other"
+				isOther = true
+			}
+			i, ok := idx[key]
+			if !ok {
+				cols = append(cols, TimetableColumn{Label: label, IsOther: isOther})
+				i = len(cols) - 1
+				idx[key] = i
+			}
+			cols[i].Entries = append(cols[i].Entries, e)
+		}
+		return cols
+	},
 	// topLocationID resolves the top-level (building) location ID for an
 	// event whose location may itself be a room (#687): a room is a child
 	// Location with ParentID set, but venue pickers only ever offer the

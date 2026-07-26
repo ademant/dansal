@@ -32,6 +32,18 @@
 }
 </script>
 {{end}}{{end}}
+{{define "evt_tt_row"}}
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}">
+  <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
+  <div class="tt-body">
+    <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+    {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
+    {{if .Entry.LocationName}}<div class="tt-meta">{{.Entry.LocationName}}</div>{{end}}
+    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+    {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
+  </div>
+</div>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Event}}
@@ -158,20 +170,53 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
-      <div class="evt-timetable">
-        {{range .Timetable}}
-        <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{end}}">
-          <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
-          <div class="tt-body">
-            <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
-            {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
-            {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
-            {{if .MusicianName}}<div class="tt-meta">{{if .MusicianID}}<a href="/musicians/{{.MusicianID}}">{{.MusicianName}}</a>{{else}}{{.MusicianName}}{{end}}</div>{{end}}
-            {{if .Description}}<div class="tt-desc md-content">{{markdownHTML .Description}}</div>{{end}}
-          </div>
+      {{$cols := timetableColumns .Timetable}}
+      {{if gt (len $cols) 1}}
+      <div class="tt-room-pills" id="tt-room-pills">
+        {{range $i, $col := $cols}}
+        <button type="button" class="tt-pill{{if eq $i 0}} active{{end}}" data-idx="{{$i}}">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</button>
+        {{end}}
+      </div>
+      <div class="tt-columns" id="tt-columns">
+        {{range $i, $col := $cols}}
+        <div class="tt-column{{if eq $i 0}} tt-column-active{{end}}" data-idx="{{$i}}">
+          <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
+          {{range $col.Entries}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
         </div>
         {{end}}
       </div>
+      <script>
+      (function(){
+        var wrap=document.getElementById('tt-columns');
+        if(!wrap)return;
+        var cols=Array.prototype.slice.call(wrap.querySelectorAll('.tt-column'));
+        var pills=Array.prototype.slice.call(document.querySelectorAll('#tt-room-pills .tt-pill'));
+        if(cols.length<2)return;
+        var active=0;
+        function show(i){
+          if(i<0)i=cols.length-1;
+          if(i>=cols.length)i=0;
+          active=i;
+          cols.forEach(function(c,idx){c.classList.toggle('tt-column-active',idx===active);});
+          pills.forEach(function(p,idx){p.classList.toggle('active',idx===active);});
+        }
+        pills.forEach(function(p,idx){p.addEventListener('click',function(){show(idx);});});
+        var sx=null;
+        wrap.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+        wrap.addEventListener('touchend',function(e){
+          if(sx===null)return;
+          var dx=e.changedTouches[0].clientX-sx;sx=null;
+          if(Math.abs(dx)>50&&window.matchMedia('(max-width:680px)').matches){
+            show(active+(dx<0?1:-1));
+          }
+        },{passive:true});
+      })();
+      </script>
+      {{else}}
+      <div class="evt-timetable">
+        {{range .Timetable}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
+      </div>
+      {{end}}
     </section>
     {{end}}
 
@@ -589,6 +634,18 @@
 .tt-badge-bal{display:inline-block;font-size:.7rem;font-weight:700;background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-meta{font-size:.82rem;color:var(--fg-faint);margin-top:.15rem}
 .tt-desc{font-size:.88rem;color:var(--fg-dim);margin-top:.25rem}
+.tt-room-pills{display:none;gap:.4rem;overflow-x:auto;margin-bottom:.6rem;padding-bottom:.2rem}
+.tt-pill{border:1px solid var(--border);background:var(--bg-card);color:var(--fg-dim);border-radius:999px;padding:.3rem .8rem;font-size:.82rem;white-space:nowrap;cursor:pointer}
+.tt-pill.active{background:var(--link);color:#fff;border-color:var(--link)}
+.tt-columns{display:flex;gap:1rem}
+.tt-column{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.5rem}
+.tt-column-title{font-size:.9rem;font-weight:700;color:var(--heading);border-bottom:2px solid var(--border);padding-bottom:.3rem;margin-bottom:.2rem}
+@media(max-width:680px){
+  .tt-room-pills{display:flex}
+  .tt-columns{display:block}
+  .tt-column{display:none}
+  .tt-column.tt-column-active{display:flex}
+}
 .loc-siteplan{margin-bottom:1.25rem}
 .loc-siteplan-summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
 .siteplan-canvas{position:relative;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--border-mid);background:var(--bg-subtle)}

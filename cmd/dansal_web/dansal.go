@@ -262,6 +262,16 @@ type TimetableEntry struct {
 	MusicianName string `json:"musician_name,omitempty"`
 }
 
+// TimetableColumn is one room's slice of timetable entries, for the
+// multi-room grid layout on /event/{id} (#886, see timetableColumns in
+// frontend.go). IsOther marks the shared fallback column for entries with
+// neither a LocationID nor a free-text Room.
+type TimetableColumn struct {
+	Label   string
+	IsOther bool
+	Entries []TimetableEntry
+}
+
 type Instructor struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`

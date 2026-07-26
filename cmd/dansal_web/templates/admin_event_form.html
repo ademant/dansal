@@ -448,7 +448,7 @@
           <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></td>
           <td><input type="text" name="tt_title" value="{{.Title}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_room" value="{{.Room}}"></td>
-          <td><select name="tt_loc_id" data-current="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><option value="">—</option>{{range $.Data.Locations}}<option value="{{.ID}}"{{if and $entry.LocationID (eq .ID (derefInt $entry.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}</select></td>
+          <td><div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
@@ -462,7 +462,7 @@
           <td><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></td>
           <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
-          <td><select name="tt_loc_id" id="tt-loc-template"></select></td>
+          <td><div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         <tr class="tt-row-detail">
@@ -878,6 +878,10 @@
 .tt-mus-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
 .tt-mus-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
 .tt-mus-suggest li:hover,.tt-mus-suggest li.tt-mus-active{background:#e8f0fe}
+.tt-loc-wrap{position:relative}
+.tt-loc-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
+.tt-loc-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
+.tt-loc-suggest li:hover,.tt-loc-suggest li.tt-loc-active{background:#e8f0fe}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .clone-notice{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem;color:#856404}
 .meta-value{font-size:.88rem;color:#333;padding:.25rem 0;word-break:break-all}
@@ -1378,24 +1382,11 @@ function geocodeLocation(){
     .finally(function(){btn.disabled=false;});
 }
 
-var _ttLocs={{locationsJSON $.Data.Locations}};
-{{/* Offer the event's own building's rooms (child locations) as timetable
-     picks too, alongside other top-level venues (#687). */}}
-{{range $.Data.Locations}}{{if and (eq .ID (topLocationID $.Data.Event)) .Children}}
-_ttLocs=_ttLocs.concat({{locationsJSON .Children}}.map(function(r){r.label='↳ '+r.label;return r;}));
-{{end}}{{end}}
+// Timetable location picker: flat searchable list of every top-level venue
+// plus all of their rooms (not just the event's own building, #889).
+var _ttLocs={{timetableLocationOptionsJSON $.Data.Locations}};
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
 var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
-function _buildLocOpts(selectedID){
-  var orgEl=document.getElementById('org_id');
-  var orgID=orgEl?parseInt(orgEl.value,10)||0:0;
-  var h='<option value="">—</option>';
-  _ttLocs.forEach(function(l){
-    if(orgID&&l.orgIDs.length>0&&l.orgIDs.indexOf(orgID)===-1)return;
-    h+='<option value="'+l.id+'"'+(l.id===selectedID?' selected':'')+'>'+l.label+'</option>';
-  });
-  return h;
-}
 // Growing timetable
 function _ttMarkEdited(){
   var el=document.getElementById('tt-edited');
@@ -1522,6 +1513,76 @@ function _ttMusCreate(inp,name){
     })
     .catch(function(){alert('Could not create musician');});
 }
+function _buildTTLocWidget(){
+  var label='';
+  if(_ttDefaultLocID){
+    var m=_ttLocs.filter(function(l){return l.id===_ttDefaultLocID;})[0];
+    if(m)label=m.label;
+  }
+  return '<div class="tt-loc-wrap">'+
+    '<input type="text" class="tt-loc-input" autocomplete="off" value="'+label.replace(/"/g,'&quot;')+'" placeholder='+{{$.Strings.T "tt_location" | jsStr}}+' oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)">'+
+    '<input type="hidden" name="tt_loc_id" value="'+(_ttDefaultLocID||'')+'">'+
+    '<ul class="tt-loc-suggest" hidden></ul></div>';
+}
+function _ttLocKeydown(e,inp){
+  var wrap=inp.closest('.tt-loc-wrap');
+  var suggest=wrap.querySelector('.tt-loc-suggest');
+  if(suggest.hidden) return;
+  var items=suggest.querySelectorAll('li');
+  if(!items.length) return;
+  var cur=suggest.querySelector('li.tt-loc-active');
+  var idx=cur?Array.prototype.indexOf.call(items,cur):-1;
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('tt-loc-active');
+    items[Math.min(idx+1,items.length-1)].classList.add('tt-loc-active');
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('tt-loc-active');
+    if(idx>0) items[idx-1].classList.add('tt-loc-active');
+  } else if(e.key==='Enter'){
+    // Swallow Enter while the dropdown is open, same reasoning as the
+    // musician picker (#808) — otherwise it implicitly submits the form.
+    e.preventDefault();
+    var active=suggest.querySelector('li.tt-loc-active')||items[0];
+    active.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));
+  } else if(e.key==='Escape'){
+    e.preventDefault();
+    suggest.hidden=true;suggest.innerHTML='';
+  }
+}
+function _ttLocInput(inp){
+  _ttMarkEdited();
+  var wrap=inp.closest('.tt-loc-wrap');
+  var idInp=wrap.querySelector('input[name="tt_loc_id"]');
+  var suggest=wrap.querySelector('.tt-loc-suggest');
+  var q=inp.value.trim();
+  idInp.value='';
+  if(!q){suggest.hidden=true;suggest.innerHTML='';return;}
+  var orgEl=document.getElementById('org_id');
+  var orgID=orgEl?parseInt(orgEl.value,10)||0:0;
+  var ql=q.toLowerCase();
+  var hits=_ttLocs.filter(function(l){
+    if(orgID&&l.orgIDs.length>0&&l.orgIDs.indexOf(orgID)===-1)return false;
+    return l.label.toLowerCase().indexOf(ql)!==-1;
+  }).slice(0,10);
+  suggest.innerHTML='';
+  hits.forEach(function(l){
+    var li=document.createElement('li');
+    li.textContent=l.label;
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault();
+      inp.value=l.label;
+      idInp.value=l.id;
+      suggest.hidden=true;
+      suggest.innerHTML='';
+      _ttMarkEdited();
+    });
+    suggest.appendChild(li);
+  });
+  if(!suggest.children.length){suggest.hidden=true;return;}
+  suggest.hidden=false;
+}
 function addTTRow(){
   var tbody=document.getElementById('tt-body');
   var row1=document.createElement('tr');
@@ -1531,7 +1592,7 @@ function addTTRow(){
     '<td><input type="time" lang="'+_tl+'" name="tt_end"></td>'+
     '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
     '<td><input type="text" name="tt_room"></td>'+
-    '<td><select name="tt_loc_id">'+_buildLocOpts(_ttDefaultLocID)+'</select></td>'+
+    '<td>'+_buildTTLocWidget()+'</td>'+
     '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
   var row2=document.createElement('tr');
   row2.className='tt-row-detail';
@@ -1542,18 +1603,6 @@ function addTTRow(){
   tbody.appendChild(row1);
   tbody.appendChild(row2);
 }
-(function(){
-  function refreshTTLocs(){
-    document.querySelectorAll('#tt-body select[name="tt_loc_id"]').forEach(function(sel){
-      var cur=parseInt(sel.dataset.current,10)||parseInt(sel.value,10)||0;
-      delete sel.dataset.current;
-      sel.innerHTML=_buildLocOpts(cur);
-    });
-  }
-  refreshTTLocs();
-  var orgEl=document.getElementById('org_id');
-  if(orgEl)orgEl.addEventListener('change',refreshTTLocs);
-})();
 function delRow(btn){
   var row1=btn.closest('.tt-row');
   var row2=row1.nextElementSibling;
@@ -1572,10 +1621,17 @@ function delRow(btn){
   if(!row)return;
   var startInp=row.querySelector('[name="tt_start"]');
   var endInp=row.querySelector('[name="tt_end"]');
-  var locSel=row.querySelector('[name="tt_loc_id"]');
+  var locIDInp=row.querySelector('[name="tt_loc_id"]');
+  var locTextInp=row.querySelector('.tt-loc-input');
   if(startInp)startInp.value={{if and $.Data.Prefill (not $.Data.Event.StartTime)}}{{$.Data.Prefill.StartTime | jsStr}}{{else}}{{isoTime $.Data.Event.StartTime | jsStr}}{{end}};
   if(endInp)endInp.value={{if and $.Data.Prefill (not $.Data.Event.EndTime)}}{{$.Data.Prefill.EndTime | jsStr}}{{else}}{{isoTime $.Data.Event.EndTime | jsStr}}{{end}};
-  if(locSel&&_ttDefaultLocID)locSel.value=_ttDefaultLocID;
+  if(locIDInp&&_ttDefaultLocID){
+    locIDInp.value=_ttDefaultLocID;
+    if(locTextInp){
+      var m=_ttLocs.filter(function(l){return l.id===_ttDefaultLocID;})[0];
+      if(m)locTextInp.value=m.label;
+    }
+  }
   {{if $.Data.Event.Musicians}}
   var detail=row.nextElementSibling;
   if(detail&&detail.classList.contains('tt-row-detail')){

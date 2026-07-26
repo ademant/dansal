@@ -988,6 +988,44 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(items)
 		return template.JS(b)
 	},
+	// timetableLocationOptionsJSON flattens every top-level location plus all
+	// of their rooms (children) into one searchable option list for the
+	// timetable's per-row location autocomplete (#889) — unlike locationsJSON,
+	// this isn't restricted to the event's own building. Rooms inherit their
+	// building's orgIDs for the existing org-based filtering, since rooms
+	// don't carry their own organization assignments.
+	"timetableLocationOptionsJSON": func(locs []Location) template.JS {
+		type locItem struct {
+			ID     int    `json:"id"`
+			Label  string `json:"label"`
+			OrgIDs []int  `json:"orgIDs"`
+		}
+		items := []locItem{}
+		for _, l := range locs {
+			label := l.Location
+			if l.ShortName != "" {
+				label = l.ShortName
+			}
+			bname := label
+			if l.Town != "" {
+				label += ", " + l.Town
+			}
+			orgIDs := l.OrganizationIDs
+			if orgIDs == nil {
+				orgIDs = []int{}
+			}
+			items = append(items, locItem{ID: l.ID, Label: label, OrgIDs: orgIDs})
+			for _, c := range l.Children {
+				clabel := c.Location
+				if c.ShortName != "" {
+					clabel = c.ShortName
+				}
+				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, OrgIDs: orgIDs})
+			}
+		}
+		b, _ := json.Marshal(items)
+		return template.JS(b)
+	},
 	// mastodonURL converts "@user@instance.tld" → "https://instance.tld/@user".
 	// If the value already starts with "http", it is returned unchanged.
 	"mastodonURL": func(handle string) string {

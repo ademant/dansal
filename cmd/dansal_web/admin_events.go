@@ -2890,6 +2890,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			musNames := r.MultipartForm.Value["tt_musician_name"]
 			insIDs := r.MultipartForm.Value["tt_instructor_id"]
 			insNames := r.MultipartForm.Value["tt_instructor_name"]
+			dates := r.MultipartForm.Value["tt_entry_date"]
 			for i, s := range starts {
 				s = strings.TrimSpace(s)
 				if i >= len(titles) {
@@ -2948,6 +2949,9 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 							log.Printf("create instructor %q: %v", name, ierr)
 						}
 					}
+				}
+				if i < len(dates) {
+					entry.EntryDate = strings.TrimSpace(dates[i])
 				}
 				ttEntries = append(ttEntries, entry)
 			}

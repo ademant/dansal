@@ -249,17 +249,19 @@ type Tag struct {
 }
 
 type TimetableEntry struct {
-	ID           int    `json:"id"`
-	StartTime    string `json:"start_time"`
-	EndTime      string `json:"end_time"`
-	Title        string `json:"title"`
-	Description  string `json:"description,omitempty"`
-	Room         string `json:"room,omitempty"`
-	EntryType    string `json:"entry_type,omitempty"`
-	LocationID   *int   `json:"location_id,omitempty"`
-	LocationName string `json:"location_name,omitempty"`
-	MusicianID   *int   `json:"musician_id,omitempty"`
-	MusicianName string `json:"musician_name,omitempty"`
+	ID             int    `json:"id"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Title          string `json:"title"`
+	Description    string `json:"description,omitempty"`
+	Room           string `json:"room,omitempty"`
+	EntryType      string `json:"entry_type,omitempty"`
+	LocationID     *int   `json:"location_id,omitempty"`
+	LocationName   string `json:"location_name,omitempty"`
+	MusicianID     *int   `json:"musician_id,omitempty"`
+	MusicianName   string `json:"musician_name,omitempty"`
+	InstructorID   *int   `json:"instructor_id,omitempty"`
+	InstructorName string `json:"instructor_name,omitempty"`
 }
 
 // TimetablePanel is one timetable entry positioned within a TimetableGrid
@@ -1842,14 +1844,15 @@ type EventLocReq struct {
 }
 
 type TimetableEntryReq struct {
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time,omitempty"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Room        string `json:"room,omitempty"`
-	EntryType   string `json:"entry_type,omitempty"`
-	LocationID  *int   `json:"location_id,omitempty"`
-	MusicianID  *int   `json:"musician_id,omitempty"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time,omitempty"`
+	Title        string `json:"title"`
+	Description  string `json:"description,omitempty"`
+	Room         string `json:"room,omitempty"`
+	EntryType    string `json:"entry_type,omitempty"`
+	LocationID   *int   `json:"location_id,omitempty"`
+	MusicianID   *int   `json:"musician_id,omitempty"`
+	InstructorID *int   `json:"instructor_id,omitempty"`
 }
 
 func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {

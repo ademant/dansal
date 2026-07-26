@@ -345,13 +345,14 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				var ttEntries []TimetableEntryReq
 				for _, e := range td.Timetable {
 					ttEntries = append(ttEntries, TimetableEntryReq{
-						StartTime:   e.StartTime,
-						EndTime:     e.EndTime,
-						Title:       e.Title,
-						Description: e.Description,
-						Room:        e.Room,
-						LocationID:  e.LocationID,
-						MusicianID:  e.MusicianID,
+						StartTime:    e.StartTime,
+						EndTime:      e.EndTime,
+						Title:        e.Title,
+						Description:  e.Description,
+						Room:         e.Room,
+						LocationID:   e.LocationID,
+						MusicianID:   e.MusicianID,
+						InstructorID: e.InstructorID,
 					})
 				}
 				if err := client.ReplaceTimetable(r.Context(), evID, ttEntries, token); err != nil {

@@ -1813,6 +1813,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		ttTypes := r.Form["tt_type"]
 		locIDs := r.Form["tt_loc_id"]
 		musIDs := r.Form["tt_musician_id"]
+		insIDs := r.Form["tt_instructor_id"]
 		var ttEntries []TimetableEntry
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -1848,6 +1849,11 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			if i < len(musIDs) {
 				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
 					entry.MusicianID = &v
+				}
+			}
+			if i < len(insIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+					entry.InstructorID = &v
 				}
 			}
 			ttEntries = append(ttEntries, entry)
@@ -2232,6 +2238,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
 		musNames := r.MultipartForm.Value["tt_musician_name"]
+		insIDs := r.MultipartForm.Value["tt_instructor_id"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2276,6 +2283,11 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 					} else {
 						log.Printf("create musician %q: %v", name, merr)
 					}
+				}
+			}
+			if i < len(insIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+					entry.InstructorID = &v
 				}
 			}
 			ttEntries = append(ttEntries, entry)
@@ -2837,13 +2849,14 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if tplOverride != nil && tplFieldsSet["timetable"] && len(tplOverride.Timetable) > 0 {
 			for _, e := range tplOverride.Timetable {
 				ttEntries = append(ttEntries, TimetableEntryReq{
-					StartTime:   e.StartTime,
-					EndTime:     e.EndTime,
-					Title:       e.Title,
-					Description: e.Description,
-					Room:        e.Room,
-					LocationID:  e.LocationID,
-					MusicianID:  e.MusicianID,
+					StartTime:    e.StartTime,
+					EndTime:      e.EndTime,
+					Title:        e.Title,
+					Description:  e.Description,
+					Room:         e.Room,
+					LocationID:   e.LocationID,
+					MusicianID:   e.MusicianID,
+					InstructorID: e.InstructorID,
 				})
 			}
 		} else {
@@ -2856,6 +2869,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			locIDs := r.MultipartForm.Value["tt_loc_id"]
 			musIDs := r.MultipartForm.Value["tt_musician_id"]
 			musNames := r.MultipartForm.Value["tt_musician_name"]
+			insIDs := r.MultipartForm.Value["tt_instructor_id"]
 			for i, s := range starts {
 				s = strings.TrimSpace(s)
 				if i >= len(titles) {
@@ -2899,6 +2913,11 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 						} else {
 							log.Printf("create musician %q: %v", name, merr)
 						}
+					}
+				}
+				if i < len(insIDs) {
+					if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+						entry.InstructorID = &v
 					}
 				}
 				ttEntries = append(ttEntries, entry)

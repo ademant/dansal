@@ -1617,6 +1617,26 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE locations ADD COLUMN plan_y REAL`)
 		}
 	}
+	// v18: instructor_id on timetable_entries, so a slot can record who's
+	// teaching it (distinct from musician_id, who's playing) (#891).
+	if !applied(18) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+		mark(18)
+	}
+	// Safety net: ensure timetable_entries.instructor_id (and its index) exist
+	// even if v18 was pre-marked by createTables()'s catch-all schema_migrations
+	// insert (createTables() itself can't create this index unconditionally: on
+	// an existing DB the column doesn't exist yet at that point, which would
+	// abort the whole schema script with "no such column").
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='instructor_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL")
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -1799,6 +1819,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_invite_links_org_id               ON invite_links(org_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id     ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id     ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id   ON timetable_entries(instructor_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_location_id       ON event_locations(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_dance_id             ON event_dances(dance_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_instructors_event_id        ON event_instructors(event_id)")
@@ -2831,11 +2852,13 @@ func createTables() error {
 		room TEXT,
 		location_id INTEGER,
 		musician_id INTEGER,
+		instructor_id INTEGER,
 		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop')),
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
-		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL
+		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+		FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
 	CREATE TABLE IF NOT EXISTS event_locations (
@@ -3058,6 +3081,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(15)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(16)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(17)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(18)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

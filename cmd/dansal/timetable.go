@@ -10,30 +10,33 @@ import (
 )
 
 type TimetableEntry struct {
-	ID           int    `json:"id"`
-	EventID      int    `json:"event_id"`
-	StartTime    string `json:"start_time"`
-	EndTime      string `json:"end_time"`
-	Title        string `json:"title"`
-	Description  string `json:"description,omitempty"`
-	Room         string `json:"room,omitempty"`
-	EntryType    string `json:"entry_type,omitempty"`
-	LocationID   *int   `json:"location_id,omitempty"`
-	LocationName string `json:"location_name,omitempty"`
-	MusicianID   *int   `json:"musician_id,omitempty"`
-	MusicianName string `json:"musician_name,omitempty"`
-	CreatedAt    string `json:"created_at"`
+	ID             int    `json:"id"`
+	EventID        int    `json:"event_id"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Title          string `json:"title"`
+	Description    string `json:"description,omitempty"`
+	Room           string `json:"room,omitempty"`
+	EntryType      string `json:"entry_type,omitempty"`
+	LocationID     *int   `json:"location_id,omitempty"`
+	LocationName   string `json:"location_name,omitempty"`
+	MusicianID     *int   `json:"musician_id,omitempty"`
+	MusicianName   string `json:"musician_name,omitempty"`
+	InstructorID   *int   `json:"instructor_id,omitempty"`
+	InstructorName string `json:"instructor_name,omitempty"`
+	CreatedAt      string `json:"created_at"`
 }
 
 type TimetableEntryRequest struct {
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Room        string `json:"room"`
-	EntryType   string `json:"entry_type"`
-	LocationID  *int   `json:"location_id"`
-	MusicianID  *int   `json:"musician_id"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Room         string `json:"room"`
+	EntryType    string `json:"entry_type"`
+	LocationID   *int   `json:"location_id"`
+	MusicianID   *int   `json:"musician_id"`
+	InstructorID *int   `json:"instructor_id"`
 }
 
 var timeSlotRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -42,8 +45,8 @@ func validTimeSlot(s string) bool { return timeSlotRe.MatchString(s) }
 
 func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	var e TimetableEntry
-	var locID, musID sql.NullInt64
-	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &locID, &musID, &e.CreatedAt); err != nil {
+	var locID, musID, insID sql.NullInt64
+	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &locID, &musID, &insID, &e.CreatedAt); err != nil {
 		return TimetableEntry{}, err
 	}
 	if locID.Valid {
@@ -54,20 +57,26 @@ func scanTimetableRow(s scanner) (TimetableEntry, error) {
 		v := int(musID.Int64)
 		e.MusicianID = &v
 	}
+	if insID.Valid {
+		v := int(insID.Int64)
+		e.InstructorID = &v
+	}
 	return e, nil
 }
 
-const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), location_id, musician_id, created_at"
+const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), location_id, musician_id, instructor_id, created_at"
 
 // fetchTimetable returns all entries for an event ordered by start_time,
-// including the location and musician name via LEFT JOINs.
+// including the location, musician, and instructor names via LEFT JOINs.
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
-		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), t.location_id, COALESCE(l.location,''), t.musician_id, COALESCE(m.bandname,''), t.created_at
+		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), t.location_id, COALESCE(l.location,''),
+		        t.musician_id, COALESCE(m.bandname,''), t.instructor_id, COALESCE(i.name,''), t.created_at
 		 FROM timetable_entries t
 		 LEFT JOIN locations l ON t.location_id = l.id
 		 LEFT JOIN musicians m ON t.musician_id = m.id
+		 LEFT JOIN instructors i ON t.instructor_id = i.id
 		 WHERE t.event_id = ? ORDER BY t.start_time, t.id`,
 		eventID,
 	)
@@ -78,9 +87,9 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	entries := []TimetableEntry{}
 	for rows.Next() {
 		var e TimetableEntry
-		var locID, musID sql.NullInt64
+		var locID, musID, insID sql.NullInt64
 		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
-			&e.Description, &e.Room, &e.EntryType, &locID, &e.LocationName, &musID, &e.MusicianName, &e.CreatedAt); err != nil {
+			&e.Description, &e.Room, &e.EntryType, &locID, &e.LocationName, &musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		if locID.Valid {
@@ -90,6 +99,10 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 		if musID.Valid {
 			v := int(musID.Int64)
 			e.MusicianID = &v
+		}
+		if insID.Valid {
+			v := int(insID.Int64)
+			e.InstructorID = &v
 		}
 		entries = append(entries, e)
 	}
@@ -144,20 +157,23 @@ func readTimetableBody(w http.ResponseWriter, r *http.Request) (reqs []Timetable
 }
 
 func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEntry, error) {
-	var locIDArg, musIDArg any
+	var locIDArg, musIDArg, insIDArg any
 	if req.LocationID != nil {
 		locIDArg = *req.LocationID
 	}
 	if req.MusicianID != nil {
 		musIDArg = *req.MusicianID
 	}
+	if req.InstructorID != nil {
+		insIDArg = *req.InstructorID
+	}
 	entryType := req.EntryType
 	if entryType != "workshop" {
 		entryType = "bal"
 	}
 	return scanTimetableRow(q.QueryRow(
-		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, entry_type, location_id, musician_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
-		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, entryType, locIDArg, musIDArg,
+		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, entry_type, location_id, musician_id, instructor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
+		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, entryType, locIDArg, musIDArg, insIDArg,
 	))
 }
 

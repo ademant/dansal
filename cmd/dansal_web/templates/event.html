@@ -171,12 +171,15 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
-      {{$days := timetableDays .Timetable .StartTime}}
+      {{$days := timetableDays .Timetable .StartTime .EndTime}}
       {{$multiDay := gt (len $days) 1}}
       {{range $days}}
       {{$dayEntries := .Entries}}
       <div class="tt-day">
       {{if $multiDay}}<h3 class="tt-day-heading">{{formatDate $.LangCode .Date}}</h3>{{end}}
+      {{if not $dayEntries}}
+      <p class="tt-day-empty">{{$.Strings.T "tt_day_empty"}}</p>
+      {{else}}
       {{$grid := timetableGrid $dayEntries}}
       {{if gt (len $grid.Columns) 1}}
       <div class="tt-room-pills">
@@ -211,6 +214,7 @@
       <div class="evt-timetable">
         {{range $dayEntries}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
       </div>
+      {{end}}
       {{end}}
       </div>
       {{end}}
@@ -697,6 +701,7 @@
 .tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}
 .tt-day+.tt-day{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--border)}
 .tt-day-heading{font-size:1rem;font-weight:700;color:var(--heading);margin:0 0 .6rem}
+.tt-day-empty{font-size:.85rem;color:var(--fg-faint);font-style:italic}
 .tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 .tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
 .tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}

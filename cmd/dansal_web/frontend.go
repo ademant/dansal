@@ -439,7 +439,7 @@ func formatDateStr(lang, s string) string {
 	return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
 }
 
-var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"}
+var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"}
 
 func parseTime(s string) (time.Time, bool) {
 	for _, layout := range parseLayouts {
@@ -671,28 +671,56 @@ type TimetableDay struct {
 	Entries []TimetableEntry
 }
 
-// timetableDays splits entries into day buckets, ordered by date. An entry
-// without its own EntryDate belongs to the event's own start date — the
-// default for every entry on a single-day event, so single-day events
-// always yield exactly one day (no visible change from before #894).
-func timetableDays(entries []TimetableEntry, eventStart string) []TimetableDay {
-	defaultDate := eventStart
+// timetableDays splits entries into day buckets covering every calendar day
+// of the event's own start/end range — not just the days that happen to
+// have dated entries — so a multi-day event always shows a section per day
+// (e.g. day 1 with everything still undated, day 2 empty until entries get
+// assigned a date via the admin picker) rather than collapsing everything
+// into a single block. An entry without its own EntryDate belongs to the
+// event's start date; single-day events always yield exactly one day (no
+// visible change from before #894).
+func timetableDays(entries []TimetableEntry, eventStart, eventEnd string) []TimetableDay {
+	startDate := eventStart
 	if t, ok := parseTime(eventStart); ok {
-		defaultDate = t.Format("2006-01-02")
+		startDate = t.Format("2006-01-02")
 	}
-	var order []string
+	endDate := startDate
+	if t, ok := parseTime(eventEnd); ok {
+		endDate = t.Format("2006-01-02")
+	}
+
 	byDate := map[string][]TimetableEntry{}
 	for _, e := range entries {
 		d := strings.TrimSpace(e.EntryDate)
 		if d == "" {
-			d = defaultDate
-		}
-		if _, ok := byDate[d]; !ok {
-			order = append(order, d)
+			d = startDate
 		}
 		byDate[d] = append(byDate[d], e)
 	}
-	sort.Strings(order)
+
+	var order []string
+	seen := map[string]bool{}
+	st, errSt := time.Parse("2006-01-02", startDate)
+	en, errEn := time.Parse("2006-01-02", endDate)
+	if errSt == nil && errEn == nil && !en.Before(st) {
+		for d := st; !d.After(en); d = d.AddDate(0, 0, 1) {
+			ds := d.Format("2006-01-02")
+			order = append(order, ds)
+			seen[ds] = true
+		}
+	}
+	// Entries dated outside the event's own range (shouldn't normally
+	// happen — the admin picker only offers in-range dates — but must not
+	// be silently dropped if it does) get appended as trailing days.
+	var extra []string
+	for d := range byDate {
+		if !seen[d] {
+			extra = append(extra, d)
+		}
+	}
+	sort.Strings(extra)
+	order = append(order, extra...)
+
 	days := make([]TimetableDay, 0, len(order))
 	for _, d := range order {
 		days = append(days, TimetableDay{Date: d, Entries: byDate[d]})

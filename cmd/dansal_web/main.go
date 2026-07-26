@@ -408,6 +408,7 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/rooms/new", adminRateLimit(adminLocationRoomCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/rooms/{room_id}/delete", adminRateLimit(adminLocationRoomDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/plan-position", adminRateLimit(adminLocationPlanPositionHandler(cfg, client)))
+		r.HandleFunc("POST /admin/api/location/{id}/room/quick-create", adminRateLimit(adminRoomQuickCreateHandler(client)))
 
 		r.HandleFunc("GET /admin/enrich", adminEnrichPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/enrich/preview", adminRateLimit(adminEnrichPreviewHandler(cfg, tmpls, db, client, i18n)))

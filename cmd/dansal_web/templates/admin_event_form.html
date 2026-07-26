@@ -301,9 +301,12 @@
     </div>
 
     <div id="room-sel-wrap" style="display:none">
-      <label for="room_id" style="font-weight:600;font-size:.9rem;color:#444">Room</label>
-      <select id="room_id" name="room_id" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
-      </select>
+      <label for="room-search" style="font-weight:600;font-size:.9rem;color:#444">{{$.Strings.T "loc_rooms_title"}}</label>
+      <input type="hidden" id="room_id" name="room_id">
+      <div class="ac-wrap">
+        <input id="room-search" type="text" placeholder="{{$.Strings.T "loc_rooms_title"}}" autocomplete="off" oninput="searchRooms(this.value)" onfocus="searchRooms(this.value)">
+        <div id="room-ac-list" class="ac-list" hidden></div>
+      </div>
     </div>
   </section>
 
@@ -1118,36 +1121,84 @@ function cancelLocCreateNew(){
   document.getElementById('loc_choice').value=document.getElementById('loc_id').value?'existing':'';
   syncLocUI();
 }
-// Room selector: map from building location ID → [{id, name}, ...] of its children.
+// Room picker: map from building location ID → [{id, name}, ...] of its children.
+// Autocomplete + inline "+ room" create, same pattern as the musician picker (#884).
 var locRooms={
 {{range $.Data.Locations}}{{if .Children}}{{.ID}}:[{{range .Children}}{id:{{.ID}},name:{{.Location | jsStr}}},{{end}}],{{end}}{{end}}
 };
+var roomBuildingID=0;
+function _roomNorm(s){
+  return s.toLowerCase().trim().replace(/\s+/g,' ').normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
 function updateRoomSel(locID){
   var wrap=document.getElementById('room-sel-wrap');
-  var sel=document.getElementById('room_id');
   var rooms=locRooms[locID]||[];
-  if(!locID||rooms.length===0){wrap.style.display='none';sel.innerHTML='';return;}
-  var curVal=sel.value;
-  sel.innerHTML='';
-  rooms.forEach(function(r){
-    var o=document.createElement('option');
-    o.value=String(r.id); o.textContent=r.name;
-    if(String(r.id)===curVal) o.selected=true;
-    sel.appendChild(o);
-  });
-  if(!curVal||!sel.value) sel.selectedIndex=0;
+  roomBuildingID=parseInt(locID,10)||0;
+  document.getElementById('room_id').value='';
+  document.getElementById('room-search').value='';
+  document.getElementById('room-ac-list').hidden=true;
+  if(!locID||rooms.length===0){wrap.style.display='none';return;}
   wrap.style.display='';
 }
-// Wire room selector to loc_id change.
+function setRoom(id,name){
+  document.getElementById('room_id').value=id;
+  document.getElementById('room-search').value=name;
+  document.getElementById('room-ac-list').hidden=true;
+}
+function searchRooms(q){
+  var list=document.getElementById('room-ac-list');
+  q=q.trim();
+  var rooms=locRooms[roomBuildingID]||[];
+  var results=rooms.filter(function(rm){
+    return rm.name.toLowerCase().indexOf(q.toLowerCase())>=0;
+  }).slice(0,8);
+  var html=results.map(function(rm){
+    var esc=rm.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return '<div class="ac-item" data-id="'+rm.id+'" data-name="'+esc+'" tabindex="0">'+rm.name+'</div>';
+  }).join('');
+  if(q.length>=3){
+    var normQ=_roomNorm(q);
+    var hasMatch=rooms.some(function(rm){return _roomNorm(rm.name)===normQ;});
+    if(!hasMatch){
+      var escQ=q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      html+='<div class="ac-item ac-create" data-name="'+escQ+'" tabindex="0">➕ '+escQ+'</div>';
+    }
+  }
+  if(!html){list.hidden=true;return;}
+  list.innerHTML=html;
+  list.querySelectorAll('.ac-item:not(.ac-create)').forEach(function(item){
+    item.addEventListener('click',function(){setRoom(parseInt(this.dataset.id,10),this.dataset.name);});
+    item.addEventListener('keydown',function(e){if(e.key==='Enter')setRoom(parseInt(this.dataset.id,10),this.dataset.name);});
+  });
+  list.querySelectorAll('.ac-create').forEach(function(item){
+    item.addEventListener('click',function(){createAndAddRoom(this.dataset.name);});
+    item.addEventListener('keydown',function(e){if(e.key==='Enter')createAndAddRoom(this.dataset.name);});
+  });
+  list.hidden=false;
+}
+function createAndAddRoom(name){
+  document.getElementById('room-ac-list').hidden=true;
+  if(!roomBuildingID)return;
+  fetch('/admin/api/location/'+roomBuildingID+'/room/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(rm){
+      (locRooms[roomBuildingID]=locRooms[roomBuildingID]||[]).push({id:rm.id,name:rm.name});
+      setRoom(rm.id,rm.name);
+    })
+    .catch(function(){alert('Could not create room');});
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#room-sel-wrap'))document.getElementById('room-ac-list').hidden=true;
+});
+// Wire room picker to loc_id change.
 (function(){
   var locSel=document.getElementById('loc_id');
   if(locSel){
     locSel.addEventListener('change',function(){updateRoomSel(this.value);});
     var initialRoom={{if and $.Data.Event.Location $.Data.Event.Location.ParentID}}{{$.Data.Event.Location.ID}}{{else}}0{{end}};
-    var roomSel=document.getElementById('room_id');
-    if(initialRoom) roomSel.dataset.initial=String(initialRoom);
+    var initialRoomName={{if and $.Data.Event.Location $.Data.Event.Location.ParentID}}{{jsStr $.Data.Event.Location.Location}}{{else}}""{{end}};
     updateRoomSel(locSel.value);
-    if(initialRoom) roomSel.value=String(initialRoom);
+    if(initialRoom) setRoom(initialRoom,initialRoomName);
   }
 })();
 // Org → Location: move selected-org's locations to top; hide separator when filtering.

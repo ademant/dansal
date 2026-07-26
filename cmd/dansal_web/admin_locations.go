@@ -768,6 +768,34 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 	}
 }
 
+// POST /admin/api/location/{id}/room/quick-create — inline room creation from
+// the event form's room picker (#884), mirroring adminMusicianQuickCreateHandler.
+func adminRoomQuickCreateHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, `{"error":"invalid location id"}`, http.StatusBadRequest)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			return
+		}
+		child, err := client.CreateLocationChild(r.Context(), id, strings.TrimSpace(req.Name), "", nil, nil, getSessionToken(r))
+		if err != nil {
+			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			return
+		}
+		client.invalidateLocations()
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": child.ID, "name": child.Location})
+	}
+}
+
 func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

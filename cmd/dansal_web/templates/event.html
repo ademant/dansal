@@ -33,13 +33,14 @@
 </script>
 {{end}}{{end}}
 {{define "evt_tt_row"}}
-<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}">
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" onclick="openTTDetail(this,true)">
   <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
   <div class="tt-body">
     <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
     {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
     {{if .Entry.LocationName}}<div class="tt-meta">{{.Entry.LocationName}}</div>{{end}}
-    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+    {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
     {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
   </div>
 </div>
@@ -187,10 +188,11 @@
             <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
             <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
               {{range $col.Panels}}
-              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px">
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" onclick="openTTDetail(this,false)">
                 <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
                 {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
-                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+                {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
                 {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
               </div>
               {{end}}
@@ -231,6 +233,28 @@
         {{range .Timetable}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
       </div>
       {{end}}
+      <dialog id="tt-detail-dialog" class="tt-detail-dialog">
+        <button type="button" class="tt-detail-close" onclick="document.getElementById('tt-detail-dialog').close()" aria-label="Close">×</button>
+        <div id="tt-detail-body"></div>
+      </dialog>
+      <script>
+      function openTTDetail(el,hasTime){
+        var dlg=document.getElementById('tt-detail-dialog');
+        var body=document.getElementById('tt-detail-body');
+        var html='';
+        if(!hasTime){
+          var s=el.dataset.start,e=el.dataset.end;
+          if(s)html='<div class="tt-time">'+s+(e?' – '+e:'')+'</div>';
+        }
+        body.innerHTML=html+el.innerHTML;
+        dlg.showModal();
+      }
+      (function(){
+        var dlg=document.getElementById('tt-detail-dialog');
+        if(!dlg)return;
+        dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+      })();
+      </script>
     </section>
     {{end}}
 
@@ -640,7 +664,7 @@
 .evt-instructor-link{color:var(--link);text-decoration:none;font-size:.85rem;margin-left:.4rem}
 .evt-instructor-bio{font-size:.88rem;color:var(--fg-dim);margin:.25rem 0 0;padding:0}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
-.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px}
+.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer}
 .tt-workshop{border-left:3px solid var(--link)}
 .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);padding-top:.1rem}
 .tt-title{font-weight:600;font-size:.95rem;color:var(--heading)}
@@ -658,11 +682,15 @@
 .tt-column{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.3rem}
 .tt-column-title{font-size:.9rem;font-weight:700;color:var(--heading);border-bottom:2px solid var(--border);padding-bottom:.3rem;margin-bottom:.2rem}
 .tt-column-body{position:relative;border-left:1px dashed var(--border)}
-.tt-panel{position:absolute;left:.4rem;right:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem}
+.tt-panel{position:absolute;left:.4rem;right:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem;cursor:pointer}
 .tt-panel.tt-workshop{border-left:3px solid var(--link)}
 .tt-panel .tt-panel-title{font-weight:600;font-size:.88rem;color:var(--heading)}
 .tt-panel .tt-meta{font-size:.78rem;color:var(--fg-faint);margin-top:.1rem}
 .tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}
+.tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
+.tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}
+.tt-detail-close{position:absolute;top:.5rem;right:.6rem;background:none;border:none;font-size:1.3rem;line-height:1;color:var(--fg-faint);cursor:pointer;padding:.2rem .4rem}
 @media(max-width:680px){
   .tt-room-pills{display:flex}
   .tt-columns{display:block}

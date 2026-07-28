@@ -23,76 +23,94 @@ Based on the issue title and body, identify the relevant files. Common entry poi
 
 | Topic | Files |
 |---|---|
-| Admin forms (event/location/org) | `cmd/dansal_web/templates/admin_*.html`, `cmd/dansal_web/admin.go` |
+| Admin forms (event/location/org) | `cmd/dansal_web/templates/admin_*.html`, `cmd/dansal_web/admin_*.go` |
 | Public frontend pages | `cmd/dansal_web/templates/*.html`, `cmd/dansal_web/frontend.go` |
 | API / DB logic | `cmd/dansal/*.go` |
+| DB migrations | `cmd/dansal/main.go` (`migrateDB`, `createTables`) |
 | Email / board | `cmd/dansal/email.go`, `cmd/dansal/contact_posts.go` |
-| iCal feeds | `cmd/dansal_web/feed.go` |
+| iCal / feed import | `cmd/dansal_web/feed.go`, `cmd/dansal/admin_import.go` |
 | Translations | `cmd/dansal_web/i18n.yaml` |
 | ActivityPub | `cmd/dansal_web/activitypub.go` |
 | Maps / dark mode | `cmd/dansal_web/templates/base.html` |
+| Runtime config (no restart) | `cmd/dansal_web/sitecache.go`, `cmd/dansal_webmin/siteconfig.go` |
 
 Read the relevant files before writing any code.
 
 ### 3. Check for i18n needs
 
-If new UI strings are needed, add them to all 7 language sections in `cmd/dansal_web/i18n.yaml`. The sections are, in order: `br`, `de`, `en`, `es`, `fr`, `it`, `nl`. Use existing nearby keys as anchors to keep each edit unique. Each edit must match exactly one occurrence — use surrounding context lines if the key pattern repeats.
+If new UI strings are needed, use the `/add-i18n` skill or add manually to all **12** language sections of `cmd/dansal_web/i18n.yaml`. Section order (approximate line numbers, will shift as file grows):
+
+| Lang | ~Line |
+|---|---|
+| `de` | 8 |
+| `br` | 1107 |
+| `en` | 2204 |
+| `es` | 3304 |
+| `fr` | 4391 |
+| `it` | 5490 |
+| `nl` | 6577 |
+| `uk` | 7664 |
+| `ca` | 8745 |
+| `pt` | 9827 |
+| `pl` | 10909 |
+| `cs` | 11991 |
+
+Use a nearby existing key as the anchor for each edit to ensure uniqueness.
 
 ### 4. Implement
 
 Follow the project's established patterns:
 
-- **Template helpers**: `derefInt`, `jsStr`, `isoDate`, `isoTime`, `locationsJSON` are in `cmd/dansal_web/frontend.go`'s `tmplFuncMap`.
+- **Template helpers**: `derefInt`, `jsStr`, `isoDate`, `isoTime`, `locationsJSON`, `timetableLocationOptionsJSON` are in `cmd/dansal_web/frontend.go`'s `tmplFuncMap`.
 - **Maps**: always use `attachTileLayer(map)` from `base.html` — never call `L.tileLayer` directly.
-- **Dark mode tiles**: handled automatically by `attachTileLayer`.
 - **Location org IDs**: `Location.OrganizationIDs []int` (not `OrganizationID *int`).
-- **Multi-day events**: `data-end-date` attribute on `<tr>` rows, handled by `renderWeek()` in `index.html`.
-- **Email**: always send in a goroutine — never block the HTTP handler.
-- **SMTP dial**: use `dialSMTPConn` from `email.go` (IPv4 fallback built in).
-- **DB migrations**: append idempotent `db.Exec(...)` calls at the end of `runMigrations()` in `main.go`. Also update `createTables()` for fresh installs.
-- **New join tables**: include the join table in both `createTables()` and `runMigrations()`.
+- **Parent-child locations**: rooms inherit address/coordinates/parking from parent via `inheritLocationFields()`. Dropdowns use `"Room — Building"` labels via `locationsJSON`.
+- **Unsaved-changes guard**: admin forms use `_formDirty` / `_markDirty()` / `safeGoBack()`. New forms must follow this pattern.
+- **Email / Telegram / Matrix**: always send in a goroutine — never block the HTTP handler.
+- **DB migrations**: use the `/add-db-field` skill, or append `if !applied(N) { … mark(N) }` to `migrateDB()` in `cmd/dansal/main.go`; update `createTables()`; add a safety-net check. Current highest version: **19**.
+- **Rate limiting**: new admin POST routes need an entry in `routeEndpoint` in `cmd/dansal_web/user_rate_limit.go`.
+- **Runtime config without restart**: use `site_settings` table + `siteSettingsCache`, not YAML config.
+- **`has_*` fields**: legacy — switch any touched code path to tags (`has_ball` → `bal-folk`/`fest-noz`, etc.).
+- **Save-and-stay pattern**: redirect to edit page with `?saved=1`; show `.form-saved` banner; back button uses `history.back()`.
 
 ### 5. Build
 
 ```bash
-go build ./cmd/dansal/ ./cmd/dansal_web/
+make build
 ```
 
 Fix all compile errors before continuing.
 
-### 6. Deploy
+### 6. Deploy to dev
 
 ```bash
-sudo install -m 755 dansal /usr/bin/dansal && \
-sudo install -m 755 dansal_web /usr/bin/dansal-web && \
-sudo systemctl restart dansal dansal-web && \
-echo "deployed"
+sudo make deploy INSTANCE=dev
 ```
 
-If only `dansal_web` changed, skip the `dansal` install and restart. If only `dansal` changed, skip `dansal_web`.
+### 7. Commit and close
 
-### 7. Commit and push
-
-Stage only the files you changed. Write a commit message that explains *why*, not *what*. End with `(closes #$ARGUMENTS)` in the subject line.
+Stage only the files you changed. Commit message explains *why*, not *what*. Include `Closes #NNN`.
 
 ```bash
 git add <files>
 git commit -m "$(cat <<'EOF'
-<type>: <description> (closes #$ARGUMENTS)
+<type>: <short description>
 
 <optional body>
+
+Closes #$ARGUMENTS
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
 )"
-git push
 ```
 
 ## Key project facts
 
-- **Binary paths**: `dansal_web` → `/usr/bin/dansal-web` (hyphen), `dansal` → `/usr/bin/dansal`
-- **DB**: SQLite at `/var/lib/dansal/calendar.db`, config at `/etc/dansal/config.yaml`
-- **Services**: `dansal` (API), `dansal-web` (frontend)
-- **DB migrations**: always use `db.Exec(...)` without error checks — idempotency via `IF NOT EXISTS` / `OR IGNORE`
-- **Go packages**: `cmd/dansal` (API server), `cmd/dansal_web` (web frontend), `cmd/dansal_admin` (admin CLI)
-- **`gh issue close`** often fails with a GraphQL permissions error — tell the user to close it manually if that happens
+- **Go version**: 1.26+ required (`go version` to check)
+- **DB**: SQLite at `/var/lib/dansal/<instance>/calendar.db`
+- **Config**: `/etc/dansal/<instance>/{config.yaml, web.yaml, webmin.yaml}`
+- **Services**: `dansal@<instance>` (API), `dansal-web@<instance>` (frontend), `dansal-webmin@<instance>` (admin UI)
+- **Binaries**: installed to `/usr/lib/dansal/<instance>/` by `make deploy`
+- **Always build and deploy all four binaries together** — never selective (issue #147)
+- **`gh issue close`** can fail with a GraphQL permissions error — tell the user to close it manually if that happens

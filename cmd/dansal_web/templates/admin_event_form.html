@@ -430,6 +430,9 @@
   <section class="form-section optional-section" id="sec-timetable">
     <h2>{{$.Strings.T "evt_timetable"}}</h2>
     {{if .TimetableError}}<p class="form-error" role="alert">{{.TimetableError}}</p>{{end}}
+    {{if and .IsNew (not .Event.Timetable)}}
+    <p class="field-hint">{{$.Strings.T "evt_timetable_save_first_hint"}}</p>
+    {{else}}
     <div id="tt-body">
       {{range .Event.Timetable}}{{$entry := .}}
       <div class="tt-entry">
@@ -444,8 +447,8 @@
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
         <div class="tt-line3">
-          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
-          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
+          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
+          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
         <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}">{{.Description}}</textarea></div>
       </div>
@@ -462,13 +465,14 @@
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
         <div class="tt-line3">
-          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
-          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
+          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
+          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
         <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></textarea></div>
       </div>
     </div>
     <input type="hidden" name="timetable_edited" id="tt-edited" value="0">
+    {{end}}
   </section>
 
   {{if not .IsTemplateMode}}
@@ -893,6 +897,7 @@
 .tt-mus-suggest,.tt-ins-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
 .tt-mus-suggest li,.tt-ins-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
 .tt-mus-suggest li:hover,.tt-mus-suggest li.tt-mus-active,.tt-ins-suggest li:hover,.tt-ins-suggest li.tt-ins-active{background:#e8f0fe}
+.tt-opt-sep{padding:0!important;height:1px;background:#ddd;cursor:default!important;margin:.2rem 0}
 .tt-loc-wrap{position:relative}
 .tt-loc-suggest{position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #b3d4f5;border-top:none;border-radius:0 0 4px 4px;max-height:180px;overflow-y:auto;list-style:none;padding:0;margin:0}
 .tt-loc-suggest li{padding:.3rem .55rem;cursor:pointer;font-size:.85rem}
@@ -1208,6 +1213,12 @@ function createAndAddRoom(name){
 }
 document.addEventListener('click',function(e){
   if(!e.target.closest('#room-sel-wrap'))document.getElementById('room-ac-list').hidden=true;
+  if(!e.target.closest('.tt-mus-wrap')){
+    document.querySelectorAll('.tt-mus-suggest').forEach(function(s){s.hidden=true;s.innerHTML='';});
+  }
+  if(!e.target.closest('.tt-ins-wrap')){
+    document.querySelectorAll('.tt-ins-suggest').forEach(function(s){s.hidden=true;s.innerHTML='';});
+  }
 });
 // Wire room picker to loc_id change.
 (function(){
@@ -1483,10 +1494,80 @@ function _ttUpdateMultiDay(){
 })();
 function _buildTTMusWidget(){
   return '<div class="tt-mus-wrap">'+
-    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)" onkeydown="_ttMusKeydown(event,this)">'+
+    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)">'+
     '<input type="hidden" name="tt_musician_id" value="">'+
     '<input type="hidden" name="tt_musician_name" value="">'+
     '<ul class="tt-mus-suggest" hidden></ul></div>';
+}
+// Musicians/instructors already used in another timetable row of this event
+// are shown first in the dropdown (separated from the rest), so admins can
+// reuse someone already booked without retyping their name.
+function _ttAssignedIds(currentWrap,wrapClass,hiddenName){
+  var ids=[];
+  document.querySelectorAll('.'+wrapClass).forEach(function(w){
+    if(w===currentWrap) return;
+    var idInp=w.querySelector('input[name="'+hiddenName+'"]');
+    var v=idInp&&idInp.value?parseInt(idInp.value,10):0;
+    if(v && ids.indexOf(v)<0) ids.push(v);
+  });
+  return ids;
+}
+function _ttMusOption(m,inp,idInp,nameInp,suggest){
+  var li=document.createElement('li');
+  li.textContent=m.name;
+  li.addEventListener('mousedown',function(e){
+    e.preventDefault();
+    inp.value=m.name;
+    idInp.value=m.id;
+    nameInp.value='';
+    suggest.hidden=true;
+    suggest.innerHTML='';
+    _ttMarkEdited();
+  });
+  return li;
+}
+// Opens the full dropdown on focus/click, same idea as a native <select>,
+// while _ttMusInput keeps filtering it live as the user types (#904).
+function _ttMusOpen(inp){
+  _ttMusRender(inp);
+}
+function _ttMusRender(inp){
+  var wrap=inp.closest('.tt-mus-wrap');
+  var idInp=wrap.querySelector('input[name="tt_musician_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_musician_name"]');
+  var suggest=wrap.querySelector('.tt-mus-suggest');
+  var q=inp.value.trim();
+  suggest.innerHTML='';
+  if(!q){
+    var assignedIds=_ttAssignedIds(wrap,'tt-mus-wrap','tt_musician_id');
+    var assigned=_ttMusicians.filter(function(m){return assignedIds.indexOf(m.id)>=0;});
+    var rest=_ttMusicians.filter(function(m){return assignedIds.indexOf(m.id)<0;});
+    assigned.forEach(function(m){suggest.appendChild(_ttMusOption(m,inp,idInp,nameInp,suggest));});
+    if(assigned.length && rest.length){
+      var sep=document.createElement('li');
+      sep.className='tt-opt-sep';
+      suggest.appendChild(sep);
+    }
+    rest.forEach(function(m){suggest.appendChild(_ttMusOption(m,inp,idInp,nameInp,suggest));});
+  } else {
+    var ql=q.toLowerCase();
+    var hits=_ttMusicians.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
+    hits.forEach(function(m){suggest.appendChild(_ttMusOption(m,inp,idInp,nameInp,suggest));});
+    var normQ=_musNorm(q);
+    var hasMatch=_ttMusicians.some(function(m){return _musNorm(m.name)===normQ;});
+    if(!hasMatch){
+      var li=document.createElement('li');
+      li.className='tt-mus-create';
+      li.textContent='➕ '+q;
+      li.addEventListener('mousedown',function(e){
+        e.preventDefault();
+        _ttMusCreate(inp,q);
+      });
+      suggest.appendChild(li);
+    }
+  }
+  if(!suggest.children.length){suggest.hidden=true;return;}
+  suggest.hidden=false;
 }
 function _ttMusKeydown(e,inp){
   var wrap=inp.closest('.tt-mus-wrap');
@@ -1523,42 +1604,9 @@ function _ttMusInput(inp){
   var wrap=inp.closest('.tt-mus-wrap');
   var idInp=wrap.querySelector('input[name="tt_musician_id"]');
   var nameInp=wrap.querySelector('input[name="tt_musician_name"]');
-  var suggest=wrap.querySelector('.tt-mus-suggest');
-  var q=inp.value.trim();
   idInp.value='';
-  nameInp.value=q;
-  if(q.length<3){suggest.hidden=true;suggest.innerHTML='';return;}
-  var ql=q.toLowerCase();
-  var hits=_ttMusicians.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
-  suggest.innerHTML='';
-  hits.forEach(function(m){
-    var li=document.createElement('li');
-    li.textContent=m.name;
-    li.addEventListener('mousedown',function(e){
-      e.preventDefault();
-      inp.value=m.name;
-      idInp.value=m.id;
-      nameInp.value='';
-      suggest.hidden=true;
-      suggest.innerHTML='';
-      _ttMarkEdited();
-    });
-    suggest.appendChild(li);
-  });
-  var normQ=_musNorm(q);
-  var hasMatch=_ttMusicians.some(function(m){return _musNorm(m.name)===normQ;});
-  if(!hasMatch){
-    var li=document.createElement('li');
-    li.className='tt-mus-create';
-    li.textContent='➕ '+q;
-    li.addEventListener('mousedown',function(e){
-      e.preventDefault();
-      _ttMusCreate(inp,q);
-    });
-    suggest.appendChild(li);
-  }
-  if(!suggest.children.length){suggest.hidden=true;return;}
-  suggest.hidden=false;
+  nameInp.value=inp.value.trim();
+  _ttMusRender(inp);
 }
 function _ttMusCreate(inp,name){
   var wrap=inp.closest('.tt-mus-wrap');
@@ -1579,10 +1627,65 @@ function _ttMusCreate(inp,name){
 }
 function _buildTTInsWidget(){
   return '<div class="tt-ins-wrap">'+
-    '<input type="text" class="tt-ins-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_instructor" | jsStr}}+' oninput="_ttInsInput(this)" onkeydown="_ttInsKeydown(event,this)">'+
+    '<input type="text" class="tt-ins-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_instructor" | jsStr}}+' oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)">'+
     '<input type="hidden" name="tt_instructor_id" value="">'+
     '<input type="hidden" name="tt_instructor_name" value="">'+
     '<ul class="tt-ins-suggest" hidden></ul></div>';
+}
+function _ttInsOption(m,inp,idInp,nameInp,suggest){
+  var li=document.createElement('li');
+  li.textContent=m.name;
+  li.addEventListener('mousedown',function(e){
+    e.preventDefault();
+    inp.value=m.name;
+    idInp.value=m.id;
+    if(nameInp)nameInp.value='';
+    suggest.hidden=true;
+    suggest.innerHTML='';
+    _ttMarkEdited();
+  });
+  return li;
+}
+function _ttInsOpen(inp){
+  _ttInsRender(inp);
+}
+function _ttInsRender(inp){
+  var wrap=inp.closest('.tt-ins-wrap');
+  var idInp=wrap.querySelector('input[name="tt_instructor_id"]');
+  var nameInp=wrap.querySelector('input[name="tt_instructor_name"]');
+  var suggest=wrap.querySelector('.tt-ins-suggest');
+  var q=inp.value.trim();
+  suggest.innerHTML='';
+  if(!q){
+    var assignedIds=_ttAssignedIds(wrap,'tt-ins-wrap','tt_instructor_id');
+    var assigned=_ttInstructors.filter(function(m){return assignedIds.indexOf(m.id)>=0;});
+    var rest=_ttInstructors.filter(function(m){return assignedIds.indexOf(m.id)<0;});
+    assigned.forEach(function(m){suggest.appendChild(_ttInsOption(m,inp,idInp,nameInp,suggest));});
+    if(assigned.length && rest.length){
+      var sep=document.createElement('li');
+      sep.className='tt-opt-sep';
+      suggest.appendChild(sep);
+    }
+    rest.forEach(function(m){suggest.appendChild(_ttInsOption(m,inp,idInp,nameInp,suggest));});
+  } else {
+    var ql=q.toLowerCase();
+    var hits=_ttInstructors.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
+    hits.forEach(function(m){suggest.appendChild(_ttInsOption(m,inp,idInp,nameInp,suggest));});
+    var normQ=_musNorm(q);
+    var hasMatch=_ttInstructors.some(function(m){return _musNorm(m.name)===normQ;});
+    if(!hasMatch){
+      var li=document.createElement('li');
+      li.className='tt-mus-create';
+      li.textContent='➕ '+q;
+      li.addEventListener('mousedown',function(e){
+        e.preventDefault();
+        _ttInsCreate(inp,q);
+      });
+      suggest.appendChild(li);
+    }
+  }
+  if(!suggest.children.length){suggest.hidden=true;return;}
+  suggest.hidden=false;
 }
 function _ttInsKeydown(e,inp){
   var wrap=inp.closest('.tt-ins-wrap');
@@ -1616,42 +1719,9 @@ function _ttInsInput(inp){
   var wrap=inp.closest('.tt-ins-wrap');
   var idInp=wrap.querySelector('input[name="tt_instructor_id"]');
   var nameInp=wrap.querySelector('input[name="tt_instructor_name"]');
-  var suggest=wrap.querySelector('.tt-ins-suggest');
-  var q=inp.value.trim();
   idInp.value='';
-  if(nameInp)nameInp.value=q;
-  if(q.length<3){suggest.hidden=true;suggest.innerHTML='';return;}
-  var ql=q.toLowerCase();
-  var hits=_ttInstructors.filter(function(m){return m.name.toLowerCase().indexOf(ql)!==-1;}).slice(0,10);
-  suggest.innerHTML='';
-  hits.forEach(function(m){
-    var li=document.createElement('li');
-    li.textContent=m.name;
-    li.addEventListener('mousedown',function(e){
-      e.preventDefault();
-      inp.value=m.name;
-      idInp.value=m.id;
-      if(nameInp)nameInp.value='';
-      suggest.hidden=true;
-      suggest.innerHTML='';
-      _ttMarkEdited();
-    });
-    suggest.appendChild(li);
-  });
-  var normQ=_musNorm(q);
-  var hasMatch=_ttInstructors.some(function(m){return _musNorm(m.name)===normQ;});
-  if(!hasMatch){
-    var li=document.createElement('li');
-    li.className='tt-mus-create';
-    li.textContent='➕ '+q;
-    li.addEventListener('mousedown',function(e){
-      e.preventDefault();
-      _ttInsCreate(inp,q);
-    });
-    suggest.appendChild(li);
-  }
-  if(!suggest.children.length){suggest.hidden=true;return;}
-  suggest.hidden=false;
+  if(nameInp)nameInp.value=inp.value.trim();
+  _ttInsRender(inp);
 }
 function _ttInsCreate(inp,name){
   var wrap=inp.closest('.tt-ins-wrap');

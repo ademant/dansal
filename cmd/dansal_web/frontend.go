@@ -1028,6 +1028,10 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strings.Join(parts, ",")
 	},
+	// locationsJSON flattens top-level locations and their room children into
+	// one JS array. Rooms are labelled "RoomName — BuildingName" to disambiguate
+	// when two buildings share a room name (mirrors timetableLocationOptionsJSON).
+	// Rooms inherit the parent's orgIDs and town for org-based filtering.
 	"locationsJSON": func(locs []Location) template.JS {
 		type locItem struct {
 			ID     int    `json:"id"`
@@ -1035,12 +1039,13 @@ var tmplFuncMap = template.FuncMap{
 			Town   string `json:"town"`
 			OrgIDs []int  `json:"orgIDs"`
 		}
-		items := make([]locItem, len(locs))
-		for i, l := range locs {
+		items := make([]locItem, 0, len(locs))
+		for _, l := range locs {
 			label := l.Location
 			if l.ShortName != "" {
 				label = l.ShortName
 			}
+			bname := label
 			if l.Town != "" {
 				label += ", " + l.Town
 			}
@@ -1048,7 +1053,18 @@ var tmplFuncMap = template.FuncMap{
 			if orgIDs == nil {
 				orgIDs = []int{}
 			}
-			items[i] = locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs}
+			items = append(items, locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs})
+			for _, c := range l.Children {
+				clabel := c.Location
+				if c.ShortName != "" {
+					clabel = c.ShortName
+				}
+				childOrgIDs := c.OrganizationIDs
+				if len(childOrgIDs) == 0 {
+					childOrgIDs = orgIDs
+				}
+				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs})
+			}
 		}
 		b, _ := json.Marshal(items)
 		return template.JS(b)

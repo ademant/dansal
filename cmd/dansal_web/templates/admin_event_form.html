@@ -304,7 +304,7 @@
       <label for="room-search" style="font-weight:600;font-size:.9rem;color:#444">{{$.Strings.T "loc_rooms_title"}}</label>
       <input type="hidden" id="room_id" name="room_id">
       <div class="ac-wrap">
-        <input id="room-search" type="text" placeholder="{{$.Strings.T "loc_rooms_title"}}" autocomplete="off" oninput="searchRooms(this.value)" onfocus="searchRooms(this.value)">
+        <input id="room-search" type="text" placeholder="{{$.Strings.T "loc_rooms_title"}}" autocomplete="off" oninput="searchRooms(this.value)" onfocus="searchRooms('')">
         <div id="room-ac-list" class="ac-list" hidden></div>
       </div>
     </div>

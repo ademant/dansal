@@ -74,10 +74,12 @@ const timetableReturning = "RETURNING id, event_id, start_time, end_time, title,
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
-		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), COALESCE(t.entry_date,''), t.location_id, COALESCE(l.location,''),
+		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), COALESCE(t.entry_date,''), t.location_id,
+		        COALESCE(l.location,''), COALESCE(l.short_name,''), l.parent_id, COALESCE(pl.location,''), COALESCE(pl.short_name,''),
 		        t.musician_id, COALESCE(m.bandname,''), t.instructor_id, COALESCE(i.name,''), t.created_at
 		 FROM timetable_entries t
 		 LEFT JOIN locations l ON t.location_id = l.id
+		 LEFT JOIN locations pl ON l.parent_id = pl.id
 		 LEFT JOIN musicians m ON t.musician_id = m.id
 		 LEFT JOIN instructors i ON t.instructor_id = i.id
 		 WHERE t.event_id = ? ORDER BY COALESCE(NULLIF(t.entry_date,''), '0000-00-00'), t.start_time, t.id`,
@@ -90,14 +92,29 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	entries := []TimetableEntry{}
 	for rows.Next() {
 		var e TimetableEntry
-		var locID, musID, insID sql.NullInt64
+		var locID, musID, insID, parentID sql.NullInt64
+		var locName, locShortName, parentName, parentShortName string
 		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
-			&e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &e.LocationName, &musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt); err != nil {
+			&e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &locName, &locShortName, &parentID, &parentName, &parentShortName,
+			&musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		if locID.Valid {
 			v := int(locID.Int64)
 			e.LocationID = &v
+			e.LocationName = locShortName
+			if e.LocationName == "" {
+				e.LocationName = locName
+			}
+			if parentID.Valid {
+				bname := parentShortName
+				if bname == "" {
+					bname = parentName
+				}
+				if bname != "" {
+					e.LocationName += " — " + bname
+				}
+			}
 		}
 		if musID.Valid {
 			v := int(musID.Int64)

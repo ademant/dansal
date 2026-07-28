@@ -2403,7 +2403,7 @@ func parseTimetableFormEntries(r *http.Request, musicians []Musician, instructor
 	for _, l := range locs {
 		locMap[l.ID] = locationDisplayName(l)
 		for _, c := range l.Children {
-			locMap[c.ID] = locationDisplayName(c)
+			locMap[c.ID] = locationDisplayName(c) + " — " + locationDisplayName(l)
 		}
 	}
 

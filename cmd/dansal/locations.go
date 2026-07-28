@@ -171,6 +171,9 @@ func inheritLocationFields(child, parent *Location) {
 	if child.Geohash == "" {
 		child.Geohash = parent.Geohash
 	}
+	if child.Parking == "" {
+		child.Parking = parent.Parking
+	}
 }
 
 // resolvedLocation looks up loc's parent (if any) and fills inherited

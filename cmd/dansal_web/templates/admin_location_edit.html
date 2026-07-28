@@ -172,8 +172,9 @@
 
   <section class="form-section" id="sec-parking">
     <h2>{{$.Strings.T "parking_label"}}</h2>
+    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
     <label for="parking">{{$.Strings.T "parking_label"}}</label>
-    <select id="parking" name="parking">
+    <select id="parking" name="parking"{{if .Location.ParentID}} disabled{{end}}>
       <option value="">{{$.Strings.T "parking_unknown"}}</option>
       <option value="none"{{if eq .Location.Parking "none"}} selected{{end}}>{{$.Strings.T "parking_none"}}</option>
       <option value="free"{{if eq .Location.Parking "free"}} selected{{end}}>{{$.Strings.T "parking_free"}}</option>

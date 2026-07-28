@@ -796,6 +796,40 @@ func adminRoomQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 	}
 }
 
+// POST /admin/locations/{id}/rooms/{room_id}/quick-edit — auto-saves room
+// attributes (floor, capacity, size, accessibility, kitchen/bar, no_street_shoes)
+// from the building edit page's inline fast-edit row.
+func adminRoomQuickEditHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		roomID, err := strconv.Atoi(r.PathValue("room_id"))
+		if err != nil {
+			http.Error(w, `{"error":"bad room_id"}`, http.StatusBadRequest)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"read error"}`, http.StatusBadRequest)
+			return
+		}
+		var probe map[string]any
+		if err := json.Unmarshal(body, &probe); err != nil {
+			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+			return
+		}
+		if err := client.PatchLocationAttrs(r.Context(), roomID, body, getSessionToken(r)); err != nil {
+			log.Printf("room quick-edit %d: %v", roomID, err)
+			http.Error(w, `{"error":"save failed"}`, http.StatusBadGateway)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	}
+}
+
 func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

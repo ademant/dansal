@@ -278,15 +278,48 @@
 {{if and .Location.ID (not .Location.ParentID)}}
 <fieldset class="members-fieldset">
   <legend>{{$.Strings.T "loc_rooms_title"}}</legend>
-  <p class="field-hint">A room is its own location (#687), inheriting this building's address and coordinates — only its name and floor differ.</p>
+  <p class="field-hint">A room is its own location, inheriting this building's address and coordinates — rooms can have their own per-room attributes.</p>
   {{if .Location.Children}}
-  <table class="members-table">
+  <div style="overflow-x:auto">
+  <table class="members-table room-qedit-table">
+    <thead>
+      <tr>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Room</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Floor</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Cap · m²</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Attributes</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
     {{range .Location.Children}}
-    <tr>
-      <td>{{.Location}}</td>
-      <td>{{if .FloorCondition}}{{$.Strings.T (print "floor_" .FloorCondition)}}{{end}}</td>
-      <td>{{if .Capacity}}🧑‍🤝‍🧑 {{derefInt .Capacity}}{{end}}{{if .SizeSqm}} 📐 {{derefInt .SizeSqm}} m²{{end}}</td>
+    <tr class="room-qedit-row" data-room-id="{{.ID}}" data-building-id="{{$.Data.Location.ID}}">
+      <td><a href="/admin/locations/{{.ID}}/edit" class="room-edit-link">{{.Location}}</a></td>
+      <td>
+        <select class="room-qe room-qe-floor" style="font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;max-width:7rem">
+          <option value="">—</option>
+          <option value="parquet"{{if eq .FloorCondition "parquet"}} selected{{end}}>{{$.Strings.T "floor_parquet"}}</option>
+          <option value="stone"{{if eq .FloorCondition "stone"}} selected{{end}}>{{$.Strings.T "floor_stone"}}</option>
+          <option value="tiles"{{if eq .FloorCondition "tiles"}} selected{{end}}>{{$.Strings.T "floor_tiles"}}</option>
+          <option value="grass"{{if eq .FloorCondition "grass"}} selected{{end}}>{{$.Strings.T "floor_grass"}}</option>
+          <option value="sand"{{if eq .FloorCondition "sand"}} selected{{end}}>{{$.Strings.T "floor_sand"}}</option>
+          <option value="pavement"{{if eq .FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
+          <option value="carpet"{{if eq .FloorCondition "carpet"}} selected{{end}}>{{$.Strings.T "floor_carpet"}}</option>
+        </select>
+      </td>
+      <td style="white-space:nowrap">
+        <input type="number" class="room-qe room-qe-cap" min="0" step="1" value="{{derefInt .Capacity}}" placeholder="—" title="{{$.Strings.T "loc_capacity"}}" style="width:3.8rem;font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;text-align:right">
+        <input type="number" class="room-qe room-qe-size" min="0" step="1" value="{{derefInt .SizeSqm}}" placeholder="—" title="{{$.Strings.T "loc_size_sqm"}}" style="width:3.8rem;font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;text-align:right">
+      </td>
+      <td style="white-space:nowrap">
+        <button class="room-attr-btn{{if index .Attributes "wheelchair"}} is-on{{end}}" data-attr="wheelchair" type="button" title="{{$.Strings.T "access_wheelchair"}}">♿</button>
+        <button class="room-attr-btn{{if index .Attributes "hearing_loop"}} is-on{{end}}" data-attr="hearing_loop" type="button" title="{{$.Strings.T "access_hearing_loop"}}">🦻</button>
+        <button class="room-attr-btn{{if index .Attributes "visual_support"}} is-on{{end}}" data-attr="visual_support" type="button" title="{{$.Strings.T "access_visual_support"}}">👁</button>
+        <button class="room-attr-btn{{if index .Attributes "kitchen"}} is-on{{end}}" data-attr="kitchen" type="button" title="{{$.Strings.T "attr_kitchen"}}">🍳</button>
+        <button class="room-attr-btn{{if index .Attributes "bar"}} is-on{{end}}" data-attr="bar" type="button" title="{{$.Strings.T "attr_bar"}}">🍺</button>
+        <button class="room-attr-btn room-attr-nss{{if .NoStreetShoes}} is-on{{end}}" data-attr="no_street_shoes" type="button" title="{{$.Strings.T "no_street_shoes_label"}}">👟</button>
+        <span class="room-save-ind" aria-live="polite"></span>
+      </td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
               onsubmit="return confirm('Delete room «{{.Location}}»?')">
@@ -297,6 +330,7 @@
     {{end}}
     </tbody>
   </table>
+  </div>
   {{else}}
   <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No rooms defined.</p>
   {{end}}
@@ -441,6 +475,13 @@
 .org-ac-item:hover,.org-ac-item.is-active{background:#e8f0fe;color:#1a6eb5}
 .room-add-form{display:flex;gap:.5rem;margin-top:.5rem}
 .room-add-input{flex:1;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem}
+.room-attr-btn{background:none;border:none;cursor:pointer;font-size:1.1rem;padding:.1rem .15rem;border-radius:3px;opacity:.2;transition:opacity .15s}
+.room-attr-btn.is-on{opacity:1}
+.room-attr-btn:hover{opacity:.7}
+.room-attr-btn.is-on:hover{opacity:.85}
+.room-edit-link{font-weight:600;color:#1a6eb5;text-decoration:none}
+.room-edit-link:hover{text-decoration:underline}
+.room-save-ind{font-size:.8rem;margin-left:.25rem;color:#5a8a5a;min-width:1rem;display:inline-block}
 .members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
 .members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}
@@ -1058,6 +1099,65 @@ function safeGoBack(){
   form.addEventListener('input',_markDirty);
   form.addEventListener('change',_markDirty);
   form.addEventListener('submit',function(){_formDirty=false;});
+})();
+(function(){
+  // Room fast-edit: auto-saves floor/capacity/size/attrs on change.
+  var rows = document.querySelectorAll('.room-qedit-row');
+  if (!rows.length) return;
+
+  function saveRow(row) {
+    var roomID = row.dataset.roomId;
+    var buildingID = row.dataset.buildingId;
+    var attrs = {};
+    row.querySelectorAll('.room-attr-btn:not(.room-attr-nss)').forEach(function(btn){
+      attrs[btn.dataset.attr] = btn.classList.contains('is-on');
+    });
+    var nssBtn = row.querySelector('.room-attr-nss');
+    var payload = {
+      floor_condition: row.querySelector('.room-qe-floor').value,
+      no_street_shoes: nssBtn ? nssBtn.classList.contains('is-on') : false,
+      attributes: attrs
+    };
+    var cap = parseInt(row.querySelector('.room-qe-cap').value, 10);
+    var size = parseInt(row.querySelector('.room-qe-size').value, 10);
+    if (!isNaN(cap) && cap > 0) payload.capacity = cap;
+    if (!isNaN(size) && size > 0) payload.size_sqm = size;
+
+    var ind = row.querySelector('.room-save-ind');
+    ind.textContent = '…';
+    fetch('/admin/locations/' + buildingID + '/rooms/' + roomID + '/quick-edit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r){
+      if (!r.ok) throw new Error('fail');
+      ind.textContent = '✓';
+      setTimeout(function(){ ind.textContent = ''; }, 2000);
+    }).catch(function(){
+      ind.textContent = '⚠';
+    });
+  }
+
+  rows.forEach(function(row){
+    row.querySelectorAll('.room-qe-floor, .room-qe-cap, .room-qe-size').forEach(function(el){
+      el.addEventListener('change', function(){ saveRow(row); });
+    });
+    row.querySelectorAll('.room-attr-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        btn.classList.toggle('is-on');
+        saveRow(row);
+      });
+    });
+    // Guard: warn if building form is dirty before navigating into a room.
+    var link = row.querySelector('.room-edit-link');
+    if (link) {
+      link.addEventListener('click', function(e){
+        if (_formDirty && !confirm('{{$.Strings.T "admin_unsaved_confirm"}}')) {
+          e.preventDefault();
+        }
+      });
+    }
+  });
 })();
 </script>
 {{end}}

@@ -1475,6 +1475,28 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	return nil
 }
 
+// PatchLocationAttrs sends a raw JSON merge-patch to PATCH /api/v1/locations/{id}.
+// body must be valid JSON; only the fields it contains are updated.
+func (c *DansalClient) PatchLocationAttrs(ctx context.Context, id int, body []byte, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
 func (c *DansalClient) GetLocationChildren(ctx context.Context, locationID int) ([]Location, error) {
 	var children []Location
 	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/children", locationID), &children); err != nil {

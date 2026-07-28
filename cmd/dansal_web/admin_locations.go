@@ -304,28 +304,37 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		// Form is multipart/form-data (shares the template with the edit page
+		// which supports site-plan image uploads). ParseForm alone skips the
+		// multipart body, leaving all fields empty and causing a spurious 400.
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		loc := Location{
-			Location:      strings.TrimSpace(r.FormValue("location")),
-			ShortName:     strings.TrimSpace(r.FormValue("short_name")),
-			Address:       strings.TrimSpace(r.FormValue("address")),
-			Zipcode:       strings.TrimSpace(r.FormValue("zipcode")),
-			Town:          strings.TrimSpace(r.FormValue("town")),
-			Country:       strings.TrimSpace(r.FormValue("country")),
-			CountryCode:   strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
-			Region:        strings.TrimSpace(r.FormValue("region")),
-			Latitude:      parseLatLng(r.FormValue("latitude")),
-			Longitude:     parseLatLng(r.FormValue("longitude")),
-			Internetsite:  strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:         parseOsmID(r.FormValue("osm_id")),
-			OsmType:       strings.TrimSpace(r.FormValue("osm_type")),
-			Aliases:       parseAliases(r.FormValue("aliases")),
-			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
-			Capacity:      parseFormOptionalInt(r.Form, "capacity"),
-			SizeSqm:       parseFormOptionalInt(r.Form, "size_sqm"),
+			Location:       strings.TrimSpace(r.FormValue("location")),
+			ShortName:      strings.TrimSpace(r.FormValue("short_name")),
+			Address:        strings.TrimSpace(r.FormValue("address")),
+			Zipcode:        strings.TrimSpace(r.FormValue("zipcode")),
+			Town:           strings.TrimSpace(r.FormValue("town")),
+			Country:        strings.TrimSpace(r.FormValue("country")),
+			CountryCode:    strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
+			Region:         strings.TrimSpace(r.FormValue("region")),
+			Latitude:       parseLatLng(r.FormValue("latitude")),
+			Longitude:      parseLatLng(r.FormValue("longitude")),
+			Internetsite:   strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:          parseOsmID(r.FormValue("osm_id")),
+			OsmType:        strings.TrimSpace(r.FormValue("osm_type")),
+			Aliases:        parseAliases(r.FormValue("aliases")),
+			NotesMd:        strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes:     locationAttrsFromForm(r),
+			Parking:        r.FormValue("parking"),
+			FloorCondition: r.FormValue("floor_condition"),
+			NoStreetShoes:  r.FormValue("no_street_shoes") == "1",
+			Capacity:       parseFormOptionalInt(r.Form, "capacity"),
+			SizeSqm:        parseFormOptionalInt(r.Form, "size_sqm"),
 		}
 		// Parse multi-value organization_ids checkboxes. Non-admin callers must
 		// include these so the API can authorize the create request.

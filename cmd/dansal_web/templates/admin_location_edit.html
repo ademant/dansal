@@ -279,16 +279,16 @@
 {{if and .Location.ID (not .Location.ParentID)}}
 <fieldset class="members-fieldset">
   <legend>{{$.Strings.T "loc_rooms_title"}}</legend>
-  <p class="field-hint">A room is its own location, inheriting this building's address and coordinates — rooms can have their own per-room attributes.</p>
+  <p class="field-hint">{{$.Strings.T "loc_room_hint"}}</p>
   {{if .Location.Children}}
   <div style="overflow-x:auto">
   <table class="members-table room-qedit-table">
     <thead>
       <tr>
-        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Room</th>
-        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Floor</th>
-        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Cap · m²</th>
-        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">Attributes</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "tt_room"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "floor_label"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "loc_capacity"}} · {{$.Strings.T "loc_size_sqm"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "admin_attributes"}}</th>
         <th></th>
       </tr>
     </thead>
@@ -323,8 +323,8 @@
       </td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('Delete room «{{.Location}}»?')">
-          <button type="submit" class="btn-sm btn-del">Delete</button>
+              onsubmit="return confirm('{{printf ($.Strings.T "loc_room_delete_confirm") .Location}}')">
+          <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
         </form>
       </td>
     </tr>
@@ -333,10 +333,10 @@
   </table>
   </div>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No rooms defined.</p>
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_rooms"}}</p>
   {{end}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/rooms/new" class="room-add-form">
-    <input type="text" name="name" placeholder="New room name…" required class="room-add-input">
+    <input type="text" name="name" placeholder="{{$.Strings.T "loc_room_name_placeholder"}}" required class="room-add-input">
     <select name="floor_condition">
       <option value="">{{$.Strings.T "floor_label"}}…</option>
       <option value="parquet">{{$.Strings.T "floor_parquet"}}</option>
@@ -349,14 +349,14 @@
     </select>
     <input type="number" min="0" step="1" name="capacity" placeholder="{{$.Strings.T "loc_capacity"}}" class="room-add-input" style="flex:0 0 6rem">
     <input type="number" min="0" step="1" name="size_sqm" placeholder="{{$.Strings.T "loc_size_sqm"}}" class="room-add-input" style="flex:0 0 6rem">
-    <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
+    <button type="submit" class="btn-sm btn-primary-sm">{{$.Strings.T "loc_room_add"}}</button>
   </form>
 </fieldset>
 {{end}}
 
 {{if .Location.ID}}
 <fieldset class="members-fieldset">
-  <legend>Organisations</legend>
+  <legend>{{$.Strings.T "admin_orgs_title"}}</legend>
   {{if .AssignedOrgs}}
   <table class="members-table">
     <tbody>
@@ -367,7 +367,7 @@
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0">
           <input type="hidden" name="action" value="remove">
           <input type="hidden" name="org_id" value="{{.ID}}">
-          <button type="submit" class="btn-sm btn-del">Remove</button>
+          <button type="submit" class="btn-sm btn-del">{{$.Strings.T "assign_remove_btn"}}</button>
         </form>
       </td>
     </tr>
@@ -375,13 +375,13 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No organisations assigned.</p>
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_orgs_assigned"}}</p>
   {{end}}
   {{if .AvailableOrgs}}
   <div class="org-ac-wrap">
     <div class="org-ac-box" id="org-ac-box">
       <input type="text" id="org-ac-input" class="org-ac-input"
-             placeholder="Add organisation…" autocomplete="off"
+             placeholder="{{$.Strings.T "loc_org_add_placeholder"}}" autocomplete="off"
              role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="org-ac-list">
       <ul id="org-ac-list" class="org-ac-list" role="listbox" hidden>
         {{range .AvailableOrgs}}

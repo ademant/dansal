@@ -64,11 +64,18 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 	query += " FROM instructors"
 	if withCounts {
 		query += ` LEFT JOIN (
-			SELECT ei.instructor_id,
-				SUM(CASE WHEN e.start_time > strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS future_count,
-				SUM(CASE WHEN e.start_time <= strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS past_count
-			FROM event_instructors ei JOIN events e ON e.id = ei.event_id
-			GROUP BY ei.instructor_id
+			SELECT instructor_id,
+				SUM(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM (
+				SELECT DISTINCT ei.instructor_id AS instructor_id, e.id AS event_id, e.start_time AS start_time, e.is_published AS is_published
+				FROM event_instructors ei JOIN events e ON e.id = ei.event_id
+				UNION
+				SELECT DISTINCT t.instructor_id AS instructor_id, e.id AS event_id, e.start_time AS start_time, e.is_published AS is_published
+				FROM timetable_entries t JOIN events e ON e.id = t.event_id
+				WHERE t.instructor_id IS NOT NULL
+			)
+			GROUP BY instructor_id
 		) ec ON ec.instructor_id = instructors.id`
 	}
 	var args []any

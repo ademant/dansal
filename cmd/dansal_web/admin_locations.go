@@ -37,6 +37,7 @@ type AdminLocationEditData struct {
 	ConflictID    int // set when API returns 409: location with same OSM ID already exists
 	ReturnURL     string
 	From          string
+	Saved         bool
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under
@@ -427,6 +428,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			From:          safeReturnPath(r.URL.Query().Get("from")),
 			AssignedOrgs:  assignedOrgs,
 			AvailableOrgs: availableOrgs,
+			Saved:         r.URL.Query().Get("saved") == "1",
 		}))
 	}
 }
@@ -524,16 +526,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				}
 			}
 		}
-		target := returnURL
-		if from != "" {
-			target = from
-		}
-		if p := safeReturnPath(target); p != "" {
-			target = p
-		} else {
-			target = "/admin/locations"
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit?saved=1", id), http.StatusSeeOther)
 	}
 }
 

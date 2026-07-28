@@ -5,6 +5,7 @@
 
 <div class="edit-wrap">
 {{with .Data}}
+{{if .Saved}}<p class="form-saved" role="status">{{$.Strings.T "admin_saved"}}</p>{{end}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 {{if .ConflictID}}<div class="form-error" role="alert">
   <p>{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
@@ -403,6 +404,7 @@
 <style>
 .edit-wrap{max-width:1100px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.form-saved{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .room-edit-notice{background:#f0f7ff;color:#1a5f8a;border:1px solid #b3d4f5;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .room-edit-notice a{color:#1a6eb5;font-weight:600}

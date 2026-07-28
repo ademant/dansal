@@ -1041,6 +1041,9 @@ var tmplFuncMap = template.FuncMap{
 		}
 		items := make([]locItem, 0, len(locs))
 		for _, l := range locs {
+			if l.ParentID != nil {
+				continue // rooms appear as children of their building; skip here to avoid duplicates
+			}
 			label := l.Location
 			if l.ShortName != "" {
 				label = l.ShortName
@@ -1083,6 +1086,9 @@ var tmplFuncMap = template.FuncMap{
 		}
 		items := []locItem{}
 		for _, l := range locs {
+			if l.ParentID != nil {
+				continue // rooms appear as children of their building; skip here to avoid duplicates
+			}
 			label := l.Location
 			if l.ShortName != "" {
 				label = l.ShortName

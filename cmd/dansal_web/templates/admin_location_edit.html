@@ -318,7 +318,7 @@
         <button class="room-attr-btn{{if index .Attributes "visual_support"}} is-on{{end}}" data-attr="visual_support" type="button" title="{{$.Strings.T "access_visual_support"}}">👁</button>
         <button class="room-attr-btn{{if index .Attributes "kitchen"}} is-on{{end}}" data-attr="kitchen" type="button" title="{{$.Strings.T "attr_kitchen"}}">🍳</button>
         <button class="room-attr-btn{{if index .Attributes "bar"}} is-on{{end}}" data-attr="bar" type="button" title="{{$.Strings.T "attr_bar"}}">🍺</button>
-        <button class="room-attr-btn room-attr-nss{{if .NoStreetShoes}} is-on{{end}}" data-attr="no_street_shoes" type="button" title="{{$.Strings.T "no_street_shoes_label"}}">👟</button>
+        <button class="room-attr-btn room-attr-nss{{if not .NoStreetShoes}} is-on{{end}}" data-attr="no_street_shoes" type="button" title="{{$.Strings.T "no_street_shoes_label"}}">👟</button>
         <span class="room-save-ind" aria-live="polite"></span>
       </td>
       <td>
@@ -481,6 +481,9 @@
 .room-attr-btn.is-on{opacity:1}
 .room-attr-btn:hover{opacity:.7}
 .room-attr-btn.is-on:hover{opacity:.85}
+.room-attr-nss{position:relative}
+.room-attr-nss:not(.is-on){opacity:1}
+.room-attr-nss:not(.is-on)::after{content:"🚫";font-size:.5em;position:absolute;top:0;right:-1px;line-height:1;pointer-events:none}
 .room-edit-link{font-weight:600;color:#1a6eb5;text-decoration:none}
 .room-edit-link:hover{text-decoration:underline}
 .room-save-ind{font-size:.8rem;margin-left:.25rem;color:#5a8a5a;min-width:1rem;display:inline-block}
@@ -1117,7 +1120,7 @@ function safeGoBack(){
     var nssBtn = row.querySelector('.room-attr-nss');
     var payload = {
       floor_condition: row.querySelector('.room-qe-floor').value,
-      no_street_shoes: nssBtn ? nssBtn.classList.contains('is-on') : false,
+      no_street_shoes: nssBtn ? !nssBtn.classList.contains('is-on') : false,
       attributes: attrs
     };
     var cap = parseInt(row.querySelector('.room-qe-cap').value, 10);

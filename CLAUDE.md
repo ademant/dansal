@@ -83,7 +83,7 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 | `cmd/dansal_admin/` | Admin CLI (`/usr/lib/dansal/<instance>/dansal_admin`) |
 | `cmd/dansal_webmin/` | Web admin UI (`/usr/lib/dansal/<instance>/dansal-webmin`) |
 | `cmd/dansal_web/templates/` | Go HTML templates |
-| `cmd/dansal_web/i18n.yaml` | Translations (7 languages: `br`, `de`, `en`, `es`, `fr`, `it`, `nl`) |
+| `cmd/dansal_web/i18n.yaml` | Translations (12 languages: `br`, `ca`, `cs`, `de`, `en`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `uk`) |
 
 ## Key facts
 
@@ -92,7 +92,7 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 - **DB migrations**: append idempotent `db.Exec(...)` calls at the end of `runMigrations()` in `cmd/dansal/main.go`; also update `createTables()` for fresh installs
 - **Maps**: always use `attachTileLayer(map)` from `base.html` — never call `L.tileLayer` directly
 - **Email, Telegram, Matrix**: always send in a goroutine — never block the HTTP handler
-- **New i18n strings**: add to all 7 language sections in `i18n.yaml` (`br`, `de`, `en`, `es`, `fr`, `it`, `nl`)
+- **New i18n strings**: add to all 12 language sections in `i18n.yaml` (`br`, `ca`, `cs`, `de`, `en`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `uk`)
 
 ## DB migration safety-net pattern
 
@@ -168,6 +168,28 @@ All mobile adaptation is CSS (`@media` queries) and JS — the server sends iden
 ## Navigation deep-links
 
 Use `geo:lat,lon?q=lat,lon` links alongside OpenStreetMap links to let mobile users open OsmAnd or other native navigation apps. Both `event.html` and `location.html` have these. No `target="_blank"` on `geo:` links — they open native apps, not browser tabs.
+
+## Unsaved-changes guard pattern
+
+Admin forms use `_formDirty` / `_markDirty()` / `safeGoBack()` to warn before navigating away with unsaved changes:
+
+- `_formDirty = false` at page load; `_markDirty()` sets it to `true` and attaches a `beforeunload` listener.
+- `safeGoBack()` checks `_formDirty` and calls `history.back()` — used by the `←` back button.
+- On form submit, `_formDirty = false` is set immediately so the `beforeunload` listener does not fire.
+- Room edit links inside a form check `_formDirty` before navigating away.
+
+## Parent-child locations (rooms / buildings)
+
+Locations can have a parent via `parent_id`. A child (room) inherits empty address, coordinates, and parking from its parent at read time via `inheritLocationFields()` in `cmd/dansal/locations.go`. Rules:
+
+- `locationsJSON` template func flattens top-level locations and their children using `"RoomName — BuildingName"` labels for disambiguation in dropdowns.
+- The room picker on the event edit form is click-to-open (`onfocus="searchRooms('')"`).
+- `adminLocationDashboardHandler` inherits parent org IDs for the "create event" button when a room has no direct org associations.
+- On the location edit form, address/coordinates/parking fields are disabled for child locations (they inherit from parent).
+
+## IndexNow / site_settings
+
+Runtime config that must not require a service restart lives in the `site_settings` table in the web DB, read via `siteSettingsCache` (10 s TTL) in `cmd/dansal_web/sitecache.go`. The webmin UI (`cmd/dansal_webmin/`) writes to this table. Example: the IndexNow API key is stored here and served dynamically at `GET /{key}.txt` without a restart.
 
 ## Tags vocabulary
 

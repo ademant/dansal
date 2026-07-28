@@ -2123,6 +2123,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 		renderErrFull := func(errKey string) {
 			ev := Event{
 				Title:          req.Title,
@@ -2145,6 +2146,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Pricing:        req.Pricing,
 				Musicians:      musiciansByID(musicianIDs, bundle.Musicians),
 				Instructors:    instructorsByID(instructorIDs, bundle.Instructors),
+				Timetable:      formTimetable,
 			}
 			if selectedLocID > 0 {
 				ev.LocationID = &selectedLocID
@@ -2381,6 +2383,92 @@ func instructorsByID(ids []int, all []Instructor) []Instructor {
 		}
 	}
 	return out
+}
+
+// parseTimetableFormEntries reads the tt_* multi-value fields from a submitted
+// multipart form and returns them as TimetableEntry values ready to be passed
+// back to the event form template on a validation error, so the user does not
+// lose timetable rows they typed before the error. Name fields are resolved
+// from the supplied slices so the autocomplete inputs are also re-populated.
+func parseTimetableFormEntries(r *http.Request, musicians []Musician, instructors []Instructor, locs []Location) []TimetableEntry {
+	musMap := make(map[int]string, len(musicians))
+	for _, m := range musicians {
+		musMap[m.ID] = m.Bandname
+	}
+	insMap := make(map[int]string, len(instructors))
+	for _, ins := range instructors {
+		insMap[ins.ID] = ins.Name
+	}
+	locMap := make(map[int]string)
+	for _, l := range locs {
+		locMap[l.ID] = locationDisplayName(l)
+		for _, c := range l.Children {
+			locMap[c.ID] = locationDisplayName(c)
+		}
+	}
+
+	starts := r.MultipartForm.Value["tt_start"]
+	ends := r.MultipartForm.Value["tt_end"]
+	titles := r.MultipartForm.Value["tt_title"]
+	descs := r.MultipartForm.Value["tt_desc"]
+	rooms := r.MultipartForm.Value["tt_room"]
+	ttTypes := r.MultipartForm.Value["tt_type"]
+	locIDs := r.MultipartForm.Value["tt_loc_id"]
+	musIDs := r.MultipartForm.Value["tt_musician_id"]
+	insIDs := r.MultipartForm.Value["tt_instructor_id"]
+	dates := r.MultipartForm.Value["tt_entry_date"]
+
+	var entries []TimetableEntry
+	for i, s := range starts {
+		s = strings.TrimSpace(s)
+		if i >= len(titles) {
+			break
+		}
+		t := strings.TrimSpace(titles[i])
+		if s == "" && t == "" {
+			continue
+		}
+		entry := TimetableEntry{StartTime: s, Title: t}
+		if i < len(ends) {
+			entry.EndTime = strings.TrimSpace(ends[i])
+		}
+		if i < len(descs) {
+			entry.Description = strings.TrimSpace(descs[i])
+		}
+		if i < len(rooms) {
+			entry.Room = strings.TrimSpace(rooms[i])
+		}
+		if i < len(ttTypes) {
+			if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+				entry.EntryType = v
+			} else {
+				entry.EntryType = "bal"
+			}
+		}
+		if i < len(locIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+				entry.LocationID = &v
+				entry.LocationName = locMap[v]
+			}
+		}
+		if i < len(musIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
+				entry.MusicianID = &v
+				entry.MusicianName = musMap[v]
+			}
+		}
+		if i < len(insIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+				entry.InstructorID = &v
+				entry.InstructorName = insMap[v]
+			}
+		}
+		if i < len(dates) {
+			entry.EntryDate = strings.TrimSpace(dates[i])
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -2772,8 +2860,10 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			applyTemplateFields(&req, tplOverride, tplFieldsSet, bundle.Locations)
 		}
 
+		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 		renderErrFull := func(errKey string) {
 			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
+			event.Timetable = formTimetable
 			event.Title = req.Title
 			event.Description = req.Description
 			event.StartTime = req.StartTime

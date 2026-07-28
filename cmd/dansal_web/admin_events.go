@@ -3313,18 +3313,25 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		// Determine which org to pre-assign for new events.
+		// Child rooms typically have no direct org associations; fall back to
+		// the parent building's orgs so the button is still shown.
+		effectiveOrgIDs := loc.OrganizationIDs
+		if len(effectiveOrgIDs) == 0 && parent != nil {
+			effectiveOrgIDs = parent.OrganizationIDs
+		}
+
 		var newEventOrgID int
 		var newEventOrgName string
 
 		if su.Role == "admin" {
-			if len(loc.OrganizationIDs) > 0 {
-				newEventOrgID = loc.OrganizationIDs[0]
+			if len(effectiveOrgIDs) > 0 {
+				newEventOrgID = effectiveOrgIDs[0]
 				newEventOrgName = orgMap[newEventOrgID]
 			}
 		} else {
 			userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
-			locOrgSet := make(map[int]bool, len(loc.OrganizationIDs))
-			for _, oid := range loc.OrganizationIDs {
+			locOrgSet := make(map[int]bool, len(effectiveOrgIDs))
+			for _, oid := range effectiveOrgIDs {
 				locOrgSet[oid] = true
 			}
 			for _, oid := range userOrgIDs {

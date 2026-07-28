@@ -951,6 +951,14 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return *p
 	},
+	// locName returns the short_name when set, otherwise the full location name.
+	// Useful for compact displays where town/address are shown separately.
+	"locName": func(l Location) string {
+		if l.ShortName != "" {
+			return l.ShortName
+		}
+		return l.Location
+	},
 	"intVal": func(p *int) string {
 		if p == nil {
 			return ""

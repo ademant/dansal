@@ -37,6 +37,7 @@ type AdminEventsData struct {
 	Organizations      []Organization
 	OrgMap             map[int]string
 	Locations          []Location
+	LocationMap        map[int]Location
 	Musicians          []Musician
 	Dances             []Dance
 	AllTags            []Tag
@@ -1424,6 +1425,10 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		for _, o := range orgs {
 			orgMap[o.ID] = o.Name
 		}
+		locMap := make(map[int]Location, len(locs))
+		for _, l := range locs {
+			locMap[l.ID] = l
+		}
 		var filterOrgName string
 		if orgID == -1 {
 			filterOrgName = i18n.T(r, "filter_no_org")
@@ -1444,6 +1449,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Organizations:      orgs,
 			OrgMap:             orgMap,
 			Locations:          locs,
+			LocationMap:        locMap,
 			Musicians:          musicians,
 			Dances:             dances,
 			AllTags:            allTags,

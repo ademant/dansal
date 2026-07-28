@@ -151,7 +151,7 @@
     <td class="col-cb cell-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="event-cb"><input type="hidden" name="event_org_{{.ID}}" value="{{if .OrganizationID}}{{.OrganizationID}}{{end}}"></td>
     <td class="cell-date" style="white-space:nowrap" data-val="{{.StartTime}}" data-mobile-icon="📅">{{formatDate $.LangCode .StartTime}}</td>
     <td class="cell-title"><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
-    <td class="cell-loc" data-mobile-icon="📍">{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
+    <td class="cell-loc" data-mobile-icon="📍">{{if .Location}}{{if .Location.ParentID}}{{locName .Location}} @ {{locName (index $.Data.LocationMap (derefInt .Location.ParentID))}}{{else if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
     <td class="cell-org" style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
     <td class="cell-status">
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>

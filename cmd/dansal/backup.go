@@ -101,17 +101,8 @@ func createBackup(outputPath string, since time.Time) adminResponse {
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 
-	var archiveErr error
-
-	// Config is always included — it is small and defines the runtime.
-	if configFilePath != "" {
-		archiveErr = addFileToTar(tw, configFilePath, "config.yaml")
-	}
-
 	// Database snapshot is always included.
-	if archiveErr == nil {
-		archiveErr = addFileToTar(tw, tmpDB.Name(), "calendar.db")
-	}
+	archiveErr := addFileToTar(tw, tmpDB.Name(), "calendar.db")
 
 	// Images — all for full backup, only changed files for incremental.
 	if archiveErr == nil {
@@ -138,6 +129,102 @@ func createBackup(outputPath string, since time.Time) adminResponse {
 		Size:        size,
 		Incremental: incremental,
 	}}
+}
+
+type configBackupResult struct {
+	Path  string   `json:"path"`
+	Size  int64    `json:"size"`
+	Files []string `json:"files"`
+}
+
+func adminConfigBackup(req adminRequest) adminResponse {
+	return createConfigBackup(req.Path)
+}
+
+// resolveConfigBackupPath mirrors resolveBackupPath but with its own
+// filename prefix, so config-backup archives never collide with business
+// data ones in the same directory.
+func resolveConfigBackupPath(outputPath string) string {
+	filename := fmt.Sprintf("dansal-config-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
+	if outputPath == "" {
+		dir := "/var/lib/dansal/backups"
+		if config != nil && config.Server.BackupDir != "" {
+			dir = config.Server.BackupDir
+		}
+		return filepath.Join(dir, filename)
+	}
+	if strings.HasSuffix(outputPath, "/") || strings.HasSuffix(outputPath, string(os.PathSeparator)) {
+		return filepath.Join(outputPath, filename)
+	}
+	if info, err := os.Stat(outputPath); err == nil && info.IsDir() {
+		return filepath.Join(outputPath, filename)
+	}
+	return outputPath
+}
+
+// createConfigBackup packages deployment/reproducibility data — config files
+// and this instance's nginx vhost configs — so a crashed server can be
+// rebuilt on fresh hardware/OS. It deliberately excludes business data
+// (calendar.db, images) and the Let's Encrypt certificate, which is
+// re-issued against the restored nginx config rather than carried in the
+// backup. Restoring one produces a working but empty instance: no users, no
+// events — those come from a separate business-data restore.
+func createConfigBackup(outputPath string) adminResponse {
+	if configFilePath == "" {
+		return adminResponse{OK: false, Error: "no config file path known"}
+	}
+	outputPath = resolveConfigBackupPath(outputPath)
+
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
+		return adminResponse{OK: false, Error: "mkdir: " + err.Error()}
+	}
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return adminResponse{OK: false, Error: "create archive: " + err.Error()}
+	}
+
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+
+	confDir := filepath.Dir(configFilePath)
+	instance := filepath.Base(confDir)
+
+	candidates := []struct{ src, name string }{
+		{configFilePath, "config.yaml"},
+		{filepath.Join(confDir, "web.yaml"), "web.yaml"},
+		{filepath.Join(confDir, "webmin.yaml"), "webmin.yaml"},
+		{"/etc/nginx/conf.d/dansal-" + instance + ".conf", "nginx/dansal.conf"},
+		{"/etc/nginx/conf.d/dansal-webmin-" + instance + ".conf", "nginx/dansal-webmin.conf"},
+		{"/etc/nginx/conf.d/dansal-doc-" + instance + ".conf", "nginx/dansal-doc.conf"},
+	}
+
+	var included []string
+	var archiveErr error
+	for _, c := range candidates {
+		if _, statErr := os.Stat(c.src); statErr != nil {
+			continue // optional file, not present for this instance
+		}
+		if archiveErr = addFileToTar(tw, c.src, c.name); archiveErr != nil {
+			break
+		}
+		included = append(included, c.name)
+	}
+
+	tw.Close()
+	gz.Close()
+	f.Close()
+
+	if archiveErr != nil {
+		os.Remove(outputPath)
+		return adminResponse{OK: false, Error: archiveErr.Error()}
+	}
+
+	info, _ := os.Stat(outputPath)
+	var size int64
+	if info != nil {
+		size = info.Size()
+	}
+	return adminResponse{OK: true, Data: configBackupResult{Path: outputPath, Size: size, Files: included}}
 }
 
 func addFileToTar(tw *tar.Writer, srcPath, name string) error {

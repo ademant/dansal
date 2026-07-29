@@ -107,6 +107,7 @@ var mutatingAdminCmds = map[string]bool{
 	"backup":                   true,
 	"incremental-backup":       true,
 	"restore":                  true,
+	"config-backup":            true,
 	"magic-link":               true,
 	"invite-admin":             true,
 	"revoke-invite":            true,
@@ -137,7 +138,7 @@ func adminAuditTarget(req adminRequest) string {
 		return "email=" + req.Email + " new_email=" + req.NewEmail
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
-	case "backup", "incremental-backup", "restore":
+	case "backup", "incremental-backup", "restore", "config-backup":
 		return "path=" + req.Path
 	case "revoke-invite":
 		return "invite_token=" + req.InviteToken
@@ -200,6 +201,8 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "config-backup":
+		return adminConfigBackup(req)
 	case "list-backups":
 		return adminListBackups(req)
 	case "magic-link":

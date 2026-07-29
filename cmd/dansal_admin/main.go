@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -1018,8 +1019,11 @@ func cmdPasswordBackup(args []string) {
 		}
 	}
 
-	// Server writes the backup to a temp path; we encrypt it locally.
-	tmp, err := os.CreateTemp("", "dansal-pbkup-*.tar.gz")
+	// Server writes the backup to a temp path; we encrypt it locally. This
+	// must live next to the admin socket, not the system temp dir: the
+	// server runs with PrivateTmp=true, so its /tmp is a different mount
+	// namespace than ours and can't see a path we create there.
+	tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-pbkup-*.tar.gz")
 	if err != nil {
 		die("temp file: %v", err)
 	}
@@ -1079,7 +1083,9 @@ func cmdPasswordRestore(args []string) {
 		die("%v", err)
 	}
 
-	tmp, err := os.CreateTemp("", "dansal-prestore-*.tar.gz")
+	// Same PrivateTmp constraint as cmdPasswordBackup: the server must be
+	// able to see this path, so it can't be the system temp dir.
+	tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-prestore-*.tar.gz")
 	if err != nil {
 		die("temp file: %v", err)
 	}

@@ -23,8 +23,13 @@ type backupResult struct {
 	Incremental bool   `json:"incremental"`
 }
 
+// adminBackup and adminIncrementalBackup always strip credentials — they
+// never honor a caller-supplied flag. Only adminBackupWithCredentials
+// (reachable exclusively via the dedicated "backup-with-credentials" admin
+// command) passes keepCredentials=true, so a plaintext credentials-included
+// backup can never be produced by requesting "backup" with some field set.
 func adminBackup(req adminRequest) adminResponse {
-	return createBackup(req.Path, time.Time{}, req.KeepCredentials)
+	return createBackup(req.Path, time.Time{}, false)
 }
 
 func adminIncrementalBackup(req adminRequest) adminResponse {
@@ -35,7 +40,15 @@ func adminIncrementalBackup(req adminRequest) adminResponse {
 	if err != nil {
 		return adminResponse{OK: false, Error: "invalid since time: " + err.Error()}
 	}
-	return createBackup(req.Path, since, req.KeepCredentials)
+	return createBackup(req.Path, since, false)
+}
+
+// adminBackupWithCredentials is used only by cmdPasswordBackup, which
+// immediately encrypts the resulting plaintext archive client-side and
+// deletes the unencrypted temp file — see cmdPasswordBackup for the full
+// handoff. This is the only path allowed to include password_hash/totp_secret.
+func adminBackupWithCredentials(req adminRequest) adminResponse {
+	return createBackup(req.Path, time.Time{}, true)
 }
 
 // resolveBackupPath returns a full file path for the backup archive.
@@ -83,13 +96,18 @@ func createBackup(outputPath string, since time.Time, keepCredentials bool) admi
 	}
 
 	// Remove credential secrets (password hash, TOTP seed) from the
-	// snapshot so plaintext backups never contain them. password-backup
-	// sets keepCredentials=true — encryption is guaranteed by construction
-	// there, so it's the one path allowed to produce a full-recovery backup.
+	// snapshot so plaintext backups never contain them. Fail closed: if we
+	// can't open the snapshot to strip them, abort rather than silently
+	// shipping an archive with credentials still in it.
 	if !keepCredentials {
-		if snapDB, err := sql.Open("sqlite3", tmpDB.Name()); err == nil {
-			snapDB.Exec("UPDATE users SET password_hash = '', totp_secret = NULL")
-			snapDB.Close()
+		snapDB, err := sql.Open("sqlite3", tmpDB.Name())
+		if err != nil {
+			return adminResponse{OK: false, Error: "credential strip: " + err.Error()}
+		}
+		_, err = snapDB.Exec("UPDATE users SET password_hash = '', totp_secret = NULL")
+		snapDB.Close()
+		if err != nil {
+			return adminResponse{OK: false, Error: "credential strip: " + err.Error()}
 		}
 	}
 

@@ -46,7 +46,6 @@ type request struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
-	KeepCredentials       bool   `json:"keep_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -1065,7 +1064,7 @@ func cmdPasswordBackup(args []string) {
 	tmp.Close()
 	os.Remove(tmpPath)
 
-	resp := send(socketPath, request{Cmd: "backup", Path: tmpPath, KeepCredentials: true})
+	resp := send(socketPath, request{Cmd: "backup-with-credentials", Path: tmpPath})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}

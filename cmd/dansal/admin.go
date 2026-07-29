@@ -25,7 +25,6 @@ type adminRequest struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
-	KeepCredentials       bool   `json:"keep_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -109,6 +108,7 @@ var mutatingAdminCmds = map[string]bool{
 	"incremental-backup":       true,
 	"restore":                  true,
 	"config-backup":            true,
+	"backup-with-credentials":  true,
 	"magic-link":               true,
 	"invite-admin":             true,
 	"revoke-invite":            true,
@@ -139,7 +139,7 @@ func adminAuditTarget(req adminRequest) string {
 		return "email=" + req.Email + " new_email=" + req.NewEmail
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
-	case "backup", "incremental-backup", "restore", "config-backup":
+	case "backup", "incremental-backup", "restore", "config-backup", "backup-with-credentials":
 		return "path=" + req.Path
 	case "revoke-invite":
 		return "invite_token=" + req.InviteToken
@@ -204,6 +204,8 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminRestore(req)
 	case "config-backup":
 		return adminConfigBackup(req)
+	case "backup-with-credentials":
+		return adminBackupWithCredentials(req)
 	case "list-backups":
 		return adminListBackups(req)
 	case "magic-link":

@@ -24,7 +24,7 @@ type backupResult struct {
 }
 
 func adminBackup(req adminRequest) adminResponse {
-	return createBackup(req.Path, time.Time{})
+	return createBackup(req.Path, time.Time{}, req.KeepCredentials)
 }
 
 func adminIncrementalBackup(req adminRequest) adminResponse {
@@ -35,7 +35,7 @@ func adminIncrementalBackup(req adminRequest) adminResponse {
 	if err != nil {
 		return adminResponse{OK: false, Error: "invalid since time: " + err.Error()}
 	}
-	return createBackup(req.Path, since)
+	return createBackup(req.Path, since, req.KeepCredentials)
 }
 
 // resolveBackupPath returns a full file path for the backup archive.
@@ -66,7 +66,7 @@ func resolveBackupPath(outputPath string, incremental bool) string {
 	return outputPath
 }
 
-func createBackup(outputPath string, since time.Time) adminResponse {
+func createBackup(outputPath string, since time.Time, keepCredentials bool) adminResponse {
 	incremental := !since.IsZero()
 	outputPath = resolveBackupPath(outputPath, incremental)
 
@@ -82,11 +82,15 @@ func createBackup(outputPath string, since time.Time) adminResponse {
 		return adminResponse{OK: false, Error: "db snapshot: " + err.Error()}
 	}
 
-	// Remove password hashes from the snapshot so plaintext backups never
-	// contain credential data. Use a separate connection to the temp file.
-	if snapDB, err := sql.Open("sqlite3", tmpDB.Name()); err == nil {
-		snapDB.Exec("UPDATE users SET password_hash = ''")
-		snapDB.Close()
+	// Remove credential secrets (password hash, TOTP seed) from the
+	// snapshot so plaintext backups never contain them. password-backup
+	// sets keepCredentials=true — encryption is guaranteed by construction
+	// there, so it's the one path allowed to produce a full-recovery backup.
+	if !keepCredentials {
+		if snapDB, err := sql.Open("sqlite3", tmpDB.Name()); err == nil {
+			snapDB.Exec("UPDATE users SET password_hash = '', totp_secret = NULL")
+			snapDB.Close()
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
@@ -468,7 +472,7 @@ func startScheduledBackup() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			resp := createBackup("", time.Time{})
+			resp := createBackup("", time.Time{}, false)
 			if resp.OK {
 				if r, ok := resp.Data.(backupResult); ok {
 					log.Printf("scheduled backup: %s (%s)", r.Path, fmtSize(r.Size))

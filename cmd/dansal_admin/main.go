@@ -46,6 +46,7 @@ type request struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
+	KeepCredentials       bool   `json:"keep_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -593,7 +594,8 @@ Create a business-data backup as a .tar.gz archive containing:
   images/       — all uploaded images
 
 Does not include config.yaml or any deployment/reproducibility data — see
-config-backup for that. Password hashes are stripped from the snapshot.
+config-backup for that. Password hashes and TOTP secrets are stripped
+from the snapshot — use password-backup for a full-recovery backup.
 
 Flags:
   --output  Destination file (default: ./dansal-backup-<timestamp>.tar.gz)`,
@@ -634,7 +636,9 @@ Flags:
 Create a business-data backup (calendar.db + images/, no config.yaml — see
 config-backup for that) and encrypt it with AES-256-GCM.
 Key derivation uses scrypt (N=65536, r=8, p=1).
-Password hashes are not included in the backup archive.
+Unlike plain backup/incremental-backup, this includes password hashes and
+TOTP secrets — a full-recovery backup that can restore working logins,
+gated on the archive always being encrypted.
 
 If --password is omitted the password is prompted from the terminal
 (no echo, confirmed twice). Passing the password as a flag exposes
@@ -1061,7 +1065,7 @@ func cmdPasswordBackup(args []string) {
 	tmp.Close()
 	os.Remove(tmpPath)
 
-	resp := send(socketPath, request{Cmd: "backup", Path: tmpPath})
+	resp := send(socketPath, request{Cmd: "backup", Path: tmpPath, KeepCredentials: true})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}

@@ -25,6 +25,7 @@ type adminRequest struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
+	WipeCredentials       bool   `json:"wipe_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -139,8 +140,10 @@ func adminAuditTarget(req adminRequest) string {
 		return "email=" + req.Email + " new_email=" + req.NewEmail
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
-	case "backup", "incremental-backup", "restore", "config-backup", "backup-with-credentials":
+	case "backup", "incremental-backup", "config-backup", "backup-with-credentials":
 		return "path=" + req.Path
+	case "restore":
+		return fmt.Sprintf("path=%s wipe_credentials=%v", req.Path, req.WipeCredentials)
 	case "revoke-invite":
 		return "invite_token=" + req.InviteToken
 	case "revoke-session":

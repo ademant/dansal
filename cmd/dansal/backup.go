@@ -287,7 +287,7 @@ func adminRestore(req adminRequest) adminResponse {
 		}
 		path = filepath.Join(dir, path)
 	}
-	restored, err := restoreFromTar(path)
+	restored, err := restoreFromTar(path, req.WipeCredentials)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -298,13 +298,135 @@ func adminRestore(req adminRequest) adminResponse {
 }
 
 type restoreResult struct {
-	Config bool `json:"config"`
-	DB     bool `json:"db"`
-	Images int  `json:"images"`
+	Config         bool `json:"config"`
+	DB             bool `json:"db"`
+	Images         int  `json:"images"`
+	PreservedUsers int  `json:"preserved_users"`
 }
 
-func restoreFromTar(tarPath string) (restoreResult, error) {
+// userSnapshotRow holds one pre-restore live users row, generically — every
+// column is captured so restoreLiveUserCredentials can restore the whole
+// row, not just password_hash, without needing to track the users schema
+// here as it evolves.
+type userSnapshotRow struct {
+	id      int64
+	email   sql.NullString
+	columns []string
+	values  []any
+}
+
+// snapshotLiveUsers captures the live users table before a restore swaps
+// the database file out from under it, so existing accounts can be
+// preserved afterward unless the caller opted into wiping credentials.
+func snapshotLiveUsers() ([]userSnapshotRow, error) {
+	rows, err := db.Query("SELECT * FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	idIdx, emailIdx := -1, -1
+	for i, c := range cols {
+		switch c {
+		case "id":
+			idIdx = i
+		case "email":
+			emailIdx = i
+		}
+	}
+	if idIdx < 0 {
+		return nil, fmt.Errorf("users table has no id column")
+	}
+
+	var snapshot []userSnapshotRow
+	for rows.Next() {
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+
+		id, _ := vals[idIdx].(int64)
+		var email sql.NullString
+		if emailIdx >= 0 {
+			if s, ok := vals[emailIdx].(string); ok {
+				email = sql.NullString{String: s, Valid: true}
+			}
+		}
+
+		var ucols []string
+		var uvals []any
+		for i, c := range cols {
+			if i == idIdx {
+				continue
+			}
+			ucols = append(ucols, c)
+			uvals = append(uvals, vals[i])
+		}
+		snapshot = append(snapshot, userSnapshotRow{id: id, email: email, columns: ucols, values: uvals})
+	}
+	return snapshot, rows.Err()
+}
+
+// restoreLiveUserCredentials writes each pre-restore live user row back over
+// the just-restored data, so a routine restore never silently locks
+// existing accounts out. Matched by id first, falling back to email in case
+// ids shifted between the live and restored databases. Users present live
+// before the restore but absent afterward (deleted in the backup) are left
+// alone — only genuinely new users from the backup are ever inserted, and
+// insertion itself is just "don't touch what restoreDB already added".
+func restoreLiveUserCredentials(snapshot []userSnapshotRow) (int, error) {
+	preserved := 0
+	for _, u := range snapshot {
+		targetID := u.id
+		var exists int
+		db.QueryRow("SELECT COUNT(*) FROM users WHERE id=?", targetID).Scan(&exists)
+		if exists == 0 && u.email.Valid && u.email.String != "" {
+			var altID int64
+			if err := db.QueryRow("SELECT id FROM users WHERE email=?", u.email.String).Scan(&altID); err == nil {
+				targetID = altID
+				exists = 1
+			}
+		}
+		if exists == 0 {
+			continue
+		}
+
+		setClause := make([]string, len(u.columns))
+		args := make([]any, 0, len(u.values)+1)
+		for i, c := range u.columns {
+			setClause[i] = c + " = ?"
+			args = append(args, u.values[i])
+		}
+		args = append(args, targetID)
+
+		query := "UPDATE users SET " + strings.Join(setClause, ", ") + " WHERE id = ?"
+		if _, err := db.Exec(query, args...); err != nil {
+			return preserved, err
+		}
+		preserved++
+	}
+	return preserved, nil
+}
+
+func restoreFromTar(tarPath string, wipeCredentials bool) (restoreResult, error) {
 	var result restoreResult
+
+	var liveUsers []userSnapshotRow
+	if !wipeCredentials {
+		var err error
+		liveUsers, err = snapshotLiveUsers()
+		if err != nil {
+			return result, fmt.Errorf("snapshot live users: %w", err)
+		}
+	}
 
 	f, err := os.Open(tarPath)
 	if err != nil {
@@ -376,6 +498,14 @@ func restoreFromTar(tarPath string) (restoreResult, error) {
 			return result, fmt.Errorf("restore db: %w", err)
 		}
 		result.DB = true
+
+		if !wipeCredentials {
+			preserved, err := restoreLiveUserCredentials(liveUsers)
+			if err != nil {
+				return result, fmt.Errorf("preserve live user credentials: %w", err)
+			}
+			result.PreservedUsers = preserved
+		}
 	}
 
 	return result, nil

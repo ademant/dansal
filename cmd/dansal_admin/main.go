@@ -46,6 +46,7 @@ type request struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
+	WipeCredentials       bool   `json:"wipe_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -599,7 +600,7 @@ from the snapshot — use password-backup for a full-recovery backup.
 Flags:
   --output  Destination file (default: ./dansal-backup-<timestamp>.tar.gz)`,
 
-	"restore": `Usage: dansal_admin restore --input PATH
+	"restore": `Usage: dansal_admin restore --input PATH [--wipe-credentials]
 
 Restore from a .tar.gz archive created by backup or incremental-backup.
 
@@ -607,8 +608,17 @@ Restore from a .tar.gz archive created by backup or incremental-backup.
   images/      — files extracted into the images directory (overlay, no delete)
   config.yaml  — restored if present in the archive (older archives only)
 
+By default, any user that already exists live (matched by id, falling back
+to email) keeps their live row exactly as it was — most importantly their
+password hash — even though plain backups have password_hash/totp_secret
+stripped. Only users present in the backup but not live are inserted.
+Pass --wipe-credentials to instead let the backup's data win for existing
+users too (useful when restoring a password-backup archive that has real
+credentials, or for a genuine full rollback).
+
 Flags:
-  --input  Path to the .tar.gz backup archive (required)`,
+  --input             Path to the .tar.gz backup archive (required)
+  --wipe-credentials  Overwrite existing users' credentials with the backup's (default: false)`,
 
 	"incremental-backup": `Usage: dansal_admin incremental-backup --since RFC3339 [--output PATH]
 
@@ -647,15 +657,21 @@ Flags:
   --output    Destination file (default: ./dansal-encrypted-<timestamp>.tar.gz.enc)
   --password  Encryption password (prompted if omitted)`,
 
-	"password-restore": `Usage: dansal_admin password-restore --input PATH [--password STR]
+	"password-restore": `Usage: dansal_admin password-restore --input PATH [--password STR] [--wipe-credentials]
 
 Decrypt a backup created by password-backup and restore it.
   calendar.db  — restored via SQLite online backup API (no restart needed)
   images/      — files extracted into the images directory (overlay, no delete)
 
+By default, existing users keep their live credentials even though this
+archive contains real password hashes/TOTP secrets from password-backup —
+pass --wipe-credentials to let the archive's credentials win instead (the
+usual choice when restoring onto a fresh instance with no live users yet).
+
 Flags:
-  --input     Path to the encrypted backup file (required)
-  --password  Decryption password (prompted if omitted)`,
+  --input             Path to the encrypted backup file (required)
+  --password          Decryption password (prompted if omitted)
+  --wipe-credentials  Overwrite existing users' credentials with the backup's (default: false)`,
 
 	"config-backup": `Usage: dansal_admin config-backup [--output PATH] [--password STR]
 
@@ -1009,22 +1025,24 @@ func cmdRestore(args []string) {
 	fs := flag.NewFlagSet("restore", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["restore"]) }
 	input := fs.String("input", "", "path to backup archive")
+	wipeCredentials := fs.Bool("wipe-credentials", false, "overwrite existing users' credentials with the backup's (default: preserve live credentials)")
 	fs.Parse(args)
 
 	if *input == "" {
 		die("--input is required")
 	}
-	resp := send(socketPath, request{Cmd: "restore", Path: *input})
+	resp := send(socketPath, request{Cmd: "restore", Path: *input, WipeCredentials: *wipeCredentials})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
-		Config bool `json:"config"`
-		DB     bool `json:"db"`
-		Images int  `json:"images"`
+		Config         bool `json:"config"`
+		DB             bool `json:"db"`
+		Images         int  `json:"images"`
+		PreservedUsers int  `json:"preserved_users"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+	fmt.Printf("restored: config=%v db=%v images=%d preserved_users=%d\n", result.Config, result.DB, result.Images, result.PreservedUsers)
 }
 
 func cmdPasswordBackup(args []string) {
@@ -1093,6 +1111,7 @@ func cmdPasswordRestore(args []string) {
 	fs.Usage = func() { fmt.Println(commandHelp["password-restore"]) }
 	input := fs.String("input", "", "path to encrypted backup")
 	password := fs.String("password", "", "decryption password (prompted if omitted)")
+	wipeCredentials := fs.Bool("wipe-credentials", false, "overwrite existing users' credentials with the backup's (default: preserve live credentials)")
 	fs.Parse(args)
 
 	if *input == "" {
@@ -1131,17 +1150,18 @@ func cmdPasswordRestore(args []string) {
 	tmp.Close()
 	defer os.Remove(tmpPath)
 
-	resp := send(socketPath, request{Cmd: "restore", Path: tmpPath})
+	resp := send(socketPath, request{Cmd: "restore", Path: tmpPath, WipeCredentials: *wipeCredentials})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
-		Config bool `json:"config"`
-		DB     bool `json:"db"`
-		Images int  `json:"images"`
+		Config         bool `json:"config"`
+		DB             bool `json:"db"`
+		Images         int  `json:"images"`
+		PreservedUsers int  `json:"preserved_users"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+	fmt.Printf("restored: config=%v db=%v images=%d preserved_users=%d\n", result.Config, result.DB, result.Images, result.PreservedUsers)
 }
 
 func cmdConfigBackup(args []string) {

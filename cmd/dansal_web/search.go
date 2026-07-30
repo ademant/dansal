@@ -47,12 +47,14 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		dateFrom, dateTo := currentWeekRange()
 		title := i18n.T(r, "search_title")
-		renderTemplate(w, tmpls.search, tmplData(r, cfg, i18n, title, SearchData{
+		td := tmplData(r, cfg, i18n, title, SearchData{
 			DateFrom: dateFrom,
 			DateTo:   dateTo,
 			Dances:   dances,
 			Locs:     tmplFuncMap["locationsJSON"].(func([]Location) template.JS)(locs),
-		}))
+		})
+		td.Hreflang = true
+		renderTemplate(w, tmpls.search, td)
 	}
 }
 

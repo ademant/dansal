@@ -195,6 +195,8 @@ func helpHandler(cfg *Config, tmpls *Templates, i18n *I18n, help *HelpSystem) ht
 		}
 
 		title := i18n.Strings(lang).T("nav_help")
-		renderTemplate(w, tmpls.help, tmplData(r, cfg, i18n, title, data))
+		td := tmplData(r, cfg, i18n, title, data)
+		td.Hreflang = true
+		renderTemplate(w, tmpls.help, td)
 	}
 }

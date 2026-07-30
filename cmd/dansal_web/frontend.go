@@ -52,6 +52,7 @@ type TemplateData struct {
 	PossibleDuplicateCount int    // events flagged as possible duplicates (scoped to caller)
 	Path                   string // current request path, for building "return to this page" links
 	CanonicalURL           string // absolute canonical URL for this page
+	Hreflang               bool   // emit <link rel="alternate" hreflang> tags for this page (only where content is 100% i18n-driven, not organizer-entered)
 	MetaDescription        string // page-specific meta description (falls back to i18n string in template)
 	OGImage                string // absolute URL of the primary image for OG/Twitter card
 	GoogleSiteVerification string
@@ -2109,7 +2110,9 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 			}
 		}
 		title := i18n.T(r, "orgs_title")
-		renderTemplate(w, tmpls.orgs, tmplData(r, cfg, i18n, title, OrgsListData{Items: items, MapPins: mapPins}))
+		td := tmplData(r, cfg, i18n, title, OrgsListData{Items: items, MapPins: mapPins})
+		td.Hreflang = true
+		renderTemplate(w, tmpls.orgs, td)
 	}
 }
 

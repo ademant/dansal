@@ -85,6 +85,11 @@ func (i *I18n) HasLang(code string) bool {
 }
 
 func (i *I18n) detectLang(r *http.Request) string {
+	if q := r.URL.Query().Get("lang"); q != "" {
+		if i.HasLang(q) {
+			return q
+		}
+	}
 	if c, err := r.Cookie(cookieLang); err == nil {
 		if i.HasLang(c.Value) {
 			return c.Value

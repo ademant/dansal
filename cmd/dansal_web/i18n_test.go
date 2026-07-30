@@ -67,6 +67,35 @@ func TestDetectLangHolidayCountryFallback(t *testing.T) {
 	})
 }
 
+func TestDetectLangQueryParam(t *testing.T) {
+	i18n := loadI18n("")
+
+	t.Run("valid lang param wins over everything else", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/?lang=es", nil)
+		req.AddCookie(&http.Cookie{Name: cookieLang, Value: "fr"})
+		req.Header.Set("Accept-Language", "it;q=0.9")
+		if got := i18n.detectLang(req); got != "es" {
+			t.Fatalf("got %q, want es", got)
+		}
+	})
+
+	t.Run("unknown lang param falls through to cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/?lang=xx", nil)
+		req.AddCookie(&http.Cookie{Name: cookieLang, Value: "fr"})
+		if got := i18n.detectLang(req); got != "fr" {
+			t.Fatalf("got %q, want fr", got)
+		}
+	})
+
+	t.Run("empty lang param falls through to cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/?lang=", nil)
+		req.AddCookie(&http.Cookie{Name: cookieLang, Value: "fr"})
+		if got := i18n.detectLang(req); got != "fr" {
+			t.Fatalf("got %q, want fr", got)
+		}
+	})
+}
+
 func TestHolidayCountryLang(t *testing.T) {
 	cases := map[string]struct {
 		lang string

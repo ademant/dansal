@@ -16,6 +16,12 @@
 {{- $desc := .MetaDescription}}{{if eq $desc ""}}{{$desc = .Strings.T "meta_description"}}{{end}}
 <meta name="description" content="{{$desc}}">
 <link rel="canonical" href="{{.CanonicalURL}}">
+{{- if .Hreflang}}
+{{- range .Languages}}
+<link rel="alternate" hreflang="{{.Code}}" href="{{$.CanonicalURL}}?lang={{.Code}}">
+{{- end}}
+<link rel="alternate" hreflang="x-default" href="{{.CanonicalURL}}">
+{{- end}}
 <meta property="og:site_name" content="{{.SiteName}}">
 <meta property="og:title" content="{{.Title}}">
 <meta property="og:description" content="{{$desc}}">

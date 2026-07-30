@@ -28,12 +28,33 @@ func indexNowKeyFileHandler(w http.ResponseWriter, r *http.Request) {
 // notifyIndexNow POSTs the given event IDs to the IndexNow API. Must be called
 // in a goroutine — never blocks the HTTP handler.
 func notifyIndexNow(baseURL, key string, ids []int) {
-	if key == "" || len(ids) == 0 {
+	if len(ids) == 0 {
 		return
 	}
 	urls := make([]string, len(ids))
 	for i, id := range ids {
 		urls[i] = fmt.Sprintf("%s/events/%d", baseURL, id)
+	}
+	notifyIndexNowURLs(baseURL, key, urls)
+}
+
+// notifyIndexNowPaths is like notifyIndexNow but for non-event pages — pass
+// site-relative paths (e.g. "/location/5", "/org/some-slug"). Must be called
+// in a goroutine — never blocks the HTTP handler.
+func notifyIndexNowPaths(baseURL, key string, paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	urls := make([]string, len(paths))
+	for i, p := range paths {
+		urls[i] = baseURL + p
+	}
+	notifyIndexNowURLs(baseURL, key, urls)
+}
+
+func notifyIndexNowURLs(baseURL, key string, urls []string) {
+	if key == "" || len(urls) == 0 {
+		return
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(baseURL, "https://"), "http://")
 	body, _ := json.Marshal(map[string]any{
@@ -55,6 +76,6 @@ func notifyIndexNow(baseURL, key string, ids []int) {
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		log.Printf("indexnow: status %d for %d URL(s)", resp.StatusCode, len(ids))
+		log.Printf("indexnow: status %d for %d URL(s)", resp.StatusCode, len(urls))
 	}
 }

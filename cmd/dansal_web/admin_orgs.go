@@ -213,6 +213,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				return
 			}
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(created)})
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
 }
@@ -578,6 +579,8 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 				return
 			}
 		}
+
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(org)})
 
 		// Handle actor rename if actor name changed
 		if org.ActorName != originalOrg.ActorName {

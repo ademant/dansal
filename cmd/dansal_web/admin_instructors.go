@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,13 +65,15 @@ func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalC
 			return
 		}
 		inst := instructorFromForm(r)
-		if _, err := client.CreateInstructor(r.Context(), inst, getSessionToken(r)); err != nil {
+		created, err := client.CreateInstructor(r.Context(), inst, getSessionToken(r))
+		if err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
 				Instructor: inst, IsNew: true, ErrorKey: "admin_save_error",
 			}))
 			return
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", created.ID)})
 		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
 	}
 }
@@ -123,6 +126,7 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			}))
 			return
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", id)})
 		target := "/admin/instructors"
 		if from != "" {
 			target = from

@@ -353,7 +353,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			return
 		}
 		token := getSessionToken(r)
-		_, err := client.CreateLocation(r.Context(), loc, token)
+		created, err := client.CreateLocation(r.Context(), loc, token)
 		if err != nil {
 			title := i18n.T(r, "admin_new")
 			data := AdminLocationEditData{
@@ -369,6 +369,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", created.ID)})
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}
 }
@@ -524,6 +525,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", id)})
 		if loc.ParentID == nil {
 			if r.FormValue("remove_site_plan") == "1" {
 				_ = client.DeleteLocationSitePlan(r.Context(), id, token)

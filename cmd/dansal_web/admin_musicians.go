@@ -122,6 +122,7 @@ func adminMusicianCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				log.Printf("upload musician image error: %v", uerr)
 			}
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", created.ID)})
 		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
 	}
 }
@@ -188,6 +189,7 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				log.Printf("upload musician image error: %v", uerr)
 			}
 		}
+		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", id)})
 		target := "/admin/musicians"
 		if from != "" {
 			target = from

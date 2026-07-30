@@ -1,0 +1,199 @@
+#!/bin/bash
+# deploy-instance — versioned deploy/rollback/list for a single dansal instance.
+#
+# Installs binaries as /usr/lib/dansal/<instance>/bin/<name>.<version>, symlinks
+# the plain name to that file, and snapshots calendar.db + the three config
+# yamls under the same version tag before restarting services. Keeps the last
+# KEEP_VERSIONS of each so a bad deploy (or a broken migration that runs on
+# next startup) can be undone with `rollback` instead of a full backup/restore.
+#
+# Usage:
+#   scripts/deploy-instance deploy   <instance> <version> <srcdir>
+#   scripts/deploy-instance rollback <instance> [version]
+#   scripts/deploy-instance list     <instance>
+set -euo pipefail
+
+KEEP_VERSIONS=5
+
+BINARIES=(dansal dansal_admin dansal_web dansal_webmin dansal_doc)
+declare -A DEST_NAME=(
+    [dansal]=dansal
+    [dansal_admin]=dansal_admin
+    [dansal_web]=dansal-web
+    [dansal_webmin]=dansal-webmin
+    [dansal_doc]=dansal-doc
+)
+
+die() { echo "error: $*" >&2; exit 1; }
+
+[[ $(id -u) -eq 0 ]] || die "must be run as root"
+
+cmd=${1:-}
+instance=${2:-}
+[[ -n $cmd && -n $instance ]] || die "usage: deploy-instance <deploy|rollback|list> <instance> [version|srcdir]"
+
+LIBDIR=/usr/lib/dansal/${instance}
+BINDIR=${LIBDIR}/bin
+DBDIR=/var/lib/dansal/${instance}
+CFGDIR=/etc/dansal/${instance}
+HIST=${LIBDIR}/deploy-history.log
+
+# distinct versions from the history log, newest first
+history_versions() {
+    [[ -f $HIST ]] && tac "$HIST" | awk '!seen[$2]++ {print $2}'
+    return 0
+}
+
+current_version() {
+    [[ -f $HIST ]] && tail -n1 "$HIST" | awk '{print $2}'
+    return 0
+}
+
+record_version() {
+    install -d -m 755 "$LIBDIR"
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $1" >> "$HIST"
+}
+
+ACTIVE_OPTIONAL_SERVICES=()
+
+stop_services() {
+    # Snapshot which optional services are active BEFORE stopping anything —
+    # stopping dansal@<instance> can make dependents (e.g. dansal-webmin, which
+    # talks to it over the admin socket) exit on their own.
+    ACTIVE_OPTIONAL_SERVICES=()
+    for svc in dansal-web dansal-webmin dansal-doc; do
+        if systemctl is-active --quiet "${svc}@${instance}"; then
+            ACTIVE_OPTIONAL_SERVICES+=("$svc")
+        fi
+    done
+    for svc in dansal-web dansal-webmin dansal-doc; do
+        systemctl stop "${svc}@${instance}" 2>/dev/null || true
+    done
+    systemctl stop "dansal@${instance}" 2>/dev/null || true
+}
+
+start_services() {
+    systemctl start "dansal@${instance}"
+    for svc in "${ACTIVE_OPTIONAL_SERVICES[@]}"; do
+        systemctl start "${svc}@${instance}" 2>/dev/null || true
+    done
+}
+
+is_kept() {
+    local ver=$1 keep=$2
+    grep -qxF "$ver" <<<"$keep"
+}
+
+prune() {
+    local keep
+    keep=$(history_versions | head -n "$KEEP_VERSIONS")
+
+    if [[ -d $BINDIR ]]; then
+        for dest in "${DEST_NAME[@]}"; do
+            for f in "$BINDIR/$dest".*; do
+                [[ -e $f ]] || continue
+                local ver=${f#"$BINDIR/$dest."}
+                is_kept "$ver" "$keep" || rm -f "$f"
+            done
+        done
+    fi
+    for f in "$DBDIR"/calendar.db.*; do
+        [[ -e $f ]] || continue
+        local ver=${f#"$DBDIR/calendar.db."}
+        is_kept "$ver" "$keep" || rm -f "$f"
+    done
+    for cfgfile in config.yaml web.yaml webmin.yaml; do
+        for f in "$CFGDIR/$cfgfile".*; do
+            [[ -e $f ]] || continue
+            local ver=${f#"$CFGDIR/$cfgfile."}
+            is_kept "$ver" "$keep" || rm -f "$f"
+        done
+    done
+}
+
+cmd_deploy() {
+    local version=$3 srcdir=$4
+    [[ -n $version && -n $srcdir ]] || die "deploy requires a version and a source directory"
+
+    install -d -m 755 "$BINDIR"
+
+    stop_services
+
+    for src in "${BINARIES[@]}"; do
+        local dest=${DEST_NAME[$src]}
+        install -m 755 "$srcdir/$src" "$BINDIR/$dest.$version"
+        ln -sf "bin/$dest.$version" "$LIBDIR/$dest"
+    done
+
+    # Snapshot DB and config now that services are stopped — no live-write race.
+    [[ -f $DBDIR/calendar.db ]] && cp -p "$DBDIR/calendar.db" "$DBDIR/calendar.db.$version"
+    for cfgfile in config.yaml web.yaml webmin.yaml; do
+        [[ -f $CFGDIR/$cfgfile ]] && cp -p "$CFGDIR/$cfgfile" "$CFGDIR/$cfgfile.$version"
+    done
+
+    record_version "$version"
+    prune
+
+    start_services
+    echo "deployed $instance (version $version)"
+}
+
+cmd_rollback() {
+    local target=${3:-}
+    local cur
+    cur=$(current_version)
+
+    if [[ -z $target ]]; then
+        target=$(history_versions | awk -v cur="$cur" '$0 != cur { print; exit }')
+        [[ -n $target ]] || die "no previous version available to roll back to"
+    fi
+    [[ $target != "$cur" ]] || die "version $target is already active"
+
+    for src in "${BINARIES[@]}"; do
+        local dest=${DEST_NAME[$src]}
+        [[ -e $BINDIR/$dest.$target ]] || die "missing $dest.$target — cannot roll back cleanly (was it pruned?)"
+    done
+
+    stop_services
+
+    for src in "${BINARIES[@]}"; do
+        local dest=${DEST_NAME[$src]}
+        ln -sf "bin/$dest.$target" "$LIBDIR/$dest"
+    done
+
+    if [[ -f $DBDIR/calendar.db.$target ]]; then
+        cp -p "$DBDIR/calendar.db.$target" "$DBDIR/calendar.db"
+    else
+        echo "warning: no DB snapshot for $target — leaving calendar.db as-is"
+    fi
+    for cfgfile in config.yaml web.yaml webmin.yaml; do
+        [[ -f $CFGDIR/$cfgfile.$target ]] && cp -p "$CFGDIR/$cfgfile.$target" "$CFGDIR/$cfgfile"
+    done
+
+    record_version "$target"
+    start_services
+    echo "rolled back $instance to version $target"
+}
+
+cmd_list() {
+    local cur
+    cur=$(current_version)
+    echo "Instance: $instance  (active: ${cur:-none})"
+    printf '%-40s %-5s %-5s %-6s\n' VERSION BIN DB CONFIG
+    while read -r ver; do
+        [[ -n $ver ]] || continue
+        local bin_ok=- db_ok=- cfg_ok=- mark=
+        [[ -e $BINDIR/dansal.$ver ]] && bin_ok=yes
+        [[ -f $DBDIR/calendar.db.$ver ]] && db_ok=yes
+        [[ -f $CFGDIR/config.yaml.$ver ]] && cfg_ok=yes
+        [[ $ver == "$cur" ]] && mark=" (active)"
+        printf '%-40s %-5s %-5s %-6s%s\n' "$ver" "$bin_ok" "$db_ok" "$cfg_ok" "$mark"
+    done < <(history_versions)
+}
+
+case "$cmd" in
+    deploy)   cmd_deploy "$@" ;;
+    rollback) cmd_rollback "$@" ;;
+    list)     cmd_list ;;
+    *) die "unknown subcommand: $cmd (expected deploy, rollback, or list)" ;;
+esac

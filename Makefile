@@ -14,7 +14,16 @@ SYSTEMDDIR := /etc/systemd/system
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
         run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default deploy-full \
-        wp-zip deploy-wp
+        wp-zip deploy-wp rollback list
+
+# ROLLBACK_VERSION only takes VERSION into account when it was actually passed
+# on the command line (e.g. `make rollback INSTANCE=dev VERSION=v1.2.3`) — the
+# unconditional git-describe default above must NOT be treated as a rollback target.
+ifeq ($(origin VERSION),command line)
+ROLLBACK_VERSION := $(VERSION)
+else
+ROLLBACK_VERSION :=
+endif
 
 build:
 	$(MAKE) -j5 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc
@@ -179,7 +188,11 @@ check-config:
 	@packaging/check-config packaging/web.yaml    $(SYSCONFDIR)/web.yaml
 	@packaging/check-config packaging/doc.yaml    $(SYSCONFDIR)/doc.yaml
 
-# deploy: install pre-built binaries and restart a specific instance.
+# deploy: install versioned pre-built binaries and restart a specific instance.
+# Binaries are installed as /usr/lib/dansal/<instance>/bin/<name>.<version> and
+# symlinked from the plain name; calendar.db and the config yamls are snapshotted
+# under the same version tag before restart. Keeps the last 5 versions of each —
+# see scripts/deploy-instance. Use 'make rollback'/'make list' to undo/inspect.
 # Usage: sudo make deploy INSTANCE=dev   (or prod, nl, ...)
 # Run as root after 'make build' as a regular user.
 deploy: install-units
@@ -187,20 +200,29 @@ deploy: install-units
 ifndef INSTANCE
 	$(error INSTANCE is required: sudo make deploy INSTANCE=dev)
 endif
-	install -d -m 755 /usr/lib/dansal/$(INSTANCE)
 	install -d -m 755 /usr/share/dansal/wiki
 	install -m 644 wiki/*.md /usr/share/dansal/wiki/
-	install -m 755 dansal        /usr/lib/dansal/$(INSTANCE)/dansal
-	install -m 755 dansal_admin  /usr/lib/dansal/$(INSTANCE)/dansal_admin
-	install -m 755 dansal_web    /usr/lib/dansal/$(INSTANCE)/dansal-web
-	install -m 755 dansal_webmin /usr/lib/dansal/$(INSTANCE)/dansal-webmin
-	install -m 755 dansal_doc    /usr/lib/dansal/$(INSTANCE)/dansal-doc
 	install -m 755 packaging/dansal_preflight /usr/lib/dansal/dansal_preflight
-	systemctl restart dansal@$(INSTANCE)
-	systemctl try-restart dansal-web@$(INSTANCE).service || true
-	systemctl try-restart dansal-webmin@$(INSTANCE).service || true
-	systemctl try-restart dansal-doc@$(INSTANCE).service || true
-	@echo "deployed $(INSTANCE)"
+	scripts/deploy-instance deploy $(INSTANCE) $(VERSION) $(CURDIR)
+
+# rollback: repoint an instance's binaries/DB/config at a previously deployed
+# version (defaults to the one before the currently active version).
+# Usage: sudo make rollback INSTANCE=dev [VERSION=v1.2.3-4-gabcdef]
+rollback:
+	@[ "$(shell id -u)" = "0" ] || { echo "rollback requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make rollback INSTANCE=dev)
+endif
+	scripts/deploy-instance rollback $(INSTANCE) $(ROLLBACK_VERSION)
+
+# list: show the deployed versions available to roll back to for an instance.
+# Usage: sudo make list INSTANCE=dev
+list:
+	@[ "$(shell id -u)" = "0" ] || { echo "list requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make list INSTANCE=dev)
+endif
+	@scripts/deploy-instance list $(INSTANCE)
 
 # setup-instance: create directories, install template configs, enable units for a new instance.
 # Idempotent — safe to re-run.  Does NOT start services (edit configs first).

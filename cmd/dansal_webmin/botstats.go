@@ -67,7 +67,7 @@ type BotStatsPageData struct {
 }
 
 func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro&_busy_timeout=3000")
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=3000")
 	if err != nil {
 		return nil, nil, err
 	}

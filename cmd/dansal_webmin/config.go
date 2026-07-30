@@ -21,8 +21,9 @@ type Config struct {
 	SiteName              string `yaml:"site_name"`
 	Instance              string `yaml:"instance"`
 	OrgID                 int    `yaml:"org_id"`      // optional: filter dashboard events to this org
-	WebDBPath             string `yaml:"web_db_path"` // path to web.db for site-config editing
-	ImagesDir             string `yaml:"images_dir"`  // path to images dir for logo/banner/favicon
+	WebDBPath             string `yaml:"web_db_path"`  // path to web.db for site-config editing
+	ImagesDir             string `yaml:"images_dir"`   // path to images dir for logo/banner/favicon
+	BotStatsDBPath        string `yaml:"bot_stats_db"` // path to bot-stats.db; defaults to /var/lib/dansal/bot-stats.db
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs       int    `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs      int    `yaml:"write_timeout_secs"`
@@ -74,6 +75,9 @@ func loadConfigFrom(path string) *Config {
 	}
 	if cfg.SiteName == "" {
 		cfg.SiteName = "Dansal Webmin"
+	}
+	if cfg.BotStatsDBPath == "" {
+		cfg.BotStatsDBPath = "/var/lib/dansal/bot-stats.db"
 	}
 	cfg.configPath = path
 	return &cfg

@@ -1,0 +1,198 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Bot &amp; Traffic Stats</h1>
+{{with .Data}}
+{{if .DBMissing}}
+<div class="alert alert-warn">Stats database not found. Set <code>bot_stats_db</code> in webmin.yaml and run <code>scripts/bot-stats.py --store PATH</code>.</div>
+{{else if not .HasData}}
+<div class="alert alert-warn">No data yet. Run <code>sudo python3 scripts/bot-stats.py --store /var/lib/dansal/bot-stats.db</code> to populate.</div>
+{{else}}
+
+{{/* ── Stat tiles ── */}}
+{{with .Latest}}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem">
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700">{{.TotalRequests}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Total requests</div>
+    <div style="font-size:.75rem;color:var(--fg-muted)">{{.Date}}</div>
+  </div>
+  {{if gt .TotalRequests 0}}
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700;color:#4caf50">{{pct .HumanCount .TotalRequests}}%</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Human ({{.HumanCount}})</div>
+  </div>
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700;color:#ff9800">{{pct .BotCount .TotalRequests}}%</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Bot ({{.BotCount}})</div>
+  </div>
+  {{end}}
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700{{if gt .InboxFailures 0}};color:#e53935{{end}}">{{.InboxFailures}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Inbox failures</div>
+  </div>
+  {{with $.Data.LatestUser}}
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700">{{printf "%.2f" .ClicksPerEntry}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Clicks/entry</div>
+  </div>
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700;color:#e53935">{{.ScannerSlip}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Scanner slipthrough</div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{/* ── Charts ── */}}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1rem;margin-bottom:1rem">
+
+<div class="card" style="margin:0">
+  <div class="card-title">Traffic by category</div>
+  <canvas id="botChart" style="width:100%;max-height:260px"></canvas>
+  <div id="botLegend" style="display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin-top:.6rem;font-size:.78rem"></div>
+</div>
+
+{{if .UserChartJSON}}
+<div class="card" style="margin:0">
+  <div class="card-title">Human referrer sources</div>
+  <canvas id="userChart" style="width:100%;max-height:260px"></canvas>
+  <div id="userLegend" style="display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin-top:.6rem;font-size:.78rem"></div>
+</div>
+{{end}}
+
+</div>
+
+{{/* ── Daily summary table ── */}}
+<div class="card">
+  <div class="card-title">Daily summary</div>
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Total</th>
+        <th>Humans</th>
+        <th>Bots</th>
+        <th>SEO scanner</th>
+        <th>Scanner/Attack</th>
+        <th>AI crawler</th>
+        <th>ActivityPub</th>
+        <th>Inbox fail</th>
+        <th>Clicks/entry</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .BotDays}}
+    {{$d := .Date}}
+    {{$u := index $.Data.UserDayMap $d}}
+    <tr>
+      <td>{{.Date}}</td>
+      <td>{{.TotalRequests}}</td>
+      <td>{{.HumanCount}}{{if gt .TotalRequests 0}} <span style="color:var(--fg-muted);font-size:.8rem">({{pct .HumanCount .TotalRequests}}%)</span>{{end}}</td>
+      <td>{{.BotCount}}{{if gt .TotalRequests 0}} <span style="color:var(--fg-muted);font-size:.8rem">({{pct .BotCount .TotalRequests}}%)</span>{{end}}</td>
+      <td>{{index .Categories "seo_scanner"}}</td>
+      <td>{{index .Categories "empty_ua"}}</td>
+      <td>{{index .Categories "ai_crawler"}}</td>
+      <td>{{index .Categories "activitypub"}}</td>
+      <td>{{if gt .InboxFailures 0}}<span style="color:#e53935">{{.InboxFailures}}</span>{{else}}0{{end}}</td>
+      <td>{{if $u}}{{printf "%.2f" $u.ClicksPerEntry}}{{else}}—{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{{end}}{{/* HasData */}}
+{{end}}{{/* with .Data */}}
+
+<script>
+(function(){
+  var botJSON = {{.Data.BotChartJSON}};
+  var userJSON = {{.Data.UserChartJSON}};
+
+  function drawStackedBar(canvasId, legendId, data) {
+    if (!data || !data.dates || !data.dates.length) return;
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.offsetWidth || 480;
+    var H = 240;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var PAD = {top: 10, right: 10, bottom: 28, left: 48};
+    var chartW = W - PAD.left - PAD.right;
+    var chartH = H - PAD.top - PAD.bottom;
+
+    // compute per-bar totals
+    var n = data.dates.length;
+    var totals = new Array(n).fill(0);
+    data.categories.forEach(function(c) {
+      var s = data.series[c.key] || [];
+      for (var i = 0; i < n; i++) totals[i] += (s[i] || 0);
+    });
+    var maxVal = Math.max.apply(null, totals) || 1;
+
+    // y-axis ticks
+    ctx.fillStyle = '#777';
+    ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'right';
+    var ticks = 4;
+    for (var t = 0; t <= ticks; t++) {
+      var v = Math.round(maxVal * t / ticks);
+      var y = PAD.top + chartH - chartH * t / ticks;
+      ctx.fillText(v >= 1000 ? (v/1000).toFixed(1)+'k' : v, PAD.left - 4, y + 3);
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, y);
+      ctx.lineTo(PAD.left + chartW, y);
+      ctx.stroke();
+    }
+
+    // bars
+    var barW = Math.max(4, Math.floor(chartW / n) - 2);
+    var barGap = (chartW - barW * n) / (n + 1);
+
+    for (var i = 0; i < n; i++) {
+      var x = PAD.left + barGap + i * (barW + barGap);
+      var yBase = PAD.top + chartH;
+      data.categories.forEach(function(c) {
+        var val = (data.series[c.key] || [])[i] || 0;
+        if (!val) return;
+        var h = Math.max(1, chartH * val / maxVal);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(x, yBase - h, barW, h);
+        yBase -= h;
+      });
+
+      // x label
+      ctx.fillStyle = '#777';
+      ctx.textAlign = 'center';
+      ctx.font = '9px system-ui,sans-serif';
+      ctx.fillText(data.dates[i], PAD.left + barGap + i * (barW + barGap) + barW/2, H - 6);
+    }
+
+    // legend
+    var legendEl = document.getElementById(legendId);
+    if (legendEl) {
+      data.categories.slice().reverse().forEach(function(c) {
+        var el = document.createElement('span');
+        el.style.display = 'inline-flex';
+        el.style.alignItems = 'center';
+        el.style.gap = '3px';
+        el.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + c.color + '"></span>' + c.label;
+        legendEl.appendChild(el);
+      });
+    }
+  }
+
+  drawStackedBar('botChart', 'botLegend', botJSON);
+  drawStackedBar('userChart', 'userLegend', userJSON);
+})();
+</script>
+{{end}}

@@ -30,6 +30,23 @@
     {{- range $i, $ins := .Instructors}}{{if $i}}, {{end}}{"@type": "Person", "name": "{{$ins.Name | js}}"{{with $ins.Website}}, "url": "{{. | js}}"{{end}}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@type": "Organization", "name": "{{$.Data.Org.Name | js}}", "url": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
+  {{- with .Pricing}}
+  {{- $curr := .Currency}}{{if not $curr}}{{$curr = "EUR"}}{{end}}
+  {{- if eq .Type "free"}}, "isAccessibleForFree": true
+  {{- else if eq .Type "donation"}}{{if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}"}{{end}}
+  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}"}
+  {{- else if eq .Type "multiple"}}
+    {{- $low := 0.0}}{{$high := 0.0}}{{$first := true}}
+    {{- range .Prices}}
+      {{- if $first}}{{$low = .Amount}}{{$high = .Amount}}{{$first = false}}
+      {{- else}}
+        {{- if lt .Amount $low}}{{$low = .Amount}}{{end}}
+        {{- if gt .Amount $high}}{{$high = .Amount}}{{end}}
+      {{- end}}
+    {{- end}}
+    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}}{{end}}
+  {{- end}}
+  {{- end}}
 }
 </script>
 {{end}}{{end}}

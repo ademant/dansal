@@ -111,6 +111,15 @@ func (i *I18n) detectLang(r *http.Request) string {
 			}
 		}
 	}
+	// Last resort: the instance's configured holiday_country implies an
+	// unambiguous language (e.g. crawlers, which send no cookie and often no
+	// usable Accept-Language, get the instance's actual language instead of
+	// always the hardcoded i18n default).
+	if siteCfg != nil {
+		if lang, ok := holidayCountryLang(siteCfg.HolidayCountry()); ok && i.HasLang(lang) {
+			return lang
+		}
+	}
 	return i.DefaultLang
 }
 

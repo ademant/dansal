@@ -150,3 +150,24 @@ func publicHolidays(country string, year int) map[string]struct{} {
 	}
 	return h
 }
+
+// holidayCountryLang maps an ISO 3166-1 alpha-2 country code to its dansal
+// language code, for use as a last-resort detectLang() fallback (see
+// cmd/dansal_web/i18n.go). Only unambiguous single-language countries are
+// mapped — CH, BE and LU have multiple official languages, so a single
+// guess would misrepresent the country; they return ok=false and fall
+// through to the hardcoded i18n default instead.
+func holidayCountryLang(country string) (lang string, ok bool) {
+	switch strings.ToUpper(country) {
+	case "DE", "AT":
+		return "de", true
+	case "FR":
+		return "fr", true
+	case "NL":
+		return "nl", true
+	case "GB":
+		return "en", true
+	default:
+		return "", false
+	}
+}

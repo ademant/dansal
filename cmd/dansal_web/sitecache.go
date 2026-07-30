@@ -13,12 +13,13 @@ type siteSettingsCache struct {
 	db  *sql.DB
 	ttl time.Duration
 
-	mu          sync.RWMutex
-	at          time.Time
-	contact     string
-	siteName    string
-	impressum   map[string]string
-	indexNowKey string
+	mu             sync.RWMutex
+	at             time.Time
+	contact        string
+	siteName       string
+	impressum      map[string]string
+	indexNowKey    string
+	holidayCountry string
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -29,6 +30,7 @@ func (c *siteSettingsCache) load() {
 	contact := getSiteSetting(c.db, "contact")
 	siteName := getSiteSetting(c.db, "site_name")
 	indexNowKey := getSiteSetting(c.db, "indexnow_key")
+	holidayCountry := getSiteSetting(c.db, "holiday_country")
 	imp := make(map[string]string)
 	for _, lang := range impressumLangs {
 		if v := getSiteSetting(c.db, "impressum_"+lang); v != "" {
@@ -36,7 +38,7 @@ func (c *siteSettingsCache) load() {
 		}
 	}
 	c.mu.Lock()
-	c.contact, c.siteName, c.impressum, c.indexNowKey, c.at = contact, siteName, imp, indexNowKey, time.Now()
+	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.at = contact, siteName, imp, indexNowKey, holidayCountry, time.Now()
 	c.mu.Unlock()
 }
 
@@ -68,6 +70,13 @@ func (c *siteSettingsCache) IndexNowKey() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.indexNowKey
+}
+
+func (c *siteSettingsCache) HolidayCountry() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.holidayCountry
 }
 
 func (c *siteSettingsCache) Impressum() map[string]string {

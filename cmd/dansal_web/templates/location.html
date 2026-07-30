@@ -9,6 +9,16 @@
   {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"},
+    {"@type": "ListItem", "position": 2, "name": "{{.Location | js}}", "item": "{{$.CanonicalURL | js}}"}
+  ]
+}
+</script>
 {{end}}{{end}}
 {{define "content"}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">

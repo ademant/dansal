@@ -49,6 +49,19 @@
   {{- end}}
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"}
+    {{- $pos := 2}}
+    {{- if $.Data.Org}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{$.Data.Org.Name | js}}", "item": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{$pos = add $pos 1}}{{end}}
+    {{- with .Location}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Location | js}}", "item": "https://{{$.Domain}}/location/{{.ID}}"}{{$pos = add $pos 1}}{{end}}
+    , {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Title | js}}", "item": "{{$.CanonicalURL | js}}"}
+  ]
+}
+</script>
 {{end}}{{end}}
 {{define "evt_tt_row"}}
 <div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" onclick="openTTDetail(this,true)">

@@ -17,6 +17,7 @@ type AdminUsersData struct {
 	OrgMap           map[int]Organization
 	UserOrgs         map[int][]int
 	MyOrgs           []Organization // orgs the current user belongs to (non-admins: invite target choices)
+	MyOrgIDs         map[int]bool   // set form of MyOrgs, for permission checks in templates
 	Invites          []InviteLink
 	APIKeys          map[int]APIKey // userID → their API key (for publishers)
 	BaseURL          string
@@ -101,6 +102,10 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		if !isAdmin && len(myOrgs) > 0 {
 			preselectedOrgID = myOrgs[0].ID
 		}
+		myOrgIDs := make(map[int]bool, len(myOrgs))
+		for _, o := range myOrgs {
+			myOrgIDs[o.ID] = true
+		}
 
 		// Build userID→APIKey map for publisher rows.
 		apiKeys := make(map[int]APIKey)
@@ -118,6 +123,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			OrgMap:           orgMap,
 			UserOrgs:         userOrgs,
 			MyOrgs:           myOrgs,
+			MyOrgIDs:         myOrgIDs,
 			Invites:          active,
 			APIKeys:          apiKeys,
 			BaseURL:          cfg.publicBaseURL(),
@@ -182,10 +188,6 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
@@ -200,6 +202,11 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		orgID, err := strconv.Atoi(r.FormValue("org_id"))
 		if err != nil {
 			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			return
+		}
+		// Non-admins may only add/remove members of orgs they themselves belong to.
+		if su.Role != "admin" && !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[orgID] {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		if action == "remove" {
@@ -359,6 +366,68 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		invToken := r.PathValue("token")
 		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+// adminInviteResendHandler regenerates an active invite: it revokes the old
+// token and issues a fresh one with the same type and org, since these
+// link/QR invites aren't tied to an email address to actually resend to.
+func adminInviteResendHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		invToken := r.PathValue("token")
+
+		invites, err := client.ListInvites(r.Context(), token)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		var old *InviteLink
+		for i := range invites {
+			if invites[i].Token == invToken {
+				old = &invites[i]
+				break
+			}
+		}
+		if old == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invite not found"})
+			return
+		}
+		if su.Role != "admin" && (old.OrgID == nil || !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*old.OrgID]) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
+			return
+		}
+
+		inviteType := old.InviteType
+		if inviteType != "qr" && inviteType != "link" {
+			inviteType = "link"
+		}
+		link, err := client.CreateInvite(r.Context(), inviteType, old.OrgID, token)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = client.RevokeInvite(r.Context(), invToken, token)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":      link.Token,
+			"type":       link.InviteType,
+			"expires_at": link.ExpiresAt,
+			"url":        cfg.publicBaseURL() + "/invites/" + link.Token,
+		})
 	}
 }
 

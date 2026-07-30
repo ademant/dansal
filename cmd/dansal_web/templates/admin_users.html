@@ -6,7 +6,6 @@
 
 {{with .Data}}
 
-
 {{if .IsAdmin}}
 <div class="bulk-bar" id="bulk-bar" style="display:none">
   <span id="bulk-count"></span>
@@ -38,48 +37,81 @@
   <tbody>
   {{range .Users}}
   {{$uid := .ID}}
-  <tr{{if .Disabled}} class="user-disabled-row"{{end}}>
-    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td>{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
-    <td data-val="{{.Role}}">
+  {{$userOrgs := index $.Data.UserOrgs $uid}}
+  {{$canManage := $.Data.IsAdmin}}
+  {{if not $canManage}}{{range $userOrgs}}{{if index $.Data.MyOrgIDs .}}{{$canManage = true}}{{end}}{{end}}{{end}}
+  <tr{{if .Disabled}} class="user-disabled-row"{{end}} data-user-row data-user-id="{{$uid}}">
+    {{if $.Data.IsAdmin}}<td class="col-cb cell-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
+    <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
+    <td class="cell-role" data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
-      <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)">
+      <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)" onclick="event.stopPropagation()">
         <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
         <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
         <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
       </select>
       {{else}}{{.Role}}{{end}}
     </td>
-    <td>
-      {{$userOrgs := index $.Data.UserOrgs $uid}}
+    <td class="cell-org">
       {{range $userOrgs}}
         {{$oid := .}}
         {{$org := index $.Data.OrgMap $oid}}
         <span class="org-tag">{{$org.Name}}
-          {{if $.Data.IsAdmin}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
+          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" onclick="event.stopPropagation();rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
         </span>
       {{end}}
-      {{if $.Data.IsAdmin}}
-      <select class="inline-select" onchange="if(this.value)addOrg({{$uid}},this.value)">
+      {{if $canManage}}
+      <select class="inline-select" onclick="event.stopPropagation()" onchange="if(this.value)addOrg({{$uid}},this.value)">
         <option value="">+</option>
-        {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
       </select>
       {{end}}
     </td>
     {{if $.Data.IsAdmin}}
-    <td class="col-actions">
+    <td class="col-actions cell-actions">
       {{if .Disabled}}
-      <button type="button" class="btn-sm btn-warn"
-              onclick="if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
+      <button type="button" class="btn-sm btn-warn" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
       {{else}}
-      <button type="button" class="btn-sm"
-              onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
+      <button type="button" class="btn-sm" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
-      <button type="button" class="btn-sm" onclick="genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
-      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
+      <button type="button" class="btn-sm" onclick="event.stopPropagation();genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
+      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="event.stopPropagation();sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
     </td>
     {{end}}
   </tr>
+  <template id="user-tmpl-{{$uid}}">
+    <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}user #{{$uid}}{{end}}
+      {{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}
+      <span class="muted">— {{.Role}}</span>
+    </h3>
+    <div class="popup-section">
+      <div class="popup-label">{{$.Strings.T "fetch_org"}}</div>
+      {{range $userOrgs}}
+        {{$oid := .}}
+        {{$org := index $.Data.OrgMap $oid}}
+        <span class="org-tag">{{$org.Name}}
+          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
+        </span>
+      {{end}}
+      {{if $canManage}}
+      <select class="inline-select" onchange="if(this.value)addOrg({{$uid}},this.value)">
+        <option value="">+</option>
+        {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+      </select>
+      {{end}}
+    </div>
+    {{if $.Data.IsAdmin}}
+    <div class="popup-actions">
+      <button type="button" class="btn-sm" onclick="closePopup();genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
+      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
+      {{if .Disabled}}
+      <button type="button" class="btn-sm btn-warn" onclick="if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
+      {{else}}
+      <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
+      {{end}}
+    </div>
+    {{end}}
+  </template>
   {{end}}
   </tbody>
 </table>
@@ -87,23 +119,12 @@
 
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_publisher_section"}}</h2>
-  <div class="invite-create-row">
-    <input type="text" id="publisher-name" placeholder="{{$.Strings.T "admin_publisher_name_placeholder"}}" style="padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)">
-    <select id="publisher-org-id">
-      {{if $.Data.IsAdmin}}<option value="">—</option>{{end}}
-      {{range .MyOrgs}}
-      <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
-      {{end}}
-    </select>
-    <button type="button" class="btn-sm" onclick="createPublisher()">{{$.Strings.T "admin_publisher_create"}}</button>
-    <button type="button" class="btn-sm" onclick="publisherConnectLinkFromForm()">{{$.Strings.T "admin_publisher_connect_link"}}</button>
-  </div>
-  <div id="publisher-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;font-size:.9rem"></div>
+  <button type="button" class="btn-primary-sm" onclick="openCreatePublisherModal()">+ {{$.Strings.T "admin_publisher_create"}}</button>
 
   {{$hasPublishers := false}}
   {{range .Users}}{{if eq .Role "publisher"}}{{$hasPublishers = true}}{{end}}{{end}}
   {{if $hasPublishers}}
-  <table class="event-table" style="margin-top:1rem">
+  <table class="event-table" id="publisher-table" style="margin-top:1rem">
     <thead>
       <tr>
         <th>{{$.Strings.T "admin_publisher_name"}}</th>
@@ -115,52 +136,48 @@
     <tbody>
     {{range .Users}}{{if eq .Role "publisher"}}
     {{$uid := .ID}}
-    {{$orgNames := ""}}
-    {{range $oid, $_ := $.Data.UserOrgs}}{{if eq $oid $uid}}{{range $.Data.UserOrgs}}{{end}}{{end}}{{end}}
-    <tr>
-      <td>{{if .DisplayName}}{{.DisplayName}}{{else}}<span class="muted">publisher#{{.ID}}</span>{{end}}</td>
-      <td>{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
-      <td class="muted" style="font-size:.85rem">
-        {{- if .UserMetadata -}}
-          {{- $m := .UserMetadata | parseUserMetadata -}}
-          {{- $cu := index $m "client_url" -}}{{- $cn := index $m "client_name" -}}
-          {{- if $cu -}}<a href="{{$cu}}" target="_blank" rel="noopener">{{if $cn}}{{$cn}}{{else}}{{$cu}}{{end}}</a>
-          {{- else if $cn}}{{$cn}}{{end -}}
-        {{- end -}}
+    {{$firstOrgID := 0}}{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if eq $i 0}}{{$firstOrgID = $oid}}{{end}}{{end}}
+    {{$clientLabel := ""}}{{$clientURL := ""}}
+    {{- if .UserMetadata -}}
+      {{- $m := .UserMetadata | parseUserMetadata -}}
+      {{- $cu := index $m "client_url" -}}{{- $cn := index $m "client_name" -}}
+      {{- if $cu}}{{$clientURL = $cu}}{{end -}}
+      {{- if $cn}}{{$clientLabel = $cn}}{{else if $cu}}{{$clientLabel = $cu}}{{end -}}
+    {{- end -}}
+    <tr data-pub-row data-pub-id="{{$uid}}">
+      <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else}}<span class="muted">publisher#{{.ID}}</span>{{end}}</td>
+      <td class="cell-org">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
+      <td class="muted cell-client" style="font-size:.85rem">
+        {{if $clientURL}}<a href="{{$clientURL}}" target="_blank" rel="noopener">{{$clientLabel}}</a>{{else}}{{$clientLabel}}{{end}}
       </td>
-      <td style="white-space:nowrap">
-        {{$firstOrgID := 0}}{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if eq $i 0}}{{$firstOrgID = $oid}}{{end}}{{end}}
+      <td class="col-actions cell-actions" style="white-space:nowrap">
+        <button type="button" class="btn-sm" onclick="event.stopPropagation();publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
+        <button type="button" class="btn-sm" onclick="event.stopPropagation();regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
+        <button type="button" class="btn-sm btn-del" onclick="event.stopPropagation();deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
+      </td>
+    </tr>
+    <template id="pub-tmpl-{{$uid}}">
+      <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{else}}publisher#{{.ID}}{{end}}</h3>
+      <p class="muted">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}{{if $clientLabel}} · {{$clientLabel}}{{end}}</p>
+      <div class="popup-actions">
         <button type="button" class="btn-sm" onclick="publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
-      </td>
-    </tr>
+      </div>
+    </template>
     {{end}}{{end}}
     </tbody>
   </table>
   {{end}}
-</div>
-
-<div class="invite-section">
-  <h2>{{$.Strings.T "admin_invite_create_section"}}</h2>
-  <div class="invite-create-row">
-    <select id="invite-org-id">
-      {{if $.Data.IsAdmin}}<option value="">—</option>{{end}}
-      {{range .MyOrgs}}
-      <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
-      {{end}}
-    </select>
-    <button type="button" class="btn-sm" onclick="createInvite('qr')" title="{{$.Strings.T "admin_invite_qr_hint"}}">{{$.Strings.T "admin_invite_create_qr"}}</button>
-    <button type="button" class="btn-sm" onclick="createInvite('link')" title="{{$.Strings.T "admin_invite_link_hint"}}">{{$.Strings.T "admin_invite_create_link"}}</button>
-  </div>
-  <div id="invite-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px"></div>
+  <div id="publisher-result" hidden style="margin:.75rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;font-size:.9rem"></div>
 </div>
 
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_invite_active"}}</h2>
+  <button type="button" class="btn-primary-sm" onclick="openCreateInviteModal()">+ {{$.Strings.T "admin_invite_create_section"}}</button>
 
   {{if .Invites}}
-  <table class="event-table" style="margin-top:1rem">
+  <table class="event-table" id="invite-table" style="margin-top:1rem">
     <thead>
       <tr>
         <th>{{$.Strings.T "admin_invite_link_label"}}</th>
@@ -172,19 +189,31 @@
     </thead>
     <tbody>
     {{range .Invites}}
-    <tr>
-      <td class="invite-link-cell">
-        <code>{{$.Data.BaseURL}}/invites/{{.Token}}</code>
-        <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
+    {{$orgName := $.Strings.T "admin_invite_no_org"}}{{if .OrgID}}{{$o := index $.Data.OrgMap (derefInt .OrgID)}}{{$orgName = $o.Name}}{{end}}
+    <tr data-invite-row data-invite-token="{{.Token}}">
+      <td class="invite-link-cell cell-link">
+        <code title="{{$.Data.BaseURL}}/invites/{{.Token}}">{{$.Data.BaseURL}}/invites/{{.Token}}</code>
+        <button type="button" class="btn-sm" onclick="event.stopPropagation();copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
       </td>
-      <td>{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}}</td>
-      <td>{{if .OrgID}}{{$o := index $.Data.OrgMap (derefInt .OrgID)}}{{$o.Name}}{{else}}{{$.Strings.T "admin_invite_no_org"}}{{end}}</td>
-      <td class="muted">{{.ExpiresAt}}</td>
-      <td>
+      <td class="cell-type">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}}</td>
+      <td class="cell-org">{{$orgName}}</td>
+      <td class="muted cell-expires">{{.ExpiresAt}}</td>
+      <td class="cell-actions">
+        <button type="button" class="btn-sm" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
         <button type="button" class="btn-sm btn-del"
-                onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+                onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
       </td>
     </tr>
+    <template id="invite-tmpl-{{.Token}}">
+      <h3 class="popup-title">{{$orgName}}</h3>
+      <p class="muted" style="word-break:break-all">{{$.Data.BaseURL}}/invites/{{.Token}}</p>
+      <p class="muted">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}} · {{$.Strings.T "admin_invite_expires"}}: {{.ExpiresAt}}</p>
+      <div class="popup-actions">
+        <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
+        <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
+        <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+      </div>
+    </template>
     {{end}}
     </tbody>
   </table>
@@ -193,29 +222,87 @@
 
 {{end}}
 
+<!-- Shared generic popup, used by users / service accounts / active invites row taps -->
+<div id="generic-modal" hidden class="popup-overlay" onclick="if(event.target===this)closePopup()">
+  <div class="popup-card">
+    <div id="generic-modal-body"></div>
+    <button type="button" class="btn-sm" onclick="closePopup()">{{$.Strings.T "admin_magic_link_close"}}</button>
+  </div>
+</div>
+
+<!-- Create service account modal -->
+<div id="create-publisher-modal" hidden class="popup-overlay" onclick="if(event.target===this)closeCreatePublisherModal()">
+  <div class="popup-card">
+    <h3 class="popup-title">{{.Strings.T "admin_publisher_create"}}</h3>
+    <div class="invite-create-row">
+      <input type="text" id="publisher-name" placeholder="{{.Strings.T "admin_publisher_name_placeholder"}}">
+      <select id="publisher-org-id">
+        {{if .Data.IsAdmin}}<option value="">—</option>{{end}}
+        {{range .Data.MyOrgs}}
+        <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
+        {{end}}
+      </select>
+    </div>
+    <div class="popup-actions">
+      <button type="button" class="btn-sm" onclick="createPublisher()">{{.Strings.T "admin_publisher_create"}}</button>
+      <button type="button" class="btn-sm" onclick="publisherConnectLinkFromForm()">{{.Strings.T "admin_publisher_connect_link"}}</button>
+      <button type="button" class="btn-sm" onclick="closeCreatePublisherModal()">{{.Strings.T "admin_magic_link_close"}}</button>
+    </div>
+    <div id="create-publisher-result" hidden style="margin-top:.75rem"></div>
+  </div>
+</div>
+
+<!-- Create invitation modal -->
+<div id="create-invite-modal" hidden class="popup-overlay" onclick="if(event.target===this)closeCreateInviteModal()">
+  <div class="popup-card">
+    <h3 class="popup-title">{{.Strings.T "admin_invite_create_section"}}</h3>
+    <div class="invite-create-row">
+      <select id="invite-org-id">
+        {{if .Data.IsAdmin}}<option value="">—</option>{{end}}
+        {{range .Data.MyOrgs}}
+        <option value="{{.ID}}"{{if eq .ID $.Data.PreselectedOrgID}} selected{{end}}>{{if .ActorName}}{{.ActorName}}{{else}}{{.Name}}{{end}}</option>
+        {{end}}
+      </select>
+    </div>
+    <div class="popup-actions">
+      <button type="button" class="btn-sm" onclick="createInvite('qr')" title="{{.Strings.T "admin_invite_qr_hint"}}">{{.Strings.T "admin_invite_create_qr"}}</button>
+      <button type="button" class="btn-sm" onclick="createInvite('link')" title="{{.Strings.T "admin_invite_link_hint"}}">{{.Strings.T "admin_invite_create_link"}}</button>
+      <button type="button" class="btn-sm" onclick="closeCreateInviteModal()">{{.Strings.T "admin_magic_link_close"}}</button>
+    </div>
+    <div id="invite-result" hidden style="margin-top:.75rem"></div>
+  </div>
+</div>
+
 <div id="magic-link-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;max-width:520px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3)">
-    <h3 style="margin:0 0 .75rem">{{$.Strings.T "admin_magic_link_title"}}</h3>
-    <p id="magic-link-toast" hidden style="background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.88rem">{{$.Strings.T "admin_magic_link_copied"}}</p>
-    <p style="font-size:.85rem;color:var(--fg-muted);margin-bottom:.5rem">{{$.Strings.T "admin_magic_link_hint"}}</p>
+    <h3 style="margin:0 0 .75rem">{{.Strings.T "admin_magic_link_title"}}</h3>
+    <p id="magic-link-toast" hidden style="background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.88rem">{{.Strings.T "admin_magic_link_copied"}}</p>
+    <p style="font-size:.85rem;color:var(--fg-muted);margin-bottom:.5rem">{{.Strings.T "admin_magic_link_hint"}}</p>
     <p id="magic-link-sent-to" hidden style="font-size:.85rem;color:#065f46;background:#d1fae5;border-radius:4px;padding:.3rem .6rem;margin-bottom:.5rem"></p>
     <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
       <input id="magic-link-input" type="text" readonly style="flex:1;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;background:var(--bg);color:var(--fg);font-family:monospace">
-      <button type="button" class="btn-sm" onclick="copyMagicLink()">{{$.Strings.T "admin_invite_copy"}}</button>
-      <button type="button" class="btn-sm" onclick="toggleQR('magic-link-qr','magic-link-input')">{{$.Strings.T "admin_qr_show"}}</button>
+      <button type="button" class="btn-sm" onclick="copyMagicLink()">{{.Strings.T "admin_invite_copy"}}</button>
+      <button type="button" class="btn-sm" onclick="toggleQR('magic-link-qr','magic-link-input')">{{.Strings.T "admin_qr_show"}}</button>
     </div>
     <div id="magic-link-qr" style="display:none;text-align:center;margin-bottom:.75rem"></div>
-    <button type="button" class="btn-sm" onclick="closeMagicModal()">{{$.Strings.T "admin_magic_link_close"}}</button>
+    <button type="button" class="btn-sm" onclick="closeMagicModal()">{{.Strings.T "admin_magic_link_close"}}</button>
   </div>
 </div>
 
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
 .col-cb{width:2rem;text-align:center}
 .col-actions{white-space:nowrap}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;cursor:pointer;background:#fff}
 .btn-sm:hover{background:#f0f0f0}
+.btn-primary-sm{display:inline-block;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;margin-bottom:.5rem}
+.btn-primary-sm:hover{background:#14588f}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
 .bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd;flex-wrap:wrap}
@@ -226,19 +313,49 @@
 .rm-org-btn:hover{color:#b00020}
 .invite-section{margin-top:2rem}
 .invite-section h2{font-size:1.1rem;margin-bottom:.75rem}
-.invite-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
-.invite-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 .invite-create-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap}
-.invite-create-row select{padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
+.invite-create-row input,.invite-create-row select{padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
 .invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
 .invite-link-cell code{word-break:break-all}
-.invite-banner{background:#d4edda;border:1px solid #a3d9a5;border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
-.invite-banner code{background:#fff;padding:.2rem .4rem;border-radius:3px;font-size:.85rem;word-break:break-all}
 .muted{color:#888;font-size:.85rem}
 .btn-warn{background:#e67e00;color:#fff;border:none}
 .btn-warn:hover{background:#c06000}
 .badge-disabled{display:inline-block;background:#f0b429;color:#333;border-radius:3px;padding:.1rem .35rem;font-size:.75rem;font-weight:600;vertical-align:middle}
 .user-disabled-row td{opacity:.6}
+
+.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem}
+.popup-card{background:var(--bg-card,#fff);border:1px solid var(--border,#ccc);border-radius:8px;padding:1.25rem;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+.popup-title{margin:0 0 .75rem;font-size:1.05rem}
+.popup-section{margin-bottom:.75rem}
+.popup-label{font-size:.8rem;color:var(--fg-dim,#888);margin-bottom:.3rem}
+.popup-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}
+.popup-qr{text-align:center;margin-top:.75rem}
+.popup-qr canvas,.popup-qr img{max-width:100%;height:auto}
+
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .col-cb{display:none}
+  .event-table .col-actions{display:none}
+
+  #user-table .cell-name{order:1;font-weight:600}
+  #user-table .cell-role{order:2;font-size:.85rem;color:#666}
+  #user-table .cell-org{order:3;flex-basis:100%;font-size:.85rem;color:#666}
+  #user-table .cell-org .inline-select{display:none}
+  #user-table .cell-org .rm-org-btn{display:none}
+
+  #publisher-table .cell-name{order:1;font-weight:600}
+  #publisher-table .cell-org{order:2;font-size:.85rem;color:#666}
+  #publisher-table .cell-client{order:3;flex-basis:100%;font-size:.8rem}
+
+  #invite-table .cell-link{order:1;flex-basis:100%;max-width:100%;overflow:hidden}
+  #invite-table .cell-link code{max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+  #invite-table .cell-link button{display:none}
+  #invite-table .cell-type{order:2;font-size:.85rem;color:#666}
+  #invite-table .cell-org{order:3;font-size:.85rem;color:#666}
+  #invite-table .cell-expires{order:4;font-size:.8rem}
+}
 </style>
 
 <script>
@@ -287,6 +404,12 @@ function revokeInvite(token) {
   f.method = 'post'; f.action = '/admin/invites/' + token + '/revoke';
   document.body.appendChild(f); f.submit();
 }
+function resendInvite(token) {
+  fetch('/admin/invites/' + token + '/resend', {method:'POST', headers:{Accept:'application/json'}})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(){ location.reload(); })
+    .catch(function(){ alert('Failed to resend invite'); });
+}
 async function createPublisher() {
   var name = document.getElementById('publisher-name').value.trim();
   var orgEl = document.getElementById('publisher-org-id');
@@ -294,7 +417,7 @@ async function createPublisher() {
   var body = {};
   if (name) body.name = name;
   if (orgVal) body.org_id = parseInt(orgVal);
-  var res = document.getElementById('publisher-result');
+  var res = document.getElementById('create-publisher-result');
   res.hidden = false; res.innerHTML = '…';
   try {
     var r = await fetch('/admin/publishers/new', {
@@ -302,29 +425,30 @@ async function createPublisher() {
     });
     var d = await r.json();
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
-    res.innerHTML = '<strong>' + (d.name||('publisher#'+d.user_id)) + '</strong> {{$.Strings.T "admin_publisher_created_key"}}: ' +
+    res.innerHTML = '<strong>' + (d.name||('publisher#'+d.user_id)) + '</strong> {{.Strings.T "admin_publisher_created_key"}}: ' +
       '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
-      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_key_once_hint"}}</p>';
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_key_once_hint"}}</p>';
     setTimeout(function(){ location.reload(); }, 8000);
   } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
 }
 async function regenerateKey(id) {
-  if (!confirm('{{$.Strings.T "admin_publisher_confirm_regen"}}')) return;
+  if (!confirm('{{.Strings.T "admin_publisher_confirm_regen"}}')) return;
   try {
     var r = await fetch('/admin/publishers/'+id+'/regenerate-key', {method:'POST'});
     var d = await r.json();
     if (!r.ok) { alert(d.error||r.statusText); return; }
     var res = document.getElementById('publisher-result');
     res.hidden = false;
-    res.innerHTML = '{{$.Strings.T "admin_publisher_new_key"}}: ' +
+    res.innerHTML = '{{.Strings.T "admin_publisher_new_key"}}: ' +
       '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
-      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_key_once_hint"}}</p>';
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_key_once_hint"}}</p>';
+    closePopup();
   } catch(e) { alert(e.message); }
 }
 async function deletePublisher(id) {
-  if (!confirm('{{$.Strings.T "admin_publisher_confirm_delete"}}')) return;
+  if (!confirm('{{.Strings.T "admin_publisher_confirm_delete"}}')) return;
   try {
     var r = await fetch('/admin/publishers/'+id+'/delete', {method:'POST'});
     if (!r.ok) { var d = await r.json().catch(function(){return {};}); alert(d.error||r.statusText); return; }
@@ -334,11 +458,11 @@ async function deletePublisher(id) {
 async function publisherConnectLinkFromForm() {
   var orgEl = document.getElementById('publisher-org-id');
   var orgVal = orgEl ? orgEl.value : '';
-  if (!orgVal) { alert('{{$.Strings.T "admin_invite_org_required"}}'); return; }
-  await publisherConnectLink(0, parseInt(orgVal));
+  if (!orgVal) { alert('{{.Strings.T "admin_invite_org_required"}}'); return; }
+  await publisherConnectLink(0, parseInt(orgVal), 'create-publisher-result');
 }
-async function publisherConnectLink(id, orgID) {
-  var res = document.getElementById('publisher-result');
+async function publisherConnectLink(id, orgID, resultId) {
+  var res = document.getElementById(resultId || 'publisher-result');
   res.hidden = false; res.innerHTML = '…';
   try {
     var r = await fetch('/admin/publishers/invite', {
@@ -346,10 +470,11 @@ async function publisherConnectLink(id, orgID) {
     });
     var d = await r.json();
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
-    res.innerHTML = '{{$.Strings.T "admin_publisher_connect_link_hint"}}: ' +
+    res.innerHTML = '{{.Strings.T "admin_publisher_connect_link_hint"}}: ' +
       '<code id="pub-connect-val" style="word-break:break-all;font-size:.82rem">' + d.redeem_url + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-connect-val\').textContent)">{{$.Strings.T "admin_invite_copy"}}</button>' +
-      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{$.Strings.T "admin_publisher_connect_link_expires"}}: ' + new Date(d.expires_at).toLocaleString() + '</p>';
+      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-connect-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_connect_link_expires"}}: ' + new Date(d.expires_at).toLocaleString() + '</p>';
+    if (!resultId) closePopup();
   } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
 }
 async function createInvite(type) {
@@ -358,7 +483,7 @@ async function createInvite(type) {
   var res = document.getElementById('invite-result');
   if (!orgVal) {
     res.hidden = false;
-    res.innerHTML = '<span style="color:#c06000">{{$.Strings.T "admin_invite_org_required"}}</span>';
+    res.innerHTML = '<span style="color:#c06000">{{.Strings.T "admin_invite_org_required"}}</span>';
     return;
   }
   var body = {type: type, org_id: parseInt(orgVal)};
@@ -373,22 +498,24 @@ async function createInvite(type) {
     if (type === 'qr') {
       res.innerHTML = '';
       var cnt = document.createElement('div');
+      cnt.className = 'popup-qr';
       res.appendChild(cnt);
       var exp = new Date(d.expires_at);
       var cd = document.createElement('p');
-      cd.style.cssText = 'margin:.4rem 0 0;font-size:.85rem;color:var(--fg-muted)';
+      cd.style.cssText = 'margin:.4rem 0 0;font-size:.85rem;color:var(--fg-muted);text-align:center';
       res.appendChild(cd);
       (function tick(){
         var s = Math.max(0, Math.round((exp - Date.now()) / 1000));
-        cd.textContent = '{{$.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
+        cd.textContent = '{{.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
         if (s > 0) setTimeout(tick, 1000);
       })();
       if (typeof QRCode !== 'undefined') {
-        new QRCode(cnt, {text: d.url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H});
+        var qrSize = Math.min(320, window.innerWidth - 96);
+        new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.H});
       }
     } else {
       res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
-        ' <button class="btn-sm" onclick="copyText(\'' + d.url + '\')" style="margin-left:.4rem">{{$.Strings.T "admin_invite_copy"}}</button>';
+        ' <button class="btn-sm" onclick="copyText(\'' + d.url + '\')" style="margin-left:.4rem">{{.Strings.T "admin_invite_copy"}}</button>';
     }
   } catch(e) {
     res.innerHTML = '<span style="color:red">' + e.message + '</span>';
@@ -396,10 +523,6 @@ async function createInvite(type) {
 }
 function copyText(t) {
   if (navigator.clipboard) navigator.clipboard.writeText(t);
-}
-function copyInvite() {
-  var el = document.getElementById('new-invite-url');
-  if (el) copyText(el.textContent.trim());
 }
 function genMagicLink(uid) {
   fetch('/admin/users/' + uid + '/magic-link', {method:'POST'})
@@ -410,7 +533,7 @@ function genMagicLink(uid) {
       var sentEl = document.getElementById('magic-link-sent-to');
       if (sentEl) {
         sentEl.hidden = !d.sent_to;
-        sentEl.textContent = d.sent_to ? '{{$.Strings.T "admin_magic_link_sent_to"}}: ' + d.sent_to : '';
+        sentEl.textContent = d.sent_to ? '{{.Strings.T "admin_magic_link_sent_to"}}: ' + d.sent_to : '';
       }
       document.getElementById('magic-link-modal').hidden = false;
       document.getElementById('magic-link-toast').hidden = true;
@@ -431,14 +554,14 @@ function closeMagicModal() {
   document.getElementById('magic-link-modal').hidden = true;
 }
 function sendTelegramMsg(uid) {
-  var msg = prompt('{{$.Strings.T "admin_telegram_msg_prompt"}}');
+  var msg = prompt('{{.Strings.T "admin_telegram_msg_prompt"}}');
   if (!msg || !msg.trim()) return;
   fetch('/admin/users/' + uid + '/telegram/message', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: 'message=' + encodeURIComponent(msg.trim())
   }).then(function(r) {
-    if (r.ok) alert('{{$.Strings.T "admin_telegram_msg_sent"}}');
+    if (r.ok) alert('{{.Strings.T "admin_telegram_msg_sent"}}');
     else r.text().then(function(t){ alert('Error: ' + t); });
   }).catch(function(){ alert('Error sending message'); });
 }
@@ -476,6 +599,54 @@ function toggleQR(containerId, sourceId) {
   if (typeof QRCode !== 'undefined') {
     new QRCode(el, {text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H});
   }
+}
+
+// Tap-to-open popups (mobile card view only — desktop keeps full inline rows).
+function openPopup(tmplId) {
+  var tmpl = document.getElementById(tmplId);
+  if (!tmpl) return;
+  var body = document.getElementById('generic-modal-body');
+  body.innerHTML = '';
+  body.appendChild(tmpl.content.cloneNode(true));
+  document.getElementById('generic-modal').hidden = false;
+}
+function closePopup() {
+  document.getElementById('generic-modal').hidden = true;
+}
+function rowPopupHandler(prefix, idAttr) {
+  return function(e) {
+    if (!window.matchMedia('(max-width:640px)').matches) return;
+    if (e.target.closest('button,select,a,input')) return;
+    var row = e.target.closest('tr[' + idAttr + ']');
+    if (!row) return;
+    openPopup(prefix + '-tmpl-' + row.getAttribute(idAttr));
+  };
+}
+(function(){
+  var ut = document.querySelector('#user-table tbody');
+  if (ut) ut.addEventListener('click', rowPopupHandler('user', 'data-user-id'));
+  var pt = document.querySelector('#publisher-table tbody');
+  if (pt) pt.addEventListener('click', rowPopupHandler('pub', 'data-pub-id'));
+  var it = document.querySelector('#invite-table tbody');
+  if (it) it.addEventListener('click', function(e){
+    if (!window.matchMedia('(max-width:640px)').matches) return;
+    if (e.target.closest('button,select,a,input')) return;
+    var row = e.target.closest('tr[data-invite-token]');
+    if (!row) return;
+    openPopup('invite-tmpl-' + row.getAttribute('data-invite-token'));
+  });
+})();
+function openCreatePublisherModal() {
+  document.getElementById('create-publisher-modal').hidden = false;
+}
+function closeCreatePublisherModal() {
+  document.getElementById('create-publisher-modal').hidden = true;
+}
+function openCreateInviteModal() {
+  document.getElementById('create-invite-modal').hidden = false;
+}
+function closeCreateInviteModal() {
+  document.getElementById('create-invite-modal').hidden = true;
 }
 </script>
 <script src="/static/qrcode.min.js"></script>

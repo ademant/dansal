@@ -285,6 +285,7 @@ func main() {
 		r.HandleFunc("POST /admin/users/{id}/org", adminRateLimit(adminUserOrgHandler(cfg, client)))
 		r.HandleFunc("POST /admin/invites/new", adminRateLimit(adminInviteCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/invites/{token}/revoke", adminRateLimit(adminInviteRevokeHandler(cfg, client)))
+		r.HandleFunc("POST /admin/invites/{token}/resend", adminRateLimit(adminInviteResendHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/new", adminRateLimit(adminPublisherCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/invite", adminRateLimit(adminPublisherInviteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/{id}/regenerate-key", adminRateLimit(adminPublisherRegenerateKeyHandler(cfg, client)))

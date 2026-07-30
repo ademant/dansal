@@ -3,9 +3,10 @@
 bot-stats.py — daily bot activity report for balfolk.jetzt
 
 Usage:
-    sudo python3 scripts/bot-stats.py [YYYY-MM-DD] [--out FILE]
+    sudo python3 scripts/bot-stats.py [YYYY-MM-DD] [--out FILE] [--store PATH]
 
     DATE defaults to yesterday. --out defaults to stdout.
+    --store writes the aggregated rows into a SQLite file for dashboard use.
 
 Reads:
     /var/log/nginx/access.log (and .1 if the target date falls in the
@@ -21,6 +22,7 @@ import argparse
 import gzip
 import json
 import re
+import sqlite3
 import subprocess
 import sys
 from collections import defaultdict
@@ -321,6 +323,11 @@ def main():
         default="-",
         help="Output file path; defaults to stdout",
     )
+    parser.add_argument(
+        "--store",
+        metavar="PATH",
+        help="SQLite file to upsert daily stats into (created if absent)",
+    )
     args = parser.parse_args()
 
     try:
@@ -359,6 +366,69 @@ def main():
             f.write(output)
             f.write("\n")
         print(f"Written to {args.out}", file=sys.stderr)
+
+    if args.store:
+        store_to_sqlite(args.store, report)
+        print(f"Stored in {args.store}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# SQLite storage
+# ---------------------------------------------------------------------------
+
+def store_to_sqlite(db_path: str, report: dict) -> None:
+    con = sqlite3.connect(db_path)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS bot_stats_daily (
+            date      TEXT NOT NULL,
+            category  TEXT NOT NULL,
+            count     INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (date, category)
+        );
+        CREATE TABLE IF NOT EXISTS bot_stats_meta (
+            date                TEXT PRIMARY KEY,
+            total_requests      INTEGER NOT NULL DEFAULT 0,
+            human_count         INTEGER NOT NULL DEFAULT 0,
+            bot_count           INTEGER NOT NULL DEFAULT 0,
+            inbox_failures      INTEGER NOT NULL DEFAULT 0,
+            api_errors          INTEGER NOT NULL DEFAULT 0,
+            web_errors          INTEGER NOT NULL DEFAULT 0
+        );
+    """)
+
+    d = report["date"]
+    ng = report["nginx"]
+    bot_cats = ng["bots"]["by_category"]
+
+    with con:
+        for cat, data in bot_cats.items():
+            con.execute(
+                "INSERT OR REPLACE INTO bot_stats_daily (date, category, count) VALUES (?, ?, ?)",
+                (d, cat, data["count"]),
+            )
+        # also store human traffic as its own "category" for unified trend queries
+        con.execute(
+            "INSERT OR REPLACE INTO bot_stats_daily (date, category, count) VALUES (?, ?, ?)",
+            (d, "browser", ng["humans"]["total"]),
+        )
+
+        con.execute(
+            """INSERT OR REPLACE INTO bot_stats_meta
+               (date, total_requests, human_count, bot_count, inbox_failures, api_errors, web_errors)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                d,
+                ng["total_requests"],
+                ng["humans"]["total"],
+                ng["bots"]["total"],
+                report["dansal_web"]["inbox_verification_failures"]["total"],
+                len(report["dansal_api"]["errors"]),
+                len(report["dansal_web"]["other_errors"]),
+            ),
+        )
+
+    con.close()
 
 
 if __name__ == "__main__":

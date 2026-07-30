@@ -128,7 +128,7 @@ func main() {
 	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,
-		HTTP:           &http.Client{Timeout: 15 * time.Second},
+		HTTP:           &http.Client{Timeout: 180 * time.Second},
 		InternalSecret: cfg.InternalSharedSecret,
 	}
 
@@ -407,6 +407,9 @@ func main() {
 		r.HandleFunc("POST /admin/locations/{id}/assign-org", adminRateLimit(adminLocationAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/rooms/new", adminRateLimit(adminLocationRoomCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/locations/{id}/rooms/{room_id}/delete", adminRateLimit(adminLocationRoomDeleteHandler(cfg, client)))
+		r.HandleFunc("POST /admin/locations/{id}/rooms/{room_id}/quick-edit", adminRateLimit(adminRoomQuickEditHandler(client)))
+		r.HandleFunc("POST /admin/locations/{id}/plan-position", adminRateLimit(adminLocationPlanPositionHandler(cfg, client)))
+		r.HandleFunc("POST /admin/api/location/{id}/room/quick-create", adminRateLimit(adminRoomQuickCreateHandler(client)))
 
 		r.HandleFunc("GET /admin/enrich", adminEnrichPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/enrich/preview", adminRateLimit(adminEnrichPreviewHandler(cfg, tmpls, db, client, i18n)))
@@ -452,8 +455,8 @@ func main() {
 	}
 	go startDelivery(cfg, db, client, relayActor)
 
-	log.Printf("web server listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
-		cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
+	log.Printf("dansal-web %s (built %s) listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
+		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           securityHeadersMiddleware(&live),

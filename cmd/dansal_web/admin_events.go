@@ -37,6 +37,7 @@ type AdminEventsData struct {
 	Organizations      []Organization
 	OrgMap             map[int]string
 	Locations          []Location
+	LocationMap        map[int]Location
 	Musicians          []Musician
 	Dances             []Dance
 	AllTags            []Tag
@@ -1424,6 +1425,10 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		for _, o := range orgs {
 			orgMap[o.ID] = o.Name
 		}
+		locMap := make(map[int]Location, len(locs))
+		for _, l := range locs {
+			locMap[l.ID] = l
+		}
 		var filterOrgName string
 		if orgID == -1 {
 			filterOrgName = i18n.T(r, "filter_no_org")
@@ -1444,6 +1449,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			Organizations:      orgs,
 			OrgMap:             orgMap,
 			Locations:          locs,
+			LocationMap:        locMap,
 			Musicians:          musicians,
 			Dances:             dances,
 			AllTags:            allTags,
@@ -1613,7 +1619,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			Event:              event,
 			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
-			Locations:          bundle.Locations,
+			Locations:          topLevelLocations(bundle.Locations),
 			LocOrgFirst:        locOrgFirst,
 			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
@@ -1674,7 +1680,7 @@ func adminTemplateNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			IsTemplateMode: true,
 			Event:          event,
 			Organizations:  bundle.Orgs,
-			Locations:      bundle.Locations,
+			Locations:      topLevelLocations(bundle.Locations),
 			LocOrgFirst:    locOrgFirst,
 			LocOthers:      locOthers,
 			Dances:         bundle.Dances,
@@ -1718,7 +1724,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				IsNew:          true,
 				IsTemplateMode: true,
 				Organizations:  bundle.Orgs,
-				Locations:      bundle.Locations,
+				Locations:      topLevelLocations(bundle.Locations),
 				Dances:         bundle.Dances,
 				UserOrgs:       userOrgs,
 				ErrorKey:       errKey,
@@ -1813,6 +1819,8 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		ttTypes := r.Form["tt_type"]
 		locIDs := r.Form["tt_loc_id"]
 		musIDs := r.Form["tt_musician_id"]
+		insIDs := r.Form["tt_instructor_id"]
+		dates := r.Form["tt_entry_date"]
 		var ttEntries []TimetableEntry
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -1834,8 +1842,8 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				entry.Room = strings.TrimSpace(rooms[i])
 			}
 			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-					entry.EntryType = "workshop"
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+					entry.EntryType = v
 				} else {
 					entry.EntryType = "bal"
 				}
@@ -1849,6 +1857,14 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
 					entry.MusicianID = &v
 				}
+			}
+			if i < len(insIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+					entry.InstructorID = &v
+				}
+			}
+			if i < len(dates) {
+				entry.EntryDate = strings.TrimSpace(dates[i])
 			}
 			ttEntries = append(ttEntries, entry)
 		}
@@ -1917,7 +1933,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
 				IsNew:         true,
 				Organizations: bundle.Orgs,
-				Locations:     bundle.Locations,
+				Locations:     topLevelLocations(bundle.Locations),
 				Musicians:     bundle.Musicians,
 				Instructors:   bundle.Instructors,
 				Dances:        bundle.Dances,
@@ -2056,10 +2072,13 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
-		var createRoomID *int
+		// A room is just a child location (#687): if one was picked, point
+		// location_id straight at it, taking precedence over the venue-name
+		// match derived from locReq below.
+		var createLocationID *int
 		if v := r.FormValue("room_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				createRoomID = &n
+				createLocationID = &n
 			}
 		}
 		req := EventCreateReq{
@@ -2085,7 +2104,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
-			RoomID:         createRoomID,
+			LocationID:     createLocationID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -2104,6 +2123,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 		renderErrFull := func(errKey string) {
 			ev := Event{
 				Title:          req.Title,
@@ -2126,6 +2146,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Pricing:        req.Pricing,
 				Musicians:      musiciansByID(musicianIDs, bundle.Musicians),
 				Instructors:    instructorsByID(instructorIDs, bundle.Instructors),
+				Timetable:      formTimetable,
 			}
 			if selectedLocID > 0 {
 				ev.LocationID = &selectedLocID
@@ -2160,7 +2181,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Event:              ev,
 				Org:                eventOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
@@ -2229,6 +2250,9 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		musIDs := r.MultipartForm.Value["tt_musician_id"]
 		musNames := r.MultipartForm.Value["tt_musician_name"]
+		insIDs := r.MultipartForm.Value["tt_instructor_id"]
+		insNames := r.MultipartForm.Value["tt_instructor_name"]
+		dates := r.MultipartForm.Value["tt_entry_date"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2250,8 +2274,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				entry.Room = strings.TrimSpace(rooms[i])
 			}
 			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-					entry.EntryType = "workshop"
+				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+					entry.EntryType = v
 				} else {
 					entry.EntryType = "bal"
 				}
@@ -2274,6 +2298,23 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 						log.Printf("create musician %q: %v", name, merr)
 					}
 				}
+			}
+			if i < len(insIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+					entry.InstructorID = &v
+				}
+			}
+			if entry.InstructorID == nil && i < len(insNames) {
+				if name := strings.TrimSpace(insNames[i]); name != "" {
+					if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
+						entry.InstructorID = &ins.ID
+					} else {
+						log.Printf("create instructor %q: %v", name, ierr)
+					}
+				}
+			}
+			if i < len(dates) {
+				entry.EntryDate = strings.TrimSpace(dates[i])
 			}
 			ttEntries = append(ttEntries, entry)
 		}
@@ -2342,6 +2383,92 @@ func instructorsByID(ids []int, all []Instructor) []Instructor {
 		}
 	}
 	return out
+}
+
+// parseTimetableFormEntries reads the tt_* multi-value fields from a submitted
+// multipart form and returns them as TimetableEntry values ready to be passed
+// back to the event form template on a validation error, so the user does not
+// lose timetable rows they typed before the error. Name fields are resolved
+// from the supplied slices so the autocomplete inputs are also re-populated.
+func parseTimetableFormEntries(r *http.Request, musicians []Musician, instructors []Instructor, locs []Location) []TimetableEntry {
+	musMap := make(map[int]string, len(musicians))
+	for _, m := range musicians {
+		musMap[m.ID] = m.Bandname
+	}
+	insMap := make(map[int]string, len(instructors))
+	for _, ins := range instructors {
+		insMap[ins.ID] = ins.Name
+	}
+	locMap := make(map[int]string)
+	for _, l := range locs {
+		locMap[l.ID] = locationDisplayName(l)
+		for _, c := range l.Children {
+			locMap[c.ID] = locationDisplayName(c) + " — " + locationDisplayName(l)
+		}
+	}
+
+	starts := r.MultipartForm.Value["tt_start"]
+	ends := r.MultipartForm.Value["tt_end"]
+	titles := r.MultipartForm.Value["tt_title"]
+	descs := r.MultipartForm.Value["tt_desc"]
+	rooms := r.MultipartForm.Value["tt_room"]
+	ttTypes := r.MultipartForm.Value["tt_type"]
+	locIDs := r.MultipartForm.Value["tt_loc_id"]
+	musIDs := r.MultipartForm.Value["tt_musician_id"]
+	insIDs := r.MultipartForm.Value["tt_instructor_id"]
+	dates := r.MultipartForm.Value["tt_entry_date"]
+
+	var entries []TimetableEntry
+	for i, s := range starts {
+		s = strings.TrimSpace(s)
+		if i >= len(titles) {
+			break
+		}
+		t := strings.TrimSpace(titles[i])
+		if s == "" && t == "" {
+			continue
+		}
+		entry := TimetableEntry{StartTime: s, Title: t}
+		if i < len(ends) {
+			entry.EndTime = strings.TrimSpace(ends[i])
+		}
+		if i < len(descs) {
+			entry.Description = strings.TrimSpace(descs[i])
+		}
+		if i < len(rooms) {
+			entry.Room = strings.TrimSpace(rooms[i])
+		}
+		if i < len(ttTypes) {
+			if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+				entry.EntryType = v
+			} else {
+				entry.EntryType = "bal"
+			}
+		}
+		if i < len(locIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+				entry.LocationID = &v
+				entry.LocationName = locMap[v]
+			}
+		}
+		if i < len(musIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
+				entry.MusicianID = &v
+				entry.MusicianName = musMap[v]
+			}
+		}
+		if i < len(insIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+				entry.InstructorID = &v
+				entry.InstructorName = insMap[v]
+			}
+		}
+		if i < len(dates) {
+			entry.EntryDate = strings.TrimSpace(dates[i])
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
 
 func buildSelectedDanceNames(event Event) map[string]bool {
@@ -2479,7 +2606,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			Event:              event,
 			Org:                eventOrg,
 			Organizations:      bundle.Orgs,
-			Locations:          bundle.Locations,
+			Locations:          topLevelLocations(bundle.Locations),
 			LocOrgFirst:        locOrgFirst,
 			LocOthers:          locOthers,
 			Musicians:          bundle.Musicians,
@@ -2533,7 +2660,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Event:              event,
 				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
@@ -2671,10 +2798,13 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 
-		var saveRoomID *int
+		// A room is just a child location (#687): if one was picked, point
+		// location_id straight at it, taking precedence over the venue-name
+		// match derived from locReq below.
+		var saveLocationID *int
 		if v := r.FormValue("room_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				saveRoomID = &n
+				saveLocationID = &n
 			}
 		}
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
@@ -2706,7 +2836,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Musicians:      musicianIDs,
 			Instructors:    instructorIDs,
 			Dances:         danceIDs,
-			RoomID:         saveRoomID,
+			LocationID:     saveLocationID,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -2730,8 +2860,10 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			applyTemplateFields(&req, tplOverride, tplFieldsSet, bundle.Locations)
 		}
 
+		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 		renderErrFull := func(errKey string) {
 			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
+			event.Timetable = formTimetable
 			event.Title = req.Title
 			event.Description = req.Description
 			event.StartTime = req.StartTime
@@ -2790,7 +2922,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Event:              event,
 				Org:                evtOrg,
 				Organizations:      bundle.Orgs,
-				Locations:          bundle.Locations,
+				Locations:          topLevelLocations(bundle.Locations),
 				LocOrgFirst:        locOrgFirst,
 				LocOthers:          locOthers,
 				Musicians:          bundle.Musicians,
@@ -2831,13 +2963,15 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if tplOverride != nil && tplFieldsSet["timetable"] && len(tplOverride.Timetable) > 0 {
 			for _, e := range tplOverride.Timetable {
 				ttEntries = append(ttEntries, TimetableEntryReq{
-					StartTime:   e.StartTime,
-					EndTime:     e.EndTime,
-					Title:       e.Title,
-					Description: e.Description,
-					Room:        e.Room,
-					LocationID:  e.LocationID,
-					MusicianID:  e.MusicianID,
+					StartTime:    e.StartTime,
+					EndTime:      e.EndTime,
+					Title:        e.Title,
+					Description:  e.Description,
+					Room:         e.Room,
+					EntryDate:    e.EntryDate,
+					LocationID:   e.LocationID,
+					MusicianID:   e.MusicianID,
+					InstructorID: e.InstructorID,
 				})
 			}
 		} else {
@@ -2850,6 +2984,9 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			locIDs := r.MultipartForm.Value["tt_loc_id"]
 			musIDs := r.MultipartForm.Value["tt_musician_id"]
 			musNames := r.MultipartForm.Value["tt_musician_name"]
+			insIDs := r.MultipartForm.Value["tt_instructor_id"]
+			insNames := r.MultipartForm.Value["tt_instructor_name"]
+			dates := r.MultipartForm.Value["tt_entry_date"]
 			for i, s := range starts {
 				s = strings.TrimSpace(s)
 				if i >= len(titles) {
@@ -2870,8 +3007,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 					entry.Room = strings.TrimSpace(rooms[i])
 				}
 				if i < len(ttTypes) {
-					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" {
-						entry.EntryType = "workshop"
+					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+						entry.EntryType = v
 					} else {
 						entry.EntryType = "bal"
 					}
@@ -2894,6 +3031,23 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 							log.Printf("create musician %q: %v", name, merr)
 						}
 					}
+				}
+				if i < len(insIDs) {
+					if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+						entry.InstructorID = &v
+					}
+				}
+				if entry.InstructorID == nil && i < len(insNames) {
+					if name := strings.TrimSpace(insNames[i]); name != "" {
+						if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
+							entry.InstructorID = &ins.ID
+						} else {
+							log.Printf("create instructor %q: %v", name, ierr)
+						}
+					}
+				}
+				if i < len(dates) {
+					entry.EntryDate = strings.TrimSpace(dates[i])
 				}
 				ttEntries = append(ttEntries, entry)
 			}
@@ -3206,6 +3360,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 type AdminLocationDashboardData struct {
 	Location          Location
+	Parent            *Location // set when Location.ParentID is set — the building this room belongs to
 	Events            []Event
 	OrgMap            map[int]string
 	Locations         []Location
@@ -3216,6 +3371,8 @@ type AdminLocationDashboardData struct {
 	TotalCount        int
 	NewEventOrgID     int    // org to pre-assign "new event" to
 	NewEventOrgName   string // shown on the button
+	RoomEventCounts   map[int]int // room location ID -> future event count, for the Rooms section
+	FilterRoomID      int         // >0 when the event list is narrowed to a single room via ?room_id=
 }
 
 func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -3236,6 +3393,13 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 			return
 		}
 
+		var parent *Location
+		if loc.ParentID != nil {
+			if p, err := client.GetLocation(r.Context(), *loc.ParentID); err == nil {
+				parent = &p
+			}
+		}
+
 		token := getSessionToken(r)
 
 		orgs, _ := client.GetOrganizations(r.Context())
@@ -3245,18 +3409,25 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		// Determine which org to pre-assign for new events.
+		// Child rooms typically have no direct org associations; fall back to
+		// the parent building's orgs so the button is still shown.
+		effectiveOrgIDs := loc.OrganizationIDs
+		if len(effectiveOrgIDs) == 0 && parent != nil {
+			effectiveOrgIDs = parent.OrganizationIDs
+		}
+
 		var newEventOrgID int
 		var newEventOrgName string
 
 		if su.Role == "admin" {
-			if len(loc.OrganizationIDs) > 0 {
-				newEventOrgID = loc.OrganizationIDs[0]
+			if len(effectiveOrgIDs) > 0 {
+				newEventOrgID = effectiveOrgIDs[0]
 				newEventOrgName = orgMap[newEventOrgID]
 			}
 		} else {
 			userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
-			locOrgSet := make(map[int]bool, len(loc.OrganizationIDs))
-			for _, oid := range loc.OrganizationIDs {
+			locOrgSet := make(map[int]bool, len(effectiveOrgIDs))
+			for _, oid := range effectiveOrgIDs {
 				locOrgSet[oid] = true
 			}
 			for _, oid := range userOrgIDs {
@@ -3273,8 +3444,22 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		includePast := r.URL.Query().Get("include_past") == "1"
+		filterRoomID, _ := strconv.Atoi(r.URL.Query().Get("room_id"))
+
+		// A building's dashboard aggregates its own events with all its rooms'
+		// events (matching the public /location/{id} page's behavior, #876) —
+		// ?room_id= narrows the same list down to a single room instead.
+		locIDs := []string{strconv.Itoa(id)}
+		if filterRoomID > 0 {
+			locIDs = []string{strconv.Itoa(filterRoomID)}
+		} else {
+			for _, child := range loc.Children {
+				locIDs = append(locIDs, strconv.Itoa(child.ID))
+			}
+		}
+
 		params := url.Values{}
-		params.Set("location_id", strconv.Itoa(id))
+		params.Set("location_id", strings.Join(locIDs, ","))
 		params.Set("limit", "1000")
 		if includePast {
 			params.Set("include_past", "true")
@@ -3291,6 +3476,11 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		allTags, _ := client.GetTags(r.Context())
 		series, _ := client.GetSeriesList(r.Context(), token)
 
+		var roomEventCounts map[int]int
+		if len(loc.Children) > 0 {
+			roomEventCounts, _ = client.GetLocationEventCounts(r.Context(), token)
+		}
+
 		locTitle := loc.ShortName
 		if locTitle == "" {
 			locTitle = loc.Location
@@ -3298,6 +3488,7 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 
 		renderTemplate(w, tmpls.adminLocationDashboard, tmplData(r, cfg, i18n, locTitle, AdminLocationDashboardData{
 			Location:          loc,
+			Parent:            parent,
 			Events:            events,
 			OrgMap:            orgMap,
 			Locations:         locs,
@@ -3308,6 +3499,8 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 			TotalCount:        total,
 			NewEventOrgID:     newEventOrgID,
 			NewEventOrgName:   newEventOrgName,
+			RoomEventCounts:   roomEventCounts,
+			FilterRoomID:      filterRoomID,
 		}))
 	}
 }

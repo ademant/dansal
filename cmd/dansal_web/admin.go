@@ -89,11 +89,40 @@ func sortLocsByDistanceThenName(locs []Location, refLat, refLng *float64) {
 	})
 }
 
-// splitEventLocations divides all locations into two groups for the event-edit
-// location dropdown: org-first (locations belonging to the event's organization,
-// and/or sharing an org with the event's pre-assigned location) and others.
-// Within each group locations are sorted by distance from the pre-assigned
-// location (when it has coordinates), then by name.
+// topLevelLocations filters out child locations (rooms) — a room is a
+// normal Location with ParentID set (#687); venue pickers only ever offer
+// the top-level building, with rooms surfaced via its .Children instead.
+func topLevelLocations(locs []Location) []Location {
+	out := make([]Location, 0, len(locs))
+	for _, l := range locs {
+		if l.ParentID == nil {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// rollUpChildEventCounts adds each room's event count onto its parent
+// building's entry in counts (keyed by location ID), so a building's total
+// reflects events held in any of its rooms too (#882) — counts otherwise
+// only reflect exact location_id matches, undercounting any building with
+// rooms since events assigned to a room carry the room's location_id, not
+// the building's.
+func rollUpChildEventCounts(locs []Location, counts map[int]int) {
+	for _, loc := range locs {
+		for _, child := range loc.Children {
+			counts[loc.ID] += counts[child.ID]
+		}
+	}
+}
+
+// splitEventLocations divides top-level locations into two groups for the
+// event-edit location dropdown: org-first (locations belonging to the
+// event's organization, and/or sharing an org with the event's pre-assigned
+// location) and others. Within each group locations are sorted by distance
+// from the pre-assigned location (when it has coordinates), then by name.
+// allLocs must be the full (unfiltered) list so a room's own org
+// assignment can still be found even though rooms never appear as options.
 func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Location) {
 	var refLat, refLng *float64
 	evOrgIDs := make(map[int]bool)
@@ -112,12 +141,13 @@ func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Lo
 			}
 		}
 	}
+	topLocs := topLevelLocations(allLocs)
 	if len(evOrgIDs) == 0 {
-		others = append([]Location(nil), allLocs...)
+		others = append([]Location(nil), topLocs...)
 		sortLocsByDistanceThenName(others, refLat, refLng)
 		return
 	}
-	for _, loc := range allLocs {
+	for _, loc := range topLocs {
 		inOrg := false
 		for _, oid := range loc.OrganizationIDs {
 			if evOrgIDs[oid] {

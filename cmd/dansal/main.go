@@ -163,6 +163,10 @@ type gzipResponseWriter struct {
 }
 
 func (g *gzipResponseWriter) Write(b []byte) (int, error) { return g.gz.Write(b) }
+
+// Unwrap lets http.ResponseController (e.g. SetWriteDeadline) see through
+// this wrapper to the underlying ResponseWriter, per its documented contract.
+func (g *gzipResponseWriter) Unwrap() http.ResponseWriter { return g.ResponseWriter }
 func (g *gzipResponseWriter) WriteHeader(code int) {
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
@@ -1515,6 +1519,141 @@ func migrateDB() {
 			db.Exec(`ALTER TABLE event_series ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL`)
 		}
 	}
+	// v15: #687 parent-child locations. A room is now a normal locations row
+	// with parent_id set, inheriting address/coordinates from its parent at
+	// read time (resolvedLocation()) rather than copying them in. Migrates
+	// the old rooms table (name-only sub-locations) into locations, repoints
+	// events.room_id onto events.location_id, then drops rooms/room_id.
+	if !applied(15) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id)`)
+		db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
+			ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL`)
+		var hasRooms int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='rooms'").Scan(&hasRooms)
+		if hasRooms > 0 {
+			db.Exec(`INSERT INTO locations (location, parent_id) SELECT name, location_id FROM rooms`)
+			db.Exec(`UPDATE events SET location_id = (
+				SELECT loc.id FROM rooms rm
+				JOIN locations loc ON loc.parent_id = rm.location_id AND loc.location = rm.name
+				WHERE rm.id = events.room_id
+			) WHERE room_id IS NOT NULL`)
+			db.Exec(`DROP TABLE rooms`)
+		}
+		var hasRoomID int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='room_id'").Scan(&hasRoomID)
+		if hasRoomID > 0 {
+			db.Exec(`ALTER TABLE events DROP COLUMN room_id`)
+		}
+		mark(15)
+	}
+	// Safety net: ensure locations.parent_id and the geohash partial-unique
+	// index exist even if v15 was pre-marked (legacy schema_migrations gap).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='parent_id'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE`)
+		}
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_locations_parent_id ON locations(parent_id)`)
+		db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_geohash_toplevel
+			ON locations(geohash) WHERE parent_id IS NULL AND geohash IS NOT NULL`)
+	}
+	// Safety net: ensure the old rooms table/events.room_id are gone even if
+	// v15 was pre-marked without the DROP running (e.g. interrupted upgrade).
+	{
+		var hasRooms int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='rooms'").Scan(&hasRooms)
+		if hasRooms > 0 {
+			db.Exec(`INSERT INTO locations (location, parent_id) SELECT name, location_id FROM rooms`)
+			db.Exec(`UPDATE events SET location_id = (
+				SELECT loc.id FROM rooms rm
+				JOIN locations loc ON loc.parent_id = rm.location_id AND loc.location = rm.name
+				WHERE rm.id = events.room_id
+			) WHERE room_id IS NOT NULL`)
+			db.Exec(`DROP TABLE rooms`)
+		}
+		var hasRoomID int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='room_id'").Scan(&hasRoomID)
+		if hasRoomID > 0 {
+			db.Exec(`ALTER TABLE events DROP COLUMN room_id`)
+		}
+	}
+	// v16: add informal capacity (max people) and size_sqm (floor area) fields
+	// to locations, shown as optional hints on any location or room (#875).
+	if !applied(16) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN capacity INTEGER`)
+		db.Exec(`ALTER TABLE locations ADD COLUMN size_sqm INTEGER`)
+		mark(16)
+	}
+	// Safety net: ensure locations.capacity/size_sqm exist even if v16 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='capacity'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN capacity INTEGER`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='size_sqm'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN size_sqm INTEGER`)
+		}
+	}
+	// v17: add plan_x/plan_y — a room's position (0-1 percentage) on its
+	// parent building's site-plan image (#877).
+	if !applied(17) {
+		db.Exec(`ALTER TABLE locations ADD COLUMN plan_x REAL`)
+		db.Exec(`ALTER TABLE locations ADD COLUMN plan_y REAL`)
+		mark(17)
+	}
+	// Safety net: ensure locations.plan_x/plan_y exist even if v17 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='plan_x'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN plan_x REAL`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='plan_y'").Scan(&n)
+		if n == 0 {
+			db.Exec(`ALTER TABLE locations ADD COLUMN plan_y REAL`)
+		}
+	}
+	// v18: instructor_id on timetable_entries, so a slot can record who's
+	// teaching it (distinct from musician_id, who's playing) (#891).
+	if !applied(18) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL")
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+		mark(18)
+	}
+	// Safety net: ensure timetable_entries.instructor_id (and its index) exist
+	// even if v18 was pre-marked by createTables()'s catch-all schema_migrations
+	// insert (createTables() itself can't create this index unconditionally: on
+	// an existing DB the column doesn't exist yet at that point, which would
+	// abort the whole schema script with "no such column").
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='instructor_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN instructor_id INTEGER REFERENCES instructors(id) ON DELETE SET NULL")
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+	}
+	// v19: entry_date on timetable_entries, so a row can be pinned to a
+	// specific day of a multi-day event (festival/workshop weekend) (#894).
+	// NULL/empty means "same as the event's own start date" — the default
+	// for all existing single-day events.
+	if !applied(19) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_date TEXT")
+		mark(19)
+	}
+	// Safety net: ensure timetable_entries.entry_date exists even if v19 was
+	// pre-marked by createTables()'s catch-all schema_migrations insert.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='entry_date'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_date TEXT")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -1697,6 +1836,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_invite_links_org_id               ON invite_links(org_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id     ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id     ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id   ON timetable_entries(instructor_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_location_id       ON event_locations(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_dance_id             ON event_dances(dance_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_instructors_event_id        ON event_instructors(event_id)")
@@ -1846,6 +1986,10 @@ func migrateDB() {
 	migrateEventsEnumChecks()
 	migrateLocationsEnumChecks()
 
+	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
+	// (coffee break / lunch slots), alongside the existing bal/workshop.
+	migrateTimetableEntriesBreakType()
+
 	// #740: migrate locations.aliases JSON column to location_aliases junction table.
 	migrateLocationAliasesToJunction()
 
@@ -1994,6 +2138,70 @@ func migrateFetchSourcesTypeCheck() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
+}
+
+// migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
+// constraint to allow 'break' alongside 'bal'/'workshop' (#895). SQLite can't
+// alter a CHECK constraint in place, so this rebuilds the table exactly like
+// migrateFetchSourcesTypeCheck above.
+func migrateTimetableEntriesBreakType() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='timetable_entries'").Scan(&schema)
+	if strings.Contains(schema, "'break'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateTimetableEntriesBreakType: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE timetable_entries_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			start_time TEXT NOT NULL,
+			end_time TEXT NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT,
+			room TEXT,
+			location_id INTEGER,
+			musician_id INTEGER,
+			instructor_id INTEGER,
+			entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break')),
+			entry_date TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+			FOREIGN KEY (location_id) REFERENCES locations(id),
+			FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+			FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO timetable_entries_chk
+			(id, event_id, start_time, end_time, title, description, room,
+			 location_id, musician_id, instructor_id, entry_type, entry_date, created_at)
+		SELECT id, event_id, start_time, end_time, title, description, room,
+			location_id, musician_id, instructor_id,
+			CASE WHEN entry_type IN ('bal','workshop','break') THEN entry_type ELSE 'bal' END,
+			entry_date, created_at
+		FROM timetable_entries`,
+		`DROP TABLE timetable_entries`,
+		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateTimetableEntriesBreakType: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+	log.Printf("migrateTimetableEntriesBreakType: added 'break' to timetable_entries.entry_type CHECK constraint")
 }
 
 // migrateEventsEnumChecks adds CHECK constraints to events.workshop_difficulty
@@ -2508,16 +2716,11 @@ func createTables() error {
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
 		-- requires organization_id; sub-resource PUT .../location requires location_id).
-		room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+		-- A room is just a location with parent_id set (#687) — location_id
+		-- points at the child directly when a room is selected.
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
-	CREATE TABLE IF NOT EXISTS rooms (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-		name TEXT NOT NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_rooms_location_id ON rooms(location_id);
 	CREATE TABLE IF NOT EXISTS event_series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		slug TEXT UNIQUE NOT NULL,
@@ -2549,6 +2752,10 @@ func createTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
+	-- The parent_id/geohash-partial-unique and parent_id indexes are created by
+	-- migrateDB()'s unconditional safety net, not here: on an existing DB where
+	-- this CREATE TABLE is a no-op (table predates parent_id), an index on that
+	-- column here would fail before migrateDB() gets a chance to add it.
 	CREATE TABLE IF NOT EXISTS locations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		location TEXT NOT NULL,
@@ -2572,6 +2779,11 @@ func createTables() error {
 		parking TEXT CHECK(parking IS NULL OR parking IN ('','none','free','paid')),
 		floor_condition TEXT CHECK(floor_condition IS NULL OR floor_condition IN ('','parquet','stone','tiles','grass','sand','pavement')),
 		no_street_shoes INTEGER DEFAULT 0,
+		parent_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+		capacity INTEGER,
+		size_sqm INTEGER,
+		plan_x REAL,
+		plan_y REAL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
@@ -2725,11 +2937,14 @@ func createTables() error {
 		room TEXT,
 		location_id INTEGER,
 		musician_id INTEGER,
-		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop')),
+		instructor_id INTEGER,
+		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break')),
+		entry_date TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
-		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL
+		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+		FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
 	CREATE TABLE IF NOT EXISTS event_locations (
@@ -2949,6 +3164,11 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(13)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(14)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(15)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(16)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(17)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(18)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(19)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3062,6 +3282,7 @@ func main() {
 	initImageCache(config.Server.ImagesDir)
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
+	initLocationImageCache(config.Server.ImagesDir + "/locations")
 	initMetrics()
 	startTokenCleanup()
 	startScheduledBackup()
@@ -3231,9 +3452,11 @@ func main() {
 	smux.Handle("PUT /api/v1/locations/{id}", auth(accountMutationLimit(putLocation)))
 	smux.Handle("PATCH /api/v1/locations/{id}", auth(accountMutationLimit(patchLocation)))
 	smux.Handle("POST /api/v1/locations/{id}/assign-org", auth(assignLocationOrg))
-	smux.Handle("GET /api/v1/locations/{id}/rooms", optAuth(http.HandlerFunc(getLocationRooms)))
-	smux.Handle("POST /api/v1/locations/{id}/rooms", auth(createLocationRoom))
-	smux.Handle("DELETE /api/v1/locations/{id}/rooms/{room_id}", auth(deleteLocationRoom))
+	smux.Handle("GET /api/v1/locations/{id}/children", optAuth(http.HandlerFunc(getLocationChildren)))
+	smux.Handle("POST /api/v1/locations/{id}/children", auth(createLocationChild))
+	smux.Handle("POST /api/v1/locations/{id}/site-plan", auth(uploadLocationSitePlan))
+	smux.Handle("DELETE /api/v1/locations/{id}/site-plan", auth(deleteLocationSitePlan))
+	smux.HandleFunc("GET /api/v1/location-images/{id}", getLocationImage)
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
 	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])
@@ -3372,7 +3595,7 @@ func main() {
 	go runHeartbeat()
 
 	listenAddr := getListenAddr()
-	log.Printf("Server starting on %s\n", listenAddr)
+	log.Printf("dansal %s (built %s) starting on %s\n", Version, BuildTime, listenAddr)
 	srv := &http.Server{
 		Addr:              listenAddr,
 		Handler:           handler,

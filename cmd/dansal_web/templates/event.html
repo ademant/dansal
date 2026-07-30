@@ -32,6 +32,19 @@
 }
 </script>
 {{end}}{{end}}
+{{define "evt_tt_row"}}
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" onclick="openTTDetail(this,true)">
+  <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
+  <div class="tt-body">
+    <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+    {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
+    {{if .Entry.LocationName}}<div class="tt-meta">{{.Entry.LocationName}}</div>{{end}}
+    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+    {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
+    {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
+  </div>
+</div>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Event}}
@@ -158,21 +171,120 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
-      <div class="evt-timetable">
-        {{range .Timetable}}
-        <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{end}}">
-          <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
-          <div class="tt-body">
-            <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
-            {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
-            {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
-            {{if .MusicianName}}<div class="tt-meta">{{if .MusicianID}}<a href="/musicians/{{.MusicianID}}">{{.MusicianName}}</a>{{else}}{{.MusicianName}}{{end}}</div>{{end}}
-            {{if .Description}}<div class="tt-desc md-content">{{markdownHTML .Description}}</div>{{end}}
-          </div>
-        </div>
+      {{$days := timetableDays .Timetable .StartTime .EndTime}}
+      {{$multiDay := gt (len $days) 1}}
+      {{range $days}}
+      {{$dayEntries := .Entries}}
+      <div class="tt-day">
+      {{if $multiDay}}<h3 class="tt-day-heading">{{formatDate $.LangCode .Date}}</h3>{{end}}
+      {{if not $dayEntries}}
+      <p class="tt-day-empty">{{$.Strings.T "tt_day_empty"}}</p>
+      {{else}}
+      {{$grid := timetableGrid $dayEntries}}
+      {{if gt (len $grid.Columns) 1}}
+      <div class="tt-room-pills">
+        {{range $i, $col := $grid.Columns}}
+        <button type="button" class="tt-pill{{if eq $i 0}} active{{end}}" data-idx="{{$i}}">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</button>
         {{end}}
       </div>
+      <div class="tt-cal">
+        <div class="tt-cal-axis" style="height:{{$grid.HeightPx}}px">
+          {{range $grid.Marks}}<div class="tt-cal-mark" style="top:{{.TopPx}}px">{{.Label}}</div>{{end}}
+        </div>
+        <div class="tt-columns">
+          {{range $i, $col := $grid.Columns}}
+          <div class="tt-column{{if eq $i 0}} tt-column-active{{end}}" data-idx="{{$i}}">
+            <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
+            <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
+              {{range $col.Panels}}
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" onclick="openTTDetail(this,false)">
+                <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+                {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
+                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+                {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
+                {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
+              </div>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{else}}
+      <div class="evt-timetable">
+        {{range $dayEntries}}{{template "evt_tt_row" (dict "Entry" . "Strings" $.Strings)}}{{end}}
+      </div>
+      {{end}}
+      {{end}}
+      </div>
+      {{end}}
+      <dialog id="tt-detail-dialog" class="tt-detail-dialog">
+        <button type="button" class="tt-detail-close" onclick="document.getElementById('tt-detail-dialog').close()" aria-label="Close">×</button>
+        <div id="tt-detail-body"></div>
+      </dialog>
+      <script>
+      function openTTDetail(el,hasTime){
+        var dlg=document.getElementById('tt-detail-dialog');
+        var body=document.getElementById('tt-detail-body');
+        var html='';
+        if(!hasTime){
+          var s=el.dataset.start,e=el.dataset.end;
+          if(s)html='<div class="tt-time">'+s+(e?' – '+e:'')+'</div>';
+        }
+        body.innerHTML=html+el.innerHTML;
+        dlg.showModal();
+      }
+      (function(){
+        var dlg=document.getElementById('tt-detail-dialog');
+        if(!dlg)return;
+        dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+      })();
+      // Each multi-room day gets its own independent room-pill switcher —
+      // scoped per .tt-day so multiple festival days don't collide on ids.
+      document.querySelectorAll('.tt-day').forEach(function(dayEl){
+        var wrap=dayEl.querySelector('.tt-columns');
+        if(!wrap)return;
+        var cols=Array.prototype.slice.call(wrap.querySelectorAll('.tt-column'));
+        var pills=Array.prototype.slice.call(dayEl.querySelectorAll('.tt-room-pills .tt-pill'));
+        if(cols.length<2)return;
+        var active=0;
+        function show(i){
+          if(i<0)i=cols.length-1;
+          if(i>=cols.length)i=0;
+          active=i;
+          cols.forEach(function(c,idx){c.classList.toggle('tt-column-active',idx===active);});
+          pills.forEach(function(p,idx){p.classList.toggle('active',idx===active);});
+        }
+        pills.forEach(function(p,idx){p.addEventListener('click',function(){show(idx);});});
+        var sx=null;
+        wrap.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+        wrap.addEventListener('touchend',function(e){
+          if(sx===null)return;
+          var dx=e.changedTouches[0].clientX-sx;sx=null;
+          if(Math.abs(dx)>50&&window.matchMedia('(max-width:680px)').matches){
+            show(active+(dx<0?1:-1));
+          }
+        },{passive:true});
+      });
+      </script>
     </section>
+    {{end}}
+
+    {{if .Location}}
+    {{$usedRooms := usedRoomIDs .Timetable}}
+    {{if and .Location.SitePlanURL (gt (len $usedRooms) 1)}}
+    <details class="loc-siteplan">
+      <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>
+      <div class="siteplan-canvas">
+        <img src="{{.Location.SitePlanURL}}" alt="{{$.Strings.T "loc_siteplan_section"}}">
+        {{range placedRooms .Location.Children}}
+        <a class="siteplan-marker{{if index $usedRooms .ID}} siteplan-marker-active{{end}}" href="/location/{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
+          <span class="siteplan-marker-label">{{.Location}}</span>
+        </a>
+        {{end}}
+      </div>
+    </details>
+    {{end}}
     {{end}}
 
   </div>
@@ -200,7 +312,7 @@
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
       {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ID}}<a href="/location/{{.ID}}" class="evt-loc-link">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a>{{else}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{end}}</div>{{end}}
-      {{with $.Data.Event.RoomName}}<div class="evt-loc-room">{{.}}</div>{{end}}
+      {{if .ParentID}}<p class="evt-loc-room"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>{{end}}
       {{if or .Address .Zipcode .Town}}
       <div class="evt-loc-addr">
         {{if .Address}}<span>{{.Address}}</span><br>{{end}}
@@ -564,14 +676,51 @@
 .evt-instructor-link{color:var(--link);text-decoration:none;font-size:.85rem;margin-left:.4rem}
 .evt-instructor-bio{font-size:.88rem;color:var(--fg-dim);margin:.25rem 0 0;padding:0}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
-.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px}
+.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer}
 .tt-workshop{border-left:3px solid var(--link)}
 .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);padding-top:.1rem}
 .tt-title{font-weight:600;font-size:.95rem;color:var(--heading)}
 .tt-badge-ws{display:inline-block;font-size:.7rem;font-weight:700;background:var(--link);color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-badge-bal{display:inline-block;font-size:.7rem;font-weight:700;background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
+.tt-badge-break{display:inline-block;font-size:.7rem;font-weight:700;background:var(--fg-faint);color:var(--bg-card);border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-meta{font-size:.82rem;color:var(--fg-faint);margin-top:.15rem}
 .tt-desc{font-size:.88rem;color:var(--fg-dim);margin-top:.25rem}
+.tt-room-pills{display:none;gap:.4rem;overflow-x:auto;margin-bottom:.6rem;padding-bottom:.2rem}
+.tt-pill{border:1px solid var(--border);background:var(--bg-card);color:var(--fg-dim);border-radius:999px;padding:.3rem .8rem;font-size:.82rem;white-space:nowrap;cursor:pointer}
+.tt-pill.active{background:var(--link);color:#fff;border-color:var(--link)}
+.tt-cal{display:flex;gap:0}
+.tt-cal-axis{position:relative;flex:0 0 48px;width:48px}
+.tt-cal-mark{position:absolute;left:0;right:.5rem;transform:translateY(-.55em);font-size:.75rem;color:var(--fg-faint);text-align:right}
+.tt-columns{display:flex;gap:1rem;flex:1 1 auto;min-width:0}
+.tt-column{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.3rem}
+.tt-column-title{font-size:.9rem;font-weight:700;color:var(--heading);border-bottom:2px solid var(--border);padding-bottom:.3rem;margin-bottom:.2rem}
+.tt-column-body{position:relative;border-left:1px dashed var(--border)}
+.tt-panel{position:absolute;left:.4rem;right:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem;cursor:pointer}
+.tt-panel.tt-workshop{border-left:3px solid var(--link)}
+.tt-panel.tt-break{border-left:3px solid var(--fg-faint)}
+.tt-panel .tt-panel-title{font-weight:600;font-size:.88rem;color:var(--heading)}
+.tt-panel .tt-meta{font-size:.78rem;color:var(--fg-faint);margin-top:.1rem}
+.tt-panel .tt-desc{font-size:.8rem;color:var(--fg-dim);margin-top:.2rem}
+.tt-day+.tt-day{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--border)}
+.tt-day-heading{font-size:1rem;font-weight:700;color:var(--heading);margin:0 0 .6rem}
+.tt-day-empty{font-size:.85rem;color:var(--fg-faint);font-style:italic}
+.tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
+.tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}
+.tt-detail-close{position:absolute;top:.5rem;right:.6rem;background:none;border:none;font-size:1.3rem;line-height:1;color:var(--fg-faint);cursor:pointer;padding:.2rem .4rem}
+@media(max-width:680px){
+  .tt-room-pills{display:flex}
+  .tt-columns{display:block}
+  .tt-column{display:none}
+  .tt-column.tt-column-active{display:flex}
+}
+.loc-siteplan{margin-bottom:1.25rem}
+.loc-siteplan-summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
+.siteplan-canvas{position:relative;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--border-mid);background:var(--bg-subtle)}
+.siteplan-canvas img{display:block;width:100%;height:auto}
+.siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:var(--link);color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.siteplan-marker:hover{filter:brightness(1.1)}
+.siteplan-marker-active{background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);font-weight:700;box-shadow:0 0 0 2px var(--link)}
 .evt-sidebar{display:flex;flex-direction:column;gap:.1rem}
 .evt-disclaimer{font-size:.8rem;color:var(--badge-warn-fg,#856404);background:var(--badge-warn-bg,#fff3cd);border-radius:4px;padding:.4rem .6rem;margin-top:.5rem;line-height:1.45}
 .sidebar-block{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;margin-bottom:.6rem}

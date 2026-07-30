@@ -235,8 +235,6 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
-	RoomID               *int             `json:"room_id,omitempty"`
-	RoomName             string           `json:"room_name,omitempty"`
 }
 
 type Dance struct {
@@ -251,17 +249,53 @@ type Tag struct {
 }
 
 type TimetableEntry struct {
-	ID           int    `json:"id"`
-	StartTime    string `json:"start_time"`
-	EndTime      string `json:"end_time"`
-	Title        string `json:"title"`
-	Description  string `json:"description,omitempty"`
-	Room         string `json:"room,omitempty"`
-	EntryType    string `json:"entry_type,omitempty"`
-	LocationID   *int   `json:"location_id,omitempty"`
-	LocationName string `json:"location_name,omitempty"`
-	MusicianID   *int   `json:"musician_id,omitempty"`
-	MusicianName string `json:"musician_name,omitempty"`
+	ID             int    `json:"id"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Title          string `json:"title"`
+	Description    string `json:"description,omitempty"`
+	Room           string `json:"room,omitempty"`
+	EntryType      string `json:"entry_type,omitempty"`
+	EntryDate      string `json:"entry_date,omitempty"`
+	LocationID     *int   `json:"location_id,omitempty"`
+	LocationName   string `json:"location_name,omitempty"`
+	MusicianID     *int   `json:"musician_id,omitempty"`
+	MusicianName   string `json:"musician_name,omitempty"`
+	InstructorID   *int   `json:"instructor_id,omitempty"`
+	InstructorName string `json:"instructor_name,omitempty"`
+}
+
+// TimetablePanel is one timetable entry positioned within a TimetableGrid
+// column, in pixels relative to the grid's shared time axis (#887).
+type TimetablePanel struct {
+	Entry    TimetableEntry
+	TopPx    float64
+	HeightPx float64
+}
+
+// TimetableGridColumn is one room's positioned entries, for the multi-room
+// calendar grid layout on /event/{id} (#886, #887; see timetableGrid in
+// frontend.go). IsOther marks the shared fallback column for entries with
+// neither a LocationID nor a free-text Room.
+type TimetableGridColumn struct {
+	Label   string
+	IsOther bool
+	Panels  []TimetablePanel
+}
+
+// TimetableGridMark is one hour/half-hour gridline on the shared time axis.
+type TimetableGridMark struct {
+	Label string
+	TopPx float64
+}
+
+// TimetableGrid is the full computed layout for the multi-room timetable
+// calendar grid: columns of positioned panels, sharing one time axis whose
+// range only spans the timetable's own earliest start to latest end (#887).
+type TimetableGrid struct {
+	Columns  []TimetableGridColumn
+	Marks    []TimetableGridMark
+	HeightPx float64
 }
 
 type Instructor struct {
@@ -276,12 +310,6 @@ type Instructor struct {
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
-}
-
-type Room struct {
-	ID         int    `json:"id"`
-	LocationID int    `json:"location_id,omitempty"`
-	Name       string `json:"name"`
 }
 
 type Organization struct {
@@ -374,7 +402,22 @@ type Location struct {
 	UpdatedAt       int64           `json:"updated_at,omitempty"`
 	UpdatedBy       string          `json:"updated_by,omitempty"`
 
-	Rooms []Room `json:"rooms,omitempty"`
+	// A room is a child Location with ParentID set, inheriting
+	// address/coordinates from its parent (#687) rather than copying them.
+	ParentID *int       `json:"parent_id,omitempty"`
+	Children []Location `json:"children,omitempty"`
+
+	// Capacity/size are informal, display-only hints (#875) — not inherited
+	// from a parent since they describe the room itself, not the building.
+	Capacity *int `json:"capacity,omitempty"`
+	SizeSqm  *int `json:"size_sqm,omitempty"`
+
+	// A room's position (0-1 percentage) on its building's site-plan image
+	// (#877). SitePlanURL is set on the building itself when it has an
+	// uploaded site-plan image.
+	PlanX       *float64 `json:"plan_x,omitempty"`
+	PlanY       *float64 `json:"plan_y,omitempty"`
+	SitePlanURL string   `json:"site_plan_url,omitempty"`
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
@@ -1102,6 +1145,83 @@ func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, 
 	return nil
 }
 
+func (c *DansalClient) UploadLocationSitePlan(ctx context.Context, id int, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/locations/%d/site-plan", c.BaseURL, id), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
+func (c *DansalClient) DeleteLocationSitePlan(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/site-plan", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
+// UpdateLocationPlanPosition saves a room's position (0-1 percentage) on its
+// building's site-plan image (#877). Marshals its own minimal body rather
+// than going through UpdateLocation, which marshals the full Location struct
+// — most of its string fields lack omitempty, so a sparse Location{PlanX,
+// PlanY} literal would still serialize other fields as "" and merge-patch
+// them over the room's real values (#880).
+func (c *DansalClient) UpdateLocationPlanPosition(ctx context.Context, id int, x, y float64, token string) error {
+	body, _ := json.Marshal(struct {
+		PlanX *float64 `json:"plan_x"`
+		PlanY *float64 `json:"plan_y"`
+	}{PlanX: &x, PlanY: &y})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
+}
+
 func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {
 	var bodyReader io.Reader = http.NoBody
 	if body != nil {
@@ -1355,33 +1475,57 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	return nil
 }
 
-func (c *DansalClient) GetLocationRooms(ctx context.Context, locationID int) ([]Room, error) {
-	var rooms []Room
-	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), &rooms); err != nil {
-		return nil, err
+// PatchLocationAttrs sends a raw JSON merge-patch to PATCH /api/v1/locations/{id}.
+// body must be valid JSON; only the fields it contains are updated.
+func (c *DansalClient) PatchLocationAttrs(ctx context.Context, id int, body []byte, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
+	if err != nil {
+		return err
 	}
-	return rooms, nil
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	c.invalidateLocations()
+	return nil
 }
 
-func (c *DansalClient) CreateLocationRoom(ctx context.Context, locationID int, name string, token string) (Room, error) {
-	body, _ := json.Marshal(map[string]string{"name": name})
-	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/rooms", locationID), token, body)
+func (c *DansalClient) GetLocationChildren(ctx context.Context, locationID int) ([]Location, error) {
+	var children []Location
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d/children", locationID), &children); err != nil {
+		return nil, err
+	}
+	return children, nil
+}
+
+func (c *DansalClient) CreateLocationChild(ctx context.Context, locationID int, name, floorCondition string, capacity, sizeSqm *int, token string) (Location, error) {
+	body, _ := json.Marshal(map[string]any{"name": name, "floor_condition": floorCondition, "capacity": capacity, "size_sqm": sizeSqm})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/locations/%d/children", locationID), token, body)
 	if err != nil {
-		return Room{}, err
+		return Location{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return Room{}, apiErr(resp)
+		return Location{}, apiErr(resp)
 	}
-	var room Room
-	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
-		return Room{}, err
+	var child Location
+	if err := json.NewDecoder(resp.Body).Decode(&child); err != nil {
+		return Location{}, err
 	}
-	return room, nil
+	return child, nil
 }
 
-func (c *DansalClient) DeleteLocationRoom(ctx context.Context, locationID, roomID int, token string) error {
-	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/rooms/%d", locationID, roomID), token, nil)
+// DeleteLocationChild removes a child location — a room is just a location,
+// so this is the same DELETE /api/v1/locations/{id} endpoint used everywhere else.
+func (c *DansalClient) DeleteLocationChild(ctx context.Context, childID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d", childID), token, nil)
 	if err != nil {
 		return err
 	}
@@ -1675,7 +1819,6 @@ type EventCreateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
-	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventUpdateReq struct {
@@ -1708,7 +1851,6 @@ type EventUpdateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
-	RoomID             *int            `json:"room_id,omitempty"`
 }
 
 type EventLocReq struct {
@@ -1725,14 +1867,16 @@ type EventLocReq struct {
 }
 
 type TimetableEntryReq struct {
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time,omitempty"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Room        string `json:"room,omitempty"`
-	EntryType   string `json:"entry_type,omitempty"`
-	LocationID  *int   `json:"location_id,omitempty"`
-	MusicianID  *int   `json:"musician_id,omitempty"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time,omitempty"`
+	Title        string `json:"title"`
+	Description  string `json:"description,omitempty"`
+	Room         string `json:"room,omitempty"`
+	EntryType    string `json:"entry_type,omitempty"`
+	EntryDate    string `json:"entry_date,omitempty"`
+	LocationID   *int   `json:"location_id,omitempty"`
+	MusicianID   *int   `json:"musician_id,omitempty"`
+	InstructorID *int   `json:"instructor_id,omitempty"`
 }
 
 func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {

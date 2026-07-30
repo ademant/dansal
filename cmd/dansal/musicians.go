@@ -124,11 +124,18 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	query += " FROM musicians"
 	if withCounts {
 		query += ` LEFT JOIN (
-			SELECT em.musician_id,
-				SUM(CASE WHEN e.start_time > strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS future_count,
-				SUM(CASE WHEN e.start_time <= strftime('%s','now') AND e.is_published=1 THEN 1 ELSE 0 END) AS past_count
-			FROM event_musicians em JOIN events e ON e.id = em.event_id
-			GROUP BY em.musician_id
+			SELECT musician_id,
+				SUM(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS future_count,
+				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count
+			FROM (
+				SELECT DISTINCT em.musician_id AS musician_id, e.id AS event_id, e.start_time AS start_time, e.is_published AS is_published
+				FROM event_musicians em JOIN events e ON e.id = em.event_id
+				UNION
+				SELECT DISTINCT t.musician_id AS musician_id, e.id AS event_id, e.start_time AS start_time, e.is_published AS is_published
+				FROM timetable_entries t JOIN events e ON e.id = t.event_id
+				WHERE t.musician_id IS NOT NULL
+			)
+			GROUP BY musician_id
 		) ec ON ec.musician_id = musicians.id`
 	}
 	var args []any

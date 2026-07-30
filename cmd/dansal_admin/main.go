@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -45,6 +46,7 @@ type request struct {
 	OrgID                 int    `json:"org_id,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Since                 string `json:"since,omitempty"`
+	WipeCredentials       bool   `json:"wipe_credentials,omitempty"`
 	SessionID             int    `json:"session_id,omitempty"`
 	InviteToken           string `json:"invite_token,omitempty"`
 	Telegram              string `json:"telegram,omitempty"`
@@ -198,6 +200,8 @@ func main() {
 		cmdPasswordBackup(rest)
 	case "password-restore":
 		cmdPasswordRestore(rest)
+	case "config-backup":
+		cmdConfigBackup(rest)
 	case "fill-location-fields":
 		cmdFillLocationFields(rest)
 	case "export":
@@ -326,11 +330,12 @@ Heartbeat:
   heartbeat-show                                     Show notification channel status
   heartbeat-set --interval N                         Set heartbeat check interval (minutes)
 
-  backup             [--output PATH]                 Full backup (config + db + images)
+  backup             [--output PATH]                 Business-data backup (db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
   restore            --input PATH                    Restore from a backup archive
-  password-backup    [--output PATH] [--password P]  Encrypted backup (AES-256-GCM)
+  password-backup    [--output PATH] [--password P]  Encrypted business-data backup (AES-256-GCM)
   password-restore   --input PATH   [--password P]   Decrypt and restore an encrypted backup
+  config-backup      [--output PATH] [--password P]  Encrypted config/nginx backup for disaster recovery
 
 mTLS PKI:
   mtls-init                                          Generate CA key and self-signed certificate
@@ -584,31 +589,44 @@ Equivalent to running VACUUM in SQLite. May take a moment on large databases.`,
 
 	"backup": `Usage: dansal_admin backup [--output PATH]
 
-Create a full backup as a .tar.gz archive containing:
-  config.yaml   — server configuration
+Create a business-data backup as a .tar.gz archive containing:
   calendar.db   — consistent SQLite snapshot (via VACUUM INTO)
   images/       — all uploaded images
+
+Does not include config.yaml or any deployment/reproducibility data — see
+config-backup for that. Password hashes and TOTP secrets are stripped
+from the snapshot — use password-backup for a full-recovery backup.
 
 Flags:
   --output  Destination file (default: ./dansal-backup-<timestamp>.tar.gz)`,
 
-	"restore": `Usage: dansal_admin restore --input PATH
+	"restore": `Usage: dansal_admin restore --input PATH [--wipe-credentials]
 
 Restore from a .tar.gz archive created by backup or incremental-backup.
 
-  config.yaml  — written to the server's config path; config reloaded live
   calendar.db  — restored via SQLite online backup API (no restart needed)
   images/      — files extracted into the images directory (overlay, no delete)
+  config.yaml  — restored if present in the archive (older archives only)
+
+By default, any user that already exists live (matched by id, falling back
+to email) keeps their live row exactly as it was — most importantly their
+password hash — even though plain backups have password_hash/totp_secret
+stripped. Only users present in the backup but not live are inserted.
+Pass --wipe-credentials to instead let the backup's data win for existing
+users too (useful when restoring a password-backup archive that has real
+credentials, or for a genuine full rollback).
 
 Flags:
-  --input  Path to the .tar.gz backup archive (required)`,
+  --input             Path to the .tar.gz backup archive (required)
+  --wipe-credentials  Overwrite existing users' credentials with the backup's (default: false)`,
 
 	"incremental-backup": `Usage: dansal_admin incremental-backup --since RFC3339 [--output PATH]
 
-Create an incremental backup containing:
-  config.yaml   — always included (small, defines runtime)
+Create an incremental business-data backup containing:
   calendar.db   — always included (full snapshot)
   images/       — only files modified after --since
+
+Does not include config.yaml — see config-backup for deployment data.
 
 Flags:
   --since   Include files changed after this time, e.g. 2026-05-01T00:00:00Z (required)
@@ -624,9 +642,12 @@ Flags:
 
 	"password-backup": `Usage: dansal_admin password-backup [--output PATH] [--password STR]
 
-Create a full backup and encrypt it with AES-256-GCM.
+Create a business-data backup (calendar.db + images/, no config.yaml — see
+config-backup for that) and encrypt it with AES-256-GCM.
 Key derivation uses scrypt (N=65536, r=8, p=1).
-Password hashes are not included in the backup archive.
+Unlike plain backup/incremental-backup, this includes password hashes and
+TOTP secrets — a full-recovery backup that can restore working logins,
+gated on the archive always being encrypted.
 
 If --password is omitted the password is prompted from the terminal
 (no echo, confirmed twice). Passing the password as a flag exposes
@@ -636,16 +657,45 @@ Flags:
   --output    Destination file (default: ./dansal-encrypted-<timestamp>.tar.gz.enc)
   --password  Encryption password (prompted if omitted)`,
 
-	"password-restore": `Usage: dansal_admin password-restore --input PATH [--password STR]
+	"password-restore": `Usage: dansal_admin password-restore --input PATH [--password STR] [--wipe-credentials]
 
 Decrypt a backup created by password-backup and restore it.
-  config.yaml  — written to the server's config path; config reloaded live
   calendar.db  — restored via SQLite online backup API (no restart needed)
   images/      — files extracted into the images directory (overlay, no delete)
 
+By default, existing users keep their live credentials even though this
+archive contains real password hashes/TOTP secrets from password-backup —
+pass --wipe-credentials to let the archive's credentials win instead (the
+usual choice when restoring onto a fresh instance with no live users yet).
+
 Flags:
-  --input     Path to the encrypted backup file (required)
-  --password  Decryption password (prompted if omitted)`,
+  --input             Path to the encrypted backup file (required)
+  --password          Decryption password (prompted if omitted)
+  --wipe-credentials  Overwrite existing users' credentials with the backup's (default: false)`,
+
+	"config-backup": `Usage: dansal_admin config-backup [--output PATH] [--password STR]
+
+Create an encrypted archive of this instance's deployment/reproducibility
+data — everything needed to recreate the instance on a fresh OS after a
+server crash, but no business data (no calendar.db, no images, no users):
+  config.yaml, web.yaml, webmin.yaml       — this instance's config files
+  nginx/dansal*.conf                       — this instance's nginx vhost configs
+Deliberately excludes the Let's Encrypt certificate/key — reissue those via
+certbot against the restored nginx config instead.
+
+Always encrypted with AES-256-GCM (same as password-backup); there is no
+plaintext variant, since this archive carries the highest-blast-radius
+secrets in the system (SMTP password, Matrix bot access token, etc).
+Restoring it (manually extract the archive into place) produces a working
+but empty instance — no users, no events. Import those separately via
+restore/password-restore of a business-data backup.
+
+If --password is omitted the password is prompted from the terminal
+(no echo, confirmed twice).
+
+Flags:
+  --output    Destination file (default: ./dansal-config-encrypted-<timestamp>.tar.gz.enc)
+  --password  Encryption password (prompted if omitted)`,
 
 	"mtls-init": `Usage: dansal_admin mtls-init
 
@@ -975,22 +1025,24 @@ func cmdRestore(args []string) {
 	fs := flag.NewFlagSet("restore", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["restore"]) }
 	input := fs.String("input", "", "path to backup archive")
+	wipeCredentials := fs.Bool("wipe-credentials", false, "overwrite existing users' credentials with the backup's (default: preserve live credentials)")
 	fs.Parse(args)
 
 	if *input == "" {
 		die("--input is required")
 	}
-	resp := send(socketPath, request{Cmd: "restore", Path: *input})
+	resp := send(socketPath, request{Cmd: "restore", Path: *input, WipeCredentials: *wipeCredentials})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
-		Config bool `json:"config"`
-		DB     bool `json:"db"`
-		Images int  `json:"images"`
+		Config         bool `json:"config"`
+		DB             bool `json:"db"`
+		Images         int  `json:"images"`
+		PreservedUsers int  `json:"preserved_users"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+	fmt.Printf("restored: config=%v db=%v images=%d preserved_users=%d\n", result.Config, result.DB, result.Images, result.PreservedUsers)
 }
 
 func cmdPasswordBackup(args []string) {
@@ -1018,8 +1070,11 @@ func cmdPasswordBackup(args []string) {
 		}
 	}
 
-	// Server writes the backup to a temp path; we encrypt it locally.
-	tmp, err := os.CreateTemp("", "dansal-pbkup-*.tar.gz")
+	// Server writes the backup to a temp path; we encrypt it locally. This
+	// must live next to the admin socket, not the system temp dir: the
+	// server runs with PrivateTmp=true, so its /tmp is a different mount
+	// namespace than ours and can't see a path we create there.
+	tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-pbkup-*.tar.gz")
 	if err != nil {
 		die("temp file: %v", err)
 	}
@@ -1027,7 +1082,7 @@ func cmdPasswordBackup(args []string) {
 	tmp.Close()
 	os.Remove(tmpPath)
 
-	resp := send(socketPath, request{Cmd: "backup", Path: tmpPath})
+	resp := send(socketPath, request{Cmd: "backup-with-credentials", Path: tmpPath})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
@@ -1056,6 +1111,7 @@ func cmdPasswordRestore(args []string) {
 	fs.Usage = func() { fmt.Println(commandHelp["password-restore"]) }
 	input := fs.String("input", "", "path to encrypted backup")
 	password := fs.String("password", "", "decryption password (prompted if omitted)")
+	wipeCredentials := fs.Bool("wipe-credentials", false, "overwrite existing users' credentials with the backup's (default: preserve live credentials)")
 	fs.Parse(args)
 
 	if *input == "" {
@@ -1079,7 +1135,9 @@ func cmdPasswordRestore(args []string) {
 		die("%v", err)
 	}
 
-	tmp, err := os.CreateTemp("", "dansal-prestore-*.tar.gz")
+	// Same PrivateTmp constraint as cmdPasswordBackup: the server must be
+	// able to see this path, so it can't be the system temp dir.
+	tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-prestore-*.tar.gz")
 	if err != nil {
 		die("temp file: %v", err)
 	}
@@ -1092,17 +1150,79 @@ func cmdPasswordRestore(args []string) {
 	tmp.Close()
 	defer os.Remove(tmpPath)
 
-	resp := send(socketPath, request{Cmd: "restore", Path: tmpPath})
+	resp := send(socketPath, request{Cmd: "restore", Path: tmpPath, WipeCredentials: *wipeCredentials})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
-		Config bool `json:"config"`
-		DB     bool `json:"db"`
-		Images int  `json:"images"`
+		Config         bool `json:"config"`
+		DB             bool `json:"db"`
+		Images         int  `json:"images"`
+		PreservedUsers int  `json:"preserved_users"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+	fmt.Printf("restored: config=%v db=%v images=%d preserved_users=%d\n", result.Config, result.DB, result.Images, result.PreservedUsers)
+}
+
+func cmdConfigBackup(args []string) {
+	fs := flag.NewFlagSet("config-backup", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["config-backup"]) }
+	output := fs.String("output", "", "destination file path")
+	password := fs.String("password", "", "encryption password (prompted if omitted)")
+	fs.Parse(args)
+
+	var pw []byte
+	if *password != "" {
+		pw = []byte(*password)
+	} else {
+		var err error
+		pw, err = promptPassword("Encryption password: ")
+		if err != nil {
+			die("password prompt: %v", err)
+		}
+		pw2, err := promptPassword("Confirm password: ")
+		if err != nil {
+			die("password prompt: %v", err)
+		}
+		if string(pw) != string(pw2) {
+			die("passwords do not match")
+		}
+	}
+
+	// Server writes the archive to a temp path next to the admin socket —
+	// see cmdPasswordBackup for why this can't be the system temp dir
+	// (PrivateTmp isolates it from the server's own /tmp). We encrypt
+	// locally, same as password-backup.
+	tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-cbkup-*.tar.gz")
+	if err != nil {
+		die("temp file: %v", err)
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	os.Remove(tmpPath)
+
+	resp := send(socketPath, request{Cmd: "config-backup", Path: tmpPath})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	defer os.Remove(tmpPath)
+
+	outPath := *output
+	if outPath == "" {
+		outPath = fmt.Sprintf("./dansal-config-encrypted-%s.tar.gz.enc", time.Now().Format("20060102-150405"))
+	}
+
+	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
+	if err := encryptFile(tmpPath, outPath, pw); err != nil {
+		die("encrypt: %v", err)
+	}
+
+	info, _ := os.Stat(outPath)
+	var size int64
+	if info != nil {
+		size = info.Size()
+	}
+	fmt.Printf("encrypted config backup written to %s (%s)\n", outPath, formatSize(size))
 }
 
 type invite struct {

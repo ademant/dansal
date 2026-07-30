@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ── Musicians ─────────────────────────────────────────────────────────────────
@@ -155,6 +156,11 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
+		// A photo upload triggers a slow AVIF re-encode on the backend (WASM-based
+		// encoder, can take well over the server's default 30s WriteTimeout for a
+		// detailed photo) — extend the deadline for this request rather than
+		// raising it server-wide.
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)

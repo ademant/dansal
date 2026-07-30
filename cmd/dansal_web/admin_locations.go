@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ── Locations ─────────────────────────────────────────────────────────────────
@@ -25,6 +28,7 @@ type AdminLocationsData struct {
 
 type AdminLocationEditData struct {
 	Location      Location
+	Parent        *Location // set when Location.ParentID is set — the building this room belongs to
 	UserOrgs      []Organization
 	AssignedOrgs  []Organization
 	AvailableOrgs []Organization
@@ -33,6 +37,7 @@ type AdminLocationEditData struct {
 	ConflictID    int // set when API returns 409: location with same OSM ID already exists
 	ReturnURL     string
 	From          string
+	Saved         bool
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under
@@ -78,15 +83,19 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.Error(w, "could not load locations", http.StatusBadGateway)
 			return
 		}
+		orgs, _ := client.GetOrganizations(r.Context())
+		token := getSessionToken(r)
+		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
+		rollUpChildEventCounts(locs, eventCounts)
+		// Rooms are shown nested under their building (.Children), not as
+		// separate top-level rows (#882).
+		locs = topLevelLocations(locs)
 		sort.Slice(locs, func(i, j int) bool {
 			if locs[i].Town != locs[j].Town {
 				return locs[i].Town < locs[j].Town
 			}
 			return locs[i].Location < locs[j].Location
 		})
-		orgs, _ := client.GetOrganizations(r.Context())
-		token := getSessionToken(r)
-		eventCounts, _ := client.GetLocationEventCounts(r.Context(), token)
 		isAdmin := user.Role == "admin"
 		var editableIDs map[int]bool
 		var userOrgs []Organization
@@ -212,6 +221,8 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			FloorCondition:  existing.FloorCondition,
 			NoStreetShoes:   existing.NoStreetShoes,
 			Aliases:         existing.Aliases,
+			Capacity:        existing.Capacity,
+			SizeSqm:         existing.SizeSqm,
 		}
 		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -293,26 +304,37 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		// Form is multipart/form-data (shares the template with the edit page
+		// which supports site-plan image uploads). ParseForm alone skips the
+		// multipart body, leaving all fields empty and causing a spurious 400.
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		loc := Location{
-			Location:      strings.TrimSpace(r.FormValue("location")),
-			ShortName:     strings.TrimSpace(r.FormValue("short_name")),
-			Address:       strings.TrimSpace(r.FormValue("address")),
-			Zipcode:       strings.TrimSpace(r.FormValue("zipcode")),
-			Town:          strings.TrimSpace(r.FormValue("town")),
-			Country:       strings.TrimSpace(r.FormValue("country")),
-			CountryCode:   strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
-			Region:        strings.TrimSpace(r.FormValue("region")),
-			Latitude:      parseLatLng(r.FormValue("latitude")),
-			Longitude:     parseLatLng(r.FormValue("longitude")),
-			Internetsite:  strings.TrimSpace(r.FormValue("internetsite")),
-			OsmID:         parseOsmID(r.FormValue("osm_id")),
-			OsmType:       strings.TrimSpace(r.FormValue("osm_type")),
-			Aliases:       parseAliases(r.FormValue("aliases")),
-			NoStreetShoes: r.FormValue("no_street_shoes") == "1",
+			Location:       strings.TrimSpace(r.FormValue("location")),
+			ShortName:      strings.TrimSpace(r.FormValue("short_name")),
+			Address:        strings.TrimSpace(r.FormValue("address")),
+			Zipcode:        strings.TrimSpace(r.FormValue("zipcode")),
+			Town:           strings.TrimSpace(r.FormValue("town")),
+			Country:        strings.TrimSpace(r.FormValue("country")),
+			CountryCode:    strings.ToUpper(strings.TrimSpace(r.FormValue("country_code"))),
+			Region:         strings.TrimSpace(r.FormValue("region")),
+			Latitude:       parseLatLng(r.FormValue("latitude")),
+			Longitude:      parseLatLng(r.FormValue("longitude")),
+			Internetsite:   strings.TrimSpace(r.FormValue("internetsite")),
+			OsmID:          parseOsmID(r.FormValue("osm_id")),
+			OsmType:        strings.TrimSpace(r.FormValue("osm_type")),
+			Aliases:        parseAliases(r.FormValue("aliases")),
+			NotesMd:        strings.TrimSpace(r.FormValue("notes_md")),
+			Attributes:     locationAttrsFromForm(r),
+			Parking:        r.FormValue("parking"),
+			FloorCondition: r.FormValue("floor_condition"),
+			NoStreetShoes:  r.FormValue("no_street_shoes") == "1",
+			Capacity:       parseFormOptionalInt(r.Form, "capacity"),
+			SizeSqm:        parseFormOptionalInt(r.Form, "size_sqm"),
 		}
 		// Parse multi-value organization_ids checkboxes. Non-admin callers must
 		// include these so the API can authorize the create request.
@@ -399,14 +421,23 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		sort.Slice(assignedOrgs, func(i, j int) bool { return assignedOrgs[i].Name < assignedOrgs[j].Name })
 		sort.Slice(availableOrgs, func(i, j int) bool { return availableOrgs[i].Name < availableOrgs[j].Name })
 
+		var parent *Location
+		if loc.ParentID != nil {
+			if p, err := client.GetLocation(r.Context(), *loc.ParentID); err == nil {
+				parent = &p
+			}
+		}
+
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 			Location:      loc,
+			Parent:        parent,
 			ReadOnly:      readOnly,
 			ReturnURL:     safeLocationsReturnURL(r.URL.Query().Get("return")),
 			From:          safeReturnPath(r.URL.Query().Get("from")),
 			AssignedOrgs:  assignedOrgs,
 			AvailableOrgs: availableOrgs,
+			Saved:         r.URL.Query().Get("saved") == "1",
 		}))
 	}
 }
@@ -417,6 +448,11 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
+		// A site-plan upload triggers a slow AVIF re-encode on the backend
+		// (WASM-based encoder, can take well over the server's default 30s
+		// WriteTimeout for a detailed photo) — extend the deadline for this
+		// request rather than raising it server-wide.
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -428,9 +464,11 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		loc := Location{
 			ID:              id,
@@ -454,6 +492,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			FloorCondition:  r.FormValue("floor_condition"),
 			NoStreetShoes:   r.FormValue("no_street_shoes") == "1",
 			Aliases:         existing.Aliases,
+			Capacity:        parseFormOptionalInt(r.Form, "capacity"),
+			SizeSqm:         parseFormOptionalInt(r.Form, "size_sqm"),
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		from := safeReturnPath(r.FormValue("from"))
@@ -484,16 +524,18 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
-		target := returnURL
-		if from != "" {
-			target = from
+		if loc.ParentID == nil {
+			if r.FormValue("remove_site_plan") == "1" {
+				_ = client.DeleteLocationSitePlan(r.Context(), id, token)
+			} else if file, header, ferr := r.FormFile("site_plan"); ferr == nil {
+				data, _ := io.ReadAll(file)
+				file.Close()
+				if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
+					log.Printf("upload location site plan error: %v", uerr)
+				}
+			}
 		}
-		if p := safeReturnPath(target); p != "" {
-			target = p
-		} else {
-			target = "/admin/locations"
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit?saved=1", id), http.StatusSeeOther)
 	}
 }
 
@@ -718,10 +760,75 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 			http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 			return
 		}
+		floorCondition := r.FormValue("floor_condition")
 		token := getSessionToken(r)
-		_, _ = client.CreateLocationRoom(r.Context(), id, name, token)
+		capacity := parseFormOptionalInt(r.Form, "capacity")
+		sizeSqm := parseFormOptionalInt(r.Form, "size_sqm")
+		_, _ = client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+// POST /admin/api/location/{id}/room/quick-create — inline room creation from
+// the event form's room picker (#884), mirroring adminMusicianQuickCreateHandler.
+func adminRoomQuickCreateHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, `{"error":"invalid location id"}`, http.StatusBadRequest)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			return
+		}
+		child, err := client.CreateLocationChild(r.Context(), id, strings.TrimSpace(req.Name), "", nil, nil, getSessionToken(r))
+		if err != nil {
+			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			return
+		}
+		client.invalidateLocations()
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": child.ID, "name": child.Location})
+	}
+}
+
+// POST /admin/locations/{id}/rooms/{room_id}/quick-edit — auto-saves room
+// attributes (floor, capacity, size, accessibility, kitchen/bar, no_street_shoes)
+// from the building edit page's inline fast-edit row.
+func adminRoomQuickEditHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		roomID, err := strconv.Atoi(r.PathValue("room_id"))
+		if err != nil {
+			http.Error(w, `{"error":"bad room_id"}`, http.StatusBadRequest)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"read error"}`, http.StatusBadRequest)
+			return
+		}
+		var probe map[string]any
+		if err := json.Unmarshal(body, &probe); err != nil {
+			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+			return
+		}
+		if err := client.PatchLocationAttrs(r.Context(), roomID, body, getSessionToken(r)); err != nil {
+			log.Printf("room quick-edit %d: %v", roomID, err)
+			http.Error(w, `{"error":"save failed"}`, http.StatusBadGateway)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
 	}
 }
 
@@ -742,8 +849,44 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.DeleteLocationRoom(r.Context(), locID, roomID, token)
+		_ = client.DeleteLocationChild(r.Context(), roomID, token)
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
+	}
+}
+
+// POST /admin/locations/{room_id}/plan-position — saves a room's dragged
+// position on its building's site-plan image (#877). Called via fetch() from
+// the drag-and-drop JS on the building's edit page, not a full page submit.
+func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		roomID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"invalid id"}`))
+			return
+		}
+		var req struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.X < 0 || req.X > 1 || req.Y < 0 || req.Y > 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"x/y must be between 0 and 1"}`))
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.UpdateLocationPlanPosition(r.Context(), roomID, req.X, req.Y, token); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			b, _ := json.Marshal(map[string]string{"error": err.Error()})
+			w.Write(b)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
 	}
 }

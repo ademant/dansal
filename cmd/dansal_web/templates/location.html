@@ -33,7 +33,7 @@
   {{if .Internetsite}}
   <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
   {{end}}
-  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition}}
+  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition .Capacity .SizeSqm}}
   <div class="loc-attrs">
     {{if index .Attributes "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
     {{if index .Attributes "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
@@ -44,6 +44,8 @@
     {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
     {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
     {{if .FloorCondition}}<span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}
+    {{if .Capacity}}<span class="access-badge" title="{{$.Strings.T "loc_capacity"}}">🧑‍🤝‍🧑 {{derefInt .Capacity}}</span>{{end}}
+    {{if .SizeSqm}}<span class="access-badge" title="{{$.Strings.T "loc_size_sqm"}}">📐 {{derefInt .SizeSqm}} m²</span>{{end}}
   </div>
   {{end}}
   {{if and .Latitude .Longitude}}
@@ -59,6 +61,35 @@
 {{end}}
 
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
+
+{{if .SitePlanURL}}
+<details class="loc-siteplan">
+  <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>
+  <div class="siteplan-canvas">
+    <img src="{{.SitePlanURL}}" alt="{{$.Strings.T "loc_siteplan_section"}}">
+    {{range placedRooms .Children}}
+    <a class="siteplan-marker" href="/location/{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
+      <span class="siteplan-marker-label">{{.Location}}</span>
+    </a>
+    {{end}}
+  </div>
+</details>
+{{end}}
+
+{{if .Children}}
+<div class="loc-rooms">
+  <h2 class="section-heading">{{$.Strings.T "loc_rooms_title"}}</h2>
+  <ul class="loc-rooms-list">
+    {{range .Children}}
+    <li><a href="/location/{{.ID}}">{{.Location}}</a>{{if .FloorCondition}} <span class="access-badge" title="{{$.Strings.T (print "floor_" .FloorCondition)}}">{{if eq .FloorCondition "parquet"}}🪵{{else if eq .FloorCondition "stone"}}🪨{{else if eq .FloorCondition "tiles"}}🔲{{else if eq .FloorCondition "grass"}}🌿{{else if eq .FloorCondition "sand"}}🏖{{else if eq .FloorCondition "pavement"}}🛣{{else if eq .FloorCondition "carpet"}}🧶{{end}}</span>{{end}}{{if .Capacity}} <span class="access-badge" title="{{$.Strings.T "loc_capacity"}}">🧑‍🤝‍🧑 {{derefInt .Capacity}}</span>{{end}}{{if .SizeSqm}} <span class="access-badge" title="{{$.Strings.T "loc_size_sqm"}}">📐 {{derefInt .SizeSqm}} m²</span>{{end}}</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .ParentID}}
+<p class="loc-parent-link"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>
+{{end}}
 
 {{end}}{{/* .Location */}}
 
@@ -106,6 +137,18 @@
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
+.loc-siteplan{margin-bottom:1.25rem}
+.loc-siteplan-summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
+.siteplan-canvas{position:relative;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--border-mid);background:var(--bg-subtle)}
+.siteplan-canvas img{display:block;width:100%;height:auto}
+.siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:var(--link);color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.siteplan-marker:hover{filter:brightness(1.1)}
+.loc-rooms{margin-bottom:1.25rem}
+.loc-rooms-list{list-style:none;padding:0;display:flex;flex-direction:column;gap:.35rem}
+.loc-rooms-list a{color:var(--link)}
+.loc-parent-link{margin-bottom:1rem;font-size:.9rem}
+.loc-parent-link a{color:var(--link);text-decoration:none}
+.loc-parent-link a:hover{text-decoration:underline}
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>

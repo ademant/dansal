@@ -5,6 +5,7 @@
 
 <div class="edit-wrap">
 {{with .Data}}
+{{if .Saved}}<p class="form-saved" role="status">{{$.Strings.T "admin_saved"}}</p>{{end}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 {{if .ConflictID}}<div class="form-error" role="alert">
   <p>{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
@@ -15,6 +16,12 @@
   </form>{{end}}
 </div>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
+{{if .Location.ParentID}}
+<div class="room-edit-notice">
+  {{$.Strings.T "loc_editing_room_notice"}}
+  {{if .Parent}}<a href="/admin/locations/{{.Parent.ID}}/edit">{{if .Parent.ShortName}}{{.Parent.ShortName}}{{else}}{{.Parent.Location}}{{end}}</a>{{end}}
+</div>
+{{end}}
 
 <div class="loc-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
@@ -27,6 +34,7 @@
   {{end}}
 </div>
 
+{{if not .Location.ParentID}}
 <button type="button" id="geo-toggle-btn" class="geo-toggle-btn">📍 {{$.Strings.T "loc_geocode_search"}}</button>
 <div id="geo-collapsible">
 <!-- Nominatim geocoding widget -->
@@ -45,8 +53,9 @@
 
 <div id="map" class="geo-map"></div>
 </div>
+{{end}}
 
-<form method="post" class="edit-form" id="loc-edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form" id="loc-edit-form">
   <input type="hidden" name="return" value="{{.ReturnURL}}">
   <input type="hidden" name="from" value="{{.From}}">
 
@@ -55,11 +64,14 @@
   <aside class="loc-nav" id="loc-nav">
     <button type="button" class="loc-nav-item loc-nav-fixed" data-target="sec-base">{{$.Strings.T "org_section_base"}}</button>
     <hr class="loc-nav-sep">
+    <button type="button" class="loc-nav-item" data-target="sec-address"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_section_address"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-website"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_website"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-access"><span class="loc-nav-dot"></span>{{$.Strings.T "access_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-kitchenbar"><span class="loc-nav-dot"></span>{{$.Strings.T "section_kitchen_bar"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-capacity"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_capacity_section"}}</button>
+    {{if not .Location.ParentID}}<button type="button" class="loc-nav-item" data-target="sec-siteplan"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_siteplan_section"}}</button>{{end}}
   </aside>
   <div class="loc-main">
 
@@ -70,46 +82,6 @@
 
     <label for="short_name">{{$.Strings.T "loc_short_name"}}</label>
     <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
-
-    <label for="address">{{$.Strings.T "loc_address"}}</label>
-    <input id="address" type="text" name="address" value="{{.Location.Address}}">
-
-    <div class="form-row">
-      <div>
-        <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
-        <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}">
-      </div>
-      <div style="flex:2">
-        <label for="town">{{$.Strings.T "loc_town"}}</label>
-        <input id="town" type="text" name="town" value="{{.Location.Town}}" required>
-      </div>
-    </div>
-
-    <label for="country">{{$.Strings.T "loc_country"}}</label>
-    <input id="country" type="text" name="country" value="{{.Location.Country}}">
-
-    <div class="form-row">
-      <div>
-        <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
-        <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off">
-        <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
-      </div>
-      <div style="flex:3">
-        <label for="region">{{$.Strings.T "loc_region"}}</label>
-        <input id="region" type="text" name="region" value="{{.Location.Region}}">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div>
-        <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
-        <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
-      </div>
-      <div>
-        <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
-        <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050">
-      </div>
-    </div>
 
     <input type="hidden" id="osm_id" name="osm_id" value="{{int64Val .Location.OsmID}}">
     <input type="hidden" id="osm_type" name="osm_type" value="{{.Location.OsmType}}">
@@ -135,6 +107,51 @@
     {{end}}
   </section>
 
+  <section class="form-section" id="sec-address"{{if .Location.ParentID}} data-force-collapsed="1"{{end}}>
+    <h2>{{$.Strings.T "loc_section_address"}}</h2>
+    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
+
+    <label for="address">{{$.Strings.T "loc_address"}}</label>
+    <input id="address" type="text" name="address" value="{{.Location.Address}}"{{if .Location.ParentID}} disabled{{end}}>
+
+    <div class="form-row">
+      <div>
+        <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
+        <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}"{{if .Location.ParentID}} disabled{{end}}>
+      </div>
+      <div style="flex:2">
+        <label for="town">{{$.Strings.T "loc_town"}}</label>
+        <input id="town" type="text" name="town" value="{{.Location.Town}}"{{if not .Location.ParentID}} required{{else}} disabled{{end}}>
+      </div>
+    </div>
+
+    <label for="country">{{$.Strings.T "loc_country"}}</label>
+    <input id="country" type="text" name="country" value="{{.Location.Country}}"{{if .Location.ParentID}} disabled{{end}}>
+
+    <div class="form-row">
+      <div>
+        <label for="country_code">{{$.Strings.T "loc_country_code"}}</label>
+        <input id="country_code" type="text" name="country_code" value="{{.Location.CountryCode}}" maxlength="2" placeholder="DE" style="width:5rem;text-transform:uppercase" autocomplete="off"{{if .Location.ParentID}} disabled{{end}}>
+        <span id="country_code_err" class="field-err" style="display:none">Format: 2 Buchstaben (z.B. DE)</span>
+      </div>
+      <div style="flex:3">
+        <label for="region">{{$.Strings.T "loc_region"}}</label>
+        <input id="region" type="text" name="region" value="{{.Location.Region}}"{{if .Location.ParentID}} disabled{{end}}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
+        <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200"{{if .Location.ParentID}} disabled{{end}}>
+      </div>
+      <div>
+        <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
+        <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050"{{if .Location.ParentID}} disabled{{end}}>
+      </div>
+    </div>
+  </section>
+
   <section class="form-section" id="sec-website">
     <h2>{{$.Strings.T "loc_website"}}</h2>
     <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
@@ -156,8 +173,9 @@
 
   <section class="form-section" id="sec-parking">
     <h2>{{$.Strings.T "parking_label"}}</h2>
+    {{if .Location.ParentID}}<p class="field-hint">{{$.Strings.T "loc_inherited_hint"}}</p>{{end}}
     <label for="parking">{{$.Strings.T "parking_label"}}</label>
-    <select id="parking" name="parking">
+    <select id="parking" name="parking"{{if .Location.ParentID}} disabled{{end}}>
       <option value="">{{$.Strings.T "parking_unknown"}}</option>
       <option value="none"{{if eq .Location.Parking "none"}} selected{{end}}>{{$.Strings.T "parking_none"}}</option>
       <option value="free"{{if eq .Location.Parking "free"}} selected{{end}}>{{$.Strings.T "parking_free"}}</option>
@@ -180,6 +198,53 @@
     </select>
     <label class="check-label"><input type="checkbox" name="no_street_shoes" value="1"{{if .Location.NoStreetShoes}} checked{{end}}> {{$.Strings.T "no_street_shoes_label"}}</label>
   </section>
+
+  <section class="form-section" id="sec-capacity">
+    <h2>{{$.Strings.T "loc_capacity_section"}}</h2>
+    <p class="field-hint">{{$.Strings.T "loc_capacity_hint"}}</p>
+    <div class="form-row">
+      <div>
+        <label for="capacity">{{$.Strings.T "loc_capacity"}}</label>
+        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{intVal .Location.Capacity}}">
+      </div>
+      <div>
+        <label for="size_sqm">{{$.Strings.T "loc_size_sqm"}}</label>
+        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{intVal .Location.SizeSqm}}">
+      </div>
+    </div>
+  </section>
+
+  {{if not .Location.ParentID}}
+  <section class="form-section" id="sec-siteplan">
+    <h2>{{$.Strings.T "loc_siteplan_section"}}</h2>
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_hint"}}</p>
+    <input type="file" name="site_plan" accept="image/*">
+
+    {{if .Location.SitePlanURL}}
+    <label class="check-label"><input type="checkbox" name="remove_site_plan" value="1"> {{$.Strings.T "loc_siteplan_remove"}}</label>
+
+    <div id="siteplan-canvas" class="siteplan-canvas">
+      <img src="{{.Location.SitePlanURL}}" alt="" draggable="false">
+      {{range placedRooms .Location.Children}}
+      <div class="siteplan-marker" draggable="true" data-room-id="{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
+        <span class="siteplan-marker-label">{{.Location}}</span>
+      </div>
+      {{end}}
+    </div>
+
+    {{if unplacedRooms .Location.Children}}
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_unplaced_hint"}}</p>
+    <ul id="siteplan-unplaced" class="siteplan-unplaced">
+      {{range unplacedRooms .Location.Children}}
+      <li draggable="true" data-room-id="{{.ID}}">{{.Location}}</li>
+      {{end}}
+    </ul>
+    {{end}}
+    {{else if .Location.Children}}
+    <p class="field-hint">{{$.Strings.T "loc_siteplan_upload_first_hint"}}</p>
+    {{end}}
+  </section>
+  {{end}}
 
   </div><!-- loc-main -->
   </div><!-- loc-edit-layout -->
@@ -211,36 +276,87 @@
   {{end}}
 </form>
 
-{{if .Location.ID}}
+{{if and .Location.ID (not .Location.ParentID)}}
 <fieldset class="members-fieldset">
-  <legend>Rooms</legend>
-  {{if .Location.Rooms}}
-  <table class="members-table">
+  <legend>{{$.Strings.T "loc_rooms_title"}}</legend>
+  <p class="field-hint">{{$.Strings.T "loc_room_hint"}}</p>
+  {{if .Location.Children}}
+  <div style="overflow-x:auto">
+  <table class="members-table room-qedit-table">
+    <thead>
+      <tr>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "tt_room"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "floor_label"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "loc_capacity"}} · {{$.Strings.T "loc_size_sqm"}}</th>
+        <th style="text-align:left;font-size:.8rem;color:#666;font-weight:600;padding:.2rem .4rem">{{$.Strings.T "admin_attributes"}}</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
-    {{range .Location.Rooms}}
-    <tr>
-      <td>{{.Name}}</td>
+    {{range .Location.Children}}
+    <tr class="room-qedit-row" data-room-id="{{.ID}}" data-building-id="{{$.Data.Location.ID}}">
+      <td><a href="/admin/locations/{{.ID}}/edit" class="room-edit-link">{{.Location}}</a></td>
+      <td>
+        <select class="room-qe room-qe-floor" style="font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;max-width:7rem">
+          <option value="">—</option>
+          <option value="parquet"{{if eq .FloorCondition "parquet"}} selected{{end}}>{{$.Strings.T "floor_parquet"}}</option>
+          <option value="stone"{{if eq .FloorCondition "stone"}} selected{{end}}>{{$.Strings.T "floor_stone"}}</option>
+          <option value="tiles"{{if eq .FloorCondition "tiles"}} selected{{end}}>{{$.Strings.T "floor_tiles"}}</option>
+          <option value="grass"{{if eq .FloorCondition "grass"}} selected{{end}}>{{$.Strings.T "floor_grass"}}</option>
+          <option value="sand"{{if eq .FloorCondition "sand"}} selected{{end}}>{{$.Strings.T "floor_sand"}}</option>
+          <option value="pavement"{{if eq .FloorCondition "pavement"}} selected{{end}}>{{$.Strings.T "floor_pavement"}}</option>
+          <option value="carpet"{{if eq .FloorCondition "carpet"}} selected{{end}}>{{$.Strings.T "floor_carpet"}}</option>
+        </select>
+      </td>
+      <td style="white-space:nowrap">
+        <input type="number" class="room-qe room-qe-cap" min="0" step="1" value="{{derefInt .Capacity}}" placeholder="—" title="{{$.Strings.T "loc_capacity"}}" style="width:3.8rem;font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;text-align:right">
+        <input type="number" class="room-qe room-qe-size" min="0" step="1" value="{{derefInt .SizeSqm}}" placeholder="—" title="{{$.Strings.T "loc_size_sqm"}}" style="width:3.8rem;font-size:.82rem;padding:.15rem .25rem;border:1px solid #ccc;border-radius:3px;text-align:right">
+      </td>
+      <td style="white-space:nowrap">
+        <button class="room-attr-btn{{if index .Attributes "wheelchair"}} is-on{{end}}" data-attr="wheelchair" type="button" title="{{$.Strings.T "access_wheelchair"}}">♿</button>
+        <button class="room-attr-btn{{if index .Attributes "hearing_loop"}} is-on{{end}}" data-attr="hearing_loop" type="button" title="{{$.Strings.T "access_hearing_loop"}}">🦻</button>
+        <button class="room-attr-btn{{if index .Attributes "visual_support"}} is-on{{end}}" data-attr="visual_support" type="button" title="{{$.Strings.T "access_visual_support"}}">👁</button>
+        <button class="room-attr-btn{{if index .Attributes "kitchen"}} is-on{{end}}" data-attr="kitchen" type="button" title="{{$.Strings.T "attr_kitchen"}}">🍳</button>
+        <button class="room-attr-btn{{if index .Attributes "bar"}} is-on{{end}}" data-attr="bar" type="button" title="{{$.Strings.T "attr_bar"}}">🍺</button>
+        <button class="room-attr-btn room-attr-nss{{if not .NoStreetShoes}} is-on{{end}}" data-attr="no_street_shoes" type="button" title="{{$.Strings.T "no_street_shoes_label"}}">👟</button>
+        <span class="room-save-ind" aria-live="polite"></span>
+      </td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('Delete room «{{.Name}}»?')">
-          <button type="submit" class="btn-sm btn-del">Delete</button>
+              onsubmit="return confirm('{{printf ($.Strings.T "loc_room_delete_confirm") .Location}}')">
+          <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
         </form>
       </td>
     </tr>
     {{end}}
     </tbody>
   </table>
+  </div>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No rooms defined.</p>
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_rooms"}}</p>
   {{end}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/rooms/new" class="room-add-form">
-    <input type="text" name="name" placeholder="New room name…" required class="room-add-input">
-    <button type="submit" class="btn-sm btn-primary-sm">Add room</button>
+    <input type="text" name="name" placeholder="{{$.Strings.T "loc_room_name_placeholder"}}" required class="room-add-input">
+    <select name="floor_condition">
+      <option value="">{{$.Strings.T "floor_label"}}…</option>
+      <option value="parquet">{{$.Strings.T "floor_parquet"}}</option>
+      <option value="stone">{{$.Strings.T "floor_stone"}}</option>
+      <option value="tiles">{{$.Strings.T "floor_tiles"}}</option>
+      <option value="grass">{{$.Strings.T "floor_grass"}}</option>
+      <option value="sand">{{$.Strings.T "floor_sand"}}</option>
+      <option value="pavement">{{$.Strings.T "floor_pavement"}}</option>
+      <option value="carpet">{{$.Strings.T "floor_carpet"}}</option>
+    </select>
+    <input type="number" min="0" step="1" name="capacity" placeholder="{{$.Strings.T "loc_capacity"}}" class="room-add-input" style="flex:0 0 6rem">
+    <input type="number" min="0" step="1" name="size_sqm" placeholder="{{$.Strings.T "loc_size_sqm"}}" class="room-add-input" style="flex:0 0 6rem">
+    <button type="submit" class="btn-sm btn-primary-sm">{{$.Strings.T "loc_room_add"}}</button>
   </form>
 </fieldset>
+{{end}}
 
+{{if .Location.ID}}
 <fieldset class="members-fieldset">
-  <legend>Organisations</legend>
+  <legend>{{$.Strings.T "admin_orgs_title"}}</legend>
   {{if .AssignedOrgs}}
   <table class="members-table">
     <tbody>
@@ -251,7 +367,7 @@
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/assign-org" style="margin:0">
           <input type="hidden" name="action" value="remove">
           <input type="hidden" name="org_id" value="{{.ID}}">
-          <button type="submit" class="btn-sm btn-del">Remove</button>
+          <button type="submit" class="btn-sm btn-del">{{$.Strings.T "assign_remove_btn"}}</button>
         </form>
       </td>
     </tr>
@@ -259,13 +375,13 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No organisations assigned.</p>
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_orgs_assigned"}}</p>
   {{end}}
   {{if .AvailableOrgs}}
   <div class="org-ac-wrap">
     <div class="org-ac-box" id="org-ac-box">
       <input type="text" id="org-ac-input" class="org-ac-input"
-             placeholder="Add organisation…" autocomplete="off"
+             placeholder="{{$.Strings.T "loc_org_add_placeholder"}}" autocomplete="off"
              role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="org-ac-list">
       <ul id="org-ac-list" class="org-ac-list" role="listbox" hidden>
         {{range .AvailableOrgs}}
@@ -288,7 +404,10 @@
 <style>
 .edit-wrap{max-width:1100px}
 .form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.form-saved{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.room-edit-notice{background:#f0f7ff;color:#1a5f8a;border:1px solid #b3d4f5;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.room-edit-notice a{color:#1a6eb5;font-weight:600}
 .loc-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
 .geo-toggle-btn{display:block;width:100%;text-align:left;padding:.5rem .75rem;background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;font-size:.9rem;color:#1a6eb5;cursor:pointer;margin-bottom:.75rem}
 .geo-toggle-btn:hover{background:#e3f0ff}
@@ -358,6 +477,16 @@
 .org-ac-item:hover,.org-ac-item.is-active{background:#e8f0fe;color:#1a6eb5}
 .room-add-form{display:flex;gap:.5rem;margin-top:.5rem}
 .room-add-input{flex:1;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.88rem}
+.room-attr-btn{background:none;border:none;cursor:pointer;font-size:1.1rem;padding:.1rem .15rem;border-radius:3px;opacity:.2;transition:opacity .15s}
+.room-attr-btn.is-on{opacity:1}
+.room-attr-btn:hover{opacity:.7}
+.room-attr-btn.is-on:hover{opacity:.85}
+.room-attr-nss{position:relative}
+.room-attr-nss:not(.is-on){opacity:1}
+.room-attr-nss:not(.is-on)::after{content:"🚫";font-size:.5em;position:absolute;top:0;right:-1px;line-height:1;pointer-events:none}
+.room-edit-link{font-weight:600;color:#1a6eb5;text-decoration:none}
+.room-edit-link:hover{text-decoration:underline}
+.room-save-ind{font-size:.8rem;margin-left:.25rem;color:#5a8a5a;min-width:1rem;display:inline-block}
 .members-fieldset{border:1px solid var(--border,#ddd);border-radius:4px;padding:.5rem .75rem;margin:1rem 0}
 .members-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .members-table{width:100%;border-collapse:collapse;font-size:.9rem}
@@ -375,6 +504,14 @@
 .btn-del{background:#b00020;color:#fff}
 .btn-del:hover{background:#800016}
 .field-hint{font-weight:400;color:#888;font-size:.82rem}
+.siteplan-canvas{position:relative;max-width:100%;margin-top:.5rem;border:1px solid var(--border-mid,#ddd);border-radius:6px;overflow:hidden;background:#f4f4f4}
+.siteplan-canvas img{display:block;width:100%;height:auto;pointer-events:none}
+.siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:#1a6eb5;color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,.3);user-select:none}
+.siteplan-marker:active{cursor:grabbing}
+.siteplan-unplaced{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0 0}
+.siteplan-unplaced li{background:#eef2f8;border:1px dashed #9ab;border-radius:12px;padding:.2rem .6rem;font-size:.82rem;cursor:grab}
+.siteplan-unplaced li:active{cursor:grabbing}
+.siteplan-canvas.is-dragover{outline:2px dashed #1a6eb5;outline-offset:-2px}
 .md-paste-hint{display:flex;align-items:center;justify-content:space-between;background:#e8f4fd;border:1px solid #b3d7f5;border-radius:4px;padding:.35rem .6rem;font-size:.82rem;color:#1a5f8a;margin-top:.25rem}
 .md-paste-hint button{background:none;border:none;color:#1a5f8a;cursor:pointer;padding:0 .25rem;font-size:1rem;line-height:1;flex-shrink:0}
 .md-paste-hint button:hover{color:#0d3f6a}
@@ -414,6 +551,7 @@
   var latInp  = document.getElementById('latitude');
   var lonInp  = document.getElementById('longitude');
   var mapDiv  = document.getElementById('map');
+  if (!btn || !mapDiv) return; // hidden entirely on a room's edit page (#876)
 
   /* ── Leaflet map ── */
   var map, selectedMarker, resultMarkers = [];
@@ -652,6 +790,12 @@
   if(toggle) toggle.addEventListener('click',function(){nav.classList.toggle('is-open-drawer');});
 
   var hasData={
+    'sec-address':function(){
+      return ['address','zipcode','town','country','country_code','region','latitude','longitude'].some(function(id){
+        var el=document.getElementById(id);
+        return el && el.value.trim();
+      });
+    },
     'sec-website':function(){return !!document.getElementById('internetsite').value.trim();},
     'sec-access':function(){
       return document.querySelector('#sec-access input[type=checkbox]:checked')!==null;
@@ -662,6 +806,12 @@
     'sec-parking':function(){return !!document.getElementById('parking').value;},
     'sec-floor':function(){
       return !!document.getElementById('floor_condition').value || document.querySelector('#sec-floor input[type=checkbox]:checked')!==null;
+    },
+    'sec-capacity':function(){
+      return !!document.getElementById('capacity').value || !!document.getElementById('size_sqm').value;
+    },
+    'sec-siteplan':function(){
+      return !!document.getElementById('siteplan-canvas');
     }
   };
   function refreshDots(){
@@ -684,8 +834,9 @@
     });
   });
   Object.keys(hasData).forEach(function(id){
+    var sec=document.getElementById(id);
+    if(sec && sec.dataset.forceCollapsed) return; // e.g. sec-address on a room: always starts collapsed
     if(hasData[id]()){
-      var sec=document.getElementById(id);
       var btn=nav.querySelector('[data-target="'+id+'"]');
       if(sec) sec.classList.add('is-open');
       if(btn) btn.classList.add('is-active');
@@ -694,6 +845,74 @@
   refreshDots();
   document.querySelector('.loc-main').addEventListener('input',refreshDots);
   document.querySelector('.loc-main').addEventListener('change',refreshDots);
+})();
+</script>
+<script>
+(function(){
+  var canvas = document.getElementById('siteplan-canvas');
+  if (!canvas) return; // no site plan uploaded yet, or this is a room's edit page
+  var unplacedList = document.getElementById('siteplan-unplaced');
+  var draggingRoomID = null;
+
+  function savePosition(roomID, x, y) {
+    fetch('/admin/locations/' + roomID + '/plan-position', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: x, y: y})
+    }).then(function(r){
+      if (!r.ok) throw new Error('save failed');
+    }).catch(function(){
+      alert('{{$.Strings.T "loc_siteplan_save_error"}}');
+    });
+  }
+
+  function attachMarkerDrag(el) {
+    el.addEventListener('dragstart', function(e){
+      draggingRoomID = el.dataset.roomId;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  }
+
+  canvas.querySelectorAll('.siteplan-marker').forEach(attachMarkerDrag);
+  if (unplacedList) {
+    unplacedList.querySelectorAll('li').forEach(attachMarkerDrag);
+  }
+
+  canvas.addEventListener('dragover', function(e){
+    e.preventDefault();
+    canvas.classList.add('is-dragover');
+  });
+  canvas.addEventListener('dragleave', function(){
+    canvas.classList.remove('is-dragover');
+  });
+  canvas.addEventListener('drop', function(e){
+    e.preventDefault();
+    canvas.classList.remove('is-dragover');
+    if (!draggingRoomID) return;
+    var roomID = draggingRoomID;
+    draggingRoomID = null;
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    var y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+
+    var marker = canvas.querySelector('.siteplan-marker[data-room-id="' + roomID + '"]');
+    if (!marker) {
+      var li = unplacedList && unplacedList.querySelector('li[data-room-id="' + roomID + '"]');
+      var label = li ? li.textContent : '';
+      if (li) li.remove();
+      marker = document.createElement('div');
+      marker.className = 'siteplan-marker';
+      marker.draggable = true;
+      marker.dataset.roomId = roomID;
+      marker.innerHTML = '<span class="siteplan-marker-label"></span>';
+      marker.querySelector('.siteplan-marker-label').textContent = label;
+      attachMarkerDrag(marker);
+      canvas.appendChild(marker);
+    }
+    marker.style.left = (x * 100) + '%';
+    marker.style.top = (y * 100) + '%';
+    savePosition(roomID, x, y);
+  });
 })();
 </script>
 <script>
@@ -885,6 +1104,65 @@ function safeGoBack(){
   form.addEventListener('input',_markDirty);
   form.addEventListener('change',_markDirty);
   form.addEventListener('submit',function(){_formDirty=false;});
+})();
+(function(){
+  // Room fast-edit: auto-saves floor/capacity/size/attrs on change.
+  var rows = document.querySelectorAll('.room-qedit-row');
+  if (!rows.length) return;
+
+  function saveRow(row) {
+    var roomID = row.dataset.roomId;
+    var buildingID = row.dataset.buildingId;
+    var attrs = {};
+    row.querySelectorAll('.room-attr-btn:not(.room-attr-nss)').forEach(function(btn){
+      attrs[btn.dataset.attr] = btn.classList.contains('is-on');
+    });
+    var nssBtn = row.querySelector('.room-attr-nss');
+    var payload = {
+      floor_condition: row.querySelector('.room-qe-floor').value,
+      no_street_shoes: nssBtn ? !nssBtn.classList.contains('is-on') : false,
+      attributes: attrs
+    };
+    var cap = parseInt(row.querySelector('.room-qe-cap').value, 10);
+    var size = parseInt(row.querySelector('.room-qe-size').value, 10);
+    if (!isNaN(cap) && cap > 0) payload.capacity = cap;
+    if (!isNaN(size) && size > 0) payload.size_sqm = size;
+
+    var ind = row.querySelector('.room-save-ind');
+    ind.textContent = '…';
+    fetch('/admin/locations/' + buildingID + '/rooms/' + roomID + '/quick-edit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r){
+      if (!r.ok) throw new Error('fail');
+      ind.textContent = '✓';
+      setTimeout(function(){ ind.textContent = ''; }, 2000);
+    }).catch(function(){
+      ind.textContent = '⚠';
+    });
+  }
+
+  rows.forEach(function(row){
+    row.querySelectorAll('.room-qe-floor, .room-qe-cap, .room-qe-size').forEach(function(el){
+      el.addEventListener('change', function(){ saveRow(row); });
+    });
+    row.querySelectorAll('.room-attr-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        btn.classList.toggle('is-on');
+        saveRow(row);
+      });
+    });
+    // Guard: warn if building form is dirty before navigating into a room.
+    var link = row.querySelector('.room-edit-link');
+    if (link) {
+      link.addEventListener('click', function(e){
+        if (_formDirty && !confirm('{{$.Strings.T "admin_unsaved_confirm"}}')) {
+          e.preventDefault();
+        }
+      });
+    }
+  });
 })();
 </script>
 {{end}}

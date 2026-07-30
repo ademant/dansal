@@ -549,22 +549,39 @@ POST   /api/v1/locations/unassign-org
 POST   /api/v1/locations/{id}/assign-org  # admin/user (member of the target org)/publisher (member of the target org)
 GET    /api/v1/locations/event-counts # auth required
 
-GET    /api/v1/locations/{id}/rooms               # list rooms for a location
-POST   /api/v1/locations/{id}/rooms               # auth required — create a room
-DELETE /api/v1/locations/{id}/rooms/{room_id}     # auth required — delete a room
+GET    /api/v1/locations/{id}/children            # list a location's rooms (child locations)
+POST   /api/v1/locations/{id}/children            # auth required — create a room under this location
 ```
 
 List and get are public. Locations support `Accept: application/geo+json` on the list endpoint.
 
 **`PUT` vs `PATCH`:** `PUT` replaces the entire location — send the complete object; any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array/map fields (`organization_ids`, `attributes`, `aliases`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
 
-**Rooms** are named sub-locations (e.g. "Grand Hall", "Studio 2") within a venue, selectable per-event via `Event.room_id`. `GET .../rooms` is public. `POST`/`DELETE` require the caller to be an admin or a member of one of the location's organizations. `GET /api/v1/locations` and `GET /api/v1/locations/{id}` embed a location's rooms as `"rooms": [{"id": N, "name": "..."}]` (omitted when empty). Deleting a room sets `room_id` to `NULL` on any events that referenced it (`ON DELETE SET NULL`) rather than blocking the delete.
+**Rooms are child locations.** A room (e.g. "Grand Hall", "Studio 2") is a normal `locations` row with `parent_id` set to its building's location `id` — not a separate entity type. This means a room automatically gets everything a location already has: its own `organization_ids` (a room can be assigned to a different org than its building), `aliases`, its own `/location/{id}` page, and its own event dedup. A location can only be a parent OR a child, never both — `parent_id` must reference a top-level location (one with `parent_id: null`); a room cannot itself have children.
+
+A room's `address`/`zipcode`/`town`/`country`/`latitude`/`longitude` are **inherited from its parent at read time**, not copied at creation — leave them unset when creating a room. This keeps a room's address in sync automatically if the building's address is later corrected, rather than drifting out of sync with a stale copy. Only fields that legitimately vary per room — `floor_condition`, `no_street_shoes`, `attributes`, `notes_md`, `capacity`, `size_sqm` — are set directly on the child.
+
+`capacity` (integer, max people) and `size_sqm` (integer, floor area in m²) are optional, purely informational fields available on any location (building or room) — there is no enforcement (no booking/capacity checks), just a display hint for organizers picking a venue or room. Like the other per-room fields above, they are never inherited from a parent.
+
+`GET /api/v1/locations` and `GET /api/v1/locations/{id}` embed a top-level location's rooms as `"children": [...]` (full `Location` objects, omitted when there are none) — `GET .../children` returns the same list on its own. `POST .../children` accepts `name` (required), `floor_condition`, `no_street_shoes`, `attributes`, `capacity`, `size_sqm`; the caller must be an admin or a member of one of the parent location's organizations. To delete a room, `DELETE /api/v1/locations/{id}` on the room's own `id` — no separate sub-resource endpoint, since a room is just a location.
+
+An event's `location_id` points directly at whichever level was chosen — the building, or a specific room within it — there is no separate `room_id` field. Deleting a room whose `id` is referenced by existing events requires `?reassign_to=` like any other location delete (see `DELETE /api/v1/locations/{id}` above).
 
 **`GET /api/v1/locations/event-counts`** returns `{"location_id": count}` for every location with at least one event. The count is **future events only** (`end_time` in the future, any publish status) — it intentionally matches the location dashboard's default (future-only) view rather than the location's lifetime event total.
 
+**Site plan (#877).** A top-level location can have a site-plan image (floor plan/map showing where its rooms are), with each room positioned on it via `plan_x`/`plan_y` (floats 0–1, percentage position on the *parent's* site-plan image — only meaningful on a room, set via the standard `PATCH /api/v1/locations/{id}` merge-patch with just those two fields). The image itself uses a separate small endpoint group, mirroring the org/musician image pattern:
+
+```
+POST   /api/v1/locations/{id}/site-plan     # multipart upload, field name "image"; 400 if {id} is itself a room
+DELETE /api/v1/locations/{id}/site-plan
+GET    /api/v1/location-images/{id}         # serves the image; public, no auth
+```
+
+`Location.site_plan_url` is set (to `/api/v1/location-images/{id}`) when a top-level location has an uploaded site-plan image; omitted otherwise. Same auth rules as editing the location itself (admin or member of one of its organizations).
+
 ```json
-POST /api/v1/locations/42/rooms
-{ "name": "Grand Hall" }
+POST /api/v1/locations/42/children
+{ "name": "Grand Hall", "floor_condition": "parquet" }
 ```
 
 **Query parameters for GET /api/v1/locations:**
@@ -658,7 +675,7 @@ PUT    /api/v1/events/{id}/dances/{dance_id}            # add one dance
 DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 ```
 
-`Event.room_id` (optional) points at a [room](#locations) within the event's location; the response also includes the denormalized `room_name` for display. Settable via `POST`/`PUT`/`PATCH` on the event body — there is no dedicated sub-resource endpoint for it (unlike `location`/`organization`/`musicians`/`instructors`/`dances`), since a room is scoped to the event's location and clearing it to `null` is unambiguous in a merge-patch.
+A room is just a [location](#locations) with `parent_id` set — to assign an event to a specific room rather than the whole venue, set `Event.location_id` directly to the room's `id` instead of the building's. There is no separate `room_id` field.
 
 **Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization. `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
 

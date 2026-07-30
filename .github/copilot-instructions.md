@@ -1,77 +1,62 @@
 # Copilot instructions for dansal
 
-Purpose: short, actionable guidance for Copilot CLI sessions and assistant agents working in this repository.
+> Full project conventions live in `CLAUDE.md` at the repo root. This file adds the quick-reference summary that GitHub Copilot loads automatically.
 
 ---
 
 ## Quick commands (build / run / deploy)
 
-- Build all binaries (recommended):
-  - make build
-- Run locally (backend):
-  - go run .
-- Build single binary (local debugging only):
-  - go build -o dansal ./cmd/dansal && ./dansal
-- Deploy an instance (install binaries & restart services):
-  - sudo make deploy INSTANCE=prod
-- First-time instance setup (interactive):
-  - sudo scripts/install-instance
+```bash
+make build                          # build all four binaries in parallel (always do this)
+sudo make deploy INSTANCE=dev       # install binaries + restart dev instance
+sudo make deploy INSTANCE=prod      # install binaries + restart prod instance
+sudo scripts/install-instance       # first-time interactive instance setup
+go vet ./...                        # static analysis (no test suite currently)
+```
 
-Notes: always run `make build` before `make deploy`. Do NOT rely on `go build ./cmd/...` + manual install — the Make targets ensure all four binaries and packaging are kept consistent.
+Never use `go build ./cmd/...` + manual install — always `make build && sudo make deploy INSTANCE=<name>`.
 
-## Tests & lint
+## Architecture
 
-- This repository currently has no repository-wide test harness detected (no *_test.go found during inspection). If tests are added, run:
-  - go test ./...            # run all tests
-  - go test ./pkg/foo -run TestName  # run a single test or package
-- Suggested quick checks (use when no CI linter present):
-  - go vet ./...
-  - go fmt ./...  (or `gofmt -w .` to apply)
+Four binaries under `cmd/`:
 
-If a linter is later added (golangci-lint, staticcheck), prefer the provided Make target or CI step instead of ad-hoc commands.
+| Binary | Path | Role |
+|---|---|---|
+| `dansal` | `cmd/dansal/` | REST API server, SQLite DB |
+| `dansal_web` | `cmd/dansal_web/` | Web frontend + ActivityPub |
+| `dansal_admin` | `cmd/dansal_admin/` | Admin CLI |
+| `dansal_webmin` | `cmd/dansal_webmin/` | Admin web UI |
 
-## High-level architecture (big picture)
+- Templates: `cmd/dansal_web/templates/` (Go HTML templates, server-side rendered)
+- Translations: `cmd/dansal_web/i18n.yaml` — **12 languages**: `br`, `ca`, `cs`, `de`, `en`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `uk`
+- DB: SQLite at `/var/lib/dansal/<instance>/calendar.db`
+- Config: `/etc/dansal/<instance>/{config.yaml, web.yaml, webmin.yaml}`
+- Services (systemd): `dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`
 
-- Monorepo with four main binaries under `cmd/`:
-  - cmd/dansal — REST API + backend logic (SQLite DB)
-  - cmd/dansal_web — web frontend and ActivityPub
-  - cmd/dansal_admin — admin CLI
-  - cmd/dansal_webmin — admin web UI
-- Frontend templates and translations:
-  - `cmd/dansal_web/templates/` — Go HTML templates
-  - `cmd/dansal_web/i18n.yaml` — translations (7 languages: br, de, en, es, fr, it, nl)
-- Database: SQLite per-instance at /var/lib/dansal/<instance>/calendar.db
-- Configuration: per-instance YAML under /etc/dansal/<instance>/{config.yaml,web.yaml,webmin.yaml}
-- Deployment model:
-  - `make build` builds all binaries in one step
-  - `make deploy INSTANCE=<name>` installs binaries to `/usr/lib/dansal/<name>/` and restarts systemd template units (`dansal@<name>`, `dansal-web@<name>`, `dansal-webmin@<name>`)
+## Key rules — read before editing
 
-## Key conventions and repository-specific rules
+- **All binaries together**: always build and deploy all four. Never selective deploy (issue #147).
+- **DB migrations**: append idempotent blocks to `runMigrations()` in `cmd/dansal/main.go`; update `createTables()` for fresh installs; add a `pragma_table_info` safety-net after each block (see CLAUDE.md § DB migration safety-net pattern).
+- **i18n**: new strings go in **all 12** language sections of `cmd/dansal_web/i18n.yaml`.
+- **Maps**: use `attachTileLayer(map)` from `base.html` — never `L.tileLayer` directly.
+- **Email / Telegram / Matrix**: always send in a goroutine — never block the HTTP handler.
+- **Event deduplication** (5 tiers): UID → URL → location+start±3h → title+start±3h → fetch_source+fuzzy. Maintained in `previewDuplicateStatus()` and `insertEvent()`. Do not break the hierarchy.
+- **Location aliases**: `locations.aliases` JSON array; append feed names when admin manually maps a location so future imports auto-match.
+- **Unsaved-changes guard**: admin forms use `_formDirty` / `_markDirty()` / `safeGoBack()`. Keep this pattern when adding new admin forms.
+- **Parent-child locations**: rooms inherit address/coordinates/parking from parent via `inheritLocationFields()`. Location dropdowns use `"Room — Building"` disambiguation labels.
+- **`has_*` fields are legacy**: use tags instead (`has_ball` → `bal-folk`/`fest-noz`, etc.). See CLAUDE.md § has_* boolean fields.
+- **No User-Agent sniffing for layout**: use CSS `@media` queries. UA detection fragments the HTTP cache.
+- **Runtime config without restart**: use `site_settings` table + `siteSettingsCache` (10 s TTL), written by webmin UI.
 
-- Always rebuild and redeploy all binaries together. Never ship a subset (see issue #147).
-- DB migrations:
-  - Append idempotent `db.Exec(...)` migration blocks to `runMigrations()` in `cmd/dansal/main.go`.
-  - Update `createTables()` for fresh installs.
-  - After each migration block, include a safety-net structural check (SELECT COUNT(*) FROM pragma_table_info...) that ALTERs or creates missing columns/tables if absent.
-- Event deduplication: four-tier matching used by `previewDuplicateStatus()` and `insertEvent()` (UID, URL, title+location+start±3h, title+start±3h). Agents editing import logic should maintain the same hierarchy.
-- Location aliases: `locations.aliases` is a JSON array used for auto-matching import names; when adding import mapping UI/logic, append feed names to aliases to improve future matches.
-- Map tile usage: templates must call `attachTileLayer(map)` from `base.html`. Do not call `L.tileLayer` directly in code/templates — this centralizes tile-layer behaviour.
-- Images: event images are stored as AVIF by default in the configured images dir and resized at upload time; served with `http.ServeFile` (no on-the-fly resizing).
-- Email: always send emails in a goroutine (do not block HTTP handlers).
-- i18n: when adding new strings, update all 7 language sections in `cmd/dansal_web/i18n.yaml`.
-- UI/server data flow: `indexHandler` fetches events once and reuses the slice for map, weekly table and future list views — avoid additional queries or refetching in template helpers.
+## Where to look
 
-## Common places to look when asked about features
-
-- API routes & handlers: `cmd/dansal/` (main.go and subpackages)
-- Web frontend templates and JS: `cmd/dansal_web/templates/`
-- Import/fetch code: `admin_import.go`, `events.go`, `preview.go` under `cmd/dansal/`
-- Migrations: `cmd/dansal/main.go` (runMigrations/createTables)
-
-## CI / GitHub workflows
-
-- Release and Docker workflows exist under `.github/workflows/` (release.yml, docker.yml). Follow existing workflow patterns when adding CI changes.
-
----
-
-If you want, merge or copy any additional operational notes from CLAUDE.md or dansal_admin.md into this file; they contain deploy and instance-setup guidance that is useful for agents.
+| Feature area | Files |
+|---|---|
+| API routes + handlers | `cmd/dansal/main.go` and siblings |
+| Web handlers | `cmd/dansal_web/frontend.go`, `admin_*.go` |
+| Templates + JS | `cmd/dansal_web/templates/` |
+| Event import / dedup | `admin_import.go`, `events.go`, `preview.go` in `cmd/dansal/` |
+| DB migrations | `cmd/dansal/main.go` (`runMigrations`, `createTables`) |
+| Translations | `cmd/dansal_web/i18n.yaml` |
+| Runtime config | `cmd/dansal_web/sitecache.go`, `cmd/dansal_webmin/siteconfig.go` |
+| CI/CD | `.github/workflows/release.yml`, `docker.yml` |

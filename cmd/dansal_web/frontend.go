@@ -265,7 +265,6 @@ func eventMetaDesc(event Event, lang string) string {
 	return desc
 }
 
-
 type IndexData struct {
 	Events          []Event
 	TotalEvents     int // true server-side count; may exceed len(Events) when the API's pagination cap truncated the result
@@ -440,7 +439,7 @@ func formatDateStr(lang, s string) string {
 	return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
 }
 
-var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"}
+var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"}
 
 func parseTime(s string) (time.Time, bool) {
 	for _, layout := range parseLayouts {
@@ -648,6 +647,185 @@ func fmtClock(timeFormat string, h, m int) string {
 	return fmt.Sprintf("%02d:%02d", h, m)
 }
 
+// parseTimetableClock parses an "HH:MM" timetable time into minutes since
+// midnight. Timetable start/end times are always validated to this exact
+// format server-side (cmd/dansal/timetable.go, validTimeSlot), so failure
+// here only happens for legacy/corrupt data.
+func parseTimetableClock(s string) (int, bool) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, false
+	}
+	return h*60 + m, true
+}
+
+// TimetableDay groups timetable entries under the calendar date they
+// belong to, for multi-day events (festivals, workshop weekends, #894).
+type TimetableDay struct {
+	Date    string // YYYY-MM-DD
+	Entries []TimetableEntry
+}
+
+// timetableDays splits entries into day buckets covering every calendar day
+// of the event's own start/end range — not just the days that happen to
+// have dated entries — so a multi-day event always shows a section per day
+// (e.g. day 1 with everything still undated, day 2 empty until entries get
+// assigned a date via the admin picker) rather than collapsing everything
+// into a single block. An entry without its own EntryDate belongs to the
+// event's start date; single-day events always yield exactly one day (no
+// visible change from before #894).
+func timetableDays(entries []TimetableEntry, eventStart, eventEnd string) []TimetableDay {
+	startDate := eventStart
+	if t, ok := parseTime(eventStart); ok {
+		startDate = t.Format("2006-01-02")
+	}
+	endDate := startDate
+	if t, ok := parseTime(eventEnd); ok {
+		endDate = t.Format("2006-01-02")
+	}
+
+	byDate := map[string][]TimetableEntry{}
+	for _, e := range entries {
+		d := strings.TrimSpace(e.EntryDate)
+		if d == "" {
+			d = startDate
+		}
+		byDate[d] = append(byDate[d], e)
+	}
+
+	var order []string
+	seen := map[string]bool{}
+	st, errSt := time.Parse("2006-01-02", startDate)
+	en, errEn := time.Parse("2006-01-02", endDate)
+	if errSt == nil && errEn == nil && !en.Before(st) {
+		for d := st; !d.After(en); d = d.AddDate(0, 0, 1) {
+			ds := d.Format("2006-01-02")
+			order = append(order, ds)
+			seen[ds] = true
+		}
+	}
+	// Entries dated outside the event's own range (shouldn't normally
+	// happen — the admin picker only offers in-range dates — but must not
+	// be silently dropped if it does) get appended as trailing days.
+	var extra []string
+	for d := range byDate {
+		if !seen[d] {
+			extra = append(extra, d)
+		}
+	}
+	sort.Strings(extra)
+	order = append(order, extra...)
+
+	days := make([]TimetableDay, 0, len(order))
+	for _, d := range order {
+		days = append(days, TimetableDay{Date: d, Entries: byDate[d]})
+	}
+	return days
+}
+
+// timetableColumnKey returns the grouping key/label/other-flag for one
+// timetable entry, shared by timetableGrid's column bucketing.
+func timetableColumnKey(e TimetableEntry) (key, label string, isOther bool) {
+	switch {
+	case e.LocationID != nil:
+		return fmt.Sprintf("loc:%d", *e.LocationID), e.LocationName, false
+	case strings.TrimSpace(e.Room) != "":
+		label := strings.TrimSpace(e.Room)
+		return "room:" + strings.ToLower(label), label, false
+	default:
+		return "other", "", true
+	}
+}
+
+func timetableGrid(entries []TimetableEntry) TimetableGrid {
+	const minPxPerMin = 1.4
+	const maxPxPerMin = 4.0
+	const minTotalHeightPx = 220.0
+
+	rangeMin, rangeMax := 0, 0
+	haveRange := false
+	type parsed struct {
+		entry            TimetableEntry
+		startMin, endMin int
+	}
+	var parsedEntries []parsed
+	for _, e := range entries {
+		start, ok1 := parseTimetableClock(e.StartTime)
+		end, ok2 := parseTimetableClock(e.EndTime)
+		if !ok1 || !ok2 {
+			continue
+		}
+		if end <= start {
+			end += 24 * 60 // crosses midnight (e.g. a fest-noz running past 00:00)
+		}
+		parsedEntries = append(parsedEntries, parsed{entry: e, startMin: start, endMin: end})
+		if !haveRange || start < rangeMin {
+			rangeMin = start
+		}
+		if !haveRange || end > rangeMax {
+			rangeMax = end
+		}
+		haveRange = true
+	}
+	if !haveRange {
+		return TimetableGrid{}
+	}
+
+	// Pick a mark step from the raw range before rounding, then round the
+	// range itself out to that step so the axis starts/ends on a mark.
+	step := 60
+	if rangeMax-rangeMin <= 180 {
+		step = 30
+	}
+	rangeMin -= rangeMin % step
+	if r := rangeMax % step; r != 0 {
+		rangeMax += step - r
+	}
+	totalMin := rangeMax - rangeMin
+	if totalMin <= 0 {
+		totalMin = step
+		rangeMax = rangeMin + step
+	}
+
+	pxPerMin := minPxPerMin
+	if h := float64(totalMin) * pxPerMin; h < minTotalHeightPx {
+		pxPerMin = minTotalHeightPx / float64(totalMin)
+	}
+	if pxPerMin > maxPxPerMin {
+		pxPerMin = maxPxPerMin
+	}
+
+	grid := TimetableGrid{HeightPx: float64(totalMin) * pxPerMin}
+	for m := rangeMin; m <= rangeMax; m += step {
+		grid.Marks = append(grid.Marks, TimetableGridMark{
+			Label: fmt.Sprintf("%02d:%02d", (m/60)%24, m%60),
+			TopPx: float64(m-rangeMin) * pxPerMin,
+		})
+	}
+
+	colIdx := map[string]int{}
+	for _, p := range parsedEntries {
+		key, label, isOther := timetableColumnKey(p.entry)
+		i, ok := colIdx[key]
+		if !ok {
+			grid.Columns = append(grid.Columns, TimetableGridColumn{Label: label, IsOther: isOther})
+			i = len(grid.Columns) - 1
+			colIdx[key] = i
+		}
+		grid.Columns[i].Panels = append(grid.Columns[i].Panels, TimetablePanel{
+			Entry:    p.entry,
+			TopPx:    float64(p.startMin-rangeMin) * pxPerMin,
+			HeightPx: float64(p.endMin-p.startMin) * pxPerMin,
+		})
+	}
+	return grid
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(lang, timeFormat, s string) string {
 		t, ok := parseTime(s)
@@ -739,17 +917,117 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strconv.FormatFloat(*f, 'f', -1, 64)
 	},
+	// pct renders a 0-1 fraction (e.g. Location.PlanX/PlanY) as a percentage
+	// number for use in a CSS "%" value — floatVal alone would render 0.6 as
+	// "0.6%" instead of "60%" (#880).
+	"pct": func(f *float64) string {
+		if f == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*f*100, 'f', -1, 64)
+	},
 	"int64Val": func(n *int64) string {
 		if n == nil {
 			return ""
 		}
 		return strconv.FormatInt(*n, 10)
 	},
+	// roomName looks up which of a building's rooms (children) an event's
+	// LocationID refers to, for the Room column on /admin/location/{id} (#883).
+	"roomName": func(children []Location, id *int) string {
+		if id == nil {
+			return ""
+		}
+		for _, c := range children {
+			if c.ID == *id {
+				return c.Location
+			}
+		}
+		return ""
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0
 		}
 		return *p
+	},
+	// locName returns the short_name when set, otherwise the full location name.
+	// Useful for compact displays where town/address are shown separately.
+	"locName": func(l Location) string {
+		if l.ShortName != "" {
+			return l.ShortName
+		}
+		return l.Location
+	},
+	"intVal": func(p *int) string {
+		if p == nil {
+			return ""
+		}
+		return strconv.Itoa(*p)
+	},
+	// unplacedRooms/placedRooms split a building's Children (#877) by whether
+	// they've been dragged onto the building's site-plan image yet.
+	"unplacedRooms": func(children []Location) []Location {
+		var out []Location
+		for _, c := range children {
+			if c.PlanX == nil || c.PlanY == nil {
+				out = append(out, c)
+			}
+		}
+		return out
+	},
+	"placedRooms": func(children []Location) []Location {
+		var out []Location
+		for _, c := range children {
+			if c.PlanX != nil && c.PlanY != nil {
+				out = append(out, c)
+			}
+		}
+		return out
+	},
+	"timetableDays": timetableDays,
+	// usedRoomIDs collects the distinct real room references (LocationID) across
+	// an event's timetable entries — free-text Room strings can't be placed on
+	// a site plan, so those entries are ignored (#885).
+	"usedRoomIDs": func(entries []TimetableEntry) map[int]bool {
+		ids := map[int]bool{}
+		for _, e := range entries {
+			if e.LocationID != nil {
+				ids[*e.LocationID] = true
+			}
+		}
+		return ids
+	},
+	// timetableGrid groups timetable entries into per-room columns and
+	// positions each entry in pixels against one shared time axis, for a
+	// real day-view calendar layout on /event/{id} (#887, refines #886's
+	// independent-per-column stacked lists). Rooms are grouped primarily by
+	// LocationID (a stable reference, labeled by LocationName), falling back
+	// to the free-text Room string (trimmed/case-insensitive key) when no
+	// LocationID is set, and finally a single shared "other" column for
+	// entries with neither. Column order follows first appearance, i.e. the
+	// timetable's existing time order.
+	//
+	// The axis only spans the timetable's own earliest start to latest end
+	// (rounded to a mark boundary), not a fixed 24h range. Entries ending
+	// before they start (e.g. a fest-noz running past midnight) are treated
+	// as ending the next day. Overlapping entries within the same room are a
+	// known, deliberately deferred edge case (#888) — this only lays out
+	// columns/time, it doesn't detect or resolve overlaps.
+	"timetableGrid": timetableGrid,
+	// topLocationID resolves the top-level (building) location ID for an
+	// event whose location may itself be a room (#687): a room is a child
+	// Location with ParentID set, but venue pickers only ever offer the
+	// top-level building, so callers select against this instead of
+	// Event.LocationID directly.
+	"topLocationID": func(e Event) int {
+		if e.Location == nil {
+			return 0
+		}
+		if e.Location.ParentID != nil {
+			return *e.Location.ParentID
+		}
+		return e.Location.ID
 	},
 	"joinInts": func(ids []int) string {
 		parts := make([]string, len(ids))
@@ -758,6 +1036,10 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return strings.Join(parts, ",")
 	},
+	// locationsJSON flattens top-level locations and their room children into
+	// one JS array. Rooms are labelled "RoomName — BuildingName" to disambiguate
+	// when two buildings share a room name (mirrors timetableLocationOptionsJSON).
+	// Rooms inherit the parent's orgIDs and town for org-based filtering.
 	"locationsJSON": func(locs []Location) template.JS {
 		type locItem struct {
 			ID     int    `json:"id"`
@@ -765,12 +1047,16 @@ var tmplFuncMap = template.FuncMap{
 			Town   string `json:"town"`
 			OrgIDs []int  `json:"orgIDs"`
 		}
-		items := make([]locItem, len(locs))
-		for i, l := range locs {
+		items := make([]locItem, 0, len(locs))
+		for _, l := range locs {
+			if l.ParentID != nil {
+				continue // rooms appear as children of their building; skip here to avoid duplicates
+			}
 			label := l.Location
 			if l.ShortName != "" {
 				label = l.ShortName
 			}
+			bname := label
 			if l.Town != "" {
 				label += ", " + l.Town
 			}
@@ -778,7 +1064,59 @@ var tmplFuncMap = template.FuncMap{
 			if orgIDs == nil {
 				orgIDs = []int{}
 			}
-			items[i] = locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs}
+			items = append(items, locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs})
+			for _, c := range l.Children {
+				clabel := c.Location
+				if c.ShortName != "" {
+					clabel = c.ShortName
+				}
+				childOrgIDs := c.OrganizationIDs
+				if len(childOrgIDs) == 0 {
+					childOrgIDs = orgIDs
+				}
+				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs})
+			}
+		}
+		b, _ := json.Marshal(items)
+		return template.JS(b)
+	},
+	// timetableLocationOptionsJSON flattens every top-level location plus all
+	// of their rooms (children) into one searchable option list for the
+	// timetable's per-row location autocomplete (#889) — unlike locationsJSON,
+	// this isn't restricted to the event's own building. Rooms inherit their
+	// building's orgIDs for the existing org-based filtering, since rooms
+	// don't carry their own organization assignments.
+	"timetableLocationOptionsJSON": func(locs []Location) template.JS {
+		type locItem struct {
+			ID     int    `json:"id"`
+			Label  string `json:"label"`
+			OrgIDs []int  `json:"orgIDs"`
+		}
+		items := []locItem{}
+		for _, l := range locs {
+			if l.ParentID != nil {
+				continue // rooms appear as children of their building; skip here to avoid duplicates
+			}
+			label := l.Location
+			if l.ShortName != "" {
+				label = l.ShortName
+			}
+			bname := label
+			if l.Town != "" {
+				label += ", " + l.Town
+			}
+			orgIDs := l.OrganizationIDs
+			if orgIDs == nil {
+				orgIDs = []int{}
+			}
+			items = append(items, locItem{ID: l.ID, Label: label, OrgIDs: orgIDs})
+			for _, c := range l.Children {
+				clabel := c.Location
+				if c.ShortName != "" {
+					clabel = c.ShortName
+				}
+				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, OrgIDs: orgIDs})
+			}
 		}
 		b, _ := json.Marshal(items)
 		return template.JS(b)
@@ -1667,6 +2005,16 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			return
 		}
 		events, _ := client.GetEventsByLocation(r.Context(), id)
+		// A parent (building) page aggregates events across all its rooms
+		// (#687) — a room is a child Location, so its events live under its
+		// own location_id and wouldn't otherwise show up on the building page.
+		for _, child := range loc.Children {
+			childEvents, _ := client.GetEventsByLocation(r.Context(), child.ID)
+			events = append(events, childEvents...)
+		}
+		if len(loc.Children) > 0 {
+			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
+		}
 		title := loc.ShortName
 		if title == "" {
 			title = loc.Location

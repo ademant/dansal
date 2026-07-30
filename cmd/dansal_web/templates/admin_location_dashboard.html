@@ -11,6 +11,33 @@
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 {{end}}{{/* .Location */}}
 
+{{if $.Data.Location.ParentID}}
+<p class="loc-parent-link">
+  <a href="/admin/location/{{derefInt $.Data.Location.ParentID}}">← {{$.Strings.T "loc_back_to_building"}}{{if $.Data.Parent}}: {{if $.Data.Parent.ShortName}}{{$.Data.Parent.ShortName}}{{else}}{{$.Data.Parent.Location}}{{end}}{{end}}</a>
+</p>
+{{end}}
+
+{{if $.Data.Location.Children}}
+<details class="loc-rooms-mgmt" open>
+  <summary>{{$.Strings.T "loc_rooms_title"}} ({{len $.Data.Location.Children}})</summary>
+  <table class="members-table">
+    <tbody>
+    {{range $.Data.Location.Children}}
+    <tr{{if eq .ID $.Data.FilterRoomID}} class="is-active-filter"{{end}}>
+      <td><a href="/admin/location/{{.ID}}">{{.Location}}</a></td>
+      <td class="loc-room-count">{{if index $.Data.RoomEventCounts .ID}}{{index $.Data.RoomEventCounts .ID}} {{$.Strings.T "admin_events_count"}}{{else}}—{{end}}</td>
+      <td style="white-space:nowrap">
+        <a href="/admin/locations/{{.ID}}/edit?return={{urlquery (print "/admin/location/" $.Data.Location.ID)}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+        <a href="/admin/events/new?loc_id={{.ID}}{{if $.Data.NewEventOrgID}}&org_id={{$.Data.NewEventOrgID}}{{end}}" class="btn-icon" title="{{$.Strings.T "admin_event_new_title"}}" aria-label="{{$.Strings.T "admin_event_new_title"}}">➕</a>
+        <a href="/admin/location/{{$.Data.Location.ID}}?room_id={{.ID}}{{if $.Data.FilterIncludePast}}&include_past=1{{end}}" class="btn-sm" title="{{$.Strings.T "loc_filter_to_room"}}">🔎</a>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</details>
+{{end}}
+
 {{if $.Data.NewEventOrgID}}
 <div class="dash-actions">
   <a href="/admin/events/new?loc_id={{$.Data.Location.ID}}{{if $.Data.NewEventOrgID}}&org_id={{$.Data.NewEventOrgID}}{{end}}" class="dash-btn">
@@ -19,7 +46,15 @@
 </div>
 {{end}}
 
+{{if $.Data.FilterRoomID}}
+<p class="loc-room-filter-active">
+  {{$.Strings.T "loc_filtered_to_room"}}
+  {{range .Location.Children}}{{if eq .ID $.Data.FilterRoomID}}<strong>{{.Location}}</strong>{{end}}{{end}}
+  <a href="/admin/location/{{.Location.ID}}{{if $.Data.FilterIncludePast}}?include_past=1{{end}}">{{$.Strings.T "filter_clear"}}</a>
+</p>
+{{end}}
 <form method="get" action="/admin/location/{{.Location.ID}}" class="event-filters">
+  {{if $.Data.FilterRoomID}}<input type="hidden" name="room_id" value="{{$.Data.FilterRoomID}}">{{end}}
   <label class="filter-check">
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
@@ -59,6 +94,16 @@
       {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
     </select>
   </div>
+  {{if .Location.Children}}
+  <div class="bq-group">
+    <label class="bq-label">{{$.Strings.T "loc_rooms_title"}}</label>
+    <select id="bq-room" class="bq-select">
+      <option value="">—</option>
+      <option value="{{.Location.ID}}">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</option>
+      {{range .Location.Children}}<option value="{{.ID}}">{{.Location}}</option>{{end}}
+    </select>
+  </div>
+  {{end}}
   <button type="button" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply" onclick="applyBulkQuick()">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
   <span class="bulk-sep"></span>
   <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_more"}}</button>
@@ -78,6 +123,7 @@
       <th data-sort="str">{{$.Strings.T "col_date"}}</th>
       <th data-sort="str">{{$.Strings.T "col_title"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      {{if .Location.Children}}<th data-sort="str">{{$.Strings.T "loc_rooms_title"}}</th>{{end}}
       <th data-sort="str">Status</th>
       <th></th>
     </tr>
@@ -89,6 +135,7 @@
     <td style="white-space:nowrap" data-val="{{.StartTime}}">{{formatDate $.LangCode .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}{{if .NeedsDuplicateReview}} <span class="badge" style="background:#fde2e1;color:#c0392b" title="{{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}}">⚠ {{$.Strings.T "admin_duplicate_badge"}}</span>{{end}}</td>
     <td style="font-size:.85rem;color:var(--fg-muted)">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>
+    {{if $.Data.Location.Children}}<td style="font-size:.85rem;color:var(--fg-muted)">{{roomName $.Data.Location.Children .LocationID}}</td>{{end}}
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
@@ -184,6 +231,16 @@
 .loc-notes{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
+.loc-parent-link{margin-bottom:1rem;font-size:.9rem}
+.loc-parent-link a{color:var(--link);text-decoration:none}
+.loc-parent-link a:hover{text-decoration:underline}
+.loc-rooms-mgmt{margin-bottom:1.25rem;background:var(--bg-subtle);border:1px solid var(--border-lite);border-radius:6px;padding:.4rem .75rem}
+.loc-rooms-mgmt summary{cursor:pointer;font-weight:600;font-size:.9rem;padding:.3rem 0}
+.loc-rooms-mgmt .members-table{margin-top:.5rem}
+.loc-rooms-mgmt tr.is-active-filter{background:var(--bg-hover)}
+.loc-room-count{font-size:.85rem;color:var(--fg-muted);white-space:nowrap}
+.loc-room-filter-active{font-size:.9rem;background:#f0f7ff;border:1px solid #b3d4f5;color:#1a5f8a;border-radius:4px;padding:.5rem .75rem;margin-bottom:.75rem}
+.loc-room-filter-active a{color:#1a6eb5;margin-left:.5rem}
 .dash-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
 .dash-btn{display:inline-block;padding:.4rem 1rem;border-radius:4px;font-size:.9rem;text-decoration:none;color:#fff;background:#1a6eb5}
 .dash-btn:hover{background:#0d4a80}
@@ -280,6 +337,8 @@ function applyBulkQuick(){
   function addField(n,v){if(!v)return;var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);}
   addField('org_id',document.getElementById('bq-org-id').value);
   addField('series_id',document.getElementById('bq-series').value);
+  var roomSel=document.getElementById('bq-room');
+  if(roomSel)addField('location_id',roomSel.value);
   document.body.appendChild(f);f.submit();
 }
 function openBulkAttrsModal(){

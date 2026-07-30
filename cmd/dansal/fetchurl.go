@@ -59,37 +59,31 @@ type FetchSource struct {
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
 const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,'')"
 
-// templateTimetableEntry is a single slot stored in event_templates.data.
-type templateTimetableEntry struct {
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Room        string `json:"room,omitempty"`
-}
-
 // templateImportData mirrors the JSON stored in event_templates.data.
+// Timetable uses the same TimetableEntryRequest as the direct API and event
+// series (#890), so location_id/musician_id/entry_type survive template
+// application instead of being silently dropped by a narrower one-off type.
 type templateImportData struct {
-	URL             string                   `json:"url"`
-	BookingURL      string                   `json:"booking_url"`
-	HasBall         bool                     `json:"has_ball"`
-	HasWorkshop     bool                     `json:"has_workshop"`
-	HasFestival     bool                     `json:"has_festival"`
-	WorkshopDiff    string                   `json:"workshop_difficulty"`
-	OrgID           int                      `json:"org_id"`
-	LocID           int                      `json:"loc_id"`
-	LocName         string                   `json:"-"` // populated at load time, not stored in JSON
-	PricingType     string                   `json:"pricing_type"`
-	PricingAmount   float64                  `json:"pricing_amount"`
-	PricingCurrency string                   `json:"pricing_currency"`
-	PricingLines    []Price                  `json:"pricing_lines"`
-	Tags            []string                 `json:"tags"`
-	DanceIDs        []int                    `json:"dance_ids"`
-	Food            string                   `json:"food"`
-	Drink           string                   `json:"drink"`
-	TicketsTotal    int                      `json:"tickets_total"`
-	BookingEnabled  bool                     `json:"booking_enabled"`
-	Timetable       []templateTimetableEntry `json:"timetable,omitempty"`
+	URL             string                  `json:"url"`
+	BookingURL      string                  `json:"booking_url"`
+	HasBall         bool                    `json:"has_ball"`
+	HasWorkshop     bool                    `json:"has_workshop"`
+	HasFestival     bool                    `json:"has_festival"`
+	WorkshopDiff    string                  `json:"workshop_difficulty"`
+	OrgID           int                     `json:"org_id"`
+	LocID           int                     `json:"loc_id"`
+	LocName         string                  `json:"-"` // populated at load time, not stored in JSON
+	PricingType     string                  `json:"pricing_type"`
+	PricingAmount   float64                 `json:"pricing_amount"`
+	PricingCurrency string                  `json:"pricing_currency"`
+	PricingLines    []Price                 `json:"pricing_lines"`
+	Tags            []string                `json:"tags"`
+	DanceIDs        []int                   `json:"dance_ids"`
+	Food            string                  `json:"food"`
+	Drink           string                  `json:"drink"`
+	TicketsTotal    int                     `json:"tickets_total"`
+	BookingEnabled  bool                    `json:"booking_enabled"`
+	Timetable       []TimetableEntryRequest `json:"timetable,omitempty"`
 }
 
 type uaTransport struct{ rt http.RoundTripper }
@@ -895,7 +889,7 @@ func resolveTemplateLocation(q querier, feedLoc EventLocationRequest, td *templa
 // applyTemplateTimetable inserts template timetable entries for eventID.
 // fetch_master: only when the event has no existing entries.
 // template_master: always replaces.
-func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableEntry, mode string) {
+func applyTemplateTimetable(q querier, eventID int, entries []TimetableEntryRequest, mode string) {
 	if len(entries) == 0 {
 		return
 	}
@@ -908,17 +902,9 @@ func applyTemplateTimetable(q querier, eventID int, entries []templateTimetableE
 			return
 		}
 	}
-	placeholders := make([]string, len(entries))
-	args := make([]any, 0, len(entries)*6)
-	for i, e := range entries {
-		placeholders[i] = "(?, ?, ?, ?, ?, ?)"
-		args = append(args, eventID, e.StartTime, e.EndTime, e.Title, e.Description, e.Room)
+	for _, e := range entries {
+		insertEntry(q, eventID, e)
 	}
-	q.Exec(
-		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room) VALUES "+
-			strings.Join(placeholders, ","),
-		args...,
-	)
 }
 
 // importSingleEvent applies template overrides, resolves the location, persists

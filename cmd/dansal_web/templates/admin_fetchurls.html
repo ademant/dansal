@@ -7,10 +7,11 @@
 
 {{with .Data}}
 <form method="post" action="/admin/fetchurls/bulk" id="bulk-form">
-<div class="bulk-toolbar">
+<div class="bulk-toolbar" id="bulk-toolbar">
   <label class="check-all-label">
     <input type="checkbox" id="check-all"> {{$.Strings.T "admin_select_all"}}
   </label>
+  <span id="bulk-count"></span>
   <select name="bulk_action" id="bulk-action">
     <option value="run">{{$.Strings.T "fetch_run"}}</option>
     {{if .IsAdmin}}<option value="delete">{{$.Strings.T "admin_delete"}}</option>{{end}}
@@ -25,10 +26,11 @@
   {{end}}
   <input type="text" name="new_tag" id="bulk-tag" placeholder="tag" style="display:none;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem">
   <button type="submit" class="btn-sm">{{$.Strings.T "admin_apply"}}</button>
+  <button type="button" class="btn-sm ms-close" id="ms-close" title="{{$.Strings.T "admin_magic_link_close"}}" aria-label="{{$.Strings.T "admin_magic_link_close"}}">✕</button>
 </div>
 
 <div class="table-wrap">
-<table class="event-table" data-sortable>
+<table class="event-table" id="fetch-table" data-sortable>
   <thead>
     <tr>
       <th class="col-check"></th>
@@ -45,19 +47,19 @@
   {{range .Sources}}
   {{$orgName := ""}}
   {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
-  <tr>
-    <td class="col-check"><input type="checkbox" name="src_ids" value="{{.ID}}" class="row-check"></td>
-    <td class="url-cell"><span title="{{.URL}}">{{.URL}}</span></td>
-    <td>{{.Type}}</td>
-    <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
-    <td>{{$orgName}}</td>
-    <td class="date-cell" data-val="{{.LastFetchedAt}}">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
-    <td class="result-cell">{{if .LastResult}}<span class="{{if hasPrefix .LastResult "error:"}}result-err{{else}}result-ok{{end}}" title="{{.LastResult}}">{{.LastResult}}</span>{{end}}</td>
-    <td class="col-actions">
+  <tr data-fetch-row data-fetch-id="{{.ID}}">
+    <td class="col-check cell-cb"><input type="checkbox" name="src_ids" value="{{.ID}}" class="row-check"></td>
+    <td class="url-cell cell-url"><span title="{{.URL}}">{{.URL}}</span></td>
+    <td class="cell-type">{{.Type}}</td>
+    <td class="mobile-hide">{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
+    <td class="cell-org">{{$orgName}}</td>
+    <td class="date-cell cell-date" data-val="{{.LastFetchedAt}}">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
+    <td class="result-cell mobile-hide">{{if .LastResult}}<span class="{{if hasPrefix .LastResult "error:"}}result-err{{else}}result-ok{{end}}" title="{{.LastResult}}">{{.LastResult}}</span>{{end}}</td>
+    <td class="col-actions cell-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       <button type="button" class="btn-icon btn-run" title="{{$.Strings.T "fetch_run"}}" aria-label="{{$.Strings.T "fetch_run"}}"
               data-run-url="/admin/fetchurls/{{.ID}}/run">🔄</button>
-      <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+      <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
               onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">🗑️</button>
     </td>
   </tr>
@@ -125,11 +127,61 @@ document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
 
 document.getElementById('check-all').addEventListener('change', function() {
   document.querySelectorAll('.row-check').forEach(function(cb){ cb.checked = this.checked; }, this);
+  updateBulkCount();
 });
 document.getElementById('bulk-action').addEventListener('change', function() {
   document.getElementById('bulk-org').style.display = this.value === 'assign-org' ? '' : 'none';
   document.getElementById('bulk-tag').style.display = this.value === 'add-tag' ? '' : 'none';
 });
+
+var _rowChecks = document.querySelectorAll('.row-check');
+var _bulkCount = document.getElementById('bulk-count');
+function updateBulkCount(){
+  var n = document.querySelectorAll('.row-check:checked').length;
+  _bulkCount.textContent = n > 0 ? n + ' ✓' : '';
+}
+_rowChecks.forEach(function(cb){ cb.addEventListener('change', updateBulkCount); });
+
+(function(){
+  var tbody = document.querySelector('#fetch-table tbody');
+  if(!tbody) return;
+
+  // Long-press (touch) on a row enters multi-select mode on mobile.
+  var LONG_PRESS_MS = 500, MOVE_TOLERANCE = 10;
+  var pressTimer = null, startX = 0, startY = 0, pressRow = null;
+  function enterMultiSelect(row){
+    document.body.classList.add('ms-active');
+    if(row){
+      var cb = row.querySelector('.row-check');
+      if(cb){ cb.checked = true; updateBulkCount(); }
+    }
+  }
+  function exitMultiSelect(){
+    document.body.classList.remove('ms-active');
+    _rowChecks.forEach(function(cb){ cb.checked = false; });
+    updateBulkCount();
+  }
+  function clearPressTimer(){
+    if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+    pressRow = null;
+  }
+  tbody.addEventListener('touchstart', function(e){
+    if(!window.matchMedia('(max-width:640px)').matches) return;
+    var row = e.target.closest('tr[data-fetch-row]');
+    if(!row) return;
+    pressRow = row;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    pressTimer = setTimeout(function(){ enterMultiSelect(pressRow); clearPressTimer(); }, LONG_PRESS_MS);
+  }, {passive:true});
+  tbody.addEventListener('touchmove', function(e){
+    if(!pressTimer) return;
+    var dx = Math.abs(e.touches[0].clientX - startX), dy = Math.abs(e.touches[0].clientY - startY);
+    if(dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) clearPressTimer();
+  }, {passive:true});
+  tbody.addEventListener('touchend', clearPressTimer);
+  tbody.addEventListener('touchcancel', clearPressTimer);
+  document.getElementById('ms-close').addEventListener('click', exitMultiSelect);
+})();
 </script>
 
 <style>
@@ -157,5 +209,23 @@ document.getElementById('bulk-action').addEventListener('change', function() {
 .btn-run:hover{background:#1a5a1a}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.ms-close{display:none}
+@media(max-width:640px){
+  .event-table thead{display:none}
+  .event-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;padding:.6rem .2rem;border-bottom:1px solid #eee}
+  .event-table tbody td{border-bottom:none;padding:0}
+  .event-table .col-check{display:none;order:0}
+  .event-table .cell-url{order:1;font-weight:600;max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .event-table .cell-actions{order:2;margin-left:auto}
+  .event-table .cell-org{order:3;flex-basis:100%;font-size:.85rem;color:#666}
+  .event-table .cell-type{order:4;font-size:.85rem;color:#666}
+  .event-table .cell-date{order:5;font-size:.85rem;color:#666}
+  .event-table .mobile-hide{display:none}
+  body.ms-active .event-table .col-check{display:block}
+  body.ms-active .bulk-toolbar{position:fixed;top:0;left:0;right:0;z-index:100;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2);border-radius:0;padding:.5rem .75rem}
+  body.ms-active .ms-close{display:inline-block;margin-left:auto}
+  body:not(.ms-active) .bulk-toolbar{display:none}
+  body.ms-active{padding-top:3.2rem}
+}
 </style>
 {{end}}

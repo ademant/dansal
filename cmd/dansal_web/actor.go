@@ -137,10 +137,17 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 		iconURL = org.ImageURL
 	}
 	if iconURL != "" {
-		if len(iconURL) > 0 && iconURL[0] == '/' {
+		if iconURL[0] == '/' {
 			iconURL = "https://" + cfg.Domain + iconURL
 		}
 		a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: iconURL}
+	}
+	if org.ImageURL != "" {
+		bannerURL := org.ImageURL
+		if bannerURL[0] == '/' {
+			bannerURL = "https://" + cfg.Domain + bannerURL
+		}
+		a.Image = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: bannerURL}
 	}
 	return a
 }

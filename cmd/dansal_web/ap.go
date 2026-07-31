@@ -46,6 +46,7 @@ type Actor struct {
 	Endpoints                 *APEndpoints `json:"endpoints,omitempty"`
 	AlsoKnownAs               []string     `json:"alsoKnownAs,omitempty"`
 	Icon                      *APDocument  `json:"icon,omitempty"`
+	Image                     *APDocument  `json:"image,omitempty"`
 	PublicKey                 PublicKey    `json:"publicKey"`
 }
 

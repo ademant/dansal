@@ -2164,11 +2164,16 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		// Relay actor: synthetic profile with no backing org
 		if actor.OrgID == 0 {
 			base := actorURL(cfg, cfg.RelayActorName)
+			displayName := cfg.RelayDisplayName
+			if displayName == "" {
+				displayName = cfg.RelayActorName + "@" + cfg.Domain
+			}
 			a := Actor{
 				Context:                   APContext,
 				Type:                      "Application",
 				ID:                        base,
-				Name:                      cfg.RelayActorName + "@" + cfg.Domain,
+				Name:                      displayName,
+				Summary:                   cfg.RelaySummary,
 				URL:                       "https://" + cfg.Domain,
 				PreferredUsername:         cfg.RelayActorName,
 				Inbox:                     base + "/inbox",
@@ -2184,6 +2189,12 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 					Owner:        base,
 					PublicKeyPem: actor.PublicKeyPEM,
 				},
+			}
+			if cfg.RelayIconURL != "" {
+				a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: cfg.RelayIconURL}
+			}
+			if cfg.RelayImageURL != "" {
+				a.Image = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: cfg.RelayImageURL}
 			}
 			writeJSON(w, http.StatusOK, a)
 			return

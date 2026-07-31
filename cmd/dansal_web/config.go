@@ -41,6 +41,10 @@ type Config struct {
 	RelayActorName      string   `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
 	ShowFederatedEvents bool     `yaml:"show_federated_events"`
+	RelayDisplayName    string   `yaml:"relay_display_name"`  // fediverse display name for the relay actor
+	RelaySummary        string   `yaml:"relay_summary"`       // fediverse bio/summary for the relay actor
+	RelayIconURL        string   `yaml:"relay_icon_url"`      // absolute URL for relay actor avatar (JPEG, ≤400×400)
+	RelayImageURL       string   `yaml:"relay_image_url"`     // absolute URL for relay actor banner
 
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg

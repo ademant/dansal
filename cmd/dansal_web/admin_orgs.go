@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -664,6 +665,54 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+	}
+}
+
+// POST /admin/organizations/{id}/redeliver
+// Re-delivers Update activities for all published events of this org to its
+// AP followers, so Mastodon and other servers can backfill the profile.
+func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			params := url.Values{
+				"organization_id": {strconv.Itoa(id)},
+				"limit":           {"200"},
+				"future":          {"true"},
+				"include_past":    {"true"},
+			}
+			events, err := client.GetEventsFiltered(ctx, params)
+			if err != nil {
+				log.Printf("redeliver org %d: fetch events: %v", id, err)
+				return
+			}
+			actor, err := getActorByOrgID(db, id)
+			if err != nil {
+				log.Printf("redeliver org %d: actor not found: %v", id, err)
+				return
+			}
+			for _, e := range events {
+				if !e.IsPublished {
+					continue
+				}
+				activity := buildUpdateActivity(cfg, actor.OrgSlug, e)
+				if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+					log.Printf("redeliver org %d event %d: %v", id, e.ID, err)
+				}
+			}
+			log.Printf("redeliver org %d: sent %d Update activities", id, len(events))
+		}()
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }
 

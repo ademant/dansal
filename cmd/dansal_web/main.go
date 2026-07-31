@@ -346,6 +346,7 @@ func main() {
 		r.HandleFunc("POST /admin/organizations/{id}/edit", adminRateLimit(adminOrgSaveHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/organizations/{id}/delete", adminRateLimit(adminOrgDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/run-feeds", adminRateLimit(adminOrgRunFeedsHandler(cfg, client)))
+		r.HandleFunc("POST /admin/organizations/{id}/redeliver", adminRateLimit(adminOrgRedeliverHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/members", adminRateLimit(adminOrgMemberHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/locations", adminRateLimit(adminOrgLocationsHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/follow", adminRateLimit(adminOrgFollowHandler(cfg, db, client)))

@@ -142,6 +142,7 @@ var routeEndpoint = map[string]string{
 	"POST /admin/organizations/{id}/edit":         "admin_orgs_edit",
 	"POST /admin/organizations/{id}/delete":       "admin_orgs_delete",
 	"POST /admin/organizations/{id}/run-feeds":    "admin_orgs_run_feeds",
+	"POST /admin/organizations/{id}/redeliver":    "admin_orgs_run_feeds",
 	"POST /admin/organizations/{id}/members":      "admin_orgs_members",
 	"POST /admin/organizations/{id}/locations":    "admin_orgs_locations",
 	"POST /admin/organizations/{id}/follow":       "admin_orgs_follow",

@@ -222,6 +222,10 @@
   {{end}}
 </fieldset>
 
+<form method="post" action="/admin/organizations/{{$orgID}}/redeliver" style="margin-bottom:.75rem">
+  <button type="submit" class="btn-sm-secondary" onclick="return confirm('Re-deliver all published events as ActivityPub Notes to followers? This may take a moment.')">📤 {{$.Strings.T "org_redeliver_events"}}</button>
+</form>
+
 <fieldset class="follows-fieldset">
   <legend>Follow external actors</legend>
   {{if .FollowErr}}<p class="form-error" role="alert">{{.FollowErr}}</p>{{end}}

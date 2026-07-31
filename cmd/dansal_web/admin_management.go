@@ -2,11 +2,16 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"database/sql"
+	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // maybeServePrecompressed attempts to serve path or its precompressed variants
@@ -228,4 +233,70 @@ func readLoadAvg() string {
 		}
 	}
 	return ""
+}
+
+// relayAssetURL returns the URL and MIME type for a relay actor image asset.
+// It prefers an uploaded file in ImagesDir (served at servedAt path), then
+// falls back to the URL set in config.
+func relayAssetURL(cfg *Config, fileKey, servedAt, configURL string) (string, string) {
+	if cfg.ImagesDir != "" {
+		for _, ext := range siteAssetExts {
+			if _, err := os.Stat(filepath.Join(cfg.ImagesDir, fileKey+ext)); err == nil {
+				return "https://" + cfg.Domain + servedAt, detectAssetMIMEFromExt(ext)
+			}
+		}
+	}
+	if configURL != "" {
+		return configURL, "image/jpeg"
+	}
+	return "", ""
+}
+
+// POST /internal/relay/redeliver — localhost-only endpoint called by dansal-webmin
+// to push Announce activities for all published events to relay followers.
+func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if host != "127.0.0.1" && host != "::1" {
+			http.NotFound(w, r)
+			return
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			relayActor, err := ensureRelayActor(db, cfg.RelayActorName)
+			if err != nil {
+				log.Printf("relay redeliver: get actor: %v", err)
+				return
+			}
+			params := url.Values{
+				"limit":        {"500"},
+				"future":       {"true"},
+				"include_past": {"true"},
+			}
+			events, err := client.GetEventsFiltered(ctx, params)
+			if err != nil {
+				log.Printf("relay redeliver: get events: %v", err)
+				return
+			}
+			sent := 0
+			for _, e := range events {
+				if !e.IsPublished || e.OrganizationID == nil {
+					continue
+				}
+				orgActor, oerr := getActorByOrgID(db, *e.OrganizationID)
+				if oerr != nil {
+					continue
+				}
+				activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, orgActor.OrgSlug, e)
+				if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
+					log.Printf("relay redeliver event %d: %v", e.ID, err)
+				} else {
+					sent++
+				}
+			}
+			log.Printf("relay redeliver: sent %d Announce activities", sent)
+		}()
+		w.WriteHeader(http.StatusAccepted)
+	}
 }

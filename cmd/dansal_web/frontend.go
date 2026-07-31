@@ -2204,11 +2204,11 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 					PublicKeyPem: actor.PublicKeyPEM,
 				},
 			}
-			if cfg.RelayIconURL != "" {
-				a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: cfg.RelayIconURL}
+			if u, m := relayAssetURL(cfg, "relay-avatar", "/relay-icon", cfg.RelayIconURL); u != "" {
+				a.Icon = &APDocument{Type: "Image", MediaType: m, URL: u}
 			}
-			if cfg.RelayImageURL != "" {
-				a.Image = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: cfg.RelayImageURL}
+			if u, m := relayAssetURL(cfg, "relay-banner", "/relay-banner", cfg.RelayImageURL); u != "" {
+				a.Image = &APDocument{Type: "Image", MediaType: m, URL: u}
 			}
 			writeJSON(w, http.StatusOK, a)
 			return

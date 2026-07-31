@@ -22,7 +22,8 @@ type Config struct {
 	Instance              string `yaml:"instance"`
 	OrgID                 int    `yaml:"org_id"`      // optional: filter dashboard events to this org
 	WebDBPath             string `yaml:"web_db_path"`  // path to web.db for site-config editing
-	ImagesDir             string `yaml:"images_dir"`   // path to images dir for logo/banner/favicon
+	ImagesDir             string `yaml:"images_dir"`   // path to images dir for logo/banner/favicon/relay assets
+	WebURL                string `yaml:"web_url"`      // internal URL of dansal-web (for relay redeliver)
 	BotStatsDBPath        string `yaml:"bot_stats_db"` // path to bot-stats.db; defaults to /var/lib/dansal/bot-stats.db
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs       int    `yaml:"read_timeout_secs"`
@@ -78,6 +79,9 @@ func loadConfigFrom(path string) *Config {
 	}
 	if cfg.BotStatsDBPath == "" {
 		cfg.BotStatsDBPath = "/var/lib/dansal/bot-stats.db"
+	}
+	if cfg.WebURL == "" {
+		cfg.WebURL = "http://127.0.0.1:8080"
 	}
 	cfg.configPath = path
 	return &cfg

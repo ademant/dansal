@@ -154,20 +154,22 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 }
 
 type siteConfigData struct {
-	Flash           string
-	SiteName        string
-	Contact         string
-	HasLogo         bool
-	HasBanner       bool
-	HasFavicon      bool
-	Dances          []dance
-	DefaultDanceIDs map[int]bool
-	ImpressumTexts  map[string]string
-	ImpressumLangs  []string
-	HolidayCountry  string
-	IndexNowKey     string
-	NoDB            bool
-	NoImagesDir     bool
+	Flash            string
+	SiteName         string
+	Contact          string
+	HasLogo          bool
+	HasBanner        bool
+	HasFavicon       bool
+	HasRelayAvatar   bool
+	HasRelayBanner   bool
+	Dances           []dance
+	DefaultDanceIDs  map[int]bool
+	ImpressumTexts   map[string]string
+	ImpressumLangs   []string
+	HolidayCountry   string
+	IndexNowKey      string
+	NoDB             bool
+	NoImagesDir      bool
 }
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
@@ -205,6 +207,8 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.HasLogo = siteAssetExists(cfg.ImagesDir, "logo")
 			data.HasBanner = siteAssetExists(cfg.ImagesDir, "banner")
 			data.HasFavicon = siteAssetExists(cfg.ImagesDir, "favicon")
+			data.HasRelayAvatar = siteAssetExists(cfg.ImagesDir, "relay-avatar")
+			data.HasRelayBanner = siteAssetExists(cfg.ImagesDir, "relay-banner")
 		}
 
 		d.Data = data
@@ -248,7 +252,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 
 		var uploadedAssets []string
 		if cfg.ImagesDir != "" {
-			for _, key := range []string{"logo", "banner", "favicon"} {
+			for _, key := range []string{"logo", "banner", "favicon", "relay-avatar", "relay-banner"} {
 				f, _, err := r.FormFile(key)
 				if err != nil {
 					continue
@@ -279,5 +283,21 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
+	}
+}
+
+// POST /site-config/relay/redeliver — calls dansal-web's internal endpoint to
+// push Announce activities for all published events to relay followers.
+func siteConfigRelayRedeliverHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		target := strings.TrimRight(cfg.WebURL, "/") + "/internal/relay/redeliver"
+		resp, err := httpClient.Post(target, "application/json", nil)
+		if err != nil {
+			log.Printf("relay redeliver: call dansal-web: %v", err)
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Redeliver failed: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+		resp.Body.Close()
+		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Re-delivering events to relay followers in the background"), http.StatusSeeOther)
 	}
 }

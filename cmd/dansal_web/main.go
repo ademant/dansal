@@ -194,6 +194,17 @@ func main() {
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
 		r.HandleFunc("GET /banner.avif", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerAVIF))
+		r.HandleFunc("GET /relay-icon", func(w http.ResponseWriter, r *http.Request) {
+			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "relay-avatar") {
+				http.NotFound(w, r)
+			}
+		})
+		r.HandleFunc("GET /relay-banner", func(w http.ResponseWriter, r *http.Request) {
+			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "relay-banner") {
+				http.NotFound(w, r)
+			}
+		})
+		r.HandleFunc("POST /internal/relay/redeliver", internalRelayRedeliverHandler(cfg, db, client))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Set("Content-Type", "application/javascript")

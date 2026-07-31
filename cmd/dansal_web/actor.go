@@ -137,6 +137,9 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 		iconURL = org.ImageURL
 	}
 	if iconURL != "" {
+		if len(iconURL) > 0 && iconURL[0] == '/' {
+			iconURL = "https://" + cfg.Domain + iconURL
+		}
 		a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: iconURL}
 	}
 	return a
@@ -920,10 +923,14 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		})
 	}
 	if e.ImageURL != "" {
+		imgURL := e.ImageURL
+		if len(imgURL) > 0 && imgURL[0] == '/' {
+			imgURL = "https://" + cfg.Domain + imgURL
+		}
 		apEvent.Attachment = []APDocument{{
 			Type:      "Document",
 			MediaType: "image/jpeg",
-			URL:       e.ImageURL,
+			URL:       imgURL,
 			Name:      e.Title,
 		}}
 	}
@@ -1008,10 +1015,14 @@ func buildNoteFromEvent(cfg *Config, slug string, e Event) APNote {
 		})
 	}
 	if e.ImageURL != "" {
+		imgURL := e.ImageURL
+		if len(imgURL) > 0 && imgURL[0] == '/' {
+			imgURL = "https://" + cfg.Domain + imgURL
+		}
 		note.Attachment = []APDocument{{
 			Type:      "Document",
 			MediaType: "image/jpeg",
-			URL:       e.ImageURL,
+			URL:       imgURL,
 			Name:      e.Title,
 		}}
 	}

@@ -1735,6 +1735,20 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 
+		// ActivityPub: serve the event as a Note when requested by an AP client.
+		if isAPRequest(r) {
+			slug := cfg.RelayActorName
+			if event.OrganizationID != nil {
+				if org, oerr := client.GetOrganization(r.Context(), *event.OrganizationID); oerr == nil {
+					slug = effectiveSlug(org)
+				}
+			}
+			note := buildNoteFromEvent(cfg, slug, event)
+			note.Context = APContext
+			writeJSON(w, http.StatusOK, note)
+			return
+		}
+
 		var (
 			org      *Organization
 			slug     string

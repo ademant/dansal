@@ -147,7 +147,11 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 		if bannerURL[0] == '/' {
 			bannerURL = "https://" + cfg.Domain + bannerURL
 		}
-		a.Image = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: bannerURL}
+		bannerMime := org.ImageMediaType
+		if bannerMime == "" {
+			bannerMime = "image/jpeg"
+		}
+		a.Image = &APDocument{Type: "Image", MediaType: bannerMime, URL: bannerURL}
 	}
 	return a
 }

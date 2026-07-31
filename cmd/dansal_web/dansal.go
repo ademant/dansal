@@ -328,10 +328,11 @@ type Organization struct {
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
 	UpdatedBy     string `json:"updated_by,omitempty"`
-	ImageURL      string `json:"image_url,omitempty"`
-	AvatarURL     string `json:"avatar_url,omitempty"`
-	NotesMd       string `json:"notes_md,omitempty"`
-	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
+	ImageURL       string `json:"image_url,omitempty"`
+	ImageMediaType string `json:"image_media_type,omitempty"`
+	AvatarURL      string `json:"avatar_url,omitempty"`
+	NotesMd        string `json:"notes_md,omitempty"`
+	FetchSourceID  *int   `json:"fetch_source_id,omitempty"`
 }
 
 type Pricing struct {

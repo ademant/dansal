@@ -26,6 +26,7 @@ type Organization struct {
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
 	UpdatedBy     string `json:"updated_by,omitempty"`
 	ImageURL      string `json:"image_url,omitempty"`
+	ImageMediaType string `json:"image_media_type,omitempty"`
 	AvatarURL     string `json:"avatar_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
@@ -154,6 +155,7 @@ func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, e
 		return o, err
 	}
 	o.ImageURL = orgImageURL(o.ID)
+	o.ImageMediaType = orgImageMediaType(o.ID)
 	o.AvatarURL = orgAvatars.url(o.ID)
 	return o, nil
 }

@@ -14,11 +14,11 @@ import (
 var orgImagesDir string
 
 type orgImageCache struct {
-	mu  sync.RWMutex
-	ids map[int]struct{}
+	mu       sync.RWMutex
+	mimeType map[int]string // image/avif or image/jpeg
 }
 
-var orgImgCache = &orgImageCache{ids: make(map[int]struct{})}
+var orgImgCache = &orgImageCache{mimeType: make(map[int]string)}
 
 func initOrgImageCache(dir string) {
 	orgImagesDir = dir
@@ -33,25 +33,34 @@ func initOrgImageCache(dir string) {
 			continue
 		}
 		name := e.Name()
-		var base string
+		var base, mime string
 		if strings.HasSuffix(name, ".avif") {
 			base = strings.TrimSuffix(name, ".avif")
+			mime = "image/avif"
 		} else if strings.HasSuffix(name, ".jpeg") {
 			base = strings.TrimSuffix(name, ".jpeg")
+			mime = "image/jpeg"
 		} else {
 			continue
 		}
 		if id, err := strconv.Atoi(base); err == nil {
-			orgImgCache.ids[id] = struct{}{}
+			orgImgCache.mimeType[id] = mime
 		}
 	}
 }
 
 func hasOrgImage(id int) bool {
 	orgImgCache.mu.RLock()
-	_, ok := orgImgCache.ids[id]
+	_, ok := orgImgCache.mimeType[id]
 	orgImgCache.mu.RUnlock()
 	return ok
+}
+
+func orgImageMediaType(id int) string {
+	orgImgCache.mu.RLock()
+	mt := orgImgCache.mimeType[id]
+	orgImgCache.mu.RUnlock()
+	return mt
 }
 
 func orgImageURL(id int) string {
@@ -61,15 +70,15 @@ func orgImageURL(id int) string {
 	return ""
 }
 
-func (c *orgImageCache) add(id int) {
+func (c *orgImageCache) add(id int, mime string) {
 	c.mu.Lock()
-	c.ids[id] = struct{}{}
+	c.mimeType[id] = mime
 	c.mu.Unlock()
 }
 
 func (c *orgImageCache) remove(id int) {
 	c.mu.Lock()
-	delete(c.ids, id)
+	delete(c.mimeType, id)
 	c.mu.Unlock()
 }
 
@@ -143,7 +152,8 @@ func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	orgImgCache.add(id)
+	_, mime := imageExtFromConfig()
+	orgImgCache.add(id, mime)
 	w.WriteHeader(http.StatusNoContent)
 }
 

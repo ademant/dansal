@@ -669,8 +669,10 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 }
 
 // POST /admin/organizations/{id}/redeliver
-// Re-delivers Update activities for all published events of this org to its
-// AP followers, so Mastodon and other servers can backfill the profile.
+// Re-delivers Create activities for all published events of this org to its
+// AP followers. Uses Create (not Update) so Mastodon adds posts it has never
+// seen before. Existing posts are simply re-created, which is idempotent for
+// Mastodon (it deduplicates by Note ID).
 func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -701,16 +703,19 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 				log.Printf("redeliver org %d: actor not found: %v", id, err)
 				return
 			}
+			sent := 0
 			for _, e := range events {
 				if !e.IsPublished {
 					continue
 				}
-				activity := buildUpdateActivity(cfg, actor.OrgSlug, e)
+				activity := buildCreateActivity(cfg, actor.OrgSlug, e)
 				if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
 					log.Printf("redeliver org %d event %d: %v", id, e.ID, err)
+				} else {
+					sent++
 				}
 			}
-			log.Printf("redeliver org %d: sent %d Update activities", id, len(events))
+			log.Printf("redeliver org %d: sent %d Create activities", id, sent)
 		}()
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}

@@ -113,7 +113,7 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 	base := actorURL(cfg, actor.OrgSlug)
 	a := Actor{
 		Context:                   APContext,
-		Type:                      "Organization",
+		Type:                      "Service",
 		ID:                        base,
 		Name:                      org.Name,
 		Summary:                   org.Description,

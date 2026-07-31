@@ -988,6 +988,17 @@ func buildNoteContent(cfg *Config, e Event) string {
 	if e.Description != "" {
 		b.WriteString(e.Description)
 	}
+	if len(e.Tags) > 0 {
+		b.WriteString("<p>")
+		for i, tag := range e.Tags {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			fmt.Fprintf(&b, `<a href="https://%s/?tag=%s" class="mention hashtag" rel="tag">#<span>%s</span></a>`,
+				cfg.Domain, html.EscapeString(tag), html.EscapeString(tag))
+		}
+		b.WriteString("</p>")
+	}
 	return b.String()
 }
 

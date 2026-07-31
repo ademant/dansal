@@ -304,6 +304,7 @@ type Instructor struct {
 	Bio       string `json:"bio,omitempty"`
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
@@ -328,6 +329,7 @@ type Organization struct {
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
 	UpdatedBy     string `json:"updated_by,omitempty"`
 	ImageURL      string `json:"image_url,omitempty"`
+	AvatarURL     string `json:"avatar_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
 }
@@ -367,6 +369,7 @@ type Musician struct {
 	Genre        string `json:"genre,omitempty"`
 	Email        string `json:"email,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
+	AvatarURL    string `json:"avatar_url,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
 	UpdatedBy    string `json:"updated_by,omitempty"`
@@ -1999,6 +2002,71 @@ func (c *DansalClient) DeleteOrgImage(ctx context.Context, id int, token string)
 		return apiErr(resp)
 	}
 	return nil
+}
+
+func (c *DansalClient) uploadAvatar(ctx context.Context, path string, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+path, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) UploadOrgAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/org-avatars/%d", id), data, filename, token)
+}
+
+func (c *DansalClient) UploadMusicianAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/musician-avatars/%d", id), data, filename, token)
+}
+
+func (c *DansalClient) UploadInstructorAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/instructor-avatars/%d", id), data, filename, token)
+}
+
+func (c *DansalClient) deleteAvatar(ctx context.Context, path, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, path, token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteOrgAvatar(ctx context.Context, id int, token string) error {
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/org-avatars/%d", id), token)
+}
+
+func (c *DansalClient) DeleteMusicianAvatar(ctx context.Context, id int, token string) error {
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/musician-avatars/%d", id), token)
+}
+
+func (c *DansalClient) DeleteInstructorAvatar(ctx context.Context, id int, token string) error {
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/instructor-avatars/%d", id), token)
 }
 
 func (c *DansalClient) UploadEventImage(ctx context.Context, eventID int, data []byte, filename, token string) error {

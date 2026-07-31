@@ -111,15 +111,18 @@ type APEvent struct {
 }
 
 type APNote struct {
-	Context      any      `json:"@context,omitempty"`
-	Type         string   `json:"type"`
-	ID           string   `json:"id"`
-	AttributedTo string   `json:"attributedTo"`
-	Content      string   `json:"content"`
-	Published    string   `json:"published"`
-	To           []string `json:"to"`
-	CC           []string `json:"cc"`
-	URL          string   `json:"url,omitempty"`
+	Context      any          `json:"@context,omitempty"`
+	Type         string       `json:"type"`
+	ID           string       `json:"id"`
+	AttributedTo string       `json:"attributedTo"`
+	Content      string       `json:"content"`
+	Published    string       `json:"published"`
+	Updated      string       `json:"updated,omitempty"`
+	To           []string     `json:"to"`
+	CC           []string     `json:"cc"`
+	URL          string       `json:"url,omitempty"`
+	Tag          []APHashtag  `json:"tag,omitempty"`
+	Attachment   []APDocument `json:"attachment,omitempty"`
 }
 
 type OrderedCollection struct {

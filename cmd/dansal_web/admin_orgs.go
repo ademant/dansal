@@ -213,6 +213,13 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				return
 			}
 		}
+		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadOrgAvatar(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
+				log.Printf("upload org avatar error: %v", uerr)
+			}
+		}
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(created)})
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
@@ -579,6 +586,13 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 				return
 			}
 		}
+		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadOrgAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
+				log.Printf("upload org avatar error: %v", uerr)
+			}
+		}
 
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(org)})
 
@@ -703,6 +717,22 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		_ = client.DeleteOrgImage(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminOrgAvatarDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteOrgAvatar(r.Context(), id, getSessionToken(r))
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net"
@@ -131,8 +132,12 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 			PublicKeyPem: actor.PublicKeyPEM,
 		},
 	}
-	if org.ImageURL != "" {
-		a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: org.ImageURL}
+	iconURL := org.AvatarURL
+	if iconURL == "" {
+		iconURL = org.ImageURL
+	}
+	if iconURL != "" {
+		a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: iconURL}
 	}
 	return a
 }
@@ -925,6 +930,94 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 	return apEvent
 }
 
+// buildNoteContent renders a human-readable HTML summary of an event for
+// inclusion as the Note content, so Mastodon and other Note-only clients can
+// display event posts in timelines and profile pages.
+func buildNoteContent(cfg *Config, e Event) string {
+	eventURL := e.URL
+	if eventURL == "" {
+		eventURL = fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `<p><a href="%s">%s</a></p>`, html.EscapeString(eventURL), html.EscapeString(e.Title))
+	if e.StartTime != "" {
+		if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
+			fmt.Fprintf(&b, "<p>📅 %s", t.Format("02.01.2006 15:04"))
+			if e.EndTime != "" {
+				if te, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
+					if t.Year() == te.Year() && t.Month() == te.Month() && t.Day() == te.Day() {
+						fmt.Fprintf(&b, "–%s", te.Format("15:04"))
+					} else {
+						fmt.Fprintf(&b, " – %s", te.Format("02.01.2006 15:04"))
+					}
+				}
+			}
+			b.WriteString("</p>")
+		}
+	}
+	if l := e.Location; l != nil {
+		var parts []string
+		if l.Location != "" {
+			parts = append(parts, l.Location)
+		}
+		if l.Town != "" {
+			parts = append(parts, l.Town)
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(&b, "<p>📍 %s</p>", html.EscapeString(strings.Join(parts, ", ")))
+		}
+	}
+	if e.Description != "" {
+		b.WriteString(e.Description)
+	}
+	return b.String()
+}
+
+func buildNoteFromEvent(cfg *Config, slug string, e Event) APNote {
+	base := actorURL(cfg, slug)
+	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+	eventURL := e.URL
+	if eventURL == "" {
+		eventURL = eventID
+	}
+	var published, updated string
+	if t, ok := parseTime(e.CreatedAt); ok {
+		published = t.UTC().Format(time.RFC3339)
+	}
+	if t, ok := parseTime(e.ChangedAt); ok {
+		updated = t.UTC().Format(time.RFC3339)
+	} else {
+		updated = published
+	}
+	note := APNote{
+		Type:         "Note",
+		ID:           eventID,
+		AttributedTo: base,
+		Content:      buildNoteContent(cfg, e),
+		Published:    published,
+		Updated:      updated,
+		To:           []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:           []string{base + "/followers"},
+		URL:          eventURL,
+	}
+	for _, tag := range e.Tags {
+		note.Tag = append(note.Tag, APHashtag{
+			Type: "Hashtag",
+			Name: "#" + tag,
+			Href: fmt.Sprintf("https://%s/?tag=%s", cfg.Domain, tag),
+		})
+	}
+	if e.ImageURL != "" {
+		note.Attachment = []APDocument{{
+			Type:      "Document",
+			MediaType: "image/jpeg",
+			URL:       e.ImageURL,
+			Name:      e.Title,
+		}}
+	}
+	return note
+}
+
 func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 	base := actorURL(cfg, slug)
 	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
@@ -932,7 +1025,7 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 		Type:   "Create",
 		ID:     eventID + "/activity",
 		Actor:  base,
-		Object: buildAPEvent(cfg, slug, e),
+		Object: buildNoteFromEvent(cfg, slug, e),
 		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:     []string{base + "/followers"},
 	}
@@ -941,13 +1034,13 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 func buildUpdateActivity(cfg *Config, slug string, e Event) Activity {
 	base := actorURL(cfg, slug)
 	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
-	apEvent := buildAPEvent(cfg, slug, e)
-	apEvent.Updated = time.Now().UTC().Format(time.RFC3339)
+	note := buildNoteFromEvent(cfg, slug, e)
+	note.Updated = time.Now().UTC().Format(time.RFC3339)
 	return Activity{
 		Type:   "Update",
 		ID:     fmt.Sprintf("%s/activities/update-%d", eventID, time.Now().UnixNano()),
 		Actor:  base,
-		Object: apEvent,
+		Object: note,
 		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:     []string{base + "/followers"},
 	}

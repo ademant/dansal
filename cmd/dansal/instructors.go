@@ -19,6 +19,8 @@ type Instructor struct {
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
 
+	AvatarURL string `json:"avatar_url,omitempty"`
+
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
@@ -49,6 +51,9 @@ func scanInstructor(row interface{ Scan(...any) error }, extra ...any) (Instruct
 	var i Instructor
 	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt, &i.UpdatedAt, &i.UpdatedBy}
 	err := row.Scan(append(dest, extra...)...)
+	if err == nil {
+		i.AvatarURL = instructorAvatars.url(i.ID)
+	}
 	return i, err
 }
 

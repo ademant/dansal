@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -60,9 +62,11 @@ func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		inst := instructorFromForm(r)
 		created, err := client.CreateInstructor(r.Context(), inst, getSessionToken(r))
@@ -72,6 +76,13 @@ func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalC
 				Instructor: inst, IsNew: true, ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadInstructorAvatar(r.Context(), created.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
+				log.Printf("upload instructor avatar error: %v", uerr)
+			}
 		}
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", created.ID)})
 		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
@@ -113,9 +124,11 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		from := safeReturnPath(r.FormValue("from"))
 		inst := instructorFromForm(r)
@@ -125,6 +138,13 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				Instructor: inst, ErrorKey: "admin_save_error", From: from,
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadInstructorAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+				log.Printf("upload instructor avatar error: %v", uerr)
+			}
 		}
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", id)})
 		target := "/admin/instructors"
@@ -137,6 +157,22 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			target = "/admin/instructors"
 		}
 		http.Redirect(w, r, target, http.StatusSeeOther)
+	}
+}
+
+func adminInstructorAvatarDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteInstructorAvatar(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, fmt.Sprintf("/admin/instructors/%d/edit", id), http.StatusSeeOther)
 	}
 }
 

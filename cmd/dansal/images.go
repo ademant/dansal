@@ -184,6 +184,37 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 	return nil
 }
 
+// saveAvatarToDir decodes r, resizes to fit 400×400, and stores as JPEG.
+// Always uses JPEG regardless of server image format config. File is named "{id}.jpg".
+func saveAvatarToDir(id int, dir string, r io.Reader) error {
+	head := make([]byte, 512)
+	n, err := io.ReadFull(r, head)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fmt.Errorf("read: %w", err)
+	}
+	if !strings.HasPrefix(http.DetectContentType(head[:n]), "image/") && !isAVIF(head[:n]) {
+		return errNotImage
+	}
+	img, _, err := image.Decode(io.MultiReader(bytes.NewReader(head[:n]), r))
+	if err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	img = fitImage(img, 400, 400)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	outPath := filepath.Join(dir, fmt.Sprintf("%d.jpg", id))
+	f, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("create: %w", err)
+	}
+	defer f.Close()
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
+		return fmt.Errorf("encode jpeg: %w", err)
+	}
+	return nil
+}
+
 // saveImageFromReader decodes image data from r, resizes, and stores as AVIF for the given event ID.
 func saveImageFromReader(eventID int, r io.Reader) error {
 	if err := saveImageToDir(eventID, config.Server.ImagesDir, r); err != nil {

@@ -27,6 +27,7 @@
     <button type="button" class="evt-nav-item" data-target="sec-links"><span class="evt-nav-dot"></span>Links &amp; IDs</button>
     <button type="button" class="evt-nav-item" data-target="sec-social"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_social"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_image"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-avatar"><span class="evt-nav-dot"></span>{{$.Strings.T "avatar_section"}}</button>
   </div>
 </aside>
 <div class="evt-main">
@@ -171,6 +172,20 @@
         <button type="button" onclick="document.getElementById('image').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
       </div>
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+    </div>
+  </section>
+
+  <section class="form-section optional-section" id="sec-avatar">
+    <h2>{{$.Strings.T "avatar_section"}}</h2>
+    {{with .Musician.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/musicians/{{$.Data.Musician.ID}}/avatar/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <div class="drop-zone">
+      <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png" style="display:none">
+      <div class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('avatar').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="avatar-preview" style="display:none;max-height:100px;border-radius:50%;margin-top:.5rem">
     </div>
   </section>
 
@@ -572,6 +587,17 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   });
 })();
 
+// Avatar pick
+(function(){
+  var inp=document.getElementById('avatar');
+  var prev=document.getElementById('avatar-preview');
+  if(inp&&prev){
+    inp.addEventListener('change',function(){
+      if(this.files[0]){prev.src=URL.createObjectURL(this.files[0]);prev.style.display='block';}
+    });
+  }
+})();
+
 // Sidebar section nav
 (function(){
   var nav=document.getElementById('mus-nav');
@@ -601,6 +627,12 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       var existing=document.getElementById('existing-image');
       var preview=document.getElementById('image-preview');
       var inp=document.getElementById('image');
+      return !!(existing)||(preview&&preview.style.display==='block')||(inp&&inp.files&&inp.files.length>0);
+    },
+    'sec-avatar':function(){
+      var existing=document.getElementById('existing-avatar');
+      var preview=document.getElementById('avatar-preview');
+      var inp=document.getElementById('avatar');
       return !!(existing)||(preview&&preview.style.display==='block')||(inp&&inp.files&&inp.files.length>0);
     }
   };

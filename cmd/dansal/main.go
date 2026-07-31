@@ -3283,6 +3283,7 @@ func main() {
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
 	initLocationImageCache(config.Server.ImagesDir + "/locations")
+	initAvatarCaches(config.Server.ImagesDir)
 	initMetrics()
 	startTokenCleanup()
 	startScheduledBackup()
@@ -3489,6 +3490,17 @@ func main() {
 	smux.Handle("DELETE /api/v1/musician-images/{id}", auth(deleteMusicianImage))
 	smux.Handle("POST /api/v1/org-images/{id}", auth(uploadOrgImage))
 	smux.Handle("DELETE /api/v1/org-images/{id}", auth(deleteOrgImage))
+
+	// Avatar endpoints (JPEG, 400×400 max)
+	smux.HandleFunc("GET /api/v1/org-avatars/{id}", avatarGetHandler(orgAvatars))
+	smux.Handle("POST /api/v1/org-avatars/{id}", auth(avatarUploadHandler(orgAvatars, "organizations", "organization", isOrgMember)))
+	smux.Handle("DELETE /api/v1/org-avatars/{id}", auth(avatarDeleteHandler(orgAvatars, "organization", isOrgMember)))
+	smux.HandleFunc("GET /api/v1/musician-avatars/{id}", avatarGetHandler(musicianAvatars))
+	smux.Handle("POST /api/v1/musician-avatars/{id}", auth(avatarUploadHandler(musicianAvatars, "musicians", "musician", func(_, _ int) bool { return false })))
+	smux.Handle("DELETE /api/v1/musician-avatars/{id}", auth(avatarDeleteHandler(musicianAvatars, "musician", func(_, _ int) bool { return false })))
+	smux.HandleFunc("GET /api/v1/instructor-avatars/{id}", avatarGetHandler(instructorAvatars))
+	smux.Handle("POST /api/v1/instructor-avatars/{id}", auth(avatarUploadHandler(instructorAvatars, "instructors", "instructor", func(_, _ int) bool { return false })))
+	smux.Handle("DELETE /api/v1/instructor-avatars/{id}", auth(avatarDeleteHandler(instructorAvatars, "instructor", func(_, _ int) bool { return false })))
 
 	// User endpoints (protected). create-user, delete-user, and set-password
 	// are intentionally CLI-only (dansal_admin) — not exposed via this API.

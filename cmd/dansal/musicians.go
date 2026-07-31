@@ -31,6 +31,7 @@ type Musician struct {
 	Genre        string `json:"genre,omitempty"`
 	Email        string `json:"email,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
+	AvatarURL    string `json:"avatar_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
 	UpdatedBy    string `json:"updated_by,omitempty"`
@@ -108,6 +109,7 @@ func scanMusician(row interface{ Scan(...any) error }, extra ...any) (Musician, 
 	err := row.Scan(append(dest, extra...)...)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
+		m.AvatarURL = musicianAvatars.url(m.ID)
 	}
 	return m, err
 }

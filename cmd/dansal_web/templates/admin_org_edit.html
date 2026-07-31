@@ -27,6 +27,20 @@
     </div>
   </fieldset>
 
+  <fieldset class="image-fieldset">
+    <legend>{{$.Strings.T "avatar_section"}}</legend>
+    {{with .Org.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/organizations/{{$.Data.Org.ID}}/avatar/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <div class="drop-zone">
+      <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png" style="display:none">
+      <div class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('avatar').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="avatar-preview" style="display:none;max-height:100px;border-radius:50%;margin-top:.5rem">
+    </div>
+  </fieldset>
+
   <input type="hidden" id="org-id" value="{{.Org.ID}}">
 
   <div class="org-edit-layout">
@@ -394,6 +408,15 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       showPreview(f);
     }
   });
+})();
+(function(){
+  var inp=document.getElementById('avatar');
+  var prev=document.getElementById('avatar-preview');
+  if(inp&&prev){
+    inp.addEventListener('change',function(){
+      if(this.files[0]){prev.src=URL.createObjectURL(this.files[0]);prev.style.display='block';}
+    });
+  }
 })();
 (function(){
   var nav=document.getElementById('org-nav');

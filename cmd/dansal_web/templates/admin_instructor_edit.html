@@ -7,7 +7,7 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
-<form method="post" class="edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form">
   <input type="hidden" name="from" value="{{.From}}">
 
   <div class="sec-head"><h3>{{$.Strings.T "instructor_name"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
@@ -45,6 +45,14 @@
     <input id="email" type="email" name="email" value="{{.Instructor.Email}}" placeholder="...@example.com">
   </div>
 
+  <div class="sec-head"><h3>{{$.Strings.T "avatar_section"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
+  <div class="sec-body" hidden>
+    {{with .Instructor.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/instructors/{{$.Data.Instructor.ID}}/avatar/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png">
+    <img id="avatar-preview" style="display:none;max-height:100px;border-radius:50%;margin-top:.5rem">
+  </div>
+
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
     <a href="{{if .From}}{{.From}}{{else}}/admin/instructors{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
@@ -65,6 +73,9 @@ input[type=text],input[type=url],input[type=email],textarea{width:100%;padding:.
 textarea{resize:vertical}
 .form-error{color:#c33;border:1px solid #fcc;background:#fff8f8;padding:.5rem 1rem;border-radius:4px}
 .form-actions{display:flex;gap:.75rem;margin-top:1.5rem}
+.btn-sm{padding:.3rem .7rem;font-size:.82rem;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#f5f5f5;color:#333}
+.btn-del{border-color:#d9534f;color:#c9302c;background:#fff8f8}
+.btn-del:hover{background:#ffeaea}
 .btn-primary{padding:.5rem 1.25rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.95rem}
 .btn-primary:hover{background:#155a96}
 .btn-secondary{padding:.5rem 1.25rem;background:var(--bg-card);color:var(--fg);border:1px solid var(--border);border-radius:4px;text-decoration:none;font-size:.95rem}
@@ -221,5 +232,18 @@ function _bindMdAutosize(taId){
   btn.addEventListener('click',function(){if(open)doCollapse();else doExpand();});
 }
 _bindMdAutosize('bio');
+function removeImage(url){
+  var f=document.createElement('form');f.method='POST';f.action=url;
+  document.body.appendChild(f);f.submit();
+}
+(function(){
+  var inp=document.getElementById('avatar');
+  var prev=document.getElementById('avatar-preview');
+  if(inp&&prev){
+    inp.addEventListener('change',function(){
+      if(this.files[0]){prev.src=URL.createObjectURL(this.files[0]);prev.style.display='block';}
+    });
+  }
+})();
 </script>
 {{end}}

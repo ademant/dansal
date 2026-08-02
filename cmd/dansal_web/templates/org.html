@@ -60,6 +60,17 @@
 </div>
 {{end}}
 
+{{if .Org.ChatLinks}}
+<div class="org-chat-section">
+  <strong>{{$.Strings.T "org_chat_links"}}</strong>
+  <div class="org-links">
+    {{range .Org.ChatLinks}}
+    <a href="{{.URL}}" class="org-link org-link-chat org-link-chat-{{.Platform}}" target="_blank" rel="noopener">{{if eq .Platform "mailing_list"}}{{$.Strings.T "org_chat_mailing_list"}}{{else}}{{chatPlatformLabel .Platform}}{{end}}</a>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 <div class="fediverse">
   <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
   <span class="fediverse-followers">{{$.Strings.TF "org_followers" .FollowerCount}}</span>
@@ -176,6 +187,15 @@
 .org-link-mastodon{background:#563acc}.org-link-mastodon:hover{background:#3c278e}
 .org-link-instagram{background:#c13584}.org-link-instagram:hover{background:#8a255e}
 .org-link-facebook{background:#1877f2}.org-link-facebook:hover{background:#0d5ab5}
+.org-chat-section{margin-bottom:1.25rem}
+.org-chat-section>strong{display:block;margin-bottom:.4rem;font-size:.9rem;color:var(--fg-dim)}
+.org-link-chat{background:#555}
+.org-link-chat-telegram{background:#26a5e4}.org-link-chat-telegram:hover{background:#1a7bab}
+.org-link-chat-signal{background:#3a76f0}.org-link-chat-signal:hover{background:#2857b3}
+.org-link-chat-whatsapp{background:#25d366}.org-link-chat-whatsapp:hover{background:#1a9c4a}
+.org-link-chat-threema{background:#0fc48a}.org-link-chat-threema:hover{background:#0b9367}
+.org-link-chat-matrix{background:#0dbd8b}.org-link-chat-matrix:hover{background:#098c66}
+.org-link-chat-mailing_list{background:#e67e22}.org-link-chat-mailing_list:hover{background:#b5641b}
 .fediverse-followers{margin-left:.6rem;font-size:.82rem;color:var(--fg-muted);background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:12px;padding:.1rem .55rem}
 .feed-links{margin:1rem 0;font-size:.85rem;color:var(--fg-muted)}
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}

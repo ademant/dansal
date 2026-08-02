@@ -1995,6 +1995,27 @@ func migrateDB() {
 
 	// #763: drop FK from event_tags.tag → tags.slug so feed-provided tags are preserved.
 	migrateEventTagsDropTagFK()
+
+	// #924: instructors gain the same mastodon/instagram/facebook social
+	// fields musicians and organizations already have.
+	for _, col := range []string{"mastodon", "instagram", "facebook"} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('instructors') WHERE name=?", col).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE instructors ADD COLUMN " + col + " TEXT")
+		}
+	}
+
+	// #925: organizations gain a generic chat_links JSON column (Telegram/
+	// Signal/WhatsApp/Threema/Matrix/mailing-list invite links), distinct
+	// from the identity-linking mastodon/instagram/facebook fields.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('organizations') WHERE name='chat_links'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE organizations ADD COLUMN chat_links TEXT")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -2882,6 +2903,7 @@ func createTables() error {
 		contact_name TEXT,
 		notes_md TEXT,
 		wikidata_id TEXT,
+		chat_links TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
@@ -2968,6 +2990,9 @@ func createTables() error {
 		bio TEXT,
 		website TEXT,
 		email TEXT,
+		mastodon TEXT,
+		instagram TEXT,
+		facebook TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,

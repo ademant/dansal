@@ -43,6 +43,12 @@
     <input id="website" type="url" name="website" value="{{.Instructor.Website}}" placeholder="https://...">
     <label for="email">{{$.Strings.T "instructor_email"}}</label>
     <input id="email" type="email" name="email" value="{{.Instructor.Email}}" placeholder="...@example.com">
+    <label for="mastodon">{{$.Strings.T "musician_mastodon"}}</label>
+    <input id="mastodon" type="text" name="mastodon" value="{{.Instructor.Mastodon}}" placeholder="@name@mastodon.social">
+    <label for="instagram">{{$.Strings.T "musician_instagram"}}</label>
+    <input id="instagram" type="text" name="instagram" value="{{.Instructor.Instagram}}" placeholder="username">
+    <label for="facebook">{{$.Strings.T "musician_facebook"}}</label>
+    <input id="facebook" type="text" name="facebook" value="{{.Instructor.Facebook}}" placeholder="username">
   </div>
 
   <div class="sec-head"><h3>{{$.Strings.T "avatar_section"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>

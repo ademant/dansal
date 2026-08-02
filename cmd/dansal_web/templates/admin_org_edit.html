@@ -51,6 +51,7 @@
     <button type="button" class="org-nav-item" data-target="sec-wikidata"><span class="org-nav-dot"></span>{{$.Strings.T "org_wikidata"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-contact"><span class="org-nav-dot"></span>{{$.Strings.T "org_section_contact"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-social"><span class="org-nav-dot"></span>{{$.Strings.T "org_social"}}</button>
+    <button type="button" class="org-nav-item" data-target="sec-chat"><span class="org-nav-dot"></span>{{$.Strings.T "org_chat_links"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-additional"><span class="org-nav-dot"></span>{{$.Strings.T "org_notes"}}</button>
   </aside>
   <div class="org-main">
@@ -129,6 +130,14 @@
 
     <label for="facebook">{{$.Strings.T "org_facebook"}}</label>
     <input id="facebook" type="text" name="facebook" value="{{.Org.Facebook}}" placeholder="myorg">
+  </section>
+
+  <section class="form-section" id="sec-chat">
+    <h2>{{$.Strings.T "org_chat_links"}}</h2>
+    {{range chatLinkPlatforms}}
+    <label for="chat_{{.Slug}}">{{if eq .Slug "mailing_list"}}{{$.Strings.T "org_chat_mailing_list"}}{{else}}{{.Label}}{{end}}</label>
+    <input id="chat_{{.Slug}}" type="url" name="chat_{{.Slug}}" value="{{chatLinkURL $.Data.Org.ChatLinks .Slug}}" placeholder="https://...">
+    {{end}}
   </section>
 
   <section class="form-section" id="sec-additional">
@@ -435,6 +444,9 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
     },
     'sec-social':function(){
       return !!(document.getElementById('mastodon').value.trim()||document.getElementById('instagram').value.trim()||document.getElementById('facebook').value.trim());
+    },
+    'sec-chat':function(){
+      return Array.prototype.some.call(document.querySelectorAll('#sec-chat input'),function(i){return i.value.trim();});
     },
     'sec-additional':function(){return !!document.getElementById('notes_md').value.trim();}
   };

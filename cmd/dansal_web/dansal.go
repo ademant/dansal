@@ -304,6 +304,9 @@ type Instructor struct {
 	Bio       string `json:"bio,omitempty"`
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
+	Mastodon  string `json:"mastodon,omitempty"`
+	Instagram string `json:"instagram,omitempty"`
+	Facebook  string `json:"facebook,omitempty"`
 	AvatarURL string `json:"avatar_url,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt int64  `json:"updated_at,omitempty"`
@@ -333,6 +336,36 @@ type Organization struct {
 	AvatarURL      string `json:"avatar_url,omitempty"`
 	NotesMd        string `json:"notes_md,omitempty"`
 	FetchSourceID  *int   `json:"fetch_source_id,omitempty"`
+	ChatLinks      []ChatLink `json:"chat_links,omitempty"`
+}
+
+// ChatLink is one entry in an organization's chat_links: a community
+// chat/list invite (Telegram, Signal, WhatsApp, Threema, Matrix room, or
+// Mailman/Postorius mailing list) — distinct from the identity-linking
+// mastodon/instagram/facebook fields (see #925).
+type ChatLink struct {
+	Platform string `json:"platform"`
+	URL      string `json:"url"`
+}
+
+// ChatPlatformInfo is the web-side display registry entry for a chat_links
+// platform: slug (stored/matched value) plus its display label.
+type ChatPlatformInfo struct {
+	Slug  string
+	Label string
+}
+
+// chatLinkPlatformOrder is the canonical display order for organization
+// chat_links platforms. Must stay in sync with validChatLinkPlatforms in
+// cmd/dansal/chat_links.go — adding a platform is one entry in each, no DB
+// migration needed (#925).
+var chatLinkPlatformOrder = []ChatPlatformInfo{
+	{Slug: "telegram", Label: "Telegram"},
+	{Slug: "signal", Label: "Signal"},
+	{Slug: "whatsapp", Label: "WhatsApp"},
+	{Slug: "threema", Label: "Threema"},
+	{Slug: "matrix", Label: "Matrix"},
+	{Slug: "mailing_list", Label: "Mailing list"},
 }
 
 type Pricing struct {

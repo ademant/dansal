@@ -22,10 +22,13 @@ type AdminInstructorEditData struct {
 
 func instructorFromForm(r *http.Request) Instructor {
 	return Instructor{
-		Name:    strings.TrimSpace(r.FormValue("name")),
-		Bio:     strings.TrimSpace(r.FormValue("bio")),
-		Website: strings.TrimSpace(r.FormValue("website")),
-		Email:   strings.TrimSpace(r.FormValue("email")),
+		Name:      strings.TrimSpace(r.FormValue("name")),
+		Bio:       strings.TrimSpace(r.FormValue("bio")),
+		Website:   strings.TrimSpace(r.FormValue("website")),
+		Email:     strings.TrimSpace(r.FormValue("email")),
+		Mastodon:  strings.TrimSpace(r.FormValue("mastodon")),
+		Instagram: strings.TrimSpace(r.FormValue("instagram")),
+		Facebook:  strings.TrimSpace(r.FormValue("facebook")),
 	}
 }
 

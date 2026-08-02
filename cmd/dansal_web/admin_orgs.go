@@ -32,7 +32,21 @@ func orgFromForm(r *http.Request) Organization {
 		ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
 		WikidataID:   strings.TrimSpace(r.FormValue("wikidata_id")),
 		NotesMd:      strings.TrimSpace(r.FormValue("notes_md")),
+		ChatLinks:    chatLinksFromForm(r),
 	}
+}
+
+// chatLinksFromForm reads one URL input per known chat_links platform
+// (chat_<platform>, see chatLinkPlatformOrder) and builds the ChatLinks
+// array, skipping any left blank.
+func chatLinksFromForm(r *http.Request) []ChatLink {
+	var links []ChatLink
+	for _, p := range chatLinkPlatformOrder {
+		if url := strings.TrimSpace(r.FormValue("chat_" + p.Slug)); url != "" {
+			links = append(links, ChatLink{Platform: p.Slug, URL: url})
+		}
+	}
+	return links
 }
 
 type OrgStats struct {

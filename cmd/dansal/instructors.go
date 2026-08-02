@@ -15,6 +15,9 @@ type Instructor struct {
 	Bio       string `json:"bio,omitempty"`
 	Website   string `json:"website,omitempty"`
 	Email     string `json:"email,omitempty"`
+	Mastodon  string `json:"mastodon,omitempty"`
+	Instagram string `json:"instagram,omitempty"`
+	Facebook  string `json:"facebook,omitempty"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
@@ -26,10 +29,13 @@ type Instructor struct {
 }
 
 type InstructorRequest struct {
-	Name    string `json:"name"`
-	Bio     string `json:"bio"`
-	Website string `json:"website"`
-	Email   string `json:"email"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	Website   string `json:"website"`
+	Email     string `json:"email"`
+	Mastodon  string `json:"mastodon"`
+	Instagram string `json:"instagram"`
+	Facebook  string `json:"facebook"`
 }
 
 // InstructorMergePatchRequest is the body accepted by PATCH
@@ -37,19 +43,22 @@ type InstructorRequest struct {
 // RFC 7396). Every field is a pointer: an omitted key leaves the existing
 // value unchanged; a present key sets it (an explicit "" clears a field).
 type InstructorMergePatchRequest struct {
-	Name    *string `json:"name,omitempty"`
-	Bio     *string `json:"bio,omitempty"`
-	Website *string `json:"website,omitempty"`
-	Email   *string `json:"email,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Bio       *string `json:"bio,omitempty"`
+	Website   *string `json:"website,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	Mastodon  *string `json:"mastodon,omitempty"`
+	Instagram *string `json:"instagram,omitempty"`
+	Facebook  *string `json:"facebook,omitempty"`
 }
 
-const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')"
+const instructorCols = "id, name, COALESCE(bio,''), COALESCE(website,''), COALESCE(email,''), COALESCE(mastodon,''), COALESCE(instagram,''), COALESCE(facebook,''), created_at, COALESCE(updated_at,0), COALESCE(updated_by,'')"
 
 // scanInstructor scans an instructorCols row into an Instructor. Extra
 // destination pointers (e.g. for appended event-count columns) can be passed via extra.
 func scanInstructor(row interface{ Scan(...any) error }, extra ...any) (Instructor, error) {
 	var i Instructor
-	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.CreatedAt, &i.UpdatedAt, &i.UpdatedBy}
+	dest := []any{&i.ID, &i.Name, &i.Bio, &i.Website, &i.Email, &i.Mastodon, &i.Instagram, &i.Facebook, &i.CreatedAt, &i.UpdatedAt, &i.UpdatedBy}
 	err := row.Scan(append(dest, extra...)...)
 	if err == nil {
 		i.AvatarURL = instructorAvatars.url(i.ID)
@@ -167,8 +176,8 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inst, err := scanInstructor(db.QueryRow(
-		"INSERT INTO instructors (name, bio, website, email, created_by_id) VALUES (?,?,?,?,?) RETURNING "+instructorCols,
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, callerID,
+		"INSERT INTO instructors (name, bio, website, email, mastodon, instagram, facebook, created_by_id) VALUES (?,?,?,?,?,?,?,?) RETURNING "+instructorCols,
+		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, callerID,
 	))
 	if err != nil {
 		writeInternalError(w, err)
@@ -209,8 +218,8 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := db.Exec(
-		"UPDATE instructors SET name=?, bio=?, website=?, email=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, resolveDisplayName(callerID), id,
+		"UPDATE instructors SET name=?, bio=?, website=?, email=?, mastodon=?, instagram=?, facebook=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -288,10 +297,19 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 	if req.Email != nil {
 		inst.Email = *req.Email
 	}
+	if req.Mastodon != nil {
+		inst.Mastodon = *req.Mastodon
+	}
+	if req.Instagram != nil {
+		inst.Instagram = *req.Instagram
+	}
+	if req.Facebook != nil {
+		inst.Facebook = *req.Facebook
+	}
 
 	result, err := db.Exec(
-		"UPDATE instructors SET name=?, bio=?, website=?, email=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		inst.Name, inst.Bio, inst.Website, inst.Email, resolveDisplayName(callerID), id,
+		"UPDATE instructors SET name=?, bio=?, website=?, email=?, mastodon=?, instagram=?, facebook=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		inst.Name, inst.Bio, inst.Website, inst.Email, inst.Mastodon, inst.Instagram, inst.Facebook, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeInternalError(w, err)

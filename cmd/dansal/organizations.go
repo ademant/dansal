@@ -30,6 +30,7 @@ type Organization struct {
 	AvatarURL     string `json:"avatar_url,omitempty"`
 	NotesMd       string `json:"notes_md,omitempty"`
 	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
+	ChatLinks     []ChatLink `json:"chat_links,omitempty"`
 
 	FutureEventCount int      `json:"future_event_count,omitempty"`
 	PastEventCount   int      `json:"past_event_count,omitempty"`
@@ -58,6 +59,7 @@ type CreateOrganizationRequest struct {
 	ContactName  string `json:"contact_name"`
 	WikidataID   string `json:"wikidata_id"`
 	NotesMd      string `json:"notes_md"`
+	ChatLinks    []ChatLink `json:"chat_links"`
 }
 
 type AddMemberRequest struct {
@@ -81,6 +83,7 @@ type OrganizationMergePatchRequest struct {
 	ContactName  *string `json:"contact_name,omitempty"`
 	WikidataID   *string `json:"wikidata_id,omitempty"`
 	NotesMd      *string `json:"notes_md,omitempty"`
+	ChatLinks    *[]ChatLink `json:"chat_links,omitempty"`
 }
 
 // ensureOrgFromOrganizer finds or creates an organization from a vevent's ORGANIZER property.
@@ -144,15 +147,19 @@ func isOrgMember(userID, orgID int) bool {
 	return n > 0
 }
 
-const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,''), COALESCE(updated_by,'')`
+const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,''), COALESCE(updated_by,''), COALESCE(chat_links,'')`
 
 // scanOrg scans an orgSelectCols row into an Organization. Extra destination
 // pointers (e.g. for appended event-count/location columns) can be passed via extra.
 func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, error) {
 	var o Organization
-	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd, &o.UpdatedBy}
+	var chatLinksJSON string
+	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd, &o.UpdatedBy, &chatLinksJSON}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return o, err
+	}
+	if chatLinksJSON != "" {
+		json.Unmarshal([]byte(chatLinksJSON), &o.ChatLinks)
 	}
 	o.ImageURL = orgImageURL(o.ID)
 	o.ImageMediaType = orgImageMediaType(o.ID)
@@ -369,9 +376,10 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	chatLinksJSON, _ := json.Marshal(filterChatLinks(req.ChatLinks))
 	o, err := scanOrg(db.QueryRow(
-		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email, contact_name, wikidata_id, notes_md, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,strftime('%s','now')) RETURNING "+orgSelectCols,
-		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail, req.ContactName, req.WikidataID, req.NotesMd,
+		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email, contact_name, wikidata_id, notes_md, chat_links, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,strftime('%s','now')) RETURNING "+orgSelectCols,
+		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail, req.ContactName, req.WikidataID, req.NotesMd, string(chatLinksJSON),
 	))
 	if err != nil {
 		writeError(w, "Failed to create organization", http.StatusInternalServerError)
@@ -468,9 +476,11 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.ContactName = req.ContactName
 	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
+	o.ChatLinks = filterChatLinks(req.ChatLinks)
+	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
 	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, resolveDisplayName(callerID), id,
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), resolveDisplayName(callerID), id,
 	); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
@@ -561,9 +571,13 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 	if req.NotesMd != nil {
 		o.NotesMd = *req.NotesMd
 	}
+	if req.ChatLinks != nil {
+		o.ChatLinks = filterChatLinks(*req.ChatLinks)
+	}
+	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
 	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, resolveDisplayName(callerID), id,
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), resolveDisplayName(callerID), id,
 	); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return

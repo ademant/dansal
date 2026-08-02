@@ -6,7 +6,13 @@
   "@type": "Person",
   "name": "{{.Name | js}}"
   {{- with .Bio}}, "description": "{{. | js}}"{{end}}
-  {{- with .Website}}, "sameAs": ["{{. | js}}"]{{end}}
+  {{- if or .Website .Mastodon .Instagram .Facebook}}, "sameAs": [
+    {{- $first := true}}
+    {{- with .Website}}"{{. | js}}"{{$first = false}}{{end}}
+    {{- with .Mastodon}}{{if not $first}}, {{end}}"{{mastodonURL . | js}}"{{$first = false}}{{end}}
+    {{- with .Instagram}}{{if not $first}}, {{end}}"{{printf "https://instagram.com/%s" . | js}}"{{$first = false}}{{end}}
+    {{- with .Facebook}}{{if not $first}}, {{end}}"{{printf "https://facebook.com/%s" . | js}}"{{$first = false}}{{end}}
+  ]{{end}}
 }
 </script>
 {{end}}{{end}}
@@ -30,10 +36,13 @@
 </div>
 {{end}}
 
-{{if .Instructor.Website}}
+{{if or .Instructor.Website .Instructor.Mastodon .Instructor.Instagram .Instructor.Facebook}}
 <div class="page-section">
   <div class="musician-links">
-    <a href="{{.Instructor.Website}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "instructor_website"}}</a>
+    {{with .Instructor.Website}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "instructor_website"}}</a>{{end}}
+    {{with .Instructor.Mastodon}}<a href="{{mastodonURL .}}" class="m-link m-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>{{end}}
+    {{with .Instructor.Instagram}}<a href="https://instagram.com/{{.}}" class="m-link m-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
+    {{with .Instructor.Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
   </div>
 </div>
 {{end}}
@@ -99,6 +108,9 @@
 .musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
 .m-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
 .m-link-web{background:#1a6eb5}.m-link-web:hover{background:#0d4a80}
+.m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
+.m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
+.m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .feed-links{margin:.5rem 0 1rem;font-size:.85rem;color:var(--fg-muted)}
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
 .feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}

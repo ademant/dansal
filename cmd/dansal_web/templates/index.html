@@ -1143,6 +1143,42 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     });
   }
 
+  // weekHasEvents reports whether any already-loaded row falls within the
+  // week starting at the given offset (Mon-Sun), using the same start/end
+  // overlap test as tableRows() -- but reading straight from `rows` so it
+  // works before `visible`/`weekKeys` exist yet, and without any DOM writes,
+  // so autoAdvanceToNextEventWeek() can search forward cheaply (#926).
+  function weekHasEvents(offset){
+    var ws = dateToIso(getWeekStart(offset));
+    var we = dateToIso(new Date(getWeekStart(offset).getTime()+6*86400000));
+    return rows.some(function(r){
+      var s = r.dataset.date || '';
+      var e = r.dataset.endDate || s;
+      return s <= we && e >= ws;
+    });
+  }
+
+  // autoAdvanceToNextEventWeek moves weekOffset forward to the next week that
+  // has at least one loaded event, so the homepage never shows a dead-looking
+  // empty week/map by default -- e.g. late in a week with nothing scheduled,
+  // or any week with no events at all (#926). Only runs when the user didn't
+  // explicitly request a week via the URL. Near-term events are always
+  // server-rendered into `rows`, so this is reliable without waiting on any
+  // background fetch.
+  function autoAdvanceToNextEventWeek(){
+    if(new URLSearchParams(window.location.search).get('week')) return false;
+    var guard = 0;
+    while(!weekHasEvents(weekOffset) && guard < 520){
+      weekOffset++;
+      guard++;
+    }
+    if(guard === 0) return false;
+    // The advanced-to week no longer contains "today", so the day highlighted
+    // within it should reset to the first day rather than keep today's index.
+    currentDayIndex = 0;
+    return true;
+  }
+
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
     typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true; typeFilter.session=true; typeFilter.concert=true;
@@ -1297,8 +1333,13 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   // Initialise map and first render
   initMap();
+  var _advanced = autoAdvanceToNextEventWeek();
+  if(_advanced) syncMiniCalToWeek();
   // Record initial week in history so back-button works from within the page.
-  history.replaceState({wo:weekOffset,di:currentDayIndex},'',window.location.href);
+  // If the empty default week was auto-advanced past, reflect that in the URL
+  // too, rather than leaving it pointing at the (empty) default week.
+  history.replaceState({wo:weekOffset,di:currentDayIndex},'',
+    _advanced ? ('?week='+dateToIso(getWeekStart(weekOffset))+'&day='+currentDayIndex) : window.location.href);
   applyFilters();
 
   // Background pre-fetch: immediately load events for the next 3 months so the

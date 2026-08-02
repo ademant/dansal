@@ -270,8 +270,13 @@ func importFromGancioJSON(ctx context.Context, src FetchSource) ([]Event, Import
 			},
 		}
 
-		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents); err != nil {
-			return nil, ImportCounts{}, err
+		if err := withEntrySavepoint(tx, func() error {
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents)
+			return err
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, req, err)
+			continue
 		}
 	}
 

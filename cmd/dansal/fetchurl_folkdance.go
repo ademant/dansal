@@ -305,22 +305,6 @@ func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, Imp
 
 		locStr := folkdanceLocationString(fe.City, fe.State, fe.Country)
 
-		var musicianIDs []int
-		seenMusician := make(map[string]bool)
-		for _, name := range append(fe.Bands, fe.Callers...) {
-			if name == "" || seenMusician[name] {
-				continue
-			}
-			seenMusician[name] = true
-			id, err := ensureMusician(tx, name)
-			if err != nil {
-				return nil, ImportCounts{}, fmt.Errorf("ensureMusician %q: %w", name, err)
-			}
-			if id > 0 {
-				musicianIDs = append(musicianIDs, int(id))
-			}
-		}
-
 		eventReq := EventCreateRequest{
 			Source:        src.URL,
 			FetchSourceID: src.ID,
@@ -340,9 +324,8 @@ func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, Imp
 					}
 					return ensureOrgByName(fe.Organisation)
 				}(),
-				Musicians: musicianIDs,
-				Dances:    src.DanceIDs,
-				Pricing:   parseFolkdancePrice(fe.Price),
+				Dances:  src.DanceIDs,
+				Pricing: parseFolkdancePrice(fe.Price),
 				Location: EventLocationRequest{
 					Location: locStr,
 					Town:     fe.City,
@@ -351,8 +334,29 @@ func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, Imp
 			},
 		}
 
-		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents); err != nil {
-			return nil, ImportCounts{}, err
+		if err := withEntrySavepoint(tx, func() error {
+			var musicianIDs []int
+			seenMusician := make(map[string]bool)
+			for _, name := range append(fe.Bands, fe.Callers...) {
+				if name == "" || seenMusician[name] {
+					continue
+				}
+				seenMusician[name] = true
+				id, err := ensureMusician(tx, name)
+				if err != nil {
+					return fmt.Errorf("ensureMusician %q: %w", name, err)
+				}
+				if id > 0 {
+					musicianIDs = append(musicianIDs, int(id))
+				}
+			}
+			eventReq.Musicians = musicianIDs
+			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
+			return err
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, eventReq, err)
+			continue
 		}
 	}
 

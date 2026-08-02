@@ -74,6 +74,10 @@ type ServerConfig struct {
 	// verifiable regardless of this setting and are transparently re-hashed
 	// with the configured KDF on next successful login.
 	PasswordKDF string `yaml:"password_kdf"`
+
+	// Debug gates verbose logging, e.g. dumping the full event request for a
+	// fetch-source entry that failed to import (see #923). Default false.
+	Debug bool `yaml:"debug"`
 }
 
 type SMTPConfig struct {

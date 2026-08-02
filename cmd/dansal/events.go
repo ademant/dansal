@@ -836,6 +836,7 @@ type ImportCounts struct {
 	New       int
 	Updated   int
 	Unchanged int
+	Failed    int
 }
 
 // Add tallies a single insertEvent outcome.
@@ -855,6 +856,7 @@ func (c *ImportCounts) Merge(other ImportCounts) {
 	c.New += other.New
 	c.Updated += other.Updated
 	c.Unchanged += other.Unchanged
+	c.Failed += other.Failed
 }
 
 // AllNew reports whether every event in the batch was newly inserted.
@@ -2939,6 +2941,27 @@ func knownTagSlugs() (map[string]bool, error) {
 		slugs[s] = true
 	}
 	return slugs, nil
+}
+
+// filterKnownTags drops any tag not present in the tags vocabulary table.
+// Feed sources (RSS/Atom categories, iCal VCATEGORY, JSON category/style
+// fields) commonly use their own taxonomy unrelated to dansal's; those terms
+// are silently discarded here rather than rejected as invalid (see #923).
+func filterKnownTags(tags []string) []string {
+	if len(tags) == 0 {
+		return tags
+	}
+	known, err := knownTagSlugs()
+	if err != nil {
+		return tags
+	}
+	out := make([]string, 0, len(tags))
+	for _, t := range tags {
+		if known[t] {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func validateTags(tags []string) error {

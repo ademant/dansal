@@ -915,6 +915,7 @@ func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportDat
 	if td != nil {
 		applyTemplateToRequest(&req, *td, mode)
 	}
+	req.Tags = filterKnownTags(req.Tags)
 	locationID, err := resolveTemplateLocation(tx, req.Location, td)
 	if err != nil {
 		return nil, err
@@ -931,6 +932,39 @@ func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportDat
 	}
 	*allEvents = append(*allEvents, evs...)
 	return evs, nil
+}
+
+// withEntrySavepoint runs fn inside a SQLite SAVEPOINT so a single failing
+// import entry rolls back only its own writes, letting the rest of the
+// feed's shared transaction commit normally instead of the whole fetch
+// producing zero events (see #923). Savepoints are scoped to the connection
+// the transaction runs on, so reusing the same name across entries (each
+// pair fully completes before the next begins) and across concurrently
+// fetched sources (each on its own connection) is safe.
+func withEntrySavepoint(tx querier, fn func() error) error {
+	if _, err := tx.Exec("SAVEPOINT import_entry"); err != nil {
+		return fn()
+	}
+	if err := fn(); err != nil {
+		tx.Exec("ROLLBACK TO SAVEPOINT import_entry")
+		tx.Exec("RELEASE SAVEPOINT import_entry")
+		return err
+	}
+	_, err := tx.Exec("RELEASE SAVEPOINT import_entry")
+	return err
+}
+
+// logFailedImportEntry logs a per-entry fetch import failure so admins can
+// see what happened via journalctl without needing to re-fetch the source.
+// The always-on line stays short; config.Server.Debug additionally dumps the
+// full event request that failed to import (see #923).
+func logFailedImportEntry(src FetchSource, req EventCreateRequest, err error) {
+	log.Printf("fetch import: skipping entry from %s (title=%q, uid=%s): %v", src.URL, req.Title, req.UID, err)
+	if config != nil && config.Server.Debug {
+		if b, mErr := json.Marshal(req); mErr == nil {
+			log.Printf("fetch import: failed entry detail: %s", b)
+		}
+	}
 }
 
 // locationRequestByID returns an EventLocationRequest populated from a stored location.
@@ -1205,9 +1239,15 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 				},
 			}
 
-			evs, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
-			if err != nil {
-				return nil, ImportCounts{}, err
+			var evs []Event
+			if err := withEntrySavepoint(tx, func() error {
+				var err error
+				evs, err = importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
+				return err
+			}); err != nil {
+				counts.Failed++
+				logFailedImportEntry(src, eventReq, err)
+				continue
 			}
 			for _, ev := range evs {
 				attachImagesFromICalEvent(ev.ID, vevent)
@@ -1529,5 +1569,6 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		New       int     `json:"new"`
 		Updated   int     `json:"updated"`
 		Unchanged int     `json:"unchanged"`
-	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged})
+		Failed    int     `json:"failed"`
+	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged, Failed: counts.Failed})
 }

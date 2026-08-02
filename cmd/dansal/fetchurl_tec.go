@@ -247,8 +247,13 @@ func importFromTECJSON(ctx context.Context, src FetchSource) ([]Event, ImportCou
 		if et, err2 := time.Parse(time.RFC3339, req.EndTime); err2 == nil && et.Before(now) {
 			continue
 		}
-		if _, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents); err != nil {
-			return nil, ImportCounts{}, err
+		if err := withEntrySavepoint(tx, func() error {
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents)
+			return err
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, req, err)
+			continue
 		}
 	}
 

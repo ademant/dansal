@@ -199,8 +199,13 @@ func importRSSItems(ctx context.Context, items []rssItem, src FetchSource) ([]Ev
 			},
 		}
 
-		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents); err != nil {
-			return nil, ImportCounts{}, err
+		if err := withEntrySavepoint(tx, func() error {
+			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
+			return err
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, eventReq, err)
+			continue
 		}
 	}
 
@@ -278,8 +283,13 @@ func importAtomEntries(ctx context.Context, entries []atomEntry, src FetchSource
 			},
 		}
 
-		if _, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents); err != nil {
-			return nil, ImportCounts{}, err
+		if err := withEntrySavepoint(tx, func() error {
+			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
+			return err
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, eventReq, err)
+			continue
 		}
 	}
 

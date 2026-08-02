@@ -34,7 +34,7 @@ SystemCallArchitectures=native
 MemoryDenyWriteExecute=true
 RemoveIPC=true
 ReadWritePaths=/var/lib/dansal-web/%i
-ReadOnlyPaths=/var/lib/dansal/bot-stats.db /var/lib/dansal/bot-stats.db-shm /var/lib/dansal/bot-stats.db-wal
+BindReadOnlyPaths=/var/lib/dansal
 
 [Install]
 WantedBy=multi-user.target

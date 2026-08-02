@@ -35,6 +35,7 @@ instance=${2:-}
 LIBDIR=/usr/lib/dansal/${instance}
 BINDIR=${LIBDIR}/bin
 DBDIR=/var/lib/dansal/${instance}
+WEBDBDIR=/var/lib/dansal-web/${instance}
 CFGDIR=/etc/dansal/${instance}
 HIST=${LIBDIR}/deploy-history.log
 
@@ -102,6 +103,11 @@ prune() {
         local ver=${f#"$DBDIR/calendar.db."}
         is_kept "$ver" "$keep" || rm -f "$f"
     done
+    for f in "$WEBDBDIR"/web.db.*; do
+        [[ -e $f ]] || continue
+        local ver=${f#"$WEBDBDIR/web.db."}
+        is_kept "$ver" "$keep" || rm -f "$f"
+    done
     for cfgfile in config.yaml web.yaml webmin.yaml; do
         for f in "$CFGDIR/$cfgfile".*; do
             [[ -e $f ]] || continue
@@ -125,8 +131,9 @@ cmd_deploy() {
         ln -sf "bin/$dest.$version" "$LIBDIR/$dest"
     done
 
-    # Snapshot DB and config now that services are stopped — no live-write race.
+    # Snapshot DBs and config now that services are stopped — no live-write race.
     [[ -f $DBDIR/calendar.db ]] && cp -p "$DBDIR/calendar.db" "$DBDIR/calendar.db.$version"
+    [[ -f $WEBDBDIR/web.db ]] && cp -p "$WEBDBDIR/web.db" "$WEBDBDIR/web.db.$version"
     for cfgfile in config.yaml web.yaml webmin.yaml; do
         [[ -f $CFGDIR/$cfgfile ]] && cp -p "$CFGDIR/$cfgfile" "$CFGDIR/$cfgfile.$version"
     done
@@ -164,7 +171,12 @@ cmd_rollback() {
     if [[ -f $DBDIR/calendar.db.$target ]]; then
         cp -p "$DBDIR/calendar.db.$target" "$DBDIR/calendar.db"
     else
-        echo "warning: no DB snapshot for $target — leaving calendar.db as-is"
+        echo "warning: no calendar.db snapshot for $target — leaving as-is"
+    fi
+    if [[ -f $WEBDBDIR/web.db.$target ]]; then
+        cp -p "$WEBDBDIR/web.db.$target" "$WEBDBDIR/web.db"
+    else
+        echo "warning: no web.db snapshot for $target — leaving as-is"
     fi
     for cfgfile in config.yaml web.yaml webmin.yaml; do
         [[ -f $CFGDIR/$cfgfile.$target ]] && cp -p "$CFGDIR/$cfgfile.$target" "$CFGDIR/$cfgfile"
@@ -179,15 +191,16 @@ cmd_list() {
     local cur
     cur=$(current_version)
     echo "Instance: $instance  (active: ${cur:-none})"
-    printf '%-40s %-5s %-5s %-6s\n' VERSION BIN DB CONFIG
+    printf '%-40s %-5s %-5s %-8s %-6s\n' VERSION BIN CALDB WEBDB CONFIG
     while read -r ver; do
         [[ -n $ver ]] || continue
-        local bin_ok=- db_ok=- cfg_ok=- mark=
+        local bin_ok=- caldb_ok=- webdb_ok=- cfg_ok=- mark=
         [[ -e $BINDIR/dansal.$ver ]] && bin_ok=yes
-        [[ -f $DBDIR/calendar.db.$ver ]] && db_ok=yes
+        [[ -f $DBDIR/calendar.db.$ver ]] && caldb_ok=yes
+        [[ -f $WEBDBDIR/web.db.$ver ]] && webdb_ok=yes
         [[ -f $CFGDIR/config.yaml.$ver ]] && cfg_ok=yes
         [[ $ver == "$cur" ]] && mark=" (active)"
-        printf '%-40s %-5s %-5s %-6s%s\n' "$ver" "$bin_ok" "$db_ok" "$cfg_ok" "$mark"
+        printf '%-40s %-5s %-5s %-8s %-6s%s\n' "$ver" "$bin_ok" "$caldb_ok" "$webdb_ok" "$cfg_ok" "$mark"
     done < <(history_versions)
 }
 

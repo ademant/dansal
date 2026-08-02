@@ -252,7 +252,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 
 		var uploadedAssets []string
 		if cfg.ImagesDir != "" {
-			for _, key := range []string{"logo", "banner", "favicon", "relay-avatar", "relay-banner"} {
+			for _, key := range []string{"logo", "banner", "favicon"} {
 				f, _, err := r.FormFile(key)
 				if err != nil {
 					continue
@@ -283,6 +283,51 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
+	}
+}
+
+// POST /site-config/relay/assets — uploads relay actor avatar and/or banner.
+// Kept separate from the main site-config save so uploading an image does not
+// overwrite text settings (site_name, impressum, etc.) with empty strings.
+func siteConfigRelayAssetsHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.ImagesDir == "" {
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("images_dir not configured in webmin.yaml"), http.StatusSeeOther)
+			return
+		}
+		if err := r.ParseMultipartForm(4 << 20); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var callerID int
+		if u := getSessionUser(r); u != nil {
+			callerID = u.ID
+		}
+		var uploaded []string
+		for _, key := range []string{"relay-avatar", "relay-banner"} {
+			f, _, err := r.FormFile(key)
+			if err != nil {
+				continue
+			}
+			data, err := io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				continue
+			}
+			mime := detectAssetMIME(data)
+			if mime == "" {
+				continue
+			}
+			if err := saveSiteAsset(cfg.ImagesDir, key, data); err != nil {
+				log.Printf("save relay asset %s: %v", key, err)
+			} else {
+				uploaded = append(uploaded, key)
+			}
+		}
+		if len(uploaded) > 0 {
+			log.Printf("audit: relay assets=[%s] updated by user=%d", strings.Join(uploaded, ","), callerID)
+		}
+		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Relay assets uploaded"), http.StatusSeeOther)
 	}
 }
 

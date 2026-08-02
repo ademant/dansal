@@ -98,6 +98,7 @@ func main() {
 		mux.HandleFunc("POST /maintenance/restore", requireLogin(cfg, maintenanceRestoreHandler(cfg)))
 		mux.HandleFunc("GET /site-config", requireLogin(cfg, siteConfigPageHandler(cfg, tmpls, webDB)))
 		mux.HandleFunc("POST /site-config", requireLogin(cfg, siteConfigSaveHandler(cfg, webDB)))
+		mux.HandleFunc("POST /site-config/relay/assets", requireLogin(cfg, siteConfigRelayAssetsHandler(cfg)))
 		mux.HandleFunc("POST /site-config/relay/redeliver", requireLogin(cfg, siteConfigRelayRedeliverHandler(cfg)))
 		mux.HandleFunc("GET /bot-stats", requireLogin(cfg, botStatsPageHandler(cfg, tmpls)))
 		return mux

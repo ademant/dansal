@@ -154,22 +154,23 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 }
 
 type siteConfigData struct {
-	Flash            string
-	SiteName         string
-	Contact          string
-	HasLogo          bool
-	HasBanner        bool
-	HasFavicon       bool
-	HasRelayAvatar   bool
-	HasRelayBanner   bool
-	Dances           []dance
-	DefaultDanceIDs  map[int]bool
-	ImpressumTexts   map[string]string
-	ImpressumLangs   []string
-	HolidayCountry   string
-	IndexNowKey      string
-	NoDB             bool
-	NoImagesDir      bool
+	Flash                string
+	SiteName             string
+	Contact              string
+	HasLogo              bool
+	HasBanner            bool
+	HasFavicon           bool
+	HasRelayAvatar       bool
+	HasRelayBanner       bool
+	Dances               []dance
+	DefaultDanceIDs      map[int]bool
+	ImpressumTexts       map[string]string
+	ImpressumLangs       []string
+	HolidayCountry       string
+	IndexNowKey          string
+	RescheduledBadgeDays string
+	NoDB                 bool
+	NoImagesDir          bool
 }
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
@@ -192,6 +193,11 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.Contact = getSiteSetting(db, "contact")
 		data.HolidayCountry = getSiteSetting(db, "holiday_country")
 		data.IndexNowKey = getSiteSetting(db, "indexnow_key")
+		if v := getSiteSetting(db, "rescheduled_badge_days"); v != "" {
+			data.RescheduledBadgeDays = v
+		} else {
+			data.RescheduledBadgeDays = "7"
+		}
 
 		impTexts := make(map[string]string)
 		for _, lang := range siteConfigLangs {
@@ -236,6 +242,9 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		setSiteSetting(db, "contact", strings.TrimSpace(r.FormValue("contact")))
 		setSiteSetting(db, "holiday_country", strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country"))))
 		setSiteSetting(db, "indexnow_key", strings.TrimSpace(r.FormValue("indexnow_key")))
+		if n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("rescheduled_badge_days"))); err == nil && n >= 0 {
+			setSiteSetting(db, "rescheduled_badge_days", strconv.Itoa(n))
+		}
 
 		for _, lang := range siteConfigLangs {
 			setSiteSetting(db, "impressum_"+lang, strings.TrimSpace(r.FormValue("impressum_"+lang)))
@@ -280,7 +289,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

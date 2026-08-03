@@ -10,7 +10,10 @@
   "name": "{{.Title | js}}",
   "startDate": "{{.StartTime}}",
   "endDate": "{{.EndTime}}",
-  "eventStatus": "https://schema.org/{{if .IsCancelled}}EventCancelled{{else}}EventScheduled{{end}}",
+  "eventStatus": "https://schema.org/{{if .IsCancelled}}EventCancelled{{else if .PreviousStartTime}}EventRescheduled{{else}}EventScheduled{{end}}",
+  {{- with .PreviousStartTime}}
+  "previousStartDate": "{{. | js}}",
+  {{- end}}
   "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
   "inLanguage": "{{$.LangCode | js}}"
   {{- with .Location}},
@@ -142,7 +145,8 @@
     {{end}}
   </div>
   {{end}}
-  {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
+  {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>
+  {{else if showRescheduledBadge .StartTime .PreviousStartTime}}<p><span class="badge rescheduled">{{$.Strings.T "evt_rescheduled"}}</span></p>{{end}}
   {{if eq .Availability "limited"}}<p><span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span></p>{{end}}
   {{if eq .Availability "sold_out"}}<p><span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span></p>{{end}}
   <div class="evt-header-meta">

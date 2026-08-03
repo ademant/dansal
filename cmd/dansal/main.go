@@ -2016,6 +2016,17 @@ func migrateDB() {
 			db.Exec("ALTER TABLE organizations ADD COLUMN chat_links TEXT")
 		}
 	}
+
+	// #927: events gain previous_start_time, set whenever an already-published,
+	// non-cancelled event's start_time shifts by >= rescheduleThreshold, so
+	// eventStatus can report EventRescheduled in JSON-LD.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='previous_start_time'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN previous_start_time INTEGER")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -2733,6 +2744,7 @@ func createTables() error {
 		series_id INTEGER REFERENCES event_series(id) ON DELETE SET NULL,
 		needs_duplicate_review INTEGER NOT NULL DEFAULT 0,
 		duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+		previous_start_time INTEGER,
 		-- location_id and organization_id are intentionally nullable (#736):
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import

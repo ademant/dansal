@@ -1148,6 +1148,22 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return platform
 	},
+	// showRescheduledBadge reports whether the public "Rescheduled" badge
+	// should show for an event: it must have a recorded previous_start_time
+	// and its (new) start_time must be within site setting
+	// rescheduled_badge_days of now (default 7) — keeps the badge relevant
+	// without permanently flagging events rescheduled long ago (#927).
+	"showRescheduledBadge": func(startTime, previousStartTime string) bool {
+		if previousStartTime == "" {
+			return false
+		}
+		t, ok := parseTime(startTime)
+		if !ok {
+			return false
+		}
+		days := siteCfg.RescheduledBadgeDays()
+		return time.Until(t) <= time.Duration(days)*24*time.Hour
+	},
 	// mastodonURL converts "@user@instance.tld" → "https://instance.tld/@user".
 	// If the value already starts with "http", it is returned unchanged.
 	"mastodonURL": func(handle string) string {

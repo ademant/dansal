@@ -78,6 +78,15 @@
 </div>
 
 <div class="card">
+  <div class="card-title">Rescheduled event badge</div>
+  <div class="form-group">
+    <label>Show badge within <span class="hint">(days before start_time)</span></label>
+    <input type="number" name="rescheduled_badge_days" value="{{.RescheduledBadgeDays}}" min="0" style="max-width:80px">
+    <div class="hint">When a published event's start time is changed by more than 3 hours, a "Rescheduled" badge shows on its public page once its start time is within this many days. Default 7.</div>
+  </div>
+</div>
+
+<div class="card">
   <div class="card-title">IndexNow (Bing / Yandex / Seznam)</div>
   <div class="form-group">
     <label>API key</label>

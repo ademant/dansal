@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -13,13 +14,14 @@ type siteSettingsCache struct {
 	db  *sql.DB
 	ttl time.Duration
 
-	mu             sync.RWMutex
-	at             time.Time
-	contact        string
-	siteName       string
-	impressum      map[string]string
-	indexNowKey    string
-	holidayCountry string
+	mu                   sync.RWMutex
+	at                   time.Time
+	contact              string
+	siteName             string
+	impressum            map[string]string
+	indexNowKey          string
+	holidayCountry       string
+	rescheduledBadgeDays int
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -31,6 +33,12 @@ func (c *siteSettingsCache) load() {
 	siteName := getSiteSetting(c.db, "site_name")
 	indexNowKey := getSiteSetting(c.db, "indexnow_key")
 	holidayCountry := getSiteSetting(c.db, "holiday_country")
+	rescheduledBadgeDays := 7
+	if v := getSiteSetting(c.db, "rescheduled_badge_days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			rescheduledBadgeDays = n
+		}
+	}
 	imp := make(map[string]string)
 	for _, lang := range impressumLangs {
 		if v := getSiteSetting(c.db, "impressum_"+lang); v != "" {
@@ -38,7 +46,8 @@ func (c *siteSettingsCache) load() {
 		}
 	}
 	c.mu.Lock()
-	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.at = contact, siteName, imp, indexNowKey, holidayCountry, time.Now()
+	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays, c.at =
+		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays, time.Now()
 	c.mu.Unlock()
 }
 
@@ -77,6 +86,15 @@ func (c *siteSettingsCache) HolidayCountry() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.holidayCountry
+}
+
+// RescheduledBadgeDays returns how many days before an event's start_time the
+// "Rescheduled" badge should be shown on its public page (#927). Default 7.
+func (c *siteSettingsCache) RescheduledBadgeDays() int {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.rescheduledBadgeDays
 }
 
 func (c *siteSettingsCache) Impressum() map[string]string {

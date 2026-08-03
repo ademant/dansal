@@ -235,6 +235,7 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime    string           `json:"previous_start_time,omitempty"`
 }
 
 type Dance struct {
@@ -317,25 +318,25 @@ type Instructor struct {
 }
 
 type Organization struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	ActorName     string `json:"actor_name,omitempty"`
-	Website       string `json:"website,omitempty"`
-	Instagram     string `json:"instagram,omitempty"`
-	Mastodon      string `json:"mastodon,omitempty"`
-	Facebook      string `json:"facebook,omitempty"`
-	ContactEmail  string `json:"contact_email,omitempty"`
-	ContactName   string `json:"contact_name,omitempty"`
-	WikidataID    string `json:"wikidata_id,omitempty"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at,omitempty"`
-	UpdatedBy     string `json:"updated_by,omitempty"`
-	ImageURL       string `json:"image_url,omitempty"`
-	ImageMediaType string `json:"image_media_type,omitempty"`
-	AvatarURL      string `json:"avatar_url,omitempty"`
-	NotesMd        string `json:"notes_md,omitempty"`
-	FetchSourceID  *int   `json:"fetch_source_id,omitempty"`
+	ID             int        `json:"id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	ActorName      string     `json:"actor_name,omitempty"`
+	Website        string     `json:"website,omitempty"`
+	Instagram      string     `json:"instagram,omitempty"`
+	Mastodon       string     `json:"mastodon,omitempty"`
+	Facebook       string     `json:"facebook,omitempty"`
+	ContactEmail   string     `json:"contact_email,omitempty"`
+	ContactName    string     `json:"contact_name,omitempty"`
+	WikidataID     string     `json:"wikidata_id,omitempty"`
+	CreatedAt      string     `json:"created_at"`
+	UpdatedAt      int64      `json:"updated_at,omitempty"`
+	UpdatedBy      string     `json:"updated_by,omitempty"`
+	ImageURL       string     `json:"image_url,omitempty"`
+	ImageMediaType string     `json:"image_media_type,omitempty"`
+	AvatarURL      string     `json:"avatar_url,omitempty"`
+	NotesMd        string     `json:"notes_md,omitempty"`
+	FetchSourceID  *int       `json:"fetch_source_id,omitempty"`
 	ChatLinks      []ChatLink `json:"chat_links,omitempty"`
 }
 

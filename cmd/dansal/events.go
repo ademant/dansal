@@ -72,6 +72,7 @@ type Event struct {
 	SeriesID             *int             `json:"series_id,omitempty"`
 	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime    string           `json:"previous_start_time,omitempty"`
 	TagsJSON             string           `json:"-"`
 	PricingJSON          string           `json:"-"`
 }
@@ -262,7 +263,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -308,6 +309,26 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+// rescheduleThresholdSeconds matches the ±3h dedup tolerance used elsewhere
+// (see threeHours in insertEvent): a start_time shift smaller than this is
+// treated as a minor time correction, not a genuine reschedule (#927).
+const rescheduleThresholdSeconds = int64(3 * 60 * 60)
+
+// isReschedule reports whether a start_time change on an existing event
+// should be recorded as a reschedule (events.previous_start_time / JSON-LD
+// EventRescheduled). Only fires for events that were already published and
+// not cancelled before the edit, and only for shifts >= rescheduleThresholdSeconds.
+func isReschedule(oldStart, newStart int64, wasPublished, wasCancelled bool) bool {
+	if !wasPublished || wasCancelled || oldStart <= 0 || newStart == oldStart {
+		return false
+	}
+	diff := newStart - oldStart
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff >= rescheduleThresholdSeconds
+}
+
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
@@ -319,7 +340,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	var danceNamesCSV string
 	var locLat, locLng sql.NullFloat64
-	var createdByID, seriesID, duplicateOfID, locParentID sql.NullInt64
+	var createdByID, seriesID, duplicateOfID, locParentID, previousStartTime sql.NullInt64
 	var needsDuplicateReviewInt int
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
@@ -333,8 +354,11 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
-		&needsDuplicateReviewInt, &duplicateOfID, &locParentID); err != nil {
+		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime); err != nil {
 		return Event{}, err
+	}
+	if previousStartTime.Valid {
+		event.PreviousStartTime = epochToLocal(previousStartTime.Int64)
 	}
 	event.NeedsDuplicateReview = needsDuplicateReviewInt == 1
 	if duplicateOfID.Valid {
@@ -874,6 +898,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var existingShortCode string
 	var existingSourceLastModified int64
 	var existingChangedAt int64
+	var existingStartTime int64
+	var existingIsPublished, existingIsCancelled bool
 	var lookupErr error = sql.ErrNoRows
 	var uidArg any
 	if uid != "" {
@@ -882,8 +908,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 	if uid != "" {
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE uid = ?", uid,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE uid = ?", uid,
+		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return 0, "", "", lookupErr
 		}
@@ -898,9 +924,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	// unrelated event sharing the same URL (#702).
 	if lookupErr == sql.ErrNoRows && url != "" {
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE url = ? AND ABS(start_time - ?) < ?",
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE url = ? AND ABS(start_time - ?) < ?",
 			url, startTime, threeHours,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return 0, "", "", lookupErr
 		}
@@ -914,9 +940,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			// notice), so once uid/url have both missed, same venue + same slot
 			// is already a strong enough signal to auto-merge on its own.
 			lookupErr = q.QueryRow(
-				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?",
+				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?",
 				locationID, startTime, threeHours,
-			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
 		}
 		if lookupErr == sql.ErrNoRows {
 			// Tier 4: title + time only. Fires when locationID == 0 (feed provided no
@@ -926,9 +952,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			// Title is still required here since, without a location signal, matching
 			// on time alone would be far too promiscuous.
 			lookupErr = q.QueryRow(
-				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
+				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
 				title, startTime, threeHours,
-			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
+			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
 		}
 	}
 
@@ -989,6 +1015,14 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			slmArg = sourceLastModified
 		}
 
+		// previous_start_time (#927): only set when this update is a genuine
+		// reschedule of an already-published, non-cancelled event; nil otherwise
+		// so the COALESCE below leaves any earlier recorded value untouched.
+		var previousStartTimeArg any
+		if isReschedule(existingStartTime, startTime, existingIsPublished, existingIsCancelled) {
+			previousStartTimeArg = existingStartTime
+		}
+
 		// Protect manual edits from being overwritten by imports (source != "").
 		if source != "" && existingChangedAt > 0 {
 			if sourceLastModified == 0 || sourceLastModified <= existingChangedAt {
@@ -1015,7 +1049,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				source_last_modified=?,
 				pricing=CASE WHEN ? IS NOT NULL THEN ? ELSE pricing END,
 				fetch_source_id=COALESCE(?,fetch_source_id),
-				organization_id=COALESCE(organization_id,?)
+				organization_id=COALESCE(organization_id,?),
+				previous_start_time=COALESCE(?,previous_start_time)
 				WHERE id=?`,
 				uidArg,
 				title,
@@ -1029,6 +1064,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				pricingArg, pricingArg,
 				fsArg,
 				orgIDArg,
+				previousStartTimeArg,
 				existingID,
 			)
 			if err != nil {
@@ -1044,14 +1080,14 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?) WHERE id=?",
+				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
 				uidArg, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
-				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, existingID,
+				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		} else {
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, organization_id=COALESCE(organization_id,?) WHERE id=?",
-				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, existingID,
+				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
+				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		}
 		if err != nil {
@@ -1902,7 +1938,11 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	var existingOrgID sql.NullInt64
 	var existingCreatedBy sql.NullInt64
-	if err := db.QueryRow("SELECT organization_id, created_by_id FROM events WHERE id = ?", id).Scan(&existingOrgID, &existingCreatedBy); err == sql.ErrNoRows {
+	var existingStartTime int64
+	var existingIsPublished, existingIsCancelled bool
+	if err := db.QueryRow("SELECT organization_id, created_by_id, start_time, is_published, is_cancelled FROM events WHERE id = ?", id).Scan(
+		&existingOrgID, &existingCreatedBy, &existingStartTime, &existingIsPublished, &existingIsCancelled,
+	); err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -1978,17 +2018,24 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if callerID > 0 {
 		callerIDArg = callerID
 	}
+	var previousStartTimeArg any
+	if isReschedule(existingStartTime, startTime, existingIsPublished, existingIsCancelled) {
+		previousStartTimeArg = existingStartTime
+	}
+
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
-		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
+		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=?,
+		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationIDArg,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
-		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
+		req.ContactName, req.ContactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg,
+		previousStartTimeArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -2123,6 +2170,9 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	// Captured before startUnix/isPublished/isCancelled are overwritten below by
+	// the patch fields, so isReschedule can compare old vs. new start_time (#927).
+	oldStartUnix, wasPublished, wasCancelled := startUnix, isPublished, isCancelled
 
 	newOrgID := existingOrgID
 	if req.OrganizationID != nil {
@@ -2284,17 +2334,24 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var previousStartTimeArg any
+	if isReschedule(oldStartUnix, startUnix, wasPublished, wasCancelled) {
+		previousStartTimeArg = oldStartUnix
+	}
+
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
-		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=? WHERE id=?`,
+		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=?,
+		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
 		title, description, startUnix, endUnix, locationIDArg,
 		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished,
 		workshopDifficulty, urlVal(url), urlVal(bookingURL), orgIDArg, pricingArg,
 		availability, ticketsTotal, bookingEnabled, food, drink, floorCondition, attrsRaw,
-		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg, id,
+		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg,
+		previousStartTimeArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return

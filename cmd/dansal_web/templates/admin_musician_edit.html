@@ -7,8 +7,8 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
 <div class="evt-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" form="mus-form" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-  <a href="{{if .From}}{{.From}}{{else}}/admin/musicians{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   {{if and (not .IsNew) (eq $.User.Role "admin")}}<form method="post" action="/admin/musicians/{{.Musician.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "musician_confirm_delete"}}')">
     <button type="submit" class="btn-del" style="padding:.45rem 1.2rem;font-size:.95rem;border-radius:4px">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
@@ -794,5 +794,28 @@ function _bindMdAutosize(taId){
 }
 _bindMdAutosize('description');
 _bindMdAutosize('biography');
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}
+  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/musicians{{end}}';}
+}
+(function(){
+  var form=document.getElementById('mus-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
+})();
 </script>
 {{end}}

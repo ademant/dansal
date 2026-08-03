@@ -6,8 +6,12 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+<div class="instructor-action-bar">
+  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="submit" form="instructor-edit-form" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+</div>
 
-<form method="post" enctype="multipart/form-data" class="edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form" id="instructor-edit-form">
   <input type="hidden" name="from" value="{{.From}}">
 
   <div class="sec-head"><h3>{{$.Strings.T "instructor_name"}}</h3><button type="button" class="btn-sec-edit" onclick="toggleSec(this)">✎</button></div>
@@ -59,11 +63,6 @@
     <img id="avatar-preview" style="display:none;max-height:100px;border-radius:50%;margin-top:.5rem">
   </div>
 
-  <div class="form-actions">
-    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="{{if .From}}{{.From}}{{else}}/admin/instructors{{end}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
-  </div>
-
 </form>
 {{end}}
 </div>
@@ -78,7 +77,7 @@ label{font-size:.9rem;font-weight:600;color:var(--fg-secondary)}
 input[type=text],input[type=url],input[type=email],textarea{width:100%;padding:.45rem .6rem;border:1px solid var(--input-border);border-radius:4px;font-size:.95rem;background:var(--input-bg);color:var(--fg)}
 textarea{resize:vertical}
 .form-error{color:#c33;border:1px solid #fcc;background:#fff8f8;padding:.5rem 1rem;border-radius:4px}
-.form-actions{display:flex;gap:.75rem;margin-top:1.5rem}
+.instructor-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:var(--bg-card,#fff);border-bottom:1px solid var(--border,#ddd);padding:.6rem 0;margin-bottom:1rem}
 .btn-sm{padding:.3rem .7rem;font-size:.82rem;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#f5f5f5;color:#333}
 .btn-del{border-color:#d9534f;color:#c9302c;background:#fff8f8}
 .btn-del:hover{background:#ffeaea}
@@ -250,6 +249,29 @@ function removeImage(url){
       if(this.files[0]){prev.src=URL.createObjectURL(this.files[0]);prev.style.display='block';}
     });
   }
+})();
+var _formDirty=false;
+function _markDirty(){
+  if(_formDirty) return;
+  _formDirty=true;
+  window.addEventListener('beforeunload',function(e){
+    if(!_formDirty) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+}
+function safeGoBack(){
+  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
+  _formDirty=false;
+  if(window.history.length>1){history.back();}
+  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/instructors{{end}}';}
+}
+(function(){
+  var form=document.getElementById('instructor-edit-form');
+  if(!form) return;
+  form.addEventListener('input',_markDirty);
+  form.addEventListener('change',_markDirty);
+  form.addEventListener('submit',function(){_formDirty=false;});
 })();
 </script>
 {{end}}

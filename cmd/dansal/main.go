@@ -1986,6 +1986,16 @@ func migrateDB() {
 	migrateEventsEnumChecks()
 	migrateLocationsEnumChecks()
 
+	// #932: widen fetch_sources.type CHECK to allow 'kufer'.
+	migrateFetchSourcesKuferType()
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='kufer_config'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN kufer_config TEXT")
+		}
+	}
+
 	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
 	// (coffee break / lunch slots), alongside the existing bal/workshop.
 	migrateTimetableEntriesBreakType()
@@ -2027,6 +2037,26 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN previous_start_time INTEGER")
 		}
 	}
+
+	// #928/#930: magic-link edit access for event suggestions + suggester name.
+	for _, col := range []struct{ name, def string }{
+		{"email_verified", "INTEGER DEFAULT 0"},
+		{"suggestion_token_expires_at", "INTEGER"},
+		{"pending_edit_json", "TEXT"},
+		{"pending_edit_submitted_at", "INTEGER"},
+		{"suggester_name", "TEXT DEFAULT ''"},
+	} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name=?", col.name).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN " + col.name + " " + col.def)
+		}
+	}
+	// Admin-created events (no suggester) and pre-existing rows whose suggestion
+	// was already accepted under the old one-shot-token scheme are unaffected
+	// by public-listing checks going forward.
+	db.Exec("UPDATE events SET email_verified = 1 WHERE suggester_email = '' OR suggester_email IS NULL")
+	db.Exec("UPDATE events SET email_verified = 1 WHERE suggestion_token IS NULL OR suggestion_token = ''")
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -2170,6 +2200,68 @@ func migrateFetchSourcesTypeCheck() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
+}
+
+// migrateFetchSourcesKuferType widens fetch_sources.type's CHECK constraint to
+// allow 'kufer' (#932), following the exact rebuild pattern used when 'rss'
+// was added in migrateFetchSourcesTypeCheck.
+func migrateFetchSourcesKuferType() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
+	if strings.Contains(schema, "'kufer'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateFetchSourcesKuferType: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE fetch_sources_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT UNIQUE NOT NULL,
+			type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer')),
+			tags TEXT,
+			organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+			last_fetched_at INTEGER,
+			last_result TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			template_id INTEGER,
+			template_mode TEXT NOT NULL DEFAULT '',
+			template_data TEXT,
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			dance_ids TEXT DEFAULT '[]',
+			created_by_id INTEGER REFERENCES users(id),
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT '',
+			kufer_config TEXT
+		)`,
+		`INSERT INTO fetch_sources_chk
+			(id, url, type, tags, organization_id, last_fetched_at, last_result,
+			 created_at, template_id, template_mode, template_data, consecutive_failures,
+			 dance_ids, created_by_id, updated_at, updated_by, kufer_config)
+		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
+			created_at, template_id, template_mode, template_data,
+			COALESCE(consecutive_failures, 0),
+			COALESCE(dance_ids, '[]'),
+			created_by_id, updated_at, COALESCE(updated_by, ''), NULL
+		FROM fetch_sources`,
+		`DROP TABLE fetch_sources`,
+		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateFetchSourcesKuferType: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	log.Printf("migrateFetchSourcesKuferType: added 'kufer' to fetch_sources.type CHECK constraint")
 }
 
 // migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
@@ -2731,7 +2823,12 @@ func createTables() error {
 		contact_name TEXT,
 		contact_email TEXT,
 		suggester_email TEXT DEFAULT '',
+		suggester_name TEXT DEFAULT '',
 		suggestion_token TEXT,
+		email_verified INTEGER DEFAULT 0,
+		suggestion_token_expires_at INTEGER,
+		pending_edit_json TEXT,
+		pending_edit_submitted_at INTEGER,
 		changed_at INTEGER,
 		changed_by TEXT DEFAULT '',
 		changed_by_id INTEGER REFERENCES users(id),
@@ -2865,7 +2962,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS fetch_sources (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		url TEXT UNIQUE NOT NULL,
-		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss')),
+		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer')),
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at INTEGER,
@@ -2877,7 +2974,8 @@ func createTables() error {
 		consecutive_failures INTEGER NOT NULL DEFAULT 0,
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,
-		updated_by TEXT DEFAULT ''
+		updated_by TEXT DEFAULT '',
+		kufer_config TEXT
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
@@ -3432,6 +3530,8 @@ func main() {
 	smux.HandleFunc("POST /api/v1/events/suggest-preview", suggestPreviewHandler)
 	smux.HandleFunc("POST /api/v1/events/suggest", suggestHandler)
 	smux.HandleFunc("GET /api/v1/events/suggest/verify/{token}", suggestVerifyHandler)
+	smux.HandleFunc("GET /api/v1/events/suggest/manage/{token}", getSuggestManageEvent)
+	smux.HandleFunc("PATCH /api/v1/events/suggest/manage/{token}", patchSuggestManageEvent)
 
 	// Self-registration endpoints
 	smux.HandleFunc("POST /api/v1/register", registerHandler)
@@ -3461,6 +3561,8 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
 	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
+	smux.Handle("POST /api/v1/events/{id}/pending-edit/approve", auth(approvePendingEdit))
+	smux.Handle("POST /api/v1/events/{id}/pending-edit/reject", auth(rejectPendingEdit))
 	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))

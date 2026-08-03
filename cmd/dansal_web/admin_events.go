@@ -222,6 +222,35 @@ func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
+// adminPendingEditHandler approves or rejects a suggester's post-publish
+// edit proposal (#928), reusing the same admin/org authorization patchEvent
+// already enforces on the API side.
+func adminPendingEditHandler(cfg *Config, client *DansalClient, approve bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		var actionErr error
+		if approve {
+			actionErr = client.ApprovePendingEdit(r.Context(), id, token)
+		} else {
+			actionErr = client.RejectPendingEdit(r.Context(), id, token)
+		}
+		if actionErr != nil {
+			http.Error(w, "pending edit action failed: "+actionErr.Error(), http.StatusBadGateway)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
 func adminEventCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

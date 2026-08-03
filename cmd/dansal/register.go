@@ -853,7 +853,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
 		).Scan(&regCount)
 		db.QueryRow(
-			"SELECT COUNT(*) FROM events WHERE is_published=0 AND (suggestion_token IS NULL OR suggestion_token='')",
+			"SELECT COUNT(*) FROM events WHERE is_published=0 AND email_verified=1",
 		).Scan(&suggestionCount)
 		db.QueryRow(
 			"SELECT COUNT(*) FROM events WHERE needs_duplicate_review=1",
@@ -874,7 +874,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 			)
 		)`
 		db.QueryRow(
-			"SELECT COUNT(*) FROM events e WHERE e.is_published=0 AND (e.suggestion_token IS NULL OR e.suggestion_token='') "+orgScopeClause,
+			"SELECT COUNT(*) FROM events e WHERE e.is_published=0 AND e.email_verified=1 "+orgScopeClause,
 			callerID, callerID,
 		).Scan(&suggestionCount)
 		db.QueryRow(

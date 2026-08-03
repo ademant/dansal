@@ -25,56 +25,60 @@ type querier interface {
 }
 
 type Event struct {
-	ID                   int              `json:"id"`
-	UID                  string           `json:"uid,omitempty"`
-	Title                string           `json:"title"`
-	Description          string           `json:"description"`
-	StartTime            string           `json:"start_time"`
-	EndTime              string           `json:"end_time"`
-	HasBall              bool             `json:"has_ball"`
-	HasWorkshop          bool             `json:"has_workshop"`
-	HasFestival          bool             `json:"has_festival"`
-	WorkshopDifficulty   string           `json:"workshop_difficulty,omitempty"`
-	IsCancelled          bool             `json:"is_cancelled"`
-	Tags                 []string         `json:"tags"`
-	IsPublished          bool             `json:"is_published"`
-	ShortCode            string           `json:"short_code"`
-	URL                  string           `json:"url,omitempty"`
-	Source               string           `json:"source,omitempty"`
-	CreatedAt            string           `json:"created_at"`
-	ImageURL             string           `json:"image_url,omitempty"`
-	OrganizationID       *int             `json:"organization_id,omitempty"`
-	Editable             *bool            `json:"editable,omitempty"`
-	Cancelable           *bool            `json:"cancelable,omitempty"`
-	Deletable            *bool            `json:"deletable,omitempty"`
-	CreatedByID          *int             `json:"created_by_id,omitempty"`
-	Timetable            []TimetableEntry `json:"timetable,omitempty"`
-	Pricing              *Pricing         `json:"pricing,omitempty"`
-	Locations            []Location       `json:"locations,omitempty"`
-	Musicians            []Musician       `json:"musicians,omitempty"`
-	Instructors          []Instructor     `json:"instructors,omitempty"`
-	LocationID           *int             `json:"location_id,omitempty"`
-	Location             *Location        `json:"location,omitempty"`
-	Attributes           map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition       string           `json:"floor_condition,omitempty"`
-	ContactName          string           `json:"contact_name,omitempty"`
-	ContactEmail         string           `json:"contact_email,omitempty"`
-	BookingURL           string           `json:"booking_url,omitempty"`
-	Availability         string           `json:"availability,omitempty"`
-	TicketsTotal         int              `json:"tickets_total,omitempty"`
-	BookingEnabled       bool             `json:"booking_enabled,omitempty"`
-	Food                 string           `json:"food,omitempty"`
-	Drink                string           `json:"drink,omitempty"`
-	DanceNames           []string         `json:"dance_names,omitempty"`
-	ChangedAt            string           `json:"changed_at,omitempty"`
-	ChangedBy            string           `json:"changed_by,omitempty"`
-	FetchSourceID        int              `json:"fetch_source_id,omitempty"`
-	SeriesID             *int             `json:"series_id,omitempty"`
-	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
-	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
-	PreviousStartTime    string           `json:"previous_start_time,omitempty"`
-	TagsJSON             string           `json:"-"`
-	PricingJSON          string           `json:"-"`
+	ID                     int              `json:"id"`
+	UID                    string           `json:"uid,omitempty"`
+	Title                  string           `json:"title"`
+	Description            string           `json:"description"`
+	StartTime              string           `json:"start_time"`
+	EndTime                string           `json:"end_time"`
+	HasBall                bool             `json:"has_ball"`
+	HasWorkshop            bool             `json:"has_workshop"`
+	HasFestival            bool             `json:"has_festival"`
+	WorkshopDifficulty     string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled            bool             `json:"is_cancelled"`
+	Tags                   []string         `json:"tags"`
+	IsPublished            bool             `json:"is_published"`
+	ShortCode              string           `json:"short_code"`
+	URL                    string           `json:"url,omitempty"`
+	Source                 string           `json:"source,omitempty"`
+	CreatedAt              string           `json:"created_at"`
+	ImageURL               string           `json:"image_url,omitempty"`
+	OrganizationID         *int             `json:"organization_id,omitempty"`
+	Editable               *bool            `json:"editable,omitempty"`
+	Cancelable             *bool            `json:"cancelable,omitempty"`
+	Deletable              *bool            `json:"deletable,omitempty"`
+	CreatedByID            *int             `json:"created_by_id,omitempty"`
+	Timetable              []TimetableEntry `json:"timetable,omitempty"`
+	Pricing                *Pricing         `json:"pricing,omitempty"`
+	Locations              []Location       `json:"locations,omitempty"`
+	Musicians              []Musician       `json:"musicians,omitempty"`
+	Instructors            []Instructor     `json:"instructors,omitempty"`
+	LocationID             *int             `json:"location_id,omitempty"`
+	Location               *Location        `json:"location,omitempty"`
+	Attributes             map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition         string           `json:"floor_condition,omitempty"`
+	ContactName            string           `json:"contact_name,omitempty"`
+	ContactEmail           string           `json:"contact_email,omitempty"`
+	BookingURL             string           `json:"booking_url,omitempty"`
+	Availability           string           `json:"availability,omitempty"`
+	TicketsTotal           int              `json:"tickets_total,omitempty"`
+	BookingEnabled         bool             `json:"booking_enabled,omitempty"`
+	Food                   string           `json:"food,omitempty"`
+	Drink                  string           `json:"drink,omitempty"`
+	DanceNames             []string         `json:"dance_names,omitempty"`
+	ChangedAt              string           `json:"changed_at,omitempty"`
+	ChangedBy              string           `json:"changed_by,omitempty"`
+	FetchSourceID          int              `json:"fetch_source_id,omitempty"`
+	SeriesID               *int             `json:"series_id,omitempty"`
+	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
+	SuggesterEmail         string           `json:"suggester_email,omitempty"`
+	SuggesterName          string           `json:"suggester_name,omitempty"`
+	PendingEditJSON        string           `json:"pending_edit_json,omitempty"`
+	PendingEditSubmittedAt string           `json:"pending_edit_submitted_at,omitempty"`
+	TagsJSON               string           `json:"-"`
+	PricingJSON            string           `json:"-"`
 }
 
 type EventDate struct {
@@ -263,7 +267,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -342,6 +346,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var locLat, locLng sql.NullFloat64
 	var createdByID, seriesID, duplicateOfID, locParentID, previousStartTime sql.NullInt64
 	var needsDuplicateReviewInt int
+	var pendingEditSubmittedEpoch int64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
@@ -354,11 +359,15 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.ContactName, &event.ContactEmail,
 		&loc.Parking, &loc.FloorCondition, &event.FloorCondition,
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
-		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime); err != nil {
+		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime,
+		&event.SuggesterEmail, &event.SuggesterName, &event.PendingEditJSON, &pendingEditSubmittedEpoch); err != nil {
 		return Event{}, err
 	}
 	if previousStartTime.Valid {
 		event.PreviousStartTime = epochToLocal(previousStartTime.Int64)
+	}
+	if pendingEditSubmittedEpoch > 0 {
+		event.PendingEditSubmittedAt = epochToLocal(pendingEditSubmittedEpoch)
 	}
 	event.NeedsDuplicateReview = needsDuplicateReviewInt == 1
 	if duplicateOfID.Valid {
@@ -1448,7 +1457,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		if shortCode := r.URL.Query().Get("code"); shortCode != "" {
 			w.Header().Set("Content-Type", "application/json")
 			event, err := scanEventRow(db.QueryRow(
-				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1 AND (e.suggestion_token IS NULL OR e.suggestion_token = '')", shortCode,
+				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1 AND e.email_verified = 1", shortCode,
 			))
 			if err == sql.ErrNoRows {
 				writeError(w, "Event not found", http.StatusNotFound)
@@ -1462,7 +1471,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := eventListSelect + " WHERE (e.suggestion_token IS NULL OR e.suggestion_token = '')"
+	query := eventListSelect + " WHERE e.email_verified = 1"
 	args := []any{}
 
 	if !isAuthorizedAdmin {
@@ -1833,7 +1842,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	if userRole != "" {
 		query = eventListSelect + " WHERE e.id = ?"
 	} else {
-		query = eventListSelect + " WHERE e.id = ? AND e.is_published = 1 AND (e.suggestion_token IS NULL OR e.suggestion_token = '')"
+		query = eventListSelect + " WHERE e.id = ? AND e.is_published = 1 AND e.email_verified = 1"
 	}
 	event, err := scanEventRow(db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
@@ -2426,7 +2435,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if userRole == RoleAdmin {
-		result, err := db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
+		result, err := db.Exec("UPDATE events SET is_published=1 WHERE id=?", id)
 		if err != nil {
 			writeInternalError(w, err)
 			return
@@ -2453,7 +2462,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		db.Exec("UPDATE events SET is_published=1, suggestion_token=NULL WHERE id=?", id)
+		db.Exec("UPDATE events SET is_published=1 WHERE id=?", id)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

@@ -170,6 +170,8 @@ func main() {
 		r.HandleFunc("POST /events/suggest/submit", suggestSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /events/suggest/done", suggestDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /events/suggest/manage/{token}", suggestManagePageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /events/suggest/manage/{token}", suggestManageSubmitHandler(cfg, tmpls, client, i18n))
 
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client))
@@ -308,6 +310,8 @@ func main() {
 		r.HandleFunc("POST /admin/bookings/{id}/delete", adminRateLimit(adminBookingDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/publish", adminRateLimit(adminEventPublishHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/cancel", adminRateLimit(adminEventCancelHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/{id}/pending-edit/approve", adminRateLimit(adminPendingEditHandler(cfg, client, true)))
+		r.HandleFunc("POST /admin/events/{id}/pending-edit/reject", adminRateLimit(adminPendingEditHandler(cfg, client, false)))
 		r.HandleFunc("POST /admin/events/{id}/delete", adminRateLimit(adminEventDeleteHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/merge", adminRateLimit(adminEventMergeHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/bulk-publish", adminRateLimit(adminEventBulkPublishHandler(cfg, client)))

@@ -44,7 +44,7 @@
       </label>
     </div>
     {{end}}
-    <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
+    <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
     {{if .CaptchaSiteKey}}
     <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -54,131 +54,98 @@
 
   {{else}}
 
+  {{if not .ManageToken}}
   <div class="suggest-tabs">
     <button class="tab-btn active" onclick="switchTab(this,'manual')">{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" onclick="switchTab(this,'import')">{{$.Strings.T "suggest_tab_import"}}</button>
   </div>
+  {{end}}
 
   <div id="tab-manual" class="tab-panel">
-  <form method="post" action="/events/suggest/submit">
-    <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
-    <div class="form-row">
-      <label>{{$.Strings.T "evt_title"}} *
-        <input type="text" name="title" required maxlength="200" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
-      </label>
-    </div>
-    <div class="form-row">
-      <label>{{$.Strings.T "evt_description"}}
-        <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
-      </label>
-    </div>
-    <div class="form-row">
-      <label>{{$.Strings.T "evt_website"}}
-        <input type="url" name="url" placeholder="https://...">
-      </label>
-    </div>
-    <div class="form-row">
-      <label class="form-label-sm">{{$.Strings.T "evt_start"}} / {{$.Strings.T "evt_end"}} *</label>
-      <div class="sg-date-time-row">
-        <div class="dpr-wrap">
-          <button type="button" id="sg-date-btn" class="dpr-btn"></button>
-          <div id="sg-date-popup" class="dpr-popup" hidden>
-            <div class="dpr-cal-header">
-              <button type="button" id="sg-cal-prev">&#8592;</button>
-              <span id="sg-cal-title"></span>
-              <button type="button" id="sg-cal-next">&#8594;</button>
-            </div>
-            <table class="dpr-cal-grid" id="sg-cal-grid"></table>
+  <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form">
+    {{if not .ManageToken}}<input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">{{end}}
+
+    <!-- Step 1: What? -->
+    <div class="wiz-step" data-step="1">
+      <div class="form-row">
+        <label>{{$.Strings.T "evt_title"}} *
+          <input type="text" id="wiz-title" name="dansal_title" required maxlength="200" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
+        </label>
+      </div>
+      <div class="form-row">
+        <div class="check-row">
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="bal-folk"> {{$.Strings.T "tag_ball"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="dance-workshop" id="tag-dance-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="musician-workshop" id="tag-musician-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="festival"> {{$.Strings.T "tag_festival"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="open-air"> {{$.Strings.T "tag_open_air"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="session"> {{$.Strings.T "tag_session"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="concert"> {{$.Strings.T "tag_concert"}}</label>
+        </div>
+        <div id="workshop-difficulty" hidden style="margin-top:.5rem">
+          <div class="check-row">
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="beginners"> {{$.Strings.T "tag_beginners"}}</label>
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="intermediate"> {{$.Strings.T "tag_intermediate"}}</label>
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="advanced"> {{$.Strings.T "tag_advanced"}}</label>
           </div>
         </div>
-        <input type="text" id="sg-time" class="sg-time-input" placeholder="20:00-23:00" autocomplete="off">
       </div>
-      <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
-    </div>
-    <input type="hidden" id="sg-date-from">
-    <input type="hidden" id="sg-date-to">
-    <input type="hidden" id="sg-start" name="start_time">
-    <input type="hidden" id="sg-end" name="end_time">
-    <div class="form-row">
-      <label class="form-label-sm">{{$.Strings.T "suggest_location_search"}}</label>
-      <div style="display:flex;gap:.5rem">
-        <input type="text" id="nominatim-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}" style="flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
-        <button type="button" id="nominatim-btn" class="btn-primary" style="padding:.45rem .9rem;margin-top:0;font-size:.88rem">{{$.Strings.T "suggest_location_search_btn"}}</button>
-      </div>
-      <ul id="nominatim-results" hidden style="list-style:none;margin:.25rem 0 0;padding:0;border:1px solid #ccc;border-radius:4px;background:#fff;max-height:180px;overflow-y:auto"></ul>
-    </div>
-    <div class="form-row form-row-2col">
-      <label>{{$.Strings.T "col_location"}}
-        <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
-      </label>
-      <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
-        <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
-      </label>
-    </div>
-    <div class="form-row">
-      <label>{{$.Strings.T "col_country"}}
-        <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
-      </label>
-    </div>
-    <input type="hidden" id="sg-lat"      name="lat">
-    <input type="hidden" id="sg-lon"      name="lon">
-    <input type="hidden" id="sg-osm-id"   name="osm_id">
-    <input type="hidden" id="sg-osm-type" name="osm_type">
-    <input type="hidden" id="sg-address"  name="address">
-    <input type="hidden" id="sg-zipcode"  name="zipcode">
-    <div class="form-row">
-      <div class="check-row">
-        <label class="check-label"><input type="checkbox" name="tags" value="bal-folk"> {{$.Strings.T "tag_ball"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="festival"> {{$.Strings.T "tag_festival"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="open-air"> {{$.Strings.T "tag_open_air"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="session"> {{$.Strings.T "tag_session"}}</label>
-        <label class="check-label"><input type="checkbox" name="tags" value="concert"> {{$.Strings.T "tag_concert"}}</label>
-      </div>
-      <div id="workshop-difficulty" hidden style="margin-top:.5rem">
+      {{if $.Data.Dances}}
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}}</label>
         <div class="check-row">
-          <label class="check-label"><input type="checkbox" name="tags" value="beginners"> {{$.Strings.T "tag_beginners"}}</label>
-          <label class="check-label"><input type="checkbox" name="tags" value="intermediate"> {{$.Strings.T "tag_intermediate"}}</label>
-          <label class="check-label"><input type="checkbox" name="tags" value="advanced"> {{$.Strings.T "tag_advanced"}}</label>
+          {{range $.Data.Dances}}
+          <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"> {{.Name}}</label>
+          {{end}}
         </div>
       </div>
-    </div>
-    {{if $.Data.Dances}}
-    <div class="form-row">
-      <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}}</label>
-      <div class="check-row">
-        {{range $.Data.Dances}}
-        <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"> {{.Name}}</label>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-
-    <details class="suggest-details">
-      <summary>{{$.Strings.T "food_label"}} / {{$.Strings.T "drink_label"}}</summary>
+      {{end}}
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
-        <div class="check-row">
-          <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
-          <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
-          <label class="check-label"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
-          <label class="check-label"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
+        <label class="form-label-sm">{{$.Strings.T "evt_musicians"}}</label>
+        <div id="sg-musician-chips" class="chip-wrap"></div>
+        <div class="ac-wrap">
+          <input id="sg-musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off">
+          <div id="sg-musician-ac" class="ac-list" hidden></div>
         </div>
       </div>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
-        <div class="check-row">
-          <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
-          <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
-          <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
-          <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
+        <label class="form-label-sm">{{$.Strings.T "evt_instructors"}}</label>
+        <div id="sg-instructor-chips" class="chip-wrap"></div>
+        <div class="ac-wrap">
+          <input id="sg-instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off">
+          <div id="sg-instructor-ac" class="ac-list" hidden></div>
         </div>
       </div>
-    </details>
+      <!-- Honeypot: named to blend in with the dansal_ fields above so a bot
+           filling "everything that looks like a field" also fills this. -->
+      <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
+    </div>
 
-    <details class="suggest-details">
-      <summary>{{$.Strings.T "evt_admission"}}</summary>
+    <!-- Step 2: When? -->
+    <div class="wiz-step" data-step="2" hidden>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "evt_start"}} / {{$.Strings.T "evt_end"}} *</label>
+        <div class="sg-date-time-row">
+          <div class="dpr-wrap">
+            <button type="button" id="sg-date-btn" class="dpr-btn"></button>
+            <div id="sg-date-popup" class="dpr-popup" hidden>
+              <div class="dpr-cal-header">
+                <button type="button" id="sg-cal-prev">&#8592;</button>
+                <span id="sg-cal-title"></span>
+                <button type="button" id="sg-cal-next">&#8594;</button>
+              </div>
+              <table class="dpr-cal-grid" id="sg-cal-grid"></table>
+            </div>
+          </div>
+          <input type="text" id="sg-time" class="sg-time-input" placeholder="20:00-23:00" autocomplete="off">
+        </div>
+        <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
+      </div>
+      <input type="hidden" id="sg-date-from">
+      <input type="hidden" id="sg-date-to">
+      <input type="hidden" id="sg-start" name="start_time">
+      <input type="hidden" id="sg-end" name="end_time">
+
       <div class="form-row">
         <label for="sg-pricing-type">{{$.Strings.T "evt_pricing_type"}}</label>
         <select id="sg-pricing-type" name="pricing_type" onchange="sgTogglePricing()">
@@ -208,10 +175,41 @@
           </tbody>
         </table>
       </div>
-    </details>
+    </div>
 
-    <details class="suggest-details">
-      <summary>{{$.Strings.T "evt_timetable"}}</summary>
+    <!-- Step 3: Where? -->
+    <div class="wiz-step" data-step="3" hidden>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "suggest_location_search"}}</label>
+        <div style="display:flex;gap:.5rem">
+          <input type="text" id="nominatim-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}" style="flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
+          <button type="button" id="nominatim-btn" class="btn-primary" style="padding:.45rem .9rem;margin-top:0;font-size:.88rem">{{$.Strings.T "suggest_location_search_btn"}}</button>
+        </div>
+        <ul id="nominatim-results" hidden style="list-style:none;margin:.25rem 0 0;padding:0;border:1px solid #ccc;border-radius:4px;background:#fff;max-height:180px;overflow-y:auto"></ul>
+      </div>
+      <div class="form-row form-row-2col">
+        <label>{{$.Strings.T "col_location"}}
+          <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
+        </label>
+        <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
+          <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>{{$.Strings.T "col_country"}}
+          <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
+        </label>
+      </div>
+      <input type="hidden" id="sg-lat"      name="lat">
+      <input type="hidden" id="sg-lon"      name="lon">
+      <input type="hidden" id="sg-osm-id"   name="osm_id">
+      <input type="hidden" id="sg-osm-type" name="osm_type">
+      <input type="hidden" id="sg-address"  name="address">
+      <input type="hidden" id="sg-zipcode"  name="zipcode">
+    </div>
+
+    <!-- Step 4: Timetable -->
+    <div class="wiz-step" data-step="4" hidden>
       <table class="growing-table" id="sg-tt-table">
         <thead>
           <tr>
@@ -239,30 +237,38 @@
           </tr>
         </tbody>
       </table>
-    </details>
+    </div>
 
-    <details class="suggest-details">
-      <summary>{{$.Strings.T "evt_musicians"}} / {{$.Strings.T "evt_instructors"}}</summary>
+    <!-- Step 5: Details -->
+    <div class="wiz-step" data-step="5" hidden>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "evt_musicians"}}</label>
-        <div id="sg-musician-chips" class="chip-wrap"></div>
-        <div class="ac-wrap">
-          <input id="sg-musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off">
-          <div id="sg-musician-ac" class="ac-list" hidden></div>
+        <label>{{$.Strings.T "evt_description"}}
+          <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>{{$.Strings.T "evt_website"}}
+          <input type="url" name="url" placeholder="https://...">
+        </label>
+      </div>
+      <div class="form-row">
+        <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
+        <div class="check-row">
+          <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="potluck"> {{$.Strings.T "food_potluck"}}</label>
+          <label class="check-label"><input type="radio" name="food" value="none"> {{$.Strings.T "food_none"}}</label>
         </div>
       </div>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "evt_instructors"}}</label>
-        <div id="sg-instructor-chips" class="chip-wrap"></div>
-        <div class="ac-wrap">
-          <input id="sg-instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off">
-          <div id="sg-instructor-ac" class="ac-list" hidden></div>
+        <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
+        <div class="check-row">
+          <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
+          <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
         </div>
       </div>
-    </details>
-
-    <details class="suggest-details">
-      <summary>{{$.Strings.T "evt_contact_name"}} / {{$.Strings.T "evt_contact_email"}}</summary>
       <div class="form-row form-row-2col">
         <label>{{$.Strings.T "evt_contact_name"}}
           <input type="text" name="contact_name">
@@ -271,24 +277,44 @@
           <input type="email" name="contact_email">
         </label>
       </div>
-    </details>
-
-    {{if $.Data.HintSMTP}}
-    <div class="form-row">
-      <label>{{$.Strings.T "suggest_email_label"}} *
-        <input type="email" name="email" required>
-      </label>
     </div>
-    {{end}}
-    <input type="text" name="phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
-    {{if .CaptchaSiteKey}}
-    <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    {{end}}
-    <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
+
+    <!-- Step 6: Review & submit -->
+    <div class="wiz-step" data-step="6" hidden>
+      <p class="suggest-hint hint-review">{{$.Strings.T "suggest_wizard_review_hint"}}</p>
+      <div class="form-row">
+        <label>{{$.Strings.T "suggest_name_label"}}
+          <input type="text" name="suggester_name" maxlength="100">
+        </label>
+      </div>
+      {{if not .ManageToken}}
+        {{if $.Data.HintSMTP}}
+        <div class="form-row">
+          <label>{{$.Strings.T "suggest_email_label"}} *
+            <input type="email" name="email" required>
+          </label>
+        </div>
+        {{end}}
+        {{if .CaptchaSiteKey}}
+        <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+        {{end}}
+      {{end}}
+      <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
+    </div>
+
+    <div class="wiz-nav">
+      <button type="button" id="wiz-back" class="btn-secondary" hidden>{{$.Strings.T "suggest_wizard_back"}}</button>
+      <div class="wiz-progress">
+        <span id="wiz-progress-label"></span>
+        <div class="wiz-dots" id="wiz-dots"></div>
+      </div>
+      <button type="button" id="wiz-next" class="btn-primary">{{$.Strings.T "suggest_wizard_next"}}</button>
+    </div>
   </form>
   </div>
 
+  {{if not .ManageToken}}
   <div id="tab-import" class="tab-panel" hidden>
   <form id="import-form" method="post" action="/events/suggest" enctype="multipart/form-data">
     <div class="form-row">
@@ -301,6 +327,7 @@
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
   </form>
   </div>
+  {{end}}
 
   {{end}}
   {{end}}
@@ -349,6 +376,14 @@
 .ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
 .ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
 .ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
+.btn-secondary{padding:.5rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.95rem}
+.btn-secondary:hover{background:#e8e8e8}
+.wiz-nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
+.wiz-progress{display:flex;flex-direction:column;align-items:center;gap:.3rem;font-size:.8rem;color:#666}
+.wiz-dots{display:flex;gap:.35rem}
+.wiz-dots span{width:.5rem;height:.5rem;border-radius:50%;background:#ccc;display:inline-block}
+.wiz-dots span.wiz-dot-active{background:#1a6eb5}
+.wiz-step{touch-action:pan-y}
 </style>
 
 <script>
@@ -470,8 +505,8 @@ function sgGrowTTTable(el) {
       if (!e.target.closest('#' + acID) && e.target !== input) acList.hidden = true;
     });
   }
-  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/api/v1/musicians', 'musicians');
-  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/api/v1/instructors', 'instructors');
+  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/api/v1/musicians', 'dansal_musicians');
+  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/api/v1/instructors', 'dansal_instructors');
 })();
 
 // ── Date range picker ─────────────────────────────────────────────────────
@@ -614,6 +649,140 @@ function sgGrowTTTable(el) {
     }
   });
 })();
+// ── Magic-link prefill (#928): populate the wizard from the suggestion's
+// current data when loaded via /events/suggest/manage/{token}. ───────────
+{{if .ManageToken}}
+(function(){
+  var data = {{.PrefillJSON}};
+  if (!data) return;
+  function setVal(id, v) { var el = document.getElementById(id); if (el && v) el.value = v; }
+  setVal('wiz-title', data.title);
+  var form = document.getElementById('wiz-form');
+  if (form) {
+    var descEl = form.querySelector('[name="description"]'); if (descEl) descEl.value = data.description || '';
+    var urlEl = form.querySelector('[name="url"]'); if (urlEl) urlEl.value = data.url || '';
+    var cn = form.querySelector('[name="contact_name"]'); if (cn) cn.value = data.contact_name || '';
+    var ce = form.querySelector('[name="contact_email"]'); if (ce) ce.value = data.contact_email || '';
+    (data.tags || []).forEach(function(t){
+      var cb = form.querySelector('[name="dansal_tags"][value="' + t + '"]');
+      if (cb) cb.checked = true;
+    });
+    if (form.querySelector('#tag-dance-workshop:checked') || form.querySelector('#tag-musician-workshop:checked')) {
+      toggleDifficulty();
+    }
+    if (data.food) { var f = form.querySelector('[name="food"][value="' + data.food + '"]'); if (f) f.checked = true; }
+    if (data.drink) { var dr = form.querySelector('[name="drink"][value="' + data.drink + '"]'); if (dr) dr.checked = true; }
+  }
+  setVal('sg-location', data.location);
+  setVal('sg-town', data.town);
+  setVal('sg-country', data.country);
+  setVal('sg-address', data.address);
+  setVal('sg-zipcode', data.zipcode);
+  if (data.start_time) {
+    var dt = data.start_time.split('T');
+    document.getElementById('sg-date-from').value = dt[0] || '';
+    document.getElementById('sg-date-to').value = dt[0] || '';
+    var startH = dt[1] ? dt[1].slice(0,5) : '';
+    var endH = data.end_time && data.end_time.split('T')[1] ? data.end_time.split('T')[1].slice(0,5) : '';
+    var timeInp = document.getElementById('sg-time');
+    if (timeInp) timeInp.value = startH && endH ? (startH + '-' + endH) : startH;
+    var dateBtn = document.getElementById('sg-date-btn');
+    if (dateBtn) dateBtn.textContent = dt[0];
+  }
+  var chips = document.getElementById('sg-musician-chips');
+  if (chips) (data.musicians || []).forEach(function(name){
+    var chip = document.createElement('div'); chip.className = 'musician-chip';
+    var span = document.createElement('span'); span.textContent = name; chip.appendChild(span);
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-chip-del'; btn.textContent = '×';
+    btn.addEventListener('click', function(){ chip.remove(); }); chip.appendChild(btn);
+    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'dansal_musicians'; hidden.value = name;
+    chip.appendChild(hidden); chips.appendChild(chip);
+  });
+  var instrChips = document.getElementById('sg-instructor-chips');
+  if (instrChips) (data.instructors || []).forEach(function(name){
+    var chip = document.createElement('div'); chip.className = 'musician-chip';
+    var span = document.createElement('span'); span.textContent = name; chip.appendChild(span);
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-chip-del'; btn.textContent = '×';
+    btn.addEventListener('click', function(){ chip.remove(); }); chip.appendChild(btn);
+    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'dansal_instructors'; hidden.value = name;
+    chip.appendChild(hidden); instrChips.appendChild(chip);
+  });
+})();
+{{end}}
+
+// ── Multi-step wizard navigation ───────────────────────────────────────────
+(function(){
+  var form = document.getElementById('wiz-form');
+  if (!form) return;
+  var steps = Array.prototype.slice.call(form.querySelectorAll('.wiz-step'));
+  var total = steps.length;
+  var current = 1;
+  var backBtn = document.getElementById('wiz-back');
+  var nextBtn = document.getElementById('wiz-next');
+  var progressLabel = document.getElementById('wiz-progress-label');
+  var dotsWrap = document.getElementById('wiz-dots');
+  var titleInput = document.getElementById('wiz-title');
+  var honeypot = form.querySelector('input[name="dansal_phone2"]');
+  var stepLabelTpl = {{$.Strings.T "suggest_wizard_step_label" | jsStr}};
+
+  for (var i = 0; i < total; i++) {
+    var dot = document.createElement('span');
+    dotsWrap.appendChild(dot);
+  }
+
+  function render() {
+    steps.forEach(function(s){ s.hidden = (parseInt(s.dataset.step, 10) !== current); });
+    backBtn.hidden = (current === 1);
+    nextBtn.hidden = (current === total);
+    progressLabel.textContent = stepLabelTpl.replace('%d', current).replace('%d', total);
+    Array.prototype.forEach.call(dotsWrap.children, function(dot, idx){
+      dot.classList.toggle('wiz-dot-active', idx === current - 1);
+    });
+  }
+
+  function goTo(step) {
+    if (step < 1 || step > total) return;
+    current = step;
+    render();
+    form.scrollIntoView({block: 'start', behavior: 'smooth'});
+  }
+
+  nextBtn.addEventListener('click', function() {
+    if (current === 1) {
+      // Bot bait: a script that filled every dansal_-looking field on step 1
+      // likely also filled the honeypot. Submit immediately (server silently
+      // accepts-and-discards) instead of walking it through more steps.
+      if (honeypot && honeypot.value !== '') {
+        form.requestSubmit ? form.requestSubmit() : form.submit();
+        return;
+      }
+      if (!titleInput.value.trim()) {
+        titleInput.reportValidity ? titleInput.reportValidity() : titleInput.focus();
+        return;
+      }
+    }
+    goTo(current + 1);
+  });
+  backBtn.addEventListener('click', function() { goTo(current - 1); });
+
+  // Mobile: swipe left/right between steps (same plain touchstart/touchend
+  // pattern as the homepage week-table swipe).
+  var touchStartX = null;
+  form.addEventListener('touchstart', function(e){
+    if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
+  }, {passive: true});
+  form.addEventListener('touchend', function(e){
+    if (touchStartX === null) return;
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    touchStartX = null;
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0) { nextBtn.hidden || nextBtn.click(); }
+    else { backBtn.hidden || backBtn.click(); }
+  }, {passive: true});
+
+  render();
+})();
+
 // Drag & drop import
 (function(){
   var dz = document.getElementById('drop-zone');

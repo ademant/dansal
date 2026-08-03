@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -18,6 +19,11 @@ type SuggestPageData struct {
 	GroupedTags    []TagGroup
 	FormToken      string
 	Dances         []Dance
+	// ManageToken/PrefillJSON are set when the wizard is loaded via the
+	// #928 magic link (/events/suggest/manage/{token}), pre-filling the
+	// same form instead of a separate simpler edit page.
+	ManageToken string
+	PrefillJSON template.JS
 }
 
 type SuggestDoneData struct{}
@@ -143,7 +149,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
-		if r.FormValue("phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		if r.FormValue("dansal_phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
@@ -171,7 +177,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			}
 		}
 
-		title := r.FormValue("title")
+		title := r.FormValue("dansal_title")
 		description := r.FormValue("description")
 
 		if strings.Contains(title, "http://") || strings.Contains(title, "https://") ||
@@ -185,7 +191,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
-		tags := r.Form["tags"]
+		tags := r.Form["dansal_tags"]
 		var danceIDs []int
 		for _, s := range r.Form["dance_ids"] {
 			if id, err := strconv.Atoi(s); err == nil {
@@ -227,8 +233,8 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			pricing = p
 		}
 
-		musicians := trimmedNonEmpty(r.Form["musicians"])
-		instructors := trimmedNonEmpty(r.Form["instructors"])
+		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
+		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
 
 		starts := r.Form["tt_start"]
 		ends := r.Form["tt_end"]
@@ -286,14 +292,15 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				OsmID:     parseOsmID(r.FormValue("osm_id")),
 				OsmType:   r.FormValue("osm_type"),
 			},
-			Email:        r.FormValue("email"),
-			Phone2:       r.FormValue("phone2"),
-			Pricing:      pricing,
-			ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
-			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
-			Musicians:    musicians,
-			Instructors:  instructors,
-			Timetable:    timetable,
+			Email:         r.FormValue("email"),
+			SuggesterName: strings.TrimSpace(r.FormValue("suggester_name")),
+			Phone2:        r.FormValue("dansal_phone2"),
+			Pricing:       pricing,
+			ContactName:   strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail:  strings.TrimSpace(r.FormValue("contact_email")),
+			Musicians:     musicians,
+			Instructors:   instructors,
+			Timetable:     timetable,
 		}
 
 		publicThrottle.record(key)
@@ -319,6 +326,143 @@ func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := i18n.T(r, "suggest_done_title")
 		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, SuggestDoneData{}))
+	}
+}
+
+// wizPrefill is the JSON shape embedded into the page for the wizard's
+// client-side prefill script (#928 magic-link edit).
+type wizPrefill struct {
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	URL          string   `json:"url"`
+	StartTime    string   `json:"start_time"`
+	EndTime      string   `json:"end_time"`
+	Tags         []string `json:"tags"`
+	Location     string   `json:"location"`
+	Town         string   `json:"town"`
+	Country      string   `json:"country"`
+	Address      string   `json:"address"`
+	Zipcode      string   `json:"zipcode"`
+	Lat          string   `json:"lat,omitempty"`
+	Lon          string   `json:"lon,omitempty"`
+	Food         string   `json:"food"`
+	Drink        string   `json:"drink"`
+	ContactName  string   `json:"contact_name"`
+	ContactEmail string   `json:"contact_email"`
+	Musicians    []string `json:"musicians"`
+	Instructors  []string `json:"instructors"`
+}
+
+func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !suggestAvailable(cfg) {
+			http.NotFound(w, r)
+			return
+		}
+		token := r.PathValue("token")
+		ev, err := client.GetSuggestManageEvent(r.Context(), token)
+		if err != nil {
+			title := i18n.T(r, "suggest_event_title")
+			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
+				Error: i18n.T(r, "suggest_error_token"),
+			}))
+			return
+		}
+
+		pf := wizPrefill{
+			Title: ev.Title, Description: ev.Description, URL: ev.URL,
+			StartTime: ev.StartTime, EndTime: ev.EndTime, Tags: ev.Tags,
+			Food: ev.Food, Drink: ev.Drink, ContactName: ev.ContactName, ContactEmail: ev.ContactEmail,
+		}
+		if ev.Location != nil {
+			pf.Location = ev.Location.Location
+			pf.Town = ev.Location.Town
+			pf.Country = ev.Location.Country
+			pf.Address = ev.Location.Address
+			pf.Zipcode = ev.Location.Zipcode
+		}
+		for _, m := range ev.Musicians {
+			pf.Musicians = append(pf.Musicians, m.Bandname)
+		}
+		for _, ins := range ev.Instructors {
+			pf.Instructors = append(pf.Instructors, ins.Name)
+		}
+		b, _ := json.Marshal(pf)
+
+		ip := getClientIP(r)
+		dances, _ := client.GetDances(r.Context())
+		title := i18n.T(r, "suggest_event_title")
+		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
+			HintSMTP:    cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			FormToken:   issueFormToken(ip),
+			Dances:      dances,
+			ManageToken: token,
+			PrefillJSON: template.JS(b),
+		}))
+	}
+}
+
+func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !suggestAvailable(cfg) {
+			http.NotFound(w, r)
+			return
+		}
+		token := r.PathValue("token")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if r.FormValue("dansal_phone2") != "" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		tags := r.Form["dansal_tags"]
+		var danceIDs []int
+		for _, s := range r.Form["dance_ids"] {
+			if id, err := strconv.Atoi(s); err == nil {
+				danceIDs = append(danceIDs, id)
+			}
+		}
+		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
+		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
+
+		req := SuggestEventReq{
+			Title:       r.FormValue("dansal_title"),
+			Description: r.FormValue("description"),
+			StartTime:   r.FormValue("start_time"),
+			EndTime:     r.FormValue("end_time"),
+			HasBall:     sliceContains(tags, "bal-folk"),
+			HasWorkshop: sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival: sliceContains(tags, "festival"),
+			Tags:        tags,
+			DanceIDs:    danceIDs,
+			URL:         r.FormValue("url"),
+			Food:        r.FormValue("food"),
+			Drink:       r.FormValue("drink"),
+			Location: PreviewLoc{
+				Location: r.FormValue("location"),
+				Town:     r.FormValue("town"),
+				Country:  r.FormValue("country"),
+				Address:  r.FormValue("address"),
+				Zipcode:  r.FormValue("zipcode"),
+			},
+			ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
+			Musicians:    musicians,
+			Instructors:  instructors,
+		}
+
+		if err := client.PatchSuggestManageEvent(r.Context(), token, req); err != nil {
+			title := i18n.T(r, "suggest_event_title")
+			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
+				Error:       i18n.T(r, "suggest_error_submit"),
+				ManageToken: token,
+			}))
+			return
+		}
+		http.Redirect(w, r, "/events/suggest/done", http.StatusSeeOther)
 	}
 }
 

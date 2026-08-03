@@ -21,24 +21,26 @@ import (
 
 type FetchURLRequest struct {
 	URL            string   `json:"url"`
-	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss"`
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer"`
 	Tags           []string `json:"tags"`
 	Organization   string   `json:"organization,omitempty"`    // find-or-create by name
 	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty" enum:"fetch_master,template_master"`
 	TemplateData   string   `json:"template_data,omitempty"`
+	KuferConfig    string   `json:"kufer_config,omitempty"`
 }
 
 // FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
 type FetchSourcePatchRequest struct {
-	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss"`
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer"`
 	Tags           []string `json:"tags"`
 	DanceIDs       []int    `json:"dance_ids"`
 	OrganizationID *int     `json:"organization_id"`
 	TemplateID     *int     `json:"template_id"`
 	TemplateMode   string   `json:"template_mode" enum:"fetch_master,template_master"`
 	TemplateData   string   `json:"template_data"`
+	KuferConfig    string   `json:"kufer_config"`
 }
 
 type FetchSource struct {
@@ -54,10 +56,25 @@ type FetchSource struct {
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty"`
 	TemplateData   string   `json:"template_data,omitempty"`
+	KuferConfig    string   `json:"kufer_config,omitempty"`
+}
+
+// KuferConfig is the JSON stored in fetch_sources.kufer_config for type="kufer"
+// sources (#932). The site's base domain is derived from fetch_sources.url
+// itself (the admin-supplied single example event URL, e.g.
+// https://www.vhs-delmenhorst.de/fileadmin/kuferweb/webbasys/ics.php?knr=26B8902) —
+// the same "url" field every other fetch type already uses. Keywords drive the
+// per-source course search. SearchURL/SearchMethod are an optional manual
+// override used when none of the known search-endpoint conventions can be
+// auto-probed successfully.
+type KuferConfig struct {
+	Keywords     []string `json:"keywords"`
+	SearchURL    string   `json:"search_url,omitempty"`
+	SearchMethod string   `json:"search_method,omitempty"`
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,'')"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,'')"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -518,7 +535,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -702,6 +719,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src.TemplateID = req.TemplateID
 	src.TemplateMode = req.TemplateMode
 	src.TemplateData = req.TemplateData
+	src.KuferConfig = req.KuferConfig
 	if src.TemplateID == nil {
 		src.TemplateData = ""
 	}
@@ -719,9 +737,13 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	if src.TemplateData != "" {
 		tplDataVal = src.TemplateData
 	}
+	var kuferVal any
+	if src.KuferConfig != "" {
+		kuferVal = src.KuferConfig
+	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, resolveDisplayName(callerID), src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, kufer_config = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, kuferVal, resolveDisplayName(callerID), src.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -797,6 +819,8 @@ func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCoun
 		return importFromGancioJSON(ctx, src)
 	case "rss":
 		return importFromRSSSource(ctx, src)
+	case "kufer":
+		return importFromKuferSource(ctx, src)
 	default:
 		return importFromICalSource(ctx, src)
 	}
@@ -1235,7 +1259,7 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 					URL:            attachURL(vevent),
 					OrganizationID: orgID,
 					Dances:         src.DanceIDs,
-					Location: parseICalLocation(vevent),
+					Location:       parseICalLocation(vevent),
 				},
 			}
 
@@ -1328,8 +1352,11 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE fetch_sources SET template_id = ?, template_mode = ?, template_data = ? WHERE id = ?",
 			tplVal, req.TemplateMode, tplDataVal, sourceID)
 	}
+	if req.KuferConfig != "" {
+		db.Exec("UPDATE fetch_sources SET kufer_config = ? WHERE id = ?", req.KuferConfig, sourceID)
+	}
 
-	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData}
+	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData, KuferConfig: req.KuferConfig}
 	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)

@@ -188,54 +188,58 @@ func apiErr(resp *http.Response) error {
 }
 
 type Event struct {
-	ID                   int              `json:"id"`
-	Title                string           `json:"title"`
-	Description          string           `json:"description"`
-	StartTime            string           `json:"start_time"`
-	EndTime              string           `json:"end_time"`
-	HasBall              bool             `json:"has_ball"`
-	HasWorkshop          bool             `json:"has_workshop"`
-	HasFestival          bool             `json:"has_festival"`
-	WorkshopDifficulty   string           `json:"workshop_difficulty,omitempty"`
-	IsCancelled          bool             `json:"is_cancelled"`
-	Tags                 []string         `json:"tags"`
-	IsPublished          bool             `json:"is_published"`
-	ShortCode            string           `json:"short_code"`
-	URL                  string           `json:"url,omitempty"`
-	ImageURL             string           `json:"image_url,omitempty"`
-	OrganizationID       *int             `json:"organization_id,omitempty"`
-	LocationID           *int             `json:"location_id,omitempty"`
-	Location             *Location        `json:"location,omitempty"`
-	Attributes           map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition       string           `json:"floor_condition,omitempty"`
-	ContactName          string           `json:"contact_name,omitempty"`
-	ContactEmail         string           `json:"contact_email,omitempty"`
-	BookingURL           string           `json:"booking_url,omitempty"`
-	Availability         string           `json:"availability,omitempty"`
-	TicketsTotal         int              `json:"tickets_total,omitempty"`
-	BookingEnabled       bool             `json:"booking_enabled,omitempty"`
-	Food                 string           `json:"food,omitempty"`
-	Drink                string           `json:"drink,omitempty"`
-	Pricing              *Pricing         `json:"pricing,omitempty"`
-	Locations            []Location       `json:"locations,omitempty"`
-	Musicians            []Musician       `json:"musicians,omitempty"`
-	Instructors          []Instructor     `json:"instructors,omitempty"`
-	DanceNames           []string         `json:"dance_names,omitempty"`
-	Timetable            []TimetableEntry `json:"timetable,omitempty"`
-	CreatedAt            string           `json:"created_at"`
-	Source               string           `json:"source,omitempty"`
-	SourceURL            string           `json:"source_url,omitempty"`
-	ChangedAt            string           `json:"changed_at,omitempty"`
-	ChangedBy            string           `json:"changed_by,omitempty"`
-	FetchSourceID        int              `json:"fetch_source_id,omitempty"`
-	Editable             bool             `json:"editable,omitempty"`
-	Cancelable           bool             `json:"cancelable,omitempty"`
-	Deletable            bool             `json:"deletable,omitempty"`
-	CreatedByID          *int             `json:"created_by_id,omitempty"`
-	SeriesID             *int             `json:"series_id,omitempty"`
-	NeedsDuplicateReview bool             `json:"needs_duplicate_review,omitempty"`
-	DuplicateOfID        *int             `json:"duplicate_of_id,omitempty"`
-	PreviousStartTime    string           `json:"previous_start_time,omitempty"`
+	ID                     int              `json:"id"`
+	Title                  string           `json:"title"`
+	Description            string           `json:"description"`
+	StartTime              string           `json:"start_time"`
+	EndTime                string           `json:"end_time"`
+	HasBall                bool             `json:"has_ball"`
+	HasWorkshop            bool             `json:"has_workshop"`
+	HasFestival            bool             `json:"has_festival"`
+	WorkshopDifficulty     string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled            bool             `json:"is_cancelled"`
+	Tags                   []string         `json:"tags"`
+	IsPublished            bool             `json:"is_published"`
+	ShortCode              string           `json:"short_code"`
+	URL                    string           `json:"url,omitempty"`
+	ImageURL               string           `json:"image_url,omitempty"`
+	OrganizationID         *int             `json:"organization_id,omitempty"`
+	LocationID             *int             `json:"location_id,omitempty"`
+	Location               *Location        `json:"location,omitempty"`
+	Attributes             map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition         string           `json:"floor_condition,omitempty"`
+	ContactName            string           `json:"contact_name,omitempty"`
+	ContactEmail           string           `json:"contact_email,omitempty"`
+	BookingURL             string           `json:"booking_url,omitempty"`
+	Availability           string           `json:"availability,omitempty"`
+	TicketsTotal           int              `json:"tickets_total,omitempty"`
+	BookingEnabled         bool             `json:"booking_enabled,omitempty"`
+	Food                   string           `json:"food,omitempty"`
+	Drink                  string           `json:"drink,omitempty"`
+	Pricing                *Pricing         `json:"pricing,omitempty"`
+	Locations              []Location       `json:"locations,omitempty"`
+	Musicians              []Musician       `json:"musicians,omitempty"`
+	Instructors            []Instructor     `json:"instructors,omitempty"`
+	DanceNames             []string         `json:"dance_names,omitempty"`
+	Timetable              []TimetableEntry `json:"timetable,omitempty"`
+	CreatedAt              string           `json:"created_at"`
+	Source                 string           `json:"source,omitempty"`
+	SourceURL              string           `json:"source_url,omitempty"`
+	ChangedAt              string           `json:"changed_at,omitempty"`
+	ChangedBy              string           `json:"changed_by,omitempty"`
+	FetchSourceID          int              `json:"fetch_source_id,omitempty"`
+	Editable               bool             `json:"editable,omitempty"`
+	Cancelable             bool             `json:"cancelable,omitempty"`
+	Deletable              bool             `json:"deletable,omitempty"`
+	CreatedByID            *int             `json:"created_by_id,omitempty"`
+	SeriesID               *int             `json:"series_id,omitempty"`
+	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
+	SuggesterEmail         string           `json:"suggester_email,omitempty"`
+	SuggesterName          string           `json:"suggester_name,omitempty"`
+	PendingEditJSON        string           `json:"pending_edit_json,omitempty"`
+	PendingEditSubmittedAt string           `json:"pending_edit_submitted_at,omitempty"`
 }
 
 type Dance struct {
@@ -474,6 +478,15 @@ type FetchSource struct {
 	TemplateID     *int     `json:"template_id,omitempty"`
 	TemplateMode   string   `json:"template_mode,omitempty"`
 	TemplateData   string   `json:"template_data,omitempty"`
+	KuferConfig    string   `json:"kufer_config,omitempty"`
+}
+
+// KuferConfig mirrors cmd/dansal's type of the same name — the JSON shape
+// stored in fetch_sources.kufer_config for type="kufer" sources (#932).
+type KuferConfig struct {
+	Keywords     []string `json:"keywords"`
+	SearchURL    string   `json:"search_url,omitempty"`
+	SearchMethod string   `json:"search_method,omitempty"`
 }
 
 type LoginResponse struct {
@@ -1331,7 +1344,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 	return nil
 }
 
-func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode, templateData string, token string) (int, error) {
+func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, token string) (int, error) {
 	payload := map[string]any{
 		"url":  rawURL,
 		"type": typ,
@@ -1344,6 +1357,9 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 		payload["template_id"] = *templateID
 		payload["template_mode"] = templateMode
 		payload["template_data"] = templateData
+	}
+	if kuferConfig != "" {
+		payload["kufer_config"] = kuferConfig
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl", token, body)
@@ -1391,7 +1407,7 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 	return src, json.NewDecoder(resp.Body).Decode(&src)
 }
 
-func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode, templateData string, token string) error {
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, token string) error {
 	payload := map[string]any{
 		"type":            typ,
 		"tags":            tags,
@@ -1400,6 +1416,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 		"template_id":     templateID,
 		"template_mode":   templateMode,
 		"template_data":   templateData,
+		"kufer_config":    kuferConfig,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, body)
@@ -3286,6 +3303,7 @@ type SuggestEventReq struct {
 	Drink              string              `json:"drink,omitempty"`
 	Location           PreviewLoc          `json:"location"`
 	Email              string              `json:"email"`
+	SuggesterName      string              `json:"suggester_name,omitempty"`
 	Phone2             string              `json:"phone2"` // honeypot
 	Pricing            *Pricing            `json:"pricing,omitempty"`
 	ContactName        string              `json:"contact_name,omitempty"`
@@ -3351,6 +3369,72 @@ func (c *DansalClient) VerifySuggestion(ctx context.Context, token string) error
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// GetSuggestManageEvent fetches a suggestion's current data via its standing
+// manage token (#928), for pre-filling the wizard on the manage page.
+func (c *DansalClient) GetSuggestManageEvent(ctx context.Context, token string) (Event, error) {
+	var ev Event
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/events/suggest/manage/"+token, nil)
+	if err != nil {
+		return ev, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return ev, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ev, apiErr(resp)
+	}
+	return ev, json.NewDecoder(resp.Body).Decode(&ev)
+}
+
+// PatchSuggestManageEvent submits an edit to a suggestion via its manage
+// token (#928). Before publish it's applied directly; after publish only a
+// safe subset auto-applies and the rest goes to pending_edit_json for review.
+func (c *DansalClient) PatchSuggestManageEvent(ctx context.Context, token string, req SuggestEventReq) error {
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.BaseURL+"/api/v1/events/suggest/manage/"+token, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// ApprovePendingEdit / RejectPendingEdit act on an event's pending_edit_json
+// (#928), using the same authorization patchEvent already enforces.
+func (c *DansalClient) ApprovePendingEdit(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/pending-edit/approve", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) RejectPendingEdit(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/pending-edit/reject", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
 	return nil

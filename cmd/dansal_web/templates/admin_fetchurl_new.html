@@ -17,11 +17,24 @@
   </div>
   <div class="form-row">
     <label for="type">{{$.Strings.T "fetch_type"}}</label>
-    <select id="type" name="type">
+    <select id="type" name="type" onchange="document.getElementById('kufer-fields').style.display=(this.value==='kufer')?'':'none'">
       <option value="" {{if eq .Type ""}}selected{{end}}>{{$.Strings.T "fetch_type_auto"}}</option>
       <option value="ical" {{if eq .Type "ical"}}selected{{end}}>iCal</option>
       <option value="rss" {{if eq .Type "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
       <option value="json" {{if eq .Type "json"}}selected{{end}}>JSON (auto-detect)</option>
+      <option value="kufer" {{if eq .Type "kufer"}}selected{{end}}>Kufer (VHS)</option>
+    </select>
+  </div>
+  <div class="form-row" id="kufer-fields" style="{{if ne .Type "kufer"}}display:none{{end}}">
+    <label for="kufer_keywords">{{$.Strings.T "fetch_kufer_keywords"}}</label>
+    <input type="text" id="kufer_keywords" name="kufer_keywords" value="{{.KuferKeywords}}" placeholder="Balfolk, Fest Noz">
+    <p class="field-hint">{{$.Strings.T "fetch_kufer_keywords_hint"}}</p>
+    <label for="kufer_search_url">{{$.Strings.T "fetch_kufer_search_url"}}</label>
+    <input type="url" id="kufer_search_url" name="kufer_search_url" value="{{.KuferSearchURL}}" placeholder="{{$.Strings.T "fetch_kufer_search_url_placeholder"}}">
+    <label for="kufer_search_method">{{$.Strings.T "fetch_kufer_search_method"}}</label>
+    <select id="kufer_search_method" name="kufer_search_method">
+      <option value="GET" {{if ne .KuferSearchMethod "POST"}}selected{{end}}>GET</option>
+      <option value="POST" {{if eq .KuferSearchMethod "POST"}}selected{{end}}>POST</option>
     </select>
   </div>
   <div class="form-row">
@@ -64,6 +77,7 @@
 
 <style>
 .import-notice{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .85rem;margin-bottom:1rem;font-size:.9rem}
+.field-hint{font-size:.8rem;color:#666;margin:.2rem 0 .6rem}
 </style>
 <script>
 function filterTemplates(orgID) {

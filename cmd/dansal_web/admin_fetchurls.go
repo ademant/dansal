@@ -26,6 +26,22 @@ type AdminFetchurlEditData struct {
 	SelectedDanceNames map[string]bool
 	Templates          []EventTemplate
 	ErrorKey           string
+	KuferKeywords      string
+	KuferSearchURL     string
+	KuferSearchMethod  string
+}
+
+// kuferEditFields extracts the display fields for the edit form from a
+// source's stored kufer_config JSON.
+func kuferEditFields(src FetchSource) (keywords, searchURL, searchMethod string) {
+	if src.KuferConfig == "" {
+		return "", "", ""
+	}
+	var cfg KuferConfig
+	if json.Unmarshal([]byte(src.KuferConfig), &cfg) != nil {
+		return "", "", ""
+	}
+	return strings.Join(cfg.Keywords, ", "), cfg.SearchURL, cfg.SearchMethod
 }
 
 func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -67,16 +83,44 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 }
 
 type AdminFetchurlNewData struct {
-	Orgs         []Organization
-	Templates    []EventTemplate
-	ErrorKey     string
-	URL          string
-	Type         string
-	OrgID        int
-	TemplateID   int
-	TemplateMode string
-	FromImport   bool
-	CreatedAfter string
+	Orgs              []Organization
+	Templates         []EventTemplate
+	ErrorKey          string
+	URL               string
+	Type              string
+	OrgID             int
+	TemplateID        int
+	TemplateMode      string
+	FromImport        bool
+	CreatedAfter      string
+	KuferKeywords     string
+	KuferSearchURL    string
+	KuferSearchMethod string
+}
+
+// kuferConfigFromForm builds the JSON stored in fetch_sources.kufer_config
+// from the admin form's keyword textfield + optional manual override fields.
+func kuferConfigFromForm(r *http.Request) string {
+	rawKeywords := strings.TrimSpace(r.FormValue("kufer_keywords"))
+	if rawKeywords == "" {
+		return ""
+	}
+	var keywords []string
+	for _, kw := range strings.Split(rawKeywords, ",") {
+		if kw = strings.TrimSpace(kw); kw != "" {
+			keywords = append(keywords, kw)
+		}
+	}
+	cfg := KuferConfig{
+		Keywords:     keywords,
+		SearchURL:    strings.TrimSpace(r.FormValue("kufer_search_url")),
+		SearchMethod: r.FormValue("kufer_search_method"),
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -167,8 +211,9 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			templateMode = ""
 		}
 		createdAfter := r.FormValue("created_after")
+		kuferConfig := kuferConfigFromForm(r)
 		token := getSessionToken(r)
-		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, fetchTemplateData(db, templateID), token); err != nil {
+		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, token); err != nil {
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgIDInt := 0
 			if orgID != nil {
@@ -189,16 +234,19 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			}
 			title := i18n.T(r, "fetch_new_title")
 			renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
-				Orgs:         orgs,
-				Templates:    templates,
-				ErrorKey:     "fetch_add_error",
-				URL:          rawURL,
-				Type:         typ,
-				OrgID:        orgIDInt,
-				TemplateID:   tplIDInt,
-				TemplateMode: templateMode,
-				FromImport:   createdAfter != "",
-				CreatedAfter: createdAfter,
+				Orgs:              orgs,
+				Templates:         templates,
+				ErrorKey:          "fetch_add_error",
+				URL:               rawURL,
+				Type:              typ,
+				OrgID:             orgIDInt,
+				TemplateID:        tplIDInt,
+				TemplateMode:      templateMode,
+				FromImport:        createdAfter != "",
+				CreatedAfter:      createdAfter,
+				KuferKeywords:     r.FormValue("kufer_keywords"),
+				KuferSearchURL:    r.FormValue("kufer_search_url"),
+				KuferSearchMethod: r.FormValue("kufer_search_method"),
 			}))
 			return
 		}
@@ -252,6 +300,7 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 		selected := buildSelectedDanceNamesFromIDs(src.DanceIDs, dances)
 		templates, _ := listTemplates(db, su.ID, orgIDs)
 		title := i18n.T(r, "admin_edit")
+		kuferKw, kuferURL, kuferMethod := kuferEditFields(src)
 		renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
 			Source:             src,
 			Orgs:               orgs,
@@ -259,6 +308,9 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 			Dances:             dances,
 			SelectedDanceNames: selected,
 			Templates:          templates,
+			KuferKeywords:      kuferKw,
+			KuferSearchURL:     kuferURL,
+			KuferSearchMethod:  kuferMethod,
 		}))
 	}
 }
@@ -324,8 +376,9 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 		templateMode := r.FormValue("template_mode")
+		kuferConfig := kuferConfigFromForm(r)
 
-		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, fetchTemplateData(db, templateID), token); err != nil {
+		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgMap := make(map[int]Organization, len(orgs))
@@ -352,6 +405,9 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				SelectedDanceNames: selected,
 				Templates:          templates,
 				ErrorKey:           "admin_save_error",
+				KuferKeywords:      r.FormValue("kufer_keywords"),
+				KuferSearchURL:     r.FormValue("kufer_search_url"),
+				KuferSearchMethod:  r.FormValue("kufer_search_method"),
 			}))
 			return
 		}
@@ -468,7 +524,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 						}
 						if !hasTag {
 							newTags := append(src.Tags, newTag)
-							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, token)
+							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, src.KuferConfig, token)
 						}
 					}
 				}

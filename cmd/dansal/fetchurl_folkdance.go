@@ -419,5 +419,5 @@ func detectFetchType(rawURL string) string {
 // validFetchType returns true for recognised fetch type strings.
 // "json" is the unified public type; "folkdance-json" and "gancio-json" are kept as aliases for backwards compatibility.
 func validFetchType(t string) bool {
-	return t == "ical" || t == "json" || t == "folkdance-json" || t == "gancio-json" || t == "rss"
+	return t == "ical" || t == "json" || t == "folkdance-json" || t == "gancio-json" || t == "rss" || t == "kufer"
 }

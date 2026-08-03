@@ -29,11 +29,25 @@
   </div>
 
   <label for="type">{{$.Strings.T "fetch_type"}}</label>
-  <select id="type" name="type">
+  <select id="type" name="type" onchange="document.getElementById('kufer-fields').style.display=(this.value==='kufer')?'':'none'">
     <option value="ical"{{if eq .Source.Type "ical"}} selected{{end}}>iCal</option>
     <option value="rss"{{if eq .Source.Type "rss"}} selected{{end}}>RSS</option>
     <option value="json"{{if or (eq .Source.Type "json") (eq .Source.Type "folkdance-json") (eq .Source.Type "gancio-json")}} selected{{end}}>JSON (auto-detect)</option>
+    <option value="kufer"{{if eq .Source.Type "kufer"}} selected{{end}}>Kufer (VHS)</option>
   </select>
+
+  <div id="kufer-fields" style="{{if ne .Source.Type "kufer"}}display:none{{end}}">
+    <label for="kufer_keywords">{{$.Strings.T "fetch_kufer_keywords"}}</label>
+    <input type="text" id="kufer_keywords" name="kufer_keywords" value="{{.KuferKeywords}}" placeholder="Balfolk, Fest Noz">
+    <p class="field-hint">{{$.Strings.T "fetch_kufer_keywords_hint"}}</p>
+    <label for="kufer_search_url">{{$.Strings.T "fetch_kufer_search_url"}}</label>
+    <input type="url" id="kufer_search_url" name="kufer_search_url" value="{{.KuferSearchURL}}" placeholder="{{$.Strings.T "fetch_kufer_search_url_placeholder"}}">
+    <label for="kufer_search_method">{{$.Strings.T "fetch_kufer_search_method"}}</label>
+    <select id="kufer_search_method" name="kufer_search_method">
+      <option value="GET" {{if ne .KuferSearchMethod "POST"}}selected{{end}}>GET</option>
+      <option value="POST" {{if eq .KuferSearchMethod "POST"}}selected{{end}}>POST</option>
+    </select>
+  </div>
 
   <label for="tags">{{$.Strings.T "fetch_tags"}}</label>
   <input id="tags" type="text" name="tags" value="{{range .Source.Tags}}{{.}} {{end}}">

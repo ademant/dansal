@@ -38,6 +38,7 @@ type SuggestRequest struct {
 	Drink              string                  `json:"drink,omitempty"`
 	Location           EventLocationRequest    `json:"location"`
 	Email              string                  `json:"email"`
+	SuggesterName      string                  `json:"suggester_name,omitempty"`
 	Phone2             string                  `json:"phone2"` // honeypot
 	Pricing            *Pricing                `json:"pricing,omitempty"`
 	ContactName        string                  `json:"contact_name,omitempty"`
@@ -176,7 +177,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var open int
 		db.QueryRow(
-			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND suggestion_token IS NOT NULL",
+			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND email_verified = 0",
 			req.Email,
 		).Scan(&open)
 		if open >= config.Server.MaxOpenTokensPerAddress {
@@ -236,8 +237,22 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tokenArg any
+	var tokenExpiryArg any
+	// No SMTP configured: there's no verification step at all, so the
+	// suggestion is immediately visible to admins for review, same as
+	// before this token became a standing link.
+	emailVerified := !smtpConfigured
 	if suggestionToken != "" {
 		tokenArg = suggestionToken
+		// #928: the token is now a standing, long-lived edit link (like
+		// contact_posts.manage_token), not a one-shot verification code —
+		// give it the same ~30-day / event_end+3d expiry.
+		ceiling := time.Now().UTC().Add(30 * 24 * time.Hour)
+		expiry := ceiling
+		if candidate := time.Unix(endTime, 0).UTC().Add(3 * 24 * time.Hour); candidate.Before(ceiling) {
+			expiry = candidate
+		}
+		tokenExpiryArg = expiry.Unix()
 	}
 
 	var pricingArg any
@@ -266,12 +281,12 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			 (title, description, start_time, end_time, location_id,
 			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
 			  is_published, url, food, drink, pricing, contact_name, contact_email,
-			  suggester_email, suggestion_token, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			  suggester_email, suggester_name, suggestion_token, suggestion_token_expires_at, email_verified, short_code)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
 			urlVal(req.URL), req.Food, req.Drink, pricingArg, req.ContactName, req.ContactEmail,
-			req.Email, tokenArg, shortCode,
+			req.Email, req.SuggesterName, tokenArg, tokenExpiryArg, emailVerified, shortCode,
 		)
 		if insertErr == nil {
 			eventID, _ = res.LastInsertId()
@@ -327,12 +342,19 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	if smtpConfigured {
 		base := buildBaseURL(r)
 		verifyURL := base + "/events/suggest/verify/" + suggestionToken
+		manageURL := base + "/events/suggest/manage/" + suggestionToken
+		subject := "Confirm your event suggestion"
+		if req.Title != "" {
+			subject = fmt.Sprintf("Confirm your event suggestion: %s, %s", req.Title, time.Unix(startTime, 0).UTC().Format("2 Jan 2006"))
+		}
 		go func() {
 			msg := fmt.Sprintf(
-				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\nIf you did not submit this suggestion, you can ignore this email.",
-				verifyURL,
+				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\n"+
+					"After confirming, you can use this same link at any time to review or edit your suggestion:\n\n%s\n\n"+
+					"If you did not submit this suggestion, you can ignore this email.",
+				verifyURL, manageURL,
 			)
-			if _, err := SendEmail(req.Email, "Confirm your event suggestion", msg, false); err != nil {
+			if _, err := SendEmail(req.Email, subject, msg, false); err != nil {
 				log.Printf("suggest: send verify email: %v", err)
 			}
 		}()
@@ -344,6 +366,9 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/v1/events/suggest/verify/{token} — confirm an email-verified suggestion.
+// The token itself is no longer destroyed (#928): it becomes a standing
+// edit-access link, mirroring contact_posts.manage_token. First visit just
+// flips email_verified, same as getContactPostByToken does for the board.
 func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
@@ -351,14 +376,23 @@ func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(`UPDATE events SET suggestion_token = NULL WHERE suggestion_token = ?`, token)
-	if err != nil {
+	var eventID int
+	var expiresAtStr string
+	err := db.QueryRow("SELECT id, COALESCE(suggestion_token_expires_at,0) FROM events WHERE suggestion_token = ?", token).Scan(&eventID, &expiresAtStr)
+	if err == sql.ErrNoRows {
+		writeError(w, "token not found", http.StatusNotFound)
+		return
+	} else if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		writeError(w, "token not found", http.StatusNotFound)
+	if exp, err := parseTokenExpiration(expiresAtStr); err == nil && time.Now().UTC().After(exp) {
+		writeError(w, "token expired", http.StatusGone)
+		return
+	}
+
+	if _, err := db.Exec(`UPDATE events SET email_verified = 1 WHERE id = ?`, eventID); err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -163,5 +164,46 @@ func TestActorOrFrontendContentNegotiation(t *testing.T) {
 		if got := isAPRequest(req); got != tc.wantAP {
 			t.Errorf("isAPRequest(Accept=%q) = %v, want %v", tc.accept, got, tc.wantAP)
 		}
+	}
+}
+
+// TestRelayActorURLSiteWideLink verifies every page (not just /org/{name})
+// carries a <link rel="alternate" type="application/activity+json"> pointing
+// at the relay actor, so federated crawlers that only look at page <head>
+// can discover it from anywhere on the site (issue #951).
+func TestRelayActorURLSiteWideLink(t *testing.T) {
+	setupSiteCfg(t)
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test", RelayActorName: "relay"}
+	req := httptest.NewRequest(http.MethodGet, "/tags/bal-folk", nil)
+
+	td := tmplData(req, cfg, i18n, "Bal-folk", TagPageData{
+		Tag: Tag{Slug: "bal-folk", Name: "Bal-folk"},
+	})
+	if td.RelayActorURL != "https://example.test/org/relay" {
+		t.Fatalf("RelayActorURL = %q, want https://example.test/org/relay", td.RelayActorURL)
+	}
+
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.tag, td)
+	body := rec.Body.String()
+	want := `<link rel="alternate" type="application/activity+json" href="https://example.test/org/relay">`
+	if !strings.Contains(body, want) {
+		t.Errorf("missing site-wide relay actor link; body tail: %s", body[max(0, len(body)-1500):])
+	}
+}
+
+// TestRelayActorURLEmptyWhenUnconfigured guards against emitting a broken
+// /org/ link (missing slug) if relay_actor_name is ever blanked out.
+func TestRelayActorURLEmptyWhenUnconfigured(t *testing.T) {
+	setupSiteCfg(t)
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test", RelayActorName: ""}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	td := tmplData(req, cfg, i18n, "Home", nil)
+	if td.RelayActorURL != "" {
+		t.Errorf("RelayActorURL = %q, want empty when RelayActorName is unset", td.RelayActorURL)
 	}
 }

@@ -125,6 +125,12 @@ so crawlers that only look at page `<head>` (rather than sending `Accept:
 application/activity+json` and relying on content negotiation) can still
 discover the actor.
 
+Every page site-wide additionally carries the same kind of `<link
+rel="alternate" type="application/activity+json">` pointing specifically at
+the relay actor (`web.yaml`'s `relay_actor_name`, e.g. `/org/relay`) —
+issue #951 — so the site's federation identity is discoverable from any
+page, not only the pages of orgs that happen to have their own actor.
+
 `/{indexnow-key}.txt` is served dynamically from the `indexnow_key` set in
 webmin's site-config — the path segment must exactly match `{key}.txt`, any
 other value 404s. When a key is configured, dansal-web pings the IndexNow API

@@ -60,6 +60,7 @@ type TemplateData struct {
 	BingSiteVerification   string
 	BannerAIGenerated      bool
 	LogoAIGenerated        bool
+	RelayActorURL          string // absolute ActivityPub actor URL of the relay actor, for a site-wide discovery link (#951)
 }
 
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
@@ -118,6 +119,11 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 
 	canonical := "https://" + cfg.Domain + r.URL.Path
 
+	var relayActorURL string
+	if cfg.RelayActorName != "" {
+		relayActorURL = actorURL(cfg, cfg.RelayActorName)
+	}
+
 	return TemplateData{
 		Title:                  title,
 		Domain:                 cfg.Domain,
@@ -149,6 +155,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		OGImage:                "https://" + cfg.Domain + "/banner.avif",
 		BannerAIGenerated:      siteCfg.BannerAIGenerated(),
 		LogoAIGenerated:        siteCfg.LogoAIGenerated(),
+		RelayActorURL:          relayActorURL,
 	}
 }
 

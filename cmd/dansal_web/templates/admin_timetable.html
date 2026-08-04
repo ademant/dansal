@@ -37,15 +37,15 @@
 .tt-gridline{position:absolute;left:0;right:0;pointer-events:none}
 .tt-gridline.hour{border-top:1px solid var(--border-mid)}
 .tt-gridline.half{border-top:1px dashed var(--border-light,rgba(128,128,128,.3))}
-/* tiles */
-.tt-panel{position:absolute;left:2px;right:2px;border-radius:5px;padding:.2rem .35rem;overflow:hidden;cursor:grab;box-sizing:border-box;font-size:.78rem;line-height:1.2;user-select:none;touch-action:none;border:1px solid rgba(0,0,0,.15);transition:box-shadow .1s}
+/* tiles — semi-transparent so overlapping areas are visible */
+.tt-panel{position:absolute;left:2px;right:2px;border-radius:5px;padding:.2rem .35rem;overflow:hidden;cursor:grab;box-sizing:border-box;font-size:.78rem;line-height:1.2;user-select:none;touch-action:none;border:1px solid rgba(0,0,0,.2);transition:box-shadow .1s}
 .tt-panel:active{cursor:grabbing}
-.tt-panel:hover{box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:10}
-.tt-panel.bal{background:#4a7fcb;color:#fff}
-.tt-panel.workshop,.tt-panel.dance-workshop{background:#c9500a;color:#fff}
-.tt-panel.break{background:#666;color:#fff}
-.tt-panel.session{background:#2a8a4a;color:#fff}
-.tt-panel.musician-workshop{background:#8a2ab0;color:#fff}
+.tt-panel:hover{box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:10}
+.tt-panel.bal{background:rgba(74,127,203,.78);color:#fff}
+.tt-panel.workshop,.tt-panel.dance-workshop{background:rgba(201,80,10,.78);color:#fff}
+.tt-panel.break{background:rgba(102,102,102,.78);color:#fff}
+.tt-panel.session{background:rgba(42,138,74,.78);color:#fff}
+.tt-panel.musician-workshop{background:rgba(138,42,176,.78);color:#fff}
 .tt-panel .tt-panel-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tt-panel .tt-panel-sub{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
 .tt-panel .tt-panel-time{opacity:.75;font-size:.7rem}
@@ -57,8 +57,12 @@
 .tt-rh{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:2}
 .tt-rh-top{top:0}
 .tt-rh-bot{bottom:0}
-/* ghost tile during new-entry drag */
-.tt-ghost{position:absolute;left:2px;right:2px;background:rgba(74,127,203,.35);border:2px dashed #4a7fcb;border-radius:5px;pointer-events:none;box-sizing:border-box}
+/* ghost tile during new-entry drag (drag-to-create) */
+.tt-ghost{position:absolute;left:2px;right:2px;background:rgba(74,127,203,.3);border:2px dashed rgba(74,127,203,.7);border-radius:5px;pointer-events:none;box-sizing:border-box}
+/* floating ghost while moving an existing tile across rooms */
+.tt-move-ghost{position:fixed;pointer-events:none;z-index:1000;box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:.88;border-radius:5px}
+/* drop-target highlight on a room body */
+.tt-room-body.tt-drop-target{background:rgba(74,127,203,.08);outline:2px dashed rgba(74,127,203,.5);outline-offset:-2px}
 /* popup */
 #tt-popup{border:1px solid var(--border-mid);border-radius:8px;padding:1rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:480px;width:95vw}
 #tt-popup::backdrop{background:rgba(0,0,0,.4)}
@@ -482,7 +486,7 @@ function renderGrid(){
 
     roomList.forEach(function(r){
       var body = document.createElement('div'); body.className='tt-room-body'; body.style.height=gridH+'px'; body.style.flex='1'; body.style.position='relative';
-      body.dataset.day=day; body.dataset.roomId=r.id; body.dataset.roomLabel=r.label;
+      body.dataset.day=day; body.dataset.roomId=r.id!==null?String(r.id):''; body.dataset.roomLabel=r.label;
 
       // grid lines
       for(var m=0; m<=_gridMax-_gridMin; m+=30){
@@ -561,44 +565,97 @@ function makeTile(e){
   return div;
 }
 
-// ─── drag: move tile ──────────────────────────────────────────────────────────
+// ─── drag: move tile (cross-room) ────────────────────────────────────────────
+// Uses a fixed-position ghost + elementFromPoint so the tile can be dropped
+// into any room column or day column visible on the current page.
 function setupMoveDrag(tile, entry){
-  var startY, origTop, origH, startMin, body;
   tile.addEventListener('pointerdown', function(ev){
-    if(ev.target.classList.contains('tt-rh')) return; // handled by resize
+    if(ev.target.classList.contains('tt-rh')) return;
     if(ev.button!==0) return;
     ev.stopPropagation();
-    body = tile.closest('.tt-room-body');
-    startY = ev.clientY;
-    origTop = parseFloat(tile.style.top)||0;
-    origH = parseFloat(tile.style.height)||40;
-    startMin = parseHHMM(entry.start_time||'00:00');
-    tile.setPointerCapture(ev.pointerId);
-    _isDragging = false;
-  });
-  tile.addEventListener('pointermove', function(ev){
-    if(!ev.buttons) return;
-    var dy = ev.clientY - startY;
-    if(Math.abs(dy)<3){ return; }
-    _isDragging = true;
-    var newTop = Math.max(0, origTop + dy);
-    var snappedOff = Math.round((newTop/PX_PER_MIN)/SNAP)*SNAP;
-    newTop = snappedOff * PX_PER_MIN;
-    tile.style.top = newTop+'px';
-  });
-  tile.addEventListener('pointerup', function(ev){
-    if(!_isDragging){ _isDragging=false; return; }
-    var newTop = parseFloat(tile.style.top)||0;
-    var newOff = Math.round((newTop/PX_PER_MIN)/SNAP)*SNAP;
-    var newAbsMin = _gridMin + newOff;
-    var dMin = newAbsMin - startMin;
-    var sMin = parseHHMM(entry.start_time||'00:00') + dMin;
-    var eMin = parseHHMM(entry.end_time||'01:00') + dMin;
-    // handle crossing midnight forward/backward in grid representation
-    entry.start_time = minToHHMM(sMin);
-    entry.end_time = minToHHMM(eMin);
-    _markDirty(); renderAll();
-    setTimeout(function(){ _isDragging=false; },50);
+
+    var rect = tile.getBoundingClientRect();
+    var startX = ev.clientX, startY = ev.clientY;
+    var offsetY = ev.clientY - rect.top; // grab point within tile
+    var ghost = null;
+    var currentBody = null;
+    var dragging = false;
+
+    function onMove(e){
+      if(!dragging){
+        if(Math.abs(e.clientX-startX)<4 && Math.abs(e.clientY-startY)<4) return;
+        dragging = true; _isDragging = true;
+        // create floating ghost
+        ghost = document.createElement('div');
+        ghost.className = tile.className + ' tt-move-ghost';
+        ghost.innerHTML = tile.innerHTML;
+        ghost.style.width = rect.width+'px';
+        ghost.style.height = rect.height+'px';
+        document.body.appendChild(ghost);
+        tile.style.opacity = '0.2';
+      }
+      ghost.style.left = (e.clientX - rect.width/2)+'px';
+      ghost.style.top  = (e.clientY - offsetY)+'px';
+
+      // hit-test the room body under the pointer (ghost is pointer-events:none)
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      var body = el ? el.closest('.tt-room-body') : null;
+      if(body !== currentBody){
+        if(currentBody) currentBody.classList.remove('tt-drop-target');
+        currentBody = body;
+        if(currentBody) currentBody.classList.add('tt-drop-target');
+      }
+    }
+
+    function onUp(e){
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      if(ghost){ document.body.removeChild(ghost); ghost=null; }
+      tile.style.opacity = '';
+      if(currentBody) currentBody.classList.remove('tt-drop-target');
+      if(!dragging) return; // was a click, not a drag
+
+      // fall back to original body if released outside any column
+      var targetBody = currentBody || tile.closest('.tt-room-body');
+      if(!targetBody){ setTimeout(function(){ _isDragging=false; },50); return; }
+
+      // compute snapped time offset within target body
+      var bodyRect = targetBody.getBoundingClientRect();
+      var yInBody = e.clientY - bodyRect.top; // viewport-relative, accounts for scroll
+      var snappedOff = Math.round(((yInBody - offsetY)/PX_PER_MIN)/SNAP)*SNAP;
+      snappedOff = Math.max(0, Math.min(snappedOff, _gridMax - _gridMin - SNAP));
+
+      // preserve original duration
+      var sRaw = parseHHMM(entry.start_time||'00:00');
+      var eRaw = parseHHMM(entry.end_time||'01:00');
+      var dur = eRaw - sRaw; if(dur <= 0) dur += 1440;
+
+      var newSMin = _gridMin + snappedOff;
+      entry.start_time = minToHHMM(newSMin);
+      entry.end_time   = minToHHMM(newSMin + dur);
+      entry.entry_date = targetBody.dataset.day;
+
+      // update room assignment from target column
+      var rid = targetBody.dataset.roomId; // '' = free-text, '-1' = Other, else DB id
+      if(rid === '-1'){
+        entry.location_id=null; entry.location_name=''; entry.room='';
+      } else if(rid !== ''){
+        var ridInt = parseInt(rid);
+        entry.location_id = ridInt;
+        var rm = _rooms.find(function(r){ return r.id===ridInt; });
+        entry.location_name = rm ? rm.label : (targetBody.dataset.roomLabel||'');
+        entry.room = '';
+      } else {
+        entry.location_id=null; entry.location_name='';
+        entry.room = targetBody.dataset.roomLabel||'';
+      }
+
+      _markDirty(); renderAll();
+      setTimeout(function(){ _isDragging=false; },50);
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   });
 }
 

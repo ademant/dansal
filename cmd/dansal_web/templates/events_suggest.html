@@ -10,55 +10,25 @@
     {{if .HintSMTP}}{{$.Strings.T "suggest_hint_email"}}{{else}}{{$.Strings.T "suggest_hint_review"}}{{end}}
   </p>
 
-  {{if .PreviewEvents}}
-  <h2>{{$.Strings.T "admin_import_preview_title"}} ({{len .PreviewEvents}})</h2>
-  <form method="post" action="/events/suggest/submit">
-    <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
-    <div class="table-wrap">
-    <table class="event-table">
-      <thead>
-        <tr>
-          <th style="width:2rem"></th>
-          <th>{{$.Strings.T "col_date"}}</th>
-          <th>{{$.Strings.T "col_title"}}</th>
-          <th>{{$.Strings.T "col_location"}}</th>
-        </tr>
-      </thead>
-      <tbody>
-      {{range $i, $e := .PreviewEvents}}
-      <tr>
-        <td><input type="checkbox" name="sel_{{$i}}" value="1" class="row-cb" checked></td>
-        <td style="white-space:nowrap">{{formatDate $.LangCode $e.StartTime}}</td>
-        <td>{{$e.Title}}</td>
-        <td>{{if $e.Location.Town}}{{$e.Location.Town}}{{else}}{{$e.Location.Location}}{{end}}</td>
-        <input type="hidden" name="event_{{$i}}" value="{{index $.Data.PreviewJSON $i}}">
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-    {{if $.Data.HintSMTP}}
-    <div class="form-row">
-      <label>{{$.Strings.T "suggest_email_label"}}
-        <input type="email" name="email" required>
-      </label>
-    </div>
-    {{end}}
-    <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
-    {{if .CaptchaSiteKey}}
-    <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    {{end}}
-    <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
-  </form>
-
-  {{else}}
-
   {{if not .ManageToken}}
+  {{if .IsImportMode}}
+  {{if gt (len .PreviewEvents) 1}}
+  <div class="import-picker">
+    {{range $i, $e := .PreviewEvents}}
+    <div class="import-pick-row" data-pf="{{index $.Data.ImportAllPrefills $i}}">
+      <span class="import-pick-label">{{formatDate $.LangCode $e.StartTime}} — {{$e.Title}}</span>
+      <button type="button" class="btn-sm import-use-btn">{{$.Strings.T "suggest_import_use"}}</button>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+  <a href="/events/suggest" class="import-back-link">&#8592; {{$.Strings.T "suggest_tab_import"}}</a>
+  {{else}}
   <div class="suggest-tabs">
     <button class="tab-btn active" onclick="switchTab(this,'manual')">{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" onclick="switchTab(this,'import')">{{$.Strings.T "suggest_tab_import"}}</button>
   </div>
+  {{end}}
   {{end}}
 
   <div id="tab-manual" class="tab-panel">
@@ -324,7 +294,7 @@
   </form>
   </div>
 
-  {{if not .ManageToken}}
+  {{if and (not .ManageToken) (not .IsImportMode)}}
   <div id="tab-import" class="tab-panel" hidden>
   <form id="import-form" method="post" action="/events/suggest" enctype="multipart/form-data">
     <div class="form-row">
@@ -339,7 +309,6 @@
   </div>
   {{end}}
 
-  {{end}}
   {{end}}
 </div>
 
@@ -395,6 +364,12 @@
 .wiz-dots span{width:.5rem;height:.5rem;border-radius:50%;background:#ccc;display:inline-block}
 .wiz-dots span.wiz-dot-active{background:#1a6eb5}
 .wiz-step{touch-action:pan-y}
+.import-picker{border:1px solid var(--border-mid,#ddd);border-radius:6px;padding:.5rem;margin-bottom:1rem}
+.import-pick-row{display:flex;align-items:center;gap:.75rem;padding:.4rem .5rem;border-bottom:1px solid var(--border-low,#eee)}
+.import-pick-row:last-child{border-bottom:none}
+.import-pick-label{flex:1;font-size:.9rem}
+.import-back-link{display:inline-block;font-size:.88rem;color:var(--link,#1a6eb5);text-decoration:none;margin-bottom:.75rem}
+.import-back-link:hover{text-decoration:underline}
 </style>
 
 <script>
@@ -660,125 +635,125 @@ function sgGrowTTTable(el) {
     }
   });
 })();
-// ── Magic-link prefill (#928): populate the wizard from the suggestion's
-// current data when loaded via /events/suggest/manage/{token}. ───────────
-{{if .Data.ManageToken}}
-(function(){
-  var data = {{.Data.PrefillJSON}};
+// ── Wizard prefill: shared by manage-link (#928) and import ───────────────
+var _ttTypeOpts = '<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
+var _ttDescPh   = {{$.Strings.T "tt_desc_placeholder" | jsStr}};
+function applyWizardData(data) {
   if (!data) return;
-  function setVal(id, v) { var el = document.getElementById(id); if (el && v) el.value = v; }
+  function setVal(id, v) { var el = document.getElementById(id); if (el && v !== undefined) el.value = v || ''; }
   setVal('wiz-title', data.title);
   var form = document.getElementById('wiz-form');
   if (form) {
+    // Reset checkboxes so switching events via the picker works cleanly.
+    Array.prototype.forEach.call(form.querySelectorAll('[name="dansal_tags"]'), function(cb){ cb.checked = false; });
+    Array.prototype.forEach.call(form.querySelectorAll('[name="dance_ids"]'),   function(cb){ cb.checked = false; });
     var descEl = form.querySelector('[name="description"]'); if (descEl) descEl.value = data.description || '';
-    var urlEl = form.querySelector('[name="url"]'); if (urlEl) urlEl.value = data.url || '';
-    var cn = form.querySelector('[name="contact_name"]'); if (cn) cn.value = data.contact_name || '';
-    var ce = form.querySelector('[name="contact_email"]'); if (ce) ce.value = data.contact_email || '';
+    var urlEl  = form.querySelector('[name="url"]');         if (urlEl)  urlEl.value  = data.url || '';
+    var cn     = form.querySelector('[name="contact_name"]');  if (cn) cn.value = data.contact_name || '';
+    var ce     = form.querySelector('[name="contact_email"]'); if (ce) ce.value = data.contact_email || '';
     (data.tags || []).forEach(function(t){
       var cb = form.querySelector('[name="dansal_tags"][value="' + t + '"]');
       if (cb) cb.checked = true;
     });
-    if (form.querySelector('#tag-dance-workshop:checked') || form.querySelector('#tag-musician-workshop:checked')) {
-      toggleDifficulty();
-    }
-    if (data.food) { var f = form.querySelector('[name="food"][value="' + data.food + '"]'); if (f) f.checked = true; }
+    toggleDifficulty();
+    if (data.food)  { var f  = form.querySelector('[name="food"][value="'  + data.food  + '"]'); if (f)  f.checked  = true; }
     if (data.drink) { var dr = form.querySelector('[name="drink"][value="' + data.drink + '"]'); if (dr) dr.checked = true; }
     if (data.pricing && data.pricing.type) {
       var ptSel = document.getElementById('sg-pricing-type');
       if (ptSel) {
-        ptSel.value = data.pricing.type;
-        sgTogglePricing();
+        ptSel.value = data.pricing.type; sgTogglePricing();
         if (data.pricing.type === 'single' || data.pricing.type === 'donation') {
           var amtEl = form.querySelector('[name="pricing_amount"]');
           if (amtEl && data.pricing.amount) amtEl.value = data.pricing.amount;
           var curEl = form.querySelector('[name="pricing_currency"]');
           if (curEl && data.pricing.currency) curEl.value = data.pricing.currency;
         } else if (data.pricing.type === 'multiple' && data.pricing.prices && data.pricing.prices.length) {
-          var tbody = document.getElementById('sg-pricing-body');
-          if (tbody) {
-            tbody.innerHTML = '';
+          var pbody = document.getElementById('sg-pricing-body');
+          if (pbody) {
+            pbody.innerHTML = '';
             data.pricing.prices.forEach(function(p, i) {
               var row = document.createElement('tr');
               var isLast = (i === data.pricing.prices.length - 1);
-              var labelIn = '<input type="text" name="pl_label"' + (isLast ? ' oninput="sgGrowPricingTable(this)"' : '') + ' value="' + (p.label||'').replace(/"/g,'&quot;') + '">';
+              var labelIn  = '<input type="text" name="pl_label"' + (isLast ? ' oninput="sgGrowPricingTable(this)"' : '') + ' value="' + (p.label||'').replace(/"/g,'&quot;') + '">';
               var amountIn = '<input type="number" name="pl_amount" min="0" step="0.01" value="' + (p.amount||'') + '">';
               row.innerHTML = '<td>' + labelIn + '</td><td>' + amountIn + '</td>';
-              tbody.appendChild(row);
+              pbody.appendChild(row);
             });
           }
         }
       }
     }
   }
-  setVal('sg-location', data.location);
-  setVal('sg-town', data.town);
-  setVal('sg-country', data.country);
-  setVal('sg-address', data.address);
-  setVal('sg-zipcode', data.zipcode);
+  setVal('sg-location', data.location); setVal('sg-town', data.town);
+  setVal('sg-country',  data.country);  setVal('sg-address', data.address);
+  setVal('sg-zipcode',  data.zipcode);
   if (data.start_time) {
     var dt = data.start_time.split('T');
     document.getElementById('sg-date-from').value = dt[0] || '';
-    document.getElementById('sg-date-to').value = dt[0] || '';
+    document.getElementById('sg-date-to').value   = dt[0] || '';
     var startH = dt[1] ? dt[1].slice(0,5) : '';
-    var endH = data.end_time && data.end_time.split('T')[1] ? data.end_time.split('T')[1].slice(0,5) : '';
+    var endH   = data.end_time && data.end_time.split('T')[1] ? data.end_time.split('T')[1].slice(0,5) : '';
     var timeInp = document.getElementById('sg-time');
     if (timeInp) timeInp.value = startH && endH ? (startH + '-' + endH) : startH;
     var dateBtn = document.getElementById('sg-date-btn');
     if (dateBtn) dateBtn.textContent = dt[0];
   }
-  var chips = document.getElementById('sg-musician-chips');
-  if (chips) (data.musicians || []).forEach(function(name){
+  function makeChip(name, fieldName) {
     var chip = document.createElement('div'); chip.className = 'musician-chip';
     var span = document.createElement('span'); span.textContent = name; chip.appendChild(span);
     var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-chip-del'; btn.textContent = '×';
     btn.addEventListener('click', function(){ chip.remove(); }); chip.appendChild(btn);
-    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'dansal_musicians'; hidden.value = name;
-    chip.appendChild(hidden); chips.appendChild(chip);
-  });
-  var instrChips = document.getElementById('sg-instructor-chips');
-  if (instrChips) (data.instructors || []).forEach(function(name){
-    var chip = document.createElement('div'); chip.className = 'musician-chip';
-    var span = document.createElement('span'); span.textContent = name; chip.appendChild(span);
-    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-chip-del'; btn.textContent = '×';
-    btn.addEventListener('click', function(){ chip.remove(); }); chip.appendChild(btn);
-    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'dansal_instructors'; hidden.value = name;
-    chip.appendChild(hidden); instrChips.appendChild(chip);
-  });
-  if (data.timetable && data.timetable.length > 0) {
-    var tbody = document.getElementById('sg-tt-body');
-    if (tbody) {
-      var ttTypeOpts = '<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
-      var ttDescPh = {{$.Strings.T "tt_desc_placeholder" | jsStr}};
-      tbody.innerHTML = '';
-      data.timetable.forEach(function(te) {
-        var r1 = document.createElement('tr'); r1.className = 'sg-tt-row';
-        var safeTitle = (te.title||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-        var safeRoom  = (te.room||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-        r1.innerHTML = '<td><input type="time" name="tt_start" value="'+(te.start_time||'')+'"></td>' +
-          '<td><input type="time" name="tt_end" value="'+(te.end_time||'')+'"></td>' +
-          '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)" value="'+safeTitle+'"></td>' +
-          '<td><input type="text" name="tt_room" value="'+safeRoom+'"></td>';
-        tbody.appendChild(r1);
-        var r2 = document.createElement('tr'); r2.className = 'sg-tt-row-detail';
-        var safeDesc = (te.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-        r2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select></td>' +
-          '<td colspan="2"><input type="text" name="tt_desc" placeholder='+ttDescPh+' value="'+safeDesc+'"></td>';
-        tbody.appendChild(r2);
-        var sel = r2.querySelector('select[name="tt_type"]');
-        if (sel && te.entry_type) sel.value = te.entry_type;
-      });
-      var er1 = document.createElement('tr'); er1.className = 'sg-tt-row';
-      er1.innerHTML = '<td><input type="time" name="tt_start"></td>' +
-        '<td><input type="time" name="tt_end"></td>' +
-        '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)"></td>' +
-        '<td><input type="text" name="tt_room"></td>';
-      tbody.appendChild(er1);
-      var er2 = document.createElement('tr'); er2.className = 'sg-tt-row-detail';
-      er2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select></td>' +
-        '<td colspan="2"><input type="text" name="tt_desc" placeholder='+ttDescPh+'></td>';
-      tbody.appendChild(er2);
-    }
+    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = fieldName; hidden.value = name;
+    chip.appendChild(hidden); return chip;
   }
+  var chips = document.getElementById('sg-musician-chips');
+  if (chips) { chips.innerHTML = ''; (data.musicians || []).forEach(function(n){ chips.appendChild(makeChip(n, 'dansal_musicians')); }); }
+  var instrChips = document.getElementById('sg-instructor-chips');
+  if (instrChips) { instrChips.innerHTML = ''; (data.instructors || []).forEach(function(n){ instrChips.appendChild(makeChip(n, 'dansal_instructors')); }); }
+  var ttBody = document.getElementById('sg-tt-body');
+  if (ttBody && data.timetable && data.timetable.length > 0) {
+    ttBody.innerHTML = '';
+    data.timetable.forEach(function(te) {
+      var r1 = document.createElement('tr'); r1.className = 'sg-tt-row';
+      var safeTitle = (te.title||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      var safeRoom  = (te.room||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      r1.innerHTML = '<td><input type="time" name="tt_start" value="'+(te.start_time||'')+'"></td>' +
+        '<td><input type="time" name="tt_end" value="'+(te.end_time||'')+'"></td>' +
+        '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)" value="'+safeTitle+'"></td>' +
+        '<td><input type="text" name="tt_room" value="'+safeRoom+'"></td>';
+      ttBody.appendChild(r1);
+      var r2 = document.createElement('tr'); r2.className = 'sg-tt-row-detail';
+      var safeDesc = (te.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      r2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+_ttTypeOpts+'</select></td>' +
+        '<td colspan="2"><input type="text" name="tt_desc" placeholder='+_ttDescPh+' value="'+safeDesc+'"></td>';
+      ttBody.appendChild(r2);
+      var sel = r2.querySelector('select[name="tt_type"]'); if (sel && te.entry_type) sel.value = te.entry_type;
+    });
+    var er1 = document.createElement('tr'); er1.className = 'sg-tt-row';
+    er1.innerHTML = '<td><input type="time" name="tt_start"></td><td><input type="time" name="tt_end"></td>' +
+      '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)"></td><td><input type="text" name="tt_room"></td>';
+    ttBody.appendChild(er1);
+    var er2 = document.createElement('tr'); er2.className = 'sg-tt-row-detail';
+    er2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+_ttTypeOpts+'</select></td>' +
+      '<td colspan="2"><input type="text" name="tt_desc" placeholder='+_ttDescPh+'></td>';
+    ttBody.appendChild(er2);
+  }
+}
+// ── Manage-link auto-prefill (#928) ────────────────────────────────────────
+{{if .Data.ManageToken}}
+(function(){ applyWizardData({{.Data.PrefillJSON}}); })();
+{{end}}
+// ── Import auto-prefill + picker ──────────────────────────────────────────
+{{if .Data.IsImportMode}}
+(function(){
+  applyWizardData({{.Data.PrefillJSON}});
+  Array.prototype.forEach.call(document.querySelectorAll('.import-use-btn'), function(btn) {
+    btn.addEventListener('click', function() {
+      applyWizardData(JSON.parse(btn.closest('.import-pick-row').dataset.pf));
+      var wiz = document.getElementById('wiz-form');
+      if (wiz) wiz.scrollIntoView({block: 'start', behavior: 'smooth'});
+    });
+  });
 })();
 {{end}}
 

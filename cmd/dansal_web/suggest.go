@@ -28,6 +28,8 @@ type SuggestPageData struct {
 	PrefillTags      map[string]bool // set of tags to pre-check in the template
 	PrefillDanceIDs  map[int]bool    // set of dance IDs to pre-check in the template
 	ExistingImageURL string          // current event image URL, shown as preview in manage mode
+	IsImportMode     bool            // true when returning from import: wizard is pre-filled
+	ImportAllPrefills []string       // each imported event as wizPrefill JSON (for picker)
 }
 
 type SuggestDoneData struct {
@@ -101,21 +103,60 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 
-		previewJSON := make([]string, len(events))
+		// Convert each parsed event to wizPrefill format for the wizard.
+		prefills := make([]wizPrefill, len(events))
 		for i, e := range events {
-			b, _ := json.Marshal(e)
-			previewJSON[i] = string(b)
+			pf := wizPrefill{
+				Title:       e.Title,
+				Description: e.Description,
+				URL:         e.URL,
+				StartTime:   e.StartTime,
+				EndTime:     e.EndTime,
+				Tags:        e.Tags,
+				Location:    e.Location.Location,
+				Town:        e.Location.Town,
+				Country:     e.Location.Country,
+				Address:     e.Location.Address,
+				Zipcode:     e.Location.Zipcode,
+				Pricing:     e.Pricing,
+			}
+			if e.Location.Latitude != nil {
+				pf.Lat = strconv.FormatFloat(*e.Location.Latitude, 'f', 7, 64)
+			}
+			if e.Location.Longitude != nil {
+				pf.Lon = strconv.FormatFloat(*e.Location.Longitude, 'f', 7, 64)
+			}
+			prefills[i] = pf
+		}
+
+		importAllPrefills := make([]string, len(prefills))
+		for i, pf := range prefills {
+			b, _ := json.Marshal(pf)
+			importAllPrefills[i] = string(b)
+		}
+
+		var prefillJSON template.JS
+		prefillTags := make(map[string]bool)
+		if len(prefills) > 0 {
+			b, _ := json.Marshal(prefills[0])
+			prefillJSON = template.JS(b)
+			for _, t := range prefills[0].Tags {
+				prefillTags[t] = true
+			}
 		}
 
 		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			PreviewEvents:  events,
-			PreviewJSON:    previewJSON,
-			CaptchaSiteKey: cfg.CaptchaSiteKey,
-			FormToken:      issueFormToken(ip),
-			Dances:         dances,
+			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			PreviewEvents:     events,
+			CaptchaSiteKey:    cfg.CaptchaSiteKey,
+			FormToken:         issueFormToken(ip),
+			Dances:            dances,
+			IsImportMode:      true,
+			PrefillJSON:       prefillJSON,
+			PrefillTags:       prefillTags,
+			ImportAllPrefills: importAllPrefills,
 		}))
 	}
 }

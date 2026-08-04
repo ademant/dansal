@@ -458,6 +458,38 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
 		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
 
+		starts := r.Form["tt_start"]
+		ends := r.Form["tt_end"]
+		ttTitles := r.Form["tt_title"]
+		descs := r.Form["tt_desc"]
+		rooms := r.Form["tt_room"]
+		ttTypes := r.Form["tt_type"]
+		var timetable []TimetableEntryReq
+		for i, s := range starts {
+			s = strings.TrimSpace(s)
+			if i >= len(ttTitles) {
+				break
+			}
+			t := strings.TrimSpace(ttTitles[i])
+			if s == "" && t == "" {
+				continue
+			}
+			entry := TimetableEntryReq{StartTime: s, Title: t}
+			if i < len(ends) {
+				entry.EndTime = strings.TrimSpace(ends[i])
+			}
+			if i < len(descs) {
+				entry.Description = strings.TrimSpace(descs[i])
+			}
+			if i < len(rooms) {
+				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(ttTypes) {
+				entry.EntryType = ttTypes[i]
+			}
+			timetable = append(timetable, entry)
+		}
+
 		var pricing *Pricing
 		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
 			p := &Pricing{Type: pt}
@@ -515,6 +547,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
 			Musicians:    musicians,
 			Instructors:  instructors,
+			Timetable:    timetable,
 		}
 
 		needsReview, err := client.PatchSuggestManageEvent(r.Context(), token, req)

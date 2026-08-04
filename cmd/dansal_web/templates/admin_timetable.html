@@ -18,19 +18,19 @@
 .tt-page-nav button{background:none;border:1px solid var(--border-mid);border-radius:4px;padding:.2rem .6rem;cursor:pointer;color:var(--fg)}
 .tt-page-nav button:disabled{opacity:.4;cursor:default}
 .tt-page-nav .tt-page-label{font-weight:600;min-width:100px;text-align:center}
-.tt-editor-scroll{overflow-x:auto;overflow-y:auto;max-height:80vh;border:1px solid var(--border-mid);border-radius:6px;background:var(--bg)}
-.tt-editor-grid{display:flex;position:relative;min-width:max-content}
+.tt-editor-scroll{overflow-x:hidden;overflow-y:auto;max-height:80vh;border:1px solid var(--border-mid);border-radius:6px;background:var(--bg)}
+.tt-editor-grid{display:flex;position:relative;width:100%}
 .tt-time-axis{width:44px;flex-shrink:0;position:sticky;left:0;z-index:5;background:var(--bg);border-right:1px solid var(--border-mid)}
 .tt-axis-header{height:32px;border-bottom:1px solid var(--border-mid);background:var(--bg-subtle)}
 .tt-axis-body{position:relative}
 .tt-axis-mark{position:absolute;right:6px;font-size:.72rem;color:var(--fg-dim);transform:translateY(-50%);white-space:nowrap;line-height:1}
 .tt-axis-line{position:absolute;left:0;right:0;border-top:1px solid var(--border-mid)}
 .tt-axis-line.half{border-top:1px dashed var(--border-light,var(--border-mid))}
-.tt-day-col{display:flex;flex-direction:column;border-right:1px solid var(--border-mid);min-width:0}
+.tt-day-col{display:flex;flex-direction:column;border-right:1px solid var(--border-mid);flex:1;min-width:0}
 .tt-day-col:last-child{border-right:none}
 .tt-day-header{height:32px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:600;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);white-space:nowrap;padding:0 .5rem;position:sticky;top:0;z-index:4}
 .tt-rooms-header{display:flex;height:0}
-.tt-room-col{flex:1;position:relative;min-width:110px}
+.tt-room-col{flex:1;position:relative;min-width:60px}
 .tt-room-col-header{position:sticky;top:32px;z-index:3;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);font-size:.72rem;color:var(--fg-dim);padding:.2rem .4rem;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
 .tt-room-col+.tt-room-col{border-left:1px solid var(--border-mid)}
 .tt-room-body{position:relative;cursor:crosshair}
@@ -186,7 +186,7 @@
 var EVT_ID = {{.Event.ID}};
 var PX_PER_MIN = 2;
 var SNAP = 15;
-var ROOM_COL_W = 130; // min px per room column
+var MAX_COLS = 6; // max day×room columns before pagination kicks in
 
 // ─── data ────────────────────────────────────────────────────────────────────
 var _entries = {{.Timetable | json}};
@@ -212,7 +212,8 @@ function _nextCid(){ return _cidCounter++; }
 // ─── state ───────────────────────────────────────────────────────────────────
 var _rooms = []; // {id: int|null, label: string} — room columns currently shown
 var _days = [];  // ["YYYY-MM-DD", ...]
-var _page = 0;
+var _page = 0;   // current page index
+var _daysPerPage = 1; // recomputed by computeDaysPerPage()
 var _formDirty = false;
 var _gridMin = 18*60;  // 18:00
 var _gridMax = 28*60;  // 04:00 next day
@@ -322,7 +323,17 @@ function recomputeRooms(){
 }
 
 // ─── render all ──────────────────────────────────────────────────────────────
+function computeDaysPerPage(){
+  var roomCount = _rooms.length + 1; // +1 for "Other" column
+  var total = _days.length * roomCount;
+  if(total <= MAX_COLS) return _days.length; // show everything
+  return Math.max(1, Math.floor(MAX_COLS / roomCount));
+}
 function renderAll(){
+  _daysPerPage = computeDaysPerPage();
+  // clamp _page to new total
+  var totalPages = Math.ceil(_days.length / _daysPerPage);
+  if(_page >= totalPages) _page = Math.max(0, totalPages-1);
   renderRoomChips();
   renderPageNav();
   renderGrid();
@@ -410,14 +421,22 @@ function addRoom(r){
 // ─── page nav ─────────────────────────────────────────────────────────────────
 function renderPageNav(){
   var nav = document.getElementById('tt-page-nav');
-  if(_days.length <= 1){ nav.hidden=true; return; }
+  var totalPages = Math.ceil(_days.length / _daysPerPage);
+  if(totalPages <= 1){ nav.hidden=true; return; }
   nav.hidden=false;
-  if(_page >= _days.length) _page=0;
-  document.getElementById('tt-page-label').textContent = _days[_page];
+  var startIdx = _page * _daysPerPage;
+  var endIdx = Math.min(startIdx + _daysPerPage - 1, _days.length - 1);
+  var label = _days[startIdx];
+  if(endIdx > startIdx) label += ' – ' + _days[endIdx];
+  document.getElementById('tt-page-label').textContent = label;
   document.getElementById('tt-prev').disabled = _page===0;
-  document.getElementById('tt-next').disabled = _page===_days.length-1;
+  document.getElementById('tt-next').disabled = _page===totalPages-1;
 }
-function changePage(d){ _page = Math.max(0,Math.min(_days.length-1,_page+d)); renderPageNav(); renderGrid(); }
+function changePage(d){
+  var totalPages = Math.ceil(_days.length / _daysPerPage);
+  _page = Math.max(0, Math.min(totalPages-1, _page+d));
+  renderPageNav(); renderGrid();
+}
 
 // ─── grid render ─────────────────────────────────────────────────────────────
 function renderGrid(){
@@ -442,8 +461,9 @@ function renderGrid(){
   }
   axis.appendChild(axisBody); el.appendChild(axis);
 
-  // determine days to show
-  var visibleDays = _days.length===1 ? _days : [_days[_page]];
+  // determine days to show for current page
+  var startIdx = _page * _daysPerPage;
+  var visibleDays = _days.slice(startIdx, startIdx + _daysPerPage);
   var roomList = _rooms.concat([{id:-1,label:'Other'}]); // -1=other sentinel
 
   visibleDays.forEach(function(day){
@@ -453,7 +473,7 @@ function renderGrid(){
     // Room-column headers row
     var roomsHdr = document.createElement('div'); roomsHdr.style.display='flex'; roomsHdr.style.position='sticky'; roomsHdr.style.top='32px'; roomsHdr.style.zIndex='3';
     roomList.forEach(function(r){
-      var rh = document.createElement('div'); rh.className='tt-room-col-header'; rh.style.flex='1'; rh.style.minWidth=ROOM_COL_W+'px'; rh.title=r.label; rh.textContent=r.label; roomsHdr.appendChild(rh);
+      var rh = document.createElement('div'); rh.className='tt-room-col-header'; rh.style.flex='1'; rh.title=r.label; rh.textContent=r.label; roomsHdr.appendChild(rh);
     });
     dayCol.appendChild(roomsHdr);
 
@@ -461,7 +481,7 @@ function renderGrid(){
     var roomsBody = document.createElement('div'); roomsBody.style.display='flex'; roomsBody.style.position='relative';
 
     roomList.forEach(function(r){
-      var body = document.createElement('div'); body.className='tt-room-body'; body.style.height=gridH+'px'; body.style.flex='1'; body.style.minWidth=ROOM_COL_W+'px'; body.style.position='relative';
+      var body = document.createElement('div'); body.className='tt-room-body'; body.style.height=gridH+'px'; body.style.flex='1'; body.style.position='relative';
       body.dataset.day=day; body.dataset.roomId=r.id; body.dataset.roomLabel=r.label;
 
       // grid lines

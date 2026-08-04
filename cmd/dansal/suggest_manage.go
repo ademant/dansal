@@ -177,7 +177,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		ContactName: req.ContactName, ContactEmail: req.ContactEmail,
 		Musicians: req.Musicians, Instructors: req.Instructors, Timetable: req.Timetable,
 	}
-	if req.Location.Location != "" {
+	if req.Location.Location != "" && locationChanged(db, eventID, req.Location) {
 		loc := req.Location
 		pending.Location = &loc
 	}
@@ -429,4 +429,20 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// locationChanged returns true when the submitted location fields differ from
+// the event's current location, so an unchanged prefilled location is not
+// treated as a relocation request.
+func locationChanged(q querier, eventID int, submitted EventLocationRequest) bool {
+	var curLoc, curAddress, curZipcode, curTown, curCountry string
+	q.QueryRow(`SELECT COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
+		COALESCE(l.town,''), COALESCE(l.country,'')
+		FROM events e LEFT JOIN locations l ON l.id = e.location_id WHERE e.id=?`, eventID).
+		Scan(&curLoc, &curAddress, &curZipcode, &curTown, &curCountry)
+	return submitted.Location != curLoc ||
+		submitted.Address != curAddress ||
+		submitted.Zipcode != curZipcode ||
+		submitted.Town != curTown ||
+		submitted.Country != curCountry
 }

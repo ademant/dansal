@@ -26,7 +26,9 @@ type SuggestPageData struct {
 	PrefillJSON template.JS
 }
 
-type SuggestDoneData struct{}
+type SuggestDoneData struct {
+	NeedsReview bool
+}
 type SuggestVerifiedData struct {
 	Error string
 }
@@ -325,7 +327,9 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := i18n.T(r, "suggest_done_title")
-		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, SuggestDoneData{}))
+		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, SuggestDoneData{
+			NeedsReview: r.URL.Query().Get("review") == "1",
+		}))
 	}
 }
 
@@ -454,7 +458,8 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Instructors:  instructors,
 		}
 
-		if err := client.PatchSuggestManageEvent(r.Context(), token, req); err != nil {
+		needsReview, err := client.PatchSuggestManageEvent(r.Context(), token, req)
+		if err != nil {
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				Error:       i18n.T(r, "suggest_error_submit"),
@@ -462,7 +467,11 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			}))
 			return
 		}
-		http.Redirect(w, r, "/events/suggest/done", http.StatusSeeOther)
+		dest := "/events/suggest/done"
+		if needsReview {
+			dest += "?review=1"
+		}
+		http.Redirect(w, r, dest, http.StatusSeeOther)
 	}
 }
 

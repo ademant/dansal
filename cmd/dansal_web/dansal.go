@@ -3401,22 +3401,27 @@ func (c *DansalClient) GetSuggestManageEvent(ctx context.Context, token string) 
 // PatchSuggestManageEvent submits an edit to a suggestion via its manage
 // token (#928). Before publish it's applied directly; after publish only a
 // safe subset auto-applies and the rest goes to pending_edit_json for review.
-func (c *DansalClient) PatchSuggestManageEvent(ctx context.Context, token string, req SuggestEventReq) error {
+// Returns needsReview=true when changes were queued for admin review.
+func (c *DansalClient) PatchSuggestManageEvent(ctx context.Context, token string, req SuggestEventReq) (needsReview bool, err error) {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.BaseURL+"/api/v1/events/suggest/manage/"+token, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return false, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
+		return false, apiErr(resp)
 	}
-	return nil
+	var result struct {
+		NeedsReview bool `json:"needs_review"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.NeedsReview, nil
 }
 
 // ApprovePendingEdit / RejectPendingEdit act on an event's pending_edit_json

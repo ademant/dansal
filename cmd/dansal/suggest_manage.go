@@ -42,6 +42,8 @@ func getSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	event.Musicians, _ = fetchEventMusicians(eventID)
+	event.Instructors, _ = fetchEventInstructors(eventID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(event)
 }
@@ -160,7 +162,8 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "db error", http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"needs_review": false})
 		return
 	}
 
@@ -226,10 +229,12 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !pending.isEmpty() {
+	needsReview := !pending.isEmpty()
+	if needsReview {
 		go notifyReviewersPendingEdit(eventID)
 	}
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"needs_review": needsReview})
 }
 
 // notifyReviewersPendingEdit alerts admins (and, when the event has an

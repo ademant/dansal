@@ -1,20 +1,23 @@
 {{template "base" .}}
 {{define "content"}}
+{{with .Data}}
 <div class="suggest-done-wrap">
-  <div class="suggest-done-box">
-    <p class="suggest-done-icon">✉</p>
-    <h2>{{.Strings.T "suggest_done_title"}}</h2>
-    <p>{{.Strings.T "suggest_done_body"}}</p>
-    <a href="/">{{.Strings.T "suggest_done_back"}}</a>
+  <div class="suggest-done-box{{if .NeedsReview}} suggest-done-review{{end}}">
+    <p class="suggest-done-icon">{{if .NeedsReview}}🔔{{else}}✉{{end}}</p>
+    <h2>{{$.Strings.T "suggest_done_title"}}</h2>
+    <p>{{if .NeedsReview}}{{$.Strings.T "suggest_manage_done_review_body"}}{{else}}{{$.Strings.T "suggest_done_body"}}{{end}}</p>
+    <a href="/">{{$.Strings.T "suggest_done_back"}}</a>
   </div>
 </div>
+{{end}}
 
 <style>
 .suggest-done-wrap{max-width:480px;margin:4rem auto;text-align:center}
 .suggest-done-box{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:8px;padding:2.5rem 2rem}
+.suggest-done-box.suggest-done-review{background:#fff3cd;color:#856404;border-color:#ffc107}
 .suggest-done-icon{font-size:3rem;margin-bottom:.5rem}
 .suggest-done-box h2{margin:0 0 .75rem}
 .suggest-done-box p{font-size:1rem;margin-bottom:1.25rem}
-.suggest-done-box a{color:#155724;font-weight:600}
+.suggest-done-box a{color:inherit;font-weight:600}
 </style>
 {{end}}

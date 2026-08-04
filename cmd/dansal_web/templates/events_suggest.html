@@ -301,7 +301,7 @@
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {{end}}
       {{end}}
-      <button type="submit" class="btn-primary">{{$.Strings.T "suggest_submit_btn"}}</button>
+      <button type="submit" class="btn-primary">{{if $.Data.ManageToken}}{{$.Strings.T "suggest_manage_submit_btn"}}{{else}}{{$.Strings.T "suggest_submit_btn"}}{{end}}</button>
     </div>
 
     <div class="wiz-nav">

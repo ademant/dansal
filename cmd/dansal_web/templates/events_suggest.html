@@ -651,9 +651,9 @@ function sgGrowTTTable(el) {
 })();
 // ── Magic-link prefill (#928): populate the wizard from the suggestion's
 // current data when loaded via /events/suggest/manage/{token}. ───────────
-{{if .ManageToken}}
+{{if .Data.ManageToken}}
 (function(){
-  var data = {{.PrefillJSON}};
+  var data = {{.Data.PrefillJSON}};
   if (!data) return;
   function setVal(id, v) { var el = document.getElementById(id); if (el && v) el.value = v; }
   setVal('wiz-title', data.title);

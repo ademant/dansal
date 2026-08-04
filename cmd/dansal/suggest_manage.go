@@ -169,19 +169,16 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Published: split into safe-auto-apply vs pending-review.
-	// Food, drink, and pricing are structured enum/numeric values — they cannot
-	// contain spam links and the organiser should be able to correct them
-	// without an admin round-trip.  Everything else (URL, location, tags,
-	// musicians, contact info, timetable) still goes through pending review,
-	// but only when the value actually differs from what's already stored —
-	// the wizard prefills all fields, so unchanged values must not trigger review.
+	// Structured / organiser-controlled fields (food, drink, pricing, location)
+	// are applied directly — the manage token is sent only to the event's own
+	// suggester so it is trusted, and location is not free text.
+	// Free-text or high-risk fields (URL, tags, musicians, contact, timetable)
+	// still go through pending review, but only when they actually differ from
+	// what is already stored — the wizard prefills all fields, so unchanged
+	// values must not trigger review.
 	pending := pendingEditFields{
 		URL:       req.URL,
 		Timetable: req.Timetable,
-	}
-	if req.Location.Location != "" && locationChanged(db, eventID, req.Location) {
-		loc := req.Location
-		pending.Location = &loc
 	}
 	if tagsChanged(db, eventID, req.Tags) {
 		pending.Tags = req.Tags
@@ -239,6 +236,13 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	if req.Location.Location != "" && locationChanged(tx, eventID, req.Location) {
+		if locID, err := ensureLocation(tx, req.Location); err == nil && locID > 0 {
+			safeUpdates = append(safeUpdates, "location_id=?")
+			safeArgs = append(safeArgs, locID)
+		}
+	}
 
 	safeArgs = append(safeArgs, eventID)
 	if _, err := tx.Exec("UPDATE events SET "+strings.Join(safeUpdates, ", ")+" WHERE id=?", safeArgs...); err != nil {

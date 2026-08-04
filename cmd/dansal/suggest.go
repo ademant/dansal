@@ -244,15 +244,10 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	emailVerified := !smtpConfigured
 	if suggestionToken != "" {
 		tokenArg = suggestionToken
-		// #928: the token is now a standing, long-lived edit link (like
-		// contact_posts.manage_token), not a one-shot verification code —
-		// give it the same ~30-day / event_end+3d expiry.
-		ceiling := time.Now().UTC().Add(30 * 24 * time.Hour)
-		expiry := ceiling
-		if candidate := time.Unix(endTime, 0).UTC().Add(3 * 24 * time.Hour); candidate.Before(ceiling) {
-			expiry = candidate
-		}
-		tokenExpiryArg = expiry.Unix()
+		// Token is a standing edit link valid until 3 days after the event ends.
+		// No 30-day cap: events scheduled far in advance keep a valid manage link
+		// throughout their run-up period.
+		tokenExpiryArg = time.Unix(endTime, 0).UTC().Add(3 * 24 * time.Hour).Unix()
 	}
 
 	var pricingArg any

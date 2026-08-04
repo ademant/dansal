@@ -1,7 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <div class="suggest-wrap">
-  <h1>{{.Strings.T "suggest_event_title"}}</h1>
+  <h1>{{if .Data.ManageToken}}{{.Strings.T "suggest_manage_title"}}{{else}}{{.Strings.T "suggest_event_title"}}{{end}}</h1>
 
   {{with .Data}}
   {{if .Error}}<p class="form-error" role="alert">{{$.Strings.T .Error}}</p>{{end}}
@@ -305,12 +305,12 @@
     </div>
 
     <div class="wiz-nav">
-      <button type="button" id="wiz-back" class="btn-secondary" hidden>{{$.Strings.T "suggest_wizard_back"}}</button>
+      <button type="button" id="wiz-back" class="btn-secondary wiz-arrow-btn" hidden>&#8592;</button>
       <div class="wiz-progress">
         <span id="wiz-progress-label"></span>
         <div class="wiz-dots" id="wiz-dots"></div>
       </div>
-      <button type="button" id="wiz-next" class="btn-primary">{{$.Strings.T "suggest_wizard_next"}}</button>
+      <button type="button" id="wiz-next" class="btn-primary wiz-arrow-btn">&#8594;</button>
     </div>
   </form>
   </div>
@@ -380,6 +380,7 @@
 .btn-secondary{padding:.5rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.95rem}
 .btn-secondary:hover{background:#e8e8e8}
 .wiz-nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
+.wiz-arrow-btn{padding:.5rem .9rem;font-size:1.25rem;line-height:1;min-width:2.8rem}
 .wiz-progress{display:flex;flex-direction:column;align-items:center;gap:.3rem;font-size:.8rem;color:#666}
 .wiz-dots{display:flex;gap:.35rem}
 .wiz-dots span{width:.5rem;height:.5rem;border-radius:50%;background:#ccc;display:inline-block}

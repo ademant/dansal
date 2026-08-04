@@ -19,12 +19,13 @@ type SuggestPageData struct {
 	GroupedTags    []TagGroup
 	FormToken      string
 	Dances         []Dance
-	// ManageToken/PrefillJSON/PrefillTags are set when the wizard is loaded via
-	// the #928 magic link (/events/suggest/manage/{token}), pre-filling the
-	// same form instead of a separate simpler edit page.
-	ManageToken string
-	PrefillJSON template.JS
-	PrefillTags map[string]bool // set of tags to pre-check in the template
+	// ManageToken/PrefillJSON/PrefillTags/PrefillDanceIDs are set when the
+	// wizard is loaded via the #928 magic link (/events/suggest/manage/{token}),
+	// pre-filling the same form instead of a separate simpler edit page.
+	ManageToken    string
+	PrefillJSON    template.JS
+	PrefillTags    map[string]bool // set of tags to pre-check in the template
+	PrefillDanceIDs map[int]bool   // set of dance IDs to pre-check in the template
 }
 
 type SuggestDoneData struct {
@@ -402,14 +403,31 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 
 		ip := getClientIP(r)
 		dances, _ := client.GetDances(r.Context())
+
+		// Build a name→ID map so we can pre-check dance checkboxes server-side.
+		// The event API only returns dance names; the form uses IDs.
+		prefillDanceIDs := make(map[int]bool)
+		if len(ev.DanceNames) > 0 {
+			nameToID := make(map[string]int, len(dances))
+			for _, d := range dances {
+				nameToID[d.Name] = d.ID
+			}
+			for _, name := range ev.DanceNames {
+				if id, ok := nameToID[name]; ok {
+					prefillDanceIDs[id] = true
+				}
+			}
+		}
+
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:    cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			FormToken:   issueFormToken(ip),
-			Dances:      dances,
-			ManageToken: token,
-			PrefillJSON: template.JS(b),
-			PrefillTags: prefillTags,
+			HintSMTP:        cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			FormToken:       issueFormToken(ip),
+			Dances:          dances,
+			ManageToken:     token,
+			PrefillJSON:     template.JS(b),
+			PrefillTags:     prefillTags,
+			PrefillDanceIDs: prefillDanceIDs,
 		}))
 	}
 }

@@ -95,7 +95,7 @@
         <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}}</label>
         <div class="check-row">
           {{range $.Data.Dances}}
-          <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"> {{.Name}}</label>
+          <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"{{if index $.Data.PrefillDanceIDs .ID}} checked{{end}}> {{.Name}}</label>
           {{end}}
         </div>
       </div>

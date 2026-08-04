@@ -653,7 +653,7 @@ document.addEventListener('keydown',function(e){
     data-date="{{isoDate .StartTime}}"
     data-end-date="{{isoEndDate .EndTime}}"
     data-title="{{.Title}}"
-    data-location="{{if .Location}}{{if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
+    data-location="{{if .Location}}{{if .Location.ParentID}}{{if .Location.ParentShortName}}{{.Location.ParentShortName}}{{else}}{{.Location.ParentName}}{{end}} — {{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}{{else if .Location.ShortName}}{{.Location.ShortName}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}"
     data-country="{{if .Location}}{{.Location.Country}}{{end}}"
     data-region="{{if .Location}}{{.Location.Region}}{{end}}"
     data-ball="{{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}1{{else}}0{{end}}"
@@ -684,7 +684,7 @@ document.addEventListener('keydown',function(e){
     {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
   </td>
   <td class="col-venue">
-    {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
+    {{if .Location}}{{if or .Location.ShortName .Location.Location}}<span class="venue">{{if .Location.ParentID}}{{if .Location.ParentShortName}}{{.Location.ParentShortName}}{{else}}{{.Location.ParentName}}{{end}} — {{if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}{{else if .Location.ShortName}}{{.Location.ShortName}}{{else}}{{.Location.Location}}{{end}}</span>{{end}}
     {{if .Location.Town}}<span class="town">{{.Location.Town}}</span>{{end}}{{end}}
   </td>
   <td class="col-type">

@@ -43,6 +43,8 @@ type Location struct {
 	FutureEventCount int             `json:"future_event_count,omitempty"`
 	PastEventCount   int             `json:"past_event_count,omitempty"`
 	ParentID         *int            `json:"parent_id,omitempty"`
+	ParentName       string          `json:"parent_name,omitempty"`
+	ParentShortName  string          `json:"parent_short_name,omitempty"`
 	Children         []Location      `json:"children,omitempty"`
 	Capacity         *int            `json:"capacity,omitempty"`
 	SizeSqm          *int            `json:"size_sqm,omitempty"`
@@ -191,6 +193,8 @@ func resolvedLocation(loc *Location) {
 		return
 	}
 	inheritLocationFields(loc, &parent)
+	loc.ParentName = parent.Location
+	loc.ParentShortName = parent.ShortName
 }
 
 func attrsJSON(attrs map[string]bool) string {

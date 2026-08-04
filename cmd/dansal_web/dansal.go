@@ -447,8 +447,10 @@ type Location struct {
 
 	// A room is a child Location with ParentID set, inheriting
 	// address/coordinates from its parent (#687) rather than copying them.
-	ParentID *int       `json:"parent_id,omitempty"`
-	Children []Location `json:"children,omitempty"`
+	ParentID        *int       `json:"parent_id,omitempty"`
+	ParentName      string     `json:"parent_name,omitempty"`
+	ParentShortName string     `json:"parent_short_name,omitempty"`
+	Children        []Location `json:"children,omitempty"`
 
 	// Capacity/size are informal, display-only hints (#875) — not inherited
 	// from a parent since they describe the room itself, not the building.

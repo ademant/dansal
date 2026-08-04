@@ -205,6 +205,7 @@ var _allInstructors = (function(){
 })();
 var _evtStart = "{{.Event.StartTime}}";
 var _evtEnd = "{{.Event.EndTime}}";
+var _topLocID = {{.TopLocationID}}; // building-level location for room quick-create
 
 // Assign client-side IDs to loaded entries
 var _cidCounter = 1;
@@ -387,18 +388,35 @@ function roomAddInput(inp){
     });
     sug.appendChild(li);
   });
-  // offer free-text entry
+  // offer to create a new room in the DB (or free-text if no venue set)
   if(q && !hits.some(function(r){ return (r.short_name||r.location||'').toLowerCase()===q; })){
     var li = document.createElement('li');
-    li.textContent='+ "'+inp.value.trim()+'"';
+    var lbl = inp.value.trim();
+    li.textContent = (_topLocID > 0 ? '+ Create room "' : '+ Add "') + lbl + '"';
     li.style.fontStyle='italic';
     li.addEventListener('mousedown',function(e){
-      e.preventDefault(); var lbl=inp.value.trim(); inp.value=''; sug.hidden=true;
-      addRoom({id:null,label:lbl});
+      e.preventDefault(); inp.value=''; sug.hidden=true;
+      if(_topLocID > 0){ roomQuickCreate(lbl); } else { addRoom({id:null,label:lbl}); }
     });
     sug.appendChild(li);
   }
   if(sug.children.length) sug.hidden=false;
+}
+
+function roomQuickCreate(name){
+  fetch('/admin/api/location/'+_topLocID+'/room/quick-create', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name})
+  }).then(function(res){
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  }).then(function(room){
+    _allRooms.push({id:room.id,location:room.name,short_name:room.name});
+    addRoom({id:room.id,label:room.name});
+  }).catch(function(err){
+    alert('Could not create room: '+err.message);
+  });
 }
 
 function roomAddKeydown(e, inp){

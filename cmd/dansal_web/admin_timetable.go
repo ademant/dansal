@@ -11,11 +11,12 @@ import (
 
 // TimetablePageData holds everything the admin timetable editor template needs.
 type TimetablePageData struct {
-	Event      Event
-	Timetable  []TimetableEntry
-	Rooms      []Location // child locations of the event's venue
-	Musicians  []Musician
-	Instructors []Instructor
+	Event         Event
+	Timetable     []TimetableEntry
+	Rooms         []Location // child locations of the event's venue (building)
+	Musicians     []Musician
+	Instructors   []Instructor
+	TopLocationID int // building-level location ID used for room quick-create
 }
 
 // GET /admin/events/{id}/timetable — serve the dedicated timetable editor.
@@ -66,18 +67,27 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		}
 		timetable = event.Timetable
 
-		// Fetch child rooms of the event's venue (if any).
-		if event.LocationID != nil && *event.LocationID > 0 {
-			rooms, _ = client.GetLocationChildren(ctx, *event.LocationID)
+		// Resolve the building-level location ID: if the event's location is
+		// itself a room (child), use the parent so we fetch sibling rooms.
+		topLocID := 0
+		if event.LocationID != nil {
+			topLocID = *event.LocationID
+		}
+		if event.Location != nil && event.Location.ParentID != nil {
+			topLocID = *event.Location.ParentID
+		}
+		if topLocID > 0 {
+			rooms, _ = client.GetLocationChildren(ctx, topLocID)
 		}
 
 		title := fmt.Sprintf("Timetable — %s", event.Title)
 		renderTemplate(w, tmpls.adminTimetable, tmplData(r, cfg, i18n, title, TimetablePageData{
-			Event:       event,
-			Timetable:   timetable,
-			Rooms:       rooms,
-			Musicians:   musicians,
-			Instructors: instructors,
+			Event:         event,
+			Timetable:     timetable,
+			Rooms:         rooms,
+			Musicians:     musicians,
+			Instructors:   instructors,
+			TopLocationID: topLocID,
 		}))
 	}
 }

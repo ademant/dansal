@@ -85,7 +85,7 @@
       {{if not .IsTemplateMode}}
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value)">
+        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value);checkTimetableShift(this.value)">
       </div>
       {{end}}
       <div>
@@ -1057,6 +1057,19 @@ function onStartDateChange(v){
     ed.setAttribute('data-auto','1');
   }
 }
+function checkTimetableShift(newDate){
+  if(typeof _origStartDate==='undefined'||!newDate||!_origStartDate) return;
+  var datedEntries=(_ttEntries||[]).filter(function(e){return e.entry_date;});
+  if(datedEntries.length===0) return;
+  var deltaDays=Math.round((new Date(newDate).getTime()-new Date(_origStartDate).getTime())/86400000);
+  if(deltaDays===0){_pendingTTShift=null;return;}
+  var sign=deltaDays>0?'+':'';
+  if(confirm('This event has '+datedEntries.length+' timetable entr'+(datedEntries.length===1?'y':'ies')+'. Shift all timetable dates by '+sign+deltaDays+' day'+(Math.abs(deltaDays)===1?'':'s')+'?')){
+    _pendingTTShift=deltaDays;
+  } else {
+    _pendingTTShift=null;
+  }
+}
 function toggleDifficulty(){
   var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden=!show;
@@ -1438,6 +1451,11 @@ var _ttLocs={{timetableLocationOptionsJSON $.Data.Locations}};
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
 var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
 var _ttInstructors=[{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
+{{if not .IsNew}}
+var _origStartDate = {{isoDate .Event.StartTime | jsStr}};
+var _ttEntries = {{.Event.Timetable | json}};
+var _pendingTTShift = null;
+{{end}}
 // Growing timetable
 function _ttMarkEdited(){
   var el=document.getElementById('tt-edited');
@@ -1904,6 +1922,53 @@ document.querySelector('.evt-form').addEventListener('submit',function(){
   if(titleInp&&titleInp.value.trim()!=='')return;
   defRow.querySelectorAll('input,select,textarea').forEach(function(i){i.disabled=true;});
 });
+{{end}}
+{{if not .IsNew}}
+(function(){
+  var evtForm=document.querySelector('.evt-form');
+  if(!evtForm) return;
+  evtForm.addEventListener('submit',function(ev){
+    if(!_pendingTTShift) return;
+    ev.preventDefault();
+    // Shift each timetable entry by _pendingTTShift days.
+    var shifted=(_ttEntries||[]).map(function(e){
+      var d=e.entry_date;
+      if(d){
+        var dt=new Date(d+'T00:00:00Z');
+        dt.setUTCDate(dt.getUTCDate()+_pendingTTShift);
+        d=dt.toISOString().slice(0,10);
+      }
+      return {start_time:e.start_time||'',end_time:e.end_time||'',entry_date:d||'',
+              title:e.title||'',description:e.description||'',room:e.room||'',
+              entry_type:e.entry_type||'bal',location_id:e.location_id||null,
+              musician_id:e.musician_id||null,instructor_id:e.instructor_id||null};
+    });
+    // Set event end_date/end_time to the last timetable entry's date+end_time.
+    var maxDT=null;
+    shifted.forEach(function(e){
+      if(!e.entry_date) return;
+      var dt=e.entry_date+'T'+(e.end_time||'23:59');
+      if(!maxDT||dt>maxDT) maxDT=dt;
+    });
+    if(maxDT){
+      var edInp=document.getElementById('end_date');
+      var etInp=document.getElementById('end_time');
+      if(edInp){edInp.value=maxDT.slice(0,10);edInp.removeAttribute('data-auto');}
+      if(etInp) etInp.value=maxDT.slice(11,16);
+    }
+    fetch('/admin/events/{{.Event.ID}}/timetable',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(shifted)
+    }).then(function(r){
+      if(!r.ok) throw new Error(r.statusText);
+      _pendingTTShift=null;
+      evtForm.submit();
+    }).catch(function(err){
+      alert('Failed to shift timetable: '+err.message+'\nEvent was not saved.');
+    });
+  });
+})();
 {{end}}
 
 // Growing pricing table

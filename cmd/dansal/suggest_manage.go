@@ -45,6 +45,7 @@ func getSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	event.Musicians, _ = fetchEventMusicians(eventID)
 	event.Instructors, _ = fetchEventInstructors(eventID)
+	event.Timetable, _ = fetchTimetable(eventID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(event)
 }

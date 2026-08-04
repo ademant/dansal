@@ -735,6 +735,41 @@ function sgGrowTTTable(el) {
     var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'dansal_instructors'; hidden.value = name;
     chip.appendChild(hidden); instrChips.appendChild(chip);
   });
+  if (data.timetable && data.timetable.length > 0) {
+    var tbody = document.getElementById('sg-tt-body');
+    if (tbody) {
+      var ttTypeOpts = '<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
+      var ttDescPh = {{$.Strings.T "tt_desc_placeholder" | jsStr}};
+      tbody.innerHTML = '';
+      data.timetable.forEach(function(te) {
+        var r1 = document.createElement('tr'); r1.className = 'sg-tt-row';
+        var safeTitle = (te.title||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+        var safeRoom  = (te.room||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+        r1.innerHTML = '<td><input type="time" name="tt_start" value="'+(te.start_time||'')+'"></td>' +
+          '<td><input type="time" name="tt_end" value="'+(te.end_time||'')+'"></td>' +
+          '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)" value="'+safeTitle+'"></td>' +
+          '<td><input type="text" name="tt_room" value="'+safeRoom+'"></td>';
+        tbody.appendChild(r1);
+        var r2 = document.createElement('tr'); r2.className = 'sg-tt-row-detail';
+        var safeDesc = (te.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+        r2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select></td>' +
+          '<td colspan="2"><input type="text" name="tt_desc" placeholder='+ttDescPh+' value="'+safeDesc+'"></td>';
+        tbody.appendChild(r2);
+        var sel = r2.querySelector('select[name="tt_type"]');
+        if (sel && te.entry_type) sel.value = te.entry_type;
+      });
+      var er1 = document.createElement('tr'); er1.className = 'sg-tt-row';
+      er1.innerHTML = '<td><input type="time" name="tt_start"></td>' +
+        '<td><input type="time" name="tt_end"></td>' +
+        '<td><input type="text" name="tt_title" oninput="sgGrowTTTable(this)"></td>' +
+        '<td><input type="text" name="tt_room"></td>';
+      tbody.appendChild(er1);
+      var er2 = document.createElement('tr'); er2.className = 'sg-tt-row-detail';
+      er2.innerHTML = '<td colspan="2"><select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select></td>' +
+        '<td colspan="2"><input type="text" name="tt_desc" placeholder='+ttDescPh+'></td>';
+      tbody.appendChild(er2);
+    }
+  }
 })();
 {{end}}
 

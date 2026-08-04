@@ -338,26 +338,27 @@ func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerF
 // wizPrefill is the JSON shape embedded into the page for the wizard's
 // client-side prefill script (#928 magic-link edit).
 type wizPrefill struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description"`
-	URL          string   `json:"url"`
-	StartTime    string   `json:"start_time"`
-	EndTime      string   `json:"end_time"`
-	Tags         []string `json:"tags"`
-	Location     string   `json:"location"`
-	Town         string   `json:"town"`
-	Country      string   `json:"country"`
-	Address      string   `json:"address"`
-	Zipcode      string   `json:"zipcode"`
-	Lat          string   `json:"lat,omitempty"`
-	Lon          string   `json:"lon,omitempty"`
-	Food         string   `json:"food"`
-	Drink        string   `json:"drink"`
-	Pricing      *Pricing `json:"pricing,omitempty"`
-	ContactName  string   `json:"contact_name"`
-	ContactEmail string   `json:"contact_email"`
-	Musicians    []string `json:"musicians"`
-	Instructors  []string `json:"instructors"`
+	Title        string               `json:"title"`
+	Description  string               `json:"description"`
+	URL          string               `json:"url"`
+	StartTime    string               `json:"start_time"`
+	EndTime      string               `json:"end_time"`
+	Tags         []string             `json:"tags"`
+	Location     string               `json:"location"`
+	Town         string               `json:"town"`
+	Country      string               `json:"country"`
+	Address      string               `json:"address"`
+	Zipcode      string               `json:"zipcode"`
+	Lat          string               `json:"lat,omitempty"`
+	Lon          string               `json:"lon,omitempty"`
+	Food         string               `json:"food"`
+	Drink        string               `json:"drink"`
+	Pricing      *Pricing             `json:"pricing,omitempty"`
+	ContactName  string               `json:"contact_name"`
+	ContactEmail string               `json:"contact_email"`
+	Musicians    []string             `json:"musicians"`
+	Instructors  []string             `json:"instructors"`
+	Timetable    []TimetableEntryReq  `json:"timetable,omitempty"`
 }
 
 func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -394,6 +395,16 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		for _, ins := range ev.Instructors {
 			pf.Instructors = append(pf.Instructors, ins.Name)
+		}
+		for _, te := range ev.Timetable {
+			pf.Timetable = append(pf.Timetable, TimetableEntryReq{
+				StartTime:   te.StartTime,
+				EndTime:     te.EndTime,
+				Title:       te.Title,
+				Description: te.Description,
+				Room:        te.Room,
+				EntryType:   te.EntryType,
+			})
 		}
 		b, _ := json.Marshal(pf)
 		prefillTags := make(map[string]bool, len(pf.Tags))

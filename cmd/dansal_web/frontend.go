@@ -60,7 +60,6 @@ type TemplateData struct {
 	BingSiteVerification   string
 	BannerAIGenerated      bool
 	LogoAIGenerated        bool
-	AIBadgeExists          bool
 }
 
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
@@ -150,7 +149,6 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		OGImage:                "https://" + cfg.Domain + "/banner.avif",
 		BannerAIGenerated:      siteCfg.BannerAIGenerated(),
 		LogoAIGenerated:        siteCfg.LogoAIGenerated(),
-		AIBadgeExists:          siteCfg.AIBadgeExists(),
 	}
 }
 
@@ -354,6 +352,9 @@ var logoAVIF []byte
 
 //go:embed static/banner.avif
 var bannerAVIF []byte
+
+//go:embed static/ai-badge.svg
+var aiBadgeDefault []byte
 
 //go:embed static/qrcode.min.js
 var qrcodeJS []byte

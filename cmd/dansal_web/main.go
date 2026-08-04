@@ -125,7 +125,7 @@ func main() {
 	initDBKey()
 	db := initDB(cfg.DBPath)
 	migrateActorKeyEncryption(db)
-	siteCfg = newSiteSettingsCache(db, cfg.ImagesDir)
+	siteCfg = newSiteSettingsCache(db)
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,
 		HTTP:           &http.Client{Timeout: 180 * time.Second},
@@ -206,11 +206,7 @@ func main() {
 				http.NotFound(w, r)
 			}
 		})
-		r.HandleFunc("GET /ai-badge", func(w http.ResponseWriter, r *http.Request) {
-			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "ai-badge") {
-				http.NotFound(w, r)
-			}
-		})
+		r.HandleFunc("GET /ai-badge", dynamicSVGHandler(cfg.ImagesDir, "ai-badge", aiBadgeDefault))
 		r.HandleFunc("POST /internal/relay/redeliver", internalRelayRedeliverHandler(cfg, db, client))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Vary", "Accept-Encoding")

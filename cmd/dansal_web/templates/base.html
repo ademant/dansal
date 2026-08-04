@@ -339,7 +339,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 {{if gt .BannerHeight 0}}
 <div class="site-banner" style="position:relative;display:block">
   <img src="/banner.avif" alt="{{.SiteName}} banner{{if .BannerAIGenerated}}; generated with help of AI{{end}}" width="960" height="{{.BannerHeight}}" style="aspect-ratio:960/{{.BannerHeight}};width:100%;display:block">
-  {{if and .BannerAIGenerated .AIBadgeExists}}<img src="/ai-badge" alt="" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none" aria-hidden="true">{{end}}
+  {{if .BannerAIGenerated}}<img src="/ai-badge" alt="" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none" aria-hidden="true">{{end}}
 </div>
 {{end}}
 <style>

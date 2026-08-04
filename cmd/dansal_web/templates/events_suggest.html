@@ -208,39 +208,8 @@
       <input type="hidden" id="sg-zipcode"  name="zipcode">
     </div>
 
-    <!-- Step 4: Timetable -->
+    <!-- Step 4: Details -->
     <div class="wiz-step" data-step="4" hidden>
-      <table class="growing-table" id="sg-tt-table">
-        <thead>
-          <tr>
-            <th>{{$.Strings.T "tt_start"}}</th>
-            <th>{{$.Strings.T "tt_end"}}</th>
-            <th>{{$.Strings.T "tt_title"}}</th>
-            <th>{{$.Strings.T "tt_room"}}</th>
-          </tr>
-        </thead>
-        <tbody id="sg-tt-body">
-          <tr class="sg-tt-row">
-            <td><input type="time" name="tt_start"></td>
-            <td><input type="time" name="tt_end"></td>
-            <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="sgGrowTTTable(this)"></td>
-            <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
-          </tr>
-          <tr class="sg-tt-row-detail">
-            <td colspan="2">
-              <select name="tt_type" class="tt-type-sel">
-                <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
-                <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
-              </select>
-            </td>
-            <td colspan="2"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Step 5: Details -->
-    <div class="wiz-step" data-step="5" hidden>
       <div class="form-row">
         <label>{{$.Strings.T "evt_description"}}
           <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
@@ -277,6 +246,38 @@
           <input type="email" name="contact_email">
         </label>
       </div>
+    </div>
+
+    <!-- Step 5: Timetable -->
+    <div class="wiz-step" data-step="5" hidden>
+      <p class="suggest-hint hint-review">{{$.Strings.T "suggest_timetable_hint"}}</p>
+      <table class="growing-table" id="sg-tt-table">
+        <thead>
+          <tr>
+            <th>{{$.Strings.T "tt_start"}}</th>
+            <th>{{$.Strings.T "tt_end"}}</th>
+            <th>{{$.Strings.T "tt_title"}}</th>
+            <th>{{$.Strings.T "tt_room"}}</th>
+          </tr>
+        </thead>
+        <tbody id="sg-tt-body">
+          <tr class="sg-tt-row">
+            <td><input type="time" name="tt_start"></td>
+            <td><input type="time" name="tt_end"></td>
+            <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="sgGrowTTTable(this)"></td>
+            <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
+          </tr>
+          <tr class="sg-tt-row-detail">
+            <td colspan="2">
+              <select name="tt_type" class="tt-type-sel">
+                <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
+                <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
+              </select>
+            </td>
+            <td colspan="2"><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Step 6: Review & submit -->

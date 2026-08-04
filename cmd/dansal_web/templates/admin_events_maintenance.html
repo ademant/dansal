@@ -167,7 +167,7 @@
   <tbody>
   {{range .Events}}
   {{$startDate := isoDate .StartTime}}
-  {{$endDate   := isoEndDate .EndTime}}
+  {{$endDate   := isoEndDate .StartTime .EndTime}}
   {{$startTime := isoTime .StartTime}}
   {{$endTime   := isoTime .EndTime}}
   {{$sameDay   := eq $startDate $endDate}}

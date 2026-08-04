@@ -449,6 +449,7 @@
   <!-- Timetable -->
   <section class="form-section optional-section" id="sec-timetable">
     <h2>{{$.Strings.T "evt_timetable"}}</h2>
+    {{if not .IsNew}}<p style="margin-bottom:.5rem"><a href="/admin/events/{{.Event.ID}}/timetable" class="btn-secondary" style="text-decoration:none;display:inline-block;padding:.25rem .6rem;font-size:.85rem">🗓 Open timetable editor</a></p>{{end}}
     {{if .TimetableError}}<p class="form-error" role="alert">{{.TimetableError}}</p>{{end}}
     {{if and .IsNew (not .Event.Timetable)}}
     <p class="field-hint">{{$.Strings.T "evt_timetable_save_first_hint"}}</p>

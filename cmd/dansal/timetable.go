@@ -191,7 +191,9 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 		insIDArg = *req.InstructorID
 	}
 	entryType := req.EntryType
-	if entryType != "workshop" && entryType != "break" {
+	switch entryType {
+	case "bal", "workshop", "break", "session", "dance-workshop", "musician-workshop":
+	default:
 		entryType = "bal"
 	}
 	var entryDateArg any
@@ -306,4 +308,26 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(entries)
+}
+
+// DELETE /api/v1/events/{id}/timetable — remove all entries for an event
+func deleteTimetable(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+	if _, err := db.Exec("DELETE FROM timetable_entries WHERE event_id = ?", eventID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

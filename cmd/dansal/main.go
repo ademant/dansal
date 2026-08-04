@@ -2013,6 +2013,10 @@ func migrateDB() {
 	// (coffee break / lunch slots), alongside the existing bal/workshop.
 	migrateTimetableEntriesBreakType()
 
+	// #893: extend timetable_entries.entry_type to allow session, dance-workshop,
+	// musician-workshop — needed by the dedicated timetable editor.
+	migrateTimetableEntriesExtendedTypes()
+
 	// #740: migrate locations.aliases JSON column to location_aliases junction table.
 	migrateLocationAliasesToJunction()
 
@@ -2339,6 +2343,69 @@ func migrateTimetableEntriesBreakType() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
 	log.Printf("migrateTimetableEntriesBreakType: added 'break' to timetable_entries.entry_type CHECK constraint")
+}
+
+// migrateTimetableEntriesExtendedTypes extends the entry_type CHECK in
+// timetable_entries to include 'session', 'dance-workshop', 'musician-workshop'
+// for the dedicated timetable editor (#893).
+func migrateTimetableEntriesExtendedTypes() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='timetable_entries'").Scan(&schema)
+	if strings.Contains(schema, "'session'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateTimetableEntriesExtendedTypes: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE timetable_entries_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			start_time TEXT NOT NULL,
+			end_time TEXT NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT,
+			room TEXT,
+			location_id INTEGER,
+			musician_id INTEGER,
+			instructor_id INTEGER,
+			entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break', 'session', 'dance-workshop', 'musician-workshop')),
+			entry_date TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+			FOREIGN KEY (location_id) REFERENCES locations(id),
+			FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+			FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO timetable_entries_chk
+			(id, event_id, start_time, end_time, title, description, room,
+			 location_id, musician_id, instructor_id, entry_type, entry_date, created_at)
+		SELECT id, event_id, start_time, end_time, title, description, room,
+			location_id, musician_id, instructor_id,
+			CASE WHEN entry_type IN ('bal','workshop','break','session','dance-workshop','musician-workshop') THEN entry_type ELSE 'bal' END,
+			entry_date, created_at
+		FROM timetable_entries`,
+		`DROP TABLE timetable_entries`,
+		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateTimetableEntriesExtendedTypes: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
+	log.Printf("migrateTimetableEntriesExtendedTypes: extended timetable_entries.entry_type CHECK constraint")
 }
 
 // migrateEventsEnumChecks adds CHECK constraints to events.workshop_difficulty
@@ -3084,7 +3151,7 @@ func createTables() error {
 		location_id INTEGER,
 		musician_id INTEGER,
 		instructor_id INTEGER,
-		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break')),
+		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break', 'session', 'dance-workshop', 'musician-workshop')),
 		entry_date TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
@@ -3584,6 +3651,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
 	smux.Handle("POST /api/v1/events/{id}/enrich", auth(http.HandlerFunc(enrichEvent)))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
+	smux.Handle("DELETE /api/v1/events/{id}/timetable", auth(deleteTimetable))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 
 	// Event relationship sub-resources (#727)

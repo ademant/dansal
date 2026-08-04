@@ -2247,6 +2247,18 @@ func (c *DansalClient) AddTimetableEntries(ctx context.Context, eventID int, ent
 	return nil
 }
 
+func (c *DansalClient) DeleteTimetable(ctx context.Context, eventID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/events/%d/timetable", eventID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("delete timetable: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
 func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.BaseURL+"/api/v1/verify/"+token, nil)

@@ -1446,6 +1446,10 @@ var tmplFuncMap = template.FuncMap{
 		return m
 	},
 	"add": func(a, b int) int { return a + b },
+	"json": func(v any) template.JS {
+		b, _ := json.Marshal(v)
+		return template.JS(b)
+	},
 	// pagerRange returns page numbers to display, using -1 as an ellipsis sentinel.
 	"pagerRange": func(current, total int) []int {
 		if total <= 7 {
@@ -1538,6 +1542,7 @@ type Templates struct {
 	adminLocationDashboard    *template.Template
 	adminInstructorDashboard  *template.Template
 	adminMusicianDashboard    *template.Template
+	adminTimetable            *template.Template
 	seriesToken               *template.Template
 	embedEvents               *template.Template
 	embedEvent                *template.Template
@@ -1631,6 +1636,7 @@ func loadTemplates() *Templates {
 		adminLocationDashboard:    load("admin_location_dashboard"),
 		adminInstructorDashboard:  load("admin_instructor_dashboard"),
 		adminMusicianDashboard:    load("admin_musician_dashboard"),
+		adminTimetable:            load("admin_timetable"),
 		seriesToken:               load("series_token"),
 		embedEvents:               loadEmbed("embed_events"),
 		embedEvent:                loadEmbed("embed_event"),

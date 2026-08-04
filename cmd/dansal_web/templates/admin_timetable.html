@@ -1,0 +1,839 @@
+{{template "base" .}}
+{{define "head_extra"}}
+<style>
+.tt-editor-page{max-width:none;padding:0 1rem 2rem}
+.tt-action-bar{display:flex;align-items:center;gap:.5rem;padding:.5rem 0 .75rem;flex-wrap:wrap}
+.tt-action-bar .save-status{font-size:.85rem;color:var(--fg-dim);margin-left:.5rem}
+.tt-room-bar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;min-height:2rem}
+.tt-room-chip{display:inline-flex;align-items:center;gap:.3rem;background:var(--bg-subtle);border:1px solid var(--border-mid);border-radius:12px;padding:.15rem .6rem;font-size:.82rem;cursor:default}
+.tt-room-chip button{background:none;border:none;cursor:pointer;color:var(--fg-dim);font-size:.9rem;padding:0 .1rem;line-height:1}
+.tt-room-chip button:hover{color:var(--danger)}
+.tt-room-add-wrap{display:inline-flex;align-items:center;gap:.3rem;position:relative}
+.tt-room-add-input{border:1px dashed var(--border-mid);border-radius:12px;padding:.15rem .6rem;font-size:.82rem;width:120px;background:transparent;color:var(--fg)}
+.tt-room-add-input:focus{outline:2px solid var(--primary);border-color:transparent}
+.tt-room-suggest{position:absolute;top:100%;left:0;z-index:100;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;list-style:none;padding:.2rem 0;margin:2px 0 0;min-width:150px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.tt-room-suggest li{padding:.3rem .7rem;cursor:pointer;font-size:.85rem}
+.tt-room-suggest li:hover,.tt-room-suggest li.active{background:var(--bg-hover)}
+.tt-page-nav{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.tt-page-nav button{background:none;border:1px solid var(--border-mid);border-radius:4px;padding:.2rem .6rem;cursor:pointer;color:var(--fg)}
+.tt-page-nav button:disabled{opacity:.4;cursor:default}
+.tt-page-nav .tt-page-label{font-weight:600;min-width:100px;text-align:center}
+.tt-editor-scroll{overflow-x:auto;overflow-y:auto;max-height:80vh;border:1px solid var(--border-mid);border-radius:6px;background:var(--bg)}
+.tt-editor-grid{display:flex;position:relative;min-width:max-content}
+.tt-time-axis{width:44px;flex-shrink:0;position:sticky;left:0;z-index:5;background:var(--bg);border-right:1px solid var(--border-mid)}
+.tt-axis-header{height:32px;border-bottom:1px solid var(--border-mid);background:var(--bg-subtle)}
+.tt-axis-body{position:relative}
+.tt-axis-mark{position:absolute;right:6px;font-size:.72rem;color:var(--fg-dim);transform:translateY(-50%);white-space:nowrap;line-height:1}
+.tt-axis-line{position:absolute;left:0;right:0;border-top:1px solid var(--border-mid)}
+.tt-axis-line.half{border-top:1px dashed var(--border-light,var(--border-mid))}
+.tt-day-col{display:flex;flex-direction:column;border-right:1px solid var(--border-mid);min-width:0}
+.tt-day-col:last-child{border-right:none}
+.tt-day-header{height:32px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:600;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);white-space:nowrap;padding:0 .5rem;position:sticky;top:0;z-index:4}
+.tt-rooms-header{display:flex;height:0}
+.tt-room-col{flex:1;position:relative;min-width:110px}
+.tt-room-col-header{position:sticky;top:32px;z-index:3;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);font-size:.72rem;color:var(--fg-dim);padding:.2rem .4rem;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.tt-room-col+.tt-room-col{border-left:1px solid var(--border-mid)}
+.tt-room-body{position:relative;cursor:crosshair}
+.tt-gridline{position:absolute;left:0;right:0;pointer-events:none}
+.tt-gridline.hour{border-top:1px solid var(--border-mid)}
+.tt-gridline.half{border-top:1px dashed var(--border-light,rgba(128,128,128,.3))}
+/* tiles */
+.tt-panel{position:absolute;left:2px;right:2px;border-radius:5px;padding:.2rem .35rem;overflow:hidden;cursor:grab;box-sizing:border-box;font-size:.78rem;line-height:1.2;user-select:none;touch-action:none;border:1px solid rgba(0,0,0,.15);transition:box-shadow .1s}
+.tt-panel:active{cursor:grabbing}
+.tt-panel:hover{box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:10}
+.tt-panel.bal{background:#4a7fcb;color:#fff}
+.tt-panel.workshop,.tt-panel.dance-workshop{background:#c9500a;color:#fff}
+.tt-panel.break{background:#666;color:#fff}
+.tt-panel.session{background:#2a8a4a;color:#fff}
+.tt-panel.musician-workshop{background:#8a2ab0;color:#fff}
+.tt-panel .tt-panel-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt-panel .tt-panel-sub{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
+.tt-panel .tt-panel-time{opacity:.75;font-size:.7rem}
+/* tt-continues: starts here, ends next day — only round top corners */
+.tt-panel.tt-continues{border-radius:5px 5px 0 0}
+/* tt-continued: started previous day, ends here — only round bottom corners */
+.tt-panel.tt-continued{border-radius:0 0 5px 5px}
+/* resize handles */
+.tt-rh{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:2}
+.tt-rh-top{top:0}
+.tt-rh-bot{bottom:0}
+/* ghost tile during new-entry drag */
+.tt-ghost{position:absolute;left:2px;right:2px;background:rgba(74,127,203,.35);border:2px dashed #4a7fcb;border-radius:5px;pointer-events:none;box-sizing:border-box}
+/* popup */
+#tt-popup{border:1px solid var(--border-mid);border-radius:8px;padding:1rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:480px;width:95vw}
+#tt-popup::backdrop{background:rgba(0,0,0,.4)}
+#tt-popup h2{margin:0 0 .75rem;font-size:1rem}
+.tt-popup-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem}
+.tt-popup-row.full{grid-template-columns:1fr}
+.tt-popup-field{display:flex;flex-direction:column;gap:.2rem}
+.tt-popup-field label{font-size:.78rem;color:var(--fg-dim);font-weight:600}
+.tt-popup-field input,.tt-popup-field select,.tt-popup-field textarea{background:var(--bg-input,var(--bg));border:1px solid var(--border-mid);border-radius:4px;padding:.35rem .5rem;color:var(--fg);font-size:.88rem;width:100%;box-sizing:border-box}
+.tt-popup-field textarea{resize:vertical;min-height:56px}
+.tt-popup-actions{display:flex;align-items:center;gap:.5rem;margin-top:.75rem}
+.tt-popup-actions .tt-del-entry{margin-left:auto}
+/* nav modal */
+#tt-nav-modal{border:1px solid var(--border-mid);border-radius:8px;padding:1.25rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:360px}
+#tt-nav-modal::backdrop{background:rgba(0,0,0,.4)}
+#tt-nav-modal p{margin:0 0 1rem}
+#tt-nav-modal .modal-actions{display:flex;flex-direction:column;gap:.5rem}
+/* autocomplete */
+.tt-ac-wrap{position:relative}
+.tt-ac-suggest{position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:4px;list-style:none;padding:.2rem 0;margin:2px 0 0;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.tt-ac-suggest li{padding:.3rem .6rem;cursor:pointer;font-size:.84rem}
+.tt-ac-suggest li:hover,.tt-ac-suggest li.tt-ac-active{background:var(--bg-hover)}
+.tt-ac-suggest li.tt-opt-sep{height:1px;background:var(--border-mid);padding:0;margin:.2rem 0}
+.tt-ac-suggest li.tt-create{color:var(--primary)}
+</style>
+{{end}}
+{{define "content"}}
+{{with .Data}}
+<div class="tt-editor-page">
+<h1 style="margin-bottom:.5rem">{{$.Strings.T "evt_timetable"}} — <a href="/admin/events/{{.Event.ID}}/edit">{{.Event.Title}}</a></h1>
+
+<div class="tt-action-bar evt-action-bar">
+  <button type="button" class="btn-secondary" id="back-btn" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" class="btn-primary" id="save-btn" onclick="saveTimetable()" disabled>{{$.Strings.T "admin_save"}}</button>
+  <button type="button" class="btn-del" onclick="deleteTimetable()">Delete timetable</button>
+  <span class="save-status" id="save-status" hidden></span>
+</div>
+
+<div id="tt-room-bar" class="tt-room-bar">
+  <span style="font-size:.82rem;color:var(--fg-dim)">Rooms:</span>
+  <div id="tt-chips"></div>
+  <div class="tt-room-add-wrap">
+    <input type="text" class="tt-room-add-input" id="tt-room-add" placeholder="+ Add room…" autocomplete="off"
+      oninput="roomAddInput(this)" onkeydown="roomAddKeydown(event,this)" onfocus="roomAddInput(this)">
+    <ul class="tt-room-suggest" id="tt-room-suggest" hidden></ul>
+  </div>
+</div>
+
+<div id="tt-page-nav" class="tt-page-nav" hidden>
+  <button type="button" id="tt-prev" onclick="changePage(-1)">‹</button>
+  <span class="tt-page-label" id="tt-page-label"></span>
+  <button type="button" id="tt-next" onclick="changePage(1)">›</button>
+</div>
+
+<div class="tt-editor-scroll">
+  <div class="tt-editor-grid" id="tt-editor-grid"></div>
+</div>
+</div>
+
+<!-- Entry edit popup -->
+<dialog id="tt-popup">
+  <h2 id="tt-popup-title">Entry</h2>
+  <div class="tt-popup-row">
+    <div class="tt-popup-field"><label>Start</label><input type="time" id="pp-start" oninput="ppDirty()"></div>
+    <div class="tt-popup-field"><label>End</label><input type="time" id="pp-end" oninput="ppDirty()"></div>
+  </div>
+  <div class="tt-popup-row full">
+    <div class="tt-popup-field"><label>Title</label><input type="text" id="pp-title" oninput="ppDirty()"></div>
+  </div>
+  <div class="tt-popup-row">
+    <div class="tt-popup-field"><label>Type</label>
+      <select id="pp-type" onchange="ppDirty()">
+        <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
+        <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
+        <option value="break">{{$.Strings.T "tt_type_break"}}</option>
+        <option value="session">{{$.Strings.T "tt_type_session"}}</option>
+        <option value="dance-workshop">{{$.Strings.T "tt_type_dance_workshop"}}</option>
+        <option value="musician-workshop">{{$.Strings.T "tt_type_musician_workshop"}}</option>
+      </select>
+    </div>
+    <div class="tt-popup-field"><label>Room</label>
+      <select id="pp-room-sel" onchange="ppRoomSelChange()">
+        <option value="">— none —</option>
+      </select>
+    </div>
+  </div>
+  <div class="tt-popup-row full tt-ac-wrap">
+    <div class="tt-popup-field"><label>Musician</label>
+      <input type="text" id="pp-mus-text" autocomplete="off" oninput="ppMusInput()" onfocus="ppMusOpen()">
+      <input type="hidden" id="pp-mus-id">
+    </div>
+    <ul class="tt-ac-suggest" id="pp-mus-suggest" hidden></ul>
+  </div>
+  <div class="tt-popup-row full tt-ac-wrap">
+    <div class="tt-popup-field"><label>Instructor</label>
+      <input type="text" id="pp-ins-text" autocomplete="off" oninput="ppInsInput()" onfocus="ppInsOpen()">
+      <input type="hidden" id="pp-ins-id">
+    </div>
+    <ul class="tt-ac-suggest" id="pp-ins-suggest" hidden></ul>
+  </div>
+  <div class="tt-popup-row full">
+    <div class="tt-popup-field"><label>Description</label>
+      <textarea id="pp-desc" oninput="ppDirty()"></textarea>
+    </div>
+  </div>
+  <div class="tt-popup-actions">
+    <button type="button" class="btn-primary" onclick="ppSave()">Save entry</button>
+    <button type="button" class="btn-secondary" onclick="ppCancel()">Cancel</button>
+    <button type="button" class="btn-del tt-del-entry" id="pp-del-btn" onclick="ppDelete()">Delete</button>
+  </div>
+</dialog>
+
+<!-- Unsaved-changes nav modal -->
+<dialog id="tt-nav-modal">
+  <p>{{$.Strings.T "admin_unsaved_confirm"}}</p>
+  <div class="modal-actions">
+    <button type="button" class="btn-primary" onclick="navModalSaveGo()">Save &amp; leave</button>
+    <button type="button" class="btn-del" onclick="navModalDiscard()">Discard &amp; leave</button>
+    <button type="button" class="btn-secondary" onclick="navModalClose()">Stay</button>
+  </div>
+</dialog>
+
+<script>
+// ─── constants ───────────────────────────────────────────────────────────────
+var EVT_ID = {{.Event.ID}};
+var PX_PER_MIN = 2;
+var SNAP = 15;
+var ROOM_COL_W = 130; // min px per room column
+
+// ─── data ────────────────────────────────────────────────────────────────────
+var _entries = {{.Timetable | json}};
+var _allRooms = {{.Rooms | json}};
+var _allMusicians = (function(){
+  var ms = {{.Musicians | json}};
+  return ms.map(function(m){return {id:m.id,name:m.bandname||m.name||''};});
+})();
+var _allInstructors = (function(){
+  var ins = {{.Instructors | json}};
+  return ins.map(function(i){return {id:i.id,name:i.name||''};});
+})();
+var _evtStart = "{{.Event.StartTime}}";
+var _evtEnd = "{{.Event.EndTime}}";
+
+// Assign client-side IDs to loaded entries
+var _cidCounter = 1;
+(function(){
+  _entries.forEach(function(e){ e._cid = _cidCounter++; });
+})();
+function _nextCid(){ return _cidCounter++; }
+
+// ─── state ───────────────────────────────────────────────────────────────────
+var _rooms = []; // {id: int|null, label: string} — room columns currently shown
+var _days = [];  // ["YYYY-MM-DD", ...]
+var _page = 0;
+var _formDirty = false;
+var _gridMin = 18*60;  // 18:00
+var _gridMax = 28*60;  // 04:00 next day
+var _popupEntry = null; // entry currently open in popup (or null for new)
+var _popupDay = null;
+var _isDragging = false;
+var _navTarget = null; // pending navigation URL
+
+// ─── init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
+function init(){
+  _days = computeDays();
+  recomputeTimeRange();
+  recomputeRooms();
+  renderAll();
+  initDirtyGuard();
+}
+
+// ─── days ─────────────────────────────────────────────────────────────────────
+function computeDays(){
+  var start = _evtStart ? new Date(_evtStart) : new Date();
+  var end = _evtEnd ? new Date(_evtEnd) : start;
+  // Clamp: entries might have entry_date outside event range; include those too
+  var entryDates = _entries.map(function(e){ return e.entry_date||''; }).filter(Boolean);
+  var days = [];
+  var cur = new Date(start);
+  cur.setUTCHours(0,0,0,0);
+  var last = new Date(end);
+  last.setUTCHours(0,0,0,0);
+  // add one day margin after end for midnight-spanning entries
+  last.setUTCDate(last.getUTCDate()+1);
+  while(cur <= last){
+    days.push(cur.toISOString().slice(0,10));
+    cur.setUTCDate(cur.getUTCDate()+1);
+  }
+  // include any extra entry_date days
+  entryDates.forEach(function(d){
+    if(days.indexOf(d)<0) days.push(d);
+  });
+  days.sort();
+  // remove trailing empty days (no entries, past event end)
+  while(days.length > 1){
+    var ld = days[days.length-1];
+    var hasEntry = _entries.some(function(e){ return effectiveDate(e)===ld; });
+    var evtEndDate = _evtEnd ? new Date(_evtEnd).toISOString().slice(0,10) : '';
+    if(!hasEntry && ld > evtEndDate) days.pop(); else break;
+  }
+  if(!days.length) days = [new Date().toISOString().slice(0,10)];
+  return days;
+}
+
+function effectiveDate(e){
+  return e.entry_date || (_days.length ? _days[0] : '');
+}
+
+// ─── time range ──────────────────────────────────────────────────────────────
+function recomputeTimeRange(){
+  if(!_entries.length){ _gridMin=18*60; _gridMax=28*60; return; }
+  var mn=999, mx=0;
+  _entries.forEach(function(e){
+    var s=parseHHMM(e.start_time||'18:00');
+    var en=parseHHMM(e.end_time||'19:00');
+    if(en<s) en+=1440; // crosses midnight
+    // convert to absolute minutes
+    var sa = s < _gridMin ? s+1440-_gridMin : s-_gridMin; // not exact yet, just gather raw
+    mn = Math.min(mn, s);
+    mx = Math.max(mx, en);
+  });
+  // round down to prev hour, round up to next hour
+  mn = Math.floor(mn/60)*60;
+  mx = Math.ceil(mx/60)*60;
+  // ensure at least 2h range
+  if(mx-mn < 120) mx = mn+120;
+  _gridMin = mn; _gridMax = mx;
+}
+
+function parseHHMM(t){
+  var p=t.split(':'); return parseInt(p[0]||0)*60+parseInt(p[1]||0);
+}
+function minToHHMM(m){
+  m = ((m%1440)+1440)%1440;
+  return ('0'+Math.floor(m/60)).slice(-2)+':'+('0'+(m%60)).slice(-2);
+}
+function absOffset(rawMin){
+  // convert raw [0..1440) time to absolute offset from _gridMin
+  if(rawMin < _gridMin) return rawMin + 1440 - _gridMin;
+  return rawMin - _gridMin;
+}
+
+// ─── rooms ────────────────────────────────────────────────────────────────────
+function recomputeRooms(){
+  // build room list from entries' location_id/location_name + explicit _rooms
+  var seen = {};
+  var out = [];
+  // rooms already in _rooms
+  _rooms.forEach(function(r){ seen[r.id !== null ? 'id:'+r.id : 'lbl:'+r.label] = true; out.push(r); });
+  _entries.forEach(function(e){
+    if(e.location_id){
+      var k='id:'+e.location_id;
+      if(!seen[k]){ seen[k]=true; out.push({id:e.location_id,label:e.location_name||('Room '+e.location_id)}); }
+    } else if(e.room){
+      var k2='lbl:'+e.room;
+      if(!seen[k2]){ seen[k2]=true; out.push({id:null,label:e.room}); }
+    }
+  });
+  _rooms = out;
+}
+
+// ─── render all ──────────────────────────────────────────────────────────────
+function renderAll(){
+  renderRoomChips();
+  renderPageNav();
+  renderGrid();
+}
+
+// ─── room chips ──────────────────────────────────────────────────────────────
+function renderRoomChips(){
+  var el = document.getElementById('tt-chips');
+  el.innerHTML='';
+  _rooms.forEach(function(r){
+    var chip = document.createElement('span');
+    chip.className='tt-room-chip';
+    chip.textContent=r.label;
+    var btn = document.createElement('button');
+    btn.textContent='×';
+    btn.title='Remove room column';
+    btn.addEventListener('click', function(){ removeRoom(r); });
+    chip.appendChild(btn);
+    el.appendChild(chip);
+  });
+}
+
+function removeRoom(r){
+  _rooms = _rooms.filter(function(x){ return x !== r; });
+  // entries in removed room → keep them, they'll show in "other" column
+  _markDirty();
+  renderAll();
+}
+
+// ─── room add input ──────────────────────────────────────────────────────────
+function roomAddInput(inp){
+  var q = inp.value.trim().toLowerCase();
+  var sug = document.getElementById('tt-room-suggest');
+  sug.innerHTML=''; sug.hidden=true;
+  var existing = _rooms.map(function(r){ return r.label.toLowerCase(); });
+  var hits = _allRooms.filter(function(r){
+    var n=(r.short_name||r.location||'').toLowerCase();
+    return (!q || n.indexOf(q)!==-1) && existing.indexOf(n)<0;
+  }).slice(0,8);
+  hits.forEach(function(r){
+    var n=r.short_name||r.location||('Room '+r.id);
+    var li = document.createElement('li');
+    li.textContent=n;
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault(); inp.value=''; sug.hidden=true;
+      addRoom({id:r.id,label:n});
+    });
+    sug.appendChild(li);
+  });
+  // offer free-text entry
+  if(q && !hits.some(function(r){ return (r.short_name||r.location||'').toLowerCase()===q; })){
+    var li = document.createElement('li');
+    li.textContent='+ "'+inp.value.trim()+'"';
+    li.style.fontStyle='italic';
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault(); var lbl=inp.value.trim(); inp.value=''; sug.hidden=true;
+      addRoom({id:null,label:lbl});
+    });
+    sug.appendChild(li);
+  }
+  if(sug.children.length) sug.hidden=false;
+}
+
+function roomAddKeydown(e, inp){
+  var sug=document.getElementById('tt-room-suggest');
+  if(e.key==='Escape'){ sug.hidden=true; inp.value=''; return; }
+  if(e.key==='Enter' && !sug.hidden){
+    e.preventDefault();
+    var first=sug.querySelector('li');
+    if(first) first.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));
+    return;
+  }
+}
+
+document.addEventListener('click',function(e){
+  var sug=document.getElementById('tt-room-suggest');
+  if(sug && !sug.contains(e.target) && e.target!==document.getElementById('tt-room-add')) sug.hidden=true;
+});
+
+function addRoom(r){
+  var exists=_rooms.some(function(x){ return x.id===r.id && x.label===r.label; });
+  if(!exists){ _rooms.push(r); _markDirty(); renderAll(); }
+}
+
+// ─── page nav ─────────────────────────────────────────────────────────────────
+function renderPageNav(){
+  var nav = document.getElementById('tt-page-nav');
+  if(_days.length <= 1){ nav.hidden=true; return; }
+  nav.hidden=false;
+  if(_page >= _days.length) _page=0;
+  document.getElementById('tt-page-label').textContent = _days[_page];
+  document.getElementById('tt-prev').disabled = _page===0;
+  document.getElementById('tt-next').disabled = _page===_days.length-1;
+}
+function changePage(d){ _page = Math.max(0,Math.min(_days.length-1,_page+d)); renderPageNav(); renderGrid(); }
+
+// ─── grid render ─────────────────────────────────────────────────────────────
+function renderGrid(){
+  var gridH = (_gridMax - _gridMin) * PX_PER_MIN;
+  var el = document.getElementById('tt-editor-grid'); el.innerHTML='';
+
+  // time axis
+  var axis = document.createElement('div'); axis.className='tt-time-axis';
+  var axisHdr = document.createElement('div'); axisHdr.className='tt-axis-header'; axis.appendChild(axisHdr);
+  var axisBody = document.createElement('div'); axisBody.className='tt-axis-body'; axisBody.style.height=gridH+'px';
+  // marks every 30 min
+  for(var m=0; m<=_gridMax-_gridMin; m+=30){
+    var rawMin = (_gridMin+m) % 1440;
+    var line = document.createElement('div');
+    line.className = 'tt-axis-line' + (m%60===0?'':' half');
+    line.style.top = (m*PX_PER_MIN)+'px'; axisBody.appendChild(line);
+    if(m%60===0){
+      var lbl = document.createElement('div');
+      lbl.className='tt-axis-mark'; lbl.style.top=(m*PX_PER_MIN)+'px';
+      lbl.textContent = minToHHMM(rawMin); axisBody.appendChild(lbl);
+    }
+  }
+  axis.appendChild(axisBody); el.appendChild(axis);
+
+  // determine days to show
+  var visibleDays = _days.length===1 ? _days : [_days[_page]];
+  var roomList = _rooms.concat([{id:-1,label:'Other'}]); // -1=other sentinel
+
+  visibleDays.forEach(function(day){
+    var dayCol = document.createElement('div'); dayCol.className='tt-day-col';
+    var dayHdr = document.createElement('div'); dayHdr.className='tt-day-header'; dayHdr.textContent=day; dayCol.appendChild(dayHdr);
+
+    // Room-column headers row
+    var roomsHdr = document.createElement('div'); roomsHdr.style.display='flex'; roomsHdr.style.position='sticky'; roomsHdr.style.top='32px'; roomsHdr.style.zIndex='3';
+    roomList.forEach(function(r){
+      var rh = document.createElement('div'); rh.className='tt-room-col-header'; rh.style.flex='1'; rh.style.minWidth=ROOM_COL_W+'px'; rh.title=r.label; rh.textContent=r.label; roomsHdr.appendChild(rh);
+    });
+    dayCol.appendChild(roomsHdr);
+
+    // Room column bodies
+    var roomsBody = document.createElement('div'); roomsBody.style.display='flex'; roomsBody.style.position='relative';
+
+    roomList.forEach(function(r){
+      var body = document.createElement('div'); body.className='tt-room-body'; body.style.height=gridH+'px'; body.style.flex='1'; body.style.minWidth=ROOM_COL_W+'px'; body.style.position='relative';
+      body.dataset.day=day; body.dataset.roomId=r.id; body.dataset.roomLabel=r.label;
+
+      // grid lines
+      for(var m=0; m<=_gridMax-_gridMin; m+=30){
+        var gl=document.createElement('div'); gl.className='tt-gridline '+(m%60===0?'hour':'half'); gl.style.top=(m*PX_PER_MIN)+'px'; body.appendChild(gl);
+      }
+
+      // entries for this day+room
+      var colEntries = _entries.filter(function(e){
+        var ed = effectiveDate(e);
+        if(ed !== day) return false;
+        if(r.id===-1){ // other column: no location_id and no room, or room not in _rooms list
+          if(e.location_id) return !_rooms.some(function(rr){ return rr.id===e.location_id; });
+          if(e.room) return !_rooms.some(function(rr){ return rr.label===e.room && rr.id===null; });
+          return true;
+        }
+        if(r.id!==null) return e.location_id===r.id;
+        return !e.location_id && e.room===r.label;
+      });
+
+      colEntries.forEach(function(e){
+        var tile = makeTile(e); body.appendChild(tile);
+      });
+
+      // drag-to-create new entry
+      body.addEventListener('pointerdown', function(ev){
+        if(ev.button!==0) return;
+        if(ev.target!==body && !ev.target.classList.contains('tt-gridline')) return;
+        startNewDrag(ev, body, day, r);
+      });
+
+      roomsBody.appendChild(body);
+    });
+    dayCol.appendChild(roomsBody);
+    el.appendChild(dayCol);
+  });
+}
+
+// ─── tile creation ────────────────────────────────────────────────────────────
+function makeTile(e){
+  var s = parseHHMM(e.start_time||'00:00');
+  var en = parseHHMM(e.end_time||'01:00');
+  if(en <= s) en += 1440;
+  var sOff = absOffset(s);
+  var eOff = absOffset(en > 1440+_gridMin ? _gridMax-_gridMin : Math.min(en,_gridMax)-_gridMin+(en>1440?1440:0));
+  // simple: just clamp end to grid
+  var startPx = sOff * PX_PER_MIN;
+  var endAbsOff = en < _gridMin ? en+1440-_gridMin : en-_gridMin;
+  if(endAbsOff > _gridMax-_gridMin) endAbsOff = _gridMax-_gridMin;
+  var heightPx = Math.max(20, (endAbsOff - sOff) * PX_PER_MIN);
+
+  var div = document.createElement('div');
+  div.className = 'tt-panel '+(e.entry_type||'bal');
+  div.style.top = startPx+'px'; div.style.height=heightPx+'px';
+  div.dataset.cid = e._cid;
+
+  var titleEl=document.createElement('div'); titleEl.className='tt-panel-title'; titleEl.textContent=e.title||'(entry)'; div.appendChild(titleEl);
+  if(e.musician_name||e.instructor_name){
+    var sub=document.createElement('div'); sub.className='tt-panel-sub'; sub.textContent=e.musician_name||e.instructor_name||''; div.appendChild(sub);
+  }
+  var timeEl=document.createElement('div'); timeEl.className='tt-panel-time'; timeEl.textContent=(e.start_time||'')+'–'+(e.end_time||''); div.appendChild(timeEl);
+
+  // resize handles
+  var rhTop=document.createElement('div'); rhTop.className='tt-rh tt-rh-top'; div.appendChild(rhTop);
+  var rhBot=document.createElement('div'); rhBot.className='tt-rh tt-rh-bot'; div.appendChild(rhBot);
+
+  div.addEventListener('click', function(ev){
+    if(_isDragging) return;
+    ev.stopPropagation();
+    openPopup(e);
+  });
+
+  setupMoveDrag(div, e);
+  setupResizeDrag(rhTop, e, 'top');
+  setupResizeDrag(rhBot, e, 'bot');
+
+  return div;
+}
+
+// ─── drag: move tile ──────────────────────────────────────────────────────────
+function setupMoveDrag(tile, entry){
+  var startY, origTop, origH, startMin, body;
+  tile.addEventListener('pointerdown', function(ev){
+    if(ev.target.classList.contains('tt-rh')) return; // handled by resize
+    if(ev.button!==0) return;
+    ev.stopPropagation();
+    body = tile.closest('.tt-room-body');
+    startY = ev.clientY;
+    origTop = parseFloat(tile.style.top)||0;
+    origH = parseFloat(tile.style.height)||40;
+    startMin = parseHHMM(entry.start_time||'00:00');
+    tile.setPointerCapture(ev.pointerId);
+    _isDragging = false;
+  });
+  tile.addEventListener('pointermove', function(ev){
+    if(!ev.buttons) return;
+    var dy = ev.clientY - startY;
+    if(Math.abs(dy)<3){ return; }
+    _isDragging = true;
+    var newTop = Math.max(0, origTop + dy);
+    var snappedOff = Math.round((newTop/PX_PER_MIN)/SNAP)*SNAP;
+    newTop = snappedOff * PX_PER_MIN;
+    tile.style.top = newTop+'px';
+  });
+  tile.addEventListener('pointerup', function(ev){
+    if(!_isDragging){ _isDragging=false; return; }
+    var newTop = parseFloat(tile.style.top)||0;
+    var newOff = Math.round((newTop/PX_PER_MIN)/SNAP)*SNAP;
+    var newAbsMin = _gridMin + newOff;
+    var dMin = newAbsMin - startMin;
+    var sMin = parseHHMM(entry.start_time||'00:00') + dMin;
+    var eMin = parseHHMM(entry.end_time||'01:00') + dMin;
+    // handle crossing midnight forward/backward in grid representation
+    entry.start_time = minToHHMM(sMin);
+    entry.end_time = minToHHMM(eMin);
+    _markDirty(); renderAll();
+    setTimeout(function(){ _isDragging=false; },50);
+  });
+}
+
+// ─── drag: resize tile ────────────────────────────────────────────────────────
+function setupResizeDrag(handle, entry, which){
+  var startY, origTop, origH;
+  handle.addEventListener('pointerdown', function(ev){
+    ev.stopPropagation(); ev.preventDefault();
+    if(ev.button!==0) return;
+    startY = ev.clientY;
+    var tile = handle.closest('.tt-panel');
+    origTop = parseFloat(tile.style.top)||0;
+    origH = parseFloat(tile.style.height)||40;
+    handle.setPointerCapture(ev.pointerId);
+    _isDragging = true;
+  });
+  handle.addEventListener('pointermove', function(ev){
+    if(!ev.buttons || !_isDragging) return;
+    var tile = handle.closest('.tt-panel');
+    var dy = ev.clientY - startY;
+    if(which==='bot'){
+      var newH = Math.max(SNAP*PX_PER_MIN, origH+dy);
+      var snapped = Math.round((newH/PX_PER_MIN)/SNAP)*SNAP*PX_PER_MIN;
+      tile.style.height = snapped+'px';
+    } else {
+      var newTop = Math.max(0, origTop+dy);
+      var snappedTop = Math.round((newTop/PX_PER_MIN)/SNAP)*SNAP*PX_PER_MIN;
+      var newH2 = origH - (snappedTop - origTop);
+      if(newH2 < SNAP*PX_PER_MIN) return;
+      tile.style.top = snappedTop+'px'; tile.style.height = newH2+'px';
+    }
+  });
+  handle.addEventListener('pointerup', function(ev){
+    if(!_isDragging) return;
+    _isDragging = false;
+    var tile = handle.closest('.tt-panel');
+    var top = parseFloat(tile.style.top)||0;
+    var h = parseFloat(tile.style.height)||40;
+    var startOff = Math.round((top/PX_PER_MIN)/SNAP)*SNAP;
+    var endOff = Math.round(((top+h)/PX_PER_MIN)/SNAP)*SNAP;
+    var sMin = _gridMin + startOff;
+    var eMin = _gridMin + endOff;
+    entry.start_time = minToHHMM(sMin);
+    entry.end_time = minToHHMM(eMin);
+    _markDirty(); renderAll();
+    setTimeout(function(){ _isDragging=false; },50);
+  });
+}
+
+// ─── drag: create new entry ───────────────────────────────────────────────────
+function startNewDrag(ev, body, day, room){
+  var rect = body.getBoundingClientRect();
+  var startOff = Math.round(((ev.clientY - rect.top + body.scrollTop)/PX_PER_MIN)/SNAP)*SNAP;
+  var ghost = document.createElement('div'); ghost.className='tt-ghost';
+  ghost.style.top=(startOff*PX_PER_MIN)+'px'; ghost.style.height=(SNAP*PX_PER_MIN)+'px';
+  body.appendChild(ghost);
+  body.setPointerCapture(ev.pointerId);
+
+  function onMove(e){
+    var curOff = Math.round(((e.clientY - rect.top + body.scrollTop)/PX_PER_MIN)/SNAP)*SNAP;
+    var top = Math.min(startOff,curOff)*PX_PER_MIN;
+    var h = Math.abs(curOff-startOff)*PX_PER_MIN || SNAP*PX_PER_MIN;
+    ghost.style.top=top+'px'; ghost.style.height=h+'px';
+  }
+  function onUp(e){
+    body.removeEventListener('pointermove',onMove); body.removeEventListener('pointerup',onUp);
+    var endOff = Math.round(((e.clientY - rect.top + body.scrollTop)/PX_PER_MIN)/SNAP)*SNAP;
+    body.removeChild(ghost);
+    var s = Math.min(startOff,endOff); var en = Math.max(startOff,endOff);
+    if(en-s < SNAP) en = s+SNAP;
+    var sMin = _gridMin + s; var eMin = _gridMin + en;
+    // open popup with prefilled times
+    var newE = {_cid:_nextCid(),entry_date:day,start_time:minToHHMM(sMin),end_time:minToHHMM(eMin),title:'',entry_type:'bal',location_id:room.id!==null&&room.id!==-1?room.id:null,location_name:room.id!==null&&room.id!==-1?room.label:'',room:room.id===null&&room.id!==-1?room.label:''};
+    openPopup(newE, true);
+  }
+  body.addEventListener('pointermove',onMove); body.addEventListener('pointerup',onUp);
+}
+
+// ─── popup ────────────────────────────────────────────────────────────────────
+function openPopup(entry, isNew){
+  _popupEntry = entry; _popupIsNew = !!isNew;
+  document.getElementById('tt-popup-title').textContent = isNew ? 'New entry' : 'Edit entry';
+  document.getElementById('pp-start').value = entry.start_time||'';
+  document.getElementById('pp-end').value = entry.end_time||'';
+  document.getElementById('pp-title').value = entry.title||'';
+  document.getElementById('pp-type').value = entry.entry_type||'bal';
+  document.getElementById('pp-desc').value = entry.description||'';
+  document.getElementById('pp-mus-text').value = entry.musician_name||'';
+  document.getElementById('pp-mus-id').value = entry.musician_id||'';
+  document.getElementById('pp-ins-text').value = entry.instructor_name||'';
+  document.getElementById('pp-ins-id').value = entry.instructor_id||'';
+  // build room select
+  var rSel = document.getElementById('pp-room-sel'); rSel.innerHTML='<option value="">— none —</option>';
+  _rooms.forEach(function(r){
+    var opt=document.createElement('option'); opt.value=r.id!==null?'id:'+r.id:'lbl:'+r.label; opt.textContent=r.label;
+    if(entry.location_id && r.id===entry.location_id) opt.selected=true;
+    else if(!entry.location_id && r.id===null && entry.room===r.label) opt.selected=true;
+    rSel.appendChild(opt);
+  });
+  document.getElementById('pp-del-btn').hidden = isNew;
+  document.getElementById('tt-popup').showModal();
+}
+var _popupIsNew = false;
+
+function ppDirty(){}
+function ppRoomSelChange(){}
+
+function ppSave(){
+  var e = _popupEntry;
+  e.start_time = document.getElementById('pp-start').value;
+  e.end_time = document.getElementById('pp-end').value;
+  e.title = document.getElementById('pp-title').value.trim();
+  e.entry_type = document.getElementById('pp-type').value;
+  e.description = document.getElementById('pp-desc').value;
+  var musId = document.getElementById('pp-mus-id').value;
+  var musName = document.getElementById('pp-mus-text').value.trim();
+  e.musician_id = musId ? parseInt(musId) : null; e.musician_name = musName;
+  var insId = document.getElementById('pp-ins-id').value;
+  var insName = document.getElementById('pp-ins-text').value.trim();
+  e.instructor_id = insId ? parseInt(insId) : null; e.instructor_name = insName;
+  // room
+  var rSel = document.getElementById('pp-room-sel').value;
+  e.location_id = null; e.location_name = ''; e.room = '';
+  if(rSel.startsWith('id:')){
+    var rid = parseInt(rSel.slice(3));
+    var rr = _rooms.find(function(r){ return r.id===rid; });
+    e.location_id = rid; e.location_name = rr ? rr.label : '';
+  } else if(rSel.startsWith('lbl:')){
+    e.room = rSel.slice(4);
+  }
+  if(!e.title){ document.getElementById('pp-title').focus(); return; }
+  if(_popupIsNew) _entries.push(e);
+  document.getElementById('tt-popup').close();
+  recomputeTimeRange(); recomputeRooms(); _markDirty(); renderAll();
+}
+function ppCancel(){ document.getElementById('tt-popup').close(); }
+function ppDelete(){
+  var cid = _popupEntry._cid;
+  _entries = _entries.filter(function(e){ return e._cid!==cid; });
+  document.getElementById('tt-popup').close();
+  recomputeTimeRange(); recomputeRooms(); _markDirty(); renderAll();
+}
+
+// ─── autocomplete: musician ───────────────────────────────────────────────────
+function ppMusOpen(){ ppMusRender(''); }
+function ppMusInput(){
+  document.getElementById('pp-mus-id').value='';
+  ppMusRender(document.getElementById('pp-mus-text').value.trim());
+}
+function ppMusRender(q){
+  var sug = document.getElementById('pp-mus-suggest');
+  sug.innerHTML=''; sug.hidden=true;
+  var hits = q ? _allMusicians.filter(function(m){ return m.name.toLowerCase().indexOf(q.toLowerCase())!==-1; }).slice(0,10) : _allMusicians.slice(0,20);
+  hits.forEach(function(m){ sug.appendChild(acItem(m.name, function(){ ppMusPick(m); })); });
+  if(q && !_allMusicians.some(function(m){ return m.name.toLowerCase()===q.toLowerCase(); })){
+    var li=acItem('➕ '+q, function(){ ppMusCreate(q); }); li.className+=' tt-create'; sug.appendChild(li);
+  }
+  if(sug.children.length) sug.hidden=false;
+}
+function ppMusPick(m){ document.getElementById('pp-mus-text').value=m.name; document.getElementById('pp-mus-id').value=m.id; document.getElementById('pp-mus-suggest').hidden=true; }
+function ppMusCreate(name){
+  document.getElementById('pp-mus-suggest').hidden=true;
+  fetch('/admin/api/musician/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bandname:name})})
+    .then(function(r){return r.ok?r.json():Promise.reject();})
+    .then(function(m){ _allMusicians.push({id:m.id,name:m.bandname}); ppMusPick({id:m.id,name:m.bandname}); })
+    .catch(function(){ alert('Could not create musician'); });
+}
+// ─── autocomplete: instructor ─────────────────────────────────────────────────
+function ppInsOpen(){ ppInsRender(''); }
+function ppInsInput(){
+  document.getElementById('pp-ins-id').value='';
+  ppInsRender(document.getElementById('pp-ins-text').value.trim());
+}
+function ppInsRender(q){
+  var sug = document.getElementById('pp-ins-suggest');
+  sug.innerHTML=''; sug.hidden=true;
+  var hits = q ? _allInstructors.filter(function(i){ return i.name.toLowerCase().indexOf(q.toLowerCase())!==-1; }).slice(0,10) : _allInstructors.slice(0,20);
+  hits.forEach(function(i){ sug.appendChild(acItem(i.name, function(){ ppInsPick(i); })); });
+  if(q && !_allInstructors.some(function(i){ return i.name.toLowerCase()===q.toLowerCase(); })){
+    var li=acItem('➕ '+q, function(){ ppInsCreate(q); }); li.className+=' tt-create'; sug.appendChild(li);
+  }
+  if(sug.children.length) sug.hidden=false;
+}
+function ppInsPick(i){ document.getElementById('pp-ins-text').value=i.name; document.getElementById('pp-ins-id').value=i.id; document.getElementById('pp-ins-suggest').hidden=true; }
+function ppInsCreate(name){
+  document.getElementById('pp-ins-suggest').hidden=true;
+  fetch('/admin/api/instructor/quick-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+    .then(function(r){return r.ok?r.json():Promise.reject();})
+    .then(function(i){ _allInstructors.push({id:i.id,name:i.name}); ppInsPick({id:i.id,name:i.name}); })
+    .catch(function(){ alert('Could not create instructor'); });
+}
+function acItem(text, fn){
+  var li=document.createElement('li'); li.textContent=text;
+  li.addEventListener('mousedown',function(e){ e.preventDefault(); fn(); });
+  return li;
+}
+document.addEventListener('click',function(e){
+  ['pp-mus-suggest','pp-ins-suggest'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && !el.contains(e.target)) el.hidden=true;
+  });
+});
+
+// ─── save / delete ────────────────────────────────────────────────────────────
+function saveTimetable(){
+  var btn = document.getElementById('save-btn'); btn.disabled=true;
+  var status = document.getElementById('save-status'); status.hidden=false; status.textContent='Saving…';
+  var payload = _entries.map(function(e){
+    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null};
+  });
+  fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.ok?r.json():Promise.reject(r.statusText);})
+    .then(function(){
+      _formDirty=false; btn.disabled=false; status.textContent='Saved'; setTimeout(function(){ status.hidden=true; },2000);
+    })
+    .catch(function(err){ btn.disabled=false; status.textContent='Error: '+err; });
+}
+
+function deleteTimetable(){
+  if(!confirm('Delete entire timetable? This cannot be undone.')) return;
+  fetch('/admin/events/'+EVT_ID+'/timetable',{method:'DELETE'})
+    .then(function(r){
+      if(r.ok||r.status===204){ _entries=[]; _cidCounter=1; _rooms=[]; _formDirty=false; recomputeTimeRange(); renderAll(); }
+      else { alert('Delete failed: '+r.statusText); }
+    })
+    .catch(function(err){ alert('Error: '+err); });
+}
+
+// ─── dirty guard ─────────────────────────────────────────────────────────────
+function _markDirty(){
+  _formDirty=true;
+  document.getElementById('save-btn').disabled=false;
+}
+function initDirtyGuard(){
+  window.addEventListener('beforeunload',function(e){ if(!_formDirty) return; e.preventDefault(); e.returnValue=''; });
+}
+
+function safeGoBack(){
+  if(!_formDirty){ doGoBack(); return; }
+  var modal=document.getElementById('tt-nav-modal'); modal.showModal();
+}
+function doGoBack(){
+  if(window.history.length>1) history.back(); else location.href='/admin/events/'+EVT_ID+'/edit';
+}
+function navModalClose(){ document.getElementById('tt-nav-modal').close(); }
+function navModalDiscard(){ _formDirty=false; document.getElementById('tt-nav-modal').close(); doGoBack(); }
+function navModalSaveGo(){
+  document.getElementById('tt-nav-modal').close();
+  var payload = _entries.map(function(e){
+    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null};
+  });
+  fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(){ _formDirty=false; doGoBack(); })
+    .catch(function(err){ alert('Save failed: '+err); });
+}
+</script>
+{{end}}
+{{end}}

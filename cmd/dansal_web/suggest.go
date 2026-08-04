@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -22,10 +23,11 @@ type SuggestPageData struct {
 	// ManageToken/PrefillJSON/PrefillTags/PrefillDanceIDs are set when the
 	// wizard is loaded via the #928 magic link (/events/suggest/manage/{token}),
 	// pre-filling the same form instead of a separate simpler edit page.
-	ManageToken    string
-	PrefillJSON    template.JS
-	PrefillTags    map[string]bool // set of tags to pre-check in the template
-	PrefillDanceIDs map[int]bool   // set of dance IDs to pre-check in the template
+	ManageToken      string
+	PrefillJSON      template.JS
+	PrefillTags      map[string]bool // set of tags to pre-check in the template
+	PrefillDanceIDs  map[int]bool    // set of dance IDs to pre-check in the template
+	ExistingImageURL string          // current event image URL, shown as preview in manage mode
 }
 
 type SuggestDoneData struct {
@@ -432,13 +434,14 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:        cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			FormToken:       issueFormToken(ip),
-			Dances:          dances,
-			ManageToken:     token,
-			PrefillJSON:     template.JS(b),
-			PrefillTags:     prefillTags,
-			PrefillDanceIDs: prefillDanceIDs,
+			HintSMTP:         cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			FormToken:        issueFormToken(ip),
+			Dances:           dances,
+			ManageToken:      token,
+			PrefillJSON:      template.JS(b),
+			PrefillTags:      prefillTags,
+			PrefillDanceIDs:  prefillDanceIDs,
+			ExistingImageURL: ev.ImageURL,
 		}))
 	}
 }
@@ -450,7 +453,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			return
 		}
 		token := r.PathValue("token")
-		if err := r.ParseForm(); err != nil {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -569,6 +572,14 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				ManageToken: token,
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			defer file.Close()
+			if data, rerr := io.ReadAll(file); rerr == nil {
+				if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
+					log.Printf("suggest manage: upload image: %v", uerr)
+				}
+			}
 		}
 		dest := "/events/suggest/done"
 		if needsReview {

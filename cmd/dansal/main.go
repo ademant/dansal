@@ -3547,6 +3547,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/events/suggest/verify/{token}", suggestVerifyHandler)
 	smux.HandleFunc("GET /api/v1/events/suggest/manage/{token}", getSuggestManageEvent)
 	smux.HandleFunc("PATCH /api/v1/events/suggest/manage/{token}", patchSuggestManageEvent)
+	smux.HandleFunc("POST /api/v1/events/suggest/manage/{token}/image", postSuggestManageImage)
 
 	// Self-registration endpoints
 	smux.HandleFunc("POST /api/v1/register", registerHandler)

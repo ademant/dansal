@@ -2126,6 +2126,35 @@ func (c *DansalClient) DeleteInstructorAvatar(ctx context.Context, id int, token
 	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/instructor-avatars/%d", id), token)
 }
 
+func (c *DansalClient) UploadSuggestManageImage(ctx context.Context, manageToken string, data []byte, filename string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/events/suggest/manage/%s/image", c.BaseURL, manageToken), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("upload image: %s", resp.Status)
+	}
+	return nil
+}
+
 func (c *DansalClient) UploadEventImage(ctx context.Context, eventID int, data []byte, filename, token string) error {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)

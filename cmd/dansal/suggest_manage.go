@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -595,4 +596,37 @@ func contactChanged(q querier, eventID int, name, email string) bool {
 		FROM events e LEFT JOIN organizations o ON e.organization_id = o.id
 		WHERE e.id=?`, eventID).Scan(&curName, &curEmail)
 	return name != curName || email != curEmail
+}
+
+// POST /api/v1/events/suggest/manage/{token}/image — public, token-gated.
+// Accepts a multipart upload with field name "image" and stores it for the event.
+func postSuggestManageImage(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	eventID, err := suggestManageLookup(token)
+	if err == sql.ErrNoRows {
+		writeError(w, "token not found or expired", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
+		writeError(w, "failed to parse multipart form", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		writeError(w, "missing or unreadable 'image' field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	if err := saveImageFromReader(eventID, file); err != nil {
+		if errors.Is(err, errNotImage) {
+			writeError(w, "file is not an image", http.StatusUnsupportedMediaType)
+		} else {
+			writeInternalError(w, err)
+		}
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }

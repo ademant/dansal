@@ -62,7 +62,7 @@
   {{end}}
 
   <div id="tab-manual" class="tab-panel">
-  <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form">
+  <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form"{{if $.Data.ManageToken}} enctype="multipart/form-data"{{end}}>
     {{if not .ManageToken}}<input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">{{end}}
 
     <!-- Step 1: What? -->
@@ -300,6 +300,15 @@
         <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {{end}}
+      {{end}}
+      {{if $.Data.ManageToken}}
+      <div class="form-row">
+        {{if $.Data.ExistingImageURL}}<img src="{{$.Data.ExistingImageURL}}" alt="" style="max-width:100%;max-height:180px;display:block;margin-bottom:.5rem;border-radius:4px">{{end}}
+        <label>{{$.Strings.T "suggest_manage_image_label"}}
+          <input type="file" name="image" accept="image/*">
+        </label>
+        <p class="hint">{{$.Strings.T "suggest_manage_image_hint"}}</p>
+      </div>
       {{end}}
       <button type="submit" class="btn-primary">{{if $.Data.ManageToken}}{{$.Strings.T "suggest_manage_submit_btn"}}{{else}}{{$.Strings.T "suggest_submit_btn"}}{{end}}</button>
     </div>

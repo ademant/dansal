@@ -91,7 +91,7 @@
       {{if hasTag .Tags "festival"}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
     </div>
     <div class="event-attr-row">{{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}</div>
-    {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+    {{if .Tags}}<div>{{range .Tags}}<a href="/tags/{{.}}" class="tag">#{{.}}</a>{{end}}</div>{{end}}
     {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
   </li>
   {{end}}

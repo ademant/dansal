@@ -1,0 +1,105 @@
+{{template "base" .}}
+{{define "head_extra"}}{{with .Data.Tag}}
+<link rel="alternate" type="application/activity+json" href="https://{{$.Domain}}/tags/{{.Slug}}">
+<link rel="alternate" type="application/atom+xml" title="{{.Name}}" href="https://{{$.Domain}}/tags/{{.Slug}}.atom">
+<link rel="alternate" type="application/feed+json" title="{{.Name}}" href="https://{{$.Domain}}/tags/{{.Slug}}.jsonfeed">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"},
+    {"@type": "ListItem", "position": 2, "name": "{{.Name | js}}", "item": "{{$.CanonicalURL | js}}"}
+  ]
+}
+</script>
+{{end}}{{end}}
+{{define "content"}}
+{{with .Data}}
+<div class="tag-header">
+  <h1>#{{.Tag.Name}}</h1>
+</div>
+
+<div class="page-section">
+  <div class="feed-links">
+    <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+    <a href="/tags/{{.Tag.Slug}}.atom" class="feed-link">Atom</a>
+    <a href="/tags/{{.Tag.Slug}}.jsonfeed" class="feed-link">JSON Feed</a>
+  </div>
+
+  {{if .Events}}
+  {{/* Map — only rendered if at least one event has coordinates */}}
+  <div id="tmap-wrap" hidden>
+    <div id="tmap"></div>
+  </div>
+  <script type="application/json" id="tmap-data">{{eventsGeoJSON .Events}}</script>
+
+  <ul class="event-list">
+  {{range .Events}}
+  <li class="event-item">
+    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+    <div class="event-meta">
+      {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
+      {{with .Location}}
+        {{if .ShortName}} &mdash; {{.ShortName}}{{if .Address}}, {{.Address}}{{end}}{{if .Town}}, {{.Town}}{{end}}
+        {{else if .Location}} &mdash; {{.Location}}{{else if .Town}} &mdash; {{.Town}}{{end}}
+      {{end}}
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+    </div>
+    <div class="event-attr-row">{{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}</div>
+    {{if .Tags}}<div>{{range .Tags}}<a href="/tags/{{.}}" class="tag">#{{.}}</a>{{end}}</div>{{end}}
+    {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
+  </li>
+  {{end}}
+  </ul>
+  {{else}}<p class="empty-msg">{{$.Strings.T "tag_no_events"}}</p>{{end}}
+</div>
+{{end}}{{/* .Data */}}
+
+<style>
+.tag-header{margin-bottom:1.25rem}
+.tag-header h1{margin:0}
+.feed-links{margin:.5rem 0 1rem;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
+#tmap{height:280px;border-radius:6px;border:1px solid var(--border);margin-bottom:1rem}
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var raw = document.getElementById('tmap-data');
+  if(!raw) return;
+  var geo;
+  try { geo = JSON.parse(raw.textContent); } catch(_){ return; }
+  if(!geo || !geo.length) return;
+
+  var wrap = document.getElementById('tmap-wrap');
+  wrap.hidden = false;
+
+  var map = L.map('tmap');
+  attachTileLayer(map);
+
+  var bounds = [];
+  geo.forEach(function(e){
+    var ll = [e.lat, e.lng];
+    bounds.push(ll);
+    var label = e.loc || e.town || '';
+    var popup = '<b><a href="/events/'+e.id+'">'+escHtml(e.t)+'</a></b>'+
+      (e.s ? '<br><small>'+(e.s||'').slice(0,10)+'</small>' : '')+
+      (label ? '<br><small>'+escHtml(label)+'</small>' : '');
+    L.marker(ll).bindPopup(popup,{maxWidth:240}).addTo(map);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 12);
+  } else {
+    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:10}); } catch(_){}
+  }
+
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+})();
+</script>
+{{end}}

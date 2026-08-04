@@ -154,7 +154,7 @@ a:hover{color:var(--link-h)}
 .event-actions{margin-top:.4rem}
 .evt-ext-link{font-size:.82rem;color:var(--link);text-decoration:none}
 .evt-ext-link:hover{text-decoration:underline}
-.tag{display:inline-block;background:var(--tag-bg);color:var(--link);border-radius:3px;padding:.1rem .4rem;font-size:.8rem;margin:.1rem .1rem 0 0}
+.tag{display:inline-block;background:var(--tag-bg);color:var(--link);border-radius:3px;padding:.1rem .4rem;font-size:.8rem;margin:.1rem .1rem 0 0;text-decoration:none}
 .tag-more{background:var(--bg-subtle);color:var(--fg-muted)}
 .badge{display:inline-block;background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:3px;padding:.1rem .4rem;font-size:.8rem;margin:.1rem .1rem 0 0}
 .badge.cancelled{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
@@ -693,7 +693,7 @@ document.addEventListener('keydown',function(e){
     {{if hasTag .Tags "festival"}}<span class="badge festival">🎪 {{$.Strings.T "filter_type_festival"}}</span>{{end}}
     {{if hasTag .Tags "session"}}<span class="badge session">🎶 {{$.Strings.T "tag_session"}}</span>{{end}}
     {{if hasTag .Tags "concert"}}<span class="badge concert">🎸 {{$.Strings.T "tag_concert"}}</span>{{end}}
-    {{range limitTags .Tags}}<span class="tag">{{tagName $.TagMap .}}</span>{{end}}
+    {{range limitTags .Tags}}<a href="/tags/{{.}}" class="tag">{{tagName $.TagMap .}}</a>{{end}}
     {{$hidden := hiddenTagCount .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
   </td>
   <td class="col-attr">

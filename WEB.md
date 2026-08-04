@@ -27,6 +27,7 @@ GET /musicians              # musician directory
 GET /musicians/{id}         # single musician profile + upcoming events
 GET /instructors            # instructor directory
 GET /instructors/{id}       # single instructor profile + upcoming events
+GET /tags/{slug}            # events carrying one tag (also serves as an ActivityPub OrderedCollection)
 GET /organizations          # organization directory
 GET /board                  # community ride-share/ticket/lost-and-found board
 GET /search                 # search form
@@ -56,6 +57,17 @@ appearing on the room's own page.
 application/activity+json` returns the Actor object instead of HTML; see
 `/.well-known/webfinger` under [Discovery Files](#discovery-files).
 
+`/tags/{slug}` works the same way for tags (issue #949): `Accept:
+application/activity+json` (or `ld+json`) returns a paged `OrderedCollection`
+of `Note` objects (`?page=true` for the embedded items, mirroring
+`/org/{name}/outbox`), each attributed to its event's own organization actor
+when known, or the relay actor otherwise. `{slug}` must be a real tag slug
+(`GET /api/v1/tags`) — anything else 404s rather than rendering an empty
+page. The HTML page also carries `<link rel="alternate">` tags to the
+Atom/JSON Feed/ActivityPub variants below, and every tag chip shown anywhere
+on the site (event/org/location/musician/instructor pages, the weekly table)
+links to its `/tags/{slug}` page.
+
 ## Feeds
 
 ```
@@ -68,6 +80,8 @@ GET /feed/location/{slug}/events.{format}   # one location's events
 GET /feed/ball/events.{format}              # events tagged as a ball/bal
 GET /feed/workshop/events.{format}          # events tagged as a workshop
 GET /feed/festival/events.{format}          # events tagged as a festival
+GET /tags/{slug}.atom                       # any tag, Atom 1.0
+GET /tags/{slug}.jsonfeed                   # any tag, JSON Feed 1.1 (jsonfeed.org)
 ```
 
 `{format}` is `ical` (or `ics`), `rss`, or `json`. `{slug}` for org/musician/
@@ -75,6 +89,12 @@ location feeds is the same slug used in that entity's page URL
 (`orgSlug`/`effectiveSlug`) — not the numeric ID. Instructor feeds use the
 numeric `{id}` (matching the `/instructors/{id}` page URL) because instructors
 have no unique slug. All feeds are public and contain only published events.
+
+Unlike the other feed families, tag feeds aren't limited to the three legacy
+ball/workshop/festival slugs — `/tags/{slug}.atom` and `/tags/{slug}.jsonfeed`
+work for any tag in `GET /api/v1/tags` (an unknown slug 404s). They're
+additive: `/feed/ball|workshop|festival/events.{format}` are unchanged and
+keep working for existing subscribers.
 
 ## Discovery Files
 

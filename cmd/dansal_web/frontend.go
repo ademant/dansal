@@ -1505,6 +1505,7 @@ type Templates struct {
 	adminLocationEdit         *template.Template
 	musicians                 *template.Template
 	musician                  *template.Template
+	tag                       *template.Template
 	adminMusicians            *template.Template
 	adminMusicianEdit         *template.Template
 	instructors               *template.Template
@@ -1599,6 +1600,7 @@ func loadTemplates() *Templates {
 		adminLocationEdit:         load("admin_location_edit"),
 		musicians:                 load("musicians"),
 		musician:                  load("musician"),
+		tag:                       load("tag"),
 		adminMusicians:            load("admin_musicians"),
 		adminMusicianEdit:         load("admin_musician_edit"),
 		instructors:               load("instructors"),

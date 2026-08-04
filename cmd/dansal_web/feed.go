@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -181,7 +183,11 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.Ha
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		tag := tagMap[feedType]
-		events, _ := client.GetEvents(r.Context(), "?tag="+tag)
+		// GetEvents(ctx, after) treats its argument as a start_time_after
+		// cursor value, not a raw querystring — "?tag="+tag would have been
+		// glued onto start_time_after= instead of becoming its own &tag=
+		// param. GetEventsFiltered builds the query correctly (issue #949).
+		events, _ := client.GetEventsFiltered(r.Context(), url.Values{"tag": {tag}, "is_published": {"true"}})
 		if events == nil {
 			events = []Event{}
 		}
@@ -352,6 +358,192 @@ func serveRSSFeed(w http.ResponseWriter, cfg *Config, title, selfURL string, eve
 	enc.Encode(root)
 }
 
+// Atom 1.0 output types, used for per-tag feeds (issue #949). Other feed
+// families (org/musician/instructor/location/ball/workshop/festival) only
+// offer ical/rss/json via serveEventFeed; tags additionally get Atom and
+// JSON Feed since those are the formats Fediverse tooling most commonly
+// polls for hashtag-style discovery.
+type feedAtomRoot struct {
+	XMLName xml.Name        `xml:"http://www.w3.org/2005/Atom feed"`
+	Title   string          `xml:"title"`
+	ID      string          `xml:"id"`
+	Updated string          `xml:"updated"`
+	Links   []feedAtomLink  `xml:"link"`
+	Entries []feedAtomEntry `xml:"entry"`
+}
+
+type feedAtomLink struct {
+	Rel  string `xml:"rel,attr,omitempty"`
+	Href string `xml:"href,attr"`
+	Type string `xml:"type,attr,omitempty"`
+}
+
+type feedAtomEntry struct {
+	Title      string             `xml:"title"`
+	ID         string             `xml:"id"`
+	Link       feedAtomLink       `xml:"link"`
+	Updated    string             `xml:"updated"`
+	Published  string             `xml:"published,omitempty"`
+	Summary    string             `xml:"summary,omitempty"`
+	Categories []feedAtomCategory `xml:"category"`
+}
+
+type feedAtomCategory struct {
+	Term string `xml:"term,attr"`
+}
+
+// serveAtomFeed writes an Atom 1.0 feed. altURL is the feed's own HTML
+// counterpart (rel="alternate"); selfURL is this feed document's own URL.
+func serveAtomFeed(w http.ResponseWriter, cfg *Config, title, selfURL, altURL string, events []Event) {
+	entries := make([]feedAtomEntry, 0, len(events))
+	for _, e := range events {
+		link := e.URL
+		if link == "" {
+			link = fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+		}
+		var updated string
+		if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
+			updated = t.UTC().Format(time.RFC3339)
+		}
+		cats := make([]feedAtomCategory, 0, len(e.Tags))
+		for _, tg := range e.Tags {
+			cats = append(cats, feedAtomCategory{Term: tg})
+		}
+		entries = append(entries, feedAtomEntry{
+			Title:      e.Title,
+			ID:         fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID),
+			Link:       feedAtomLink{Href: link},
+			Updated:    updated,
+			Published:  updated,
+			Summary:    e.Description,
+			Categories: cats,
+		})
+	}
+	root := feedAtomRoot{
+		Title:   title,
+		ID:      altURL,
+		Updated: time.Now().UTC().Format(time.RFC3339),
+		Links: []feedAtomLink{
+			{Rel: "self", Href: selfURL, Type: "application/atom+xml"},
+			{Rel: "alternate", Href: altURL, Type: "text/html"},
+		},
+		Entries: entries,
+	}
+	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+	w.Write([]byte(xml.Header))
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	enc.Encode(root)
+}
+
+// JSON Feed v1.1 (https://www.jsonfeed.org/version/1.1/) output types.
+type jsonFeedDoc struct {
+	Version     string         `json:"version"`
+	Title       string         `json:"title"`
+	HomePageURL string         `json:"home_page_url,omitempty"`
+	FeedURL     string         `json:"feed_url,omitempty"`
+	Items       []jsonFeedItem `json:"items"`
+}
+
+type jsonFeedItem struct {
+	ID            string   `json:"id"`
+	URL           string   `json:"url,omitempty"`
+	Title         string   `json:"title,omitempty"`
+	ContentHTML   string   `json:"content_html,omitempty"`
+	DatePublished string   `json:"date_published,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+}
+
+// serveJSONFeedSpec writes a JSON Feed 1.1 document — distinct from
+// serveJSONFeed, which dumps the raw Event array used by the org/musician/
+// etc. feeds.
+func serveJSONFeedSpec(w http.ResponseWriter, cfg *Config, title, selfURL, altURL string, events []Event) {
+	items := make([]jsonFeedItem, 0, len(events))
+	for _, e := range events {
+		link := e.URL
+		if link == "" {
+			link = fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+		}
+		var published string
+		if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
+			published = t.UTC().Format(time.RFC3339)
+		}
+		items = append(items, jsonFeedItem{
+			ID:            fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID),
+			URL:           link,
+			Title:         e.Title,
+			ContentHTML:   e.Description,
+			DatePublished: published,
+			Tags:          e.Tags,
+		})
+	}
+	doc := jsonFeedDoc{
+		Version:     "https://jsonfeed.org/version/1.1",
+		Title:       title,
+		HomePageURL: altURL,
+		FeedURL:     selfURL,
+		Items:       items,
+	}
+	w.Header().Set("Content-Type", "application/feed+json; charset=utf-8")
+	json.NewEncoder(w).Encode(doc)
+}
+
+// tagFeedEvents resolves a tag slug to its Tag record and current matching
+// events for the /tags/{slug}.atom and /tags/{slug}.jsonfeed handlers.
+// ok is false for an unknown slug, so callers 404 rather than serving an
+// always-empty feed for arbitrary input.
+func tagFeedEvents(ctx context.Context, client *DansalClient, slug string) (tag Tag, events []Event, ok bool) {
+	tagMap, err := client.GetTagMap(ctx)
+	if err != nil {
+		return Tag{}, nil, false
+	}
+	tag, ok = tagMap[slug]
+	if !ok {
+		return Tag{}, nil, false
+	}
+	events, _ = client.GetEventsFiltered(ctx, url.Values{"tag": {slug}, "is_published": {"true"}})
+	if events == nil {
+		events = []Event{}
+	}
+	return tag, events, true
+}
+
+func tagAtomHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+		tag, events, ok := tagFeedEvents(r.Context(), client, slug)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		title := tag.Name
+		if title == "" {
+			title = slug
+		}
+		selfURL := "https://" + cfg.Domain + r.URL.Path
+		altURL := "https://" + cfg.Domain + "/tags/" + slug
+		serveAtomFeed(w, cfg, title, selfURL, altURL, events)
+	}
+}
+
+func tagJSONFeedHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+		tag, events, ok := tagFeedEvents(r.Context(), client, slug)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		title := tag.Name
+		if title == "" {
+			title = slug
+		}
+		selfURL := "https://" + cfg.Domain + r.URL.Path
+		altURL := "https://" + cfg.Domain + "/tags/" + slug
+		serveJSONFeedSpec(w, cfg, title, selfURL, altURL, events)
+	}
+}
+
 // feedURL builds the canonical feed URL for a given path and format extension.
 func feedURL(cfg *Config, path, format string) string {
 	return "https://" + cfg.Domain + path + "/events." + format
@@ -370,6 +562,8 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 	ballH := feedTypeHandler(cfg, client, "ball")
 	workshopH := feedTypeHandler(cfg, client, "workshop")
 	festivalH := feedTypeHandler(cfg, client, "festival")
+	tagAtomH := tagAtomHandler(cfg, client)
+	tagJSONFeedH := tagJSONFeedHandler(cfg, client)
 
 	const evDot = "/events."
 
@@ -432,6 +626,12 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 			case strings.HasPrefix(p, "/feed/events."):
 				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/events."))
 				mainH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/tags/") && strings.HasSuffix(p, ".atom"):
+				r.SetPathValue("slug", strings.TrimSuffix(strings.TrimPrefix(p, "/tags/"), ".atom"))
+				tagAtomH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/tags/") && strings.HasSuffix(p, ".jsonfeed"):
+				r.SetPathValue("slug", strings.TrimSuffix(strings.TrimPrefix(p, "/tags/"), ".jsonfeed"))
+				tagJSONFeedH.ServeHTTP(w, r)
 			case strings.HasPrefix(p, "/veranstaltungen/") && strings.Contains(p, "/ical"):
 				// Redirect old WordPress per-event and category iCal URLs.
 				rest := strings.TrimPrefix(p, "/veranstaltungen/")

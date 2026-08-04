@@ -97,6 +97,7 @@
 <div class="tt-action-bar evt-action-bar">
   <button type="button" class="btn-secondary" id="back-btn" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="button" class="btn-primary" id="save-btn" onclick="saveTimetable()" disabled>{{$.Strings.T "admin_save"}}</button>
+  <button type="button" class="btn-secondary" id="sync-btn" onclick="syncEventTimes()" title="Set event start/end times from timetable entries">⇄ Sync event times</button>
   <button type="button" class="btn-del" onclick="deleteTimetable()">Delete timetable</button>
   <span class="save-status" id="save-status" hidden></span>
 </div>
@@ -890,6 +891,34 @@ function saveTimetable(){
       _formDirty=false; btn.disabled=false; status.textContent='Saved'; setTimeout(function(){ status.hidden=true; },2000);
     })
     .catch(function(err){ btn.disabled=false; status.textContent='Error: '+err; });
+}
+
+function syncEventTimes(){
+  if(_entries.length===0){ alert('No timetable entries to sync from.'); return; }
+  // Find min(entry_date + start_time) and max(entry_date + end_time) across all entries.
+  var minDT=null, maxDT=null;
+  _entries.forEach(function(e){
+    var d=e.entry_date||'';
+    if(!d) return;
+    var s=d+'T'+(e.start_time||'00:00');
+    var en=d+'T'+(e.end_time||'00:00');
+    if(!minDT||s<minDT) minDT=s;
+    if(!maxDT||en>maxDT) maxDT=en;
+  });
+  if(!minDT||!maxDT){ alert('Entries are missing dates — save the timetable first.'); return; }
+  var msg='Set event times to:\nStart: '+minDT+'\nEnd:   '+maxDT+'\n\nContinue?';
+  if(!confirm(msg)) return;
+  var btn=document.getElementById('sync-btn');
+  btn.disabled=true;
+  fetch('/admin/events/'+EVT_ID+'/timetable/sync-times',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({start_time:minDT,end_time:maxDT})
+  }).then(function(r){
+    btn.disabled=false;
+    if(r.ok){ alert('Event times updated.'); }
+    else { r.text().then(function(t){ alert('Sync failed: '+t); }); }
+  }).catch(function(err){ btn.disabled=false; alert('Error: '+err); });
 }
 
 function deleteTimetable(){

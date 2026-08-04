@@ -125,6 +125,38 @@ func adminTimetableSaveHandler(client *DansalClient) http.HandlerFunc {
 	}
 }
 
+// POST /admin/events/{id}/timetable/sync-times — set event start/end from timetable entries.
+// Body: {"start_time":"2025-10-18T18:00","end_time":"2025-10-20T23:00"}
+func adminTimetableSyncTimesHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "invalid event id", http.StatusBadRequest)
+			return
+		}
+		tok := getSessionToken(r)
+
+		var req struct {
+			StartTime string `json:"start_time"`
+			EndTime   string `json:"end_time"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.StartTime == "" || req.EndTime == "" {
+			http.Error(w, "invalid body: start_time and end_time required", http.StatusBadRequest)
+			return
+		}
+		if err := client.PatchEventTimes(r.Context(), id, req.StartTime, req.EndTime, tok); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}
+}
+
 // DELETE /admin/events/{id}/timetable — delete all entries (proxy to API).
 func adminTimetableDeleteHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

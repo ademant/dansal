@@ -2259,6 +2259,27 @@ func (c *DansalClient) DeleteTimetable(ctx context.Context, eventID int, token s
 	return nil
 }
 
+func (c *DansalClient) PatchEventTimes(ctx context.Context, eventID int, startTime, endTime, token string) error {
+	body, _ := json.Marshal(map[string]string{"start_time": startTime, "end_time": endTime})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("patch event times: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
 func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.BaseURL+"/api/v1/verify/"+token, nil)

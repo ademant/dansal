@@ -168,9 +168,13 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Published: split into safe-auto-apply vs pending-review.
+	// Food, drink, and pricing are structured enum/numeric values — they cannot
+	// contain spam links and the organiser should be able to correct them
+	// without an admin round-trip.  Everything else (URL, location, tags,
+	// musicians, contact info, timetable) still goes through pending review.
 	pending := pendingEditFields{
-		URL: req.URL, Tags: req.Tags, DanceIDs: req.DanceIDs, Pricing: req.Pricing,
-		Food: req.Food, Drink: req.Drink, ContactName: req.ContactName, ContactEmail: req.ContactEmail,
+		URL: req.URL, Tags: req.Tags, DanceIDs: req.DanceIDs,
+		ContactName: req.ContactName, ContactEmail: req.ContactEmail,
 		Musicians: req.Musicians, Instructors: req.Instructors, Timetable: req.Timetable,
 	}
 	if req.Location.Location != "" {
@@ -196,11 +200,19 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		safeUpdates = append(safeUpdates, "description=?")
 		safeArgs = append(safeArgs, req.Description)
 	}
-	safeUpdates = append(safeUpdates, "start_time=?", "end_time=?")
-	safeArgs = append(safeArgs, startTime, endTime)
+	safeUpdates = append(safeUpdates, "start_time=?", "end_time=?", "food=?", "drink=?")
+	safeArgs = append(safeArgs, startTime, endTime, req.Food, req.Drink)
 	if isReschedule(oldStart, startTime, true, wasCancelled == 1) {
 		safeUpdates = append(safeUpdates, "previous_start_time=?")
 		safeArgs = append(safeArgs, oldStart)
+	}
+	if req.Pricing != nil {
+		if b, err := json.Marshal(req.Pricing); err == nil {
+			safeUpdates = append(safeUpdates, "pricing=?")
+			safeArgs = append(safeArgs, string(b))
+		}
+	} else {
+		safeUpdates = append(safeUpdates, "pricing=NULL")
 	}
 
 	tx, err := db.Begin()

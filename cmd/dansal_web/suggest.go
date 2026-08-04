@@ -434,6 +434,38 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
 		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
 
+		var pricing *Pricing
+		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
+			p := &Pricing{Type: pt}
+			switch pt {
+			case "single", "donation":
+				if amt := r.FormValue("pricing_amount"); amt != "" {
+					if f, err2 := strconv.ParseFloat(amt, 64); err2 == nil {
+						p.Amount = f
+					}
+				}
+				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+			case "multiple":
+				for i, lbl := range r.Form["pl_label"] {
+					lbl = strings.TrimSpace(lbl)
+					if lbl == "" {
+						continue
+					}
+					var amt float64
+					if i < len(r.Form["pl_amount"]) {
+						if f, err2 := strconv.ParseFloat(strings.TrimSpace(r.Form["pl_amount"][i]), 64); err2 == nil {
+							amt = f
+						}
+					}
+					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+				}
+				if len(p.Prices) == 0 {
+					p = nil
+				}
+			}
+			pricing = p
+		}
+
 		req := SuggestEventReq{
 			Title:       r.FormValue("dansal_title"),
 			Description: r.FormValue("description"),
@@ -447,6 +479,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			URL:         r.FormValue("url"),
 			Food:        r.FormValue("food"),
 			Drink:       r.FormValue("drink"),
+			Pricing:     pricing,
 			Location: PreviewLoc{
 				Location: r.FormValue("location"),
 				Town:     r.FormValue("town"),

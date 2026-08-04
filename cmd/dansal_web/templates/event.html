@@ -113,6 +113,7 @@
 <div class="evt-header">
   <h1>{{.Title}}</h1>
   <button type="button" class="btn-icon" onclick="history.back()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <a href="/events/{{.ID}}.ics" class="btn-icon" title="{{$.Strings.T "evt_add_to_calendar"}}" aria-label="{{$.Strings.T "evt_add_to_calendar"}}">📅</a>
   {{if and $.User .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
   {{if and $.User .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon btn-cancel-event" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
   {{if $.User}}<a href="/admin/events/new?clone_from={{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_clone"}}" aria-label="{{$.Strings.T "admin_clone"}}">📋</a>{{end}}
@@ -352,10 +353,15 @@
     </div>
     {{end}}
 
-    {{/* Location block */}}
-    {{with .Location}}
-    {{if or .Location .Town}}
+    {{/* Location + floor condition + food/drink + admission, combined into
+         one segment: floor/food/drink render as icon-only badges (like the
+         existing accessibility icons), admission as a "label: value" line. */}}
+    {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
+    {{$hasVenue := false}}{{with .Location}}{{if or .Location .Town}}{{$hasVenue = true}}{{end}}{{end}}
+    {{if or $hasVenue $floor .Food .Drink .Pricing}}
     <div class="sidebar-block">
+      {{with .Location}}
+      {{if or .Location .Town}}
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
       {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ParentID}}{{if .ParentShortName}}{{.ParentShortName}}{{else}}{{.ParentName}}{{end}} — {{end}}{{if .ID}}<a href="/location/{{.ID}}" class="evt-loc-link">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a>{{else}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{end}}</div>{{end}}
       {{if .ParentID}}<p class="evt-loc-room"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>{{end}}
@@ -389,49 +395,30 @@
       </div>
       {{end}}
       {{range $.Data.Event.Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}
-    </div>
-    {{end}}
-    {{end}}
+      {{end}}
+      {{end}}
 
-    {{/* Floor condition: event override takes precedence over location */}}
-    {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
-    {{if $floor}}
-    <div class="sidebar-block">
-      <div class="sidebar-food-row">
-        <span class="sidebar-food-icon">{{if eq $floor "parquet"}}🪵{{else if eq $floor "stone"}}🪨{{else if eq $floor "tiles"}}🔲{{else if eq $floor "grass"}}🌿{{else if eq $floor "sand"}}🏖{{else if eq $floor "pavement"}}🛣{{else if eq $floor "carpet"}}🧶{{end}}</span>
-        <span class="sidebar-food-text">{{if eq $floor "parquet"}}{{$.Strings.T "floor_parquet"}}{{else if eq $floor "stone"}}{{$.Strings.T "floor_stone"}}{{else if eq $floor "tiles"}}{{$.Strings.T "floor_tiles"}}{{else if eq $floor "grass"}}{{$.Strings.T "floor_grass"}}{{else if eq $floor "sand"}}{{$.Strings.T "floor_sand"}}{{else if eq $floor "pavement"}}{{$.Strings.T "floor_pavement"}}{{else if eq $floor "carpet"}}{{$.Strings.T "floor_carpet"}}{{end}}</span>
-      </div>
-    </div>
-    {{end}}
-
-    {{/* Food & Drinks */}}
-    {{if or .Food .Drink}}
-    <div class="sidebar-block">
-      {{if .Food}}
-      <div class="sidebar-food-row">
-        <span class="sidebar-food-icon">{{if eq .Food "sold"}}🍽️{{else if eq .Food "potluck"}}🥘{{else if eq .Food "none"}}🚫{{end}}</span>
-        <span class="sidebar-food-text">{{if eq .Food "sold"}}{{$.Strings.T "food_sold"}}{{else if eq .Food "potluck"}}{{$.Strings.T "food_potluck"}}{{else if eq .Food "none"}}{{$.Strings.T "food_none"}}{{end}}</span>
+      {{/* Floor condition + food/drink: icon-only, event override takes precedence over location */}}
+      {{if or $floor .Food .Drink}}
+      <div class="evt-access">
+        {{if eq $floor "parquet"}}<span class="access-badge" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{else if eq $floor "stone"}}<span class="access-badge" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{else if eq $floor "tiles"}}<span class="access-badge" title="{{$.Strings.T "floor_tiles"}}">🔲</span>{{else if eq $floor "grass"}}<span class="access-badge" title="{{$.Strings.T "floor_grass"}}">🌿</span>{{else if eq $floor "sand"}}<span class="access-badge" title="{{$.Strings.T "floor_sand"}}">🏖</span>{{else if eq $floor "pavement"}}<span class="access-badge" title="{{$.Strings.T "floor_pavement"}}">🛣</span>{{else if eq $floor "carpet"}}<span class="access-badge" title="{{$.Strings.T "floor_carpet"}}">🧶</span>{{end}}
+        {{if eq .Food "sold"}}<span class="access-badge" title="{{$.Strings.T "food_sold"}}">🍽️</span>{{else if eq .Food "potluck"}}<span class="access-badge" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{else if eq .Food "none"}}<span class="access-badge" title="{{$.Strings.T "food_none"}}">🚫🍽️</span>{{end}}
+        {{if eq .Drink "alcohol"}}<span class="access-badge" title="{{$.Strings.T "drink_alcohol"}}">🍺</span>{{else if eq .Drink "soft"}}<span class="access-badge" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{else if eq .Drink "none"}}<span class="access-badge" title="{{$.Strings.T "drink_none"}}">💧</span>{{end}}
       </div>
       {{end}}
-      {{if .Drink}}
-      <div class="sidebar-food-row">
-        <span class="sidebar-food-icon">{{if eq .Drink "alcohol"}}🍺{{else if eq .Drink "soft"}}🥤{{else if eq .Drink "none"}}💧{{end}}</span>
-        <span class="sidebar-food-text">{{if eq .Drink "alcohol"}}{{$.Strings.T "drink_alcohol"}}{{else if eq .Drink "soft"}}{{$.Strings.T "drink_soft"}}{{else if eq .Drink "none"}}{{$.Strings.T "drink_none"}}{{end}}</span>
-      </div>
-      {{end}}
-    </div>
-    {{end}}
 
-    {{/* Admission */}}
-    {{with .Pricing}}
-    {{$cur := .Currency}}
-    <div class="sidebar-block">
-      <div class="sidebar-label">{{$.Strings.T "evt_admission"}}</div>
-      {{if eq .Type "free"}}<div>{{$.Strings.T "evt_free"}}</div>{{end}}
-      {{if eq .Type "donation"}}<div>{{if gt .Amount 0.0}}ca. {{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}{{else}}{{$.Strings.T "evt_donation"}}{{end}}</div>{{end}}
-      {{if eq .Type "single"}}<div>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</div>{{end}}
-      {{if eq .Type "multiple"}}
-        {{range .Prices}}<div>{{.Label}}: {{.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}</div>{{end}}
+      {{/* Admission: label: value */}}
+      {{with .Pricing}}
+      {{$cur := .Currency}}
+      <div class="evt-admission">
+        <span class="sidebar-label">{{$.Strings.T "evt_admission"}}:</span>
+        {{if eq .Type "free"}}<span>{{$.Strings.T "evt_free"}}</span>{{end}}
+        {{if eq .Type "donation"}}<span>{{if gt .Amount 0.0}}ca. {{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}{{else}}{{$.Strings.T "evt_donation"}}{{end}}</span>{{end}}
+        {{if eq .Type "single"}}<span>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</span>{{end}}
+        {{if eq .Type "multiple"}}
+          <span>{{range $i, $p := .Prices}}{{if $i}}, {{end}}{{$p.Label}}: {{$p.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}{{end}}</span>
+        {{end}}
+      </div>
       {{end}}
     </div>
     {{end}}
@@ -450,11 +437,6 @@
       <a href="{{.URL}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a>
     </div>
     {{end}}
-
-    {{/* Add to calendar */}}
-    <div class="sidebar-block">
-      <a href="/events/{{.ID}}.ics" class="sidebar-link">📅 {{$.Strings.T "evt_add_to_calendar"}}</a>
-    </div>
 
     {{/* Tags */}}
     {{if .Tags}}
@@ -774,9 +756,6 @@
 .sidebar-link{display:inline-block;color:var(--link);font-size:.9rem;text-decoration:none}
 .sidebar-link:hover{text-decoration:underline}
 .sidebar-meta-text{font-size:.85rem;color:var(--fg-dim)}
-.sidebar-food-row{display:flex;align-items:center;gap:.45rem;font-size:.88rem;color:var(--fg-2);margin-bottom:.3rem}
-.sidebar-food-icon{font-size:1rem;line-height:1}
-.sidebar-food-text{line-height:1.3}
 .evt-org{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.1rem 1.25rem;margin-top:.5rem}
 .evt-org h2{font-size:1rem;margin-bottom:.35rem}
 .org-links{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
@@ -797,6 +776,8 @@
 .map-link-nav{color:var(--link)}
 .evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 .access-badge{font-size:1.1rem;opacity:.85;cursor:default}
+.evt-admission{margin-top:.5rem;font-size:.9rem;color:var(--fg-2)}
+.evt-admission .sidebar-label{display:inline;margin-bottom:0;margin-right:.3rem}
 .evt-loc-notes{margin-top:.6rem;font-size:.86rem;color:var(--fg-dim);line-height:1.55}
 .evt-loc-notes p{margin:.2rem 0}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}

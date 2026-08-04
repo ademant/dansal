@@ -114,6 +114,12 @@
   <h1>{{.Title}}</h1>
   <button type="button" class="btn-icon" onclick="history.back()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <a href="/events/{{.ID}}.ics" class="btn-icon" title="{{$.Strings.T "evt_add_to_calendar"}}" aria-label="{{$.Strings.T "evt_add_to_calendar"}}">📅</a>
+  {{$hasBall := or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}
+  {{$hasWorkshop := or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}
+  {{$hasFestival := hasTag .Tags "festival"}}
+  {{if $hasBall}}<span class="btn-icon btn-icon-static" title="{{$.Strings.T "filter_type_ball"}}" aria-label="{{$.Strings.T "filter_type_ball"}}">💃</span>{{end}}
+  {{if $hasWorkshop}}<span class="btn-icon btn-icon-static" title="{{$.Strings.T "filter_type_workshop"}}{{if .WorkshopDifficulty}} ({{$.Strings.T (print "workshop_difficulty_" .WorkshopDifficulty)}}){{end}}" aria-label="{{$.Strings.T "filter_type_workshop"}}">🎓</span>{{end}}
+  {{if $hasFestival}}<span class="btn-icon btn-icon-static" title="{{$.Strings.T "filter_type_festival"}}" aria-label="{{$.Strings.T "filter_type_festival"}}">🎪</span>{{end}}
   {{if and $.User .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
   {{if and $.User .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon btn-cancel-event" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
   {{if $.User}}<a href="/admin/events/new?clone_from={{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_clone"}}" aria-label="{{$.Strings.T "admin_clone"}}">📋</a>{{end}}
@@ -337,21 +343,6 @@
   </div>
 
   <aside class="evt-sidebar">
-
-    {{/* Type + difficulty badges */}}
-    {{$hasBall := or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}
-    {{$hasWorkshop := or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}
-    {{$hasFestival := hasTag .Tags "festival"}}
-    {{if or $hasBall (or $hasWorkshop $hasFestival)}}
-    <div class="sidebar-block">
-      {{if $hasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-      {{if $hasWorkshop}}
-        <span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>
-        {{if .WorkshopDifficulty}}<span class="badge badge-difficulty">{{$.Strings.T (print "workshop_difficulty_" .WorkshopDifficulty)}}</span>{{end}}
-      {{end}}
-      {{if $hasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
-    </div>
-    {{end}}
 
     {{/* Location + floor condition + food/drink + admission, combined into
          one segment: floor/food/drink render as icon-only badges (like the
@@ -682,6 +673,8 @@
 .evt-header{padding:1.25rem 0 .75rem}
 .evt-header h1{margin-bottom:.35rem}
 .evt-header .btn-icon{margin-left:.4rem}
+.btn-icon-static{cursor:default}
+.btn-icon-static:hover{background:var(--btn-bg);border-color:var(--border-mid)}
 .btn-cancel-event{background:#fff3cd;border-color:#e0a800;color:#856404}
 .btn-cancel-event:hover{background:#ffeaa0;border-color:#c89200}
 .evt-header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;color:var(--fg-dim);font-size:.95rem}
@@ -764,7 +757,6 @@
 .m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
 .m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
-.badge-difficulty{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .evt-loc-name{font-weight:600;font-size:.92rem;color:var(--heading);margin-bottom:.25rem}
 .evt-loc-link{color:var(--heading);text-decoration:none}
 .evt-loc-link:hover{text-decoration:underline}

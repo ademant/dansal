@@ -19,11 +19,12 @@ type SuggestPageData struct {
 	GroupedTags    []TagGroup
 	FormToken      string
 	Dances         []Dance
-	// ManageToken/PrefillJSON are set when the wizard is loaded via the
-	// #928 magic link (/events/suggest/manage/{token}), pre-filling the
+	// ManageToken/PrefillJSON/PrefillTags are set when the wizard is loaded via
+	// the #928 magic link (/events/suggest/manage/{token}), pre-filling the
 	// same form instead of a separate simpler edit page.
 	ManageToken string
 	PrefillJSON template.JS
+	PrefillTags map[string]bool // set of tags to pre-check in the template
 }
 
 type SuggestDoneData struct {
@@ -394,6 +395,10 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			pf.Instructors = append(pf.Instructors, ins.Name)
 		}
 		b, _ := json.Marshal(pf)
+		prefillTags := make(map[string]bool, len(pf.Tags))
+		for _, t := range pf.Tags {
+			prefillTags[t] = true
+		}
 
 		ip := getClientIP(r)
 		dances, _ := client.GetDances(r.Context())
@@ -404,6 +409,7 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Dances:      dances,
 			ManageToken: token,
 			PrefillJSON: template.JS(b),
+			PrefillTags: prefillTags,
 		}))
 	}
 }

@@ -74,19 +74,19 @@
       </div>
       <div class="form-row">
         <div class="check-row">
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="bal-folk"> {{$.Strings.T "tag_ball"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="dance-workshop" id="tag-dance-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="musician-workshop" id="tag-musician-workshop" onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="festival"> {{$.Strings.T "tag_festival"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="open-air"> {{$.Strings.T "tag_open_air"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="session"> {{$.Strings.T "tag_session"}}</label>
-          <label class="check-label"><input type="checkbox" name="dansal_tags" value="concert"> {{$.Strings.T "tag_concert"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="bal-folk"{{if index .PrefillTags "bal-folk"}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="dance-workshop" id="tag-dance-workshop" onchange="toggleDifficulty()"{{if index .PrefillTags "dance-workshop"}} checked{{end}}> {{$.Strings.T "tag_dance_workshop"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="musician-workshop" id="tag-musician-workshop" onchange="toggleDifficulty()"{{if index .PrefillTags "musician-workshop"}} checked{{end}}> {{$.Strings.T "tag_musician_workshop"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="festival"{{if index .PrefillTags "festival"}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="open-air"{{if index .PrefillTags "open-air"}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="session"{{if index .PrefillTags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
+          <label class="check-label"><input type="checkbox" name="dansal_tags" value="concert"{{if index .PrefillTags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
         </div>
         <div id="workshop-difficulty" hidden style="margin-top:.5rem">
           <div class="check-row">
-            <label class="check-label"><input type="checkbox" name="dansal_tags" value="beginners"> {{$.Strings.T "tag_beginners"}}</label>
-            <label class="check-label"><input type="checkbox" name="dansal_tags" value="intermediate"> {{$.Strings.T "tag_intermediate"}}</label>
-            <label class="check-label"><input type="checkbox" name="dansal_tags" value="advanced"> {{$.Strings.T "tag_advanced"}}</label>
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="beginners"{{if index .PrefillTags "beginners"}} checked{{end}}> {{$.Strings.T "tag_beginners"}}</label>
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="intermediate"{{if index .PrefillTags "intermediate"}} checked{{end}}> {{$.Strings.T "tag_intermediate"}}</label>
+            <label class="check-label"><input type="checkbox" name="dansal_tags" value="advanced"{{if index .PrefillTags "advanced"}} checked{{end}}> {{$.Strings.T "tag_advanced"}}</label>
           </div>
         </div>
       </div>

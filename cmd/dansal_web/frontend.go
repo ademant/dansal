@@ -50,6 +50,7 @@ type TemplateData struct {
 	PendingRegCount        int    // verified pending registrations awaiting action (scoped to caller)
 	PendingSuggestionCount int    // unpublished events awaiting review (scoped to caller)
 	PossibleDuplicateCount int    // events flagged as possible duplicates (scoped to caller)
+	PendingEditCount       int    // published events with a pending suggester edit awaiting review
 	Path                   string // current request path, for building "return to this page" links
 	CanonicalURL           string // absolute canonical URL for this page
 	Hreflang               bool   // emit <link rel="alternate" hreflang> tags for this page (only where content is 100% i18n-driven, not organizer-entered)
@@ -141,6 +142,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		PendingRegCount:        dashAttention(r).PendingRegistrations,
 		PendingSuggestionCount: dashAttention(r).PendingEventSuggestions,
 		PossibleDuplicateCount: dashAttention(r).PossibleDuplicates,
+		PendingEditCount:       dashAttention(r).PendingEdits,
 		Path:                   r.URL.Path,
 		CanonicalURL:           canonical,
 		GoogleSiteVerification: cfg.GoogleSiteVerification,

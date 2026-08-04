@@ -847,7 +847,7 @@ func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
 func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	var regCount, suggestionCount, duplicateCount int
+	var regCount, suggestionCount, duplicateCount, pendingEditCount int
 	if callerRole == RoleAdmin {
 		db.QueryRow(
 			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
@@ -858,6 +858,9 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 		db.QueryRow(
 			"SELECT COUNT(*) FROM events WHERE needs_duplicate_review=1",
 		).Scan(&duplicateCount)
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events WHERE pending_edit_json IS NOT NULL AND pending_edit_json != ''",
+		).Scan(&pendingEditCount)
 	} else {
 		db.QueryRow(`
 			SELECT COUNT(*) FROM pending_registrations pr
@@ -881,6 +884,10 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 			"SELECT COUNT(*) FROM events e WHERE e.needs_duplicate_review=1 "+orgScopeClause,
 			callerID, callerID,
 		).Scan(&duplicateCount)
+		db.QueryRow(
+			"SELECT COUNT(*) FROM events e WHERE e.pending_edit_json IS NOT NULL AND e.pending_edit_json != '' "+orgScopeClause,
+			callerID, callerID,
+		).Scan(&pendingEditCount)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -888,6 +895,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 		"pending_registrations":     regCount,
 		"pending_event_suggestions": suggestionCount,
 		"possible_duplicates":       duplicateCount,
+		"pending_edits":             pendingEditCount,
 	})
 }
 

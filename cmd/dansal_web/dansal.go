@@ -3609,6 +3609,7 @@ type DashboardAttention struct {
 	PendingRegistrations    int `json:"pending_registrations"`
 	PendingEventSuggestions int `json:"pending_event_suggestions"`
 	PossibleDuplicates      int `json:"possible_duplicates"`
+	PendingEdits            int `json:"pending_edits"`
 }
 
 // GetDashboardAttention returns the scoped counts of items needing review for the caller.

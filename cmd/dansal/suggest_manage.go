@@ -259,7 +259,7 @@ func notifyReviewersPendingEdit(eventID int) {
 		log.Printf("pending-edit: notify: %v", err)
 		return
 	}
-	msg := fmt.Sprintf("A suggested edit to %q is waiting for review — /admin/events/%d/edit.", title, eventID)
+	editPath := fmt.Sprintf("/admin/events/%d/edit", eventID)
 
 	seen := make(map[int]bool)
 	notify := func(userID int) {
@@ -269,6 +269,7 @@ func notifyReviewersPendingEdit(eventID int) {
 		seen[userID] = true
 		var email, chatID string
 		db.QueryRow("SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE id=?", userID).Scan(&email, &chatID)
+		msg := fmt.Sprintf("A suggested edit to %q is waiting for review — %s", title, adminReviewLink(userID, editPath))
 		notifyUser(chatID, email, "Event suggestion edit needs review", msg)
 	}
 

@@ -55,7 +55,7 @@ type AdminEventsData struct {
 	FilterDance        string
 	FilterCreatedAfter string
 	FilterSource       string
-	FilterUnpublished  bool
+	FilterNotVerified  bool
 	FilterFlagged      bool
 	TotalCount         int
 	PrevURL            string
@@ -1261,6 +1261,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		createdAfter := q.Get("created_after")
 		filterSource := q.Get("source")
 		filterUnpublished := q.Get("unpublished") == "1"
+		filterNotVerified := q.Get("not_verified") == "1"
 		filterFlagged := q.Get("flagged") == "1"
 
 		params := url.Values{}
@@ -1295,6 +1296,10 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 				params.Set("include_past", "true")
 			}
 		}
+		if filterNotVerified && !includePast {
+			// Need all events (published + unpublished) to find pending edits.
+			params.Set("include_past", "true")
+		}
 		if filterFlagged && !includePast {
 			params.Set("include_past", "true")
 		}
@@ -1304,7 +1309,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		hasFilter := includePast || orgID != 0 || locationID != 0 || musicianID != 0 ||
 			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
 			filterCity != "" || createdAfter != "" || filterSource != "" ||
-			filterUnpublished || filterFlagged
+			filterUnpublished || filterNotVerified || filterFlagged
 		limit := 100
 		if hasFilter {
 			limit = 1000
@@ -1387,6 +1392,15 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			filtered := events[:0]
 			for _, e := range events {
 				if e.Location != nil && e.Location.Town == filterCity {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
+		if filterNotVerified {
+			filtered := events[:0]
+			for _, e := range events {
+				if !e.IsPublished || e.PendingEditJSON != "" {
 					filtered = append(filtered, e)
 				}
 			}
@@ -1496,7 +1510,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterDance:        filterDance,
 			FilterCreatedAfter: createdAfter,
 			FilterSource:       filterSource,
-			FilterUnpublished:  filterUnpublished,
+			FilterNotVerified:  filterNotVerified || filterUnpublished,
 			FilterFlagged:      filterFlagged,
 			TotalCount:         total,
 			PrevURL:            prevURL,

@@ -120,6 +120,7 @@
       <span class="tpl-msg" id="evt-tpl-msg-{{.ID}}"></span>
     </div>
   </details>{{end}}
+  {{if and $.User .PendingEditJSON}}<p class="suggest-hint hint-review" style="margin:.5rem 0">{{$.Strings.T "event_pending_edit_notice"}}</p>{{end}}
   {{if not .IsPublished}}
   <div class="evt-draft-banner">
     <span>{{$.Strings.T "evt_draft_notice"}}</span>

@@ -3,13 +3,16 @@
 {{with .Data}}
 <h1>{{$.Strings.T "dashboard_title"}}</h1>
 
-{{if or $.PendingRegCount $.PendingSuggestionCount $.PossibleDuplicateCount}}
+{{if or $.PendingRegCount $.PendingSuggestionCount $.PossibleDuplicateCount $.PendingEditCount}}
 <div class="dash-hints">
   {{if $.PendingRegCount}}
   <a href="/admin/registrations" class="dash-hint dash-hint-warn">⚠ {{$.Strings.TF "dashboard_hint_registrations" $.PendingRegCount}}</a>
   {{end}}
   {{if $.PendingSuggestionCount}}
-  <a href="/admin/events?unpublished=1&amp;include_past=1" class="dash-hint dash-hint-info">📝 {{$.Strings.TF "dashboard_hint_suggestions" $.PendingSuggestionCount}}</a>
+  <a href="/admin/events?not_verified=1" class="dash-hint dash-hint-info">📝 {{$.Strings.TF "dashboard_hint_suggestions" $.PendingSuggestionCount}}</a>
+  {{end}}
+  {{if $.PendingEditCount}}
+  <a href="/admin/events?not_verified=1" class="dash-hint dash-hint-warn">✏ {{$.Strings.TF "dashboard_hint_pending_edits" $.PendingEditCount}}</a>
   {{end}}
   {{if $.PossibleDuplicateCount}}
   <a href="/admin/events?flagged=1&amp;include_past=1" class="dash-hint dash-hint-danger">⚠ {{$.Strings.TF "dashboard_hint_duplicates" $.PossibleDuplicateCount}}</a>

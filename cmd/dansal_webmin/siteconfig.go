@@ -160,6 +160,9 @@ type siteConfigData struct {
 	HasLogo              bool
 	HasBanner            bool
 	HasFavicon           bool
+	HasAIBadge           bool
+	LogoAIGenerated      bool
+	BannerAIGenerated    bool
 	HasRelayAvatar       bool
 	HasRelayBanner       bool
 	Dances               []dance
@@ -191,6 +194,8 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 
 		data.SiteName = getSiteSetting(db, "site_name")
 		data.Contact = getSiteSetting(db, "contact")
+		data.LogoAIGenerated = getSiteSetting(db, "logo_ai_generated") == "1"
+		data.BannerAIGenerated = getSiteSetting(db, "banner_ai_generated") == "1"
 		data.HolidayCountry = getSiteSetting(db, "holiday_country")
 		data.IndexNowKey = getSiteSetting(db, "indexnow_key")
 		if v := getSiteSetting(db, "rescheduled_badge_days"); v != "" {
@@ -213,6 +218,7 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.HasLogo = siteAssetExists(cfg.ImagesDir, "logo")
 			data.HasBanner = siteAssetExists(cfg.ImagesDir, "banner")
 			data.HasFavicon = siteAssetExists(cfg.ImagesDir, "favicon")
+			data.HasAIBadge = siteAssetExists(cfg.ImagesDir, "ai-badge")
 			data.HasRelayAvatar = siteAssetExists(cfg.ImagesDir, "relay-avatar")
 			data.HasRelayBanner = siteAssetExists(cfg.ImagesDir, "relay-banner")
 		}
@@ -259,9 +265,20 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		j, _ := json.Marshal(defaultDanceIDs)
 		setSiteSetting(db, "default_dance_ids", string(j))
 
+		if r.FormValue("logo_ai_generated") == "1" {
+			setSiteSetting(db, "logo_ai_generated", "1")
+		} else {
+			setSiteSetting(db, "logo_ai_generated", "0")
+		}
+		if r.FormValue("banner_ai_generated") == "1" {
+			setSiteSetting(db, "banner_ai_generated", "1")
+		} else {
+			setSiteSetting(db, "banner_ai_generated", "0")
+		}
+
 		var uploadedAssets []string
 		if cfg.ImagesDir != "" {
-			for _, key := range []string{"logo", "banner", "favicon"} {
+			for _, key := range []string{"logo", "banner", "favicon", "ai-badge"} {
 				f, _, err := r.FormFile(key)
 				if err != nil {
 					continue
@@ -275,7 +292,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 				if mime == "" {
 					continue
 				}
-				if key != "favicon" && mime == "image/gif" {
+				if key != "favicon" && key != "ai-badge" && mime == "image/gif" {
 					continue
 				}
 				if err := saveSiteAsset(cfg.ImagesDir, key, data); err != nil {
@@ -289,7 +306,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

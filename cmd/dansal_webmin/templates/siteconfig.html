@@ -26,14 +26,16 @@
     {{if .NoImagesDir}}<div class="hint" style="color:var(--fg-warn,#b45309)">images_dir not configured — image uploads disabled.</div>
     {{else}}
     <input type="file" name="logo" accept=".svg,.avif,.jpg,.jpeg,image/svg+xml,image/avif,image/jpeg">
-    {{if .HasLogo}}<div class="hint">Currently set.</div>{{end}}
+    {{if .HasLogo}}<div class="hint">Currently set. <label style="font-weight:normal"><input type="checkbox" name="logo_ai_generated" value="1"{{if .LogoAIGenerated}} checked{{end}}> AI-generated</label></div>
+    {{else}}<div class="hint">Using default (AI-generated).</div>{{end}}
     {{end}}
   </div>
   <div class="form-group">
     <label>Banner <span class="hint">(SVG, AVIF, JPG)</span></label>
     {{if not .NoImagesDir}}
     <input type="file" name="banner" accept=".svg,.avif,.jpg,.jpeg,image/svg+xml,image/avif,image/jpeg">
-    {{if .HasBanner}}<div class="hint">Currently set.</div>{{end}}
+    {{if .HasBanner}}<div class="hint">Currently set. <label style="font-weight:normal"><input type="checkbox" name="banner_ai_generated" value="1"{{if .BannerAIGenerated}} checked{{end}}> AI-generated</label></div>
+    {{else}}<div class="hint">Using default (AI-generated).</div>{{end}}
     {{end}}
   </div>
   <div class="form-group">
@@ -41,6 +43,13 @@
     {{if not .NoImagesDir}}
     <input type="file" name="favicon" accept=".svg,.avif,.jpg,.jpeg,.gif,image/svg+xml,image/avif,image/jpeg,image/gif">
     {{if .HasFavicon}}<div class="hint">Currently set.</div>{{end}}
+    {{end}}
+  </div>
+  <div class="form-group">
+    <label>AI badge <span class="hint">(SVG, AVIF, JPG, GIF — overlaid on AI-generated images)</span></label>
+    {{if not .NoImagesDir}}
+    <input type="file" name="ai-badge" accept=".svg,.avif,.jpg,.jpeg,.gif,image/svg+xml,image/avif,image/jpeg,image/gif">
+    {{if .HasAIBadge}}<div class="hint">Currently set.</div>{{else}}<div class="hint">Not set — badge overlay disabled.</div>{{end}}
     {{end}}
   </div>
 </div>

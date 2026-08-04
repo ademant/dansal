@@ -57,6 +57,9 @@ type TemplateData struct {
 	OGImage                string // absolute URL of the primary image for OG/Twitter card
 	GoogleSiteVerification string
 	BingSiteVerification   string
+	BannerAIGenerated      bool
+	LogoAIGenerated        bool
+	AIBadgeExists          bool
 }
 
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
@@ -143,6 +146,9 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		GoogleSiteVerification: cfg.GoogleSiteVerification,
 		BingSiteVerification:   cfg.BingSiteVerification,
 		OGImage:                "https://" + cfg.Domain + "/banner.avif",
+		BannerAIGenerated:      siteCfg.BannerAIGenerated(),
+		LogoAIGenerated:        siteCfg.LogoAIGenerated(),
+		AIBadgeExists:          siteCfg.AIBadgeExists(),
 	}
 }
 

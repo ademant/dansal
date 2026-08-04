@@ -1654,6 +1654,19 @@ func migrateDB() {
 			db.Exec("ALTER TABLE timetable_entries ADD COLUMN entry_date TEXT")
 		}
 	}
+	// v20: image_ai_generated flag on events for KI-VO compliance labeling (#933).
+	if !applied(20) {
+		db.Exec("ALTER TABLE events ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		mark(20)
+	}
+	// Safety net: ensure image_ai_generated exists even if v20 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='image_ai_generated'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2842,6 +2855,7 @@ func createTables() error {
 		needs_duplicate_review INTEGER NOT NULL DEFAULT 0,
 		duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
 		previous_start_time INTEGER,
+		image_ai_generated INTEGER DEFAULT 0,
 		-- location_id and organization_id are intentionally nullable (#736):
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
@@ -3304,6 +3318,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(17)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(18)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(19)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(20)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

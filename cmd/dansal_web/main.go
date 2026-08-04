@@ -125,7 +125,7 @@ func main() {
 	initDBKey()
 	db := initDB(cfg.DBPath)
 	migrateActorKeyEncryption(db)
-	siteCfg = newSiteSettingsCache(db)
+	siteCfg = newSiteSettingsCache(db, cfg.ImagesDir)
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,
 		HTTP:           &http.Client{Timeout: 180 * time.Second},
@@ -203,6 +203,11 @@ func main() {
 		})
 		r.HandleFunc("GET /relay-banner", func(w http.ResponseWriter, r *http.Request) {
 			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "relay-banner") {
+				http.NotFound(w, r)
+			}
+		})
+		r.HandleFunc("GET /ai-badge", func(w http.ResponseWriter, r *http.Request) {
+			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "ai-badge") {
 				http.NotFound(w, r)
 			}
 		})

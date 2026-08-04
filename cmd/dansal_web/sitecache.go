@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -11,8 +13,9 @@ import (
 // most once per ttl. Changes saved via webmin are visible within one window
 // without any process signal or restart.
 type siteSettingsCache struct {
-	db  *sql.DB
-	ttl time.Duration
+	db        *sql.DB
+	ttl       time.Duration
+	imagesDir string
 
 	mu                   sync.RWMutex
 	at                   time.Time
@@ -22,10 +25,13 @@ type siteSettingsCache struct {
 	indexNowKey          string
 	holidayCountry       string
 	rescheduledBadgeDays int
+	bannerAIGenerated    bool
+	logoAIGenerated      bool
+	aiBadgeExists        bool
 }
 
-func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
-	return &siteSettingsCache{db: db, ttl: 10 * time.Second}
+func newSiteSettingsCache(db *sql.DB, imagesDir string) *siteSettingsCache {
+	return &siteSettingsCache{db: db, ttl: 10 * time.Second, imagesDir: imagesDir}
 }
 
 func (c *siteSettingsCache) load() {
@@ -45,9 +51,14 @@ func (c *siteSettingsCache) load() {
 			imp[lang] = v
 		}
 	}
+	bannerAIGenerated := getSiteSetting(c.db, "banner_ai_generated") == "1"
+	logoAIGenerated := getSiteSetting(c.db, "logo_ai_generated") == "1"
+	aiBadgeExists := siteAssetOnDiskExists(c.imagesDir, "ai-badge")
 	c.mu.Lock()
-	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays, c.at =
-		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays, time.Now()
+	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
+		c.bannerAIGenerated, c.logoAIGenerated, c.aiBadgeExists, c.at =
+		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
+		bannerAIGenerated, logoAIGenerated, aiBadgeExists, time.Now()
 	c.mu.Unlock()
 }
 
@@ -106,4 +117,38 @@ func (c *siteSettingsCache) Impressum() map[string]string {
 		cp[k] = v
 	}
 	return cp
+}
+
+func (c *siteSettingsCache) BannerAIGenerated() bool {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.bannerAIGenerated
+}
+
+func (c *siteSettingsCache) LogoAIGenerated() bool {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.logoAIGenerated
+}
+
+func (c *siteSettingsCache) AIBadgeExists() bool {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.aiBadgeExists
+}
+
+// siteAssetOnDiskExists checks whether a site asset file exists for the given key.
+func siteAssetOnDiskExists(dir, key string) bool {
+	if dir == "" {
+		return false
+	}
+	for _, ext := range siteAssetExts {
+		if _, err := os.Stat(filepath.Join(dir, key+ext)); err == nil {
+			return true
+		}
+	}
+	return false
 }

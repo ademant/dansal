@@ -203,6 +203,7 @@ type Event struct {
 	ShortCode              string           `json:"short_code"`
 	URL                    string           `json:"url,omitempty"`
 	ImageURL               string           `json:"image_url,omitempty"`
+	ImageAIGenerated       bool             `json:"image_ai_generated,omitempty"`
 	OrganizationID         *int             `json:"organization_id,omitempty"`
 	LocationID             *int             `json:"location_id,omitempty"`
 	Location               *Location        `json:"location,omitempty"`
@@ -1874,6 +1875,7 @@ type EventCreateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
+	ImageAIGenerated   bool            `json:"image_ai_generated,omitempty"`
 }
 
 type EventUpdateReq struct {
@@ -1906,6 +1908,7 @@ type EventUpdateReq struct {
 	Musicians          []int           `json:"musicians,omitempty"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
+	ImageAIGenerated   bool            `json:"image_ai_generated,omitempty"`
 }
 
 type EventLocReq struct {

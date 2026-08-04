@@ -84,8 +84,9 @@
 {{with .Event}}
 
 {{if .ImageURL}}
-<div class="evt-hero">
-  <img src="{{.ImageURL}}" alt="{{.Title}}">
+<div class="evt-hero" style="position:relative;display:inline-block;width:100%">
+  <img src="{{.ImageURL}}" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  {{if and .ImageAIGenerated $.AIBadgeExists}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
 </div>
 {{end}}
 

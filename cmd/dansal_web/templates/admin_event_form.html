@@ -373,6 +373,10 @@
       </div>
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
     </div>
+    <label style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem;font-weight:normal;font-size:.9rem">
+      <input type="checkbox" name="image_ai_generated" value="1"{{if .Event.ImageAIGenerated}} checked{{end}}>
+      {{$.Strings.T "evt_image_ai_label"}}
+    </label>
   </section>
   {{end}}
 

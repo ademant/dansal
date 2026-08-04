@@ -673,6 +673,32 @@ function sgGrowTTTable(el) {
     }
     if (data.food) { var f = form.querySelector('[name="food"][value="' + data.food + '"]'); if (f) f.checked = true; }
     if (data.drink) { var dr = form.querySelector('[name="drink"][value="' + data.drink + '"]'); if (dr) dr.checked = true; }
+    if (data.pricing && data.pricing.type) {
+      var ptSel = document.getElementById('sg-pricing-type');
+      if (ptSel) {
+        ptSel.value = data.pricing.type;
+        sgTogglePricing();
+        if (data.pricing.type === 'single' || data.pricing.type === 'donation') {
+          var amtEl = form.querySelector('[name="pricing_amount"]');
+          if (amtEl && data.pricing.amount) amtEl.value = data.pricing.amount;
+          var curEl = form.querySelector('[name="pricing_currency"]');
+          if (curEl && data.pricing.currency) curEl.value = data.pricing.currency;
+        } else if (data.pricing.type === 'multiple' && data.pricing.prices && data.pricing.prices.length) {
+          var tbody = document.getElementById('sg-pricing-body');
+          if (tbody) {
+            tbody.innerHTML = '';
+            data.pricing.prices.forEach(function(p, i) {
+              var row = document.createElement('tr');
+              var isLast = (i === data.pricing.prices.length - 1);
+              var labelIn = '<input type="text" name="pl_label"' + (isLast ? ' oninput="sgGrowPricingTable(this)"' : '') + ' value="' + (p.label||'').replace(/"/g,'&quot;') + '">';
+              var amountIn = '<input type="number" name="pl_amount" min="0" step="0.01" value="' + (p.amount||'') + '">';
+              row.innerHTML = '<td>' + labelIn + '</td><td>' + amountIn + '</td>';
+              tbody.appendChild(row);
+            });
+          }
+        }
+      }
+    }
   }
   setVal('sg-location', data.location);
   setVal('sg-town', data.town);

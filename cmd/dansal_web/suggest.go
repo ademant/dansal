@@ -351,6 +351,7 @@ type wizPrefill struct {
 	Lon          string   `json:"lon,omitempty"`
 	Food         string   `json:"food"`
 	Drink        string   `json:"drink"`
+	Pricing      *Pricing `json:"pricing,omitempty"`
 	ContactName  string   `json:"contact_name"`
 	ContactEmail string   `json:"contact_email"`
 	Musicians    []string `json:"musicians"`
@@ -376,7 +377,8 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		pf := wizPrefill{
 			Title: ev.Title, Description: ev.Description, URL: ev.URL,
 			StartTime: ev.StartTime, EndTime: ev.EndTime, Tags: ev.Tags,
-			Food: ev.Food, Drink: ev.Drink, ContactName: ev.ContactName, ContactEmail: ev.ContactEmail,
+			Food: ev.Food, Drink: ev.Drink, Pricing: ev.Pricing,
+			ContactName: ev.ContactName, ContactEmail: ev.ContactEmail,
 		}
 		if ev.Location != nil {
 			pf.Location = ev.Location.Location

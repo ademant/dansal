@@ -169,16 +169,15 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Published: split into safe-auto-apply vs pending-review.
-	// Structured / organiser-controlled fields (food, drink, pricing, location)
-	// are applied directly — the manage token is sent only to the event's own
-	// suggester so it is trusted, and location is not free text.
-	// Free-text or high-risk fields (URL, tags, musicians, contact, timetable)
-	// still go through pending review, but only when they actually differ from
-	// what is already stored — the wizard prefills all fields, so unchanged
-	// values must not trigger review.
+	// Structured / organiser-controlled fields (food, drink, pricing, location,
+	// timetable) are applied directly — the manage token is sent only to the
+	// event's own suggester so it is trusted.
+	// Free-text or high-risk fields (URL, tags, musicians, contact) still go
+	// through pending review, but only when they actually differ from what is
+	// already stored — the wizard prefills all fields, so unchanged values must
+	// not trigger review.
 	pending := pendingEditFields{
-		URL:       req.URL,
-		Timetable: req.Timetable,
+		URL: req.URL,
 	}
 	if tagsChanged(db, eventID, req.Tags) {
 		pending.Tags = req.Tags
@@ -248,6 +247,13 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.Exec("UPDATE events SET "+strings.Join(safeUpdates, ", ")+" WHERE id=?", safeArgs...); err != nil {
 		writeError(w, "db error: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// Apply timetable directly: replace existing entries wholesale.
+	if len(req.Timetable) > 0 {
+		tx.Exec("DELETE FROM timetable_entries WHERE event_id = ?", eventID)
+		for _, ttReq := range req.Timetable {
+			insertEntry(tx, eventID, ttReq)
+		}
 	}
 
 	if !pending.isEmpty() {

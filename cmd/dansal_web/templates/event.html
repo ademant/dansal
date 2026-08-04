@@ -26,18 +26,27 @@
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
   {{- with .ImageURL}}, "image": "{{. | js}}"{{end}}
-  {{- with .Description}}, "description": "{{. | js}}"{{end}}
-  {{- if .Musicians}}, "performer": [
-    {{- range $i, $m := .Musicians}}{{if $i}}, {{end}}{"@type": "MusicGroup", "name": "{{$m.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{$m.ID}}"}{{end}}
-  ]{{else if .Instructors}}, "performer": [
-    {{- range $i, $ins := .Instructors}}{{if $i}}, {{end}}{"@type": "Person", "name": "{{$ins.Name | js}}"{{with $ins.Website}}, "url": "{{. | js}}"{{end}}}{{end}}
+  {{- if .Description}}, "description": "{{.Description | js}}"
+  {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode . | js}}{{end}}"
+  {{- end}}
+  {{- if or .Musicians .Instructors}}, "performer": [
+    {{- $pfirst := true}}
+    {{- range .Musicians}}{{if not $pfirst}}, {{end}}{"@type": "MusicGroup", "name": "{{.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{.ID}}"}{{$pfirst = false}}{{end}}
+    {{- range .Instructors}}{{if not $pfirst}}, {{end}}{"@type": "Person", "name": "{{.Name | js}}"{{with .Website}}, "url": "{{. | js}}"{{end}}}{{$pfirst = false}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@type": "Organization", "name": "{{$.Data.Org.Name | js}}", "url": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
+  {{- if or .DanceNames .Tags}}, "keywords": "{{- $sep := ""}}{{- range .DanceNames}}{{$sep}}{{. | js}}{{$sep = ", "}}{{- end}}{{- range .Tags}}{{$sep}}{{. | js}}{{$sep = ", "}}{{- end}}"{{end}}
+  {{- $audType := "dancers"}}
+  {{- range .Tags}}{{if or (eq . "musician-workshop") (eq . "session") (eq . "music-course")}}{{$audType = "dancers, musicians"}}{{end}}{{end}}
+  , "audience": {"@type": "Audience", "audienceType": "{{$audType | js}}"}
+  {{- $offersURL := $.CanonicalURL}}
+  {{- if .URL}}{{$offersURL = .URL}}{{end}}
+  {{- if .BookingURL}}{{$offersURL = .BookingURL}}{{end}}
   {{- with .Pricing}}
   {{- $curr := .Currency}}{{if not $curr}}{{$curr = "EUR"}}{{end}}
-  {{- if eq .Type "free"}}, "isAccessibleForFree": true
-  {{- else if eq .Type "donation"}}{{if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}"}{{end}}
-  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}"}
+  {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "url": "{{$offersURL | js}}"}
+  {{- else if eq .Type "donation"}}{{if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "url": "{{$offersURL | js}}"}{{end}}
+  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "url": "{{$offersURL | js}}"}
   {{- else if eq .Type "multiple"}}
     {{- $low := 0.0}}{{$high := 0.0}}{{$first := true}}
     {{- range .Prices}}
@@ -47,7 +56,7 @@
         {{- if gt .Amount $high}}{{$high = .Amount}}{{end}}
       {{- end}}
     {{- end}}
-    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}}{{end}}
+    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "url": "{{$offersURL | js}}"}{{end}}
   {{- end}}
   {{- end}}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -171,15 +172,32 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	// Food, drink, and pricing are structured enum/numeric values — they cannot
 	// contain spam links and the organiser should be able to correct them
 	// without an admin round-trip.  Everything else (URL, location, tags,
-	// musicians, contact info, timetable) still goes through pending review.
+	// musicians, contact info, timetable) still goes through pending review,
+	// but only when the value actually differs from what's already stored —
+	// the wizard prefills all fields, so unchanged values must not trigger review.
 	pending := pendingEditFields{
-		URL: req.URL, Tags: req.Tags, DanceIDs: req.DanceIDs,
-		ContactName: req.ContactName, ContactEmail: req.ContactEmail,
-		Musicians: req.Musicians, Instructors: req.Instructors, Timetable: req.Timetable,
+		URL:       req.URL,
+		Timetable: req.Timetable,
 	}
 	if req.Location.Location != "" && locationChanged(db, eventID, req.Location) {
 		loc := req.Location
 		pending.Location = &loc
+	}
+	if tagsChanged(db, eventID, req.Tags) {
+		pending.Tags = req.Tags
+	}
+	if danceIDsChanged(db, eventID, req.DanceIDs) {
+		pending.DanceIDs = req.DanceIDs
+	}
+	if musiciansChanged(db, eventID, req.Musicians) {
+		pending.Musicians = req.Musicians
+	}
+	if instructorsChanged(db, eventID, req.Instructors) {
+		pending.Instructors = req.Instructors
+	}
+	if contactChanged(db, eventID, req.ContactName, req.ContactEmail) {
+		pending.ContactName = req.ContactName
+		pending.ContactEmail = req.ContactEmail
 	}
 
 	var oldStart int64
@@ -445,4 +463,125 @@ func locationChanged(q querier, eventID int, submitted EventLocationRequest) boo
 		submitted.Zipcode != curZipcode ||
 		submitted.Town != curTown ||
 		submitted.Country != curCountry
+}
+
+// tagsChanged returns true when the submitted tag set differs from the stored one.
+func tagsChanged(q querier, eventID int, submitted []string) bool {
+	rows, err := q.Query("SELECT tag FROM event_tags WHERE event_id=? ORDER BY tag", eventID)
+	if err != nil {
+		return true
+	}
+	defer rows.Close()
+	var current []string
+	for rows.Next() {
+		var t string
+		rows.Scan(&t)
+		current = append(current, t)
+	}
+	cp := append([]string(nil), submitted...)
+	sort.Strings(cp)
+	if len(cp) != len(current) {
+		return true
+	}
+	for i := range cp {
+		if cp[i] != current[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// danceIDsChanged returns true when the submitted dance IDs differ from the stored ones.
+func danceIDsChanged(q querier, eventID int, submitted []int) bool {
+	rows, err := q.Query("SELECT dance_id FROM event_dances WHERE event_id=? ORDER BY dance_id", eventID)
+	if err != nil {
+		return true
+	}
+	defer rows.Close()
+	var current []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		current = append(current, id)
+	}
+	cp := append([]int(nil), submitted...)
+	sort.Ints(cp)
+	if len(cp) != len(current) {
+		return true
+	}
+	for i := range cp {
+		if cp[i] != current[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// musiciansChanged returns true when the submitted musician names differ from stored ones.
+func musiciansChanged(q querier, eventID int, submitted []string) bool {
+	rows, err := q.Query(`SELECT m.bandname FROM musicians m
+		JOIN event_musicians em ON em.musician_id = m.id
+		WHERE em.event_id = ? ORDER BY m.bandname`, eventID)
+	if err != nil {
+		return true
+	}
+	defer rows.Close()
+	var current []string
+	for rows.Next() {
+		var name string
+		rows.Scan(&name)
+		current = append(current, name)
+	}
+	cp := append([]string(nil), submitted...)
+	sort.Strings(cp)
+	sort.Strings(current)
+	if len(cp) != len(current) {
+		return true
+	}
+	for i := range cp {
+		if cp[i] != current[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// instructorsChanged returns true when the submitted instructor names differ from stored ones.
+func instructorsChanged(q querier, eventID int, submitted []string) bool {
+	rows, err := q.Query(`SELECT i.name FROM instructors i
+		JOIN event_instructors ei ON ei.instructor_id = i.id
+		WHERE ei.event_id = ? ORDER BY i.name`, eventID)
+	if err != nil {
+		return true
+	}
+	defer rows.Close()
+	var current []string
+	for rows.Next() {
+		var name string
+		rows.Scan(&name)
+		current = append(current, name)
+	}
+	cp := append([]string(nil), submitted...)
+	sort.Strings(cp)
+	sort.Strings(current)
+	if len(cp) != len(current) {
+		return true
+	}
+	for i := range cp {
+		if cp[i] != current[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// contactChanged returns true when the submitted contact differs from the stored one.
+// Uses the same COALESCE fallback to org contact as the API read path.
+func contactChanged(q querier, eventID int, name, email string) bool {
+	var curName, curEmail string
+	q.QueryRow(`SELECT COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''),
+		COALESCE(NULLIF(e.contact_email,''), o.contact_email, '')
+		FROM events e LEFT JOIN organizations o ON e.organization_id = o.id
+		WHERE e.id=?`, eventID).Scan(&curName, &curEmail)
+	return name != curName || email != curEmail
 }

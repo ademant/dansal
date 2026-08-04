@@ -206,20 +206,6 @@
       <input type="hidden" id="sg-osm-type" name="osm_type">
       <input type="hidden" id="sg-address"  name="address">
       <input type="hidden" id="sg-zipcode"  name="zipcode">
-    </div>
-
-    <!-- Step 4: Details -->
-    <div class="wiz-step" data-step="4" hidden>
-      <div class="form-row">
-        <label>{{$.Strings.T "evt_description"}}
-          <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
-        </label>
-      </div>
-      <div class="form-row">
-        <label>{{$.Strings.T "evt_website"}}
-          <input type="url" name="url" placeholder="https://...">
-        </label>
-      </div>
       <div class="form-row">
         <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
         <div class="check-row">
@@ -237,6 +223,20 @@
           <label class="check-label"><input type="radio" name="drink" value="soft"> {{$.Strings.T "drink_soft"}}</label>
           <label class="check-label"><input type="radio" name="drink" value="none"> {{$.Strings.T "drink_none"}}</label>
         </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Details -->
+    <div class="wiz-step" data-step="4" hidden>
+      <div class="form-row">
+        <label>{{$.Strings.T "evt_description"}}
+          <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>{{$.Strings.T "evt_website"}}
+          <input type="url" name="url" placeholder="https://...">
+        </label>
       </div>
       <div class="form-row form-row-2col">
         <label>{{$.Strings.T "evt_contact_name"}}
@@ -282,7 +282,7 @@
 
     <!-- Step 6: Review & submit -->
     <div class="wiz-step" data-step="6" hidden>
-      <p class="suggest-hint hint-review">{{$.Strings.T "suggest_wizard_review_hint"}}</p>
+      {{if not $.Data.ManageToken}}<p class="suggest-hint hint-review">{{$.Strings.T "suggest_wizard_review_hint"}}</p>{{end}}
       <div class="form-row">
         <label>{{$.Strings.T "suggest_name_label"}}
           <input type="text" name="suggester_name" maxlength="100">

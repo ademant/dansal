@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -86,7 +87,11 @@ func findOrCreateInstructorID(q querier, name string) (int, error) {
 	return id, err
 }
 
-// POST /api/v1/events/suggest-preview — parse iCal or folkdance-JSON without auth or org_id requirement.
+// POST /api/v1/events/suggest-preview — parse iCal or folkdance-JSON without
+// auth or org_id requirement. Accepts either an uploaded file or a "url" form
+// field to fetch server-side (via safeClient, which blocks private/loopback/
+// link-local addresses to prevent SSRF); the rate limiter above bounds abuse
+// of the latter.
 func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	ip := getIP(r)
 	if !suggestPreviewRateLimiter.Allow(ip) {
@@ -101,10 +106,6 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	feedType := r.FormValue("type")
-	if feedType == "" {
-		feedType = "ical"
-	}
-
 	src := FetchSource{Type: feedType}
 
 	var body []byte
@@ -115,10 +116,41 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "read failed", http.StatusBadRequest)
 			return
 		}
+	} else if rawURL := strings.TrimSpace(r.FormValue("url")); rawURL != "" {
+		u, err := url.Parse(rawURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			writeError(w, "invalid URL", http.StatusBadRequest)
+			return
+		}
+		src.URL = rawURL
+		if feedType == "" && strings.Contains(strings.ToLower(rawURL), ".json") {
+			feedType = "json"
+		}
+
+		resp, err := getWithRetry(r.Context(), safeClient, rawURL)
+		if err != nil {
+			writeError(w, "fetch failed", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			writeError(w, fmt.Sprintf("remote returned %d", resp.StatusCode), http.StatusBadGateway)
+			return
+		}
+		body, err = io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		if err != nil {
+			writeError(w, "read failed", http.StatusBadGateway)
+			return
+		}
 	} else {
-		writeError(w, "file is required", http.StatusBadRequest)
+		writeError(w, "file or url is required", http.StatusBadRequest)
 		return
 	}
+
+	if feedType == "" {
+		feedType = "ical"
+	}
+	src.Type = feedType
 
 	reqs, err := parseBodyToRequests(body, src)
 	if err != nil {

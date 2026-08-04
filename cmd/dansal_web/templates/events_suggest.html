@@ -304,6 +304,10 @@
       </div>
       <p id="drop-filename" class="drop-filename" hidden></p>
     </div>
+    <div class="import-url-divider">{{$.Strings.T "suggest_import_url_label"}}</div>
+    <div class="form-row">
+      <input type="url" id="import-url" name="url" placeholder="{{$.Strings.T "suggest_import_url_placeholder"}}">
+    </div>
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
   </form>
   </div>
@@ -336,6 +340,7 @@
 .drop-zone{border:2px dashed var(--border-mid,#ccc);border-radius:6px;padding:2rem 1rem;text-align:center;cursor:pointer;color:var(--fg-muted,#666);transition:background .15s}
 .drop-zone:hover,.drop-zone.drag-over{background:var(--bg-hover,#f0f4ff);border-color:var(--link,#1a6eb5)}
 .drop-filename{font-size:.88rem;color:var(--fg-2,#555);margin-top:.3rem}
+.import-url-divider{text-align:center;font-size:.85rem;color:var(--fg-muted,#888);margin:1rem 0 .5rem}
 #nominatim-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
 #nominatim-results li:last-child{border-bottom:none}
 #nominatim-results li:hover{background:#f0f4ff}

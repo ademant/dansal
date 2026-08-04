@@ -29,6 +29,7 @@ var tmplFuncs = template.FuncMap{
 		}
 		return fmt.Sprintf("%d", 100*part/total)
 	},
+	"add": func(a, b int) int { return a + b },
 }
 
 func loadTemplates() *Templates {

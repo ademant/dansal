@@ -104,6 +104,120 @@
 </div>
 
 {{end}}{{/* HasData */}}
+
+{{/* ══════════════════════════════════════════════════════════════
+     Fediverse section — always rendered (live snapshot available
+     even when bot-stats DB is missing or has no fedi history).
+     ══════════════════════════════════════════════════════════════ */}}
+<h2 style="margin:1.5rem 0 .75rem">Fediverse</h2>
+
+{{if .FediLive}}
+{{/* ── Live snapshot tiles ── */}}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin-bottom:1.25rem">
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700">{{.FediLive.TotalFollowers}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Total followers</div>
+  </div>
+  {{range .FediLive.FollowersByOrg}}
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700">{{.Count}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Org {{.OrgID}} followers</div>
+  </div>
+  {{end}}
+  <div class="card" style="margin:0;text-align:center">
+    <div style="font-size:1.6rem;font-weight:700{{if gt .FediLive.PendingDeliveryFailures 0}};color:#e53935{{end}}">{{.FediLive.PendingDeliveryFailures}}</div>
+    <div style="font-size:.8rem;color:var(--fg-dim)">Pending delivery failures</div>
+  </div>
+</div>
+
+{{if .FediLive.TopInstances}}
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Follower instances (lifetime)</div>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Instance</th><th>Followers</th></tr></thead>
+    <tbody>
+    {{range .FediLive.TopInstances}}
+    <tr><td>{{.Instance}}</td><td>{{.Count}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+{{end}}
+{{end}}{{/* FediLive */}}
+
+{{if .FediHasData}}
+{{/* ── Fediverse charts ── */}}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1rem;margin-bottom:1rem">
+<div class="card" style="margin:0">
+  <div class="card-title">Inbox &amp; actor activity (daily)</div>
+  <canvas id="fediInboxChart" style="width:100%;max-height:260px"></canvas>
+  <div id="fediInboxLegend" style="display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin-top:.6rem;font-size:.78rem"></div>
+</div>
+<div class="card" style="margin:0">
+  <div class="card-title">New followers &amp; deliveries (daily)</div>
+  <canvas id="fediFollowChart" style="width:100%;max-height:260px"></canvas>
+  <div id="fediFollowLegend" style="display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin-top:.6rem;font-size:.78rem"></div>
+</div>
+</div>
+
+{{if .FediTopInstances}}
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Top source instances (request activity, last 60 days)</div>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Instance</th><th>Requests</th></tr></thead>
+    <tbody>
+    {{range .FediTopInstances}}
+    <tr><td>{{.Instance}}</td><td>{{.Count}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+{{end}}
+
+{{/* ── Daily fediverse summary table ── */}}
+<div class="card">
+  <div class="card-title">Daily fediverse summary</div>
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>New followers</th>
+        <th>Delivered</th>
+        <th>Inbox (total)</th>
+        <th>Inbox OK</th>
+        <th>Inbox 4xx</th>
+        <th>Actor fetches</th>
+        <th>WebFinger</th>
+        <th>Outbox</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .FediDays}}
+    <tr>
+      <td>{{.Date}}</td>
+      <td>{{if gt .FollowersGained 0}}<strong style="color:#4caf50">+{{.FollowersGained}}</strong>{{else}}—{{end}}</td>
+      <td>{{if gt (add .EventsDeliveredCreates .EventsDeliveredUpdates) 0}}{{add .EventsDeliveredCreates .EventsDeliveredUpdates}}{{else}}—{{end}}</td>
+      <td>{{.InboxTotal}}</td>
+      <td>{{if gt .Inbox2xx 0}}<span style="color:#4caf50">{{.Inbox2xx}}</span>{{else}}—{{end}}</td>
+      <td>{{if gt .Inbox4xx 0}}<span style="color:#ff9800">{{.Inbox4xx}}</span>{{else}}—{{end}}</td>
+      <td>{{.ActorFetches}}</td>
+      <td>{{.WebfingerRequests}}</td>
+      <td>{{.OutboxFetches}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+{{else}}
+<div class="alert alert-warn">No fediverse history yet. Run <code>sudo python3 scripts/fedi-stats.py --store /var/lib/dansal/bot-stats.db --web-db /var/lib/dansal-web/prod/web.db</code> to populate.</div>
+{{end}}{{/* FediHasData */}}
+
 {{end}}{{/* with .Data */}}
 
 <script>
@@ -193,6 +307,8 @@
 
   drawStackedBar('botChart', 'botLegend', botJSON);
   drawStackedBar('userChart', 'userLegend', userJSON);
+  drawStackedBar('fediInboxChart', 'fediInboxLegend', {{.Data.FediChartJSON}});
+  drawStackedBar('fediFollowChart', 'fediFollowLegend', {{.Data.FediFollowChart}});
 })();
 </script>
 {{end}}

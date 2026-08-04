@@ -234,6 +234,13 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 			writeJSONError(w, r, http.StatusBadRequest, "unsupported resource format")
 			return
 		}
+		// Some Fediverse clients probe common local-part conventions (e.g.
+		// admin@domain, info@domain) even without being told they exist.
+		// WebfingerAliases lets an admin route those to a real actor slug
+		// instead of a 404 (issue #947).
+		if target, aliased := cfg.WebfingerAliases[slug]; aliased && target != "" {
+			slug = target
+		}
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {

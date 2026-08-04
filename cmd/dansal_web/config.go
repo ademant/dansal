@@ -41,10 +41,14 @@ type Config struct {
 	RelayActorName      string   `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
 	ShowFederatedEvents bool     `yaml:"show_federated_events"`
-	RelayDisplayName    string   `yaml:"relay_display_name"`  // fediverse display name for the relay actor
-	RelaySummary        string   `yaml:"relay_summary"`       // fediverse bio/summary for the relay actor
-	RelayIconURL        string   `yaml:"relay_icon_url"`      // absolute URL for relay actor avatar (JPEG, ≤400×400)
-	RelayImageURL       string   `yaml:"relay_image_url"`     // absolute URL for relay actor banner
+	RelayDisplayName    string   `yaml:"relay_display_name"` // fediverse display name for the relay actor
+	RelaySummary        string   `yaml:"relay_summary"`      // fediverse bio/summary for the relay actor
+	RelayIconURL        string   `yaml:"relay_icon_url"`     // absolute URL for relay actor avatar (JPEG, ≤400×400)
+	RelayImageURL       string   `yaml:"relay_image_url"`    // absolute URL for relay actor banner
+	// WebfingerAliases maps common local-part probes (e.g. "admin", "info")
+	// that some Fediverse clients try by convention to the actor slug that
+	// should actually answer them, e.g. {"admin": "relay"} (issue #947).
+	WebfingerAliases map[string]string `yaml:"webfinger_aliases"`
 
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg

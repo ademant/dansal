@@ -147,6 +147,7 @@ func main() {
 		r.HandleFunc("GET /nodeinfo/2.1", nodeinfo21Handler(cfg, client))
 		r.HandleFunc("GET /.well-known/security.txt", securityTxtHandler(cfg))
 		r.HandleFunc("GET /.well-known/host-meta", hostMetaHandler(cfg))
+		r.HandleFunc("GET /.well-known/host-meta.json", hostMetaJSONHandler(cfg))
 		r.HandleFunc("GET /.well-known/dnt-policy.txt", dntPolicyHandler())
 		r.HandleFunc("GET /.well-known/dnt", dntStatusHandler(cfg))
 		r.HandleFunc("GET /health", healthHandler())

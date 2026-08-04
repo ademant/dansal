@@ -62,6 +62,14 @@ relay_actor_name: "relay"
 # this only controls their visibility on the public index page.
 show_federated_events: false
 
+# Some Fediverse clients look up common local-part conventions (admin@domain,
+# info@domain) via WebFinger even without being told they exist. Map those to
+# a real actor slug (e.g. the relay actor) instead of a 404. Optional, empty
+# by default.
+# webfinger_aliases:
+#   admin: relay
+#   info: relay
+
 # NodeInfo metadata served at /nodeinfo/2.1 (used by fediverse crawlers).
 nodeinfo_description: ""
 nodeinfo_maintainer_name: ""

@@ -1,5 +1,7 @@
 {{template "base" .}}
-{{define "head_extra"}}{{with .Data.Org}}
+{{define "head_extra"}}
+{{with $.Data.Slug}}<link rel="alternate" type="application/activity+json" href="https://{{$.Domain}}/org/{{.}}">{{end}}
+{{with .Data.Org}}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",

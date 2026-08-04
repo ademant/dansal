@@ -47,6 +47,18 @@ func hostMetaHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+// hostMetaJSONHandler serves /.well-known/host-meta.json — the JSON LRDD
+// equivalent of hostMetaHandler's XRD document, expected by some Fediverse
+// clients that prefer JSON discovery documents over XML (issue #947).
+func hostMetaJSONHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		base := cfg.publicBaseURL()
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, `{"links":[{"rel":"lrdd","type":"application/jrd+json","template":"%s/.well-known/webfinger?resource={uri}"}]}`+"\n", base)
+	}
+}
+
 // dntPolicyHandler serves /.well-known/dnt-policy.txt per EFF DNT spec.
 func dntPolicyHandler() http.HandlerFunc {
 	const policy = `DNT Policy for this service

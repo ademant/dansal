@@ -85,10 +85,25 @@ GET /llms.txt                        # plain-text site summary for LLM crawlers
 GET /manifest.json                   # web app manifest (PWA icons/theme)
 GET /opensearch.xml                  # OpenSearch description for browser search-bar integration
 GET /.well-known/webfinger           # ActivityPub actor discovery (?resource=acct:...)
+GET /.well-known/host-meta           # LRDD pointer to WebFinger, XRD/XML (RFC 6415)
+GET /.well-known/host-meta.json      # same, JSON LRDD — some Fediverse clients prefer this over XML
 GET /.well-known/nodeinfo            # ActivityPub server metadata pointer
 GET /.well-known/security.txt        # security contact (RFC 9116)
 GET /{indexnow-key}.txt              # IndexNow ownership verification (only if a key is configured)
 ```
+
+WebFinger resolves both `acct:slug@domain` and the actor's own `https://` URL
+(`webfingerSlug` in `actor.go`). Some Fediverse clients probe common
+local-part conventions (`admin@domain`, `info@domain`) speculatively, without
+being told they exist first; `web.yaml`'s `webfinger_aliases` map lets an
+admin route those to a real actor slug (e.g. `{admin: relay}`) instead of a
+404 — unconfigured probes still 404 as before.
+
+`/org/{name}` pages also carry a `<link rel="alternate"
+type="application/activity+json" href="…">` pointing at their own actor URL,
+so crawlers that only look at page `<head>` (rather than sending `Accept:
+application/activity+json` and relying on content negotiation) can still
+discover the actor.
 
 `/{indexnow-key}.txt` is served dynamically from the `indexnow_key` set in
 webmin's site-config — the path segment must exactly match `{key}.txt`, any

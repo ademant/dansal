@@ -2393,7 +2393,12 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 		lang := i18n.detectLang(r)
 		var body template.HTML
 		if text := siteCfg.Impressum()[lang]; text != "" {
-			body = template.HTML(`<pre class="impressum-text">` + template.HTMLEscapeString(text) + `</pre>`)
+			var buf bytes.Buffer
+			if err := goldmark.Convert([]byte(text), &buf); err != nil {
+				body = template.HTML(`<div class="impressum-text">` + template.HTMLEscapeString(text) + `</div>`)
+			} else {
+				body = template.HTML(sanitizeMarkdownHTML(buf.String()))
+			}
 		} else if md := LegalMarkdownHTML(cfg.LegalDir, "impressum"); md != "" {
 			body = md
 		} else {

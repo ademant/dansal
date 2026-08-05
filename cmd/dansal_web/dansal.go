@@ -255,6 +255,14 @@ type Tag struct {
 	EventCount int    `json:"event_count,omitempty"`
 }
 
+// City is a town with geo-tagged venues and upcoming events (#965).
+type City struct {
+	Town          string `json:"town"`
+	Slug          string `json:"slug"`
+	LocationCount int    `json:"location_count"`
+	EventCount    int    `json:"event_count"`
+}
+
 type TimetableEntry struct {
 	ID             int    `json:"id"`
 	StartTime      string `json:"start_time"`
@@ -4093,6 +4101,123 @@ func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) erro
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// GetCities returns towns with geo-tagged venues and upcoming events (#965).
+func (c *DansalClient) GetCities(ctx context.Context) ([]City, error) {
+	var cities []City
+	return cities, c.get(ctx, "/api/v1/locations/cities", &cities)
+}
+
+// Syndication proxy helpers (#971, #953) — used by admin event handlers.
+
+// SyndicationConfig mirrors the API's SyndicationConfig for admin UI.
+type SyndicationConfig struct {
+	Eventbrite       *EventbriteCfg       `json:"eventbrite,omitempty"`
+	SocialDanceToday *SocialDanceTodayCfg `json:"social_dance_today,omitempty"`
+}
+
+type EventbriteCfg struct {
+	Enabled     bool   `json:"enabled"`
+	Token       string `json:"token"`
+	OrgID       string `json:"org_id"`
+	AutoPublish bool   `json:"auto_publish"`
+}
+
+type SocialDanceTodayCfg struct {
+	Enabled bool   `json:"enabled"`
+	APIKey  string `json:"api_key"`
+	OrgSlug string `json:"org_slug"`
+}
+
+// PlatformSyncStatus is one platform's sync state from events.external_sync.
+type PlatformSyncStatus struct {
+	Status     string `json:"status"`
+	ExternalID string `json:"external_id,omitempty"`
+	URL        string `json:"url,omitempty"`
+	SyncedAt   string `json:"synced_at,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// ExternalSync mirrors the API's ExternalSync for the admin event UI.
+type ExternalSync struct {
+	Eventbrite       *PlatformSyncStatus `json:"eventbrite,omitempty"`
+	SocialDanceToday *PlatformSyncStatus `json:"social_dance_today,omitempty"`
+}
+
+func (c *DansalClient) GetSyndicationConfig(ctx context.Context, orgID int, token string) (*SyndicationConfig, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/organizations/%d/syndication", c.BaseURL, orgID), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var cfg SyndicationConfig
+	return &cfg, json.NewDecoder(resp.Body).Decode(&cfg)
+}
+
+func (c *DansalClient) PutSyndicationConfig(ctx context.Context, orgID int, token string, cfg SyndicationConfig) error {
+	body, _ := json.Marshal(cfg)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/organizations/%d/syndication", c.BaseURL, orgID),
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetEventSyncStatus(ctx context.Context, eventID int, token string) (*ExternalSync, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/events/%d/syndication", c.BaseURL, eventID), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var s ExternalSync
+	return &s, json.NewDecoder(resp.Body).Decode(&s)
+}
+
+func (c *DansalClient) SyndicateTo(ctx context.Context, eventID int, platform, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/events/%d/syndicate/%s", c.BaseURL, eventID, platform), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
 		return apiErr(resp)
 	}
 	return nil

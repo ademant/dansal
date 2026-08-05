@@ -1530,3 +1530,94 @@ func locationEventCounts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(counts)
 }
+
+// CityInfo represents a town that has at least one geo-tagged venue with
+// upcoming events, for use in the /cities directory and /city/{slug} hub pages.
+type CityInfo struct {
+	Town          string `json:"town"`
+	Slug          string `json:"slug"`
+	LocationCount int    `json:"location_count"`
+	EventCount    int    `json:"event_count"`
+}
+
+// townSlug converts a city name to a URL-safe slug with common European
+// character transliteration (Köln → koeln, München → munchen, etc.).
+func townSlug(town string) string {
+	// Common European character substitutions before ASCII-stripping.
+	replacer := strings.NewReplacer(
+		"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
+		"Ä", "ae", "Ö", "oe", "Ü", "ue",
+		"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "æ", "ae",
+		"è", "e", "é", "e", "ê", "e", "ë", "e",
+		"ì", "i", "í", "i", "î", "i", "ï", "i",
+		"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ø", "o",
+		"ù", "u", "ú", "u", "û", "u",
+		"ý", "y",
+		"ç", "c", "ć", "c", "č", "c",
+		"ñ", "n", "ń", "n",
+		"ž", "z", "ź", "z", "ż", "z",
+		"š", "s", "ś", "s",
+		"ł", "l", "ľ", "l",
+		"ď", "d", "đ", "d",
+		"ť", "t",
+		"ř", "r",
+	)
+	s := replacer.Replace(strings.ToLower(town))
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevHyphen = false
+		} else if !prevHyphen {
+			b.WriteRune('-')
+			prevHyphen = true
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	dedup := regexp.MustCompile(`-{2,}`)
+	return dedup.ReplaceAllString(slug, "-")
+}
+
+// GET /api/v1/locations/cities — lists all towns that have at least one
+// geo-tagged location and at least one published future event. Results include
+// location_count and event_count per town. Used by /cities directory and
+// /city/{slug} hub pages.
+func getCities(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query(`
+		SELECT l.town,
+		       COUNT(DISTINCT l.id) AS location_count,
+		       COUNT(DISTINCT e.id) AS event_count
+		FROM locations l
+		LEFT JOIN events e ON e.location_id = l.id
+		    AND e.is_published = 1
+		    AND e.end_time >= ?
+		    AND e.email_verified = 1
+		WHERE l.town IS NOT NULL AND l.town != ''
+		  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+		GROUP BY l.town
+		HAVING event_count > 0
+		ORDER BY l.town
+	`, time.Now().Unix())
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer rows.Close()
+
+	var cities []CityInfo
+	for rows.Next() {
+		var c CityInfo
+		if err := rows.Scan(&c.Town, &c.LocationCount, &c.EventCount); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		c.Slug = townSlug(c.Town)
+		cities = append(cities, c)
+	}
+	if cities == nil {
+		cities = []CityInfo{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cities)
+}

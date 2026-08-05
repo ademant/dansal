@@ -152,6 +152,80 @@
 
 {{$orgID := .Org.ID}}
 {{if $orgID}}
+
+<!-- Syndication (#971, #953) -->
+<fieldset class="members-fieldset" id="sec-syndication">
+  <legend>External Syndication</legend>
+  <p style="font-size:.85rem;color:var(--fg-dim);margin:.25rem 0 .75rem">Push events to external platforms. Credentials are stored encrypted server-side. Leave fields blank to disable a platform.</p>
+  <div id="syn-status" style="font-size:.85rem;color:var(--fg-dim);margin-bottom:.5rem" aria-live="polite"></div>
+  <form id="syn-form" style="display:grid;gap:.5rem">
+    <h3 style="font-size:.95rem;margin:.5rem 0 .25rem">Eventbrite</h3>
+    <label for="eb-token">API token (private)</label>
+    <input type="password" id="eb-token" name="eb_token" autocomplete="off" placeholder="private token">
+    <label for="eb-org-id">Eventbrite organisation ID</label>
+    <input type="text" id="eb-org-id" name="eb_org_id" placeholder="123456789">
+    <label for="eb-auto">
+      <input type="checkbox" id="eb-auto" name="eb_auto_publish"> Auto-publish new events to Eventbrite
+    </label>
+
+    <h3 style="font-size:.95rem;margin:1rem 0 .25rem">social-dance.today</h3>
+    <label for="sdt-key">API key</label>
+    <input type="password" id="sdt-key" name="sdt_key" autocomplete="off" placeholder="API key">
+    <label for="sdt-org">Organisation slug on social-dance.today</label>
+    <input type="text" id="sdt-org" name="sdt_org" placeholder="my-org">
+
+    <div style="margin-top:.75rem">
+      <button type="submit" class="btn-primary">Save syndication settings</button>
+    </div>
+  </form>
+  <script>
+  (function(){
+    var orgID = {{$orgID}};
+    var form  = document.getElementById('syn-form');
+    var stat  = document.getElementById('syn-status');
+
+    // Load existing config.
+    fetch('/admin/orgs/'+orgID+'/syndication')
+      .then(function(r){if(!r.ok)throw r;return r.json();})
+      .then(function(cfg){
+        if(cfg.eventbrite){
+          document.getElementById('eb-token').placeholder  = cfg.eventbrite.has_token ? '(saved)' : 'private token';
+          document.getElementById('eb-org-id').value       = cfg.eventbrite.org_id||'';
+          document.getElementById('eb-auto').checked       = !!cfg.eventbrite.auto_publish;
+        }
+        if(cfg.social_dance_today){
+          document.getElementById('sdt-key').placeholder  = cfg.social_dance_today.has_key ? '(saved)' : 'API key';
+          document.getElementById('sdt-org').value        = cfg.social_dance_today.org_slug||'';
+        }
+      })
+      .catch(function(){stat.textContent='Could not load syndication config.';});
+
+    form.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      stat.textContent='Saving…';
+      var body = {
+        eventbrite: {
+          token:        document.getElementById('eb-token').value,
+          org_id:       document.getElementById('eb-org-id').value,
+          auto_publish: document.getElementById('eb-auto').checked
+        },
+        social_dance_today: {
+          api_key:  document.getElementById('sdt-key').value,
+          org_slug: document.getElementById('sdt-org').value
+        }
+      };
+      fetch('/admin/orgs/'+orgID+'/syndication', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      }).then(function(r){
+        stat.textContent = r.ok ? '✓ Saved.' : '✗ Error saving.';
+      }).catch(function(){stat.textContent='✗ Network error.';});
+    });
+  })();
+  </script>
+</fieldset>
+
 <fieldset class="members-fieldset">
   <legend>Members</legend>
   {{if .Members}}

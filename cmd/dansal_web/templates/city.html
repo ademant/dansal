@@ -1,0 +1,129 @@
+{{template "base" .}}
+{{define "head_extra"}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "cities_title"}}", "item": "https://{{$.Domain}}/cities"},
+    {"@type": "ListItem", "position": 2, "name": "{{with .Data}}{{.City.Town}}{{end}}", "item": "https://{{$.Domain}}/city/{{with .Data}}{{townSlug .City.Town}}{{end}}"}
+  ]
+}
+</script>
+{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/cities">{{$.Strings.T "cities_title"}}</a>
+  <span aria-hidden="true">›</span>
+  {{with .Data}}<span>{{.City.Town}}</span>{{end}}
+</nav>
+{{end}}
+{{define "content"}}
+{{with .Data}}
+<h1>{{$.Strings.T "city_title_prefix"}}{{.City.Town}}</h1>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+
+{{if .GeoJSON}}
+<div id="city-map" style="height:300px;border-radius:.4rem;margin-bottom:1rem"></div>
+{{end}}
+
+{{if .Events}}
+<ul class="city-event-list">
+  {{range .Events}}
+  <li class="city-event{{if .IsCancelled}} cancelled{{end}}">
+    <a href="/events/{{.ID}}" class="city-event-link">
+      <span class="city-event-date">{{formatDate $.Lang .StartTime}}</span>
+      <span class="city-event-title">{{.Title}}</span>
+      {{with .Location}}<span class="city-event-venue">{{.Location}}</span>{{end}}
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="no-results">{{$.Strings.T "search_no_results"}}</p>
+{{end}}
+
+{{if not .IncludePast}}
+<button type="button" id="city-past-btn" class="btn-secondary">{{$.Strings.T "city_past_events"}}</button>
+<ul id="city-past-list" class="city-event-list" hidden></ul>
+{{end}}
+
+<script>
+(function(){
+{{if .GeoJSON}}
+  var points = {{.GeoJSON}};
+  if(points && points.length){
+    var map = L.map('city-map');
+    attachTileLayer(map);
+    var bounds = [];
+    points.forEach(function(p){
+      var mk = L.marker([p.lat,p.lng]).addTo(map);
+      mk.bindPopup('<a href="/events/'+p.id+'">'+p.title+'</a><br><small>'+p.venue+'</small>');
+      bounds.push([p.lat,p.lng]);
+    });
+    if(bounds.length===1){map.setView(bounds[0],13);}
+    else if(bounds.length>1){map.fitBounds(bounds,{padding:[20,20]});}
+  }
+{{end}}
+
+  var pastBtn = document.getElementById('city-past-btn');
+  var pastList = document.getElementById('city-past-list');
+  if(pastBtn){
+    pastBtn.addEventListener('click',function(){
+      pastBtn.disabled=true;
+      pastBtn.textContent='…';
+      fetch('/city/{{townSlug .City.Town}}/past-events')
+        .then(function(r){return r.json();})
+        .then(function(evts){
+          pastList.innerHTML='';
+          if(!evts||!evts.length){pastList.innerHTML='<li>—</li>';pastList.hidden=false;return;}
+          evts.forEach(function(e){
+            var li=document.createElement('li');
+            li.className='city-event'+(e.is_cancelled?' cancelled':'');
+            li.innerHTML='<a href="'+e.url+'" class="city-event-link">'
+              +'<span class="city-event-date">'+e.start_time.slice(0,10)+'</span>'
+              +'<span class="city-event-title">'+e.title+'</span>'
+              +(e.venue?'<span class="city-event-venue">'+e.venue+'</span>':'')
+              +'</a>';
+            pastList.appendChild(li);
+          });
+          pastList.hidden=false;
+          pastBtn.hidden=true;
+        })
+        .catch(function(){pastBtn.disabled=false;pastBtn.textContent='{{$.Strings.T "city_past_events"}}';});
+    });
+  }
+})();
+</script>
+
+<style>
+.city-event-list {
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0 1rem;
+}
+.city-event { border-bottom: 1px solid var(--border); }
+.city-event:last-child { border-bottom: none; }
+.city-event.cancelled .city-event-title { text-decoration: line-through; opacity: .6; }
+.city-event-link {
+  display: grid;
+  grid-template-columns: 7rem 1fr auto;
+  gap: .3rem 1rem;
+  align-items: center;
+  padding: .5rem .25rem;
+  text-decoration: none;
+  color: inherit;
+  transition: background .1s;
+}
+.city-event-link:hover { background: var(--bg-alt); }
+.city-event-date { font-size: .8rem; color: var(--fg-dim); white-space: nowrap; }
+.city-event-venue { font-size: .8rem; color: var(--fg-dim); text-align: right; }
+@media(max-width:480px){
+  .city-event-link { grid-template-columns: 1fr; gap: .1rem; }
+  .city-event-venue { text-align: left; }
+}
+#city-past-btn { margin: .5rem 0 1rem; }
+</style>
+{{end}}
+{{end}}

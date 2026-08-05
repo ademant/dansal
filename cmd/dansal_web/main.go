@@ -262,6 +262,9 @@ func main() {
 		r.HandleFunc("GET /tags/{slug}/followers", tagFollowersHandler(cfg, db, client))
 		r.HandleFunc("POST /tags/{slug}/inbox", tagInboxHandler(cfg, db, client))
 		r.HandleFunc("GET /api/v1/tags/search", tagSearchHandler(client))
+		r.HandleFunc("GET /cities", citiesHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /city/{slug}", cityHubHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /city/{slug}/past-events", cityPastEventsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /musicians", musiciansHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /instructors", instructorsHandler(cfg, tmpls, client, i18n))
@@ -450,6 +453,12 @@ func main() {
 		r.HandleFunc("POST /admin/enrich/apply", adminRateLimit(adminEnrichApplyHandler(cfg, client)))
 		r.HandleFunc("POST /admin/enrich/city-aliases/new", adminRateLimit(adminEnrichAliasNewHandler(db)))
 		r.HandleFunc("POST /admin/enrich/city-aliases/{id}/delete", adminRateLimit(adminEnrichAliasDeleteHandler(db)))
+
+		// Syndication (#971, #953)
+		r.HandleFunc("GET /admin/orgs/{id}/syndication", adminSyndicationGetHandler(cfg, client))
+		r.HandleFunc("POST /admin/orgs/{id}/syndication", adminRateLimit(adminSyndicationSaveHandler(cfg, client)))
+		r.HandleFunc("POST /admin/events/{id}/syndicate/{platform}", adminRateLimit(adminSyndicatePlatformHandler(cfg, client)))
+		r.HandleFunc("GET /admin/events/{id}/syndication", adminGetSyncStatusHandler(cfg, client))
 
 		r.HandleFunc("GET /embed/events", embedEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/event/{id}", embedEventHandler(cfg, tmpls, client, i18n))

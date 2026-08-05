@@ -138,6 +138,16 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		})
 	}
 
+	// Cities — hub pages for each town with upcoming events.
+	cities, _ := client.GetCities(ctx)
+	for _, c := range cities {
+		urls = append(urls, sitemapURL{
+			Loc:        base + "/city/" + townSlug(c.Town),
+			ChangeFreq: "weekly",
+			Priority:   "0.7",
+		})
+	}
+
 	// Organizations — every org has a public page at effectiveSlug(o),
 	// whether or not it has an explicit ActorName.
 	orgs, _ := client.GetOrganizations(ctx)

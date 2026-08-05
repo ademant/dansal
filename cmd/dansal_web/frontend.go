@@ -1464,6 +1464,7 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(v)
 		return template.JS(b)
 	},
+	"townSlug": townSlug,
 	// pagerRange returns page numbers to display, using -1 as an ellipsis sentinel.
 	"pagerRange": func(current, total int) []int {
 		if total <= 7 {
@@ -1520,6 +1521,8 @@ type Templates struct {
 	musician                  *template.Template
 	tag                       *template.Template
 	tagsIndex                 *template.Template
+	cities                    *template.Template
+	city                      *template.Template
 	adminMusicians            *template.Template
 	adminMusicianEdit         *template.Template
 	instructors               *template.Template
@@ -1616,6 +1619,8 @@ func loadTemplates() *Templates {
 		musician:                  load("musician"),
 		tag:                       load("tag"),
 		tagsIndex:                 load("tags"),
+		cities:                    load("cities"),
+		city:                      load("city"),
 		adminMusicians:            load("admin_musicians"),
 		adminMusicianEdit:         load("admin_musician_edit"),
 		instructors:               load("instructors"),

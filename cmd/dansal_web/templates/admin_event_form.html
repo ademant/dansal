@@ -767,6 +767,59 @@
   </section>
   {{end}}
 
+  {{if and (not .IsNew) (not .IsTemplateMode) .Event.ID}}
+  <!-- Syndication (#971, #953) -->
+  <section class="form-section" id="sec-syndication">
+    <h2>External Syndication</h2>
+    <div id="syn-status" style="font-size:.85rem;color:var(--fg-dim)" aria-live="polite">Loading…</div>
+    <div id="syn-buttons" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+      <button type="button" id="syn-eb-btn" class="btn-secondary" disabled>Eventbrite</button>
+      <button type="button" id="syn-sdt-btn" class="btn-secondary" disabled>social-dance.today</button>
+    </div>
+    <div id="syn-details" style="font-size:.8rem;margin-top:.5rem"></div>
+  </section>
+  <script>
+  (function(){
+    var eventID = {{.Event.ID}};
+    var ebBtn  = document.getElementById('syn-eb-btn');
+    var sdtBtn = document.getElementById('syn-sdt-btn');
+    var stat   = document.getElementById('syn-status');
+    var details= document.getElementById('syn-details');
+
+    function loadStatus(){
+      fetch('/admin/events/'+eventID+'/syndication')
+        .then(function(r){if(!r.ok)throw r;return r.json();})
+        .then(function(s){
+          stat.textContent='';
+          var parts=[];
+          if(s.eventbrite){
+            ebBtn.disabled=false;
+            parts.push('Eventbrite: '+s.eventbrite.status+(s.eventbrite.url?' <a href="'+s.eventbrite.url+'" target="_blank" rel="noopener">↗</a>':''));
+          }
+          if(s.social_dance_today){
+            sdtBtn.disabled=false;
+            parts.push('social-dance.today: '+s.social_dance_today.status);
+          }
+          if(!parts.length){stat.textContent='No platforms configured for this org.';}
+          details.innerHTML=parts.join(' · ');
+        })
+        .catch(function(){stat.textContent='Could not load sync status.';});
+    }
+    loadStatus();
+
+    function syncTo(platform,btn){
+      btn.disabled=true;btn.textContent='…';
+      fetch('/admin/events/'+eventID+'/syndicate/'+platform,{method:'POST'})
+        .then(function(r){return r.json();})
+        .then(function(){setTimeout(loadStatus,1500);btn.textContent=platform==='eventbrite'?'Eventbrite':'social-dance.today';btn.disabled=false;})
+        .catch(function(){btn.textContent='✗ error';btn.disabled=false;});
+    }
+    ebBtn.addEventListener('click',function(){syncTo('eventbrite',ebBtn);});
+    sdtBtn.addEventListener('click',function(){syncTo('social-dance-today',sdtBtn);});
+  })();
+  </script>
+  {{end}}
+
 </form>
 </div>
 </div>

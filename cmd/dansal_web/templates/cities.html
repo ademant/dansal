@@ -1,0 +1,66 @@
+{{template "base" .}}
+{{define "head_extra"}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "cities_title"}}", "item": "https://{{$.Domain}}/cities"}
+  ]
+}
+</script>
+{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <span>{{$.Strings.T "cities_title"}}</span>
+</nav>
+{{end}}
+{{define "content"}}
+<h1>{{$.Strings.T "cities_title"}}</h1>
+
+{{with .Data}}
+{{if .Cities}}
+<ul class="city-list">
+  {{range .Cities}}
+  <li class="city-item">
+    <a href="/city/{{townSlug .Town}}" class="city-link">
+      <span class="city-name">{{.Town}}</span>
+      <span class="city-meta">{{.EventCount}} / {{.LocationCount}}</span>
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{end}}
+{{end}}
+
+<style>
+.city-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .5rem;
+}
+.city-item { display: contents; }
+.city-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .55rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: .4rem;
+  background: var(--bg-alt);
+  text-decoration: none;
+  transition: background .15s;
+}
+.city-link:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.city-link:hover .city-meta { color: rgba(255,255,255,.8); }
+.city-name { font-weight: 500; }
+.city-meta {
+  font-size: .8rem;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+</style>
+{{end}}

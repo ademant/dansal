@@ -1667,6 +1667,34 @@ func migrateDB() {
 			SELECT id, location_id FROM events WHERE location_id IS NOT NULL`)
 		mark(21)
 	}
+	// v22: external_syndication on organizations — JSON blob for per-platform
+	// credentials (Eventbrite, social-dance.today, etc.) (#971).
+	if !applied(22) {
+		db.Exec("ALTER TABLE organizations ADD COLUMN external_syndication TEXT DEFAULT NULL")
+		mark(22)
+	}
+	// Safety net: ensure column exists even if v22 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('organizations') WHERE name='external_syndication'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE organizations ADD COLUMN external_syndication TEXT DEFAULT NULL")
+		}
+	}
+	// v23: external_sync on events — JSON blob tracking per-platform sync
+	// status, external IDs and URLs (#971).
+	if !applied(23) {
+		db.Exec("ALTER TABLE events ADD COLUMN external_sync TEXT DEFAULT NULL")
+		mark(23)
+	}
+	// Safety net: ensure column exists even if v23 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='external_sync'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN external_sync TEXT DEFAULT NULL")
+		}
+	}
 	// Safety net: backfill any events that slipped through (e.g. imported after
 	// v21 ran but before insertEvent was updated). Idempotent via OR IGNORE.
 	db.Exec(`INSERT OR IGNORE INTO event_locations (event_id, location_id)
@@ -3603,6 +3631,7 @@ func main() {
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
 	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))
+	smux.Handle("GET /api/v1/locations/cities", optAuth(http.HandlerFunc(getCities)))
 	smux.Handle("GET /api/v1/locations/event-counts", auth(http.HandlerFunc(locationEventCounts)))
 	smux.Handle("GET /api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation)))
 	smux.Handle("GET /api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations)))
@@ -3665,6 +3694,10 @@ func main() {
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
 	smux.Handle("DELETE /api/v1/events/{id}/timetable", auth(deleteTimetable))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
+	// Syndication (#971, #953)
+	smux.Handle("GET /api/v1/events/{id}/syndication", auth(http.HandlerFunc(getEventSyncStatus)))
+	smux.Handle("POST /api/v1/events/{id}/syndicate/eventbrite", auth(http.HandlerFunc(syndicateToEventbrite)))
+	smux.Handle("POST /api/v1/events/{id}/syndicate/social-dance-today", auth(http.HandlerFunc(syndicateToSocialDanceToday)))
 
 	// Event relationship sub-resources (#727)
 	smux.Handle("PUT /api/v1/events/{id}/location", auth(http.HandlerFunc(setEventLocationRef)))
@@ -3790,6 +3823,8 @@ func main() {
 	smux.Handle("GET /api/v1/organizations/{id}/members", auth(getOrganizationMembers))
 	smux.Handle("POST /api/v1/organizations/{id}/members", auth(addOrganizationMember))
 	smux.Handle("DELETE /api/v1/organizations/{id}/members/{user_id}", auth(removeOrganizationMember))
+	smux.Handle("GET /api/v1/organizations/{id}/syndication", auth(http.HandlerFunc(getSyndicationConfig)))
+	smux.Handle("PUT /api/v1/organizations/{id}/syndication", auth(http.HandlerFunc(putSyndicationConfig)))
 
 	// Fetch URL endpoints (protected)
 	smux.Handle("GET /api/v1/fetchurl", auth(getFetchSources))

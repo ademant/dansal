@@ -704,6 +704,12 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		*query += " AND e.source = ?"
 		*args = append(*args, v)
 	}
+	// ?town=Berlin — case-insensitive match on the location's town field.
+	// Inherits parent location town (lp.town) when the primary location is a room.
+	if town := q.Get("town"); town != "" {
+		*query += " AND LOWER(COALESCE(NULLIF(l.town,''), lp.town, '')) = LOWER(?)"
+		*args = append(*args, town)
+	}
 	return nil
 }
 

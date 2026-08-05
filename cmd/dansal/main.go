@@ -1659,6 +1659,18 @@ func migrateDB() {
 		db.Exec("ALTER TABLE events ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
 		mark(20)
 	}
+	// v21: seed event_locations from events.location_id so all existing events
+	// have their primary venue in the junction table. New events populate it in
+	// insertEvent; re-assignments via setEventLocationRef also maintain it.
+	if !applied(21) {
+		db.Exec(`INSERT OR IGNORE INTO event_locations (event_id, location_id)
+			SELECT id, location_id FROM events WHERE location_id IS NOT NULL`)
+		mark(21)
+	}
+	// Safety net: backfill any events that slipped through (e.g. imported after
+	// v21 ran but before insertEvent was updated). Idempotent via OR IGNORE.
+	db.Exec(`INSERT OR IGNORE INTO event_locations (event_id, location_id)
+		SELECT id, location_id FROM events WHERE location_id IS NOT NULL`)
 	// Safety net: ensure image_ai_generated exists even if v20 was pre-marked.
 	{
 		var n int
@@ -3657,6 +3669,9 @@ func main() {
 	// Event relationship sub-resources (#727)
 	smux.Handle("PUT /api/v1/events/{id}/location", auth(http.HandlerFunc(setEventLocationRef)))
 	smux.Handle("DELETE /api/v1/events/{id}/location", auth(http.HandlerFunc(unsetEventLocationRef)))
+	smux.Handle("PUT /api/v1/events/{id}/locations/{location_id}", auth(addEventExtraLocation))
+	smux.Handle("DELETE /api/v1/events/{id}/locations/{location_id}", auth(removeEventExtraLocation))
+	smux.Handle("PUT /api/v1/events/{id}/locations/{location_id}/primary", auth(setEventExtraLocationPrimary))
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}/location", optionsSchema[EventLocationRefRequest])
 	smux.Handle("PUT /api/v1/events/{id}/organization", auth(http.HandlerFunc(setEventOrganizationRef)))
 	smux.Handle("DELETE /api/v1/events/{id}/organization", auth(http.HandlerFunc(unsetEventOrganizationRef)))

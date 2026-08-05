@@ -932,6 +932,21 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
   var map=L.map(el,{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
   attachTileLayer(map);
   L.marker([lat,lng]).addTo(map);
+  // Extra venue markers (festival additional buildings)
+  {{$primID := derefInt .Event.LocationID}}
+  {{$hasExtra := false}}
+  {{range .Event.Locations}}{{if and (ne .ID $primID) .Latitude .Longitude}}{{$hasExtra = true}}
+  (function(){
+    var xm=L.circleMarker([{{floatVal .Latitude}},{{floatVal .Longitude}}],{radius:8,color:'#3388ff',weight:2,fillColor:'#fff',fillOpacity:.9,opacity:.8});
+    xm.bindTooltip({{(or .ShortName .Location) | jsStr}},{permanent:false,direction:'top'});
+    xm.addTo(map);
+  })();
+  {{end}}{{end}}
+  // Fit map to all markers when multiple locations exist
+  {{if $hasExtra}}
+  var bounds=[[lat,lng]{{range .Event.Locations}}{{if and (ne .ID $primID) .Latitude .Longitude}},[{{floatVal .Latitude}},{{floatVal .Longitude}}]{{end}}{{end}}];
+  map.fitBounds(bounds,{padding:[20,20]});
+  {{end}}
   el.addEventListener('click',function(){window.open('https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=16/'+lat+'/'+lng,'_blank');});
   el.style.cursor='pointer';
 })();

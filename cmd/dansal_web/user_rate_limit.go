@@ -168,6 +168,9 @@ var routeEndpoint = map[string]string{
 	"POST /admin/locations/{id}/rooms/new":                        "admin_locations_rooms_new",
 	"POST /admin/locations/{id}/rooms/{room_id}/delete":           "admin_locations_rooms_delete",
 	"POST /admin/locations/{id}/rooms/{room_id}/quick-edit":       "admin_locations_rooms_quick_edit",
+	"PUT /admin/events/{id}/locations/{location_id}":              "admin_events_locations_add",
+	"DELETE /admin/events/{id}/locations/{location_id}":           "admin_events_locations_remove",
+	"PUT /admin/events/{id}/locations/{location_id}/primary":      "admin_events_locations_primary",
 }
 
 var userRateLimiter *UserRateLimiter

@@ -1154,6 +1154,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	}
 	id, _ := result.LastInsertId()
 	syncEventLocationGeohash(int(id))
+	if locationID != 0 {
+		q.Exec("INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?,?)", int(id), locationID)
+	}
 	if duplicateReviewCandidateID > 0 {
 		flagDuplicateReview(q, int(id), duplicateReviewCandidateID, title)
 	}
@@ -1446,6 +1449,55 @@ func fetchEventLocation(eventID int) ([]Location, error) {
 	}
 	loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
 	return []Location{loc}, nil
+}
+
+// fetchEventLocations returns all locations assigned to an event via event_locations,
+// including the primary. Used by getEvent to populate Event.Locations.
+func fetchEventLocations(eventID int) ([]Location, error) {
+	const sel = `SELECT l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
+		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''),
+		COALESCE(l.country_code,''), COALESCE(l.region,''), l.latitude,
+		l.longitude, COALESCE(l.internetsite,''), l.osm_id, COALESCE(l.osm_type,''),
+		COALESCE(l.geohash,''), COALESCE(l.wikidata_id,''), COALESCE(l.mb_place_id,''),
+		l.created_at, COALESCE(GROUP_CONCAT(lo.organization_id),'')
+		FROM locations l
+		LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		JOIN event_locations el ON l.id=el.location_id
+		WHERE el.event_id=? GROUP BY l.id`
+	rows, err := db.Query(sel, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var locs []Location
+	for rows.Next() {
+		var loc Location
+		var orgIDsStr string
+		var lat, lng sql.NullFloat64
+		if err := rows.Scan(
+			&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+			&loc.Zipcode, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region, &lat, &lng,
+			&loc.Internetsite, &loc.OsmID, &loc.OsmType,
+			&loc.Geohash, &loc.WikidataID, &loc.MBPlaceID,
+			&loc.CreatedAt, &orgIDsStr,
+		); err != nil {
+			return nil, err
+		}
+		if lat.Valid {
+			v := lat.Float64
+			loc.Latitude = &v
+		}
+		if lng.Valid {
+			v := lng.Float64
+			loc.Longitude = &v
+		}
+		if loc.Geohash == "" && loc.Latitude != nil && loc.Longitude != nil {
+			loc.Geohash = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
+		}
+		loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
+		locs = append(locs, loc)
+	}
+	return locs, rows.Err()
 }
 
 // ── HTTP handlers ──────────────────────────────────────────────────────────
@@ -1879,7 +1931,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	)
 	wg.Add(4)
 	go func() { defer wg.Done(); timetable, _ = fetchTimetable(event.ID) }()
-	go func() { defer wg.Done(); locs, _ = fetchEventLocation(event.ID) }()
+	go func() { defer wg.Done(); locs, _ = fetchEventLocations(event.ID) }()
 	go func() { defer wg.Done(); musicians, _ = fetchEventMusicians(event.ID) }()
 	go func() { defer wg.Done(); instructors, _ = fetchEventInstructors(event.ID) }()
 	wg.Wait()
@@ -3347,6 +3399,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	db.Exec("INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?,?)", eventID, req.LocationID)
 	syncEventLocationGeohash(eventID)
 	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)

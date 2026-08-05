@@ -67,17 +67,56 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		}
 		timetable = event.Timetable
 
-		// Resolve the building-level location ID: if the event's location is
-		// itself a room (child), use the parent so we fetch sibling rooms.
-		topLocID := 0
+		// Resolve building-level location IDs: primary + all extra locations.
+		// If a location is itself a room (child), use the parent as the building.
+		topLocID := 0 // primary building — used for the room quick-create API
 		if event.LocationID != nil {
 			topLocID = *event.LocationID
 		}
 		if event.Location != nil && event.Location.ParentID != nil {
 			topLocID = *event.Location.ParentID
 		}
+		// Collect all unique building IDs (primary + extra locations).
+		seenBuildings := map[int]bool{}
+		buildingIDs := []int{}
 		if topLocID > 0 {
-			rooms, _ = client.GetLocationChildren(ctx, topLocID)
+			seenBuildings[topLocID] = true
+			buildingIDs = append(buildingIDs, topLocID)
+		}
+		for _, loc := range event.Locations {
+			bID := loc.ID
+			if loc.ParentID != nil {
+				bID = *loc.ParentID
+			}
+			if bID > 0 && !seenBuildings[bID] {
+				seenBuildings[bID] = true
+				buildingIDs = append(buildingIDs, bID)
+			}
+		}
+		// Fetch rooms from all buildings and merge, deduplicating by room ID.
+		type roomResult struct {
+			locs []Location
+			err  error
+		}
+		results := make([]roomResult, len(buildingIDs))
+		var roomWg sync.WaitGroup
+		for i, bID := range buildingIDs {
+			roomWg.Add(1)
+			go func(i, bID int) {
+				defer roomWg.Done()
+				locs, err := client.GetLocationChildren(ctx, bID)
+				results[i] = roomResult{locs: locs, err: err}
+			}(i, bID)
+		}
+		roomWg.Wait()
+		seenRooms := map[int]bool{}
+		for _, r := range results {
+			for _, l := range r.locs {
+				if !seenRooms[l.ID] {
+					seenRooms[l.ID] = true
+					rooms = append(rooms, l)
+				}
+			}
 		}
 
 		title := fmt.Sprintf("Timetable — %s", event.Title)

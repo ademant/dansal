@@ -324,6 +324,30 @@
         <div id="room-ac-list" class="ac-list" hidden></div>
       </div>
     </div>
+
+    {{if not .IsNew}}
+    <!-- Additional venues (festival buildings) — managed via API, not form submit -->
+    <div style="margin-top:1rem">
+      <label style="font-weight:600;font-size:.9rem">Additional venues</label>
+      <p class="field-hint" style="margin:.2rem 0 .5rem">Extra buildings that are part of this event. Shown as additional map markers on the event page and available as rooms in the timetable editor.</p>
+      <div id="extra-loc-warn" class="form-error" role="alert" hidden></div>
+      <div id="extra-loc-chips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem">
+        {{$primaryID := 0}}{{with .Event.LocationID}}{{$primaryID = derefInt $.Data.Event.LocationID}}{{end}}
+        {{range .Event.Locations}}{{if ne .ID $primaryID}}
+        <span class="assign-chip" data-loc-id="{{.ID}}">
+          <span class="assign-chip-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</span>
+          <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" onclick="extraLocSetPrimary({{.ID}})">⭐</button>
+          <button type="button" class="btn-sm btn-del" onclick="extraLocRemove({{.ID}}, this)">×</button>
+        </span>
+        {{end}}{{end}}
+      </div>
+      <div style="position:relative;display:inline-block">
+        <input type="text" id="extra-loc-input" class="tt-room-add-input" placeholder="+ Add venue…" autocomplete="off" style="width:16rem"
+          oninput="extraLocInput(this)" onkeydown="extraLocKeydown(event,this)" onfocus="extraLocInput(this)">
+        <ul id="extra-loc-suggest" class="tt-room-suggest" hidden></ul>
+      </div>
+    </div>
+    {{end}}
   </section>
 
   <!-- Venue attribute overrides -->
@@ -1182,6 +1206,80 @@ function cancelLocCreateNew(){
   document.getElementById('loc_choice').value=document.getElementById('loc_id').value?'existing':'';
   syncLocUI();
 }
+
+// ── Extra venues (additional buildings for festivals) ────────────────────────
+{{if not .IsNew}}
+var _extraLocAssigned = new Set([{{range .Event.Locations}}{{if ne .ID (derefInt $.Data.Event.LocationID)}}{{.ID}},{{end}}{{end}}]);
+var _primaryLocID = {{derefInt .Event.LocationID}};
+// All top-level locations available to pick from.
+var _allLocs = [{{range $.Data.Locations}}{id:{{.ID}},name:{{(or .ShortName .Location) | jsStr}},town:{{.Town | jsStr}}},{{end}}];
+
+function extraLocWarn(msg){
+  var w=document.getElementById('extra-loc-warn');
+  if(!w) return;
+  w.textContent=msg; w.hidden=!msg;
+  if(msg) setTimeout(function(){w.hidden=true;},4000);
+}
+
+function extraLocInput(inp){
+  var q=inp.value.trim().toLowerCase();
+  var sug=document.getElementById('extra-loc-suggest');
+  sug.innerHTML=''; sug.hidden=true;
+  var hits=_allLocs.filter(function(l){
+    if(_extraLocAssigned.has(l.id)||l.id===_primaryLocID) return false;
+    var n=(l.name+' '+l.town).toLowerCase();
+    return !q||n.indexOf(q)!==-1;
+  }).slice(0,10);
+  hits.forEach(function(l){
+    var li=document.createElement('li');
+    li.textContent=l.name+(l.town?', '+l.town:'');
+    li.addEventListener('mousedown',function(e){
+      e.preventDefault(); inp.value=''; sug.hidden=true;
+      extraLocAdd(l.id, l.name+(l.town?', '+l.town:''));
+    });
+    sug.appendChild(li);
+  });
+  if(sug.children.length) sug.hidden=false;
+}
+function extraLocKeydown(e,inp){
+  var sug=document.getElementById('extra-loc-suggest');
+  if(e.key==='Escape'){sug.hidden=true;inp.value='';}
+  if(e.key==='Enter'&&!sug.hidden){e.preventDefault();var li=sug.querySelector('li');if(li)li.dispatchEvent(new MouseEvent('mousedown'));}
+}
+function extraLocAdd(id, label){
+  fetch('/admin/events/{{.Event.ID}}/locations/'+id,{method:'PUT'})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(t);});
+      _extraLocAssigned.add(id);
+      var chip=document.createElement('span');
+      chip.className='assign-chip'; chip.dataset.locId=String(id);
+      chip.innerHTML='<span class="assign-chip-name">'+label+'</span>'
+        +' <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" onclick="extraLocSetPrimary('+id+')">⭐</button>'
+        +' <button type="button" class="btn-sm btn-del" onclick="extraLocRemove('+id+',this)">×</button>';
+      document.getElementById('extra-loc-chips').appendChild(chip);
+    })
+    .catch(function(err){extraLocWarn('Could not add venue: '+err.message);});
+}
+function extraLocRemove(id, btn){
+  fetch('/admin/events/{{.Event.ID}}/locations/'+id,{method:'DELETE'})
+    .then(function(r){
+      if(r.status===409){extraLocWarn('Unstar first: make another location primary before removing this one.');return;}
+      if(!r.ok) return r.text().then(function(t){throw new Error(t);});
+      _extraLocAssigned.delete(id);
+      btn.closest('.assign-chip').remove();
+    })
+    .catch(function(err){extraLocWarn('Could not remove venue: '+err.message);});
+}
+function extraLocSetPrimary(id){
+  fetch('/admin/events/{{.Event.ID}}/locations/'+id+'/primary',{method:'PUT'})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(t);});
+      // Reload page so primary chip and extra chips reflect the change.
+      location.reload();
+    })
+    .catch(function(err){extraLocWarn('Could not set primary: '+err.message);});
+}
+{{end}}
 // Room picker: map from building location ID → [{id, name}, ...] of its children.
 // Autocomplete + inline "+ room" create, same pattern as the musician picker (#884).
 var locRooms={

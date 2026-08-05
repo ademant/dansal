@@ -2259,6 +2259,42 @@ func (c *DansalClient) DeleteTimetable(ctx context.Context, eventID int, token s
 	return nil
 }
 
+func (c *DansalClient) AddEventExtraLocation(ctx context.Context, eventID, locationID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/locations/%d", eventID, locationID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("add event location: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
+func (c *DansalClient) RemoveEventExtraLocation(ctx context.Context, eventID, locationID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/events/%d/locations/%d", eventID, locationID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("remove event location: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
+func (c *DansalClient) SetEventExtraLocationPrimary(ctx context.Context, eventID, locationID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/locations/%d/primary", eventID, locationID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("set primary location: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
 func (c *DansalClient) PatchEventTimes(ctx context.Context, eventID int, startTime, endTime, token string) error {
 	body, _ := json.Marshal(map[string]string{"start_time": startTime, "end_time": endTime})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,

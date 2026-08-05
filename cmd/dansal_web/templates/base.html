@@ -144,6 +144,10 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
   .footer-left,.footer-right{text-align:center}
 }
 main{max-width:960px;margin:0 auto;padding-bottom:1.5rem;flex:1;width:100%}
+.breadcrumb{font-size:.83rem;color:var(--fg-dim);margin-bottom:.6rem;display:flex;flex-wrap:wrap;align-items:center;gap:.15rem}
+.breadcrumb a{color:var(--fg-dim);text-decoration:none}
+.breadcrumb a:hover{color:var(--fg);text-decoration:underline}
+.breadcrumb-sep{margin:0 .3rem;opacity:.45;user-select:none}
 h1{font-size:1.6rem;margin-bottom:1rem;color:var(--heading)}
 h2{font-size:1.2rem;margin:1.5rem 0 .5rem;color:var(--fg-2)}
 a{color:var(--link)}
@@ -567,6 +571,7 @@ function initDateRangePicker(opts){
 }
 </script>
 <main>
+{{block "breadcrumb" .}}{{end}}
 {{block "content" .}}{{end}}
 </main>
 <button id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>

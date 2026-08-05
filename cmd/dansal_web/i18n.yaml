@@ -11,6 +11,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Veranstaltungen"
+      breadcrumb_in: "in"
       meta_description: "Veranstaltungskalender für Bal-Folk, Fest-Noz und Volkstanz-Events."
       index_travel_notice: "Bitte vor der Anreise prüfen, ob die Veranstaltung noch stattfindet."
       evt_disclaimer: "Diese Seite übernimmt keine Verantwortung für fehlerhafte Angaben. Bitte vor der Anreise sicherstellen, dass die Veranstaltung stattfindet."
@@ -1157,6 +1158,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Darvoudoù"
+      breadcrumb_in: "e"
       meta_description: "Deiziadur darvoudoù evit bal-folk, fest-noz hag obererezhioù dañs hengounel."
       index_travel_notice: "Gwiriit ma c'hoarvez ar c'hoñversadenn a-raok degas war-zu an tu-se."
       evt_disclaimer: "N'eo ket karg ar bajenn-mañ evit titouroù fazi. Gwiriit ma c'hoarvez an darvoud a-raok mont war-zu an tu-se."
@@ -2301,6 +2303,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Events"
+      breadcrumb_in: "in"
       meta_description: "Community calendar for bal-folk, fest-noz, and folk dance events."
       index_travel_notice: "Always check that an event is still happening before travelling."
       evt_disclaimer: "This page is not responsible for incorrect information. Please verify that the event is taking place before you travel."
@@ -3447,6 +3450,7 @@ languages:
     name: "Español"
     strings:
       nav_events: "Eventos"
+      breadcrumb_in: "en"
       meta_description: "Calendario comunitario de eventos de bal-folk, fest-noz y danza folk."
       index_travel_notice: "Comprueba que el evento sigue adelante antes de desplazarte."
       evt_disclaimer: "Esta página no se hace responsable de información incorrecta. Asegúrate de que el evento se celebra antes de desplazarte."
@@ -4582,6 +4586,7 @@ languages:
     strings:
       # Navigation
       nav_events: "Événements"
+      breadcrumb_in: "à"
       meta_description: "Agenda communautaire des bals folk, fest-noz et événements de danse traditionnelle."
       index_travel_notice: "Vérifiez que l'événement a bien lieu avant de vous déplacer."
       evt_disclaimer: "Cette page décline toute responsabilité pour les informations inexactes. Assurez-vous que l'événement a lieu avant de vous déplacer."
@@ -5727,6 +5732,7 @@ languages:
     name: "Italiano"
     strings:
       nav_events: "Eventi"
+      breadcrumb_in: "a"
       meta_description: "Calendario della comunità per eventi di bal-folk, fest-noz e danza popolare."
       index_travel_notice: "Verificate che l'evento si svolga ancora prima di mettervi in viaggio."
       evt_disclaimer: "Questa pagina non è responsabile di informazioni errate. Verificate che l'evento si svolga prima di mettervi in viaggio."
@@ -6861,6 +6867,7 @@ languages:
     name: "Nederlands"
     strings:
       nav_events: "Evenementen"
+      breadcrumb_in: "in"
       meta_description: "Communitykalender voor bal-folk, fest-noz en volksdansevenementen."
       index_travel_notice: "Controleer of het evenement doorgaat voordat u reist."
       evt_disclaimer: "Deze pagina is niet verantwoordelijk voor onjuiste informatie. Controleer of het evenement doorgaat voordat u reist."
@@ -7995,6 +8002,7 @@ languages:
     name: "Українська"
     strings:
       nav_events: "Події"
+      breadcrumb_in: "у"
       meta_description: "Громадський календар подій бал-фолк, фест-ноз і народних танців."
       index_travel_notice: "Перед поїздкою перевірте, чи відбудеться захід."
       evt_disclaimer: "Ця сторінка не несе відповідальності за неточну інформацію. Перед поїздкою перевірте, чи відбудеться захід."
@@ -9123,6 +9131,7 @@ languages:
     name: "Català"
     strings:
       nav_events: "Esdeveniments"
+      breadcrumb_in: "a"
       meta_description: "Calendari comunitari d'esdeveniments de bal-folk, fest-noz i dansa folk."
       index_travel_notice: "Comproveu que l'esdeveniment es realitza abans de desplaçar-vos."
       evt_disclaimer: "Aquesta pàgina no es responsabilitza d'informació incorrecta. Comproveu que l'esdeveniment es realitza abans de desplaçar-vos."
@@ -10252,6 +10261,7 @@ languages:
     name: "Português"
     strings:
       nav_events: "Eventos"
+      breadcrumb_in: "em"
       meta_description: "Calendário comunitário de eventos de bal-folk, fest-noz e dança folk."
       index_travel_notice: "Verifique se o evento ainda acontece antes de viajar."
       evt_disclaimer: "Esta página não se responsabiliza por informações incorretas. Verifique se o evento acontece antes de viajar."
@@ -11381,6 +11391,7 @@ languages:
     name: "Polski"
     strings:
       nav_events: "Wydarzenia"
+      breadcrumb_in: "w"
       meta_description: "Społecznościowy kalendarz wydarzeń bal-folk, fest-noz i tańca ludowego."
       index_travel_notice: "Przed wyjazdem sprawdź, czy wydarzenie nadal się odbędzie."
       evt_disclaimer: "Ta strona nie odpowiada za błędne informacje. Przed wyjazdem sprawdź, czy wydarzenie nadal się odbędzie."
@@ -12510,6 +12521,7 @@ languages:
     name: "Čeština"
     strings:
       nav_events: "Události"
+      breadcrumb_in: "v"
       meta_description: "Komunitní kalendář akcí bal-folk, fest-noz a lidového tance."
       index_travel_notice: "Před cestou ověřte, zda se akce stále koná."
       evt_disclaimer: "Tato stránka neodpovídá za nesprávné informace. Před cestou ověřte, zda se akce stále koná."

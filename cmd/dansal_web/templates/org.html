@@ -30,6 +30,13 @@
 }
 </script>
 {{end}}{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/orgs">{{.Strings.T "nav_orgs"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span>{{.Data.Org.Name}}</span>
+</nav>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Org.ImageURL}}<img src="{{.}}" alt="{{$.Data.Org.Name}}" class="org-banner">{{end}}

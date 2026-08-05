@@ -75,6 +75,19 @@
 }
 </script>
 {{end}}{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{if .Data.Org}}
+  <a href="/org/{{.Data.OrgSlug}}">{{.Data.Org.Name}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span>{{.Data.Event.Title}}</span>
+  {{else}}
+  <a href="/">{{.Strings.T "nav_events"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span>{{.Data.Event.Title}}{{with formatDate .LangCode .Data.Event.StartTime}} · {{.}}{{end}}{{with .Data.Event.Location}}{{with .Town}} {{$.Strings.T "breadcrumb_in"}} {{.}}{{end}}{{end}}</span>
+  {{end}}
+</nav>
+{{end}}
 {{define "evt_tt_row"}}
 <div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" onclick="openTTDetail(this,true)">
   <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>

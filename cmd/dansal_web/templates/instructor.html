@@ -16,6 +16,13 @@
 }
 </script>
 {{end}}{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/instructors">{{.Strings.T "nav_instructors"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span>{{.Data.Instructor.Name}}</span>
+</nav>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 <div class="musician-header">

@@ -937,7 +937,7 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		apEvent.Tag = append(apEvent.Tag, APHashtag{
 			Type: "Hashtag",
 			Name: "#" + tag,
-			Href: fmt.Sprintf("https://%s/?tag=%s", cfg.Domain, tag),
+			Href: fmt.Sprintf("https://%s/tags/%s", cfg.Domain, tag),
 		})
 	}
 	if e.ImageURL != "" {
@@ -1040,7 +1040,7 @@ func buildNoteFromEvent(cfg *Config, slug string, e Event) APNote {
 		note.Tag = append(note.Tag, APHashtag{
 			Type: "Hashtag",
 			Name: "#" + tag,
-			Href: fmt.Sprintf("https://%s/?tag=%s", cfg.Domain, tag),
+			Href: fmt.Sprintf("https://%s/tags/%s", cfg.Domain, tag),
 		})
 	}
 	if e.ImageURL != "" {

@@ -128,6 +128,16 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		})
 	}
 
+	// Tags — category landing pages for long-tail search traffic.
+	tags, _ := client.GetTags(ctx)
+	for _, t := range tags {
+		urls = append(urls, sitemapURL{
+			Loc:        base + "/tags/" + t.Slug,
+			ChangeFreq: "weekly",
+			Priority:   "0.6",
+		})
+	}
+
 	// Organizations — every org has a public page at effectiveSlug(o),
 	// whether or not it has an explicit ActorName.
 	orgs, _ := client.GetOrganizations(ctx)

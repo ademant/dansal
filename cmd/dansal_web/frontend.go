@@ -118,6 +118,12 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	strs := i18n.Strings(lang)
 
 	canonical := "https://" + cfg.Domain + r.URL.Path
+	// When a ?lang= override is in the URL, include it in the canonical so the
+	// hreflang self-reference is consistent and Google Search Console does not
+	// flag the page as "Alternate page with proper canonical tag" (#966).
+	if l := r.URL.Query().Get("lang"); l != "" {
+		canonical += "?lang=" + l
+	}
 
 	var relayActorURL string
 	if cfg.RelayActorName != "" {

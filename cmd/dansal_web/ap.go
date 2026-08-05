@@ -27,6 +27,7 @@ type PublicKey struct {
 
 type APEndpoints struct {
 	SharedInbox string `json:"sharedInbox"`
+	Tags        string `json:"tags,omitempty"` // URL of tag catalog OrderedCollection (#958)
 }
 
 type Actor struct {

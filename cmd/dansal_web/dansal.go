@@ -249,9 +249,10 @@ type Dance struct {
 }
 
 type Tag struct {
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	EventCount int    `json:"event_count,omitempty"`
 }
 
 type TimetableEntry struct {

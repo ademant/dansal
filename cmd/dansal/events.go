@@ -3043,9 +3043,10 @@ func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery st
 }
 
 type Tag struct {
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	EventCount int    `json:"event_count,omitempty"`
 }
 
 func knownTagSlugs() (map[string]bool, error) {
@@ -3105,7 +3106,12 @@ func validateTags(tags []string) error {
 // GET /api/v1/tags
 func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	rows, err := db.Query("SELECT slug, name, category FROM tags ORDER BY category, name")
+	rows, err := db.Query(`
+		SELECT t.slug, t.name, t.category, COUNT(et.event_id) AS event_count
+		FROM tags t
+		LEFT JOIN event_tags et ON et.tag = t.slug
+		GROUP BY t.slug, t.name, t.category
+		ORDER BY t.category, t.name`)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -3114,7 +3120,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	tags := []Tag{}
 	for rows.Next() {
 		var t Tag
-		if err := rows.Scan(&t.Slug, &t.Name, &t.Category); err != nil {
+		if err := rows.Scan(&t.Slug, &t.Name, &t.Category, &t.EventCount); err != nil {
 			writeInternalError(w, err)
 			return
 		}

@@ -125,7 +125,10 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 		ManuallyApprovesFollowers: false,
 		Discoverable:              true,
 		Indexable:                 true,
-		Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
+		Endpoints: &APEndpoints{
+			SharedInbox: "https://" + cfg.Domain + "/inbox",
+			Tags:        "https://" + cfg.Domain + "/tags",
+		},
 		PublicKey: PublicKey{
 			ID:           base + "#main-key",
 			Owner:        base,

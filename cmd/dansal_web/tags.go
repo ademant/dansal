@@ -1,9 +1,62 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 )
+
+// TagCatalogGroup groups tags by category for the /tags catalog view.
+type TagCatalogGroup struct {
+	Category string
+	Tags     []Tag
+}
+
+// TagsIndexData is the template data for GET /tags (HTML view).
+type TagsIndexData struct {
+	Groups []TagCatalogGroup
+}
+
+// tagsIndexHandler serves GET /tags — content-negotiated:
+//   - ActivityPub: OrderedCollection of all tag collection URIs (#955)
+//   - HTML: browsable tag catalog with event counts (#961)
+func tagsIndexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tags, err := client.GetTags(r.Context())
+		if err != nil {
+			http.Error(w, "could not load tags", http.StatusBadGateway)
+			return
+		}
+
+		if isAPRequest(r) {
+			items := make([]string, len(tags))
+			for i, t := range tags {
+				items[i] = fmt.Sprintf("https://%s/tags/%s", cfg.Domain, t.Slug)
+			}
+			col := map[string]any{
+				"@context":     APContext,
+				"type":         "OrderedCollection",
+				"id":           fmt.Sprintf("https://%s/tags", cfg.Domain),
+				"totalItems":   len(tags),
+				"orderedItems": items,
+			}
+			writeJSON(w, http.StatusOK, col)
+			return
+		}
+
+		// Group by category (API already orders by category, name).
+		var groups []TagCatalogGroup
+		for _, t := range tags {
+			if len(groups) == 0 || groups[len(groups)-1].Category != t.Category {
+				groups = append(groups, TagCatalogGroup{Category: t.Category})
+			}
+			groups[len(groups)-1].Tags = append(groups[len(groups)-1].Tags, t)
+		}
+
+		td := tmplData(r, cfg, i18n, i18n.Strings(i18n.detectLang(r)).T("tags_title"), TagsIndexData{Groups: groups})
+		renderTemplate(w, tmpls.tagsIndex, td)
+	}
+}
 
 // TagPageData is the template data for GET /tags/{slug}.
 type TagPageData struct {

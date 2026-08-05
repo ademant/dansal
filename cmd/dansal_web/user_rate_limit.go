@@ -171,6 +171,7 @@ var routeEndpoint = map[string]string{
 	"PUT /admin/events/{id}/locations/{location_id}":              "admin_events_locations_add",
 	"DELETE /admin/events/{id}/locations/{location_id}":           "admin_events_locations_remove",
 	"PUT /admin/events/{id}/locations/{location_id}/primary":      "admin_events_locations_primary",
+	"POST /tags/{slug}/inbox":                                     "tag_inbox",
 }
 
 var userRateLimiter *UserRateLimiter

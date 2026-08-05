@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // TagCatalogGroup groups tags by category for the /tags catalog view.
@@ -91,7 +92,7 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 		}
 
 		if isAPRequest(r) {
-			serveTagCollection(w, r, cfg, client, slug, events)
+			serveTagCollection(w, r, cfg, client, slug, tag, events)
 			return
 		}
 
@@ -106,21 +107,34 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 }
 
 // serveTagCollection renders events tagged with slug as an ActivityPub
-// OrderedCollection, paged exactly like outboxHandler (?page=true fetches
-// the embedded Note objects; the base request just returns totalItems +
-// first). Each Note is attributed to its owning organization's actor when
-// resolvable, or the relay actor otherwise — the same fallback the relay
-// actor already provides for site-wide federation aggregation.
-func serveTagCollection(w http.ResponseWriter, r *http.Request, cfg *Config, client *DansalClient, slug string, events []Event) {
+// Collection actor (#957). The base request returns a collection actor object
+// with inbox/followers/outbox links so remote servers can follow the tag;
+// ?page=true embeds the event Note objects for the timeline pager. Each Note
+// is attributed to its owning organization's actor when resolvable, or the
+// relay actor otherwise.
+func serveTagCollection(w http.ResponseWriter, r *http.Request, cfg *Config, client *DansalClient, slug string, tag Tag, events []Event) {
 	base := "https://" + cfg.Domain + "/tags/" + slug
 
 	if r.URL.Query().Get("page") != "true" {
-		col := OrderedCollection{
-			Context:    APContext,
-			Type:       "OrderedCollection",
-			ID:         base,
-			TotalItems: len(events),
-			First:      base + "?page=true",
+		name := tag.Name
+		if name == "" {
+			name = slug
+		}
+		// Return an actor-like OrderedCollection so remote servers can follow
+		// this tag. The inbox and followers links enable AP Follow/Undo handling.
+		col := map[string]any{
+			"@context":     APContext,
+			"type":         "OrderedCollection",
+			"id":           base,
+			"name":         "#" + name,
+			"summary":      fmt.Sprintf("Events tagged #%s", name),
+			"url":          base,
+			"totalItems":   len(events),
+			"first":        base + "?page=true",
+			"inbox":        base + "/inbox",
+			"followers":    base + "/followers",
+			"discoverable": true,
+			"indexable":    true,
 		}
 		writeJSON(w, http.StatusOK, col)
 		return
@@ -152,4 +166,34 @@ func serveTagCollection(w http.ResponseWriter, r *http.Request, cfg *Config, cli
 		OrderedItems: items,
 	}
 	writeJSON(w, http.StatusOK, page)
+}
+
+// tagSearchHandler serves GET /api/v1/tags/search?q=... — returns the subset
+// of known tags whose name or slug contains the query string (case-insensitive).
+// Useful for autocomplete and external tag discovery (#960).
+func tagSearchHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		if q == "" {
+			writeJSONError(w, r, http.StatusBadRequest, "query parameter q is required")
+			return
+		}
+
+		tags, err := client.GetTags(r.Context())
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadGateway, "could not load tags")
+			return
+		}
+
+		qLower := strings.ToLower(q)
+		matches := make([]Tag, 0)
+		for _, t := range tags {
+			if strings.Contains(strings.ToLower(t.Name), qLower) ||
+				strings.Contains(strings.ToLower(t.Slug), qLower) {
+				matches = append(matches, t)
+			}
+		}
+
+		writeJSON(w, http.StatusOK, matches)
+	}
 }

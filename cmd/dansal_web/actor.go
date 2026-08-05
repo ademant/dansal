@@ -266,6 +266,24 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 				}
 			}
 			if actor == nil {
+				// Not an org actor — check if it's a tag (#959): acct:bal-folk@domain.
+				tagMap, tagErr := client.GetTagMap(r.Context())
+				if tagErr == nil {
+					if tag, ok := tagMap[slug]; ok {
+						tagURL := "https://" + cfg.Domain + "/tags/" + tag.Slug
+						wf := WebFinger{
+							Subject: "acct:" + tag.Slug + "@" + cfg.Domain,
+							Aliases: []string{tagURL},
+							Links: []WebFingerLink{
+								{Rel: "self", Type: "application/activity+json", Href: tagURL},
+								{Rel: "http://webfinger.net/rel/profile-page", Type: "text/html", Href: tagURL},
+							},
+						}
+						w.Header().Set("Content-Type", "application/jrd+json")
+						json.NewEncoder(w).Encode(wf)
+						return
+					}
+				}
 				writeJSONError(w, r, http.StatusNotFound, "user not found")
 				return
 			}

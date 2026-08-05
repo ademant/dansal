@@ -186,7 +186,74 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 		}
 	}
 
+	// Migration v4: tag_followers — tracks remote actors that follow a tag
+	// collection via ActivityPub Follow. Accepts are signed by the relay actor.
+	if !migrationApplied(db, 4) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS tag_followers (
+			id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+			tag_slug           TEXT    NOT NULL,
+			actor_uri          TEXT    NOT NULL,
+			inbox_url          TEXT    NOT NULL,
+			follow_activity_id TEXT    NOT NULL DEFAULT '',
+			created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(tag_slug, actor_uri)
+		)`)
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (4)")
+	}
+	// Safety net: ensure the table exists even if v4 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tag_followers'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS tag_followers (
+				id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+				tag_slug           TEXT    NOT NULL,
+				actor_uri          TEXT    NOT NULL,
+				inbox_url          TEXT    NOT NULL,
+				follow_activity_id TEXT    NOT NULL DEFAULT '',
+				created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(tag_slug, actor_uri)
+			)`)
+		}
+	}
+
 	return db
+}
+
+func addTagFollower(db *sql.DB, slug, actorURI, inboxURL, followActivityID string) error {
+	_, err := db.Exec(
+		"INSERT OR IGNORE INTO tag_followers (tag_slug, actor_uri, inbox_url, follow_activity_id) VALUES (?, ?, ?, ?)",
+		slug, actorURI, inboxURL, followActivityID,
+	)
+	return err
+}
+
+func removeTagFollower(db *sql.DB, slug, actorURI string) error {
+	_, err := db.Exec(
+		"DELETE FROM tag_followers WHERE tag_slug = ? AND actor_uri = ?",
+		slug, actorURI,
+	)
+	return err
+}
+
+func listTagFollowers(db *sql.DB, slug string) ([]struct{ ActorURI, InboxURL string }, error) {
+	rows, err := db.Query(
+		"SELECT actor_uri, inbox_url FROM tag_followers WHERE tag_slug = ? ORDER BY created_at",
+		slug,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var fs []struct{ ActorURI, InboxURL string }
+	for rows.Next() {
+		var f struct{ ActorURI, InboxURL string }
+		if err := rows.Scan(&f.ActorURI, &f.InboxURL); err != nil {
+			return nil, err
+		}
+		fs = append(fs, f)
+	}
+	return fs, rows.Err()
 }
 
 type ActorRecord struct {

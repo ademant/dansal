@@ -16,6 +16,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .loc-legend{background:rgba(255,255,255,.88);padding:.35rem .55rem;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.75rem;color:#555;line-height:1.6}
 .loc-legend-dots{display:flex;align-items:center;gap:2px;margin-top:.15rem}
 .loc-legend-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(255,255,255,.8);flex-shrink:0}
+.powered-by{text-align:right;padding:.25rem .5rem;font-size:.72rem;color:#aaa}.powered-by a{color:#aaa;text-decoration:none}.powered-by a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -96,5 +97,6 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   new ResizeObserver(reportHeight).observe(document.body);
 })();
 </script>
+<div class="powered-by"><a href="{{.BaseURL}}" target="_blank" rel="noopener">Powered by {{.SiteName}}</a></div>
 </body>
 </html>

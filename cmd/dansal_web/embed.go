@@ -11,6 +11,18 @@ import (
 	"time"
 )
 
+// embedSiteName returns the display name for the host instance, used in
+// "Powered by …" attribution links inside embedded widgets.
+func embedSiteName(cfg *Config) string {
+	if n := siteCfg.SiteName(); n != "" {
+		return n
+	}
+	if cfg.SiteName != "" {
+		return cfg.SiteName
+	}
+	return cfg.Domain
+}
+
 // embedLang returns the display language for embed pages: prefer the ?lang=
 // query param, fall back to cookie/default.
 func embedLang(r *http.Request, i18n *I18n) string {
@@ -128,6 +140,7 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			"OrgNames": orgNames,
 			"Strings":  strs,
 			"BaseURL":  cfg.BaseURL,
+				"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -156,11 +169,12 @@ func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedEvent, map[string]any{
-			"Lang":    lang,
-			"Event":   event,
-			"OrgName": orgName,
-			"Strings": strs,
-			"BaseURL": cfg.BaseURL,
+			"Lang":     lang,
+			"Event":    event,
+			"OrgName":  orgName,
+			"Strings":  strs,
+			"BaseURL":  cfg.BaseURL,
+			"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -208,11 +222,12 @@ func embedOrgHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedOrg, map[string]any{
-			"Lang":    lang,
-			"Org":     org,
-			"Events":  events,
-			"Strings": strs,
-			"BaseURL": cfg.BaseURL,
+			"Lang":     lang,
+			"Org":      org,
+			"Events":   events,
+			"Strings":  strs,
+			"BaseURL":  cfg.BaseURL,
+			"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -263,10 +278,11 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedNext, map[string]any{
-			"Lang":    lang,
-			"Events":  events,
-			"Strings": strs,
-			"BaseURL": cfg.BaseURL,
+			"Lang":     lang,
+			"Events":   events,
+			"Strings":  strs,
+			"BaseURL":  cfg.BaseURL,
+			"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -326,10 +342,11 @@ func embedLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedLocations, map[string]any{
-			"Lang":    lang,
-			"LocData": template.JS(locJSON),
-			"Strings": strs,
-			"BaseURL": cfg.BaseURL,
+			"Lang":     lang,
+			"LocData":  template.JS(locJSON),
+			"Strings":  strs,
+			"BaseURL":  cfg.BaseURL,
+			"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -448,6 +465,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"FPLocale":    fpLocales[lang],
 			"Strings":     strs,
 			"BaseURL":     cfg.BaseURL,
+			"SiteName":    embedSiteName(cfg),
 		})
 	}
 }

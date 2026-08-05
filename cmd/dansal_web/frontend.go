@@ -1932,8 +1932,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
 		pageTitle := event.Title
-		if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
-			pageTitle = event.Title + " – " + d
+		{
+			var suffix []string
+			if event.Location != nil && event.Location.Town != "" {
+				suffix = append(suffix, event.Location.Town)
+			}
+			if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
+				suffix = append(suffix, d)
+			}
+			if len(suffix) > 0 {
+				pageTitle = event.Title + " – " + strings.Join(suffix, ", ")
+			}
 		}
 		td := tmplData(r, cfg, i18n, pageTitle, EventData{
 			Event:             event,

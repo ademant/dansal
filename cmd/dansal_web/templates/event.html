@@ -25,7 +25,7 @@
   }
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
-  {{- with .ImageURL}}, "image": "{{. | js}}"{{end}}
+  {{- if .ImageURL}}, "image": "{{.ImageURL | js}}"{{else if gt $.BannerHeight 0}}, "image": "https://{{$.Domain | js}}/banner.avif"{{end}}
   {{- if .Description}}, "description": "{{.Description | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode . | js}}{{end}}"
   {{- end}}

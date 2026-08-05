@@ -38,7 +38,7 @@ func maybeServePrecompressed(w http.ResponseWriter, r *http.Request, path, conte
 	return false
 }
 
-var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
+var siteAssetExts = []string{".svg", ".avif", ".png", ".jpg", ".gif"}
 
 // findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
 // findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
@@ -98,6 +98,8 @@ func detectAssetMIMEFromExt(ext string) string {
 		return "image/svg+xml"
 	case ".avif":
 		return "image/avif"
+	case ".png":
+		return "image/png"
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
 	case ".gif":
@@ -133,6 +135,10 @@ func detectAssetMIME(data []byte) string {
 				return "image/avif"
 			}
 		}
+	}
+	// PNG: 89 50 4E 47 magic
+	if len(data) >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+		return "image/png"
 	}
 	// JPEG: FF D8 magic
 	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xD8 {

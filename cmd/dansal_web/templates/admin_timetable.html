@@ -207,6 +207,7 @@ var _allInstructors = (function(){
 var _evtStart = "{{.Event.StartTime}}";
 var _evtEnd = "{{.Event.EndTime}}";
 var _topLocID = {{.TopLocationID}}; // building-level location for room quick-create
+var _topLocName = {{.TopLocationName | js}}; // short name of the primary building
 
 // Assign client-side IDs to loaded entries
 var _cidCounter = 1;
@@ -376,11 +377,11 @@ function roomAddInput(inp){
   sug.innerHTML=''; sug.hidden=true;
   var existing = _rooms.map(function(r){ return r.label.toLowerCase(); });
   var hits = _allRooms.filter(function(r){
-    var n=(r.short_name||r.location||'').toLowerCase();
+    var n=(r.label||'').toLowerCase();
     return (!q || n.indexOf(q)!==-1) && existing.indexOf(n)<0;
   }).slice(0,8);
   hits.forEach(function(r){
-    var n=r.short_name||r.location||('Room '+r.id);
+    var n=r.label||('Room '+r.id);
     var li = document.createElement('li');
     li.textContent=n;
     li.addEventListener('mousedown',function(e){
@@ -390,10 +391,13 @@ function roomAddInput(inp){
     sug.appendChild(li);
   });
   // offer to create a new room in the DB (or free-text if no venue set)
-  if(q && !hits.some(function(r){ return (r.short_name||r.location||'').toLowerCase()===q; })){
+  if(q && !hits.some(function(r){ return (r.label||'').toLowerCase()===q; })){
     var li = document.createElement('li');
     var lbl = inp.value.trim();
-    li.textContent = (_topLocID > 0 ? '+ Create room "' : '+ Add "') + lbl + '"';
+    var createLbl = _topLocID > 0
+      ? '+ Create room "' + lbl + '"' + (_topLocName ? ' in ' + _topLocName : '')
+      : '+ Add "' + lbl + '"';
+    li.textContent = createLbl;
     li.style.fontStyle='italic';
     li.addEventListener('mousedown',function(e){
       e.preventDefault(); inp.value=''; sug.hidden=true;
@@ -413,7 +417,7 @@ function roomQuickCreate(name){
     if(!res.ok) throw new Error('HTTP '+res.status);
     return res.json();
   }).then(function(room){
-    _allRooms.push({id:room.id,location:room.name,short_name:room.name});
+    _allRooms.push({id:room.id,label:room.name});
     addRoom({id:room.id,label:room.name});
   }).catch(function(err){
     alert('Could not create room: '+err.message);

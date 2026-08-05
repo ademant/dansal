@@ -1602,9 +1602,9 @@ var _ttLocs={{timetableLocationOptionsJSON $.Data.Locations}};
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
 var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
 var _ttInstructors=[{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
-{{if not .IsNew}}
-var _origStartDate = {{isoDate .Event.StartTime | jsStr}};
-var _ttEntries = {{.Event.Timetable | json}};
+{{if not $.Data.IsNew}}
+var _origStartDate = {{isoDate $.Data.Event.StartTime | jsStr}};
+var _ttEntries = {{$.Data.Event.Timetable | json}};
 var _pendingTTShift = null;
 {{end}}
 // Growing timetable
@@ -2074,7 +2074,7 @@ document.querySelector('.evt-form').addEventListener('submit',function(){
   defRow.querySelectorAll('input,select,textarea').forEach(function(i){i.disabled=true;});
 });
 {{end}}
-{{if not .IsNew}}
+{{if not $.Data.IsNew}}
 (function(){
   var evtForm=document.querySelector('.evt-form');
   if(!evtForm) return;
@@ -2107,7 +2107,7 @@ document.querySelector('.evt-form').addEventListener('submit',function(){
       if(edInp){edInp.value=maxDT.slice(0,10);edInp.removeAttribute('data-auto');}
       if(etInp) etInp.value=maxDT.slice(11,16);
     }
-    fetch('/admin/events/{{.Event.ID}}/timetable',{
+    fetch('/admin/events/{{$.Data.Event.ID}}/timetable',{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(shifted)

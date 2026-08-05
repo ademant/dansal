@@ -26,6 +26,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			return
 		}
 		if err := r.ParseForm(); err != nil {
+			log.Printf("dansal-web: board parse form ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
 		}
@@ -64,6 +65,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		globalEmailSendRate.record()
 		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
+			log.Printf("dansal-web: board post failed ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
 			clearPendingSubmission(ip, r.UserAgent())
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
@@ -100,6 +102,7 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		token := getSessionToken(r)
 
 		if err := client.DeleteContactPost(r.Context(), postID, token); err != nil {
+			log.Printf("dansal-web: board delete failed post_id=%d path=%s err=%v", postID, r.URL.Path, err)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_delete_error", eventID), http.StatusSeeOther)
 			return
 		}
@@ -149,6 +152,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		globalEmailSendRate.record()
 		tgURL, err := client.ContactPoster(r.Context(), postID, email, telegram, message, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
+			log.Printf("dansal-web: board contact failed post_id=%d ip_hash=%s path=%s err=%v", postID, hashIP(ip), r.URL.Path, err)
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
 			return
 		}

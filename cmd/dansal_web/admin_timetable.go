@@ -9,14 +9,23 @@ import (
 	"sync"
 )
 
+// TimetableRoom is a room option for the timetable editor's room picker.
+// Label is pre-disambiguated (includes building name when two buildings share
+// a room name, e.g. "305 — Aal2" vs "305 — Aalen").
+type TimetableRoom struct {
+	ID    int    `json:"id"`
+	Label string `json:"label"`
+}
+
 // TimetablePageData holds everything the admin timetable editor template needs.
 type TimetablePageData struct {
-	Event         Event
-	Timetable     []TimetableEntry
-	Rooms         []Location // child locations of the event's venue (building)
-	Musicians     []Musician
-	Instructors   []Instructor
-	TopLocationID int // building-level location ID used for room quick-create
+	Event           Event
+	Timetable       []TimetableEntry
+	Rooms           []TimetableRoom // rooms across all relevant buildings, disambiguated
+	Musicians       []Musician
+	Instructors     []Instructor
+	TopLocationID   int    // building-level location ID used for room quick-create
+	TopLocationName string // short name of the primary building (for create-room label)
 }
 
 // GET /admin/events/{id}/timetable — serve the dedicated timetable editor.
@@ -37,8 +46,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		var (
 			event       Event
 			eventErr    error
-			timetable   []TimetableEntry
-			rooms       []Location
+			allLocs     []Location
 			musicians   []Musician
 			instructors []Instructor
 			wg          sync.WaitGroup
@@ -48,6 +56,11 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		go func() {
 			defer wg.Done()
 			event, eventErr = client.GetEventAuthed(ctx, id, tok)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			allLocs, _ = client.GetLocations(ctx)
 		}()
 		wg.Add(1)
 		go func() {
@@ -65,7 +78,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			http.Error(w, "event not found", http.StatusNotFound)
 			return
 		}
-		timetable = event.Timetable
+		timetable := event.Timetable
 
 		// Resolve building-level location IDs: primary + all extra locations.
 		// If a location is itself a room (child), use the parent as the building.
@@ -76,57 +89,106 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if event.Location != nil && event.Location.ParentID != nil {
 			topLocID = *event.Location.ParentID
 		}
-		// Collect all unique building IDs (primary + extra locations).
-		seenBuildings := map[int]bool{}
-		buildingIDs := []int{}
+
+		// Build a complete id→location map from the cached all-locations list.
+		locByID := make(map[int]Location, len(allLocs))
+		for _, l := range allLocs {
+			locByID[l.ID] = l
+		}
+
+		// Collect the set of buildings (parent locations) whose rooms should be
+		// offered: primary building, extra event locations (multi-venue), plus
+		// the parent of any room already referenced by an existing timetable entry.
+		buildingIDs := map[int]bool{}
 		if topLocID > 0 {
-			seenBuildings[topLocID] = true
-			buildingIDs = append(buildingIDs, topLocID)
+			buildingIDs[topLocID] = true
 		}
 		for _, loc := range event.Locations {
 			bID := loc.ID
 			if loc.ParentID != nil {
 				bID = *loc.ParentID
 			}
-			if bID > 0 && !seenBuildings[bID] {
-				seenBuildings[bID] = true
-				buildingIDs = append(buildingIDs, bID)
+			if bID > 0 {
+				buildingIDs[bID] = true
 			}
 		}
-		// Fetch rooms from all buildings and merge, deduplicating by room ID.
-		type roomResult struct {
-			locs []Location
-			err  error
+		for _, e := range timetable {
+			if e.LocationID == nil {
+				continue
+			}
+			if l, ok := locByID[*e.LocationID]; ok && l.ParentID != nil {
+				buildingIDs[*l.ParentID] = true
+			}
 		}
-		results := make([]roomResult, len(buildingIDs))
-		var roomWg sync.WaitGroup
-		for i, bID := range buildingIDs {
-			roomWg.Add(1)
-			go func(i, bID int) {
-				defer roomWg.Done()
-				locs, err := client.GetLocationChildren(ctx, bID)
-				results[i] = roomResult{locs: locs, err: err}
-			}(i, bID)
+
+		// Group rooms by building and detect name conflicts so we can
+		// disambiguate labels (e.g. "305 — Aal2" vs "305 — Aalen").
+		type buildingGroup struct {
+			name  string
+			rooms []Location
 		}
-		roomWg.Wait()
-		seenRooms := map[int]bool{}
-		for _, r := range results {
-			for _, l := range r.locs {
-				if !seenRooms[l.ID] {
-					seenRooms[l.ID] = true
-					rooms = append(rooms, l)
+		var buildings []buildingGroup
+		for bid := range buildingIDs {
+			bl := locByID[bid]
+			name := bl.ShortName
+			if name == "" {
+				name = bl.Location
+			}
+			var children []Location
+			for _, l := range allLocs {
+				if l.ParentID != nil && *l.ParentID == bid {
+					children = append(children, l)
 				}
+			}
+			buildings = append(buildings, buildingGroup{name: name, rooms: children})
+		}
+
+		roomLabel := func(l Location) string {
+			if l.ShortName != "" {
+				return l.ShortName
+			}
+			if l.Location != "" {
+				return l.Location
+			}
+			return fmt.Sprintf("Room %d", l.ID)
+		}
+
+		// Count how many buildings share each base label.
+		nameCounts := map[string]int{}
+		for _, b := range buildings {
+			for _, r := range b.rooms {
+				nameCounts[roomLabel(r)]++
+			}
+		}
+
+		var rooms []TimetableRoom
+		for _, b := range buildings {
+			for _, r := range b.rooms {
+				lbl := roomLabel(r)
+				if nameCounts[lbl] > 1 {
+					lbl = lbl + " — " + b.name
+				}
+				rooms = append(rooms, TimetableRoom{ID: r.ID, Label: lbl})
+			}
+		}
+
+		topLocName := ""
+		if bl, ok := locByID[topLocID]; ok {
+			topLocName = bl.ShortName
+			if topLocName == "" {
+				topLocName = bl.Location
 			}
 		}
 
 		title := fmt.Sprintf("Timetable — %s", event.Title)
 		renderTemplate(w, tmpls.adminTimetable, tmplData(r, cfg, i18n, title, TimetablePageData{
-			Event:         event,
-			Timetable:     timetable,
-			Rooms:         rooms,
-			Musicians:     musicians,
-			Instructors:   instructors,
-			TopLocationID: topLocID,
+			Event:           event,
+			Timetable:       timetable,
+			Rooms:           rooms,
+			Musicians:       musicians,
+			Instructors:     instructors,
+			TopLocationID:   topLocID,
+			TopLocationName: topLocName,
 		}))
 	}
 }

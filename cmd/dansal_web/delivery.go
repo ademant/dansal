@@ -117,6 +117,19 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 				}
 			}
 		}
+
+		// Tag follower delivery (#956): deliver Create{Note} to remote actors
+		// that follow any of the event's tags. Uses org_id = -1 as a sentinel
+		// in the delivered table so each event is delivered at most once.
+		if relayActor != nil && len(e.Tags) > 0 && !isDelivered(db, e.ID, -1) {
+			if err := deliverEventToTagFollowers(cfg, db, relayActor, e); err != nil {
+				log.Printf("tag delivery event %d: %v", e.ID, err)
+			} else {
+				if err := markDelivered(db, e.ID, -1); err != nil {
+					log.Printf("mark tag delivered event %d: %v", e.ID, err)
+				}
+			}
+		}
 	}
 }
 
@@ -149,6 +162,51 @@ func deliverToFollowers(cfg *Config, db *sql.DB, actor *ActorRecord, activity Ac
 			}
 		} else {
 			deleteDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL)
+		}
+	}
+	return nil
+}
+
+// deliverEventToTagFollowers sends Create{Note} to all remote actors that
+// follow any of the event's tags. Deduplicates by inbox URL so a follower
+// of multiple matching tags receives only one copy. Signed by the relay actor.
+// The delivered table entry (org_id = -1) is set by the caller.
+func deliverEventToTagFollowers(cfg *Config, db *sql.DB, relayActor *ActorRecord, event Event) error {
+	// Collect unique inbox URLs across all tags.
+	seen := map[string]bool{}
+	var targets []struct{ ActorURI, InboxURL string }
+	for _, tag := range event.Tags {
+		fs, err := listTagFollowers(db, tag)
+		if err != nil {
+			log.Printf("tag delivery: list followers for %s: %v", tag, err)
+			continue
+		}
+		for _, f := range fs {
+			if !seen[f.InboxURL] {
+				seen[f.InboxURL] = true
+				targets = append(targets, f)
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+
+	// Build a Create{Note} attributed to the relay actor.
+	activity := buildCreateActivity(cfg, relayActor.OrgSlug, event)
+	activity.Context = APContext
+
+	body, err := json.Marshal(activity)
+	if err != nil {
+		return err
+	}
+
+	relayBase := actorURL(cfg, relayActor.OrgSlug)
+	keyID := relayBase + "#main-key"
+
+	for _, t := range targets {
+		if err := postToInbox(t.InboxURL, keyID, relayActor.PrivateKeyPEM, body); err != nil {
+			log.Printf("tag delivery event %d to %s: %v", event.ID, t.InboxURL, err)
 		}
 	}
 	return nil

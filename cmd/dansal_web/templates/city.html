@@ -33,7 +33,7 @@
   {{range .Events}}
   <li class="city-event{{if .IsCancelled}} cancelled{{end}}">
     <a href="/events/{{.ID}}" class="city-event-link">
-      <span class="city-event-date">{{formatDate $.Lang .StartTime}}</span>
+      <span class="city-event-date">{{formatDate $.LangCode .StartTime}}</span>
       <span class="city-event-title">{{.Title}}</span>
       {{with .Location}}<span class="city-event-venue">{{.Location}}</span>{{end}}
     </a>

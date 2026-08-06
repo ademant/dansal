@@ -30,11 +30,11 @@ type AdminEventsMaintenanceData struct {
 	FilterUnpublished  bool
 	ReturnURL          string
 	// paging
-	TotalCount    int
-	Page          int
-	TotalPages    int
-	HasFilter     bool
-	PagerBaseURL  string
+	TotalCount   int
+	Page         int
+	TotalPages   int
+	HasFilter    bool
+	PagerBaseURL string
 }
 
 func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -96,6 +96,32 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
+		}
+
+		if filterUnpublished {
+			// #982: is_published=false alone misses events stuck at
+			// email_verified=0 — those are invisible to the API's base guard
+			// regardless of published status. Merge in a second request so the
+			// "unpublished" shortcut doesn't silently skip them.
+			evParams := url.Values{}
+			for k, v := range params {
+				evParams[k] = v
+			}
+			evParams.Del("is_published")
+			evParams.Set("email_verified", "false")
+			if evEvents, _, evErr := client.GetAdminEventsWithTotal(r.Context(), token, evParams); evErr == nil {
+				seen := make(map[int]bool, len(events))
+				for _, e := range events {
+					seen[e.ID] = true
+				}
+				for _, e := range evEvents {
+					if !seen[e.ID] {
+						events = append(events, e)
+						seen[e.ID] = true
+						total++
+					}
+				}
+			}
 		}
 
 		totalPages := 1

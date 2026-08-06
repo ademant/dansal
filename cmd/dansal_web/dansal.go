@@ -268,6 +268,7 @@ type Event struct {
 	SuggesterName          string           `json:"suggester_name,omitempty"`
 	PendingEditJSON        string           `json:"pending_edit_json,omitempty"`
 	PendingEditSubmittedAt string           `json:"pending_edit_submitted_at,omitempty"`
+	EmailVerified          bool             `json:"email_verified"`
 }
 
 type Dance struct {
@@ -3749,6 +3750,7 @@ type DashboardAttention struct {
 	PendingEventSuggestions int `json:"pending_event_suggestions"`
 	PossibleDuplicates      int `json:"possible_duplicates"`
 	PendingEdits            int `json:"pending_edits"`
+	NotVerifiedEventCount   int `json:"not_verified_event_count"`
 }
 
 // GetDashboardAttention returns the scoped counts of items needing review for the caller.

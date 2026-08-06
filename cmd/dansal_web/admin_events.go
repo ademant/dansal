@@ -33,57 +33,58 @@ func parseChangedAt(changedAt string) int64 {
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
-	Events             []Event
-	Organizations      []Organization
-	OrgMap             map[int]string
-	Locations          []Location
-	LocationMap        map[int]Location
-	Musicians          []Musician
-	Dances             []Dance
-	AllTags            []Tag
-	Series             []EventSeries
-	FilterIncludePast  bool
-	FilterOrgID        int // -1 = no org assigned
-	FilterOrgName      string
-	FilterLocationID   int
-	FilterLocationName string
-	FilterCity         string
-	FilterDateFrom     string
-	FilterDateTo       string
-	FilterMusicianID   int
-	FilterType         string // "ball", "workshop", "festival"
-	FilterDance        string
-	FilterCreatedAfter string
-	FilterSource       string
-	FilterNotVerified  bool
-	FilterFlagged      bool
-	TotalCount         int
-	PrevURL            string
-	NextURL            string
+	Events                 []Event
+	Organizations          []Organization
+	OrgMap                 map[int]string
+	Locations              []Location
+	LocationMap            map[int]Location
+	Musicians              []Musician
+	Dances                 []Dance
+	AllTags                []Tag
+	Series                 []EventSeries
+	FilterIncludePast      bool
+	FilterOrgID            int // -1 = no org assigned
+	FilterOrgName          string
+	FilterLocationID       int
+	FilterLocationName     string
+	FilterCity             string
+	FilterDateFrom         string
+	FilterDateTo           string
+	FilterMusicianID       int
+	FilterType             string // "ball", "workshop", "festival"
+	FilterDance            string
+	FilterCreatedAfter     string
+	FilterSource           string
+	FilterNotVerified      bool
+	FilterFlagged          bool
+	FilterEmailNotVerified bool
+	TotalCount             int
+	PrevURL                string
+	NextURL                string
 }
 
 type EventPrefill struct {
-	Title, Description, URL, BookingURL string
-	Date, EndDate                       string
-	StartTime, EndTime                  string
+	Title, Description, URL, BookingURL       string
+	Date, EndDate                             string
+	StartTime, EndTime                        string
 	Location, Address, Zipcode, Town, Country string
-	HasBall, HasWorkshop, HasFestival   bool
-	WorkshopDifficulty                  string
-	OrgID                               int
-	LocID                               int
-	PricingType                         string
-	PricingAmount                       float64
-	PricingCurrency                     string
-	PricingLines                        []Price
-	Tags                                []string
-	DanceIDs                            []int
-	Food                                string
-	Drink                               string
-	TicketsTotal                        int
-	BookingEnabled                      bool
-	Timetable                           []TimetableEntry
-	CloneMode                           bool
-	OriginalDate                        string // used in clone mode to enforce date change
+	HasBall, HasWorkshop, HasFestival         bool
+	WorkshopDifficulty                        string
+	OrgID                                     int
+	LocID                                     int
+	PricingType                               string
+	PricingAmount                             float64
+	PricingCurrency                           string
+	PricingLines                              []Price
+	Tags                                      []string
+	DanceIDs                                  []int
+	Food                                      string
+	Drink                                     string
+	TicketsTotal                              int
+	BookingEnabled                            bool
+	Timetable                                 []TimetableEntry
+	CloneMode                                 bool
+	OriginalDate                              string // used in clone mode to enforce date change
 }
 
 type TagOption struct {
@@ -1263,6 +1264,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		filterUnpublished := q.Get("unpublished") == "1"
 		filterNotVerified := q.Get("not_verified") == "1"
 		filterFlagged := q.Get("flagged") == "1"
+		filterEmailNotVerified := q.Get("email_not_verified") == "1"
 
 		params := url.Values{}
 		if includePast {
@@ -1303,13 +1305,22 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		if filterFlagged && !includePast {
 			params.Set("include_past", "true")
 		}
+		if filterEmailNotVerified {
+			// email_verified=0 events can predate today (stuck since a feed
+			// import before the next server restart's backfill caught up), so
+			// this shortcut also needs the full time range, not just future events.
+			params.Set("email_verified", "false")
+			if !includePast {
+				params.Set("include_past", "true")
+			}
+		}
 
 		// Fetch all events when any filter is active so in-memory filters
 		// (org, type, dance, city, flagged) operate on the full result set.
 		hasFilter := includePast || orgID != 0 || locationID != 0 || musicianID != 0 ||
 			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
 			filterCity != "" || createdAfter != "" || filterSource != "" ||
-			filterUnpublished || filterNotVerified || filterFlagged
+			filterUnpublished || filterNotVerified || filterFlagged || filterEmailNotVerified
 		limit := 100
 		if hasFilter {
 			limit = 1000
@@ -1415,6 +1426,15 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 			events = filtered
 		}
+		if filterEmailNotVerified {
+			filtered := events[:0]
+			for _, e := range events {
+				if !e.EmailVerified {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
 
 		var prevURL, nextURL string
 		if !clientFilterActive {
@@ -1488,33 +1508,34 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 		}
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
-			Events:             events,
-			Organizations:      orgs,
-			OrgMap:             orgMap,
-			Locations:          locs,
-			LocationMap:        locMap,
-			Musicians:          musicians,
-			Dances:             dances,
-			AllTags:            allTags,
-			Series:             series,
-			FilterIncludePast:  includePast,
-			FilterOrgID:        orgID,
-			FilterOrgName:      filterOrgName,
-			FilterLocationID:   locationID,
-			FilterLocationName: filterLocationName,
-			FilterCity:         filterCity,
-			FilterDateFrom:     dateFrom,
-			FilterDateTo:       dateTo,
-			FilterMusicianID:   musicianID,
-			FilterType:         filterType,
-			FilterDance:        filterDance,
-			FilterCreatedAfter: createdAfter,
-			FilterSource:       filterSource,
-			FilterNotVerified:  filterNotVerified || filterUnpublished,
-			FilterFlagged:      filterFlagged,
-			TotalCount:         total,
-			PrevURL:            prevURL,
-			NextURL:            nextURL,
+			Events:                 events,
+			Organizations:          orgs,
+			OrgMap:                 orgMap,
+			Locations:              locs,
+			LocationMap:            locMap,
+			Musicians:              musicians,
+			Dances:                 dances,
+			AllTags:                allTags,
+			Series:                 series,
+			FilterIncludePast:      includePast,
+			FilterOrgID:            orgID,
+			FilterOrgName:          filterOrgName,
+			FilterLocationID:       locationID,
+			FilterLocationName:     filterLocationName,
+			FilterCity:             filterCity,
+			FilterDateFrom:         dateFrom,
+			FilterDateTo:           dateTo,
+			FilterMusicianID:       musicianID,
+			FilterType:             filterType,
+			FilterDance:            filterDance,
+			FilterCreatedAfter:     createdAfter,
+			FilterSource:           filterSource,
+			FilterNotVerified:      filterNotVerified || filterUnpublished,
+			FilterFlagged:          filterFlagged,
+			FilterEmailNotVerified: filterEmailNotVerified,
+			TotalCount:             total,
+			PrevURL:                prevURL,
+			NextURL:                nextURL,
 		}))
 	}
 }
@@ -3377,28 +3398,28 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		}
 
 		renderTemplate(w, tmpls.adminOrgDashboard, tmplData(r, cfg, i18n, org.Name, AdminOrgDashboardData{
-			Org:                  org,
-			Slug:                 slug,
-			Events:               events,
-			OrgMap:               orgMap,
-			Locations:            locs,
-			Dances:               dances,
-			AllTags:              allTags,
-			Series:               series,
-			FilterIncludePast:    includePast,
-			FilterType:           filterType,
-			FilterDance:          filterDance,
-			FilterLocationIDs:    filterLocationIDs,
-			FilterLocationIDSet:  filterLocationIDSet,
-			FilterLocationNames:  filterLocationNames,
-			TotalCount:           total,
-			IsMember:             isMember,
-			NewEventOrgID:        newEventOrgID,
-			NewEventOrgName:      newEventOrgName,
-			OrgLocations:         orgLocations,
-			LocEventCounts:       locEventCounts,
-			OrgTemplates:         orgTemplates,
-			OrgSeries:            orgSeries,
+			Org:                 org,
+			Slug:                slug,
+			Events:              events,
+			OrgMap:              orgMap,
+			Locations:           locs,
+			Dances:              dances,
+			AllTags:             allTags,
+			Series:              series,
+			FilterIncludePast:   includePast,
+			FilterType:          filterType,
+			FilterDance:         filterDance,
+			FilterLocationIDs:   filterLocationIDs,
+			FilterLocationIDSet: filterLocationIDSet,
+			FilterLocationNames: filterLocationNames,
+			TotalCount:          total,
+			IsMember:            isMember,
+			NewEventOrgID:       newEventOrgID,
+			NewEventOrgName:     newEventOrgName,
+			OrgLocations:        orgLocations,
+			LocEventCounts:      locEventCounts,
+			OrgTemplates:        orgTemplates,
+			OrgSeries:           orgSeries,
 		}))
 	}
 }
@@ -3416,8 +3437,8 @@ type AdminLocationDashboardData struct {
 	Series            []EventSeries
 	FilterIncludePast bool
 	TotalCount        int
-	NewEventOrgID     int    // org to pre-assign "new event" to
-	NewEventOrgName   string // shown on the button
+	NewEventOrgID     int         // org to pre-assign "new event" to
+	NewEventOrgName   string      // shown on the button
 	RoomEventCounts   map[int]int // room location ID -> future event count, for the Rooms section
 	FilterRoomID      int         // >0 when the event list is narrowed to a single room via ?room_id=
 }

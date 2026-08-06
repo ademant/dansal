@@ -284,10 +284,15 @@ type Tag struct {
 
 // City is a town with geo-tagged venues and upcoming events (#965).
 type City struct {
-	Town          string `json:"town"`
-	Slug          string `json:"slug"`
-	LocationCount int    `json:"location_count"`
-	EventCount    int    `json:"event_count"`
+	Town           string   `json:"town"`
+	Slug           string   `json:"slug"`
+	LocationCount  int      `json:"location_count"`
+	EventCount     int      `json:"event_count"` // future published events
+	Latitude       *float64 `json:"latitude,omitempty"`
+	Longitude      *float64 `json:"longitude,omitempty"`
+	NextEventID    int      `json:"next_event_id,omitempty"`
+	NextEventTitle string   `json:"next_event_title,omitempty"`
+	NextEventStart string   `json:"next_event_start,omitempty"`
 }
 
 type TimetableEntry struct {

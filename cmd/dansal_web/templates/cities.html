@@ -20,47 +20,127 @@
 
 {{with .Data}}
 {{if .Cities}}
-<ul class="city-list">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+
+<div id="cities-map-wrap">
+  <div id="cities-map"></div>
+</div>
+<script type="application/json" id="cities-map-data">{{.MapJSON}}</script>
+
+<div class="city-grid">
   {{range .Cities}}
-  <li class="city-item">
-    <a href="/city/{{townSlug .Town}}" class="city-link">
-      <span class="city-name">{{.Town}}</span>
-      <span class="city-meta">{{.EventCount}} / {{.LocationCount}}</span>
-    </a>
-  </li>
+  <a href="/city/{{.Slug}}" class="city-card">
+    <div class="city-card-head">
+      <span class="city-card-name">{{.Town}}</span>
+      <span class="city-card-count">{{.EventCount}}</span>
+    </div>
+    {{if .NextEventTitle}}
+    <div class="city-card-next">
+      <span class="city-card-next-label">{{$.Strings.T "cities_next_event"}}</span>
+      <span class="city-card-next-title">{{.NextEventTitle}}</span>
+      <span class="city-card-next-date">{{formatDate $.LangCode .NextEventStart}}</span>
+    </div>
+    {{end}}
+  </a>
   {{end}}
-</ul>
+</div>
+
+<script>
+(function(){
+  var raw = document.getElementById('cities-map-data');
+  if(!raw) return;
+  var pins;
+  try { pins = JSON.parse(raw.textContent); } catch(_){ return; }
+  if(!pins || !pins.length) return;
+
+  var map = L.map('cities-map');
+  attachTileLayer(map);
+
+  // Bucket relative to the busiest city among those shown, so a given color
+  // always means the same thing regardless of how many cities are listed —
+  // mirrors the weekly-calendar heat scale on the homepage (#981).
+  var maxCount = 0;
+  pins.forEach(function(p){ if(p.count > maxCount) maxCount = p.count; });
+  function heatClass(count){
+    if(!count || !maxCount) return 'city-pin-1';
+    var frac = count / maxCount;
+    if(frac<=0.25) return 'city-pin-1';
+    if(frac<=0.5)  return 'city-pin-2';
+    if(frac<=0.75) return 'city-pin-3';
+    return 'city-pin-4';
+  }
+  function pinIcon(cls){
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34" class="'+cls+'">'+
+      '<path d="M12 2C6.5 2 2 6.5 2 12c0 7.8 10 20 10 20S22 19.8 22 12C22 6.5 17.5 2 12 2z" stroke="rgba(0,0,0,.2)" stroke-width="1"/>'+
+      '<circle cx="12" cy="12" r="4.5" fill="rgba(255,255,255,.85)"/></svg>';
+    return L.divIcon({html:svg,className:'',iconSize:[24,34],iconAnchor:[12,34],popupAnchor:[0,-36]});
+  }
+
+  var bounds = [];
+  pins.forEach(function(p){
+    var ll = [p.lat, p.lng];
+    bounds.push(ll);
+    var popup = '<b><a href="/city/'+escHtml(p.slug)+'">'+escHtml(p.town)+'</a></b><br><small>'+p.count+'</small>';
+    L.marker(ll, {icon: pinIcon(heatClass(p.count))}).bindPopup(popup).addTo(map);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 11);
+  } else {
+    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:9}); } catch(_){}
+  }
+
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+})();
+</script>
 {{end}}
 {{end}}
 
 <style>
-.city-list {
+#cities-map-wrap{margin:1rem 0 1.5rem}
+#cities-map{height:360px;border-radius:6px;border:1px solid var(--border)}
+.city-pin-1 path{fill:var(--heat-1)}
+.city-pin-2 path{fill:var(--heat-2)}
+.city-pin-3 path{fill:var(--heat-3)}
+.city-pin-4 path{fill:var(--heat-4)}
+
+.city-grid {
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0;
+  margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: .5rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: .75rem;
 }
-.city-item { display: contents; }
-.city-link {
+.city-card {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: .55rem .8rem;
+  flex-direction: column;
+  gap: .4rem;
+  padding: .8rem 1rem;
   border: 1px solid var(--border);
-  border-radius: .4rem;
-  background: var(--bg-alt);
+  border-radius: .5rem;
+  background: var(--bg-card);
   text-decoration: none;
-  transition: background .15s;
+  color: var(--heading);
+  transition: box-shadow .15s, border-color .15s;
 }
-.city-link:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.city-link:hover .city-meta { color: rgba(255,255,255,.8); }
-.city-name { font-weight: 500; }
-.city-meta {
-  font-size: .8rem;
-  color: var(--fg-dim);
+.city-card:hover { border-color: var(--link); box-shadow: 0 2px 8px rgba(26,110,181,.12); }
+.city-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.city-card-name { font-weight: 700; font-size: 1rem; }
+.city-card-count {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--link);
+  background: var(--tag-bg);
+  border-radius: 10px;
+  padding: .05rem .5rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+.city-card-next { display: flex; flex-direction: column; gap: .1rem; padding-top: .35rem; border-top: 1px solid var(--border-lite); }
+.city-card-next-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-faint); }
+.city-card-next-title { font-size: .85rem; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.city-card-next-date { font-size: .78rem; color: var(--fg-dim); }
 </style>
 {{end}}

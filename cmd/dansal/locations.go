@@ -486,9 +486,9 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 			byID[locations[i].ID] = &locations[i]
 			ids[i] = strconv.Itoa(locations[i].ID)
 		}
-		childRows, err := db.Query(`SELECT `+locationCols+`
+		childRows, err := db.Query(`SELECT ` + locationCols + `
 			FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-			WHERE l.parent_id IN (`+strings.Join(ids, ",")+`) GROUP BY l.id ORDER BY l.parent_id, l.id`)
+			WHERE l.parent_id IN (` + strings.Join(ids, ",") + `) GROUP BY l.id ORDER BY l.parent_id, l.id`)
 		if err == nil {
 			for childRows.Next() {
 				var child Location
@@ -1534,10 +1534,15 @@ func locationEventCounts(w http.ResponseWriter, r *http.Request) {
 // CityInfo represents a town that has at least one geo-tagged venue with
 // upcoming events, for use in the /cities directory and /city/{slug} hub pages.
 type CityInfo struct {
-	Town          string `json:"town"`
-	Slug          string `json:"slug"`
-	LocationCount int    `json:"location_count"`
-	EventCount    int    `json:"event_count"`
+	Town           string   `json:"town"`
+	Slug           string   `json:"slug"`
+	LocationCount  int      `json:"location_count"`
+	EventCount     int      `json:"event_count"` // future published events
+	Latitude       *float64 `json:"latitude,omitempty"`
+	Longitude      *float64 `json:"longitude,omitempty"`
+	NextEventID    int      `json:"next_event_id,omitempty"`
+	NextEventTitle string   `json:"next_event_title,omitempty"`
+	NextEventStart string   `json:"next_event_start,omitempty"` // RFC3339
 }
 
 // townSlug converts a city name to a URL-safe slug with common European
@@ -1584,10 +1589,13 @@ func townSlug(town string) string {
 // location_count and event_count per town. Used by /cities directory and
 // /city/{slug} hub pages.
 func getCities(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().Unix()
 	rows, err := db.Query(`
 		SELECT l.town,
 		       COUNT(DISTINCT l.id) AS location_count,
-		       COUNT(DISTINCT e.id) AS event_count
+		       COUNT(DISTINCT e.id) AS event_count,
+		       AVG(l.latitude) AS lat,
+		       AVG(l.longitude) AS lng
 		FROM locations l
 		LEFT JOIN events e ON e.location_id = l.id
 		    AND e.is_published = 1
@@ -1598,23 +1606,64 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		GROUP BY l.town
 		HAVING event_count > 0
 		ORDER BY l.town
-	`, time.Now().Unix())
+	`, now)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
 
+	cityByTown := make(map[string]*CityInfo)
 	var cities []CityInfo
 	for rows.Next() {
 		var c CityInfo
-		if err := rows.Scan(&c.Town, &c.LocationCount, &c.EventCount); err != nil {
+		if err := rows.Scan(&c.Town, &c.LocationCount, &c.EventCount, &c.Latitude, &c.Longitude); err != nil {
 			writeInternalError(w, err)
 			return
 		}
 		c.Slug = townSlug(c.Town)
 		cities = append(cities, c)
 	}
+	if err := rows.Err(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	for i := range cities {
+		cityByTown[cities[i].Town] = &cities[i]
+	}
+
+	// Soonest upcoming published event per town, one extra query rather than
+	// a per-city correlated subquery (#981 — /cities city tiles show "next
+	// event"). ROW_NUMBER partitions by town, ordered by start_time.
+	if len(cities) > 0 {
+		nextRows, err := db.Query(`
+			SELECT town, id, title, start_time FROM (
+				SELECT l.town AS town, e.id AS id, e.title AS title, e.start_time AS start_time,
+				       ROW_NUMBER() OVER (PARTITION BY l.town ORDER BY e.start_time) AS rn
+				FROM events e
+				JOIN locations l ON e.location_id = l.id
+				WHERE e.is_published = 1 AND e.email_verified = 1 AND e.end_time >= ?
+				  AND l.town IS NOT NULL AND l.town != ''
+			) WHERE rn = 1
+		`, now)
+		if err == nil {
+			defer nextRows.Close()
+			for nextRows.Next() {
+				var town, title string
+				var id int
+				var startTime int64
+				if err := nextRows.Scan(&town, &id, &title, &startTime); err != nil {
+					continue
+				}
+				if c, ok := cityByTown[town]; ok {
+					c.NextEventID = id
+					c.NextEventTitle = title
+					c.NextEventStart = epochToLocal(startTime)
+				}
+			}
+		}
+	}
+
 	if cities == nil {
 		cities = []CityInfo{}
 	}

@@ -58,7 +58,35 @@ func townSlug(town string) string {
 // ── Template data ─────────────────────────────────────────────────────────────
 
 type CitiesData struct {
-	Cities []City
+	Cities  []City
+	MapJSON template.JS // compact JSON for map markers, colored by event count client-side (#981)
+}
+
+// cityMapPin is the trimmed shape sent to the browser for the /cities map —
+// short key names, only what's needed to place a marker and link/label it.
+type cityMapPin struct {
+	Town  string  `json:"town"`
+	Slug  string  `json:"slug"`
+	Lat   float64 `json:"lat"`
+	Lng   float64 `json:"lng"`
+	Count int     `json:"count"`
+}
+
+func citiesMapJSON(cities []City) template.JS {
+	var pins []cityMapPin
+	for _, c := range cities {
+		if c.Latitude == nil || c.Longitude == nil {
+			continue
+		}
+		pins = append(pins, cityMapPin{
+			Town: c.Town, Slug: c.Slug, Lat: *c.Latitude, Lng: *c.Longitude, Count: c.EventCount,
+		})
+	}
+	if pins == nil {
+		return template.JS("[]")
+	}
+	b, _ := json.Marshal(pins)
+	return template.JS(b)
 }
 
 type CityData struct {
@@ -113,7 +141,7 @@ func citiesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I1
 			return
 		}
 		title := i18n.T(r, "cities_title")
-		td := tmplData(r, cfg, i18n, title, CitiesData{Cities: cities})
+		td := tmplData(r, cfg, i18n, title, CitiesData{Cities: cities, MapJSON: citiesMapJSON(cities)})
 		td.MetaDescription = metaDesc(title, 155)
 		renderTemplate(w, tmpls.cities, td)
 	}

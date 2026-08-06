@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
@@ -63,7 +64,7 @@ type CitiesData struct {
 type CityData struct {
 	City        City
 	Events      []Event
-	GeoJSON     string // compact JSON for map markers
+	GeoJSON     template.JS // compact JSON for map markers
 	IncludePast bool
 }
 
@@ -75,7 +76,7 @@ type cityGeoEvent struct {
 	Lng   float64 `json:"lng"`
 }
 
-func cityEventsGeoJSON(events []Event) string {
+func cityEventsGeoJSON(events []Event) template.JS {
 	seen := map[string]bool{}
 	var points []cityGeoEvent
 	for _, e := range events {
@@ -95,8 +96,11 @@ func cityEventsGeoJSON(events []Event) string {
 			Lng:   *e.Location.Longitude,
 		})
 	}
+	if points == nil {
+		return template.JS("[]")
+	}
 	b, _ := json.Marshal(points)
-	return string(b)
+	return template.JS(b)
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────

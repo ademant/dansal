@@ -427,6 +427,22 @@
     });
   }
 
+  // Keeps the map's cluster group in sync with the currently visible rows —
+  // town/type/dance filters otherwise only affected the list, leaving the
+  // map showing every event in the date range regardless (#976).
+  function syncMarkers(visibleRows){
+    if(!clusterGroup) return;
+    var visibleIds = {};
+    visibleRows.forEach(function(r){ visibleIds[r.dataset.id] = true; });
+    Object.keys(allMarkers).forEach(function(id){
+      var m = allMarkers[id];
+      var shouldShow = !!visibleIds[id];
+      var has = clusterGroup.hasLayer(m);
+      if(shouldShow && !has) clusterGroup.addLayer(m);
+      else if(!shouldShow && has) clusterGroup.removeLayer(m);
+    });
+  }
+
   function render(){
     var visible = rows.filter(matchesFilters);
     rows.forEach(function(r){ r.hidden = true; });
@@ -435,6 +451,7 @@
     document.getElementById('sf-empty-state').hidden = visible.length>0;
     document.getElementById('sf-event-table').hidden = visible.length===0;
     insertDateSeparators();
+    syncMarkers(visible);
   }
 
   function fetchResults(){

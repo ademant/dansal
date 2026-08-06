@@ -159,6 +159,46 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 	return a
 }
 
+// relayActorFromRecord returns the synthetic, instance-wide ActivityPub actor.
+// Keeping this separate from the HTTP handler also lets profile updates deliver
+// exactly the same representation that a remote server fetches from /org/relay.
+func relayActorFromRecord(cfg *Config, actor *ActorRecord) Actor {
+	base := actorURL(cfg, cfg.RelayActorName)
+	displayName := cfg.RelayDisplayName
+	if displayName == "" {
+		displayName = cfg.RelayActorName + "@" + cfg.Domain
+	}
+	a := Actor{
+		Context:                   APContext,
+		Type:                      "Application",
+		ID:                        base,
+		Name:                      displayName,
+		Summary:                   cfg.RelaySummary,
+		URL:                       "https://" + cfg.Domain,
+		PreferredUsername:         cfg.RelayActorName,
+		Inbox:                     base + "/inbox",
+		Outbox:                    base + "/outbox",
+		Followers:                 base + "/followers",
+		ManuallyApprovesFollowers: false,
+		Discoverable:              true,
+		Indexable:                 true,
+		Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
+		AlsoKnownAs:               cfg.RelayAlsoKnownAs,
+		PublicKey: PublicKey{
+			ID:           base + "#main-key",
+			Owner:        base,
+			PublicKeyPem: actor.PublicKeyPEM,
+		},
+	}
+	if u, m := relayAssetURL(cfg, "relay-avatar", "/relay-icon", cfg.RelayIconURL); u != "" {
+		a.Icon = &APDocument{Type: "Image", MediaType: m, URL: u}
+	}
+	if u, m := relayAssetURL(cfg, "relay-banner", "/relay-banner", cfg.RelayImageURL); u != "" {
+		a.Image = &APDocument{Type: "Image", MediaType: m, URL: u}
+	}
+	return a
+}
+
 func isAPRequest(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
 	return strings.Contains(accept, "application/activity+json") ||

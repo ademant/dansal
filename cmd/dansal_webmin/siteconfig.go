@@ -352,8 +352,28 @@ func siteConfigRelayAssetsHandler(cfg *Config) http.HandlerFunc {
 		}
 		if len(uploaded) > 0 {
 			log.Printf("audit: relay assets=[%s] updated by user=%d", strings.Join(uploaded, ","), callerID)
+			go notifyRelayProfileUpdate(cfg)
 		}
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Relay assets uploaded"), http.StatusSeeOther)
+	}
+}
+
+func notifyRelayProfileUpdate(cfg *Config) {
+	target := strings.TrimRight(cfg.WebURL, "/") + "/internal/relay/profile-update"
+	req, err := http.NewRequest(http.MethodPost, target, nil)
+	if err != nil {
+		log.Printf("relay profile update: create request: %v", err)
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("relay profile update: call dansal-web: %v", err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		log.Printf("relay profile update: dansal-web returned %s", resp.Status)
 	}
 }
 

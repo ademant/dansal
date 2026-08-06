@@ -221,6 +221,28 @@ func deliverEventToFollowers(cfg *Config, db *sql.DB, orgID int, event Event) {
 	deliverToFollowers(cfg, db, actor, activity)
 }
 
+// deliverRelayProfileUpdate tells existing relay followers to refresh the
+// synthetic actor after its avatar or banner changes.
+func deliverRelayProfileUpdate(cfg *Config, db *sql.DB) {
+	actor, err := ensureRelayActor(db, cfg.RelayActorName)
+	if err != nil {
+		log.Printf("relay profile update: load actor: %v", err)
+		return
+	}
+	base := actorURL(cfg, actor.OrgSlug)
+	activity := Activity{
+		Type:   "Update",
+		ID:     base + "/activities/profile-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:  base,
+		Object: relayActorFromRecord(cfg, actor),
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
+	}
+	if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+		log.Printf("relay profile update: %v", err)
+	}
+}
+
 // buildAnnounceActivity wraps the org's Create inside a relay Announce.
 // relaySlug signs the outer Announce; orgSlug is preserved in the inner
 // Create so remote servers see the original org as the event creator.

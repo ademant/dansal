@@ -247,8 +247,11 @@ func readLoadAvg() string {
 func relayAssetURL(cfg *Config, fileKey, servedAt, configURL string) (string, string) {
 	if cfg.ImagesDir != "" {
 		for _, ext := range siteAssetExts {
-			if _, err := os.Stat(filepath.Join(cfg.ImagesDir, fileKey+ext)); err == nil {
-				return "https://" + cfg.Domain + servedAt, detectAssetMIMEFromExt(ext)
+			if info, err := os.Stat(filepath.Join(cfg.ImagesDir, fileKey+ext)); err == nil {
+				// Remote servers commonly cache actor images.  Include the file's
+				// modification time so replacing an uploaded image yields a new URL
+				// when the actor profile is refreshed.
+				return "https://" + cfg.Domain + servedAt + "?v=" + strconv.FormatInt(info.ModTime().UnixNano(), 10), detectAssetMIMEFromExt(ext)
 			}
 		}
 	}
@@ -304,5 +307,19 @@ func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient
 			log.Printf("relay redeliver: sent %d Announce activities", sent)
 		}()
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// internalRelayProfileUpdateHandler is called by webmin after a relay asset
+// upload. Like redelivery, it is only reachable from the local machine.
+func internalRelayProfileUpdateHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if host != "127.0.0.1" && host != "::1" {
+			http.NotFound(w, r)
+			return
+		}
+		go deliverRelayProfileUpdate(cfg, db)
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

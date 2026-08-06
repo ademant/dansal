@@ -2273,42 +2273,9 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 			return
 		}
 
-		// Relay actor: synthetic profile with no backing org
+		// Relay actor: synthetic profile with no backing org.
 		if actor.OrgID == 0 {
-			base := actorURL(cfg, cfg.RelayActorName)
-			displayName := cfg.RelayDisplayName
-			if displayName == "" {
-				displayName = cfg.RelayActorName + "@" + cfg.Domain
-			}
-			a := Actor{
-				Context:                   APContext,
-				Type:                      "Application",
-				ID:                        base,
-				Name:                      displayName,
-				Summary:                   cfg.RelaySummary,
-				URL:                       "https://" + cfg.Domain,
-				PreferredUsername:         cfg.RelayActorName,
-				Inbox:                     base + "/inbox",
-				Outbox:                    base + "/outbox",
-				Followers:                 base + "/followers",
-				ManuallyApprovesFollowers: false,
-				Discoverable:              true,
-				Indexable:                 true,
-				Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
-				AlsoKnownAs:               cfg.RelayAlsoKnownAs,
-				PublicKey: PublicKey{
-					ID:           base + "#main-key",
-					Owner:        base,
-					PublicKeyPem: actor.PublicKeyPEM,
-				},
-			}
-			if u, m := relayAssetURL(cfg, "relay-avatar", "/relay-icon", cfg.RelayIconURL); u != "" {
-				a.Icon = &APDocument{Type: "Image", MediaType: m, URL: u}
-			}
-			if u, m := relayAssetURL(cfg, "relay-banner", "/relay-banner", cfg.RelayImageURL); u != "" {
-				a.Image = &APDocument{Type: "Image", MediaType: m, URL: u}
-			}
-			writeJSON(w, http.StatusOK, a)
+			writeJSON(w, http.StatusOK, relayActorFromRecord(cfg, actor))
 			return
 		}
 

@@ -14,6 +14,10 @@
 </p>
 {{end}}
 
+<label style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.5rem;font-size:.9rem;color:#555">
+  <input type="checkbox" id="series-show-past"> {{$.Strings.T "series_show_past"}}
+</label>
+
 <div class="table-wrap">
 <table class="event-table">
   <thead>
@@ -27,7 +31,7 @@
   </thead>
   <tbody>
   {{range $series.Events}}
-  <tr {{if .IsCancelled}}style="opacity:.5"{{end}}>
+  <tr data-start="{{.StartTime}}" {{if .IsCancelled}}style="opacity:.5"{{end}}>
     <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
     <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
     <td class="muted">{{.LocationName}}</td>
@@ -45,6 +49,24 @@
   </tbody>
 </table>
 </div>
+
+<script>
+(function(){
+  var checkbox = document.getElementById('series-show-past');
+  if (!checkbox) return;
+  var now = Date.now();
+  var rows = document.querySelectorAll('.event-table tbody tr[data-start]');
+  function applyFilter(){
+    var showPast = checkbox.checked;
+    rows.forEach(function(row){
+      var isPast = new Date(row.getAttribute('data-start')).getTime() < now;
+      row.hidden = isPast && !showPast;
+    });
+  }
+  checkbox.addEventListener('change', applyFilter);
+  applyFilter();
+})();
+</script>
 
 <style>
 .table-wrap{overflow-x:auto;margin-top:1rem}

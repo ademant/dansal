@@ -660,6 +660,10 @@ function applyWizardData(data) {
       var cb = form.querySelector('[name="dansal_tags"][value="' + t + '"]');
       if (cb) cb.checked = true;
     });
+    (data.dance_ids || []).forEach(function(id){
+      var cb = form.querySelector('[name="dance_ids"][value="' + id + '"]');
+      if (cb) cb.checked = true;
+    });
     toggleDifficulty();
     if (data.food)  { var f  = form.querySelector('[name="food"][value="'  + data.food  + '"]'); if (f)  f.checked  = true; }
     if (data.drink) { var dr = form.querySelector('[name="drink"][value="' + data.drink + '"]'); if (dr) dr.checked = true; }

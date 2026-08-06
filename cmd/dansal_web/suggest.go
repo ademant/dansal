@@ -387,6 +387,7 @@ type wizPrefill struct {
 	StartTime    string               `json:"start_time"`
 	EndTime      string               `json:"end_time"`
 	Tags         []string             `json:"tags"`
+	DanceIDs     []int                `json:"dance_ids,omitempty"`
 	Location     string               `json:"location"`
 	Town         string               `json:"town"`
 	Country      string               `json:"country"`
@@ -420,6 +421,25 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			return
 		}
 
+		ip := getClientIP(r)
+		dances, _ := client.GetDances(r.Context())
+
+		// Build a name→ID map so we can pre-check dance checkboxes both
+		// server-side (PrefillDanceIDs) and via the JS wizard (pf.DanceIDs).
+		// The event API only returns dance names; the form uses IDs.
+		prefillDanceIDs := make(map[int]bool)
+		if len(ev.DanceNames) > 0 {
+			nameToID := make(map[string]int, len(dances))
+			for _, d := range dances {
+				nameToID[d.Name] = d.ID
+			}
+			for _, name := range ev.DanceNames {
+				if id, ok := nameToID[name]; ok {
+					prefillDanceIDs[id] = true
+				}
+			}
+		}
+
 		pf := wizPrefill{
 			Title: ev.Title, Description: ev.Description, URL: ev.URL,
 			StartTime: ev.StartTime, EndTime: ev.EndTime, Tags: ev.Tags,
@@ -449,28 +469,13 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				EntryType:   te.EntryType,
 			})
 		}
+		for id := range prefillDanceIDs {
+			pf.DanceIDs = append(pf.DanceIDs, id)
+		}
 		b, _ := json.Marshal(pf)
 		prefillTags := make(map[string]bool, len(pf.Tags))
 		for _, t := range pf.Tags {
 			prefillTags[t] = true
-		}
-
-		ip := getClientIP(r)
-		dances, _ := client.GetDances(r.Context())
-
-		// Build a name→ID map so we can pre-check dance checkboxes server-side.
-		// The event API only returns dance names; the form uses IDs.
-		prefillDanceIDs := make(map[int]bool)
-		if len(ev.DanceNames) > 0 {
-			nameToID := make(map[string]int, len(dances))
-			for _, d := range dances {
-				nameToID[d.Name] = d.ID
-			}
-			for _, name := range ev.DanceNames {
-				if id, ok := nameToID[name]; ok {
-					prefillDanceIDs[id] = true
-				}
-			}
 		}
 
 		title := i18n.T(r, "suggest_event_title")

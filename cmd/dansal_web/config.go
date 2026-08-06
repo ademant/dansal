@@ -90,6 +90,11 @@ type Config struct {
 	SearchRateLimit      int `yaml:"search_rate_limit"`       // max requests per window per IP; default 60
 	SearchRateWindowMins int `yaml:"search_rate_window_mins"` // window in minutes; default 1
 
+	// Rate limiting for GET /search/geocode (per-IP; the Nominatim call itself
+	// is additionally paced globally regardless of IP, see geocodeMinInterval)
+	GeocodeRateLimit      int `yaml:"geocode_rate_limit"`       // max requests per window per IP; default 20
+	GeocodeRateWindowMins int `yaml:"geocode_rate_window_mins"` // window in minutes; default 5
+
 	// Form token anti-bot protection
 	FormTokenMaxAgeMins      int  `yaml:"form_token_max_age_mins"`       // non-login token validity window in minutes; default 5
 	FormTokenLoginMaxAgeMins int  `yaml:"form_token_login_max_age_mins"` // login-form token validity in minutes; default 10
@@ -160,6 +165,8 @@ func loadConfig() *Config {
 		PublicThrottleForgetHours: 1,
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
+		GeocodeRateLimit:          20,
+		GeocodeRateWindowMins:     5,
 		FormTokenMaxAgeMins:       5,
 		FormTokenLoginMaxAgeMins:  10,
 		FormTokenCleanupMins:      5,
@@ -263,6 +270,8 @@ func reloadConfig(path string) *Config {
 		PublicThrottleForgetHours: 1,
 		SearchRateLimit:           60,
 		SearchRateWindowMins:      1,
+		GeocodeRateLimit:          20,
+		GeocodeRateWindowMins:     5,
 		FormTokenMaxAgeMins:       5,
 		FormTokenLoginMaxAgeMins:  10,
 		FormTokenCleanupMins:      5,

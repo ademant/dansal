@@ -337,22 +337,65 @@
   })();
 
   // ── Town suggest ─────────────────────────────────────────────────────────
+  // Local matches (against towns that already have events) are instant.
+  // When there are none and the query is long enough, a debounced online
+  // lookup (#977) geocodes the typed place via /search/geocode so it can
+  // still be used as a radius-search origin, same as "Locate me".
   (function(){
     var input = document.getElementById('sf-town');
     var box = document.getElementById('sf-town-suggest');
+    var geocodeTimer = null;
+    var geocodeReqToken = 0;
+    var geocodeResults = [];
+    var GEOCODE_MIN_LEN = 3;
+    var GEOCODE_DEBOUNCE_MS = 500;
+
     input.addEventListener('input', function(){
       townFilter = this.value.trim();
       geoFilter = null;
+      clearTimeout(geocodeTimer);
+      geocodeReqToken++; // invalidate any in-flight online lookup
       var q = townFilter.toLowerCase();
       if(q.length<2){ box.hidden=true; box.innerHTML=''; render(); return; }
       var matches = allTowns.filter(function(t){ return t.toLowerCase().indexOf(q)>=0; }).slice(0,8);
-      box.innerHTML = matches.map(function(t){ return '<div>'+escHtml(t)+'</div>'; }).join('');
+      box.innerHTML = matches.map(function(t){ return '<div data-kind="local">'+escHtml(t)+'</div>'; }).join('');
       box.hidden = matches.length===0;
       render();
+      if(matches.length===0 && townFilter.length>=GEOCODE_MIN_LEN){
+        box.innerHTML = '<div style="color:#999;padding:.35rem .5rem">…</div>';
+        box.hidden = false;
+        var myToken = geocodeReqToken;
+        var q2 = townFilter;
+        geocodeTimer = setTimeout(function(){
+          fetch('/search/geocode?q='+encodeURIComponent(q2))
+            .then(function(r){ return r.ok ? r.json() : []; })
+            .then(function(results){
+              if(myToken!==geocodeReqToken) return; // input changed since this fired
+              geocodeResults = results || [];
+              if(!geocodeResults.length){ box.hidden=true; box.innerHTML=''; return; }
+              box.innerHTML = geocodeResults.map(function(res,idx){
+                return '<div data-kind="online" data-idx="'+idx+'">🌐 '+escHtml(res.name)+'</div>';
+              }).join('');
+              box.hidden = false;
+            })
+            .catch(function(){ if(myToken===geocodeReqToken){ box.hidden=true; box.innerHTML=''; } });
+        }, GEOCODE_DEBOUNCE_MS);
+      }
     });
     box.addEventListener('click', function(e){
-      if(e.target && e.target.tagName==='DIV'){
-        input.value = e.target.textContent;
+      var div = e.target && e.target.tagName==='DIV' ? e.target : null;
+      if(!div) return;
+      if(div.dataset.kind==='online'){
+        var res = geocodeResults[parseInt(div.dataset.idx,10)];
+        if(!res) return;
+        input.value = res.name;
+        townFilter = '';
+        geoFilter = {lat:res.lat, lng:res.lng, radiusKm:parseInt(document.getElementById('sf-radius').value,10)};
+        box.hidden = true;
+        if(map) map.setView([res.lat,res.lng], 9);
+        render();
+      } else {
+        input.value = div.textContent;
         townFilter = input.value;
         box.hidden = true;
         render();

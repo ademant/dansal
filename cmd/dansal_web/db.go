@@ -217,6 +217,30 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 		}
 	}
 
+	// Migration v5: geocode_cache — caches Nominatim city lookups for the
+	// /search page's online city fallback (#977), so repeated/popular queries
+	// don't re-hit Nominatim and every visitor benefits from earlier lookups.
+	if !migrationApplied(db, 5) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS geocode_cache (
+			query        TEXT    PRIMARY KEY COLLATE NOCASE,
+			results_json TEXT    NOT NULL,
+			fetched_at   INTEGER NOT NULL
+		)`)
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (5)")
+	}
+	// Safety net: ensure the table exists even if v5 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='geocode_cache'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS geocode_cache (
+				query        TEXT    PRIMARY KEY COLLATE NOCASE,
+				results_json TEXT    NOT NULL,
+				fetched_at   INTEGER NOT NULL
+			)`)
+		}
+	}
+
 	return db
 }
 
@@ -597,6 +621,34 @@ func listOrgActorSlugs(db *sql.DB) (map[int]string, error) {
 		m[orgID] = slug
 	}
 	return m, nil
+}
+
+// getGeocodeCache returns the cached Nominatim results JSON for query if a
+// row exists and is younger than maxAge, otherwise ("", false). maxAge is
+// measured from fetched_at (first insert) — deliberately not refreshed on
+// reads, so cache hits stay plain SELECTs with no write amplification on a
+// sqlite file shared with ActivityPub delivery bookkeeping (#977).
+func getGeocodeCache(db *sql.DB, query string, maxAge time.Duration) (string, bool) {
+	var resultsJSON string
+	var fetchedAt int64
+	err := db.QueryRow("SELECT results_json, fetched_at FROM geocode_cache WHERE query = ?", query).Scan(&resultsJSON, &fetchedAt)
+	if err != nil {
+		return "", false
+	}
+	if time.Now().Unix()-fetchedAt > int64(maxAge.Seconds()) {
+		return "", false
+	}
+	return resultsJSON, true
+}
+
+// setGeocodeCache stores (or refreshes) a Nominatim lookup result, resetting
+// fetched_at so the 90-day TTL restarts from this fetch.
+func setGeocodeCache(db *sql.DB, query, resultsJSON string) error {
+	_, err := db.Exec(
+		"INSERT INTO geocode_cache(query, results_json, fetched_at) VALUES(?,?,?) ON CONFLICT(query) DO UPDATE SET results_json=excluded.results_json, fetched_at=excluded.fetched_at",
+		query, resultsJSON, time.Now().Unix(),
+	)
+	return err
 }
 
 func getSiteSetting(db *sql.DB, key string) string {

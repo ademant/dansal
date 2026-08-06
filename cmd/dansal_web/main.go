@@ -33,6 +33,11 @@ var publicThrottle *submissionThrottle
 // Generous limit (default 60/min) blocks scraping/hammering without affecting normal browsing.
 var searchThrottle *submissionThrottle
 
+// geocodeThrottle is the per-IP rate limiter for GET /search/geocode. Tighter
+// than searchThrottle since each miss triggers an outbound Nominatim call
+// (itself additionally paced globally, see geocodeMinInterval in geocode.go).
+var geocodeThrottle *submissionThrottle
+
 // tokenThrottle is the per-IP rate limiter for GET handlers that issue form tokens.
 var tokenThrottle *submissionThrottle
 
@@ -98,6 +103,10 @@ func main() {
 	searchThrottle = newSubmissionThrottle(
 		cfg.SearchRateLimit,
 		time.Duration(cfg.SearchRateWindowMins)*time.Minute,
+	)
+	geocodeThrottle = newSubmissionThrottle(
+		cfg.GeocodeRateLimit,
+		time.Duration(cfg.GeocodeRateWindowMins)*time.Minute,
 	)
 	tokenThrottle = newSubmissionThrottle(
 		cfg.TokenRateLimit,
@@ -242,6 +251,7 @@ func main() {
 		r.HandleFunc("GET /dashboard", dashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /search", searchPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))
+		r.HandleFunc("GET /search/geocode", geocodeHandler(cfg, db))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/{id}/assign-org", adminRateLimit(eventAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))

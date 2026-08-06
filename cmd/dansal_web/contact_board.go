@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -92,6 +93,36 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
+	}
+}
+
+// GET /events/{id}/board/form-token — issues a fresh one-time form token for
+// the board-post panel (#979). The page-rendered token is embedded at page
+// load and can expire (max age commonly 5 min) before a visitor who reads
+// the event first gets around to opening the "add a post" panel and filling
+// it out; the panel's toggle handler calls this to swap in a live token
+// right when it opens, without a full page reload.
+func boardFormTokenHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := strconv.Atoi(r.PathValue("id")); err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		ip := getClientIP(r)
+		if tokenThrottle.isBlocked(ip) {
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		tokenThrottle.record(ip)
+
+		tok := issueFormToken(ip)
+		if tok == "" {
+			http.Error(w, `{"error":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"form_token": tok})
 	}
 }
 

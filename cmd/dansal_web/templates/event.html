@@ -931,6 +931,33 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
     if (msg && boardContainsLink(msg.value)) { e.preventDefault(); alert('{{$.Strings.T "board_no_links_error"}}'); }
   });
 });
+// Refresh the board-post form token when the panel is opened (#979): the
+// page-rendered token can already be past its max age by the time a visitor
+// who read the page first gets around to filling this out. Failure is
+// silent — the page-rendered token is left in place and submission still
+// works if it hasn't actually expired yet.
+(function(){
+  var details = document.querySelector('.board-post-details');
+  if (!details) return;
+  var form = details.querySelector('.board-post-form');
+  var tokenInput = form && form.querySelector('input[name="_form_token"]');
+  var submitBtn = form && form.querySelector('.btn-board-submit');
+  // Derived from the form's own action (".../board") rather than a Go
+  // template value — this script runs outside the page-data template scope.
+  if (!tokenInput || !form || !/\/board$/.test(form.action)) return;
+  var tokenURL = form.action.replace(/\/board$/, '/board/form-token');
+  var refreshed = false;
+  details.addEventListener('toggle', function(){
+    if (!details.open || refreshed) return;
+    refreshed = true;
+    if (submitBtn) submitBtn.disabled = true;
+    fetch(tokenURL, {credentials:'same-origin'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){ if (data && data.form_token) tokenInput.value = data.form_token; })
+      .catch(function(){})
+      .finally(function(){ if (submitBtn) submitBtn.disabled = false; });
+  });
+})();
 </script>
 
 {{with .Data}}{{if and .Event.Location .Event.Location.Latitude}}

@@ -1263,7 +1263,24 @@ function cancelLocCreateNew(){
 var _extraLocAssigned = new Set([{{range .Event.Locations}}{{if ne .ID (derefInt $.Data.Event.LocationID)}}{{.ID}},{{end}}{{end}}]);
 var _primaryLocID = {{derefInt .Event.LocationID}};
 // All top-level locations available to pick from.
-var _allLocs = [{{range $.Data.Locations}}{id:{{.ID}},name:{{(or .ShortName .Location) | jsStr}},town:{{.Town | jsStr}}},{{end}}];
+var _allLocs = [{{range $.Data.Locations}}{id:{{.ID}},name:{{(or .ShortName .Location) | jsStr}},town:{{.Town | jsStr}},lat:{{if and .Latitude .Longitude}}{{floatVal .Latitude}}{{else}}null{{end}},lng:{{if and .Latitude .Longitude}}{{floatVal .Longitude}}{{else}}null{{end}}},{{end}}];
+
+// Suggestions are ordered by distance from the event's primary venue when
+// both have coordinates, so nearby buildings surface first (#980-ish ask).
+var _primaryLocLL=(function(){
+  for(var i=0;i<_allLocs.length;i++){
+    var l=_allLocs[i];
+    if(l.id===_primaryLocID&&l.lat!=null&&l.lng!=null) return [l.lat,l.lng];
+  }
+  return null;
+})();
+function _haversineKm(lat1,lng1,lat2,lng2){
+  var R=6371, toRad=Math.PI/180;
+  var dLat=(lat2-lat1)*toRad, dLng=(lng2-lng1)*toRad;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+
+    Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
 
 function extraLocWarn(msg){
   var w=document.getElementById('extra-loc-warn');
@@ -1280,7 +1297,14 @@ function extraLocInput(inp){
     if(_extraLocAssigned.has(l.id)||l.id===_primaryLocID) return false;
     var n=(l.name+' '+l.town).toLowerCase();
     return !q||n.indexOf(q)!==-1;
-  }).slice(0,10);
+  });
+  if(_primaryLocLL){
+    hits=hits.map(function(l){
+      var d=(l.lat!=null&&l.lng!=null)?_haversineKm(_primaryLocLL[0],_primaryLocLL[1],l.lat,l.lng):Infinity;
+      return {loc:l,dist:d};
+    }).sort(function(a,b){return a.dist-b.dist;}).map(function(x){return x.loc;});
+  }
+  hits=hits.slice(0,10);
   hits.forEach(function(l){
     var li=document.createElement('li');
     li.textContent=l.name+(l.town?', '+l.town:'');

@@ -1069,7 +1069,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				pricing=CASE WHEN ? IS NOT NULL THEN jsonb(?) ELSE pricing END,
 				fetch_source_id=COALESCE(?,fetch_source_id),
 				organization_id=COALESCE(organization_id,?),
-				previous_start_time=COALESCE(?,previous_start_time)
+				previous_start_time=COALESCE(?,previous_start_time),
+				email_verified=1
 				WHERE id=?`,
 				uidArg,
 				title,
@@ -1099,13 +1100,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
+				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
 				uidArg, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
 				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		} else {
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
+				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
 				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		}
@@ -1145,7 +1146,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			createdByArg = *createdByID
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?)",
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1)",
 			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated,
 		)
 		if err == nil {

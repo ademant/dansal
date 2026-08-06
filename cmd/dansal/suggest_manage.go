@@ -148,7 +148,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(
 			`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 			 has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?, url=?, food=?, drink=?,
-			 pricing=jsonb(?), contact_name=?, contact_email=? WHERE id=?`,
+			 pricing=jsonb(?), contact_name=?, contact_email=?, changed_by='anonymous', changed_at=unixepoch() WHERE id=?`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.WorkshopDifficulty, urlVal(req.URL), req.Food, req.Drink,
 			pricingArg, req.ContactName, req.ContactEmail, eventID,
@@ -202,7 +202,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	var wasCancelled int
 	db.QueryRow("SELECT start_time, is_cancelled FROM events WHERE id=?", eventID).Scan(&oldStart, &wasCancelled)
 
-	safeUpdates := []string{}
+	safeUpdates := []string{"changed_by='anonymous'", "changed_at=unixepoch()"}
 	safeArgs := []any{}
 	if containsLink(req.Title) {
 		pending.Title = req.Title

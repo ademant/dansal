@@ -2497,7 +2497,10 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if userRole == RoleAdmin {
-		result, err := db.Exec("UPDATE events SET is_published=1 WHERE id=?", id)
+		// suggester_email has served its purpose (rate-limiting + the
+		// verification/manage-link email) once the event is published, and the
+		// privacy notice promises minimal retention — clear it here (#944).
+		result, err := db.Exec("UPDATE events SET is_published=1, suggester_email='' WHERE id=?", id)
 		if err != nil {
 			writeInternalError(w, err)
 			return
@@ -2524,7 +2527,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		db.Exec("UPDATE events SET is_published=1 WHERE id=?", id)
+		db.Exec("UPDATE events SET is_published=1, suggester_email='' WHERE id=?", id)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

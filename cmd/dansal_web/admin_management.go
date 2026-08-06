@@ -251,7 +251,7 @@ func relayAssetURL(cfg *Config, fileKey, servedAt, configURL string) (string, st
 				// Remote servers commonly cache actor images.  Include the file's
 				// modification time so replacing an uploaded image yields a new URL
 				// when the actor profile is refreshed.
-				return "https://" + cfg.Domain + servedAt + "?v=" + strconv.FormatInt(info.ModTime().UnixNano(), 10), detectAssetMIMEFromExt(ext)
+				return "https://" + cfg.Domain + servedAt + "?v=" + info.ModTime().UTC().Format(time.RFC3339Nano), detectAssetMIMEFromExt(ext)
 			}
 		}
 	}

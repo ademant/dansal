@@ -1695,6 +1695,17 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN external_sync TEXT DEFAULT NULL")
 		}
 	}
+	// v24: store events.pricing/attributes as JSONB instead of text JSON (#978).
+	// json_extract/json_each/json()/jsonb() all accept both formats interchangeably,
+	// so this is a one-off backfill, not a breaking change — rows written before
+	// this migration and rows written after (via the now-jsonb(?)-wrapped INSERT/
+	// UPDATE call sites) coexist safely under the same read queries. jsonb() is
+	// idempotent and NULL-safe, so this is also safe to re-run.
+	if !applied(24) {
+		db.Exec("UPDATE events SET pricing = jsonb(pricing) WHERE pricing IS NOT NULL")
+		db.Exec("UPDATE events SET attributes = jsonb(attributes) WHERE attributes IS NOT NULL")
+		mark(24)
+	}
 	// Safety net: backfill any events that slipped through (e.g. imported after
 	// v21 ran but before insertEvent was updated). Idempotent via OR IGNORE.
 	db.Exec(`INSERT OR IGNORE INTO event_locations (event_id, location_id)

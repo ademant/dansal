@@ -148,7 +148,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(
 			`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 			 has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?, url=?, food=?, drink=?,
-			 pricing=?, contact_name=?, contact_email=? WHERE id=?`,
+			 pricing=jsonb(?), contact_name=?, contact_email=? WHERE id=?`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.WorkshopDifficulty, urlVal(req.URL), req.Food, req.Drink,
 			pricingArg, req.ContactName, req.ContactEmail, eventID,
@@ -224,7 +224,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Pricing != nil {
 		if b, err := json.Marshal(req.Pricing); err == nil {
-			safeUpdates = append(safeUpdates, "pricing=?")
+			safeUpdates = append(safeUpdates, "pricing=jsonb(?)")
 			safeArgs = append(safeArgs, string(b))
 		}
 	} else {
@@ -411,7 +411,7 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 		}
 		if p.Pricing != nil {
 			if b, err := json.Marshal(p.Pricing); err == nil {
-				updates = append(updates, "pricing=?")
+				updates = append(updates, "pricing=jsonb(?)")
 				args = append(args, string(b))
 			}
 		}

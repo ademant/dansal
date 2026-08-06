@@ -269,7 +269,7 @@ var timeFormats = []string{
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(e.attributes,'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -1066,7 +1066,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				workshop_difficulty=CASE WHEN ?!='' THEN ? ELSE workshop_difficulty END,
 				url=CASE WHEN ? IS NOT NULL THEN ? ELSE url END,
 				source_last_modified=?,
-				pricing=CASE WHEN ? IS NOT NULL THEN ? ELSE pricing END,
+				pricing=CASE WHEN ? IS NOT NULL THEN jsonb(?) ELSE pricing END,
 				fetch_source_id=COALESCE(?,fetch_source_id),
 				organization_id=COALESCE(organization_id,?),
 				previous_start_time=COALESCE(?,previous_start_time)
@@ -1099,13 +1099,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
+				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
 				uidArg, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
 				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		} else {
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=?, organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
+				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time) WHERE id=?",
 				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		}
@@ -1145,7 +1145,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			createdByArg = *createdByID
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?)",
 			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated,
 		)
 		if err == nil {
@@ -2097,8 +2097,8 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
-		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
+		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
+		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, image_ai_generated=?, changed_at=?, changed_by=?, changed_by_id=?,
 		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationIDArg,
@@ -2223,9 +2223,9 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		pricingRaw                                                            sql.NullString
 	)
 	err = db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
-		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), pricing,
+		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), json(pricing),
 		COALESCE(workshop_difficulty,''), COALESCE(booking_url,''), COALESCE(availability,''), tickets_total, booking_enabled,
-		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(attributes,'{}'),
+		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(json(attributes),'{}'),
 		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id
 		FROM events WHERE id=?`, id).Scan(
 		&title, &description, &startUnix, &endUnix, &existingLocationID, &existingOrgID,
@@ -2413,8 +2413,8 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
-		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=?,
+		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
+		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=?,
 		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
 		title, description, startUnix, endUnix, locationIDArg,
@@ -3235,7 +3235,7 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Wheelchair != nil || req.Bar != nil || req.Kitchen != nil {
 			var attrsRaw string
-			db.QueryRow("SELECT COALESCE(attributes,'{}') FROM events WHERE id=?", id).Scan(&attrsRaw)
+			db.QueryRow("SELECT COALESCE(json(attributes),'{}') FROM events WHERE id=?", id).Scan(&attrsRaw)
 			attrs := make(map[string]bool)
 			json.Unmarshal([]byte(attrsRaw), &attrs)
 			if req.Wheelchair != nil {
@@ -3251,7 +3251,7 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.PricingType != nil {
 			var pricingRaw string
-			db.QueryRow("SELECT COALESCE(pricing,'') FROM events WHERE id=?", id).Scan(&pricingRaw)
+			db.QueryRow("SELECT COALESCE(json(pricing),'') FROM events WHERE id=?", id).Scan(&pricingRaw)
 			p := Pricing{Type: *req.PricingType}
 			if pricingRaw != "" {
 				var existing Pricing

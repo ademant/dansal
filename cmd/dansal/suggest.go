@@ -309,7 +309,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
 			  is_published, url, food, drink, pricing, contact_name, contact_email,
 			  suggester_email, suggester_name, suggestion_token, suggestion_token_expires_at, email_verified, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locID,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
 			urlVal(req.URL), req.Food, req.Drink, pricingArg, req.ContactName, req.ContactEmail,

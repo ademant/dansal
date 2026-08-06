@@ -35,7 +35,7 @@ func enrichEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Pricing != nil {
 		if b, merr := json.Marshal(req.Pricing); merr == nil {
-			db.Exec("UPDATE events SET pricing=? WHERE id=? AND pricing IS NULL", string(b), id)
+			db.Exec("UPDATE events SET pricing=jsonb(?) WHERE id=? AND pricing IS NULL", string(b), id)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

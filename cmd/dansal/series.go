@@ -73,8 +73,8 @@ func applySeriesTemplate(q querier, eventID int, td seriesTemplateData) error {
 	}
 	if _, err := q.Exec(
 		`UPDATE events SET has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?,
-		 url=?, booking_url=?, pricing=?, tickets_total=?, booking_enabled=?,
-		 food=?, drink=?, floor_condition=?, attributes=?, contact_name=?, contact_email=? WHERE id=?`,
+		 url=?, booking_url=?, pricing=jsonb(?), tickets_total=?, booking_enabled=?,
+		 food=?, drink=?, floor_condition=?, attributes=jsonb(?), contact_name=?, contact_email=? WHERE id=?`,
 		td.HasBall, td.HasWorkshop, td.HasFestival, td.WorkshopDifficulty,
 		urlVal(td.URL), urlVal(td.BookingURL), pricingArg, td.TicketsTotal, td.BookingEnabled,
 		td.Food, td.Drink, td.FloorCondition, attrsJSON(td.Attributes), td.ContactName, td.ContactEmail, eventID,

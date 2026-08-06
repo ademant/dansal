@@ -60,7 +60,7 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 	const origStart = int64(1_800_000_000)
 	id, _, outcome, err := insertEvent(db, "Fest Noz", "desc", origStart, origStart+3600, 0,
 		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil)
+		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 	minorShift := origStart + 3600
 	_, _, outcome, err = insertEvent(db, "Fest Noz", "desc", minorShift, minorShift+3600, 0,
 		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil)
+		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
 	if err != nil {
 		t.Fatalf("minor update: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 	newStart := minorShift + 5*3600
 	_, _, outcome, err = insertEvent(db, "Fest Noz", "desc", newStart, newStart+3600, 0,
 		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil)
+		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
 	if err != nil {
 		t.Fatalf("reschedule update: %v", err)
 	}

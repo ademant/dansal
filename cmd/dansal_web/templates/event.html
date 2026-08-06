@@ -568,7 +568,7 @@
   {{end}}
   {{end}}
   {{if .BoardError}}
-  <p class="msg msg-error">{{$.Strings.T .BoardError}}</p>
+  <p class="msg msg-error">{{if .BoardErrorMsg}}{{.BoardErrorMsg}}{{else}}{{$.Strings.T .BoardError}}{{end}}</p>
   {{end}}
 
   {{if .ContactPosts}}

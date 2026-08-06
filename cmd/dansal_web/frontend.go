@@ -307,6 +307,7 @@ type EventData struct {
 	BoardContacted    bool
 	BoardContactTgURL string
 	BoardError        string
+	BoardErrorMsg     string // detailed message from the API, when available (#973); falls back to BoardError's i18n key otherwise
 	BookingOK         bool
 	BookingError      string
 	UserOrgs          []Organization
@@ -1939,6 +1940,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		boardContacted := r.URL.Query().Get("board_contacted") == "1"
 		boardContactTgURL := r.URL.Query().Get("board_contact_tg_url")
 		boardError := r.URL.Query().Get("board_error")
+		boardErrorMsg := r.URL.Query().Get("board_error_msg")
 		bookingOK := r.URL.Query().Get("book_ok") == "1"
 		bookingError := r.URL.Query().Get("book_error")
 
@@ -1969,6 +1971,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BoardContacted:    boardContacted,
 			BoardContactTgURL: boardContactTgURL,
 			BoardError:        boardError,
+			BoardErrorMsg:     boardErrorMsg,
 			BookingOK:         bookingOK,
 			BookingError:      bookingError,
 			UserOrgs:          userOrgs,

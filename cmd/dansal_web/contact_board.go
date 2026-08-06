@@ -11,6 +11,19 @@ import (
 	"time"
 )
 
+// redirectBoardError redirects to the event page with both the generic
+// board_error i18n key (fallback, always present) and the API's actual
+// validation message when available (#973) — e.g. "message must not contain
+// links" instead of just "Could not save post." errMsg is server-controlled
+// text from dansal's own writeError() calls, not raw user input.
+func redirectBoardError(w http.ResponseWriter, r *http.Request, eventID int, key string, err error) {
+	u := fmt.Sprintf("/events/%d?board_error=%s", eventID, key)
+	if msg := apiErrUserMessage(err); msg != "" {
+		u += "&board_error_msg=" + url.QueryEscape(msg)
+	}
+	http.Redirect(w, r, u, http.StatusSeeOther)
+}
+
 // POST /events/{id}/board
 func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -65,9 +78,10 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		globalEmailSendRate.record()
 		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
-			log.Printf("dansal-web: board post failed ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
+			log.Printf("dansal-web: board post failed ip_hash=%s path=%s type=%q city=%q message_len=%d err=%v",
+				hashIP(ip), r.URL.Path, r.FormValue("type"), r.FormValue("city"), len(r.FormValue("message")), err)
 			clearPendingSubmission(ip, r.UserAgent())
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
+			redirectBoardError(w, r, eventID, "board_post_error", err)
 			return
 		}
 		if firstPost {
@@ -103,7 +117,7 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 
 		if err := client.DeleteContactPost(r.Context(), postID, token); err != nil {
 			log.Printf("dansal-web: board delete failed post_id=%d path=%s err=%v", postID, r.URL.Path, err)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_delete_error", eventID), http.StatusSeeOther)
+			redirectBoardError(w, r, eventID, "board_delete_error", err)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/events/%d", eventID), http.StatusSeeOther)
@@ -153,7 +167,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		tgURL, err := client.ContactPoster(r.Context(), postID, email, telegram, message, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
 			log.Printf("dansal-web: board contact failed post_id=%d ip_hash=%s path=%s err=%v", postID, hashIP(ip), r.URL.Path, err)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
+			redirectBoardError(w, r, eventID, "board_contact_error", err)
 			return
 		}
 		if tgURL != "" {

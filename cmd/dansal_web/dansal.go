@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -169,6 +170,35 @@ func (c *DansalClient) FetchRefBundle(ctx context.Context) RefBundle {
 	return b
 }
 
+// apiHTTPError carries the dansal API's error message separately from its
+// formatted Error() string, so callers that want to show the raw message to
+// an end user (#973) don't have to parse it back out of "dansal API 400: ...".
+type apiHTTPError struct {
+	StatusCode int
+	Message    string
+	ErrorID    string
+}
+
+func (e *apiHTTPError) Error() string {
+	if e.ErrorID != "" {
+		return fmt.Sprintf("dansal API %d: %s (error_id: %s)", e.StatusCode, e.Message, e.ErrorID)
+	}
+	return fmt.Sprintf("dansal API %d: %s", e.StatusCode, e.Message)
+}
+
+// apiErrUserMessage returns the user-safe message from an apiHTTPError, or ""
+// for any other error type (network errors, etc. should fall back to a
+// generic message rather than leaking Go error text to the browser). Not to
+// be confused with apiErrorMessage(resp), which extracts straight from a
+// still-open response body.
+func apiErrUserMessage(err error) string {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) {
+		return ae.Message
+	}
+	return ""
+}
+
 func apiErr(resp *http.Response) error {
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	var body struct {
@@ -176,13 +206,10 @@ func apiErr(resp *http.Response) error {
 		ErrorID string `json:"error_id"`
 	}
 	if json.Unmarshal(b, &body) == nil && body.Error != "" {
-		if body.ErrorID != "" {
-			return fmt.Errorf("dansal API %d: %s (error_id: %s)", resp.StatusCode, body.Error, body.ErrorID)
-		}
-		return fmt.Errorf("dansal API %d: %s", resp.StatusCode, body.Error)
+		return &apiHTTPError{StatusCode: resp.StatusCode, Message: body.Error, ErrorID: body.ErrorID}
 	}
 	if msg := strings.TrimSpace(string(b)); msg != "" {
-		return fmt.Errorf("dansal API %d: %s", resp.StatusCode, msg)
+		return &apiHTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 	return fmt.Errorf("dansal API: %s", resp.Status)
 }

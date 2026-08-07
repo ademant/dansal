@@ -1138,8 +1138,8 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				EventWriteRequest: EventWriteRequest{
 					Title:          title,
 					Description:    prop(ics.ComponentPropertyDescription),
-					StartTime:      occ[0].UTC().Format(time.RFC3339),
-					EndTime:        occ[1].UTC().Format(time.RFC3339),
+					StartTime:      occ[0].In(berlinLoc).Format(time.RFC3339),
+					EndTime:        occ[1].In(berlinLoc).Format(time.RFC3339),
 					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
 					Tags:           tags,
 					URL:            attachURL(vevent),

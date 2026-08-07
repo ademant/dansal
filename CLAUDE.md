@@ -167,6 +167,16 @@ Tier 4 fires as a fallback when tiers 1–3 all miss. This catches: (a) feeds us
 
 The full `Event` struct (with all API fields) is never sent to the browser — `eventsGeoJSON` deliberately strips fields like `geohash`, `osm_id`, `notes_md`, `aliases`, `contact_*`, `series_id`, etc.
 
+## DansalClient (cmd/dansal_web/dansal.go)
+
+`DansalClient` proxies the REST API for the web frontend.
+
+- Use `c.do(ctx, method, path, token, body, out, okStatus...)` for request + auth + status check + JSON decode in one call. Do **not** hand-roll `c.authed(...)` + status switch + `json.NewDecoder` blocks — the ~90 identical blocks were consolidated into `do`.
+- GET helpers: `c.get` (public), `c.getWithTotal` (captures `X-Total-Count`), `c.getWithTotalAuthed` (Bearer + `X-Total-Count`). Don't build per-endpoint GET helpers.
+- `do` maps `404`→`errNotFound`, `403`→`errForbidden`, `410`→`errExpired`; compare with `errors.Is`.
+- Whole-table lists use `limit=1000` (the `apiListLimit` const). Raise the const rather than special-casing.
+- Keep `CreateLocation` as its manual block — it maps `409` to `LocationConflictError` (checked via `errors.As`). Keep `c.authed` only for endpoints needing custom status handling.
+
 ## Images
 
 - Stored as AVIF (default) or JPEG in `config.Server.ImagesDir`, one file per event: `{event_id}.avif`

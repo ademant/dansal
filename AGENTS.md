@@ -111,6 +111,16 @@ Config that must change without restarting goes in the `site_settings` table (we
 
 When touching any `has_*` field, switch the code path to tags.
 
+## DansalClient (cmd/dansal_web/dansal.go)
+
+`DansalClient` proxies the REST API for the web frontend.
+
+- Use `c.do(ctx, method, path, token, body, out, okStatus...)` for request + auth + status check + JSON decode in one call. Do **not** hand-roll `c.authed(...)` + `resp.StatusCode` switch + `json.NewDecoder` blocks — the ~90 identical blocks were consolidated into `do`.
+- GET helpers: `c.get` (public), `c.getWithTotal` (captures `X-Total-Count`), `c.getWithTotalAuthed` (Bearer + `X-Total-Count`). Don't build per-endpoint GET helpers.
+- `do` maps `404`→`errNotFound`, `403`→`errForbidden`, `410`→`errExpired`; compare with `errors.Is`.
+- Whole-table lists use `limit=1000` (the `apiListLimit` const). Raise the const rather than special-casing.
+- Keep `CreateLocation` as its manual block — it maps `409` to `LocationConflictError` (checked via `errors.As`). Keep `c.authed` only for endpoints needing custom status handling.
+
 ## Where to look
 
 | What | Where |

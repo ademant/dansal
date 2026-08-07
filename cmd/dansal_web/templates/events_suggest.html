@@ -360,6 +360,7 @@
 .ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
 .ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
 .ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
+.ac-item-new{color:#555;font-style:italic}
 .btn-secondary{padding:.5rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.95rem}
 .btn-secondary:hover{background:#e8e8e8}
 .wiz-nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
@@ -472,19 +473,33 @@ function sgGrowTTTable(el) {
         fetch(apiPath + '?name=' + encodeURIComponent(q))
           .then(function(r){ return r.json(); })
           .then(function(results){
-            if (!results || !results.length) { acList.hidden = true; return; }
             acList.innerHTML = '';
-            results.slice(0, 8).forEach(function(r){
-              var name = r.bandname || r.name || '';
-              if (!name) return;
-              var item = document.createElement('div');
-              item.className = 'ac-item';
-              item.tabIndex = 0;
-              item.textContent = name;
-              item.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(name); });
-              acList.appendChild(item);
-            });
-            acList.hidden = false;
+            var typedName = input.value.trim();
+            var exactMatch = false;
+            if (results && results.length) {
+              results.slice(0, 8).forEach(function(r){
+                var name = r.bandname || r.name || '';
+                if (!name) return;
+                if (name.toLowerCase() === typedName.toLowerCase()) exactMatch = true;
+                var item = document.createElement('div');
+                item.className = 'ac-item';
+                item.tabIndex = 0;
+                item.textContent = name;
+                item.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(name); });
+                acList.appendChild(item);
+              });
+            }
+            // Always offer to add the typed name when it's not already an exact match,
+            // so users can confirm a new name without pressing Enter.
+            if (!exactMatch && typedName) {
+              var addItem = document.createElement('div');
+              addItem.className = 'ac-item ac-item-new';
+              addItem.tabIndex = 0;
+              addItem.textContent = '+ ' + typedName;
+              addItem.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(typedName); });
+              acList.appendChild(addItem);
+            }
+            acList.hidden = acList.children.length === 0;
           })
           .catch(function(){ acList.hidden = true; });
       }, 300);
@@ -556,6 +571,27 @@ function sgGrowTTTable(el) {
   var form = document.querySelector('#tab-manual form');
   if (!form) return;
   form.addEventListener('submit', function(e) {
+    // Auto-commit any typed musician/instructor text not confirmed as a chip yet
+    // (covers the case where the user types a name and moves on without pressing Enter)
+    [['sg-musician-search', 'sg-musician-chips', 'dansal_musicians'],
+     ['sg-instructor-search', 'sg-instructor-chips', 'dansal_instructors']].forEach(function(cfg){
+      var inp = document.getElementById(cfg[0]);
+      var chipsEl = document.getElementById(cfg[1]);
+      if (!inp || !chipsEl) return;
+      var name = inp.value.trim();
+      if (!name) return;
+      var already = Array.prototype.some.call(
+        chipsEl.querySelectorAll('input[type=hidden]'),
+        function(h){ return h.value === name; }
+      );
+      if (!already) {
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = cfg[2];
+        hidden.value = name;
+        chipsEl.appendChild(hidden);
+      }
+    });
     var dateFrom = document.getElementById('sg-date-from').value;
     var dateTo   = document.getElementById('sg-date-to').value || dateFrom;
     var timeVal  = (document.getElementById('sg-time').value || '').trim();

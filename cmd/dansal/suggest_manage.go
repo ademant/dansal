@@ -190,8 +190,9 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	// through pending review, but only when they actually differ from what is
 	// already stored — the wizard prefills all fields, so unchanged values must
 	// not trigger review.
-	pending := pendingEditFields{
-		URL: req.URL,
+	pending := pendingEditFields{}
+	if urlChanged(db, eventID, req.URL) {
+		pending.URL = req.URL
 	}
 	if tagsChanged(db, eventID, req.Tags) {
 		pending.Tags = req.Tags
@@ -608,6 +609,13 @@ func contactChanged(q querier, eventID int, name, email string) bool {
 		FROM events e LEFT JOIN organizations o ON e.organization_id = o.id
 		WHERE e.id=?`, eventID).Scan(&curName, &curEmail)
 	return name != curName || email != curEmail
+}
+
+// urlChanged returns true when the submitted URL differs from the stored one.
+func urlChanged(q querier, eventID int, submitted string) bool {
+	var current string
+	q.QueryRow("SELECT COALESCE(url, '') FROM events WHERE id=?", eventID).Scan(&current)
+	return submitted != current
 }
 
 // POST /api/v1/events/suggest/manage/{token}/image — public, token-gated.

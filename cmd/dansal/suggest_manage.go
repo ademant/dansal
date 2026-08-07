@@ -161,6 +161,18 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		for _, danceID := range req.DanceIDs {
 			tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
 		}
+		tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", eventID)
+		for _, name := range req.Musicians {
+			if id, err := findOrCreateMusicianID(tx, name); err == nil && id > 0 {
+				tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", eventID, id)
+			}
+		}
+		tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", eventID)
+		for _, name := range req.Instructors {
+			if id, err := findOrCreateInstructorID(tx, name); err == nil && id > 0 {
+				tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", eventID, id)
+			}
+		}
 		if err := tx.Commit(); err != nil {
 			writeError(w, "db error", http.StatusInternalServerError)
 			return

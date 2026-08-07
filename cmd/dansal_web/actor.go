@@ -619,12 +619,19 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 	activityType, _ := raw["type"].(string)
 	actorField, _ := raw["actor"].(string)
 
-	if actorField != "" {
-		if err := verifyInboxRequest(r.Context(), client.HTTP, r, body, actorField); err != nil {
-			log.Printf("inbox: verification failed for %s: %v", actorField, err)
-			writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
-			return
-		}
+	// Signature verification is mandatory for every inbox activity: an empty
+	// actor field must not be able to skip it (#999). Real ActivityPub
+	// servers always sign inbox POSTs. fedHTTPClient (not client.HTTP) is
+	// used to fetch the signer's public key so a hostile keyId can't SSRF
+	// through dansal-web's unrestricted API client (#998).
+	if actorField == "" {
+		writeJSONError(w, r, http.StatusBadRequest, "missing actor")
+		return
+	}
+	if err := verifyInboxRequest(r.Context(), fedHTTPClient, r, body, actorField); err != nil {
+		log.Printf("inbox: verification failed for %s: %v", actorField, err)
+		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
+		return
 	}
 
 	switch activityType {
@@ -833,6 +840,14 @@ func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent
 				}
 			}
 		}
+	}
+
+	// The event URL is rendered as an outbound redirect target
+	// (federatedEventHandler) and must not be trusted unvalidated — a
+	// crafted activity could otherwise plant an open-redirect link on our
+	// own domain (#1000). Drop it rather than rejecting the whole activity.
+	if eventURL != "" && validateAPURL(eventURL) != nil {
+		eventURL = ""
 	}
 
 	rawBytes, _ := json.Marshal(obj)

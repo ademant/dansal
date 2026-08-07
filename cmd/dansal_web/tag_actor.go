@@ -87,12 +87,17 @@ func tagInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handler
 		activityType, _ := raw["type"].(string)
 		actorField, _ := raw["actor"].(string)
 
-		if actorField != "" {
-			if err := verifyInboxRequest(r.Context(), client.HTTP, r, body, actorField); err != nil {
-				log.Printf("tag inbox: verification failed for %s: %v", actorField, err)
-				writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
-				return
-			}
+		// Signature verification is mandatory for every inbox activity: an
+		// empty actor field must not be able to skip it (#999). Real
+		// ActivityPub servers always sign inbox POSTs.
+		if actorField == "" {
+			writeJSONError(w, r, http.StatusBadRequest, "missing actor")
+			return
+		}
+		if err := verifyInboxRequest(r.Context(), fedHTTPClient, r, body, actorField); err != nil {
+			log.Printf("tag inbox: verification failed for %s: %v", actorField, err)
+			writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
+			return
 		}
 
 		switch activityType {

@@ -35,8 +35,11 @@ var (
 // keyID. keyID may include a fragment (e.g. "https://host/actor#main-key");
 // the fragment is stripped for the actual HTTP GET, but used as a cache key.
 func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID string) (pemStr, owner string, err error) {
+	if err := validateAPURL(keyID); err != nil {
+		return "", "", fmt.Errorf("key ID: %w", err)
+	}
 	u, err := url.Parse(keyID)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
+	if err != nil {
 		return "", "", fmt.Errorf("key ID must be an https URL with non-empty host: %q", keyID)
 	}
 

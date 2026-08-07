@@ -1697,7 +1697,10 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 		}
 		var eventURL string
 		rows.Scan(&eventURL)
-		if eventURL == "" {
+		// Defense-in-depth (#1000): apObjectToFederatedEvent already drops
+		// unsafe URLs at ingest, but re-validate here too in case a row was
+		// written before that check existed.
+		if eventURL == "" || validateAPURL(eventURL) != nil {
 			http.NotFound(w, r)
 			return
 		}

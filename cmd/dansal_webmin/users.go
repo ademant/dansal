@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 type adminUser struct {
@@ -26,15 +26,10 @@ type adminSession struct {
 }
 
 func listAdminUsers(socketPath string) ([]adminUser, error) {
-	resp, err := sendSocket(socketPath, socketRequest{Cmd: "list-users"})
-	if err != nil {
+	var users []adminUser
+	if err := getSocketData(socketPath, "list-users", &users); err != nil {
 		return nil, err
 	}
-	if !resp.OK {
-		return nil, fmt.Errorf("%s", resp.Error)
-	}
-	var users []adminUser
-	json.Unmarshal(resp.Data, &users)
 	// filter to admin role only
 	var admins []adminUser
 	for _, u := range users {
@@ -90,22 +85,16 @@ func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 func userRevokeSessionHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
-		sessionID := 0
-		fmt.Sscan(r.PathValue("id"), &sessionID)
-		if sessionID == 0 {
+		sessionID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || sessionID == 0 {
 			http.Redirect(w, r, "/users/"+url.PathEscape(email)+"/sessions?flash=invalid+id", http.StatusSeeOther)
 			return
 		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "revoke-session", SessionID: sessionID})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			http.Redirect(w, r, "/users/"+url.PathEscape(email)+"/sessions?flash="+url.QueryEscape("Error: "+msg), http.StatusSeeOther)
+		basePath := "/users/" + url.PathEscape(email) + "/sessions"
+		if _, ok := socketFlashRedirect(w, r, cfg, basePath, "Error", socketRequest{Cmd: "revoke-session", SessionID: sessionID}); !ok {
 			return
 		}
-		http.Redirect(w, r, "/users/"+url.PathEscape(email)+"/sessions?flash=Session+revoked", http.StatusSeeOther)
+		http.Redirect(w, r, basePath+"?flash=Session+revoked", http.StatusSeeOther)
 	}
 }
 
@@ -119,33 +108,22 @@ func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Only admin accounts may receive magic links via webmin.
-		admins, err := listAdminUsers(cfg.AdminSocket)
+		su, err := lookupAdminUser(cfg, email)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 			json.NewEncoder(w).Encode(map[string]string{"error": "could not verify user role"})
 			return
 		}
-		isAdmin := false
-		for _, u := range admins {
-			if u.Email == email {
-				isAdmin = true
-				break
-			}
-		}
-		if !isAdmin {
+		if su == nil {
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]string{"error": "magic links via webmin are only available for admin accounts"})
 			return
 		}
 
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "magic-link", Email: email})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
+		resp, err := doSocket(cfg, socketRequest{Cmd: "magic-link", Email: email})
+		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": msg})
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 		w.Write(resp.Data)
@@ -159,15 +137,11 @@ func userMagicLinkHandler(cfg *Config) http.HandlerFunc {
 func userInviteAdminHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "invite-admin", Email: email})
+		resp, err := doSocket(cfg, socketRequest{Cmd: "invite-admin", Email: email})
 		w.Header().Set("Content-Type", "application/json")
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
+		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": msg})
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 		w.Write(resp.Data)

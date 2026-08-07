@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 )
 
 //go:embed templates
@@ -65,8 +66,7 @@ type TemplateData struct {
 func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData {
 	nav := r.URL.Path
 	// normalise sub-pages to their top-level nav entry
-	switch {
-	case nav == "/sessions" || len(nav) > 9 && nav[:9] == "/sessions":
+	if strings.HasPrefix(nav, "/sessions") {
 		nav = "/users"
 	}
 	return TemplateData{

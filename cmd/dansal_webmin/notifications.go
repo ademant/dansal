@@ -2,10 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 )
@@ -46,17 +43,6 @@ type heartbeatConfig struct {
 	Email        channelStatus `json:"email"`
 	Telegram     channelStatus `json:"telegram"`
 	Matrix       channelStatus `json:"matrix"`
-}
-
-func getSocketData(socketPath, cmd string, out any) error {
-	resp, err := sendSocket(socketPath, socketRequest{Cmd: cmd})
-	if err != nil {
-		return err
-	}
-	if !resp.OK {
-		return fmt.Errorf("%s", resp.Error)
-	}
-	return json.Unmarshal(resp.Data, out)
 }
 
 // notifStatus values drive the colour indicator: "ok" = green, "partial" = red, "missing" = grey.
@@ -203,26 +189,13 @@ func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 			SMTPTo:          r.FormValue("to"),
 			SMTPSendmail:    r.FormValue("sendmail"),
 		}
-		resp, err := sendSocket(cfg.AdminSocket, req)
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("smtp-set: %v / %s", err, msg)
-			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("SMTP error: "+msg), http.StatusSeeOther)
+		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "SMTP error", req); !ok {
 			return
 		}
 
 		// update password if provided
 		if pw := r.FormValue("password"); pw != "" {
-			resp2, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-set-password", Password: pw})
-			if err2 != nil || !resp2.OK {
-				msg := "socket error"
-				if err2 == nil {
-					msg = resp2.Error
-				}
-				http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("SMTP saved but password error: "+msg), http.StatusSeeOther)
+			if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "SMTP saved but password error", socketRequest{Cmd: "smtp-set-password", Password: pw}); !ok {
 				return
 			}
 		}
@@ -236,17 +209,11 @@ func notificationsTelegramSaveHandler(cfg *Config) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "Telegram error", socketRequest{
 			Cmd:              "telegram-set",
 			TelegramBotToken: r.FormValue("bot_token"),
 			TelegramBotName:  r.FormValue("bot_name"),
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Telegram error: "+msg), http.StatusSeeOther)
+		}); !ok {
 			return
 		}
 		http.Redirect(w, r, "/notifications?flash=Telegram+settings+saved", http.StatusSeeOther)
@@ -259,17 +226,11 @@ func notificationsMatrixSaveHandler(cfg *Config) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "Matrix error", socketRequest{
 			Cmd:               "matrix-set",
 			MatrixHomeserver:  r.FormValue("homeserver"),
 			MatrixAccessToken: r.FormValue("access_token"),
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Matrix error: "+msg), http.StatusSeeOther)
+		}); !ok {
 			return
 		}
 		http.Redirect(w, r, "/notifications?flash=Matrix+settings+saved", http.StatusSeeOther)
@@ -300,27 +261,13 @@ func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
 			SMTPTo:          r.FormValue("to"),
 			SMTPSendmail:    r.FormValue("sendmail"),
 		}
-		resp, err := sendSocket(cfg.AdminSocket, saveReq)
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "save failed: " + msg})
+		if _, err := doSocket(cfg, saveReq); err != nil {
+			respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
 			return
 		}
 		if pw := r.FormValue("password"); pw != "" {
-			resp2, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-set-password", Password: pw})
-			if err2 != nil || !resp2.OK {
-				msg := "socket error"
-				if err2 == nil {
-					msg = resp2.Error
-				}
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadGateway)
-				json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "password save failed: " + msg})
+			if _, err := doSocket(cfg, socketRequest{Cmd: "smtp-set-password", Password: pw}); err != nil {
+				respondJSON(w, http.StatusBadGateway, false, "password save failed: "+err.Error())
 				return
 			}
 		}
@@ -352,17 +299,12 @@ func notificationsTelegramTestHandler(cfg *Config) http.HandlerFunc {
 			respondJSON(w, http.StatusBadRequest, false, "bad request")
 			return
 		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+		if _, err := doSocket(cfg, socketRequest{
 			Cmd:              "telegram-set",
 			TelegramBotToken: r.FormValue("bot_token"),
 			TelegramBotName:  r.FormValue("bot_name"),
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			respondJSON(w, http.StatusBadGateway, false, "save failed: "+msg)
+		}); err != nil {
+			respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
 			return
 		}
 		test, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "telegram-test"})
@@ -386,18 +328,13 @@ func notificationsMatrixLoginHandler(cfg *Config) http.HandlerFunc {
 			respondJSON(w, http.StatusBadRequest, false, "bad request")
 			return
 		}
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+		if _, err := doSocket(cfg, socketRequest{
 			Cmd:              "matrix-login",
 			MatrixHomeserver: r.FormValue("homeserver"),
 			MatrixUsername:   r.FormValue("username"),
 			MatrixPassword:   r.FormValue("password"),
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			respondJSON(w, http.StatusOK, false, msg)
+		}); err != nil {
+			respondJSON(w, http.StatusOK, false, err.Error())
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")
@@ -412,17 +349,12 @@ func notificationsMatrixTestHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		if token := r.FormValue("access_token"); token != "" {
-			resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+			if _, err := doSocket(cfg, socketRequest{
 				Cmd:               "matrix-set",
 				MatrixHomeserver:  r.FormValue("homeserver"),
 				MatrixAccessToken: token,
-			})
-			if err != nil || !resp.OK {
-				msg := "socket error"
-				if err == nil {
-					msg = resp.Error
-				}
-				respondJSON(w, http.StatusBadGateway, false, "save failed: "+msg)
+			}); err != nil {
+				respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
 				return
 			}
 		}
@@ -456,16 +388,10 @@ func notificationsHeartbeatSaveHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		mins, _ := strconv.Atoi(r.FormValue("interval_mins"))
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{
+		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "Heartbeat error", socketRequest{
 			Cmd:                   "heartbeat-set",
 			HeartbeatIntervalMins: mins,
-		})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Heartbeat error: "+msg), http.StatusSeeOther)
+		}); !ok {
 			return
 		}
 		http.Redirect(w, r, "/notifications?flash=Heartbeat+interval+saved", http.StatusSeeOther)

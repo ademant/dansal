@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,9 +20,7 @@ func maintenancePageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Load backup list for the restore card.
 		var backups []backupFileInfo
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "list-backups"})
-		if err == nil && resp.OK {
-			json.Unmarshal(resp.Data, &backups)
+		if err := getSocketData(cfg.AdminSocket, "list-backups", &backups); err == nil {
 			for i := range backups {
 				backups[i].SizeDisplay = fmtBytes(backups[i].Size)
 			}
@@ -40,14 +37,8 @@ func maintenancePageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 
 func maintenanceVacuumHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "vacuum"})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("vacuum: %v / %s", err, msg)
-			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Vacuum error: "+msg), http.StatusSeeOther)
+		_, ok := socketFlashRedirect(w, r, cfg, "/maintenance", "Vacuum error", socketRequest{Cmd: "vacuum"})
+		if !ok {
 			return
 		}
 		http.Redirect(w, r, "/maintenance?flash=Database+vacuum+completed", http.StatusSeeOther)
@@ -56,14 +47,8 @@ func maintenanceVacuumHandler(cfg *Config) http.HandlerFunc {
 
 func maintenancePruneImagesHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "prune-images"})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("prune-images: %v / %s", err, msg)
-			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Prune error: "+msg), http.StatusSeeOther)
+		resp, ok := socketFlashRedirect(w, r, cfg, "/maintenance", "Prune error", socketRequest{Cmd: "prune-images"})
+		if !ok {
 			return
 		}
 		var result struct {
@@ -78,14 +63,8 @@ func maintenancePruneImagesHandler(cfg *Config) http.HandlerFunc {
 
 func maintenanceFetchAllHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "fetch-all"})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("fetch-all: %v / %s", err, msg)
-			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Fetch error: "+msg), http.StatusSeeOther)
+		resp, ok := socketFlashRedirect(w, r, cfg, "/maintenance", "Fetch error", socketRequest{Cmd: "fetch-all"})
+		if !ok {
 			return
 		}
 		var results []struct {
@@ -122,13 +101,11 @@ func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 		}
 
 		// Ask the API for its backup dir so we can build the full path server-side.
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "list-backups"})
-		if err != nil || !resp.OK {
+		var files []backupFileInfo
+		if err := getSocketData(cfg.AdminSocket, "list-backups", &files); err != nil {
 			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Could not list backups"), http.StatusSeeOther)
 			return
 		}
-		var files []backupFileInfo
-		json.Unmarshal(resp.Data, &files)
 		var found bool
 		for _, f := range files {
 			if f.Name == filename {
@@ -141,19 +118,9 @@ func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// We need to pass the full path. Ask the API to resolve it via list-backups
-		// which already uses the configured backup_dir. Build path from first file's
-		// ModTime is not reliable — instead send the filename; the API will join it
-		// with its configured backup_dir in restoreFromTar if the path has no dir component.
-		// Simpler: send the bare filename and let the API prepend backup_dir.
-		resp2, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "restore", Path: filename})
-		if err != nil || !resp2.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp2.Error
-			}
-			log.Printf("restore: %v / %s", err, msg)
-			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Restore error: "+msg), http.StatusSeeOther)
+		// Send the bare filename; the API joins it with its configured backup_dir.
+		resp2, ok := socketFlashRedirect(w, r, cfg, "/maintenance", "Restore error", socketRequest{Cmd: "restore", Path: filename})
+		if !ok {
 			return
 		}
 		var result struct {
@@ -174,14 +141,8 @@ func maintenanceBackupHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		outputPath := r.FormValue("output")
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "backup", Path: outputPath})
-		if err != nil || !resp.OK {
-			msg := "socket error"
-			if err == nil {
-				msg = resp.Error
-			}
-			log.Printf("backup: %v / %s", err, msg)
-			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Backup error: "+msg), http.StatusSeeOther)
+		resp, ok := socketFlashRedirect(w, r, cfg, "/maintenance", "Backup error", socketRequest{Cmd: "backup", Path: outputPath})
+		if !ok {
 			return
 		}
 		var result struct {

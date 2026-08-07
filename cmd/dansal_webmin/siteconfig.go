@@ -365,8 +365,7 @@ func notifyRelayProfileUpdate(cfg *Config) {
 		log.Printf("relay profile update: create request: %v", err)
 		return
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("relay profile update: call dansal-web: %v", err)
 		return

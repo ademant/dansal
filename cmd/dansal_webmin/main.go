@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/ademant/dansal/internal/instance"
 )
 
 var httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -30,29 +30,11 @@ func (lh *liveHandler) store(h http.Handler) {
 	lh.p.Store(&h)
 }
 
-func instanceFromConfigArg() string {
-	for i, arg := range os.Args {
-		var path string
-		switch {
-		case (arg == "--config" || arg == "-config") && i+1 < len(os.Args):
-			path = os.Args[i+1]
-		case strings.HasPrefix(arg, "--config="):
-			path = arg[len("--config="):]
-		case strings.HasPrefix(arg, "-config="):
-			path = arg[len("-config="):]
-		}
-		if path != "" {
-			return filepath.Base(filepath.Dir(path))
-		}
-	}
-	return ""
-}
-
 func main() {
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
 
 	tag := "dansal-webmin"
-	if inst := instanceFromConfigArg(); inst != "" {
+	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal-webmin@" + inst
 	}
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {
@@ -111,12 +93,7 @@ func main() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGHUP)
 		for range sig {
-			newCfg := reloadConfig(cfg.configPath)
-			if newCfg == nil {
-				log.Print("reload failed, keeping current configuration")
-				continue
-			}
-			live.store(buildHandler(newCfg))
+			live.store(buildHandler(loadConfigFrom(cfg.configPath)))
 			log.Print("configuration reloaded")
 		}
 	}()

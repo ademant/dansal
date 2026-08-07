@@ -39,11 +39,6 @@ func loadConfig() *Config {
 	return loadConfigFrom(*configPath)
 }
 
-func reloadConfig(path string) *Config {
-	cfg := loadConfigFrom(path)
-	return cfg
-}
-
 func loadConfigFrom(path string) *Config {
 	data, err := os.ReadFile(path)
 	if err != nil {

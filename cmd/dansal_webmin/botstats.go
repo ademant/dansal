@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -241,13 +242,9 @@ func loadFediStatsDB(dbPath string) ([]fediStatDay, []fediSourceInstance, error)
 		instances = append(instances, fediSourceInstance{Instance: inst, Count: cnt})
 	}
 	// Sort descending by count.
-	for i := 0; i < len(instances); i++ {
-		for j := i + 1; j < len(instances); j++ {
-			if instances[j].Count > instances[i].Count {
-				instances[i], instances[j] = instances[j], instances[i]
-			}
-		}
-	}
+	sort.Slice(instances, func(i, j int) bool {
+		return instances[i].Count > instances[j].Count
+	})
 
 	return days, instances, nil
 }

@@ -144,6 +144,10 @@ func validateTimetableRequests(reqs []TimetableEntryRequest) error {
 }
 
 // timetableAuthCheck verifies the event exists and the caller may edit it.
+// timetableAuthCheck delegates to the shared requireEventOrg (#1007) — admin
+// unrestricted, publisher/user must belong to the event's org. There's no
+// target org for a timetable edit, so targetOrgID/requireTarget are the
+// "no target to validate" values.
 func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventID int) bool {
 	var orgID sql.NullInt64
 	err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID)
@@ -155,11 +159,7 @@ func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventI
 		writeInternalError(w, err)
 		return false
 	}
-	if userRole != RoleAdmin && (!orgID.Valid || !isOrgMember(callerID, int(orgID.Int64))) {
-		writeError(w, "Forbidden: not authorized to edit this event", http.StatusForbidden)
-		return false
-	}
-	return true
+	return requireEventOrg(w, userRole, callerID, orgID, nil, false)
 }
 
 func readTimetableBody(w http.ResponseWriter, r *http.Request) (reqs []TimetableEntryRequest, ok bool) {

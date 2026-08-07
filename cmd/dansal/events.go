@@ -909,103 +909,79 @@ func (c ImportCounts) AllNew() bool {
 	return c.Updated == 0 && c.Unchanged == 0
 }
 
+// EventInput is insertEvent's upsert payload. Replaces insertEvent's former
+// 28 positional parameters — two call sites passed ~30 positional args each,
+// which was easy to get subtly wrong (e.g. transposing two strings) with no
+// compiler help (#1008).
+type EventInput struct {
+	Title, Description                string
+	StartTime, EndTime                int64
+	LocationID                        int64
+	HasBall, HasWorkshop, HasFestival bool
+	IsCancelled                       bool
+	WorkshopDifficulty                string
+	BookingURL                        string
+	IsPublished                       bool
+	OrganizationID                    *int
+	UID, URL, Source                  string
+	SourceLastModified                int64
+	Pricing                           *Pricing
+	FetchSourceID                     int
+	Food, Drink, FloorCondition       string
+	Attributes                        map[string]bool
+	ContactName, ContactEmail         string
+	CreatedByID                       *int
+	ImageAIGenerated                  bool
+}
+
 // insertEvent upserts an event. Returns (id, shortCode, outcome, error) where
 // outcome is one of outcomeNew/outcomeUpdated/outcomeUnchanged.
-// Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
-// The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
-// publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, workshopDifficulty, bookingURL string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, fetchSourceID int, food, drink, floorCondition string, attributes map[string]bool, contactName, contactEmail string, createdByID *int, imageAIGenerated bool) (int, string, string, error) {
-	var existingID int
-	var existingShortCode string
-	var existingSourceLastModified int64
-	var existingChangedAt int64
-	var existingStartTime int64
-	var existingIsPublished, existingIsCancelled bool
-	var lookupErr error = sql.ErrNoRows
+// Deduplication runs findExistingEvent's shared 5-tier hierarchy (#1005),
+// also used by previewDuplicateStatus so the two paths can't drift.
+func insertEvent(q querier, in EventInput) (int, string, string, error) {
+	title, description := in.Title, in.Description
+	startTime, endTime := in.StartTime, in.EndTime
+	locationID := in.LocationID
+	hasBall, hasWorkshop, hasFestival := in.HasBall, in.HasWorkshop, in.HasFestival
+	isCancelled := in.IsCancelled
+	workshopDifficulty, bookingURL := in.WorkshopDifficulty, in.BookingURL
+	isPublished := in.IsPublished
+	organizationID := in.OrganizationID
+	uid, url, source := in.UID, in.URL, in.Source
+	sourceLastModified := in.SourceLastModified
+	pricing := in.Pricing
+	fetchSourceID := in.FetchSourceID
+	food, drink, floorCondition := in.Food, in.Drink, in.FloorCondition
+	attributes := in.Attributes
+	contactName, contactEmail := in.ContactName, in.ContactEmail
+	createdByID := in.CreatedByID
+	imageAIGenerated := in.ImageAIGenerated
+
 	var uidArg any
 	if uid != "" {
 		uidArg = uid
 	}
 
-	if uid != "" {
-		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE uid = ?", uid,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
-		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return 0, "", "", lookupErr
-		}
+	existing, tier, err := findExistingEvent(q, title, url, &startTime, locationID, uid, fetchSourceID)
+	if err != nil {
+		return 0, "", "", err
 	}
+	existingID := existing.ID
+	existingShortCode := existing.ShortCode
+	existingSourceLastModified := existing.SourceLastModified
+	existingChangedAt := existing.ChangedAt
+	existingStartTime := existing.StartTime
+	existingIsPublished := existing.IsPublished
+	existingIsCancelled := existing.IsCancelled
 
-	const threeHours = int64(3 * 60 * 60)
-
-	// URL tier: fires when uid is absent or not found. Constrained to a ±3h
-	// window around start_time — otherwise a feed that reuses one generic URL
-	// (e.g. its homepage) for every event permanently locks tier 2 onto the
-	// first event ever imported with that URL, silently absorbing every later,
-	// unrelated event sharing the same URL (#702).
-	if lookupErr == sql.ErrNoRows && url != "" {
-		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE url = ? AND ABS(start_time - ?) < ?",
-			url, startTime, threeHours,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
-		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return 0, "", "", lookupErr
-		}
-	}
-
-	// Fuzzy fallback: fires when both uid and url lookups missed.
-	if lookupErr == sql.ErrNoRows {
-		if locationID > 0 {
-			// Tier 3: known location + time, no title check. Titles get rewritten
-			// over an event's lifetime (placeholder -> lineup -> cancellation
-			// notice), so once uid/url have both missed, same venue + same slot
-			// is already a strong enough signal to auto-merge on its own.
-			lookupErr = q.QueryRow(
-				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?",
-				locationID, startTime, threeHours,
-			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
-		}
-		if lookupErr == sql.ErrNoRows {
-			// Tier 4: title + time only. Fires when locationID == 0 (feed provided no
-			// resolvable location name) or when tier 3 missed (feed location name didn't
-			// match the DB name of the event's stored location, e.g. after HTML-entity
-			// decoding or a venue rename that caused ensureLocation to create a new row).
-			// Title is still required here since, without a location signal, matching
-			// on time alone would be far too promiscuous.
-			lookupErr = q.QueryRow(
-				"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0), start_time, is_published, is_cancelled FROM events WHERE title = ? AND ABS(start_time - ?) < ?",
-				title, startTime, threeHours,
-			).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt, &existingStartTime, &existingIsPublished, &existingIsCancelled)
-		}
-	}
-
-	if lookupErr != nil && lookupErr != sql.ErrNoRows {
-		return 0, "", "", lookupErr
-	}
-
-	// Tier 5: low-confidence review candidate. Fires only when tiers 1-4 all
-	// missed (e.g. the venue changed AND the feed regenerated the uid AND the
-	// title was rewritten to announce the move). Same originating feed + same
-	// time window + fuzzy title overlap is too weak a signal to auto-merge on,
-	// so instead of guessing we insert as new and flag both rows for an admin
-	// to resolve via the existing merge UI.
+	// Tier 5 is a low-confidence review hint, not a match: proceed as if
+	// nothing was found, but remember the candidate to flag after insert.
 	var duplicateReviewCandidateID int
-	if lookupErr == sql.ErrNoRows && fetchSourceID > 0 && title != "" {
-		rows, err := q.Query(
-			"SELECT id, title FROM events WHERE fetch_source_id = ? AND ABS(start_time - ?) < ?",
-			fetchSourceID, startTime, threeHours,
-		)
-		if err == nil {
-			for rows.Next() {
-				var candID int
-				var candTitle string
-				if rows.Scan(&candID, &candTitle) == nil && titlesFuzzyOverlap(title, candTitle) {
-					duplicateReviewCandidateID = candID
-					break
-				}
-			}
-			rows.Close()
-		}
+	lookupErr := sql.ErrNoRows
+	if tier == TierFuzzyReview {
+		duplicateReviewCandidateID = existing.ID
+	} else if tier != TierNone {
+		lookupErr = nil
 	}
 
 	var pricingArg any
@@ -1125,7 +1101,6 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	// short_code is pre-computed so the INSERT is a single round-trip (no follow-up UPDATE).
 	// Retry up to 5 times on the rare collision of the 4-byte random short code.
 	var result sql.Result
-	var err error
 	var shortCode string
 	insChangedAt := time.Now().UTC().Unix()
 	insChangedBy := "admin"
@@ -1219,7 +1194,35 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, counts, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, outcome, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty, req.BookingURL, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.FetchSourceID, req.Food, req.Drink, req.FloorCondition, req.Attributes, req.ContactName, req.ContactEmail, createdByID, req.ImageAIGenerated)
+		id, shortCode, outcome, err := insertEvent(q, EventInput{
+			Title:              req.Title,
+			Description:        entry.description,
+			StartTime:          startTime,
+			EndTime:            endTime,
+			LocationID:         locationID,
+			HasBall:            req.HasBall,
+			HasWorkshop:        req.HasWorkshop,
+			HasFestival:        req.HasFestival,
+			IsCancelled:        req.IsCancelled,
+			WorkshopDifficulty: req.WorkshopDifficulty,
+			BookingURL:         req.BookingURL,
+			IsPublished:        isPublished,
+			OrganizationID:     req.OrganizationID,
+			UID:                req.UID,
+			URL:                req.URL,
+			Source:             req.Source,
+			SourceLastModified: req.SourceLastModified,
+			Pricing:            req.Pricing,
+			FetchSourceID:      req.FetchSourceID,
+			Food:               req.Food,
+			Drink:              req.Drink,
+			FloorCondition:     req.FloorCondition,
+			Attributes:         req.Attributes,
+			ContactName:        req.ContactName,
+			ContactEmail:       req.ContactEmail,
+			CreatedByID:        createdByID,
+			ImageAIGenerated:   req.ImageAIGenerated,
+		})
 		if err != nil {
 			return nil, counts, err
 		}
@@ -1981,6 +1984,51 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// requireExistingOrgMember writes a 403 and returns false unless callerID is
+// a member of the org referenced by existingOrgID (existingOrgID being unset
+// is always denied — an org-less event isn't "your org's event"). This is
+// the single check duplicated (with only variable names differing) across
+// event/location/image/suggestion handlers; requireEventOrg builds on it for
+// handlers that also need to validate a target org (#1007).
+func requireExistingOrgMember(w http.ResponseWriter, callerID int, existingOrgID sql.NullInt64) bool {
+	if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// requireEventOrg enforces the standard event-mutation access rule that
+// recurred, copy-pasted, across updateEvent/patchEvent and others (#1007):
+// admin is unrestricted; publisher/user must belong to the event's current
+// org (requireExistingOrgMember), and must also belong to targetOrgID — the
+// org the caller wants the event to end up in after this request.
+// requireTarget controls whether targetOrgID == nil itself is a denial
+// (PUT: yes, an org must always be specified by non-admins; PATCH: no, a
+// caller resolves targetOrgID to the existing org before calling when the
+// request omits organization_id, so nil there only means "event has no
+// org", already caught by requireExistingOrgMember above).
+func requireEventOrg(w http.ResponseWriter, role string, callerID int, existingOrgID sql.NullInt64, targetOrgID *int, requireTarget bool) bool {
+	if role == RoleAdmin {
+		return true
+	}
+	if !requireExistingOrgMember(w, callerID, existingOrgID) {
+		return false
+	}
+	if targetOrgID == nil {
+		if !requireTarget {
+			return true
+		}
+		writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+		return false
+	}
+	if !isOrgMember(callerID, *targetOrgID) {
+		writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 // PUT /api/v1/events/{id} — full event update
 func updateEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
@@ -2032,27 +2080,8 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	switch userRole {
-	case RoleAdmin:
-		// unrestricted
-	case RolePublisher:
-		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
-			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
-			return
-		}
-	default:
-		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if req.OrganizationID == nil || !isOrgMember(callerID, *req.OrganizationID) {
-			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
-			return
-		}
+	if !requireEventOrg(w, userRole, callerID, existingOrgID, req.OrganizationID, userRole != RolePublisher) {
+		return
 	}
 
 	startTime, err := parseTimeToUnix(req.StartTime)
@@ -2260,27 +2289,17 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	if req.OrganizationID != nil {
 		newOrgID = sql.NullInt64{Int64: int64(*req.OrganizationID), Valid: true}
 	}
-	switch userRole {
-	case RoleAdmin:
-		// unrestricted
-	case RolePublisher:
-		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
-			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
-			return
-		}
-	default:
-		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if !newOrgID.Valid || !isOrgMember(callerID, int(newOrgID.Int64)) {
-			writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
-			return
-		}
+	var newOrgIDArg *int
+	if newOrgID.Valid {
+		v := int(newOrgID.Int64)
+		newOrgIDArg = &v
+	}
+	// requireTarget=true unconditionally: newOrgIDArg already resolves to the
+	// existing org when the request omits organization_id, so it's only nil
+	// when the event has no org at all — already caught by
+	// requireExistingOrgMember before the target check runs.
+	if !requireEventOrg(w, userRole, callerID, existingOrgID, newOrgIDArg, true) {
+		return
 	}
 
 	if req.Title != nil {
@@ -2534,8 +2553,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 		db.Exec("UPDATE events SET is_published=1, suggester_email='' WHERE id=?", id)
@@ -2612,8 +2630,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 		deadline := eventDeletionDeadline(createdAt, time.Unix(startTime, 0))
@@ -2680,8 +2697,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 	default:
@@ -2803,20 +2819,35 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert the clone with no start/end time (zero = not set).
-	cloneID, shortCode, _, err := insertEvent(tx,
-		cloneReq.Title, cloneReq.Description,
-		0, 0, // start_time, end_time cleared
-		locationID,
-		cloneReq.HasBall, cloneReq.HasWorkshop, cloneReq.HasFestival, false,
-		cloneReq.WorkshopDifficulty, cloneReq.BookingURL,
-		false, // is_published = 0
-		targetOrgID,
-		"", cloneReq.URL, "", 0, // uid, url, source, source_last_modified cleared
-		cloneReq.Pricing, 0,
-		cloneReq.Food, cloneReq.Drink, cloneReq.FloorCondition,
-		cloneReq.Attributes, cloneReq.ContactName, cloneReq.ContactEmail,
-		&callerID, false,
-	)
+	cloneID, shortCode, _, err := insertEvent(tx, EventInput{
+		Title:              cloneReq.Title,
+		Description:        cloneReq.Description,
+		StartTime:          0, // cleared
+		EndTime:            0, // cleared
+		LocationID:         locationID,
+		HasBall:            cloneReq.HasBall,
+		HasWorkshop:        cloneReq.HasWorkshop,
+		HasFestival:        cloneReq.HasFestival,
+		IsCancelled:        false,
+		WorkshopDifficulty: cloneReq.WorkshopDifficulty,
+		BookingURL:         cloneReq.BookingURL,
+		IsPublished:        false,
+		OrganizationID:     targetOrgID,
+		UID:                "", // cleared
+		URL:                cloneReq.URL,
+		Source:             "", // cleared
+		SourceLastModified: 0,  // cleared
+		Pricing:            cloneReq.Pricing,
+		FetchSourceID:      0,
+		Food:               cloneReq.Food,
+		Drink:              cloneReq.Drink,
+		FloorCondition:     cloneReq.FloorCondition,
+		Attributes:         cloneReq.Attributes,
+		ContactName:        cloneReq.ContactName,
+		ContactEmail:       cloneReq.ContactEmail,
+		CreatedByID:        &callerID,
+		ImageAIGenerated:   false,
+	})
 	if err != nil {
 		writeInternalError(w, err)
 		return

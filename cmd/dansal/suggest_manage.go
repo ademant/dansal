@@ -367,8 +367,7 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 		return
 	}
 	if userRole != RoleAdmin {
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 	}

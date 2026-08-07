@@ -425,8 +425,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 	}
@@ -467,8 +466,7 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userRole != RoleAdmin {
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 	}

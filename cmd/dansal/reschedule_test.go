@@ -58,9 +58,16 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 	}
 
 	const origStart = int64(1_800_000_000)
-	id, _, outcome, err := insertEvent(db, "Fest Noz", "desc", origStart, origStart+3600, 0,
-		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
+	baseInput := EventInput{
+		Title:       "Fest Noz",
+		Description: "desc",
+		IsPublished: true,
+		UID:         "reschedule-test-uid",
+	}
+
+	in := baseInput
+	in.StartTime, in.EndTime = origStart, origStart+3600
+	id, _, outcome, err := insertEvent(db, in)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
@@ -76,9 +83,9 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 
 	// Minor 1h correction: should NOT set previous_start_time.
 	minorShift := origStart + 3600
-	_, _, outcome, err = insertEvent(db, "Fest Noz", "desc", minorShift, minorShift+3600, 0,
-		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
+	in = baseInput
+	in.StartTime, in.EndTime = minorShift, minorShift+3600
+	_, _, outcome, err = insertEvent(db, in)
 	if err != nil {
 		t.Fatalf("minor update: %v", err)
 	}
@@ -92,9 +99,9 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 
 	// Genuine reschedule: shift by 5h from the (already updated) minorShift time.
 	newStart := minorShift + 5*3600
-	_, _, outcome, err = insertEvent(db, "Fest Noz", "desc", newStart, newStart+3600, 0,
-		false, false, false, false, "", "", true, nil,
-		"reschedule-test-uid", "", "", 0, nil, 0, "", "", "", nil, "", "", nil, false)
+	in = baseInput
+	in.StartTime, in.EndTime = newStart, newStart+3600
+	_, _, outcome, err = insertEvent(db, in)
 	if err != nil {
 		t.Fatalf("reschedule update: %v", err)
 	}

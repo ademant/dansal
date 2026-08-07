@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -108,120 +107,62 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // previewDuplicateStatus checks the DB for a matching event using the same
-// three-tier dedup logic as insertEvent and returns "new", "exists", or "updated".
+// shared findExistingEvent dedup hierarchy as insertEvent (#1005) and
+// returns "new", "exists", or "updated".
 func previewDuplicateStatus(req EventCreateRequest) string {
-	type row struct {
-		id          int
-		title       string
-		startTime   int64
-		isCancelled bool
-		srcMod      int64
-	}
-
-	scan := func(r *sql.Row) (row, error) {
-		var ro row
-		var cancelled int
-		err := r.Scan(&ro.id, &ro.title, &ro.startTime, &cancelled, &ro.srcMod)
-		ro.isCancelled = cancelled == 1
-		return ro, err
-	}
-
-	var found row
-	var lookupErr error = sql.ErrNoRows
-
-	if req.UID != "" {
-		found, lookupErr = scan(db.QueryRow(
-			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE uid=?", req.UID,
-		))
-		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return "new"
-		}
-	}
-
 	startStr := req.StartTime
 	if len(req.Date) > 0 {
 		startStr = req.Date[0].StartTime
 	}
 	startEpoch, startErr := parseTimeToUnix(startStr)
-	const threeHours = int64(3 * 60 * 60)
+	var startTime *int64
+	if startErr == nil {
+		startTime = &startEpoch
+	}
 
-	// URL tier: constrained to a ±3h window around start_time — otherwise a
-	// feed that reuses one generic URL (e.g. its homepage) for every event
-	// permanently locks this tier onto the first event ever imported with
-	// that URL, silently absorbing every later, unrelated event sharing the
-	// same URL (#702).
-	if lookupErr == sql.ErrNoRows && req.URL != "" && startErr == nil {
-		found, lookupErr = scan(db.QueryRow(
-			"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE url=? AND ABS(start_time-?)<?",
-			req.URL, startEpoch, threeHours,
-		))
-		if lookupErr != nil && lookupErr != sql.ErrNoRows {
-			return "new"
+	// Resolve the feed's location name to a DB location_id the same way
+	// tier 3 needs it — insertEvent's caller resolves this via ensureLocation
+	// (which may create a row); preview must not create anything, so it does
+	// a read-only lookup instead. locID stays 0 (tier 3 skipped) when the
+	// feed's location name doesn't match a stored location.
+	var locID int64
+	if startErr == nil {
+		db.QueryRow("SELECT id FROM locations WHERE location=?", req.Location.Location).Scan(&locID)
+		if locID == 0 && req.Location.Address != "" {
+			composite := req.Location.Location + " - " + req.Location.Address
+			db.QueryRow("SELECT id FROM locations WHERE location=?", composite).Scan(&locID)
 		}
 	}
 
-	if lookupErr == sql.ErrNoRows {
-		if startErr == nil {
-			var locID int64
-			db.QueryRow("SELECT id FROM locations WHERE location=?", req.Location.Location).Scan(&locID)
-			if locID == 0 && req.Location.Address != "" {
-				composite := req.Location.Location + " - " + req.Location.Address
-				db.QueryRow("SELECT id FROM locations WHERE location=?", composite).Scan(&locID)
-			}
-			if locID > 0 {
-				// Tier 3: known location + time, no title check — mirrors insertEvent's
-				// loosened tier 3 (titles get rewritten over an event's lifetime).
-				found, lookupErr = scan(db.QueryRow(
-					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE location_id=? AND ABS(start_time-?)<? ",
-					locID, startEpoch, threeHours,
-				))
-				if lookupErr != nil && lookupErr != sql.ErrNoRows {
-					return "new"
-				}
-			}
-			if lookupErr == sql.ErrNoRows {
-				// Tier 4: title + time only. Fires when the feed location name didn't
-				// match any DB location, or when tier 3 missed (location name mismatch
-				// between feed and stored event, e.g. after entity-decoding or rename).
-				found, lookupErr = scan(db.QueryRow(
-					"SELECT id, title, start_time, is_cancelled, COALESCE(source_last_modified,0) FROM events WHERE title=? AND ABS(start_time-?)<? ",
-					req.Title, startEpoch, threeHours,
-				))
-				if lookupErr != nil && lookupErr != sql.ErrNoRows {
-					return "new"
-				}
-			}
-		}
-	}
-
-	if lookupErr == sql.ErrNoRows {
+	found, tier, err := findExistingEvent(db, req.Title, req.URL, startTime, locID, req.UID, req.FetchSourceID)
+	// Tier 5 is a low-confidence review hint, not a real match — preview has
+	// no "flag for review" state, so it reports "new" same as no match.
+	if err != nil || tier == TierNone || tier == TierFuzzyReview {
 		return "new"
 	}
 
 	// Always check whether the feed's location geodata differs from the DB —
 	// location coordinates can change independently of the event record.
-	if previewLocationUpdated(found.id, req.Location) {
+	if previewLocationUpdated(found.ID, req.Location) {
 		return "updated"
 	}
 
 	// Match found — determine whether event data has changed.
 	if req.SourceLastModified > 0 {
-		if req.SourceLastModified > found.srcMod {
+		if req.SourceLastModified > found.SourceLastModified {
 			return "updated"
 		}
 		return "exists"
 	}
 
 	// No source timestamps — compare key event fields.
-	if startErr == nil {
-		if startEpoch != found.startTime {
-			return "updated"
-		}
-	}
-	if req.IsCancelled != found.isCancelled {
+	if startTime != nil && *startTime != found.StartTime {
 		return "updated"
 	}
-	if req.Title != found.title {
+	if req.IsCancelled != found.IsCancelled {
+		return "updated"
+	}
+	if req.Title != found.Title {
 		return "updated"
 	}
 	return "exists"

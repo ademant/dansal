@@ -558,8 +558,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pr.RegType == "join_org" && callerRole != RoleAdmin {
-		if !pr.OrgID.Valid || !isOrgMember(callerID, int(pr.OrgID.Int64)) {
-			writeError(w, "forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, pr.OrgID) {
 			return
 		}
 	}
@@ -715,8 +714,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if pr.RegType == "join_org" && callerRole != RoleAdmin {
-		if !pr.OrgID.Valid || !isOrgMember(callerID, int(pr.OrgID.Int64)) {
-			writeError(w, "forbidden", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, pr.OrgID) {
 			return
 		}
 	} else if callerRole != RoleAdmin {

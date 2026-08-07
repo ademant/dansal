@@ -78,9 +78,7 @@ func isOrgMemberOfEvent(userID, eventID int) bool {
 	if err != nil || orgID == 0 {
 		return false
 	}
-	var count int
-	db.QueryRow("SELECT COUNT(*) FROM organization_members WHERE organization_id=? AND user_id=?", orgID, userID).Scan(&count)
-	return count > 0
+	return isOrgMember(userID, orgID)
 }
 
 // validContactPostTypes is the set of allowed contact post type values.

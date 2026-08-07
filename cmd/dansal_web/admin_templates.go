@@ -181,9 +181,27 @@ func adminTemplateUnpinHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func adminTemplateDataHandler(db *sql.DB) http.HandlerFunc {
+// canAccessTemplate reports whether su may read/apply t: its owner, a member
+// of the org it's scoped to, or an admin. Mirrors the owner-or-org-member
+// rule listTemplates already uses to decide what a user sees in the picker;
+// enforced here too since ids are sequential and enumerable (#1001).
+func canAccessTemplate(t EventTemplate, su *SessionUser, orgIDs []int) bool {
+	if su.Role == "admin" || t.UserID == su.ID {
+		return true
+	}
+	if t.OrgID != nil {
+		for _, oid := range orgIDs {
+			if oid == *t.OrgID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func adminTemplateDataHandler(db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -194,6 +212,10 @@ func adminTemplateDataHandler(db *sql.DB) http.HandlerFunc {
 		}
 		t, err := getTemplate(db, id)
 		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if !canAccessTemplate(t, su, getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))) {
 			http.NotFound(w, r)
 			return
 		}
@@ -244,7 +266,7 @@ func adminTemplateAssignPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, c
 
 func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -269,6 +291,10 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 		}
 		tpl, err := getTemplate(db, templateID)
 		if err != nil {
+			http.Error(w, "template not found", http.StatusNotFound)
+			return
+		}
+		if !canAccessTemplate(tpl, su, getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))) {
 			http.Error(w, "template not found", http.StatusNotFound)
 			return
 		}

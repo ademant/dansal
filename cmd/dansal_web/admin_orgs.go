@@ -689,7 +689,7 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 // Mastodon (it deduplicates by Note ID).
 func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -697,6 +697,16 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 		if err != nil {
 			http.NotFound(w, r)
 			return
+		}
+		// Redelivery blasts the org's whole follower list — restrict it to
+		// admins and members of that org, matching adminOrgEditPageHandler's
+		// access rule (#1002).
+		if user.Role != "admin" {
+			token := getSessionToken(r)
+			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[id] {
+				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
+				return
+			}
 		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

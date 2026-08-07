@@ -20,11 +20,12 @@ type Config struct {
 	AdminSocket           string `yaml:"admin_socket"`
 	SiteName              string `yaml:"site_name"`
 	Instance              string `yaml:"instance"`
-	OrgID                 int    `yaml:"org_id"`      // optional: filter dashboard events to this org
+	OrgID                 int    `yaml:"org_id"`       // optional: filter dashboard events to this org
 	WebDBPath             string `yaml:"web_db_path"`  // path to web.db for site-config editing
 	ImagesDir             string `yaml:"images_dir"`   // path to images dir for logo/banner/favicon/relay assets
 	WebURL                string `yaml:"web_url"`      // internal URL of dansal-web (for relay redeliver)
 	BotStatsDBPath        string `yaml:"bot_stats_db"` // path to bot-stats.db; defaults to /var/lib/dansal/bot-stats.db
+	CertOnly              bool   `yaml:"cert_only"`    // when true, disable password login entirely — mTLS client cert required (#994)
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs       int    `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs      int    `yaml:"write_timeout_secs"`
@@ -95,5 +96,8 @@ func applyWebminEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("DANSAL_WEBMIN_DANSAL_URL"); v != "" {
 		cfg.DansalURL = strings.TrimRight(v, "/")
+	}
+	if v := os.Getenv("DANSAL_WEBMIN_CERT_ONLY"); v != "" {
+		cfg.CertOnly = v == "1" || strings.EqualFold(v, "true")
 	}
 }

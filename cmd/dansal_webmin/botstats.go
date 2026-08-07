@@ -105,16 +105,16 @@ type BotStatsPageData struct {
 	DBMissing     bool
 
 	// Fediverse
-	FediDays          []fediStatDay
-	FediTopInstances  []fediSourceInstance // aggregated over loaded fedi days
-	FediLive          *fediLiveSnapshot
-	FediChartJSON     string // inbox success/fail + actor fetches stacked bar
-	FediFollowChart   string // daily followers gained line/bar
-	FediHasData       bool
+	FediDays         []fediStatDay
+	FediTopInstances []fediSourceInstance // aggregated over loaded fedi days
+	FediLive         *fediLiveSnapshot
+	FediChartJSON    string // inbox success/fail + actor fetches stacked bar
+	FediFollowChart  string // daily followers gained line/bar
+	FediHasData      bool
 }
 
 func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&immutable=1&_busy_timeout=3000")
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&_busy_timeout=5000")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,7 +180,7 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 // loadFediStatsDB reads fediverse daily stats and per-instance request counts
 // from the bot-stats DB, returning up to the last 60 days.
 func loadFediStatsDB(dbPath string) ([]fediStatDay, []fediSourceInstance, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&immutable=1&_busy_timeout=3000")
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&_busy_timeout=5000")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -257,7 +257,7 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 	if webDBPath == "" {
 		return nil
 	}
-	db, err := sql.Open("sqlite3", "file:"+webDBPath+"?mode=ro&immutable=1&_busy_timeout=3000")
+	db, err := sql.Open("sqlite3", "file:"+webDBPath+"?mode=ro&_busy_timeout=5000")
 	if err != nil {
 		log.Printf("fedi live: open web.db: %v", err)
 		return nil
@@ -318,11 +318,11 @@ func buildFediChartJSON(days []fediStatDay) string {
 		Color string `json:"color"`
 	}
 	cats := []cat{
-		{"inbox_2xx",      "Inbox accepted", "#4caf50"},
-		{"inbox_4xx",      "Inbox rejected", "#ff9800"},
-		{"inbox_5xx",      "Inbox error",    "#e53935"},
-		{"actor_fetches",  "Actor fetches",  "#1e88e5"},
-		{"webfinger",      "WebFinger",      "#00acc1"},
+		{"inbox_2xx", "Inbox accepted", "#4caf50"},
+		{"inbox_4xx", "Inbox rejected", "#ff9800"},
+		{"inbox_5xx", "Inbox error", "#e53935"},
+		{"actor_fetches", "Actor fetches", "#1e88e5"},
+		{"webfinger", "WebFinger", "#00acc1"},
 	}
 	dates := make([]string, len(days))
 	series := map[string][]int{}
@@ -333,11 +333,11 @@ func buildFediChartJSON(days []fediStatDay) string {
 		if len(d.Date) >= 10 {
 			dates[i] = d.Date[5:]
 		}
-		series["inbox_2xx"][i]     = d.Inbox2xx
-		series["inbox_4xx"][i]     = d.Inbox4xx
-		series["inbox_5xx"][i]     = d.Inbox5xx
+		series["inbox_2xx"][i] = d.Inbox2xx
+		series["inbox_4xx"][i] = d.Inbox4xx
+		series["inbox_5xx"][i] = d.Inbox5xx
 		series["actor_fetches"][i] = d.ActorFetches
-		series["webfinger"][i]     = d.WebfingerRequests
+		series["webfinger"][i] = d.WebfingerRequests
 	}
 	b, _ := json.Marshal(map[string]any{
 		"dates":      dates,
@@ -355,7 +355,7 @@ func buildFediFollowChartJSON(days []fediStatDay) string {
 		Color string `json:"color"`
 	}
 	cats := []cat{
-		{"gained",   "New followers",    "#4caf50"},
+		{"gained", "New followers", "#4caf50"},
 		{"delivers", "Events delivered", "#1e88e5"},
 	}
 	dates := make([]string, len(days))
@@ -367,7 +367,7 @@ func buildFediFollowChartJSON(days []fediStatDay) string {
 		if len(d.Date) >= 10 {
 			dates[i] = d.Date[5:]
 		}
-		series["gained"][i]   = d.FollowersGained
+		series["gained"][i] = d.FollowersGained
 		series["delivers"][i] = d.EventsDeliveredCreates + d.EventsDeliveredUpdates
 	}
 	b, _ := json.Marshal(map[string]any{
@@ -464,7 +464,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 					data.FediTopInstances = fediInst
 					data.FediHasData = len(fediDays) > 0
 					if data.FediHasData {
-						data.FediChartJSON   = buildFediChartJSON(fediDays)
+						data.FediChartJSON = buildFediChartJSON(fediDays)
 						data.FediFollowChart = buildFediFollowChartJSON(fediDays)
 					}
 				}

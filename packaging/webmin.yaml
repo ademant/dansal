@@ -25,3 +25,9 @@ site_name: "Dansal Webmin"
 # Public subdomain for dansal-webmin (used by deploy-nginx-webmin).
 # Example: webmin.example.com
 # webmin_domain: "webmin.example.com"
+
+# When true, disables password login entirely — only a verified mTLS client
+# certificate (via nginx's X-Client-Verified/X-Client-DN headers) can sign
+# in. Recommended for the strongest admin-console posture. Can also be set
+# via the DANSAL_WEBMIN_CERT_ONLY env var.
+# cert_only: false

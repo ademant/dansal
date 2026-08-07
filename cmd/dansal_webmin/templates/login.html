@@ -4,6 +4,9 @@
   <div class="card">
     <div class="card-title">Sign in to {{.SiteName}}</div>
     {{with .Data}}
+    {{if .CertOnly}}
+    <div class="alert alert-danger">Certificate authentication required. Present a valid client certificate to sign in — password login is disabled for this instance.</div>
+    {{else}}
     {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
     <form method="POST" action="/login">
       <input type="hidden" name="next" value="{{.Next}}">
@@ -17,6 +20,7 @@
       </div>
       <button type="submit" class="btn" style="width:100%">Sign in</button>
     </form>
+    {{end}}
     {{end}}
   </div>
 </div>

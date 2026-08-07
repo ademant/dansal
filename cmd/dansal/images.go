@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	ics "github.com/arran4/golang-ical"
 	"github.com/gen2brain/avif"
@@ -59,60 +58,18 @@ func imagePathForID(dir, idStr string) (path, contentType string, found bool) {
 	return "", "", false
 }
 
-// imageCache is an in-memory set of event IDs that have an image on disk.
-// It avoids an os.Stat syscall per event row when building list responses.
-type imageCache struct {
-	mu  sync.RWMutex
-	ids map[int]struct{}
-}
-
-var imgCache = &imageCache{ids: make(map[int]struct{})}
+// imgCache is an in-memory set of event IDs that have an image on disk.
+// See imageIDCache (image_cache.go) for the shared implementation.
+var imgCache = newImageIDCache()
 
 // initImageCache populates the cache by scanning the images directory.
 // Called once at startup; the cache is kept up-to-date via add/remove.
 func initImageCache(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return // directory may not exist yet
-	}
-	imgCache.mu.Lock()
-	defer imgCache.mu.Unlock()
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		var base string
-		if strings.HasSuffix(name, ".avif") {
-			base = strings.TrimSuffix(name, ".avif")
-		} else if strings.HasSuffix(name, ".jpeg") {
-			base = strings.TrimSuffix(name, ".jpeg")
-		} else {
-			continue
-		}
-		if id, err := strconv.Atoi(base); err == nil {
-			imgCache.ids[id] = struct{}{}
-		}
-	}
+	imgCache.init(dir)
 }
 
 func hasImage(id int) bool {
-	imgCache.mu.RLock()
-	_, ok := imgCache.ids[id]
-	imgCache.mu.RUnlock()
-	return ok
-}
-
-func (c *imageCache) add(id int) {
-	c.mu.Lock()
-	c.ids[id] = struct{}{}
-	c.mu.Unlock()
-}
-
-func (c *imageCache) remove(id int) {
-	c.mu.Lock()
-	delete(c.ids, id)
-	c.mu.Unlock()
+	return imgCache.has(id)
 }
 
 var errNotImage = errors.New("data is not an image")
@@ -445,56 +402,32 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/images/{event_id}
-func uploadEventImage(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	eventID := r.PathValue("event_id")
-
-	var id int
-	var orgID sql.NullInt64
-	err := db.QueryRow("SELECT id, organization_id FROM events WHERE id = ?", eventID).Scan(&id, &orgID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-
-	if userRole != RoleAdmin {
-		if !requireExistingOrgMember(w, callerID, orgID) {
-			return
-		}
-	}
-
-	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		writeError(w, "Failed to parse multipart form", http.StatusBadRequest)
-		return
-	}
-
-	file, _, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, "Missing or unreadable 'image' field", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	if err := saveImageFromReader(id, file); err != nil {
-		if errors.Is(err, errNotImage) {
-			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-		} else {
+var uploadEventImage = imageUploadHandler(imageUploadSpec{
+	pathParam: "event_id",
+	idLabel:   "event ID",
+	roles:     []string{RoleAdmin, RoleUser, RolePublisher},
+	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
+		var orgID sql.NullInt64
+		err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
+		if err == sql.ErrNoRows {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return false
+		} else if err != nil {
 			writeInternalError(w, err)
+			return false
 		}
-		return
-	}
-
-	ext, _ := imageExtFromConfig()
-	outPath := filepath.Join(config.Server.ImagesDir, eventID+ext)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"path": outPath})
-}
+		if userRole != RoleAdmin {
+			return requireExistingOrgMember(w, callerID, orgID)
+		}
+		return true
+	},
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, config.Server.ImagesDir, r) },
+	cacheAdd: imgCache.add,
+	respond: func(w http.ResponseWriter, id int) {
+		ext, _ := imageExtFromConfig()
+		outPath := filepath.Join(config.Server.ImagesDir, fmt.Sprintf("%d%s", id, ext))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"path": outPath})
+	},
+})

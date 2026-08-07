@@ -1,56 +1,24 @@
 package main
 
 import (
-	"errors"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 )
 
 var musicianImagesDir string
 
-type musicianImageCache struct {
-	mu  sync.RWMutex
-	ids map[int]struct{}
-}
-
-var musicianImgCache = &musicianImageCache{ids: make(map[int]struct{})}
+var musicianImgCache = newImageIDCache()
 
 func initMusicianImageCache(dir string) {
 	musicianImagesDir = dir
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	musicianImgCache.mu.Lock()
-	defer musicianImgCache.mu.Unlock()
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		var base string
-		if strings.HasSuffix(name, ".avif") {
-			base = strings.TrimSuffix(name, ".avif")
-		} else if strings.HasSuffix(name, ".jpeg") {
-			base = strings.TrimSuffix(name, ".jpeg")
-		} else {
-			continue
-		}
-		if id, err := strconv.Atoi(base); err == nil {
-			musicianImgCache.ids[id] = struct{}{}
-		}
-	}
+	musicianImgCache.init(dir)
 }
 
 func hasMusicianImage(id int) bool {
-	musicianImgCache.mu.RLock()
-	_, ok := musicianImgCache.ids[id]
-	musicianImgCache.mu.RUnlock()
-	return ok
+	return musicianImgCache.has(id)
 }
 
 func musicianImageURL(id int) string {
@@ -58,18 +26,6 @@ func musicianImageURL(id int) string {
 		return "/api/v1/musician-images/" + strconv.Itoa(id)
 	}
 	return ""
-}
-
-func (c *musicianImageCache) add(id int) {
-	c.mu.Lock()
-	c.ids[id] = struct{}{}
-	c.mu.Unlock()
-}
-
-func (c *musicianImageCache) remove(id int) {
-	c.mu.Lock()
-	delete(c.ids, id)
-	c.mu.Unlock()
 }
 
 // GET /api/v1/musician-images/{id}
@@ -92,48 +48,25 @@ func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/musician-images/{id}
-func uploadMusicianImage(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	// AVIF re-encode (WASM-based) can take well over the server's default
-	// 30s WriteTimeout for a detailed photo — extend the deadline for this
-	// request rather than raising it server-wide.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
-	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		writeError(w, "Invalid musician ID", http.StatusBadRequest)
-		return
-	}
-	var exists int
-	if err := db.QueryRow("SELECT id FROM musicians WHERE id=?", id).Scan(&exists); err != nil {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	}
-	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		writeError(w, "Failed to parse form", http.StatusBadRequest)
-		return
-	}
-	file, _, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, "Missing image field", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-	if err := saveImageToDir(id, musicianImagesDir, file); err != nil {
-		if errors.Is(err, errNotImage) {
-			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-		} else {
-			writeInternalError(w, err)
+// Note: previously read role from the X-User-Role header directly instead
+// of callerFromRequest like its siblings (#1009) — now uniform. callerID is
+// unused here since musician images have no org-membership check.
+var uploadMusicianImage = imageUploadHandler(imageUploadSpec{
+	pathParam:     "id",
+	idLabel:       "musician ID",
+	roles:         []string{RoleAdmin, RoleUser},
+	writeDeadline: 170 * time.Second,
+	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
+		var exists int
+		if err := db.QueryRow("SELECT id FROM musicians WHERE id=?", id).Scan(&exists); err != nil {
+			writeError(w, "Musician not found", http.StatusNotFound)
+			return false
 		}
-		return
-	}
-	musicianImgCache.add(id)
-	w.WriteHeader(http.StatusNoContent)
-}
+		return true
+	},
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, musicianImagesDir, r) },
+	cacheAdd: musicianImgCache.add,
+})
 
 // DELETE /api/v1/musician-images/{id}
 func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {

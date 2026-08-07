@@ -1,13 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -23,21 +22,9 @@ type avatarSet struct {
 
 func newAvatarSet(dir, urlBase string) *avatarSet {
 	s := &avatarSet{ids: make(map[int]struct{}), dir: dir, urlBase: urlBase}
-	entries, _ := os.ReadDir(dir)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if !strings.HasSuffix(name, ".jpg") {
-			continue
-		}
-		if id, err := strconv.Atoi(strings.TrimSuffix(name, ".jpg")); err == nil {
-			s.ids[id] = struct{}{}
-		}
-	}
+	scanIDFiles(dir, ".jpg", func(id int) { s.ids[id] = struct{}{} })
 	return s
 }
 
@@ -87,55 +74,31 @@ func initAvatarCaches(imagesDir string) {
 	instructorAvatars = newAvatarSet(imagesDir+"/instructor-avatars", "/api/v1/instructor-avatars/")
 }
 
+// avatarUploadHandler builds the upload endpoint for one avatar set (org,
+// musician, or instructor) on top of the shared imageUploadHandler skeleton
+// (#1009) — only the entity-specific access/existence check and save target
+// differ between them.
 func avatarUploadHandler(s *avatarSet, entityTable, entityLabel string, checkAccess func(callerID int, entityID int) bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		callerID, userRole := callerFromRequest(r)
-		if userRole != RoleAdmin && userRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(60 * time.Second))
-		idStr := r.PathValue("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			writeError(w, fmt.Sprintf("Invalid %s ID", entityLabel), http.StatusBadRequest)
-			return
-		}
-		if userRole != RoleAdmin && !checkAccess(callerID, id) {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		var exists int
-		if err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s WHERE id=?", entityTable), id).Scan(&exists); err != nil {
-			writeError(w, fmt.Sprintf("%s not found", entityLabel), http.StatusNotFound)
-			return
-		}
-		if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-			var maxErr *http.MaxBytesError
-			if errors.As(err, &maxErr) {
-				writeError(w, fmt.Sprintf("image too large (max %d MB)", config.Server.MaxBodyBytes>>20), http.StatusRequestEntityTooLarge)
-			} else {
-				writeError(w, "Failed to parse form", http.StatusBadRequest)
+	return imageUploadHandler(imageUploadSpec{
+		pathParam:     "id",
+		idLabel:       entityLabel + " ID",
+		roles:         []string{RoleAdmin, RoleUser},
+		writeDeadline: 60 * time.Second,
+		checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
+			if userRole != RoleAdmin && !checkAccess(callerID, id) {
+				writeError(w, "Forbidden", http.StatusForbidden)
+				return false
 			}
-			return
-		}
-		file, _, err := r.FormFile("image")
-		if err != nil {
-			writeError(w, "Missing image field", http.StatusBadRequest)
-			return
-		}
-		defer file.Close()
-		if err := saveAvatarToDir(id, s.dir, file); err != nil {
-			if errors.Is(err, errNotImage) {
-				writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-			} else {
-				writeInternalError(w, err)
+			var exists int
+			if err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s WHERE id=?", entityTable), id).Scan(&exists); err != nil {
+				writeError(w, fmt.Sprintf("%s not found", entityLabel), http.StatusNotFound)
+				return false
 			}
-			return
-		}
-		s.add(id)
-		w.WriteHeader(http.StatusNoContent)
-	}
+			return true
+		},
+		save:     func(id int, r io.Reader) error { return saveAvatarToDir(id, s.dir, r) },
+		cacheAdd: s.add,
+	})
 }
 
 func avatarDeleteHandler(s *avatarSet, entityLabel string, checkAccess func(callerID int, entityID int) bool) http.HandlerFunc {

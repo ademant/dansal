@@ -2,13 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 )
 
@@ -16,57 +13,15 @@ import (
 // location (building), showing where its rooms are. Mirrors org_images.go.
 var locationImagesDir string
 
-type locationImageCache struct {
-	mu  sync.RWMutex
-	ids map[int]struct{}
-}
-
-var locationImgCache = &locationImageCache{ids: make(map[int]struct{})}
+var locationImgCache = newImageIDCache()
 
 func initLocationImageCache(dir string) {
 	locationImagesDir = dir
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	locationImgCache.mu.Lock()
-	defer locationImgCache.mu.Unlock()
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		var base string
-		if strings.HasSuffix(name, ".avif") {
-			base = strings.TrimSuffix(name, ".avif")
-		} else if strings.HasSuffix(name, ".jpeg") {
-			base = strings.TrimSuffix(name, ".jpeg")
-		} else {
-			continue
-		}
-		if id, err := strconv.Atoi(base); err == nil {
-			locationImgCache.ids[id] = struct{}{}
-		}
-	}
+	locationImgCache.init(dir)
 }
 
 func hasLocationImage(id int) bool {
-	locationImgCache.mu.RLock()
-	_, ok := locationImgCache.ids[id]
-	locationImgCache.mu.RUnlock()
-	return ok
-}
-
-func (c *locationImageCache) add(id int) {
-	c.mu.Lock()
-	c.ids[id] = struct{}{}
-	c.mu.Unlock()
-}
-
-func (c *locationImageCache) remove(id int) {
-	c.mu.Lock()
-	delete(c.ids, id)
-	c.mu.Unlock()
+	return locationImgCache.has(id)
 }
 
 // GET /api/v1/location-images/{id}
@@ -89,56 +44,32 @@ func getLocationImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/locations/{id}/site-plan
-func uploadLocationSitePlan(w http.ResponseWriter, r *http.Request) {
-	callerID, requesterRole := callerFromRequest(r)
-	idStr := r.PathValue("id")
-	if !checkLocationWriteAccess(w, callerID, requesterRole, idStr) {
-		return
-	}
-	// AVIF re-encode (WASM-based) can take well over the server's default
-	// 30s WriteTimeout for a detailed site-plan photo — extend the deadline
-	// for this request rather than raising it server-wide.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		writeError(w, "Invalid location ID", http.StatusBadRequest)
-		return
-	}
-	var parentID sql.NullInt64
-	if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", id).Scan(&parentID); err != nil {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if parentID.Valid {
-		writeError(w, "a site plan can only be set on a top-level location, not a room", http.StatusBadRequest)
-		return
-	}
-	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			writeError(w, fmt.Sprintf("image too large (max %d MB)", config.Server.MaxBodyBytes>>20), http.StatusRequestEntityTooLarge)
-		} else {
-			writeError(w, "Failed to parse form", http.StatusBadRequest)
+// roles is left empty: checkLocationWriteAccess does its own role gate
+// (admin unrestricted, user/publisher must be an org member of the
+// location) which doesn't map onto the generic allow-list gate.
+var uploadLocationSitePlan = imageUploadHandler(imageUploadSpec{
+	pathParam:     "id",
+	idLabel:       "location ID",
+	writeDeadline: 170 * time.Second,
+	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
+		idStr := strconv.Itoa(id)
+		if !checkLocationWriteAccess(w, callerID, userRole, idStr) {
+			return false
 		}
-		return
-	}
-	file, _, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, "Missing image field", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-	if err := saveImageToDir(id, locationImagesDir, file); err != nil {
-		if errors.Is(err, errNotImage) {
-			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-		} else {
-			writeInternalError(w, err)
+		var parentID sql.NullInt64
+		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", id).Scan(&parentID); err != nil {
+			writeError(w, "Location not found", http.StatusNotFound)
+			return false
 		}
-		return
-	}
-	locationImgCache.add(id)
-	w.WriteHeader(http.StatusNoContent)
-}
+		if parentID.Valid {
+			writeError(w, "a site plan can only be set on a top-level location, not a room", http.StatusBadRequest)
+			return false
+		}
+		return true
+	},
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, locationImagesDir, r) },
+	cacheAdd: locationImgCache.add,
+})
 
 // DELETE /api/v1/locations/{id}/site-plan
 func deleteLocationSitePlan(w http.ResponseWriter, r *http.Request) {

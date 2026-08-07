@@ -18,6 +18,10 @@ Discussion and issue creation (steps 1–2) do not have to be immediately follow
 
 Skip the discussion step only for obvious typos or single-line fixes, which may be implemented directly without an issue. Always create the issue before writing code for anything else.
 
+**Batches of related issues**: when the user asks to analyse a range of issues and group them into an implementation order, encode that as GitHub labels (`phase-31`, `phase-32`, …) in dependency order rather than a scratch file — labels stay attached to the issues and survive across sessions. "Implement phase-N" then means: implement every issue with that label, one commit closing all of them together (multiple `Closes #NNN` lines), then `make build` + `sudo make deploy INSTANCE=dev`. Don't jump ahead to a later phase's issues even if related — phases are ordered because later ones assume earlier refactors landed.
+
+**gofmt and doc comments**: `gofmt -w` converts straight quotes to curly quotes inside doc comments (comments immediately preceding a top-level declaration) — this is canonical Go 1.19+ formatting, not a mistake to undo. Run `gofmt -l <touched files>` after any refactor and `gofmt -w` to fix, same as `go vet`/`go test`.
+
 ## Go version
 
 This project requires **Go 1.26+** (`go.mod` currently declares `go 1.26.3`). Before running `make build`, verify:
@@ -122,15 +126,28 @@ For table population (e.g. seed data), use a COUNT-based check:
 
 ## Event deduplication (5 tiers)
 
-`previewDuplicateStatus()` in `cmd/dansal/preview.go` and `insertEvent()` in `cmd/dansal/events.go` both use the same hierarchy:
+`previewDuplicateStatus()` in `cmd/dansal/preview.go` and `insertEvent()` in `cmd/dansal/events.go` both delegate to a single shared finder, `findExistingEvent(q querier, title, url string, startTime *int64, locationID int64, uid string, fetchSourceID int) (ExistingEvent, DuplicateTier, error)` in `cmd/dansal/dedup.go`. Before this existed, the two callers hand-copied the SQL and had already drifted — don't reintroduce a second copy of the tier logic in either caller; add new tiers to `findExistingEvent` only. `startTime` is a pointer because `previewDuplicateStatus` may have an unparseable date string (nil skips all tiers but UID); `insertEvent` always passes a non-nil pointer. `dedup_test.go` asserts both callers agree tier-by-tier — extend it when adding a tier.
+
+The hierarchy (`DuplicateTier` enum: `TierNone`, `TierUID`, `TierURL`, `TierLocation`, `TierTitle`, `TierFuzzyReview`):
 
 1. **UID** — exact match on feed UID
 2. **URL** — exact match on event URL
 3. **location_id + start_time ±3h** — when `locationID > 0`, no title check. Titles get rewritten over an event's lifetime (placeholder → confirmed lineup → cancellation notice → backup act), so once UID/URL have both missed, same venue + same slot is already a strong enough signal to auto-merge on its own.
 4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location). Title is still required here since, without a location signal, time-only matching would be far too promiscuous.
-5. **(insertEvent only) fetch_source_id + start_time ±3h + fuzzy title overlap** — when tiers 1–4 all miss (e.g. the venue *also* changed and the feed regenerated the UID). Too low-confidence to auto-merge, so instead of guessing it inserts as new and flags both rows via `needs_duplicate_review`/`duplicate_of_id`, notifying admins to resolve via the existing `/admin/events` bulk-merge UI.
+5. **(insertEvent only) fetch_source_id + start_time ±3h + fuzzy title overlap** — when tiers 1–4 all miss (e.g. the venue *also* changed and the feed regenerated the UID). Too low-confidence to auto-merge, so instead of guessing it inserts as new and flags both rows via `needs_duplicate_review`/`duplicate_of_id`, notifying admins to resolve via the existing `/admin/events` bulk-merge UI. `previewDuplicateStatus` treats this tier as a hint only, not a match — it still reports "new".
 
 Tier 4 fires as a fallback when tiers 1–3 all miss. This catches: (a) feeds using city-level location names vs. DB venue names, (b) location name mismatches caused by HTML-entity decoding or venue renames that make `ensureLocation` create a new location row (giving a new `locationID` that tier 3 can't match against the event's old `location_id`).
+
+`insertEvent(q querier, in EventInput) (id int, shortCode, outcome string, err error)` takes an `EventInput` struct (not positional params — it grew past 28 of those). Both call sites (`createEventFromRequest`, the clone-event handler) build a named `EventInput{...}` literal; do the same for any new call site rather than adding another positional wrapper.
+
+## Event org access-control helpers
+
+`cmd/dansal/events.go` has two shared helpers used everywhere an event/timetable/image/registration handler needs to check the caller belongs to the relevant organization — don't reintroduce a hand-rolled `!orgID.Valid || !isOrgMember(...)` check:
+
+- `requireExistingOrgMember(w, callerID int, existingOrgID sql.NullInt64) bool` — single check, writes 403 and returns false on failure. Used in `deleteEvent`, `cancelEvent`, approve-for-publish, `images.go`, `register.go`, `suggest_manage.go`.
+- `requireEventOrg(w, role string, callerID int, existingOrgID sql.NullInt64, targetOrgID *int, requireTarget bool) bool` — covers the PUT vs PATCH asymmetry: admin is unrestricted; publisher/user must belong to the event's *existing* org, and (only when `requireTarget` is true) must also belong to the *target* org being moved to. `updateEvent` (PUT) passes `requireTarget = userRole != RolePublisher`; `patchEvent` always passes `true` since it resolves the target org from the existing one when the request omits `organization_id`. `timetableAuthCheck` calls it with `targetOrgID = nil, requireTarget = false` (no target org concept for timetable edits).
+
+`isOrgMember(userID, orgID int) bool` is the single-org-column membership check these build on. It's distinct from `locationHasOrgMember` (`locations.go`), which checks the many-to-many `location_organizations` join table — don't try to merge the two, they answer different questions.
 
 ## Location aliases
 

@@ -1,18 +1,21 @@
 package main
 
 import (
-	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
 
 var orgImagesDir string
 
+// orgImageCache tracks a mimeType per id rather than just presence (an org
+// image can be AVIF or JPEG depending on when it was uploaded relative to a
+// server config change), so it layers its own value type on the shared
+// scanImageIDs scan (image_cache.go) instead of embedding imageIDCache
+// directly (#1010).
 type orgImageCache struct {
 	mu       sync.RWMutex
 	mimeType map[int]string // image/avif or image/jpeg
@@ -22,31 +25,15 @@ var orgImgCache = &orgImageCache{mimeType: make(map[int]string)}
 
 func initOrgImageCache(dir string) {
 	orgImagesDir = dir
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
 	orgImgCache.mu.Lock()
 	defer orgImgCache.mu.Unlock()
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		var base, mime string
-		if strings.HasSuffix(name, ".avif") {
-			base = strings.TrimSuffix(name, ".avif")
-			mime = "image/avif"
-		} else if strings.HasSuffix(name, ".jpeg") {
-			base = strings.TrimSuffix(name, ".jpeg")
+	scanImageIDs(dir, func(id int, ext string) {
+		mime := "image/avif"
+		if ext == ".jpeg" {
 			mime = "image/jpeg"
-		} else {
-			continue
 		}
-		if id, err := strconv.Atoi(base); err == nil {
-			orgImgCache.mimeType[id] = mime
-		}
-	}
+		orgImgCache.mimeType[id] = mime
+	})
 }
 
 func hasOrgImage(id int) bool {
@@ -102,60 +89,29 @@ func getOrgImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/org-images/{id}
-func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	// AVIF re-encode (WASM-based) can take well over the server's default
-	// 30s WriteTimeout for a detailed photo — extend the deadline for this
-	// request rather than raising it server-wide.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
-	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		writeError(w, "Invalid organization ID", http.StatusBadRequest)
-		return
-	}
-	if userRole != RoleAdmin {
-		if !isOrgMember(callerID, id) {
+var uploadOrgImage = imageUploadHandler(imageUploadSpec{
+	pathParam:     "id",
+	idLabel:       "organization ID",
+	roles:         []string{RoleAdmin, RoleUser},
+	writeDeadline: 170 * time.Second,
+	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
+		if userRole != RoleAdmin && !isOrgMember(callerID, id) {
 			writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
-			return
+			return false
 		}
-	}
-	var exists int
-	if err := db.QueryRow("SELECT id FROM organizations WHERE id=?", id).Scan(&exists); err != nil {
-		writeError(w, "Organization not found", http.StatusNotFound)
-		return
-	}
-	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			writeError(w, fmt.Sprintf("image too large (max %d MB)", config.Server.MaxBodyBytes>>20), http.StatusRequestEntityTooLarge)
-		} else {
-			writeError(w, "Failed to parse form", http.StatusBadRequest)
+		var exists int
+		if err := db.QueryRow("SELECT id FROM organizations WHERE id=?", id).Scan(&exists); err != nil {
+			writeError(w, "Organization not found", http.StatusNotFound)
+			return false
 		}
-		return
-	}
-	file, _, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, "Missing image field", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-	if err := saveImageToDir(id, orgImagesDir, file); err != nil {
-		if errors.Is(err, errNotImage) {
-			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-		} else {
-			writeInternalError(w, err)
-		}
-		return
-	}
-	_, mime := imageExtFromConfig()
-	orgImgCache.add(id, mime)
-	w.WriteHeader(http.StatusNoContent)
-}
+		return true
+	},
+	save: func(id int, r io.Reader) error { return saveImageToDir(id, orgImagesDir, r) },
+	cacheAdd: func(id int) {
+		_, mime := imageExtFromConfig()
+		orgImgCache.add(id, mime)
+	},
+})
 
 // DELETE /api/v1/org-images/{id}
 func deleteOrgImage(w http.ResponseWriter, r *http.Request) {

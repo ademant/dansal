@@ -32,8 +32,7 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePublisherRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.OrgID == nil {

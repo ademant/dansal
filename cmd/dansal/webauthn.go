@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -193,20 +192,8 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.PathValue("token")
 
-	invite, err := loadValidInvite(token)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
-		return
-	case err == errInviteUsed:
-		writeError(w, "Invite link already used", http.StatusGone)
-		return
-	case err == errInviteExpired:
-		writeError(w, "Invite link expired", http.StatusGone)
-		return
-	default:
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	invite, ok := loadValidInviteOrError(w, token)
+	if !ok {
 		return
 	}
 
@@ -214,8 +201,7 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		Email       string `json:"email"`
 		DisplayName string `json:"display_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if invite.PresetEmail != "" {
@@ -276,7 +262,7 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		InviteID:    invite.ID,
 		UserID:      int(userID),
 	})
-	sessionID, err := generateSessionToken()
+	sessionID, err := generateToken(32)
 	if err != nil {
 		db.Exec("DELETE FROM users WHERE id=?", userID)
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
@@ -333,20 +319,8 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := loadValidInvite(token)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		writeError(w, "Invalid invite link", http.StatusNotFound)
-		return
-	case err == errInviteUsed:
-		writeError(w, "Invite link already used", http.StatusGone)
-		return
-	case err == errInviteExpired:
-		writeError(w, "Invite link expired", http.StatusGone)
-		return
-	default:
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	invite, ok := loadValidInviteOrError(w, token)
+	if !ok {
 		return
 	}
 
@@ -449,45 +423,31 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 		}
 		// userID stays 0 as sentinel for the discoverable path in finish.
 	} else {
-		var userEmail string
-		var userDisabled int
-		if err := db.QueryRow(
-			"SELECT id, COALESCE(email,''), COALESCE(disabled,0) FROM users WHERE email=?", req.Email,
-		).Scan(&userID, &userEmail, &userDisabled); err != nil {
-			// Fall back to display_name for users registered without an email address.
-			rows, err2 := db.Query(
-				"SELECT id, COALESCE(email,''), COALESCE(disabled,0) FROM users WHERE display_name=? COLLATE NOCASE LIMIT 2",
-				req.Email,
-			)
-			if err2 != nil {
-				writeError(w, "No passkeys found for this user", http.StatusNotFound)
-				return
-			}
-			defer rows.Close()
-			var matched int
-			for rows.Next() {
-				matched++
-				rows.Scan(&userID, &userEmail, &userDisabled)
-			}
-			if matched == 0 {
-				writeError(w, "No passkeys found for this user", http.StatusNotFound)
-				return
-			}
-			if matched > 1 {
-				writeError(w, "Multiple accounts share that username; please use your email address", http.StatusConflict)
-				return
-			}
+		// Same identifier-resolution algorithm as password login (#1013):
+		// exact email match, falling back to a case-insensitive display_name
+		// match only when exactly one account has it.
+		authUser, err := resolveLoginUser(req.Email, false)
+		switch {
+		case err == sql.ErrNoRows:
+			writeError(w, "No passkeys found for this user", http.StatusNotFound)
+			return
+		case err == errAmbiguousIdentifier:
+			writeError(w, "Multiple accounts share that username; please use your email address", http.StatusConflict)
+			return
+		case err != nil:
+			writeError(w, "No passkeys found for this user", http.StatusNotFound)
+			return
 		}
-		if userDisabled != 0 {
+		if authUser.Disabled != 0 {
 			writeError(w, "This account has been disabled. Please contact the administrator.", http.StatusForbidden)
 			return
 		}
-		user := loadWebAuthnUser(userID, userEmail)
+		userID = authUser.ID
+		user := loadWebAuthnUser(userID, authUser.Email)
 		if len(user.credentials) == 0 {
 			writeError(w, "No passkeys registered for this user", http.StatusBadRequest)
 			return
 		}
-		var err error
 		options, sessionData, err = wauthn.BeginLogin(user, uvOpt)
 		if err != nil {
 			writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
@@ -496,7 +456,7 @@ func webauthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blob, _ := json.Marshal(waLoginSession{Session: *sessionData, UserID: userID})
-	sessionID, err := generateSessionToken()
+	sessionID, err := generateToken(32)
 	if err != nil {
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
 		return
@@ -565,8 +525,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 			"UPDATE webauthn_credentials SET sign_count=?, flags=? WHERE user_id=? AND credential_id=?",
 			credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), discUserID, credential.ID,
 		)
-		var discTOTPSecret string
-		db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", discUserID).Scan(&discTOTPSecret)
+		discTOTPSecret := getUserTOTPSecret(discUserID)
 		if discTOTPSecret != "" {
 			issueWATOTPPending(w, discUserID, discEmail, discRole)
 			return
@@ -626,8 +585,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		credential.Authenticator.SignCount, byte(credential.Flags.ProtocolValue()), stored.UserID, credential.ID,
 	)
 
-	var totpSecret string
-	db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", stored.UserID).Scan(&totpSecret)
+	totpSecret := getUserTOTPSecret(stored.UserID)
 	if totpSecret != "" {
 		issueWATOTPPending(w, stored.UserID, userEmail, role)
 		return
@@ -645,8 +603,7 @@ func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		PendingToken string `json:"pending_token"`
 		TotpCode     string `json:"totp_code"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	v, ok := webauthnPendingTOTP.LoadAndDelete(req.PendingToken)
@@ -659,8 +616,8 @@ func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "pending token expired", http.StatusUnauthorized)
 		return
 	}
-	var totpSecret string
-	if err := db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", pending.UserID).Scan(&totpSecret); err != nil || totpSecret == "" {
+	totpSecret := getUserTOTPSecret(pending.UserID)
+	if totpSecret == "" {
 		writeError(w, "TOTP not configured", http.StatusBadRequest)
 		return
 	}
@@ -711,8 +668,8 @@ func webauthnUserRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := callerFromRequest(r)
-	var userEmail string
-	if err := db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+	userEmail, err := getUserEmail(callerID)
+	if err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
@@ -725,7 +682,7 @@ func webauthnUserRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	blob, _ := json.Marshal(waLoginSession{Session: *sessionData, UserID: callerID})
-	sessionID, err := generateSessionToken()
+	sessionID, err := generateToken(32)
 	if err != nil {
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
 		return
@@ -760,8 +717,8 @@ func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Session mismatch", http.StatusBadRequest)
 		return
 	}
-	var userEmail string
-	if err := db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", callerID).Scan(&userEmail); err != nil {
+	userEmail, err := getUserEmail(callerID)
+	if err != nil {
 		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
@@ -787,7 +744,7 @@ func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/user/webauthn/credentials/{id}
 func webauthnUserCredentialDelete(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := callerFromRequest(r)
-	credID, err := strconv.Atoi(r.PathValue("id"))
+	credID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -910,7 +867,7 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 		UserID:    int(userID),
 		PendingID: pr.ID,
 	})
-	sessionID, err := generateSessionToken()
+	sessionID, err := generateToken(32)
 	if err != nil {
 		db.Exec("DELETE FROM users WHERE id=?", userID)
 		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)

@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"net/http"
-	"strconv"
 )
 
 // addEventExtraLocation handles PUT /api/v1/events/{id}/locations/{location_id}.
@@ -15,12 +14,12 @@ func addEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	locationID, err := strconv.Atoi(r.PathValue("location_id"))
+	locationID, err := intPathValue(r, "location_id")
 	if err != nil {
 		writeError(w, "invalid location_id", http.StatusBadRequest)
 		return
@@ -57,12 +56,12 @@ func removeEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	locationID, err := strconv.Atoi(r.PathValue("location_id"))
+	locationID, err := intPathValue(r, "location_id")
 	if err != nil {
 		writeError(w, "invalid location_id", http.StatusBadRequest)
 		return
@@ -89,12 +88,12 @@ func setEventExtraLocationPrimary(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	locationID, err := strconv.Atoi(r.PathValue("location_id"))
+	locationID, err := intPathValue(r, "location_id")
 	if err != nil {
 		writeError(w, "invalid location_id", http.StatusBadRequest)
 		return

@@ -137,7 +137,7 @@ type ContactPostMergePatchRequest struct {
 // Public. Returns only email-verified posts; email field is never returned.
 func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -176,7 +176,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 // Anonymous users: post is unverified; a confirmation email with the manage link is sent.
 func createContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -190,8 +190,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ContactPostCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -480,7 +479,7 @@ func checkContactPostManageToken(w http.ResponseWriter, postID int, token string
 // auth()/Bearer — see #726.
 func putContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	postID, err := strconv.Atoi(r.PathValue("id"))
+	postID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
@@ -490,8 +489,7 @@ func putContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ContactPostWriteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	req.Type = strings.TrimSpace(req.Type)
@@ -534,7 +532,7 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
 		return
 	}
-	postID, err := strconv.Atoi(r.PathValue("id"))
+	postID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
@@ -553,8 +551,7 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ContactPostMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Type != nil {
@@ -629,7 +626,7 @@ func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	postID, err := strconv.Atoi(r.PathValue("id"))
+	postID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
@@ -662,7 +659,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 // Anonymous users: creates a pending contact_request and sends a verification email/Telegram link.
 func contactPoster(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	postID, err := strconv.Atoi(r.PathValue("id"))
+	postID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
@@ -673,8 +670,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		Telegram string `json:"telegram"`
 		Message  string `json:"message"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	req.Email = strings.TrimSpace(req.Email)

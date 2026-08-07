@@ -94,3 +94,21 @@ func generateToken(n int) (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+
+// getUserTOTPSecret returns the user's active TOTP secret, or "" if unset —
+// dedupes the "SELECT COALESCE(totp_secret,”) FROM users WHERE id=?" query
+// repeated across auth.go/webauthn.go (#1013).
+func getUserTOTPSecret(userID int) string {
+	var secret string
+	db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", userID).Scan(&secret)
+	return secret
+}
+
+// getUserEmail returns the user's email address, or "" if unset — dedupes
+// the "SELECT COALESCE(email,”) FROM users WHERE id=?" query repeated
+// across totp.go/webauthn.go (#1013).
+func getUserEmail(userID int) (string, error) {
+	var email string
+	err := db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", userID).Scan(&email)
+	return email, err
+}

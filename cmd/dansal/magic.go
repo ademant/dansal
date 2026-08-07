@@ -35,7 +35,7 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	targetID, err := strconv.Atoi(r.PathValue("id"))
+	targetID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -103,8 +103,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		Channel string `json:"channel"` // "email" (default) or "telegram"
 		BaseURL string `json:"base_url"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Email == "" {

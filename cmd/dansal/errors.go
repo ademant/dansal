@@ -58,6 +58,40 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// decodeJSONBody decodes r.Body's JSON into dst, writing a uniform error
+// response and returning false on failure — a 413 (via readBodyOrError's
+// wording) when the body exceeds config.Server.MaxBodyBytes, a plain 400
+// otherwise. Callers should `return` immediately when this returns false.
+// Consolidates the ~67 hand-rolled json.NewDecoder(r.Body).Decode sites that
+// previously wrote ad-hoc "invalid request body" errors and, unlike this
+// helper, didn't map *http.MaxBytesError to 413 (#1011).
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		if errors.As(err, new(*http.MaxBytesError)) {
+			writeError(w, fmt.Sprintf(
+				"request body exceeds the %d MB limit — reduce the payload size (e.g. split a bulk-create array into multiple smaller requests)",
+				config.Server.MaxBodyBytes>>20,
+			), http.StatusRequestEntityTooLarge)
+			return false
+		}
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// intPathValue parses the named path value as an integer via strconv.Atoi.
+// Moved here from register.go and reimplemented on Atoi instead of
+// fmt.Sscan, which silently accepted "+5"/leading-whitespace/partial
+// parses (#1013).
+func intPathValue(r *http.Request, key string) (int, error) {
+	v := r.PathValue(key)
+	if v == "" {
+		return 0, fmt.Errorf("missing path value %s", key)
+	}
+	return strconv.Atoi(v)
+}
+
 // newErrorID returns a short random hex string suitable for use as an error ID.
 func newErrorID() string {
 	b := make([]byte, 4)

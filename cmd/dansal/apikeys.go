@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -203,7 +202,7 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	callerID, callerRole := callerFromRequest(r)
 
-	keyID, err := strconv.Atoi(r.PathValue("id"))
+	keyID, err := intPathValue(r, "id")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid API key ID"})

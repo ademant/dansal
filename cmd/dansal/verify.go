@@ -45,7 +45,7 @@ func generateVerificationToken() (string, error) {
 func sendVerification(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	targetID, err := strconv.Atoi(r.PathValue("id"))
+	targetID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return

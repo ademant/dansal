@@ -65,7 +65,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 func deleteSession(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	sessionID, err := strconv.Atoi(r.PathValue("id"))
+	sessionID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid session ID", http.StatusBadRequest)
 		return

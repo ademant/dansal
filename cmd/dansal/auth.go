@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,10 +33,6 @@ type LoginResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
 	User      User   `json:"user"`
-}
-
-type TokenError struct {
-	Error string `json:"error"`
 }
 
 // recordFailedLogin increments the per-user failure counter and disables the
@@ -80,17 +74,89 @@ func recordFailedLogin(userID int, email, clientIP string, storedCount int, fail
 	}
 }
 
-func generateSessionToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+// authUserRow holds the DB columns needed to resolve and authenticate a
+// login identifier — a superset of the public User type (adds
+// PasswordHash/FailedLogin* bookkeeping that never belongs in an API
+// response).
+type authUserRow struct {
+	ID               int
+	Email            string
+	DisplayName      string
+	Role             string
+	CreatedAt        string
+	PasswordHash     string
+	Disabled         int
+	FailedLoginCount int
+	FailedLoginSince string
+}
+
+// errAmbiguousIdentifier is returned by resolveLoginUser when a
+// display_name fallback match is ambiguous (shared by 2+ accounts).
+var errAmbiguousIdentifier = errors.New("multiple accounts share that identifier")
+
+const authUserCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, COALESCE(password_hash,''), COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'')"
+
+func scanAuthUserRow(row interface{ Scan(...any) error }, u *authUserRow) error {
+	return row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.CreatedAt, &u.PasswordHash, &u.Disabled, &u.FailedLoginCount, &u.FailedLoginSince)
+}
+
+// resolveLoginUser resolves a login identifier to a user row: first by exact
+// email match, then falling back to a case-insensitive display_name match
+// when exactly one account has it (rejecting the login as ambiguous
+// otherwise). This is the shared implementation of the same
+// security-sensitive resolution algorithm previously duplicated between
+// password login (here) and WebAuthn login (webauthn.go), which had already
+// drifted (#1013).
+//
+// requirePassword restricts the display_name fallback to accounts that have
+// a password set — password login only wants candidates it could
+// conceivably authenticate; WebAuthn login doesn't care and passes false.
+//
+// Returns sql.ErrNoRows if no account matches, errAmbiguousIdentifier if the
+// display_name fallback matched more than one account, or another error on
+// a DB failure.
+func resolveLoginUser(identifier string, requirePassword bool) (authUserRow, error) {
+	var u authUserRow
+	err := scanAuthUserRow(db.QueryRow("SELECT "+authUserCols+" FROM users WHERE email = ?", identifier), &u)
+	if err == nil {
+		return u, nil
 	}
-	return base64.URLEncoding.EncodeToString(b), nil
+	if err != sql.ErrNoRows {
+		return authUserRow{}, err
+	}
+
+	query := "SELECT " + authUserCols + " FROM users WHERE display_name = ? COLLATE NOCASE"
+	if requirePassword {
+		query += " AND password_hash IS NOT NULL AND password_hash != ''"
+	}
+	query += " LIMIT 2"
+	rows, qerr := db.Query(query, identifier)
+	if qerr != nil {
+		return authUserRow{}, sql.ErrNoRows
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		count++
+		if count == 1 {
+			if serr := scanAuthUserRow(rows, &u); serr != nil {
+				return authUserRow{}, serr
+			}
+		}
+	}
+	switch {
+	case count == 0:
+		return authUserRow{}, sql.ErrNoRows
+	case count > 1:
+		return authUserRow{}, errAmbiguousIdentifier
+	}
+	return u, nil
 }
 
 // createTokenInDB stores the token with session metadata in the database.
 func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, time.Time, error) {
-	token, err := generateSessionToken()
+	token, err := generateToken(32)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -132,7 +198,7 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 // Any existing pinned tokens for the user are deleted first, so re-authenticating
 // from a new IP immediately invalidates the old one.
 func createPinnedTokenInDB(userID int, ip string) (string, time.Time, error) {
-	token, err := generateSessionToken()
+	token, err := generateToken(32)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -250,8 +316,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			if errors.As(err, new(*http.MaxBytesError)) {
 				status = http.StatusRequestEntityTooLarge
 			}
-			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid form data"})
+			writeError(w, "Invalid form data", status)
 			return
 		}
 		req.Email = r.FormValue("email")
@@ -260,13 +325,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Password = r.FormValue("password")
 	} else {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			status := http.StatusBadRequest
-			if errors.As(err, new(*http.MaxBytesError)) {
-				status = http.StatusRequestEntityTooLarge
-			}
-			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid request body"})
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 	}
@@ -278,8 +337,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	// Validate input
 	if req.Email == "" || req.Password == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(TokenError{Error: "Email and password are required"})
+		writeError(w, "Email and password are required", http.StatusBadRequest)
 		return
 	}
 
@@ -292,61 +350,31 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify user credentials
-	var user User
-	var passwordHash string
-	var userDisabled, failedCount int
-	var failedSince string
-
-	err := db.QueryRow(
-		"SELECT id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE email = ?",
-		req.Email,
-	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
-
-	if err == sql.ErrNoRows {
-		// Fallback: try display_name (case-insensitive, only when exactly one user has it and has a password)
-		rows, qerr := db.Query(
-			"SELECT id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE display_name = ? COLLATE NOCASE AND password_hash IS NOT NULL AND password_hash != '' LIMIT 2",
-			req.Email,
-		)
-		if qerr == nil {
-			var count int
-			for rows.Next() {
-				count++
-				if count == 1 {
-					rows.Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
-				}
-			}
-			rows.Close()
-			if count == 1 {
-				err = nil
-			}
-		}
-	}
-
-	if err == sql.ErrNoRows {
+	authUser, err := resolveLoginUser(req.Email, true)
+	if err == sql.ErrNoRows || err == errAmbiguousIdentifier {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
+		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(TokenError{Error: "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	user := User{ID: authUser.ID, Email: authUser.Email, DisplayName: authUser.DisplayName, Role: authUser.Role, CreatedAt: authUser.CreatedAt}
+	passwordHash := authUser.PasswordHash
+	failedCount := authUser.FailedLoginCount
+	failedSince := authUser.FailedLoginSince
 
-	if userDisabled != 0 {
+	if authUser.Disabled != 0 {
 		log.Printf("auth failed from %s: user %q is disabled", clientIP, user.Email)
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
+		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
 	// Reject empty password logins — user must use passkey or magic link.
 	if passwordHash == "" {
 		log.Printf("auth failed from %s: no password set for user %q", clientIP, user.Email)
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "No password set — use a passkey or magic link"})
+		writeError(w, "No password set — use a passkey or magic link", http.StatusUnauthorized)
 		return
 	}
 
@@ -355,8 +383,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		recordFailedLogin(user.ID, user.Email, clientIP, failedCount, failedSince)
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid email or password"})
+		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	if migrate {
@@ -369,18 +396,15 @@ func login(w http.ResponseWriter, r *http.Request) {
 	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", user.ID)
 
 	// Check TOTP when enabled.
-	var totpSecret string
-	db.QueryRow("SELECT COALESCE(totp_secret,'') FROM users WHERE id=?", user.ID).Scan(&totpSecret)
+	totpSecret := getUserTOTPSecret(user.ID)
 	if totpSecret != "" {
 		if req.TotpCode == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "totp_required"})
+			writeError(w, "totp_required", http.StatusUnauthorized)
 			return
 		}
 		if !totpCheckAndMark(user.ID, totpSecret, req.TotpCode, time.Now()) {
 			log.Printf("auth failed from %s: invalid or replayed TOTP code for %q", clientIP, user.Email)
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid TOTP code"})
+			writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 			return
 		}
 	}
@@ -389,8 +413,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)
 	if err != nil {
 		log.Printf("Error creating token: %v\n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(TokenError{Error: "Failed to create token"})
+		writeError(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
 
@@ -418,7 +441,10 @@ func certLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email string `json:"email"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.Email == "" {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
@@ -482,7 +508,7 @@ func logout(w http.ResponseWriter, r *http.Request) {
 //     nothing; the caller decides how to proceed (reject or continue
 //     unauthenticated).
 //   - noAuth=false: the header was present but malformed/invalid/expired.
-//     resolveCaller has already written a 401 TokenError response.
+//     resolveCaller has already written a 401 error response.
 func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -492,9 +518,7 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool
 	// Extract token from "Bearer <token>" format
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(TokenError{Error: "Invalid authorization header format. Use 'Bearer <token>'"})
+		writeError(w, "Invalid authorization header format. Use 'Bearer <token>'", http.StatusUnauthorized)
 		return false, false
 	}
 
@@ -506,9 +530,7 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool
 		var apiErr error
 		userID, userRole, apiErr = validateAPIKey(token)
 		if apiErr != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
+			writeError(w, "Invalid or expired credentials", http.StatusUnauthorized)
 			return false, false
 		}
 	} else {
@@ -534,9 +556,7 @@ func TokenMiddleware(next http.Handler) http.Handler {
 		ok, noAuth := resolveCaller(w, r)
 		if !ok {
 			if noAuth {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(TokenError{Error: "Authorization header missing"})
+				writeError(w, "Authorization header missing", http.StatusUnauthorized)
 			}
 			return
 		}

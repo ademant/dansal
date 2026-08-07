@@ -89,7 +89,7 @@ func ConnLimitMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip := getIP(r)
+		ip := getClientIP(r)
 		if !connLimiter.acquire(ip) {
 			writeError(w, "Too many concurrent connections", http.StatusTooManyRequests)
 			return
@@ -202,7 +202,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip := getIP(r)
+		ip := getClientIP(r)
 		if !rateLimiter.Allow(ip) {
 			rateLimitRejectionsTotal.Inc()
 			writeError(w, "Rate limit exceeded", http.StatusTooManyRequests)
@@ -232,17 +232,6 @@ func isInternalCaller(r *http.Request) bool {
 	}
 	got := r.Header.Get("X-Dansal-Internal")
 	return subtle.ConstantTimeCompare([]byte(got), []byte(secret)) == 1
-}
-
-func getIP(r *http.Request) string {
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return strings.TrimSpace(strings.Split(ip, ",")[0])
-	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return strings.TrimSpace(ip)
-	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
 }
 
 // corsOrigin returns the allowed CORS origin for the request.

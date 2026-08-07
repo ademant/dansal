@@ -11,26 +11,26 @@ import (
 )
 
 type Organization struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	ActorName     string `json:"actor_name,omitempty"`
-	Website       string `json:"website,omitempty"`
-	Instagram     string `json:"instagram,omitempty"`
-	Mastodon      string `json:"mastodon,omitempty"`
-	Facebook      string `json:"facebook,omitempty"`
-	ContactEmail  string `json:"contact_email,omitempty"`
-	ContactName   string `json:"contact_name,omitempty"`
-	WikidataID    string `json:"wikidata_id,omitempty"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at,omitempty"`
-	UpdatedBy     string `json:"updated_by,omitempty"`
-	ImageURL      string `json:"image_url,omitempty"`
-	ImageMediaType string `json:"image_media_type,omitempty"`
-	AvatarURL     string `json:"avatar_url,omitempty"`
-	NotesMd       string `json:"notes_md,omitempty"`
-	FetchSourceID *int   `json:"fetch_source_id,omitempty"`
-	ChatLinks     []ChatLink `json:"chat_links,omitempty"`
+	ID             int        `json:"id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	ActorName      string     `json:"actor_name,omitempty"`
+	Website        string     `json:"website,omitempty"`
+	Instagram      string     `json:"instagram,omitempty"`
+	Mastodon       string     `json:"mastodon,omitempty"`
+	Facebook       string     `json:"facebook,omitempty"`
+	ContactEmail   string     `json:"contact_email,omitempty"`
+	ContactName    string     `json:"contact_name,omitempty"`
+	WikidataID     string     `json:"wikidata_id,omitempty"`
+	CreatedAt      string     `json:"created_at"`
+	UpdatedAt      int64      `json:"updated_at,omitempty"`
+	UpdatedBy      string     `json:"updated_by,omitempty"`
+	ImageURL       string     `json:"image_url,omitempty"`
+	ImageMediaType string     `json:"image_media_type,omitempty"`
+	AvatarURL      string     `json:"avatar_url,omitempty"`
+	NotesMd        string     `json:"notes_md,omitempty"`
+	FetchSourceID  *int       `json:"fetch_source_id,omitempty"`
+	ChatLinks      []ChatLink `json:"chat_links,omitempty"`
 
 	FutureEventCount int      `json:"future_event_count,omitempty"`
 	PastEventCount   int      `json:"past_event_count,omitempty"`
@@ -48,17 +48,17 @@ type OrganizationMember struct {
 }
 
 type CreateOrganizationRequest struct {
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	ActorName    string `json:"actor_name"`
-	Website      string `json:"website"`
-	Instagram    string `json:"instagram"`
-	Mastodon     string `json:"mastodon"`
-	Facebook     string `json:"facebook"`
-	ContactEmail string `json:"contact_email"`
-	ContactName  string `json:"contact_name"`
-	WikidataID   string `json:"wikidata_id"`
-	NotesMd      string `json:"notes_md"`
+	Name         string     `json:"name"`
+	Description  string     `json:"description"`
+	ActorName    string     `json:"actor_name"`
+	Website      string     `json:"website"`
+	Instagram    string     `json:"instagram"`
+	Mastodon     string     `json:"mastodon"`
+	Facebook     string     `json:"facebook"`
+	ContactEmail string     `json:"contact_email"`
+	ContactName  string     `json:"contact_name"`
+	WikidataID   string     `json:"wikidata_id"`
+	NotesMd      string     `json:"notes_md"`
 	ChatLinks    []ChatLink `json:"chat_links"`
 }
 
@@ -72,17 +72,17 @@ type AddMemberRequest struct {
 // value unchanged; a present key sets it (an explicit "" clears a field).
 // As with PUT, name/actor_name may only be changed by admins.
 type OrganizationMergePatchRequest struct {
-	Name         *string `json:"name,omitempty"`
-	Description  *string `json:"description,omitempty"`
-	ActorName    *string `json:"actor_name,omitempty"`
-	Website      *string `json:"website,omitempty"`
-	Instagram    *string `json:"instagram,omitempty"`
-	Mastodon     *string `json:"mastodon,omitempty"`
-	Facebook     *string `json:"facebook,omitempty"`
-	ContactEmail *string `json:"contact_email,omitempty"`
-	ContactName  *string `json:"contact_name,omitempty"`
-	WikidataID   *string `json:"wikidata_id,omitempty"`
-	NotesMd      *string `json:"notes_md,omitempty"`
+	Name         *string     `json:"name,omitempty"`
+	Description  *string     `json:"description,omitempty"`
+	ActorName    *string     `json:"actor_name,omitempty"`
+	Website      *string     `json:"website,omitempty"`
+	Instagram    *string     `json:"instagram,omitempty"`
+	Mastodon     *string     `json:"mastodon,omitempty"`
+	Facebook     *string     `json:"facebook,omitempty"`
+	ContactEmail *string     `json:"contact_email,omitempty"`
+	ContactName  *string     `json:"contact_name,omitempty"`
+	WikidataID   *string     `json:"wikidata_id,omitempty"`
+	NotesMd      *string     `json:"notes_md,omitempty"`
 	ChatLinks    *[]ChatLink `json:"chat_links,omitempty"`
 }
 
@@ -356,8 +356,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req CreateOrganizationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Name == "" {
@@ -445,8 +444,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req CreateOrganizationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if callerRole == RoleAdmin {
@@ -522,8 +520,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req OrganizationMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if callerRole == RoleAdmin {
@@ -714,7 +711,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/organizations/{id}/members
 func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	orgID, err := strconv.Atoi(r.PathValue("id"))
+	orgID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -774,7 +771,7 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/organizations/{id}/members/{user_id}
 func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
-	orgID, err := strconv.Atoi(r.PathValue("id"))
+	orgID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
 		return

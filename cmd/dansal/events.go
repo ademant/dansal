@@ -1988,15 +1988,14 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	var req EventUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Title == "" {
@@ -2190,15 +2189,14 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	var req EventMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Title != nil && *req.Title == "" {
@@ -2594,7 +2592,7 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 // window after creation — see eventDeletionDeadline.
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -2664,7 +2662,7 @@ func eventDeletionDeadline(createdAt, startTime time.Time) time.Time {
 // admin: any event. user/publisher: own orgs.
 func cancelEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -2714,7 +2712,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	srcID, err := strconv.Atoi(r.PathValue("id"))
+	srcID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -2915,7 +2913,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}.ics — single-event iCal download
 func getEventICS(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -3366,7 +3364,7 @@ func removeEventFromSeries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -3404,7 +3402,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -3440,7 +3438,7 @@ func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -3461,7 +3459,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -3500,7 +3498,7 @@ func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -3520,12 +3518,12 @@ func addEventMusician(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	musicianID, err := strconv.Atoi(r.PathValue("musician_id"))
+	musicianID, err := intPathValue(r, "musician_id")
 	if err != nil {
 		writeError(w, "invalid musician id", http.StatusBadRequest)
 		return
@@ -3551,12 +3549,12 @@ func removeEventMusician(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	musicianID, err := strconv.Atoi(r.PathValue("musician_id"))
+	musicianID, err := intPathValue(r, "musician_id")
 	if err != nil {
 		writeError(w, "invalid musician id", http.StatusBadRequest)
 		return
@@ -3576,12 +3574,12 @@ func addEventInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	instructorID, err := strconv.Atoi(r.PathValue("instructor_id"))
+	instructorID, err := intPathValue(r, "instructor_id")
 	if err != nil {
 		writeError(w, "invalid instructor id", http.StatusBadRequest)
 		return
@@ -3607,12 +3605,12 @@ func removeEventInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	instructorID, err := strconv.Atoi(r.PathValue("instructor_id"))
+	instructorID, err := intPathValue(r, "instructor_id")
 	if err != nil {
 		writeError(w, "invalid instructor id", http.StatusBadRequest)
 		return
@@ -3632,12 +3630,12 @@ func addEventDance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	danceID, err := strconv.Atoi(r.PathValue("dance_id"))
+	danceID, err := intPathValue(r, "dance_id")
 	if err != nil {
 		writeError(w, "invalid dance id", http.StatusBadRequest)
 		return
@@ -3663,12 +3661,12 @@ func removeEventDance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	danceID, err := strconv.Atoi(r.PathValue("dance_id"))
+	danceID, err := intPathValue(r, "dance_id")
 	if err != nil {
 		writeError(w, "invalid dance id", http.StatusBadRequest)
 		return

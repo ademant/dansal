@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -243,7 +242,7 @@ func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid user ID", http.StatusBadRequest)
 		return

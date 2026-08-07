@@ -842,8 +842,7 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req LocationCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Location == "" {
@@ -943,8 +942,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req LocationMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.CountryCode != nil && !validCountryCode(*req.CountryCode) {
@@ -1246,7 +1244,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 // admin: any org. user: own orgs only.
 func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	callerID, requesterRole := callerFromRequest(r)
-	locID, err := strconv.Atoi(r.PathValue("id"))
+	locID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -1423,7 +1421,7 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/locations/{id}/children — list a location's child locations
 // (rooms), with address/coordinates inherited from this location.
 func getLocationChildren(w http.ResponseWriter, r *http.Request) {
-	locID, err := strconv.Atoi(r.PathValue("id"))
+	locID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return

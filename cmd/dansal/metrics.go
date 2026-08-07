@@ -153,7 +153,7 @@ func startMetricsServer() {
 
 func metricsIPGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getIP(r)
+		ip := getClientIP(r)
 		for _, allowed := range config.Server.MetricsAllowedIPs {
 			if allowed == ip {
 				next.ServeHTTP(w, r)

@@ -1,10 +1,8 @@
 package main
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,14 +23,6 @@ func smtpEnabled() bool {
 
 func selfRegEnabled() bool {
 	return smtpEnabled() || config.Server.TelegramBotToken != ""
-}
-
-func randomHex32() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 type RegisterRequest struct {
@@ -70,7 +60,7 @@ type PendingRegistration struct {
 
 // POST /api/v1/register — create a pending registration.
 func registerHandler(w http.ResponseWriter, r *http.Request) {
-	ip := getIP(r)
+	ip := getClientIP(r)
 	if !registerRateLimiter.Allow(ip) {
 		writeError(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -205,12 +195,12 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	verificationToken, err := randomHex32()
+	verificationToken, err := generateToken(32)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	approvalToken, err := randomHex32()
+	approvalToken, err := generateToken(32)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
@@ -359,7 +349,7 @@ func initResendRateLimiter() {
 
 func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
-	ip := getIP(r)
+	ip := getClientIP(r)
 	if !resendRateLimiter.Allow(ip) {
 		writeError(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -816,16 +806,6 @@ func notifyApprovers(pendingID int) {
 			}
 		}
 	}
-}
-
-func intPathValue(r *http.Request, key string) (int, error) {
-	v := r.PathValue(key)
-	if v == "" {
-		return 0, fmt.Errorf("missing path value %s", key)
-	}
-	var n int
-	_, err := fmt.Sscan(v, &n)
-	return n, err
 }
 
 // GET /api/v1/pending-registrations/count — scoped count of verified, unactioned registrations.

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 type EnrichEventReq struct {
@@ -20,14 +19,13 @@ func enrichEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil || id <= 0 {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 	var req EnrichEventReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "bad request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	for _, mid := range req.AddMusicianIDs {

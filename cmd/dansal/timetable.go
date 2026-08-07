@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strconv"
 )
 
 type TimetableEntry struct {
@@ -215,7 +214,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
@@ -256,7 +255,7 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
@@ -317,7 +316,7 @@ func deleteTimetable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return

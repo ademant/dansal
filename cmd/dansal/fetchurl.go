@@ -703,8 +703,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req FetchSourcePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1298,8 +1297,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req FetchURLRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

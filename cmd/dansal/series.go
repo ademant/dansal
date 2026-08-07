@@ -649,8 +649,7 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 		InstructorID      *int            `json:"instructor_id"`
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -735,8 +734,7 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		StartTime string `json:"start_time"`
 		EndTime   string `json:"end_time"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Date == "" {
@@ -895,8 +893,7 @@ func patchSeriesEventDescription(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Description string `json:"description"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	_, err = db.Exec("UPDATE events SET description=? WHERE id=?", req.Description, eventID)
@@ -941,8 +938,7 @@ func updateSeriesDescriptions(w http.ResponseWriter, r *http.Request) {
 			Description string `json:"description"`
 		} `json:"updates"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	for _, u := range req.Updates {
@@ -1019,7 +1015,7 @@ func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("event_id"))
+	eventID, err := intPathValue(r, "event_id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -1051,7 +1047,7 @@ func removeSeriesEvent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("event_id"))
+	eventID, err := intPathValue(r, "event_id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return

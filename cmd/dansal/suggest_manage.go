@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -97,8 +96,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SuggestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Title == "" || req.StartTime == "" {
@@ -353,7 +351,7 @@ func rejectPendingEdit(w http.ResponseWriter, r *http.Request) {
 
 func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return

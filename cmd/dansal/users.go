@@ -251,7 +251,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	targetID, err := strconv.Atoi(r.PathValue("id"))
+	targetID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -276,7 +276,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 func getUserOrganizations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	targetID, err := strconv.Atoi(r.PathValue("id"))
+	targetID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -311,8 +311,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	requesterID, requesterRole := callerFromRequest(r)
 
 	var req UserUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -507,7 +506,7 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := callerFromRequest(r)
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -662,8 +661,7 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if len(req.NewPassword) < 8 {

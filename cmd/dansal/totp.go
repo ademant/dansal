@@ -123,8 +123,7 @@ func totpIssuer() string {
 // Stores the pending secret in users.totp_pending; returns {secret, uri}.
 func totpSetupHandler(w http.ResponseWriter, r *http.Request) {
 	userID := callerUserID(r)
-	var email string
-	db.QueryRow("SELECT COALESCE(email,'') FROM users WHERE id=?", userID).Scan(&email)
+	email, _ := getUserEmail(userID)
 
 	secret, err := totpNewSecret()
 	if err != nil {
@@ -152,8 +151,7 @@ func totpConfirmHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code string `json:"code"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	req.Code = strings.TrimSpace(req.Code)
@@ -189,8 +187,7 @@ func totpDisableHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code string `json:"code"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	req.Code = strings.TrimSpace(req.Code)

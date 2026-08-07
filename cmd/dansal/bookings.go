@@ -92,7 +92,7 @@ func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole
 func listBookings(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -128,7 +128,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/events/{id}/bookings
 // Public. Creates a pending booking and sends an email verification link.
 func createBooking(w http.ResponseWriter, r *http.Request) {
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -156,8 +156,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		Persons int    `json:"persons"`
 		Message string `json:"message"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
@@ -284,7 +283,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	bookingID, err := strconv.Atoi(r.PathValue("id"))
+	bookingID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return
@@ -298,8 +297,7 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Status != "approved" && req.Status != "cancelled" {
@@ -371,7 +369,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 func deleteBooking(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	bookingID, err := strconv.Atoi(r.PathValue("id"))
+	bookingID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return

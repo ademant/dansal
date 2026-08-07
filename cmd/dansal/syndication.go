@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -116,7 +115,7 @@ func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -166,7 +165,7 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -189,9 +188,9 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		if incoming.Eventbrite.Token != "" {
 			existing.Eventbrite.Token = incoming.Eventbrite.Token
 		}
-		existing.Eventbrite.OrgID       = incoming.Eventbrite.OrgID
+		existing.Eventbrite.OrgID = incoming.Eventbrite.OrgID
 		existing.Eventbrite.AutoPublish = incoming.Eventbrite.AutoPublish
-		existing.Eventbrite.Enabled     = incoming.Eventbrite.OrgID != "" && existing.Eventbrite.Token != ""
+		existing.Eventbrite.Enabled = incoming.Eventbrite.OrgID != "" && existing.Eventbrite.Token != ""
 	}
 	if incoming.SocialDanceToday != nil {
 		if existing.SocialDanceToday == nil {
@@ -220,7 +219,7 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -241,7 +240,7 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -286,7 +285,7 @@ func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -393,8 +392,8 @@ func publishToEventbrite(eventID int, event Event, cfg *EventbriteCfg) {
 	// Step 2: Add a free ticket class.
 	ticketPayload := map[string]any{
 		"ticket_class": map[string]any{
-			"name":     "General Admission",
-			"free":     true,
+			"name":           "General Admission",
+			"free":           true,
 			"quantity_total": 100,
 		},
 	}

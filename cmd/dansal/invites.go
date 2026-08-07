@@ -68,6 +68,30 @@ func loadValidInvite(token string) (inviteRecord, error) {
 	return invite, nil
 }
 
+// loadValidInviteOrError loads and validates the invite for token, writing
+// the appropriate HTTP error response and returning ok=false on any
+// failure. Consolidates the err→HTTP-status switch that had drifted across
+// 4 call sites — two (webauthn.go) were silently missing the
+// errInviteBadToken case and falling through to the wrong 500 (#1013).
+func loadValidInviteOrError(w http.ResponseWriter, token string) (inviteRecord, bool) {
+	invite, err := loadValidInvite(token)
+	switch {
+	case err == nil:
+		return invite, true
+	case err == sql.ErrNoRows:
+		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
+	case err == errInviteUsed:
+		writeError(w, "Invite link already used", http.StatusGone)
+	case err == errInviteExpired:
+		writeError(w, "Invite link expired", http.StatusGone)
+	case err == errInviteBadToken:
+		writeError(w, "Invalid invite link", http.StatusBadRequest)
+	default:
+		writeError(w, "Internal server error", http.StatusInternalServerError)
+	}
+	return inviteRecord{}, false
+}
+
 // roleRank returns a numeric rank for role comparison (higher = more privileged).
 func roleRank(role string) int {
 	switch role {
@@ -196,8 +220,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreateInviteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	// Only "user" and "publisher" roles are allowed via the UI; admin invites
@@ -348,29 +371,13 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 
 	token := r.PathValue("token")
 
-	invite, err := loadValidInvite(token)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
-		return
-	case err == errInviteUsed:
-		writeError(w, "Invite link has already been used", http.StatusGone)
-		return
-	case err == errInviteExpired:
-		writeError(w, "Invite link has expired", http.StatusGone)
-		return
-	case err == errInviteBadToken:
-		writeError(w, "Invalid invite link", http.StatusBadRequest)
-		return
-	default:
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	invite, ok := loadValidInviteOrError(w, token)
+	if !ok {
 		return
 	}
 
 	var req UseInviteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if invite.PresetEmail != "" {
@@ -464,23 +471,8 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 
 	token := r.PathValue("token")
 
-	invite, err := loadValidInvite(token)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
-		return
-	case err == errInviteUsed:
-		writeError(w, "Invite link has already been used", http.StatusGone)
-		return
-	case err == errInviteExpired:
-		writeError(w, "Invite link has expired", http.StatusGone)
-		return
-	case err == errInviteBadToken:
-		writeError(w, "Invalid invite link", http.StatusBadRequest)
-		return
-	default:
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	invite, ok := loadValidInviteOrError(w, token)
+	if !ok {
 		return
 	}
 

@@ -367,7 +367,7 @@ func deleteInstructor(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}/instructors
 func getEventInstructors(w http.ResponseWriter, r *http.Request) {
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
@@ -408,7 +408,7 @@ func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := strconv.Atoi(r.PathValue("id"))
+	eventID, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
@@ -418,8 +418,7 @@ func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ids []int
-	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
-		writeError(w, "expected JSON array of instructor IDs", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &ids) {
 		return
 	}
 

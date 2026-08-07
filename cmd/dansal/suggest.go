@@ -93,7 +93,7 @@ func findOrCreateInstructorID(q querier, name string) (int, error) {
 // link-local addresses to prevent SSRF); the rate limiter above bounds abuse
 // of the latter.
 func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
-	ip := getIP(r)
+	ip := getClientIP(r)
 	if !suggestPreviewRateLimiter.Allow(ip) {
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -165,7 +165,7 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/events/suggest — submit an anonymous event suggestion.
 func suggestHandler(w http.ResponseWriter, r *http.Request) {
-	ip := getIP(r)
+	ip := getClientIP(r)
 	if !suggestRateLimiter.Allow(ip) {
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -261,7 +261,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 
 	var suggestionToken string
 	if smtpConfigured {
-		suggestionToken, err = randomHex32()
+		suggestionToken, err = generateToken(32)
 		if err != nil {
 			writeError(w, "internal error", http.StatusInternalServerError)
 			return

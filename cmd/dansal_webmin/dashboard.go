@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -43,10 +41,11 @@ func (s ServiceStatus) Badge() string {
 }
 
 type DiskInfo struct {
-	Path       string
-	TotalBytes uint64
-	FreeBytes  uint64
-	UsedBytes  uint64
+	Path        string
+	TotalBytes  int64
+	FreeBytes   int64
+	UsedBytes   int64
+	UsedPercent int
 }
 
 func fmtBytes(b int64) string {
@@ -80,6 +79,7 @@ type DashboardData struct {
 	Services        []ServiceStatus
 	Disk            *DiskInfo
 	Events          []DashboardEvent
+	PastCount       int
 	CollectedAt     string
 }
 
@@ -87,18 +87,6 @@ func getDashboardEvents(ctx context.Context, dansalURL string, orgID int) ([]Das
 	u := dansalURL + "/api/v1/events?include_past=true&limit=500"
 	if orgID > 0 {
 		u += "&org_id=" + fmt.Sprintf("%d", orgID)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	var raw []struct {
 		ID          int    `json:"id"`
@@ -110,7 +98,7 @@ func getDashboardEvents(ctx context.Context, dansalURL string, orgID int) ([]Das
 			Town     string `json:"town"`
 		} `json:"location"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := getJSON(ctx, u, &raw); err != nil {
 		return nil, err
 	}
 	now := time.Now()
@@ -131,20 +119,8 @@ func getDashboardEvents(ctx context.Context, dansalURL string, orgID int) ([]Das
 }
 
 func getDansalInfo(ctx context.Context, dansalURL string) (*DansalInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dansalURL+"/api/v1/info", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
 	var info DansalInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+	if err := getJSON(ctx, dansalURL+"/api/v1/info", &info); err != nil {
 		return nil, err
 	}
 	return &info, nil
@@ -208,11 +184,17 @@ func getDiskInfo(path string) *DiskInfo {
 	}
 	total := stat.Blocks * uint64(stat.Bsize)
 	free := stat.Bavail * uint64(stat.Bsize)
+	used := total - free
+	pct := 0
+	if total > 0 {
+		pct = int(used * 100 / total)
+	}
 	return &DiskInfo{
-		Path:       path,
-		TotalBytes: total,
-		FreeBytes:  free,
-		UsedBytes:  total - free,
+		Path:        path,
+		TotalBytes:  int64(total),
+		FreeBytes:   int64(free),
+		UsedBytes:   int64(used),
+		UsedPercent: pct,
 	}
 }
 
@@ -231,6 +213,11 @@ func collectDashboard(ctx context.Context, cfg *Config) DashboardData {
 	}
 
 	d.Events, _ = getDashboardEvents(ctx, cfg.DansalURL, cfg.OrgID)
+	for _, e := range d.Events {
+		if e.IsPast {
+			d.PastCount++
+		}
+	}
 
 	for _, unit := range monitoredUnits(cfg.Instance) {
 		d.Services = append(d.Services, getServiceStatus(unit))
@@ -238,59 +225,4 @@ func collectDashboard(ctx context.Context, cfg *Config) DashboardData {
 
 	d.Disk = getDiskInfo("/var/lib/dansal")
 	return d
-}
-
-// fmtBytesTemplate is used in templates via a helper since template funcs aren't set up.
-func fmtUint64Bytes(b uint64) string {
-	return fmtBytes(int64(b))
-}
-
-// renderDashboard writes the data inline - used by templates via .Data accessor.
-func dashboardDataMap(d DashboardData) map[string]any {
-	var disk map[string]any
-	if d.Disk != nil {
-		pct := 0
-		if d.Disk.TotalBytes > 0 {
-			pct = int(d.Disk.UsedBytes * 100 / d.Disk.TotalBytes)
-		}
-		disk = map[string]any{
-			"Path":  d.Disk.Path,
-			"Total": fmtBytes(int64(d.Disk.TotalBytes)),
-			"Free":  fmtBytes(int64(d.Disk.FreeBytes)),
-			"Used":  fmtBytes(int64(d.Disk.UsedBytes)),
-			"Pct":   pct,
-		}
-	}
-
-	var dansalInfo map[string]any
-	if d.DansalInfo != nil {
-		dansalInfo = map[string]any{
-			"Version":         d.DansalInfo.Version,
-			"BuildTime":       d.DansalInfo.BuildTime,
-			"TotalEvents":     d.DansalInfo.TotalEvents,
-			"PublishedEvents": d.DansalInfo.PublishedEvents,
-			"UpcomingEvents":  d.DansalInfo.UpcomingEvents,
-			"DBSize":          fmtBytes(d.DansalInfo.DBSizeBytes),
-			"ImagesSize":      fmtBytes(d.DansalInfo.ImagesSizeBytes),
-		}
-	}
-
-	pastCount := 0
-	for _, e := range d.Events {
-		if e.IsPast {
-			pastCount++
-		}
-	}
-
-	return map[string]any{
-		"WebminVersion":   d.WebminVersion,
-		"WebminBuildTime": d.WebminBuildTime,
-		"DansalInfo":      dansalInfo,
-		"DansalError":     d.DansalError,
-		"Services":        d.Services,
-		"Disk":            disk,
-		"Events":          d.Events,
-		"PastCount":       pastCount,
-		"CollectedAt":     d.CollectedAt,
-	}
 }

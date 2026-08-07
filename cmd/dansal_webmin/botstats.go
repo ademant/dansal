@@ -114,8 +114,14 @@ type BotStatsPageData struct {
 	FediHasData      bool
 }
 
+// openReadonlyDB opens an SQLite database read-only with a busy timeout.
+// immutable=1 is intentionally not used (see #996).
+func openReadonlyDB(path string) (*sql.DB, error) {
+	return sql.Open("sqlite3", "file:"+path+"?mode=ro&_busy_timeout=5000")
+}
+
 func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&_busy_timeout=5000")
+	db, err := openReadonlyDB(dbPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,7 +187,7 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 // loadFediStatsDB reads fediverse daily stats and per-instance request counts
 // from the bot-stats DB, returning up to the last 60 days.
 func loadFediStatsDB(dbPath string) ([]fediStatDay, []fediSourceInstance, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro&_busy_timeout=5000")
+	db, err := openReadonlyDB(dbPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -254,7 +260,7 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 	if webDBPath == "" {
 		return nil
 	}
-	db, err := sql.Open("sqlite3", "file:"+webDBPath+"?mode=ro&_busy_timeout=5000")
+	db, err := openReadonlyDB(webDBPath)
 	if err != nil {
 		log.Printf("fedi live: open web.db: %v", err)
 		return nil
@@ -306,15 +312,32 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 	return snap
 }
 
+// chartDates truncates YYYY-MM-DD labels to MM-DD for compact chart axes.
+func chartDates(dates []string) []string {
+	out := make([]string, len(dates))
+	for i, d := range dates {
+		if len(d) >= 10 {
+			out[i] = d[5:]
+		}
+	}
+	return out
+}
+
+// buildChartJSON renders the shared chart payload: date labels, the category
+// legend, and one stacked series per category.
+func buildChartJSON(dates []string, cats []botCat, series map[string][]int) string {
+	b, _ := json.Marshal(map[string]any{
+		"dates":      chartDates(dates),
+		"categories": cats,
+		"series":     series,
+	})
+	return string(b)
+}
+
 // buildFediChartJSON builds a stacked-bar chart JSON for inbox activity
 // (2xx success, 4xx rejection, 5xx error) plus actor fetches as a separate series.
 func buildFediChartJSON(days []fediStatDay) string {
-	type cat struct {
-		Key   string `json:"key"`
-		Label string `json:"label"`
-		Color string `json:"color"`
-	}
-	cats := []cat{
+	cats := []botCat{
 		{"inbox_2xx", "Inbox accepted", "#4caf50"},
 		{"inbox_4xx", "Inbox rejected", "#ff9800"},
 		{"inbox_5xx", "Inbox error", "#e53935"},
@@ -327,31 +350,19 @@ func buildFediChartJSON(days []fediStatDay) string {
 		series[c.Key] = make([]int, len(days))
 	}
 	for i, d := range days {
-		if len(d.Date) >= 10 {
-			dates[i] = d.Date[5:]
-		}
+		dates[i] = d.Date
 		series["inbox_2xx"][i] = d.Inbox2xx
 		series["inbox_4xx"][i] = d.Inbox4xx
 		series["inbox_5xx"][i] = d.Inbox5xx
 		series["actor_fetches"][i] = d.ActorFetches
 		series["webfinger"][i] = d.WebfingerRequests
 	}
-	b, _ := json.Marshal(map[string]any{
-		"dates":      dates,
-		"categories": cats,
-		"series":     series,
-	})
-	return string(b)
+	return buildChartJSON(dates, cats, series)
 }
 
 // buildFediFollowChartJSON builds a simple bar chart of daily followers gained.
 func buildFediFollowChartJSON(days []fediStatDay) string {
-	type cat struct {
-		Key   string `json:"key"`
-		Label string `json:"label"`
-		Color string `json:"color"`
-	}
-	cats := []cat{
+	cats := []botCat{
 		{"gained", "New followers", "#4caf50"},
 		{"delivers", "Events delivered", "#1e88e5"},
 	}
@@ -361,18 +372,11 @@ func buildFediFollowChartJSON(days []fediStatDay) string {
 		"delivers": make([]int, len(days)),
 	}
 	for i, d := range days {
-		if len(d.Date) >= 10 {
-			dates[i] = d.Date[5:]
-		}
+		dates[i] = d.Date
 		series["gained"][i] = d.FollowersGained
 		series["delivers"][i] = d.EventsDeliveredCreates + d.EventsDeliveredUpdates
 	}
-	b, _ := json.Marshal(map[string]any{
-		"dates":      dates,
-		"categories": cats,
-		"series":     series,
-	})
-	return string(b)
+	return buildChartJSON(dates, cats, series)
 }
 
 func buildBotChartJSON(days []botStatDay) string {
@@ -382,19 +386,12 @@ func buildBotChartJSON(days []botStatDay) string {
 		series[c.Key] = make([]int, len(days))
 	}
 	for i, d := range days {
-		if len(d.Date) >= 10 {
-			dates[i] = d.Date[5:] // MM-DD
-		}
+		dates[i] = d.Date
 		for _, c := range botCategoryList {
 			series[c.Key][i] = d.Categories[c.Key]
 		}
 	}
-	b, _ := json.Marshal(map[string]any{
-		"dates":      dates,
-		"categories": botCategoryList,
-		"series":     series,
-	})
-	return string(b)
+	return buildChartJSON(dates, botCategoryList, series)
 }
 
 func buildUserChartJSON(days []userStatDay) string {
@@ -406,20 +403,13 @@ func buildUserChartJSON(days []userStatDay) string {
 		"internal": make([]int, len(days)),
 	}
 	for i, d := range days {
-		if len(d.Date) >= 10 {
-			dates[i] = d.Date[5:]
-		}
+		dates[i] = d.Date
 		series["direct"][i] = d.DirectCount
 		series["search"][i] = d.SearchCount
 		series["external"][i] = d.ExternalCount
 		series["internal"][i] = d.InternalCount
 	}
-	b, _ := json.Marshal(map[string]any{
-		"dates":      dates,
-		"categories": userRefList,
-		"series":     series,
-	})
-	return string(b)
+	return buildChartJSON(dates, userRefList, series)
 }
 
 func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
@@ -472,7 +462,6 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		data.FediLive = loadFediLive(cfg.WebDBPath)
 
 		d := tmplData(r, cfg, "Bot & Traffic Stats", data)
-		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.botStats, d)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -45,14 +46,27 @@ func getSiteSetting(db *sql.DB, key string) string {
 		return ""
 	}
 	var v string
-	db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
+	err := db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
+	if err != nil {
+		// Missing key is expected; missing table happens on a brand-new DB
+		// before dansal-web has created it. Anything else is worth logging.
+		if err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
+			log.Printf("get site setting %s: %v", key, err)
+		}
+		return ""
+	}
 	return v
 }
 
 func setSiteSetting(db *sql.DB, key, value string) {
-	db.Exec(
+	if db == nil {
+		return
+	}
+	if _, err := db.Exec(
 		"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-		key, value)
+		key, value); err != nil {
+		log.Printf("set site setting %s: %v", key, err)
+	}
 }
 
 func siteAssetExists(dir, key string) bool {
@@ -128,14 +142,44 @@ func saveSiteAsset(dir, key string, data []byte) error {
 	return os.WriteFile(filepath.Join(dir, key+ext), data, 0o644)
 }
 
-func fetchDances(dansalURL string) []dance {
-	resp, err := http.Get(dansalURL + "/api/v1/dances")
-	if err != nil || resp.StatusCode != http.StatusOK {
+// handleAssetUploads reads the multipart file uploads for keys, validates and
+// saves each, and returns the keys that were successfully written. GIF is
+// accepted only when allowGIF is set or the key is favicon/ai-badge, which
+// historically allow it.
+func handleAssetUploads(r *http.Request, dir string, keys []string, allowGIF bool) []string {
+	var saved []string
+	for _, key := range keys {
+		f, _, err := r.FormFile(key)
+		if err != nil {
+			continue
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			continue
+		}
+		mime := detectAssetMIME(data)
+		if mime == "" {
+			continue
+		}
+		if !allowGIF && key != "favicon" && key != "ai-badge" && mime == "image/gif" {
+			continue
+		}
+		if err := saveSiteAsset(dir, key, data); err != nil {
+			log.Printf("save site asset %s: %v", key, err)
+		} else {
+			saved = append(saved, key)
+		}
+	}
+	return saved
+}
+
+func fetchDances(ctx context.Context, dansalURL string) []dance {
+	var dances []dance
+	if err := getJSON(ctx, dansalURL+"/api/v1/dances", &dances); err != nil {
+		log.Printf("fetch dances: %v", err)
 		return nil
 	}
-	defer resp.Body.Close()
-	var dances []dance
-	json.NewDecoder(resp.Body).Decode(&dances)
 	return dances
 }
 
@@ -179,7 +223,6 @@ type siteConfigData struct {
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := tmplData(r, cfg, "Site configuration", nil)
-		d.User = getSessionUser(r)
 
 		data := siteConfigData{
 			Flash:          r.URL.Query().Get("flash"),
@@ -209,7 +252,7 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			impTexts[lang] = getSiteSetting(db, "impressum_"+lang)
 		}
 		data.ImpressumTexts = impTexts
-		data.Dances = fetchDances(cfg.DansalURL)
+		data.Dances = fetchDances(r.Context(), cfg.DansalURL)
 		data.DefaultDanceIDs = loadDefaultDanceIDs(db)
 
 		if cfg.ImagesDir == "" {
@@ -278,29 +321,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 
 		var uploadedAssets []string
 		if cfg.ImagesDir != "" {
-			for _, key := range []string{"logo", "banner", "favicon", "ai-badge"} {
-				f, _, err := r.FormFile(key)
-				if err != nil {
-					continue
-				}
-				data, err := io.ReadAll(f)
-				f.Close()
-				if err != nil {
-					continue
-				}
-				mime := detectAssetMIME(data)
-				if mime == "" {
-					continue
-				}
-				if key != "favicon" && key != "ai-badge" && mime == "image/gif" {
-					continue
-				}
-				if err := saveSiteAsset(cfg.ImagesDir, key, data); err != nil {
-					log.Printf("save site asset %s: %v", key, err)
-				} else {
-					uploadedAssets = append(uploadedAssets, key)
-				}
-			}
+			uploadedAssets = handleAssetUploads(r, cfg.ImagesDir, []string{"logo", "banner", "favicon", "ai-badge"}, false)
 		}
 
 		if len(uploadedAssets) > 0 {
@@ -329,27 +350,7 @@ func siteConfigRelayAssetsHandler(cfg *Config) http.HandlerFunc {
 		if u := getSessionUser(r); u != nil {
 			callerID = u.ID
 		}
-		var uploaded []string
-		for _, key := range []string{"relay-avatar", "relay-banner"} {
-			f, _, err := r.FormFile(key)
-			if err != nil {
-				continue
-			}
-			data, err := io.ReadAll(f)
-			f.Close()
-			if err != nil {
-				continue
-			}
-			mime := detectAssetMIME(data)
-			if mime == "" {
-				continue
-			}
-			if err := saveSiteAsset(cfg.ImagesDir, key, data); err != nil {
-				log.Printf("save relay asset %s: %v", key, err)
-			} else {
-				uploaded = append(uploaded, key)
-			}
-		}
+		uploaded := handleAssetUploads(r, cfg.ImagesDir, []string{"relay-avatar", "relay-banner"}, true)
 		if len(uploaded) > 0 {
 			log.Printf("audit: relay assets=[%s] updated by user=%d", strings.Join(uploaded, ","), callerID)
 			go notifyRelayProfileUpdate(cfg)

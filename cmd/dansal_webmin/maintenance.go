@@ -30,7 +30,6 @@ func maintenancePageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			"Flash":   r.URL.Query().Get("flash"),
 			"Backups": backups,
 		})
-		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.maintenance, d)
 	}
 }

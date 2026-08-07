@@ -23,8 +23,8 @@
       <tr><th>Total events</th><td>{{.DansalInfo.TotalEvents}}</td></tr>
       <tr><th>Published</th><td>{{.DansalInfo.PublishedEvents}}</td></tr>
       <tr><th>Upcoming</th><td>{{.DansalInfo.UpcomingEvents}}</td></tr>
-      <tr><th>Database</th><td>{{.DansalInfo.DBSize}}</td></tr>
-      <tr><th>Images</th><td>{{.DansalInfo.ImagesSize}}</td></tr>
+      <tr><th>Database</th><td>{{.DansalInfo.DBSizeBytes | bytes}}</td></tr>
+      <tr><th>Images</th><td>{{.DansalInfo.ImagesSizeBytes | bytes}}</td></tr>
     </table>
     {{end}}
   </div>
@@ -33,12 +33,12 @@
   <div class="card">
     <div class="card-title">Disk — {{.Disk.Path}}</div>
     <table>
-      <tr><th style="width:40%">Used</th><td>{{.Disk.Used}} ({{.Disk.Pct}}%)</td></tr>
-      <tr><th>Free</th><td>{{.Disk.Free}}</td></tr>
-      <tr><th>Total</th><td>{{.Disk.Total}}</td></tr>
+      <tr><th style="width:40%">Used</th><td>{{.Disk.UsedBytes | bytes}} ({{.Disk.UsedPercent}}%)</td></tr>
+      <tr><th>Free</th><td>{{.Disk.FreeBytes | bytes}}</td></tr>
+      <tr><th>Total</th><td>{{.Disk.TotalBytes | bytes}}</td></tr>
     </table>
     <div style="margin-top:.75rem;background:var(--bg-subtle);border-radius:3px;height:8px;overflow:hidden">
-      <div style="background:#1a6eb5;height:100%;width:{{.Disk.Pct}}%"></div>
+      <div style="background:#1a6eb5;height:100%;width:{{.Disk.UsedPercent}}%"></div>
     </div>
   </div>
   {{end}}

@@ -31,6 +31,7 @@ var tmplFuncs = template.FuncMap{
 		return fmt.Sprintf("%d", 100*part/total)
 	},
 	"add": func(a, b int) int { return a + b },
+	"bytes": fmtBytes,
 }
 
 func loadTemplates() *Templates {
@@ -72,6 +73,7 @@ func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData
 	return TemplateData{
 		Title:    title,
 		SiteName: cfg.SiteName,
+		User:     getSessionUser(r),
 		Data:     data,
 		Version:  Version,
 		NavPath:  nav,

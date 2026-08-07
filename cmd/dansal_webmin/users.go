@@ -53,7 +53,6 @@ func usersPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			"Error": errMsg,
 			"Flash": r.URL.Query().Get("flash"),
 		})
-		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.users, d)
 	}
 }
@@ -77,7 +76,6 @@ func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			"Error":    errMsg,
 			"Flash":    r.URL.Query().Get("flash"),
 		})
-		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.sessions, d)
 	}
 }

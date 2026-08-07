@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -164,9 +166,40 @@ func notificationsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		nd := loadNotificationsData(cfg.AdminSocket)
 		nd.Flash = r.URL.Query().Get("flash")
 		d := tmplData(r, cfg, "Notifications", nd)
-		d.User = getSessionUser(r)
 		renderTemplate(w, tmpls.notifications, d)
 	}
+}
+
+func smtpSetRequest(r *http.Request) socketRequest {
+	port, _ := strconv.Atoi(r.FormValue("port"))
+	timeoutSecs, _ := strconv.Atoi(r.FormValue("timeout_secs"))
+	return socketRequest{
+		Cmd:             "smtp-set",
+		SMTPHost:        r.FormValue("host"),
+		SMTPPort:        port,
+		SMTPUsername:    r.FormValue("username"),
+		SMTPFrom:        r.FormValue("from"),
+		SMTPFromName:    r.FormValue("from_name"),
+		SMTPTLS:         r.FormValue("tls"),
+		SMTPTimeoutSecs: timeoutSecs,
+		SMTPTo:          r.FormValue("to"),
+		SMTPSendmail:    r.FormValue("sendmail"),
+	}
+}
+
+// smtpSaveAndMaybePassword persists the SMTP settings from r (smtp-set) and,
+// when a password is supplied, updates it (smtp-set-password). On failure it
+// returns a human-readable message describing which step failed.
+func smtpSaveAndMaybePassword(cfg *Config, r *http.Request) (string, error) {
+	if _, err := doSocket(cfg, smtpSetRequest(r)); err != nil {
+		return "save failed: " + err.Error(), err
+	}
+	if pw := r.FormValue("password"); pw != "" {
+		if _, err := doSocket(cfg, socketRequest{Cmd: "smtp-set-password", Password: pw}); err != nil {
+			return "password save failed: " + err.Error(), err
+		}
+	}
+	return "", nil
 }
 
 func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
@@ -175,29 +208,11 @@ func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		port, _ := strconv.Atoi(r.FormValue("port"))
-		timeoutSecs, _ := strconv.Atoi(r.FormValue("timeout_secs"))
-		req := socketRequest{
-			Cmd:             "smtp-set",
-			SMTPHost:        r.FormValue("host"),
-			SMTPPort:        port,
-			SMTPUsername:    r.FormValue("username"),
-			SMTPFrom:        r.FormValue("from"),
-			SMTPFromName:    r.FormValue("from_name"),
-			SMTPTLS:         r.FormValue("tls"),
-			SMTPTimeoutSecs: timeoutSecs,
-			SMTPTo:          r.FormValue("to"),
-			SMTPSendmail:    r.FormValue("sendmail"),
-		}
-		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "SMTP error", req); !ok {
+		msg, err := smtpSaveAndMaybePassword(cfg, r)
+		if err != nil {
+			log.Printf("SMTP error: %v", err)
+			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("SMTP error: "+msg), http.StatusSeeOther)
 			return
-		}
-
-		// update password if provided
-		if pw := r.FormValue("password"); pw != "" {
-			if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "SMTP saved but password error", socketRequest{Cmd: "smtp-set-password", Password: pw}); !ok {
-				return
-			}
 		}
 		http.Redirect(w, r, "/notifications?flash=SMTP+settings+saved", http.StatusSeeOther)
 	}
@@ -243,52 +258,30 @@ func notificationsMatrixSaveHandler(cfg *Config) http.HandlerFunc {
 func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad request"})
+			respondJSON(w, http.StatusOK, false, "bad request")
 			return
 		}
-		port, _ := strconv.Atoi(r.FormValue("port"))
-		timeoutSecs, _ := strconv.Atoi(r.FormValue("timeout_secs"))
-		saveReq := socketRequest{
-			Cmd:             "smtp-set",
-			SMTPHost:        r.FormValue("host"),
-			SMTPPort:        port,
-			SMTPUsername:    r.FormValue("username"),
-			SMTPFrom:        r.FormValue("from"),
-			SMTPFromName:    r.FormValue("from_name"),
-			SMTPTLS:         r.FormValue("tls"),
-			SMTPTimeoutSecs: timeoutSecs,
-			SMTPTo:          r.FormValue("to"),
-			SMTPSendmail:    r.FormValue("sendmail"),
-		}
-		if _, err := doSocket(cfg, saveReq); err != nil {
-			respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
+		msg, err := smtpSaveAndMaybePassword(cfg, r)
+		if err != nil {
+			respondJSON(w, http.StatusOK, false, msg)
 			return
-		}
-		if pw := r.FormValue("password"); pw != "" {
-			if _, err := doSocket(cfg, socketRequest{Cmd: "smtp-set-password", Password: pw}); err != nil {
-				respondJSON(w, http.StatusBadGateway, false, "password save failed: "+err.Error())
-				return
-			}
 		}
 		// Send test email to the configured recipient.
 		to := r.FormValue("to")
 		if to == "" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "No recipient address configured — fill in the Admin To field first."})
+			respondJSON(w, http.StatusOK, false, "No recipient address configured — fill in the Admin To field first.")
 			return
 		}
 		testResp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-test", SMTPTo: to})
-		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "socket error: " + err.Error()})
+			respondJSON(w, http.StatusOK, false, "socket error: "+err.Error())
 			return
 		}
 		if !testResp.OK {
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": testResp.Error})
+			respondJSON(w, http.StatusOK, false, testResp.Error)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		respondJSON(w, http.StatusOK, true, "")
 	}
 }
 

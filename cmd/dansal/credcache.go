@@ -66,6 +66,27 @@ func (c *credCache) invalidate(key string) {
 	c.mu.Unlock()
 }
 
+// invalidateByTokenID removes the cached entry for a specific session token
+// row by its DB id. Callers that revoke a session (deleteSession,
+// adminRevokeSession) only have the hashed token read back from the tokens
+// table, not the raw token the cache is keyed by, so invalidate(hashedToken)
+// silently misses and the cached credential keeps authenticating requests
+// for up to credCacheTTL after the DB row is gone (#1004). tokenID is
+// unique per row and is already cached alongside the entry, so it's a safe
+// key to prune by without touching the user's other sessions.
+func (c *credCache) invalidateByTokenID(tokenID int) {
+	if tokenID == 0 {
+		return
+	}
+	c.mu.Lock()
+	for k, e := range c.entries {
+		if e.tokenID == tokenID {
+			delete(c.entries, k)
+		}
+	}
+	c.mu.Unlock()
+}
+
 // pruneByUserID removes all cached entries for a user (e.g. when the account is disabled).
 func (c *credCache) pruneByUserID(userID int) {
 	c.mu.Lock()

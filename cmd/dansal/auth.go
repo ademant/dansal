@@ -360,7 +360,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if migrate {
-		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(req.Password), user.ID)
+		if newHash, err := hashPassword(req.Password); err != nil {
+			log.Printf("auth: hash migration for user %d skipped: %v", user.ID, err)
+		} else {
+			db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, user.ID)
+		}
 	}
 	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", user.ID)
 
@@ -456,7 +460,10 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(parts) == 2 && parts[0] == "Bearer" {
 		token := parts[1]
-		db.Exec("DELETE FROM tokens WHERE token = ?", token)
+		// tokens.token stores sha256Hex(token) (see createTokenInDB) — deleting
+		// by the raw token never matched any row, so logout never actually
+		// revoked the session server-side (#1004).
+		db.Exec("DELETE FROM tokens WHERE token = ?", sha256Hex(token))
 		credentials.invalidate(token)
 		lastSeenMu.Lock()
 		delete(lastSeenCache, token)

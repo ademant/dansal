@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -229,6 +230,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		verifiedInitial = 1
 	}
 
+	// Tokens are single-factor account-enabling credentials (whoever presents
+	// one gets an invite) — hash at rest like magic_login_tokens, rather than
+	// storing plaintext (#1014). The raw values are still what's emailed/
+	// returned to the client; only the DB copy is hashed.
 	var pendingID int64
 	dbErr := db.QueryRow(
 		`INSERT INTO pending_registrations
@@ -236,7 +241,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		  reg_type, org_id, org_name, org_actor_name, org_description, org_website, org_contact_email,
 		  verification_channel, telegram, verified, expires_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
-		verificationToken, approvalToken, req.Email, req.Description,
+		sha256Hex(verificationToken), sha256Hex(approvalToken), req.Email, req.Description,
 		req.RegType, orgIDArg, req.OrgName, req.OrgActorName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
 		channel, req.Telegram, verifiedInitial, expiresAt,
 	).Scan(&pendingID)
@@ -267,7 +272,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg, false); err != nil {
 				log.Printf("register: send verify email: %v", err)
 			} else {
-				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, verificationToken)
+				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, sha256Hex(verificationToken))
 			}
 		}()
 		json.NewEncoder(w).Encode(map[string]string{
@@ -329,8 +334,11 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 		"has_passkey": hasPasskey,
 	}
 	// Only return invite URL when the caller proves ownership via the verification token
-	// and the invite is still valid (not used, not expired).
-	if approved == 1 && token != "" && token == storedToken && approvedInviteURL != "" {
+	// and the invite is still valid (not used, not expired). storedToken is the
+	// sha256 hash at rest; compare constant-time against the hash of the
+	// presented token (#1014).
+	tokenMatches := token != "" && subtle.ConstantTimeCompare([]byte(sha256Hex(token)), []byte(storedToken)) == 1
+	if approved == 1 && tokenMatches && approvedInviteURL != "" {
 		inviteToken := inviteTokenFromURL(approvedInviteURL)
 		if inviteToken != "" && isInviteUsable(inviteToken) {
 			resp["invite_url"] = approvedInviteURL
@@ -362,7 +370,7 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 	var verified int
 	err := db.QueryRow(
 		"SELECT id, COALESCE(email,''), COALESCE(telegram,''), verification_channel, expires_at, verified FROM pending_registrations WHERE verification_token=?",
-		token,
+		sha256Hex(token),
 	).Scan(&id, &email, &telegram, &channel, &expiresAt, &verified)
 	if err == sql.ErrNoRows {
 		writeError(w, "registration not found", http.StatusNotFound)
@@ -405,7 +413,7 @@ func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var verified int
 	err := db.QueryRow(
-		"SELECT id, verified FROM pending_registrations WHERE verification_token=?", token,
+		"SELECT id, verified FROM pending_registrations WHERE verification_token=?", sha256Hex(token),
 	).Scan(&id, &verified)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNoContent)
@@ -436,7 +444,7 @@ func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
 	var expiresAt string
 	err := db.QueryRow(
 		"SELECT id, expires_at FROM pending_registrations WHERE verification_token=? AND verified=0",
-		token,
+		sha256Hex(token),
 	).Scan(&id, &expiresAt)
 	if err != nil {
 		writeError(w, "token not found", http.StatusNotFound)

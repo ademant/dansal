@@ -40,16 +40,20 @@ func passwordKDF() string {
 	return "argon2id"
 }
 
-func hashArgon2id(password string) string {
+// hashArgon2id and hashPBKDF2 return an error instead of panicking on a
+// rand.Read failure — both are reachable from HTTP handlers (registration,
+// password change, admin user creation), so a transient CSPRNG failure must
+// not be able to crash the process (#1014).
+func hashArgon2id(password string) (string, error) {
 	salt := make([]byte, argon2SaltLen)
 	if _, err := rand.Read(salt); err != nil {
-		panic(fmt.Sprintf("argon2id: %v", err))
+		return "", fmt.Errorf("argon2id: %w", err)
 	}
 	hash := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argon2Memory, argon2Time, argon2Threads,
 		base64.RawStdEncoding.EncodeToString(salt),
-		base64.RawStdEncoding.EncodeToString(hash))
+		base64.RawStdEncoding.EncodeToString(hash)), nil
 }
 
 func checkArgon2id(password, stored string) bool {
@@ -77,16 +81,16 @@ func checkArgon2id(password, stored string) bool {
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
-func hashPBKDF2(password string) string {
+func hashPBKDF2(password string) (string, error) {
 	salt := make([]byte, pbkdf2SaltLen)
 	if _, err := rand.Read(salt); err != nil {
-		panic(fmt.Sprintf("pbkdf2: %v", err))
+		return "", fmt.Errorf("pbkdf2: %w", err)
 	}
 	hash := pbkdf2.Key([]byte(password), salt, pbkdf2Iterations, pbkdf2KeyLen, sha256.New)
 	return fmt.Sprintf("$pbkdf2-sha256$i=%d$%s$%s",
 		pbkdf2Iterations,
 		base64.RawStdEncoding.EncodeToString(salt),
-		base64.RawStdEncoding.EncodeToString(hash))
+		base64.RawStdEncoding.EncodeToString(hash)), nil
 }
 
 func checkPBKDF2(password, stored string) bool {

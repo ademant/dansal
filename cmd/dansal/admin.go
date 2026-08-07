@@ -482,12 +482,14 @@ func adminRevokeSession(req adminRequest) adminResponse {
 	if req.SessionID == 0 {
 		return adminResponse{OK: false, Error: "session_id is required"}
 	}
-	var token string
-	if err := db.QueryRow("SELECT token FROM tokens WHERE id=?", req.SessionID).Scan(&token); err != nil {
+	if err := db.QueryRow("SELECT id FROM tokens WHERE id=?", req.SessionID).Scan(new(int)); err != nil {
 		return adminResponse{OK: false, Error: "session not found"}
 	}
 	db.Exec("DELETE FROM tokens WHERE id=?", req.SessionID)
-	credentials.invalidate(token)
+	// tokens.token is hashed at rest — invalidate(hashedToken) never matched
+	// the raw-keyed cred cache, leaving the revoked session usable for up to
+	// credCacheTTL. invalidateByTokenID prunes by the row id instead (#1004).
+	credentials.invalidateByTokenID(req.SessionID)
 	return adminResponse{OK: true}
 }
 
@@ -537,9 +539,13 @@ func adminCreateUser(req adminRequest) adminResponse {
 	if !validateRole(role) {
 		return adminResponse{OK: false, Error: "invalid role: use admin, user, or publisher"}
 	}
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		return adminResponse{OK: false, Error: "internal error"}
+	}
 	result, err := db.Exec(
 		"INSERT INTO users (email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?)",
-		req.Email, hashPassword(req.Password), role, req.Telegram, req.Matrix,
+		req.Email, passwordHash, role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
 		return adminResponse{OK: false, Error: "email already exists"}
@@ -573,8 +579,12 @@ func adminSetPassword(req adminRequest) adminResponse {
 	if isPasswordPwned(ctx, req.Password) {
 		return adminResponse{OK: false, Error: "Password has appeared in a data breach; choose a different one"}
 	}
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		return adminResponse{OK: false, Error: "internal error"}
+	}
 	result, err := db.Exec("UPDATE users SET password_hash = ? WHERE email = ?",
-		hashPassword(req.Password), req.Email)
+		passwordHash, req.Email)
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}

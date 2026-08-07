@@ -13,7 +13,10 @@ func setPasswordKDF(t *testing.T, kdf string) {
 func TestHashPasswordArgon2idRoundTrip(t *testing.T) {
 	setPasswordKDF(t, "argon2id")
 
-	stored := hashPassword("s3cret!")
+	stored, err := hashPassword("s3cret!")
+	if err != nil {
+		t.Fatalf("hashPassword: %v", err)
+	}
 	ok, migrate := checkPassword("s3cret!", stored)
 	if !ok {
 		t.Fatal("expected password to verify")
@@ -29,7 +32,10 @@ func TestHashPasswordArgon2idRoundTrip(t *testing.T) {
 func TestHashPasswordPBKDF2RoundTrip(t *testing.T) {
 	setPasswordKDF(t, "pbkdf2")
 
-	stored := hashPassword("s3cret!")
+	stored, err := hashPassword("s3cret!")
+	if err != nil {
+		t.Fatalf("hashPassword: %v", err)
+	}
 	ok, migrate := checkPassword("s3cret!", stored)
 	if !ok {
 		t.Fatal("expected password to verify")
@@ -44,7 +50,10 @@ func TestHashPasswordPBKDF2RoundTrip(t *testing.T) {
 
 func TestCheckPasswordMigratesAcrossKDFs(t *testing.T) {
 	setPasswordKDF(t, "pbkdf2")
-	stored := hashPassword("s3cret!")
+	stored, err := hashPassword("s3cret!")
+	if err != nil {
+		t.Fatalf("hashPassword: %v", err)
+	}
 
 	// Admin flips the configured KDF to argon2id; the pbkdf2 hash should
 	// still verify, but now be flagged for migration.

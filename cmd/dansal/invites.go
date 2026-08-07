@@ -412,9 +412,14 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Display name is already taken", http.StatusConflict)
 		return
 	}
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	result, err := tx.Exec(
 		"INSERT INTO users (email, display_name, password_hash, role, telegram, matrix, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		emailVal, req.DisplayName, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix, emailVerified,
+		emailVal, req.DisplayName, passwordHash, invite.Role, req.Telegram, req.Matrix, emailVerified,
 	)
 	if err != nil {
 		writeError(w, "Account with this email already exists", http.StatusConflict)

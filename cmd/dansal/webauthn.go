@@ -845,7 +845,7 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := db.QueryRow(
 		"SELECT id, COALESCE(email,''), verified, user_id, expires_at FROM pending_registrations WHERE id=? AND verification_token=?",
-		req.PendingID, req.VerificationToken,
+		req.PendingID, sha256Hex(req.VerificationToken),
 	).Scan(&pr.ID, &pr.Email, &pr.Verified, &pr.UserID, &pr.ExpiresAt); err != nil {
 		writeError(w, "Pending registration not found", http.StatusNotFound)
 		return

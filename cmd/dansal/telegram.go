@@ -88,7 +88,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		var regVerified int
 		regErr := db.QueryRow(
 			"SELECT id, expires_at, verified FROM pending_registrations WHERE verification_token=?",
-			regToken,
+			sha256Hex(regToken),
 		).Scan(&regID, &regExpires, &regVerified)
 		if regErr != nil {
 			_ = sendTelegramMessage(chatIDStr, "This registration token is invalid or has already been used.")

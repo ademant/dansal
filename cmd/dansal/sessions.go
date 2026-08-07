@@ -89,7 +89,11 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.Exec("DELETE FROM tokens WHERE id=?", sessionID)
-	credentials.invalidate(token)
+	// token here is the hashed value read back from the tokens table, not the
+	// raw token the cache/lastSeenCache are keyed by — invalidate by tokenID
+	// instead so the cached credential doesn't keep working for up to
+	// credCacheTTL after revocation (#1004).
+	credentials.invalidateByTokenID(sessionID)
 	lastSeenMu.Lock()
 	delete(lastSeenCache, token)
 	lastSeenMu.Unlock()

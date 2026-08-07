@@ -81,9 +81,9 @@ func passwordBytes(password string) []byte {
 // hashPassword hashes password with the configured KDF (argon2id by
 // default, or pbkdf2 for FIPS 140 environments — see config.go's
 // PasswordKDF and #802).
-func hashPassword(password string) string {
+func hashPassword(password string) (string, error) {
 	if password == "" {
-		return ""
+		return "", nil
 	}
 	if passwordKDF() == "pbkdf2" {
 		return hashPBKDF2(password)
@@ -690,7 +690,12 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, err := db.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(req.NewPassword), userID); err != nil {
+	newHash, err := hashPassword(req.NewPassword)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if _, err := db.Exec("UPDATE users SET password_hash=? WHERE id=?", newHash, userID); err != nil {
 		writeError(w, "Failed to update password", http.StatusInternalServerError)
 		return
 	}

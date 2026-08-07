@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -50,7 +51,7 @@ func adminBookingsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 		if !userCanManageEvent(r, su, event, client, token) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		bookings, err := client.GetBookings(r.Context(), eventID, token)
@@ -86,7 +87,9 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.UpdateBookingStatus(r.Context(), bookingID, "approved", token)
+		if err := client.UpdateBookingStatus(r.Context(), bookingID, "approved", token); err != nil {
+			log.Printf("approve booking %d: %v", bookingID, err)
+		}
 		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
@@ -105,7 +108,9 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.UpdateBookingStatus(r.Context(), bookingID, "cancelled", token)
+		if err := client.UpdateBookingStatus(r.Context(), bookingID, "cancelled", token); err != nil {
+			log.Printf("cancel booking %d: %v", bookingID, err)
+		}
 		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
@@ -124,7 +129,9 @@ func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.DeleteBooking(r.Context(), bookingID, token)
+		if err := client.DeleteBooking(r.Context(), bookingID, token); err != nil {
+			log.Printf("delete booking %d: %v", bookingID, err)
+		}
 		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}

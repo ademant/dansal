@@ -130,12 +130,9 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			return best
 		}
 		isAdmin := user.Role == "admin"
-		// For non-admins, build their org membership set to show edit button per org.
-		myOrgIDs := map[int]bool{}
-		if !isAdmin {
-			for _, id := range getUserOrgIDs(r.Context(), client, user.ID, token) {
-				myOrgIDs[id] = true
-			}
+		myOrgIDs := memberOrgSet(r, client, user)
+		if isAdmin {
+			myOrgIDs = map[int]bool{}
 		}
 		stats := make([]OrgStats, len(orgs))
 		for i, o := range orgs {
@@ -165,7 +162,7 @@ func adminOrgNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.Hand
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		title := i18n.T(r, "admin_new")
@@ -180,7 +177,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -247,7 +244,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			return
 		}
 		if user.Role != "admin" && user.Role != "user" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -260,14 +257,12 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			http.NotFound(w, r)
 			return
 		}
-		token := getSessionToken(r)
 		// Non-admins may only edit orgs they belong to.
-		if user.Role != "admin" {
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[org.ID] {
-				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
-				return
-			}
+		if user.Role != "admin" && !memberOrgSet(r, client, user)[org.ID] {
+			forbidden(w, r)
+			return
 		}
+		token := getSessionToken(r)
 		var follows []FollowRecord
 		hasActorWithFollowers := false
 		if actor, err := getActorByOrgID(db, id); err == nil {
@@ -360,7 +355,7 @@ func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.H
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -408,7 +403,7 @@ func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -449,7 +444,7 @@ func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		orgID, err := strconv.Atoi(r.PathValue("id"))
@@ -469,9 +464,13 @@ func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if action == "remove" {
-			_ = client.RemoveOrgMember(r.Context(), orgID, userID, token)
+			if err := client.RemoveOrgMember(r.Context(), orgID, userID, token); err != nil {
+				log.Printf("remove org member %d from %d: %v", userID, orgID, err)
+			}
 		} else {
-			_ = client.AddOrgMember(r.Context(), orgID, userID, token)
+			if err := client.AddOrgMember(r.Context(), orgID, userID, token); err != nil {
+				log.Printf("add org member %d to %d: %v", userID, orgID, err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
 	}
@@ -495,8 +494,8 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				http.NotFound(w, r)
 				return
 			}
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[org.ID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+			if !memberOrgSet(r, client, user)[org.ID] {
+				forbidden(w, r)
 				return
 			}
 		}
@@ -511,9 +510,13 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			return
 		}
 		if action == "remove" {
-			_ = client.UnassignLocationOrg(r.Context(), locID, orgID, token)
+			if err := client.UnassignLocationOrg(r.Context(), locID, orgID, token); err != nil {
+				log.Printf("unassign org %d from location %d: %v", orgID, locID, err)
+			}
 		} else {
-			_ = client.BulkAssignLocationOrg(r.Context(), []int{locID}, &orgID, token)
+			if err := client.BulkAssignLocationOrg(r.Context(), []int{locID}, &orgID, token); err != nil {
+				log.Printf("assign org %d to location %d: %v", orgID, locID, err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
 	}
@@ -526,14 +529,14 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			return
 		}
 		if user.Role != "admin" && user.Role != "user" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		// A logo upload triggers a slow AVIF re-encode on the backend (WASM-based
 		// encoder, can take well over the server's default 30s WriteTimeout for a
 		// detailed photo) — extend the deadline for this request rather than
 		// raising it server-wide.
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
+		adminWriteDeadline(w)
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -547,11 +550,9 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			return
 		}
 		token := getSessionToken(r)
-		if user.Role != "admin" {
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[originalOrg.ID] {
-				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
-				return
-			}
+		if user.Role != "admin" && !memberOrgSet(r, client, user)[originalOrg.ID] {
+			forbidden(w, r)
+			return
 		}
 
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -641,7 +642,7 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -649,7 +650,9 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteOrganization(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteOrganization(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete organization %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
 }
@@ -675,7 +678,9 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 				}
 			}
 			if len(ids) > 0 {
-				_ = client.BulkRunFetchSources(r.Context(), ids, token)
+				if err := client.BulkRunFetchSources(r.Context(), ids, token); err != nil {
+					log.Printf("run feeds for org %d: %v", id, err)
+				}
 			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
@@ -701,12 +706,9 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 		// Redelivery blasts the org's whole follower list — restrict it to
 		// admins and members of that org, matching adminOrgEditPageHandler's
 		// access rule (#1002).
-		if user.Role != "admin" {
-			token := getSessionToken(r)
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, user.ID, token))[id] {
-				http.Error(w, "Forbidden: you are not a member of this organisation", http.StatusForbidden)
-				return
-			}
+		if user.Role != "admin" && !memberOrgSet(r, client, user)[id] {
+			forbidden(w, r)
+			return
 		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -754,7 +756,7 @@ func adminOrgCheckActorNameHandler(cfg *Config, client *DansalClient) http.Handl
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -794,7 +796,9 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteOrgImage(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteOrgImage(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete org image %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }
@@ -810,7 +814,9 @@ func adminOrgAvatarDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteOrgAvatar(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteOrgAvatar(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete org avatar %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }

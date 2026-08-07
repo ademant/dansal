@@ -205,7 +205,7 @@ func smtpSaveAndMaybePassword(cfg *Config, r *http.Request) (string, error) {
 func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		msg, err := smtpSaveAndMaybePassword(cfg, r)
@@ -221,7 +221,7 @@ func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 func notificationsTelegramSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "Telegram error", socketRequest{
@@ -238,7 +238,7 @@ func notificationsTelegramSaveHandler(cfg *Config) http.HandlerFunc {
 func notificationsMatrixSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		if _, ok := socketFlashRedirect(w, r, cfg, "/notifications", "Matrix error", socketRequest{
@@ -377,7 +377,7 @@ func respondJSON(w http.ResponseWriter, status int, ok bool, errMsg string) {
 func notificationsHeartbeatSaveHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		mins, _ := strconv.Atoi(r.FormValue("interval_mins"))

@@ -286,7 +286,9 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
+				"Error": "bad request",
+			}))
 			return
 		}
 		email := r.FormValue("email")

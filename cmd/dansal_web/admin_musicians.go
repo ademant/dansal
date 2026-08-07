@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ── Musicians ─────────────────────────────────────────────────────────────────
@@ -168,7 +167,7 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		// encoder, can take well over the server's default 30s WriteTimeout for a
 		// detailed photo) — extend the deadline for this request rather than
 		// raising it server-wide.
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
+		adminWriteDeadline(w)
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -228,7 +227,9 @@ func adminMusicianDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteMusician(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteMusician(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete musician %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
 	}
 }
@@ -244,7 +245,9 @@ func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.Han
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteMusicianImage(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteMusicianImage(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete musician image %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/musicians/%d/edit", id), http.StatusSeeOther)
 	}
 }
@@ -260,7 +263,9 @@ func adminMusicianAvatarDeleteHandler(cfg *Config, client *DansalClient) http.Ha
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteMusicianAvatar(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteMusicianAvatar(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete musician avatar %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/musicians/%d/edit", id), http.StatusSeeOther)
 	}
 }

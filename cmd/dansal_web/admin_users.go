@@ -35,10 +35,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		isAdmin := su.Role == "admin"
 
 		orgs, _ := client.GetOrganizations(r.Context())
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
+		orgMap := buildOrgMap(orgs)
 
 		orgIDs := make([]int, len(orgs))
 		for i, o := range orgs {
@@ -140,7 +137,7 @@ func adminGenerateMagicLinkHandler(cfg *Config, client *DansalClient) http.Handl
 			return
 		}
 		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -165,7 +162,7 @@ func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -177,7 +174,9 @@ func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		_ = client.UpdateUser(r.Context(), id, map[string]string{"role": r.FormValue("role")}, getSessionToken(r))
+		if err := client.UpdateUser(r.Context(), id, map[string]string{"role": r.FormValue("role")}, getSessionToken(r)); err != nil {
+			log.Printf("set role of user %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
 }
@@ -205,14 +204,18 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		// Non-admins may only add/remove members of orgs they themselves belong to.
-		if su.Role != "admin" && !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[orgID] {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+		if su.Role != "admin" && !memberOrgSet(r, client, su)[orgID] {
+			forbidden(w, r)
 			return
 		}
 		if action == "remove" {
-			_ = client.RemoveOrgMember(r.Context(), orgID, userID, token)
+			if err := client.RemoveOrgMember(r.Context(), orgID, userID, token); err != nil {
+				log.Printf("remove user %d from org %d: %v", userID, orgID, err)
+			}
 		} else {
-			_ = client.AddOrgMember(r.Context(), orgID, userID, token)
+			if err := client.AddOrgMember(r.Context(), orgID, userID, token); err != nil {
+				log.Printf("add user %d to org %d: %v", userID, orgID, err)
+			}
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -225,7 +228,7 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -239,11 +242,15 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			switch action {
 			case "org":
 				if orgID != nil {
-					_ = client.AddOrgMember(r.Context(), *orgID, id, token)
+					if err := client.AddOrgMember(r.Context(), *orgID, id, token); err != nil {
+						log.Printf("bulk add user %d to org %d: %v", id, *orgID, err)
+					}
 				}
 			case "role":
 				if role := r.FormValue("role"); role != "" {
-					_ = client.UpdateUser(r.Context(), id, map[string]string{"role": role}, token)
+					if err := client.UpdateUser(r.Context(), id, map[string]string{"role": role}, token); err != nil {
+						log.Printf("bulk set role of user %d: %v", id, err)
+					}
 				}
 			}
 		}
@@ -258,7 +265,7 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -271,7 +278,9 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		disabled := r.FormValue("disabled") == "1"
-		_ = client.SetUserDisabled(r.Context(), id, disabled, getSessionToken(r))
+		if err := client.SetUserDisabled(r.Context(), id, disabled, getSessionToken(r)); err != nil {
+			log.Printf("set disabled=%t for user %d: %v", disabled, id, err)
+		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
 }
@@ -283,7 +292,7 @@ func adminUserTelegramMessageHandler(cfg *Config, client *DansalClient) http.Han
 			return
 		}
 		if su.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -319,7 +328,7 @@ func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			OrgID      *int   `json:"org_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "bad request")
 			return
 		}
 		if req.InviteType != "qr" && req.InviteType != "link" {
@@ -328,23 +337,17 @@ func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		token := getSessionToken(r)
 		if su.Role != "admin" {
 			if req.OrgID == nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(map[string]string{"error": "organisation required"})
+				writeJSONError(w, r, http.StatusForbidden, "organisation required")
 				return
 			}
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*req.OrgID] {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
+			if !memberOrgSet(r, client, su)[*req.OrgID] {
+				forbidden(w, r)
 				return
 			}
 		}
 		link, err := client.CreateInvite(r.Context(), req.InviteType, req.OrgID, token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -364,7 +367,9 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			return
 		}
 		invToken := r.PathValue("token")
-		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
+		if err := client.RevokeInvite(r.Context(), invToken, getSessionToken(r)); err != nil {
+			log.Printf("revoke invite %s: %v", invToken, err)
+		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
 }
@@ -383,9 +388,7 @@ func adminInviteResendHandler(cfg *Config, client *DansalClient) http.HandlerFun
 
 		invites, err := client.ListInvites(r.Context(), token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		var old *InviteLink
@@ -396,15 +399,11 @@ func adminInviteResendHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			}
 		}
 		if old == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invite not found"})
+			writeJSONError(w, r, http.StatusNotFound, "invite not found")
 			return
 		}
-		if su.Role != "admin" && (old.OrgID == nil || !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*old.OrgID]) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
+		if su.Role != "admin" && (old.OrgID == nil || !memberOrgSet(r, client, su)[*old.OrgID]) {
+			forbidden(w, r)
 			return
 		}
 
@@ -414,12 +413,12 @@ func adminInviteResendHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		}
 		link, err := client.CreateInvite(r.Context(), inviteType, old.OrgID, token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
-		_ = client.RevokeInvite(r.Context(), invToken, token)
+		if err := client.RevokeInvite(r.Context(), invToken, token); err != nil {
+			log.Printf("revoke invite %s: %v", invToken, err)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
@@ -442,21 +441,17 @@ func adminPublisherCreateHandler(cfg *Config, client *DansalClient) http.Handler
 			OrgID *int   `json:"org_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "bad request")
 			return
 		}
 		token := getSessionToken(r)
 		if su.Role != "admin" && req.OrgID == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": "organisation required"})
+			writeJSONError(w, r, http.StatusForbidden, "organisation required")
 			return
 		}
 		pub, err := client.CreatePublisher(r.Context(), req.Name, req.OrgID, token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -472,15 +467,13 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
 		newKey, keyID, err := client.RegeneratePublisherKey(r.Context(), id, getSessionToken(r))
 		if err != nil {
 			log.Printf("regenerate publisher key %d: %v", id, err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -498,25 +491,17 @@ func adminPublisherInviteHandler(cfg *Config, client *DansalClient) http.Handler
 			OrgID *int `json:"org_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrgID == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "org_id required"})
+			writeJSONError(w, r, http.StatusBadRequest, "org_id required")
 			return
 		}
 		token := getSessionToken(r)
-		if su.Role != "admin" {
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*req.OrgID] {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
-				return
-			}
+		if su.Role != "admin" && !memberOrgSet(r, client, su)[*req.OrgID] {
+			forbidden(w, r)
+			return
 		}
 		link, err := client.CreatePublisherInvite(r.Context(), *req.OrgID, token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		redeemURL := cfg.publicBaseURL() + "/api/v1/invites/" + link.Token + "/publisher"
@@ -537,14 +522,12 @@ func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
 		if err := client.DeletePublisher(r.Context(), id, getSessionToken(r)); err != nil {
 			log.Printf("delete publisher %d: %v", id, err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

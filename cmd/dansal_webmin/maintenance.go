@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -54,7 +55,9 @@ func maintenancePruneImagesHandler(cfg *Config) http.HandlerFunc {
 			Removed    int   `json:"removed"`
 			FreedBytes int64 `json:"freed_bytes"`
 		}
-		json.Unmarshal(resp.Data, &result)
+		if err := json.Unmarshal(resp.Data, &result); err != nil {
+			log.Printf("prune-images: decode result: %v", err)
+		}
 		msg := fmt.Sprintf("Removed %d orphaned image(s), freed %s", result.Removed, fmtBytes(result.FreedBytes))
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
@@ -72,7 +75,9 @@ func maintenanceFetchAllHandler(cfg *Config) http.HandlerFunc {
 			Events int    `json:"events"`
 			Error  string `json:"error,omitempty"`
 		}
-		json.Unmarshal(resp.Data, &results)
+		if err := json.Unmarshal(resp.Data, &results); err != nil {
+			log.Printf("fetch-all: decode results: %v", err)
+		}
 		total, errCount := 0, 0
 		for _, r := range results {
 			if r.Error != "" {
@@ -89,7 +94,7 @@ func maintenanceFetchAllHandler(cfg *Config) http.HandlerFunc {
 func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		filename := r.FormValue("filename")
@@ -127,7 +132,9 @@ func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 			DB     bool `json:"db"`
 			Images int  `json:"images"`
 		}
-		json.Unmarshal(resp2.Data, &result)
+		if err := json.Unmarshal(resp2.Data, &result); err != nil {
+			log.Printf("restore: decode result: %v", err)
+		}
 		msg := fmt.Sprintf("Restore complete — DB: %v, config: %v, images: %d", result.DB, result.Config, result.Images)
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
@@ -136,7 +143,7 @@ func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 func maintenanceBackupHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		outputPath := r.FormValue("output")
@@ -148,7 +155,9 @@ func maintenanceBackupHandler(cfg *Config) http.HandlerFunc {
 			Path string `json:"path"`
 			Size int64  `json:"size"`
 		}
-		json.Unmarshal(resp.Data, &result)
+		if err := json.Unmarshal(resp.Data, &result); err != nil {
+			log.Printf("backup: decode result: %v", err)
+		}
 		msg := fmt.Sprintf("Backup written to %s (%s)", result.Path, fmtBytes(result.Size))
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)
 	}

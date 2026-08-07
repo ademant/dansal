@@ -278,7 +278,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseMultipartForm(4 << 20); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 
@@ -343,7 +343,7 @@ func siteConfigRelayAssetsHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseMultipartForm(4 << 20); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
 			return
 		}
 		var callerID int

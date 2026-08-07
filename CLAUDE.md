@@ -18,7 +18,7 @@ Discussion and issue creation (steps 1–2) do not have to be immediately follow
 
 Skip the discussion step only for obvious typos or single-line fixes, which may be implemented directly without an issue. Always create the issue before writing code for anything else.
 
-**Batches of related issues**: when the user asks to analyse a range of issues and group them into an implementation order, encode that as GitHub labels (`phase-31`, `phase-32`, …) in dependency order rather than a scratch file — labels stay attached to the issues and survive across sessions. "Implement phase-N" then means: implement every issue with that label, one commit closing all of them together (multiple `Closes #NNN` lines), then `make build` + `sudo make deploy INSTANCE=dev`. Don't jump ahead to a later phase's issues even if related — phases are ordered because later ones assume earlier refactors landed.
+**Batches of related issues**: when the user asks to analyse a range of issues and group them into an implementation order, encode that as GitHub labels (`phase-31`, `phase-32`, …) in dependency order rather than a scratch file — labels stay attached to the issues and survive across sessions. "Implement phase-N" then means: implement every issue with that label, one commit closing all of them together (multiple `Closes #NNN` lines). Build/deploy only when separately asked (see Build & deploy). Don't jump ahead to a later phase's issues even if related — phases are ordered because later ones assume earlier refactors landed.
 
 **gofmt and doc comments**: `gofmt -w` converts straight quotes to curly quotes inside doc comments (comments immediately preceding a top-level declaration) — this is canonical Go 1.19+ formatting, not a mistake to undo. Run `gofmt -l <touched files>` after any refactor and `gofmt -w` to fix, same as `go vet`/`go test`.
 
@@ -33,6 +33,8 @@ go version  # must print go1.26 or higher
 Do not downgrade `go.mod`. If a new language or stdlib feature from 1.24+ is available and fits the problem, prefer it over a manual workaround.
 
 ## Build & deploy
+
+**`make build` and `sudo make deploy` are not run automatically after every change.** Implement, commit (`go build ./...`/`go vet ./...`/`gofmt -l`/`go test ./...` are still run every time to verify the change compiles and passes), and stop there — only run `make build` / `sudo make deploy INSTANCE=<name>` when the user explicitly asks for a build or deploy in that message. Several changes/commits commonly stack up before the user asks for a deploy; don't build+deploy after each one on your own initiative.
 
 Always rebuild and redeploy **all** binaries together, regardless of which files changed. A selective deploy risks shipping stale binaries (see issue #147).
 

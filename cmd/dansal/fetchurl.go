@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -990,6 +991,109 @@ func logFailedImportEntry(src FetchSource, req EventCreateRequest, err error) {
 	}
 }
 
+// maxFeedBodySize caps how much of a remote feed fetchFeedBody reads into
+// memory. The old per-parser 10 MiB LimitReader silently truncated larger
+// bodies mid-event, so the fetch stage now reads the whole body up to a
+// generous shared limit and each parser decides how much of it to consume
+// (see #1006).
+const maxFeedBodySize = 64 << 20
+
+// fetchFeedBody fetches src.URL and returns the body bytes, handling the
+// shared status-code check and the overall size cap.
+func fetchFeedBody(ctx context.Context, src FetchSource) ([]byte, error) {
+	resp, err := getWithRetry(ctx, safeClient, src.URL)
+	if err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("remote returned %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFeedBodySize))
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	return body, nil
+}
+
+// importEntries runs the shared import skeleton for a batch of pre-built
+// entries: it updates last_fetched_at, opens a transaction, imports every
+// entry through importSingleEvent inside a per-entry savepoint, and commits.
+// The finalize callback runs inside each savepoint so formats can do
+// per-entry database work (e.g. iCal image attachment or folkdance musician
+// resolution) around the importSingleEvent call. reqOf extracts the event
+// request from an entry for failure logging.
+func importEntries[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error) ([]Event, ImportCounts, error) {
+	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
+
+	td := parseTemplateData(src.TemplateData)
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	defer tx.Rollback()
+
+	var allEvents []Event
+	var counts ImportCounts
+
+	for _, entry := range entries {
+		if err := withEntrySavepoint(tx, func() error {
+			return finalize(tx, entry, td, &counts, &allEvents)
+		}); err != nil {
+			counts.Failed++
+			logFailedImportEntry(src, reqOf(entry), err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, ImportCounts{}, err
+	}
+	return allEvents, counts, nil
+}
+
+// importParsedFeed fetches src.URL, converts the body into event requests via
+// parse, then imports them through the shared transaction skeleton.
+func importParsedFeed(ctx context.Context, src FetchSource, parse func([]byte) ([]EventCreateRequest, error)) ([]Event, ImportCounts, error) {
+	body, err := fetchFeedBody(ctx, src)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	reqs, err := parse(body)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	return importEntries(ctx, src, reqs,
+		func(r EventCreateRequest) EventCreateRequest { return r },
+		func(tx querier, req EventCreateRequest, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
+			return err
+		})
+}
+
+// mergeTags merges per-feed tags with source-level tags, deduplicating while
+// preserving order (feed tags first, source tags after). Shared by the RSS,
+// Atom, iCal, gancio and folkdance importers.
+func mergeTags(feedTags, srcTags []string) []string {
+	seen := make(map[string]bool)
+	tags := make([]string, 0, len(feedTags)+len(srcTags))
+	for _, t := range feedTags {
+		t = strings.TrimSpace(t)
+		if t != "" && !seen[t] {
+			seen[t] = true
+			tags = append(tags, t)
+		}
+	}
+	for _, t := range srcTags {
+		t = strings.TrimSpace(t)
+		if t != "" && !seen[t] {
+			seen[t] = true
+			tags = append(tags, t)
+		}
+	}
+	return tags
+}
+
 // locationRequestByID returns an EventLocationRequest populated from a stored location.
 func locationRequestByID(id int) (EventLocationRequest, bool) {
 	var loc EventLocationRequest
@@ -1152,35 +1256,22 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 	return reqs
 }
 
-// importFromICalSource fetches an iCal URL and imports its events into the DB.
-func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(ctx, safeClient, src.URL)
+// icalImportEntry pairs an iCal event request with its source vevent so the
+// importer can attach images after a successful insert.
+type icalImportEntry struct {
+	req    EventCreateRequest
+	vevent *ics.VEvent
+}
+
+// parseICalBody parses an iCal body into event requests, expanding RRULE
+// occurrences, without touching the database.
+func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
+	cal, err := ics.ParseCalendar(bytes.NewReader(body))
 	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("parse iCal: %w", err)
 	}
 
-	cal, err := ics.ParseCalendar(io.LimitReader(resp.Body, 10<<20))
-	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("parse iCal: %w", err)
-	}
-
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
-
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
-	var allEvents []Event
-	var counts ImportCounts
+	var entries []icalImportEntry
 	now := time.Now().UTC()
 
 	for _, vevent := range cal.Events() {
@@ -1209,16 +1300,7 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 			continue
 		}
 
-		tags := parseICalCategories(vevent)
-		seen := make(map[string]bool)
-		for _, t := range tags {
-			seen[t] = true
-		}
-		for _, t := range src.Tags {
-			if !seen[t] {
-				tags = append(tags, t)
-			}
-		}
+		tags := mergeTags(parseICalCategories(vevent), src.Tags)
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)
 
@@ -1239,49 +1321,58 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
 			}
 
-			orgID := src.OrganizationID
-			if orgID == nil {
-				orgID = ensureOrgFromOrganizer(vevent)
-			}
-			eventReq := EventCreateRequest{
-				UID:                uid,
-				Source:             src.URL,
-				SourceLastModified: sourceLastModified,
-				FetchSourceID:      src.ID,
-				EventWriteRequest: EventWriteRequest{
-					Title:          title,
-					Description:    prop(ics.ComponentPropertyDescription),
-					StartTime:      occ[0].UTC().Format(time.RFC3339),
-					EndTime:        occ[1].UTC().Format(time.RFC3339),
-					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
-					Tags:           tags,
-					URL:            attachURL(vevent),
-					OrganizationID: orgID,
-					Dances:         src.DanceIDs,
-					Location:       parseICalLocation(vevent),
+			entries = append(entries, icalImportEntry{
+				req: EventCreateRequest{
+					UID:                uid,
+					Source:             src.URL,
+					SourceLastModified: sourceLastModified,
+					FetchSourceID:      src.ID,
+					EventWriteRequest: EventWriteRequest{
+						Title:          title,
+						Description:    prop(ics.ComponentPropertyDescription),
+						StartTime:      occ[0].UTC().Format(time.RFC3339),
+						EndTime:        occ[1].UTC().Format(time.RFC3339),
+						IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
+						Tags:           tags,
+						URL:            attachURL(vevent),
+						OrganizationID: src.OrganizationID,
+						Dances:         src.DanceIDs,
+						Location:       parseICalLocation(vevent),
+					},
 				},
-			}
-
-			var evs []Event
-			if err := withEntrySavepoint(tx, func() error {
-				var err error
-				evs, err = importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
-				return err
-			}); err != nil {
-				counts.Failed++
-				logFailedImportEntry(src, eventReq, err)
-				continue
-			}
-			for _, ev := range evs {
-				attachImagesFromICalEvent(ev.ID, vevent)
-			}
+				vevent: vevent,
+			})
 		}
 	}
+	return entries, nil
+}
 
-	if err := tx.Commit(); err != nil {
+// importFromICalSource fetches an iCal URL and imports its events into the DB.
+func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	body, err := fetchFeedBody(ctx, src)
+	if err != nil {
 		return nil, ImportCounts{}, err
 	}
-	return allEvents, counts, nil
+	entries, err := parseICalBody(body, src)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	return importEntries(ctx, src, entries,
+		func(e icalImportEntry) EventCreateRequest { return e.req },
+		func(tx querier, e icalImportEntry, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
+			req := e.req
+			if req.OrganizationID == nil {
+				req.OrganizationID = ensureOrgFromOrganizer(e.vevent)
+			}
+			evs, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
+			if err != nil {
+				return err
+			}
+			for _, ev := range evs {
+				attachImagesFromICalEvent(ev.ID, e.vevent)
+			}
+			return nil
+		})
 }
 
 // POST /api/v1/fetchurl

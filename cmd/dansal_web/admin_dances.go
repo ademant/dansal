@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ func adminDancesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		dances, _ := client.GetDances(r.Context())
@@ -36,7 +37,7 @@ func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -45,7 +46,9 @@ func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		}
 		name := strings.TrimSpace(r.FormValue("name"))
 		if name != "" {
-			_, _ = client.CreateDance(r.Context(), name, getSessionToken(r))
+			if _, err := client.CreateDance(r.Context(), name, getSessionToken(r)); err != nil {
+				log.Printf("create dance %q: %v", name, err)
+			}
 		}
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
 	}
@@ -58,7 +61,7 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -66,7 +69,9 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteDance(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteDance(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete dance %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
 	}
 }

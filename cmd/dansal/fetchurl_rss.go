@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 )
@@ -115,49 +114,31 @@ func rssEventDates(startStr, endStr string) (time.Time, time.Time, bool) {
 }
 
 func importFromRSSSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(ctx, safeClient, src.URL)
-	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
-	}
+	return importParsedFeed(ctx, src, func(body []byte) ([]EventCreateRequest, error) {
+		return parseRSSBody(body, src)
+	})
+}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("read body: %w", err)
-	}
-
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
-
+// parseRSSBody converts an RSS 2.0 or Atom body into EventCreateRequests.
+func parseRSSBody(body []byte, src FetchSource) ([]EventCreateRequest, error) {
 	// Try RSS 2.0
 	var rssFd rssFeed
 	if xmlErr := xml.Unmarshal(body, &rssFd); xmlErr == nil && rssFd.XMLName.Local == "rss" {
-		return importRSSItems(ctx, rssFd.Channel.Items, src)
+		return rssItemsToRequests(rssFd.Channel.Items, src), nil
 	}
 
 	// Try Atom
 	var atomFd atomFeed
 	if xmlErr := xml.Unmarshal(body, &atomFd); xmlErr == nil && atomFd.XMLName.Local == "feed" {
-		return importAtomEntries(ctx, atomFd.Entries, src)
+		return atomEntriesToRequests(atomFd.Entries, src), nil
 	}
 
-	return nil, ImportCounts{}, fmt.Errorf("not a valid RSS 2.0 or Atom feed")
+	return nil, fmt.Errorf("not a valid RSS 2.0 or Atom feed")
 }
 
-func importRSSItems(ctx context.Context, items []rssItem, src FetchSource) ([]Event, ImportCounts, error) {
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
+func rssItemsToRequests(items []rssItem, src FetchSource) []EventCreateRequest {
 	now := time.Now().UTC()
-	var allEvents []Event
-	var counts ImportCounts
+	var reqs []EventCreateRequest
 
 	for _, item := range items {
 		title := strings.TrimSpace(item.Title)
@@ -181,9 +162,7 @@ func importRSSItems(ctx context.Context, items []rssItem, src FetchSource) ([]Ev
 			uid = src.URL + "#" + title
 		}
 
-		tags := buildRSSTags(src.Tags, item.Categories)
-
-		eventReq := EventCreateRequest{
+		reqs = append(reqs, EventCreateRequest{
 			UID:           uid,
 			Source:        src.URL,
 			FetchSourceID: src.ID,
@@ -192,41 +171,19 @@ func importRSSItems(ctx context.Context, items []rssItem, src FetchSource) ([]Ev
 				Description:    item.Description,
 				StartTime:      startT.Format(time.RFC3339),
 				EndTime:        endT.Format(time.RFC3339),
-				Tags:           tags,
+				Tags:           mergeTags(item.Categories, src.Tags),
 				URL:            firstSet(item.Link),
 				OrganizationID: src.OrganizationID,
 				Dances:         src.DanceIDs,
 			},
-		}
-
-		if err := withEntrySavepoint(tx, func() error {
-			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
-			return err
-		}); err != nil {
-			counts.Failed++
-			logFailedImportEntry(src, eventReq, err)
-			continue
-		}
+		})
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
-	}
-	return allEvents, counts, nil
+	return reqs
 }
 
-func importAtomEntries(ctx context.Context, entries []atomEntry, src FetchSource) ([]Event, ImportCounts, error) {
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
+func atomEntriesToRequests(entries []atomEntry, src FetchSource) []EventCreateRequest {
 	now := time.Now().UTC()
-	var allEvents []Event
-	var counts ImportCounts
+	var reqs []EventCreateRequest
 
 	for _, entry := range entries {
 		title := strings.TrimSpace(entry.Title.Value)
@@ -264,10 +221,9 @@ func importAtomEntries(ctx context.Context, entries []atomEntry, src FetchSource
 				catTerms = append(catTerms, t)
 			}
 		}
-		tags := buildRSSTags(src.Tags, catTerms)
 		desc := firstSet(entry.Content.Value, entry.Summary.Value)
 
-		eventReq := EventCreateRequest{
+		reqs = append(reqs, EventCreateRequest{
 			UID:           uid,
 			Source:        src.URL,
 			FetchSourceID: src.ID,
@@ -276,45 +232,12 @@ func importAtomEntries(ctx context.Context, entries []atomEntry, src FetchSource
 				Description:    desc,
 				StartTime:      startT.Format(time.RFC3339),
 				EndTime:        endT.Format(time.RFC3339),
-				Tags:           tags,
+				Tags:           mergeTags(catTerms, src.Tags),
 				URL:            link,
 				OrganizationID: src.OrganizationID,
 				Dances:         src.DanceIDs,
 			},
-		}
-
-		if err := withEntrySavepoint(tx, func() error {
-			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
-			return err
-		}); err != nil {
-			counts.Failed++
-			logFailedImportEntry(src, eventReq, err)
-			continue
-		}
+		})
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
-	}
-	return allEvents, counts, nil
-}
-
-// buildRSSTags merges source-level tags with per-item categories, deduplicating.
-func buildRSSTags(srcTags, itemCats []string) []string {
-	seen := make(map[string]bool)
-	tags := make([]string, 0, len(srcTags)+len(itemCats))
-	for _, t := range itemCats {
-		t = strings.TrimSpace(t)
-		if t != "" && !seen[t] {
-			seen[t] = true
-			tags = append(tags, t)
-		}
-	}
-	for _, t := range srcTags {
-		if !seen[t] {
-			seen[t] = true
-			tags = append(tags, t)
-		}
-	}
-	return tags
+	return reqs
 }

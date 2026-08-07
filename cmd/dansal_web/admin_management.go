@@ -170,7 +170,7 @@ func adminStatsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 
@@ -197,7 +197,7 @@ func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 

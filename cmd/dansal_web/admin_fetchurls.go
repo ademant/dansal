@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -57,20 +58,15 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 		orgs, _ := client.GetOrganizations(r.Context())
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
+		orgMap := buildOrgMap(orgs)
 		isAdmin := su.Role == "admin"
 		if !isAdmin {
-			userOrgSet := orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))
-			var filtered []FetchSource
-			for _, s := range sources {
-				if s.OrganizationID != nil && userOrgSet[*s.OrganizationID] {
-					filtered = append(filtered, s)
+			sources = filterByUserOrgs(sources, func(s FetchSource) []int {
+				if s.OrganizationID != nil {
+					return []int{*s.OrganizationID}
 				}
-			}
-			sources = filtered
+				return nil
+			}, memberOrgSet(r, client, su))
 		}
 		title := i18n.T(r, "admin_fetchurls_title")
 		renderTemplate(w, tmpls.adminFetchurls, tmplData(r, cfg, i18n, title, AdminFetchurlsData{
@@ -129,10 +125,9 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		if !ok {
 			return
 		}
-		token := getSessionToken(r)
 		orgs, _ := client.GetOrganizations(r.Context())
 		if su.Role != "admin" {
-			userOrgSet := orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))
+			userOrgSet := memberOrgSet(r, client, su)
 			var filtered []Organization
 			for _, o := range orgs {
 				if userOrgSet[o.ID] {
@@ -142,14 +137,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			orgs = filtered
 		}
 		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
-		var orgIDs []int
-		if su.Role == "admin" {
-			for _, o := range orgs {
-				orgIDs = append(orgIDs, o.ID)
-			}
-		} else {
-			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
-		}
+		orgIDs := orgIDsForTemplates(r, client, su)
 		templates, _ := listTemplates(db, su.ID, orgIDs)
 		title := i18n.T(r, "fetch_new_title")
 		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
@@ -190,13 +178,12 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			}
 		}
 		if su.Role != "admin" {
-			token := getSessionToken(r)
 			if orgID == nil {
-				http.Error(w, "Forbidden: organisation required", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
-			if !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*orgID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+			if !memberOrgSet(r, client, su)[*orgID] {
+				forbidden(w, r)
 				return
 			}
 		}
@@ -219,15 +206,7 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			if orgID != nil {
 				orgIDInt = *orgID
 			}
-			var orgIDs []int
-			if su.Role == "admin" {
-				for _, o := range orgs {
-					orgIDs = append(orgIDs, o.ID)
-				}
-			} else {
-				orgIDs = getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))
-			}
-			templates, _ := listTemplates(db, su.ID, orgIDs)
+			templates, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 			tplIDInt := 0
 			if templateID != nil {
 				tplIDInt = *templateID
@@ -279,23 +258,15 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 			return
 		}
 		orgs, _ := client.GetOrganizations(r.Context())
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
-		var orgIDs []int
-		if su.Role == "admin" {
-			for _, o := range orgs {
-				orgIDs = append(orgIDs, o.ID)
-			}
-		} else {
-			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
-			userOrgSet := orgIDSet(orgIDs)
+		orgMap := buildOrgMap(orgs)
+		if su.Role != "admin" {
+			userOrgSet := memberOrgSet(r, client, su)
 			if src.OrganizationID == nil || !userOrgSet[*src.OrganizationID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
 		}
+		orgIDs := orgIDsForTemplates(r, client, su)
 		dances, _ := client.GetDances(r.Context())
 		selected := buildSelectedDanceNamesFromIDs(src.DanceIDs, dances)
 		templates, _ := listTemplates(db, su.ID, orgIDs)
@@ -348,16 +319,16 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 		token := getSessionToken(r)
 		if su.Role != "admin" {
-			userOrgSet := orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))
+			userOrgSet := memberOrgSet(r, client, su)
 			// Verify they own the source's current org
 			existing, ferr := client.GetFetchSource(r.Context(), id, token)
 			if ferr != nil || existing.OrganizationID == nil || !userOrgSet[*existing.OrganizationID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
 			// Also verify the new org (if changed) is still theirs
 			if orgID == nil || !userOrgSet[*orgID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
 		}
@@ -381,21 +352,10 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
-			orgMap := make(map[int]Organization, len(orgs))
-			for _, o := range orgs {
-				orgMap[o.ID] = o
-			}
+			orgMap := buildOrgMap(orgs)
 			dances, _ := client.GetDances(r.Context())
 			selected := buildSelectedDanceNamesFromIDs(danceIDs, dances)
-			var orgIDs []int
-			if su.Role == "admin" {
-				for _, o := range orgs {
-					orgIDs = append(orgIDs, o.ID)
-				}
-			} else {
-				orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
-			}
-			templates, _ := listTemplates(db, su.ID, orgIDs)
+			templates, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
 				Source:             src,
@@ -429,12 +389,14 @@ func adminFetchurlDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		token := getSessionToken(r)
 		if su.Role != "admin" {
 			src, ferr := client.GetFetchSource(r.Context(), id, token)
-			if ferr != nil || src.OrganizationID == nil || !orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, token))[*src.OrganizationID] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+			if ferr != nil || src.OrganizationID == nil || !memberOrgSet(r, client, su)[*src.OrganizationID] {
+				forbidden(w, r)
 				return
 			}
 		}
-		_ = client.DeleteFetchSource(r.Context(), id, token)
+		if err := client.DeleteFetchSource(r.Context(), id, token); err != nil {
+			log.Printf("delete fetch source %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
 	}
 }
@@ -490,18 +452,24 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		switch action {
 		case "delete":
 			if user.Role != "admin" {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
-			_ = client.BulkDeleteFetchSources(r.Context(), ids, token)
+			if err := client.BulkDeleteFetchSources(r.Context(), ids, token); err != nil {
+				log.Printf("bulk delete fetch sources: %v", err)
+			}
 		case "run":
-			_ = client.BulkRunFetchSources(r.Context(), ids, token)
+			if err := client.BulkRunFetchSources(r.Context(), ids, token); err != nil {
+				log.Printf("bulk run fetch sources: %v", err)
+			}
 		case "assign-org":
 			if user.Role != "admin" {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				forbidden(w, r)
 				return
 			}
-			_ = client.BulkAssignFetchSourceOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), token)
+			if err := client.BulkAssignFetchSourceOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), token); err != nil {
+				log.Printf("bulk assign fetch source org: %v", err)
+			}
 		case "add-tag":
 			newTag := strings.TrimSpace(r.FormValue("new_tag"))
 			if newTag != "" {
@@ -524,7 +492,9 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 						}
 						if !hasTag {
 							newTags := append(src.Tags, newTag)
-							_ = client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, src.KuferConfig, token)
+							if err := client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, src.KuferConfig, token); err != nil {
+								log.Printf("bulk add tag %q to fetch source %d: %v", newTag, src.ID, err)
+							}
 						}
 					}
 				}

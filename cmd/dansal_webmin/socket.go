@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type socketRequest struct {
@@ -40,12 +41,19 @@ type socketResponse struct {
 	Data  json.RawMessage `json:"data,omitempty"`
 }
 
+// socketTimeout bounds the whole admin-socket exchange so a hung socket can't
+// block a webmin HTTP handler forever. It deliberately matches the default
+// webmin HTTP WriteTimeout (30s) — anything slower than that fails the HTTP
+// request anyway.
+const socketTimeout = 30 * time.Second
+
 func sendSocket(socketPath string, req socketRequest) (socketResponse, error) {
-	conn, err := net.Dial("unix", socketPath)
+	conn, err := net.DialTimeout("unix", socketPath, socketTimeout)
 	if err != nil {
 		return socketResponse{}, fmt.Errorf("connect to %s: %w", socketPath, err)
 	}
 	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(socketTimeout))
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return socketResponse{}, fmt.Errorf("send: %w", err)
 	}

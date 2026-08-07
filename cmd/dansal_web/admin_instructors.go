@@ -174,7 +174,9 @@ func adminInstructorAvatarDeleteHandler(cfg *Config, client *DansalClient) http.
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteInstructorAvatar(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteInstructorAvatar(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete instructor avatar %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/instructors/%d/edit", id), http.StatusSeeOther)
 	}
 }
@@ -190,7 +192,9 @@ func adminInstructorDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteInstructor(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteInstructor(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete instructor %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
 	}
 }

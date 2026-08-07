@@ -67,8 +67,9 @@ func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			errMsg = err.Error()
 		} else if !resp.OK {
 			errMsg = resp.Error
-		} else {
-			json.Unmarshal(resp.Data, &sessions)
+		} else if err := json.Unmarshal(resp.Data, &sessions); err != nil {
+			log.Printf("list-sessions %s: decode: %v", email, err)
+			errMsg = "could not parse session list"
 		}
 		d := tmplData(r, cfg, "Sessions: "+email, map[string]any{
 			"Email":    email,

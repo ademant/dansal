@@ -299,37 +299,24 @@ func importFromKuferSource(ctx context.Context, src FetchSource) ([]Event, Impor
 		return nil, ImportCounts{}, fmt.Errorf("no courses found for any configured keyword at %s", base.String())
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
-	var allEvents []Event
-	var counts ImportCounts
+	var reqs []EventCreateRequest
+	var courseFailures int
 	for knr := range seenKnr {
-		reqs, err := kuferFetchCourseEvents(ctx, base, knr, src)
+		knrReqs, err := kuferFetchCourseEvents(ctx, base, knr, src)
 		if err != nil {
-			counts.Failed++
+			courseFailures++
 			log.Printf("kufer import: knr=%s: %v", knr, err)
 			continue
 		}
-		for _, eventReq := range reqs {
-			if err := withEntrySavepoint(tx, func() error {
-				_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
-				return err
-			}); err != nil {
-				counts.Failed++
-				logFailedImportEntry(src, eventReq, err)
-			}
-		}
+		reqs = append(reqs, knrReqs...)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
-	}
-	return allEvents, counts, nil
+	events, counts, err := importEntries(ctx, src, reqs,
+		func(r EventCreateRequest) EventCreateRequest { return r },
+		func(tx querier, req EventCreateRequest, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
+			return err
+		})
+	counts.Failed += courseFailures
+	return events, counts, err
 }

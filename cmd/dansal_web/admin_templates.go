@@ -23,21 +23,9 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if !ok {
 			return
 		}
-		token := getSessionToken(r)
-		userOrgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
-		if su.Role == "admin" {
-			allOrgs, _ := client.GetOrganizations(r.Context())
-			userOrgIDs = make([]int, 0, len(allOrgs))
-			for _, o := range allOrgs {
-				userOrgIDs = append(userOrgIDs, o.ID)
-			}
-		}
-		ts, _ := listTemplates(db, su.ID, userOrgIDs)
+		ts, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 		orgs, _ := client.GetOrganizations(r.Context())
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
+		orgMap := buildOrgMap(orgs)
 		pinnedIDs, _ := listPinnedTemplateIDs(db, su.ID)
 		title := i18n.T(r, "admin_templates_title")
 		renderTemplate(w, tmpls.adminTemplates, tmplData(r, cfg, i18n, title, AdminTemplatesData{
@@ -134,7 +122,9 @@ func adminTemplateDeleteHandler(db *sql.DB) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		_ = deleteTemplate(db, id, su.ID, su.Role == "admin")
+		if err := deleteTemplate(db, id, su.ID, su.Role == "admin"); err != nil {
+			log.Printf("delete template %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
 	}
 }
@@ -160,7 +150,9 @@ func adminTemplatePinHandler(db *sql.DB) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		_ = pinTemplate(db, su.ID, id)
+		if err := pinTemplate(db, su.ID, id); err != nil {
+			log.Printf("pin template %d: %v", id, err)
+		}
 		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
 	}
 }
@@ -176,7 +168,9 @@ func adminTemplateUnpinHandler(db *sql.DB) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		_ = unpinTemplate(db, su.ID, id)
+		if err := unpinTemplate(db, su.ID, id); err != nil {
+			log.Printf("unpin template %d: %v", id, err)
+		}
 		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
 	}
 }
@@ -215,7 +209,7 @@ func adminTemplateDataHandler(db *sql.DB, client *DansalClient) http.HandlerFunc
 			http.NotFound(w, r)
 			return
 		}
-		if !canAccessTemplate(t, su, getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))) {
+		if !canAccessTemplate(t, su, memberOrgIDs(r, client, su)) {
 			http.NotFound(w, r)
 			return
 		}
@@ -245,17 +239,7 @@ func adminTemplateAssignPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, c
 			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 			return
 		}
-		token := getSessionToken(r)
-		var orgIDs []int
-		if su.Role == "admin" {
-			allOrgs, _ := client.GetOrganizations(r.Context())
-			for _, o := range allOrgs {
-				orgIDs = append(orgIDs, o.ID)
-			}
-		} else {
-			orgIDs = getUserOrgIDs(r.Context(), client, su.ID, token)
-		}
-		ts, _ := listTemplates(db, su.ID, orgIDs)
+		ts, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 		title := i18n.T(r, "admin_template_assign_title")
 		renderTemplate(w, tmpls.adminTemplateAssign, tmplData(r, cfg, i18n, title, AdminTemplateAssignData{
 			EventIDs:  eventIDs,
@@ -294,7 +278,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 			http.Error(w, "template not found", http.StatusNotFound)
 			return
 		}
-		if !canAccessTemplate(tpl, su, getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))) {
+		if !canAccessTemplate(tpl, su, memberOrgIDs(r, client, su)) {
 			http.Error(w, "template not found", http.StatusNotFound)
 			return
 		}

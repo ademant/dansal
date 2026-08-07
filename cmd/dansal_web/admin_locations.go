@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ── Locations ─────────────────────────────────────────────────────────────────
@@ -99,23 +98,18 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		isAdmin := user.Role == "admin"
 		var editableIDs map[int]bool
 		var userOrgs []Organization
-		if !isAdmin {
-			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
-			userOrgSet := map[int]bool{}
-			for _, id := range userOrgIDs {
-				userOrgSet[id] = true
-			}
+		if memberSet := memberOrgSet(r, client, user); memberSet != nil {
 			editableIDs = map[int]bool{}
 			for _, loc := range locs {
 				for _, oid := range loc.OrganizationIDs {
-					if userOrgSet[oid] {
+					if memberSet[oid] {
 						editableIDs[loc.ID] = true
 						break
 					}
 				}
 			}
 			for _, o := range orgs {
-				if userOrgSet[o.ID] {
+				if memberSet[o.ID] {
 					userOrgs = append(userOrgs, o)
 				}
 			}
@@ -141,7 +135,7 @@ func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dans
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		locs, err := client.GetLocations(r.Context())
@@ -178,25 +172,21 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		if user.Role != "admin" {
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"error":"forbidden"}`))
+			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"invalid id"}`))
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
 		existing, err := client.GetLocation(r.Context(), id)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(`{"error":"not found"}`))
+			writeJSONError(w, r, http.StatusNotFound, "not found")
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"bad request"}`))
+			writeJSONError(w, r, http.StatusBadRequest, "bad request")
 			return
 		}
 		loc := Location{
@@ -225,16 +215,12 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 			SizeSqm:         existing.SizeSqm,
 		}
 		if err := validateURLDomain(r.Context(), loc.Internetsite); err != nil {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			b, _ := json.Marshal(map[string]string{"error": err.Error()})
-			w.Write(b)
+			writeJSONError(w, r, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(map[string]string{"error": err.Error()})
-			w.Write(b)
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Write([]byte(`{"ok":true}`))
@@ -248,7 +234,7 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -270,12 +256,7 @@ func newLocationUserOrgs(r *http.Request, user *SessionUser, client *DansalClien
 	if user.Role == "admin" {
 		return allOrgs
 	}
-	token := getSessionToken(r)
-	userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
-	set := make(map[int]bool, len(userOrgIDs))
-	for _, id := range userOrgIDs {
-		set[id] = true
-	}
+	set := memberOrgSet(r, client, user)
 	var out []Organization
 	for _, o := range allOrgs {
 		if set[o.ID] {
@@ -307,11 +288,9 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		// Form is multipart/form-data (shares the template with the edit page
 		// which supports site-plan image uploads). ParseForm alone skips the
 		// multipart body, leaving all fields empty and causing a spurious 400.
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
+		if err := parseAdminMultipart(r); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
 		}
 		loc := Location{
 			Location:       strings.TrimSpace(r.FormValue("location")),
@@ -392,11 +371,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		}
 		readOnly := false
 		if user.Role != "admin" {
-			userOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, getSessionToken(r))
-			userOrgSet := map[int]bool{}
-			for _, uid := range userOrgIDs {
-				userOrgSet[uid] = true
-			}
+			userOrgSet := memberOrgSet(r, client, user)
 			editable := false
 			for _, oid := range loc.OrganizationIDs {
 				if userOrgSet[oid] {
@@ -449,11 +424,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		// A site-plan upload triggers a slow AVIF re-encode on the backend
-		// (WASM-based encoder, can take well over the server's default 30s
-		// WriteTimeout for a detailed photo) — extend the deadline for this
-		// request rather than raising it server-wide.
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
+		// A site-plan upload triggers a slow AVIF re-encode on the backend —
+		// extend the deadline for this request rather than raising it server-wide.
+		adminWriteDeadline(w)
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -465,11 +438,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
+		if err := parseAdminMultipart(r); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
 		}
 		loc := Location{
 			ID:              id,
@@ -528,7 +499,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", id)})
 		if loc.ParentID == nil {
 			if r.FormValue("remove_site_plan") == "1" {
-				_ = client.DeleteLocationSitePlan(r.Context(), id, token)
+				if err := client.DeleteLocationSitePlan(r.Context(), id, token); err != nil {
+					log.Printf("delete location site plan %d: %v", id, err)
+				}
 			} else if file, header, ferr := r.FormFile("site_plan"); ferr == nil {
 				data, _ := io.ReadAll(file)
 				file.Close()
@@ -552,7 +525,9 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteLocation(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteLocation(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete location %d: %v", id, err)
+		}
 		target := safeLocationsReturnURL(r.FormValue("return"))
 		if p := safeReturnPath(target); p != "" {
 			target = p
@@ -574,7 +549,7 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -697,13 +672,17 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		base.Aliases = mergedAliases
 
 		// Update base location (applies merged fields + org assignments).
-		_ = client.UpdateLocation(ctx, base.ID, base, token)
+		if err := client.UpdateLocation(ctx, base.ID, base, token); err != nil {
+			log.Printf("merge location: update base %d: %v", base.ID, err)
+		}
 
 		// Delete dropped locations. MergeLocation passes ?reassign_to=base.ID so
 		// the API reassigns events and event_locations before deleting, satisfying
 		// the FK constraint on events.location_id without touching the wrong DB.
 		for _, l := range locs[1:] {
-			_ = client.MergeLocation(ctx, l.ID, base.ID, token)
+			if err := client.MergeLocation(ctx, l.ID, base.ID, token); err != nil {
+				log.Printf("merge location: delete %d: %v", l.ID, err)
+			}
 		}
 
 		client.invalidateLocations()
@@ -734,9 +713,13 @@ func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.Handl
 		}
 		token := getSessionToken(r)
 		if r.FormValue("action") == "remove" {
-			_ = client.UnassignLocationOrg(r.Context(), id, orgID, token)
+			if err := client.UnassignLocationOrg(r.Context(), id, orgID, token); err != nil {
+				log.Printf("unassign org %d from location %d: %v", orgID, id, err)
+			}
 		} else {
-			_ = client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token)
+			if err := client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token); err != nil {
+				log.Printf("assign org %d to location %d: %v", orgID, id, err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -766,7 +749,9 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		token := getSessionToken(r)
 		capacity := parseFormOptionalInt(r.Form, "capacity")
 		sizeSqm := parseFormOptionalInt(r.Form, "size_sqm")
-		_, _ = client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token)
+		if _, err := client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token); err != nil {
+			log.Printf("create child location under %d: %v", id, err)
+		}
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -776,22 +761,26 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 // the event form's room picker (#884), mirroring adminMusicianQuickCreateHandler.
 func adminRoomQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
-			http.Error(w, `{"error":"invalid location id"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid location id")
 			return
 		}
 		var req struct {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid")
 			return
 		}
 		child, err := client.CreateLocationChild(r.Context(), id, strings.TrimSpace(req.Name), "", nil, nil, getSessionToken(r))
 		if err != nil {
-			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			writeJSONError(w, r, http.StatusInternalServerError, "create failed")
 			return
 		}
 		client.invalidateLocations()
@@ -812,22 +801,22 @@ func adminRoomQuickEditHandler(client *DansalClient) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		roomID, err := strconv.Atoi(r.PathValue("room_id"))
 		if err != nil {
-			http.Error(w, `{"error":"bad room_id"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "bad room_id")
 			return
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			http.Error(w, `{"error":"read error"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return
 		}
 		var probe map[string]any
 		if err := json.Unmarshal(body, &probe); err != nil {
-			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid json")
 			return
 		}
 		if err := client.PatchLocationAttrs(r.Context(), roomID, body, getSessionToken(r)); err != nil {
 			log.Printf("room quick-edit %d: %v", roomID, err)
-			http.Error(w, `{"error":"save failed"}`, http.StatusBadGateway)
+			writeJSONError(w, r, http.StatusBadGateway, "save failed")
 			return
 		}
 		w.Write([]byte(`{"ok":true}`))
@@ -851,7 +840,9 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.DeleteLocationChild(r.Context(), roomID, token)
+		if err := client.DeleteLocationChild(r.Context(), roomID, token); err != nil {
+			log.Printf("delete room %d: %v", roomID, err)
+		}
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
 	}
@@ -869,8 +860,7 @@ func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.Ha
 		}
 		roomID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"invalid id"}`))
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
 		var req struct {
@@ -878,15 +868,12 @@ func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.Ha
 			Y float64 `json:"y"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.X < 0 || req.X > 1 || req.Y < 0 || req.Y > 1 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"x/y must be between 0 and 1"}`))
+			writeJSONError(w, r, http.StatusBadRequest, "x/y must be between 0 and 1")
 			return
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocationPlanPosition(r.Context(), roomID, req.X, req.Y, token); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(map[string]string{"error": err.Error()})
-			w.Write(b)
+			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Write([]byte(`{"ok":true}`))

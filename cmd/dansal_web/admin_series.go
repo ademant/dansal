@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -294,11 +295,13 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			if i < len(ends) && strings.TrimSpace(ends[i]) != "" {
 				et = ends[i]
 			}
-			_ = client.AddSeriesDate(r.Context(), created.ID, map[string]any{
+			if err := client.AddSeriesDate(r.Context(), created.ID, map[string]any{
 				"date":       d,
 				"start_time": st,
 				"end_time":   et,
-			}, token)
+			}, token); err != nil {
+				log.Printf("add series date %s to series %d: %v", d, created.ID, err)
+			}
 		}
 
 		// Assign any events that were passed from the bulk-assign flow.
@@ -309,7 +312,9 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			}
 		}
 		if len(assignIDs) > 0 {
-			_ = client.AssignEventsToSeries(r.Context(), created.ID, assignIDs, token)
+			if err := client.AssignEventsToSeries(r.Context(), created.ID, assignIDs, token); err != nil {
+				log.Printf("assign %d events to series %d: %v", len(assignIDs), created.ID, err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", created.ID), http.StatusSeeOther)
 	}
@@ -480,7 +485,9 @@ func adminSeriesDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.DeleteSeries(r.Context(), id, token)
+		if err := client.DeleteSeries(r.Context(), id, token); err != nil {
+			log.Printf("delete series %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/series", http.StatusSeeOther)
 	}
 }
@@ -517,7 +524,9 @@ func adminSeriesSaveDescriptionsHandler(cfg *Config, client *DansalClient) http.
 			})
 		}
 		if len(updates) > 0 {
-			_ = client.UpdateSeriesDescriptions(r.Context(), id, updates, token)
+			if err := client.UpdateSeriesDescriptions(r.Context(), id, updates, token); err != nil {
+				log.Printf("update %d series descriptions: %v", len(updates), err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
@@ -568,7 +577,9 @@ func adminSeriesRegenerateTokenHandler(cfg *Config, client *DansalClient) http.H
 			return
 		}
 		token := getSessionToken(r)
-		_, _ = client.RegenerateSeriesToken(r.Context(), id, token)
+		if _, err := client.RegenerateSeriesToken(r.Context(), id, token); err != nil {
+			log.Printf("regenerate token for series %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
 }
@@ -585,7 +596,9 @@ func adminSeriesRevokeTokenHandler(cfg *Config, client *DansalClient) http.Handl
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.RevokeSeriesToken(r.Context(), id, token)
+		if err := client.RevokeSeriesToken(r.Context(), id, token); err != nil {
+			log.Printf("revoke token for series %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
 }

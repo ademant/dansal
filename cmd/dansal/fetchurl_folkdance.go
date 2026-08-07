@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -146,6 +145,62 @@ func ensureMusician(q querier, bandname string) (int64, error) {
 	return result.LastInsertId()
 }
 
+// folkdanceEventToRequest converts a single folkdance.page event to an
+// EventCreateRequest, skipping events with no name, an unparseable start time,
+// or an end time already in the past. Feed-specific fields that need a
+// database (musicians, organisation fallback) are resolved by the importer.
+func folkdanceEventToRequest(fe folkdanceEvent, src FetchSource) (EventCreateRequest, bool) {
+	if fe.Name == "" {
+		return EventCreateRequest{}, false
+	}
+	startTime, err := parseFolkdanceTime(fe.Start, fe.StartDate)
+	if err != nil {
+		return EventCreateRequest{}, false
+	}
+	endTime := startTime
+	if fe.End != "" {
+		endTime, _ = parseFolkdanceTime(fe.End, "")
+	} else if fe.EndDate != "" {
+		// For date-only end values use end-of-day so multi-day events have a
+		// sensible duration even when start and end fall on the same calendar date.
+		if t, err := time.Parse("2006-01-02", fe.EndDate); err == nil {
+			endTime = t.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339)
+		}
+	}
+	if et, err := time.Parse(time.RFC3339, endTime); err == nil && et.Before(time.Now().UTC()) {
+		return EventCreateRequest{}, false
+	}
+
+	var eventURL string
+	if len(fe.Links) > 0 {
+		eventURL = fe.Links[0]
+	}
+
+	return EventCreateRequest{
+		Source:        src.URL,
+		FetchSourceID: src.ID,
+		EventWriteRequest: EventWriteRequest{
+			Title:          fe.Name,
+			Description:    fe.Details,
+			StartTime:      startTime,
+			EndTime:        endTime,
+			HasBall:        fe.Social,
+			HasWorkshop:    fe.Workshop,
+			IsCancelled:    fe.Cancelled,
+			Tags:           mergeTags(fe.Styles, src.Tags),
+			URL:            eventURL,
+			OrganizationID: src.OrganizationID,
+			Dances:         src.DanceIDs,
+			Pricing:        parseFolkdancePrice(fe.Price),
+			Location: EventLocationRequest{
+				Location: folkdanceLocationString(fe.City, fe.State, fe.Country),
+				Town:     fe.City,
+				Country:  fe.Country,
+			},
+		},
+	}, true
+}
+
 // parseFolkdanceJSONToRequests converts a folkdance JSON body to
 // EventCreateRequests without touching the database. Used by the preview
 // endpoint; musician IDs are omitted since ensureMusician requires a DB.
@@ -158,186 +213,69 @@ func parseFolkdanceJSONToRequests(body []byte, src FetchSource) ([]EventCreateRe
 	}
 
 	var reqs []EventCreateRequest
-	now := time.Now().UTC()
-
 	for _, fe := range payload.Events {
-		if fe.Name == "" {
-			continue
+		if req, ok := folkdanceEventToRequest(fe, src); ok {
+			reqs = append(reqs, req)
 		}
-		startTime, err := parseFolkdanceTime(fe.Start, fe.StartDate)
-		if err != nil {
-			continue
-		}
-		endTime := startTime
-		if fe.End != "" {
-			endTime, _ = parseFolkdanceTime(fe.End, "")
-		} else if fe.EndDate != "" {
-			if t, err := time.Parse("2006-01-02", fe.EndDate); err == nil {
-				endTime = t.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339)
-			}
-		}
-		if et, err := time.Parse(time.RFC3339, endTime); err == nil && et.Before(now) {
-			continue
-		}
-
-		tags := make([]string, 0, len(fe.Styles)+len(src.Tags))
-		seen := make(map[string]bool)
-		for _, s := range fe.Styles {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				tags = append(tags, s)
-			}
-		}
-		for _, s := range src.Tags {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				tags = append(tags, s)
-			}
-		}
-
-		var eventURL string
-		if len(fe.Links) > 0 {
-			eventURL = fe.Links[0]
-		}
-
-		reqs = append(reqs, EventCreateRequest{
-			Source: src.URL,
-			EventWriteRequest: EventWriteRequest{
-				Title:          fe.Name,
-				Description:    fe.Details,
-				StartTime:      startTime,
-				EndTime:        endTime,
-				HasBall:        fe.Social,
-				HasWorkshop:    fe.Workshop,
-				IsCancelled:    fe.Cancelled,
-				Tags:           tags,
-				URL:            eventURL,
-				OrganizationID: src.OrganizationID,
-				Dances:         src.DanceIDs,
-				Pricing:        parseFolkdancePrice(fe.Price),
-				Location: EventLocationRequest{
-					Location: folkdanceLocationString(fe.City, fe.State, fe.Country),
-					Town:     fe.City,
-					Country:  fe.Country,
-				},
-			},
-		})
 	}
 	return reqs, nil
 }
 
-func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(ctx, safeClient, src.URL)
-	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
-	}
+// folkdanceImportEntry bundles a folkdance event request with the raw feed
+// data the importer needs to resolve organisation and musicians inside the
+// import transaction (the preview builder must not touch the database).
+type folkdanceImportEntry struct {
+	req     EventCreateRequest
+	org     string
+	bands   []string
+	callers []string
+}
 
+// parseFolkdanceImportEntries converts a folkdance JSON body to import entries
+// without touching the database.
+func parseFolkdanceImportEntries(body []byte, src FetchSource) ([]folkdanceImportEntry, error) {
 	var payload struct {
 		Events []folkdanceEvent `json:"events"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&payload); err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("parse JSON: %w", err)
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("parse JSON: %w", err)
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
+	var entries []folkdanceImportEntry
+	for _, fe := range payload.Events {
+		req, ok := folkdanceEventToRequest(fe, src)
+		if !ok {
+			continue
+		}
+		entries = append(entries, folkdanceImportEntry{
+			req:     req,
+			org:     fe.Organisation,
+			bands:   fe.Bands,
+			callers: fe.Callers,
+		})
+	}
+	return entries, nil
+}
 
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
+func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	body, err := fetchFeedBody(ctx, src)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
-	defer tx.Rollback()
-
-	var allEvents []Event
-	var counts ImportCounts
-	now := time.Now().UTC()
-
-	for _, fe := range payload.Events {
-		if fe.Name == "" {
-			continue
-		}
-
-		startTime, err := parseFolkdanceTime(fe.Start, fe.StartDate)
-		if err != nil {
-			continue
-		}
-
-		// For date-only end values use end-of-day so multi-day events have a
-		// sensible duration even when start and end fall on the same calendar date.
-		endTime := startTime
-		if fe.End != "" {
-			endTime, _ = parseFolkdanceTime(fe.End, "")
-		} else if fe.EndDate != "" {
-			if t, err := time.Parse("2006-01-02", fe.EndDate); err == nil {
-				endTime = t.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339)
+	entries, err := parseFolkdanceImportEntries(body, src)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	return importEntries(ctx, src, entries,
+		func(e folkdanceImportEntry) EventCreateRequest { return e.req },
+		func(tx querier, e folkdanceImportEntry, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
+			req := e.req
+			if req.OrganizationID == nil {
+				req.OrganizationID = ensureOrgByName(e.org)
 			}
-		}
-
-		if et, err := time.Parse(time.RFC3339, endTime); err == nil && et.Before(now) {
-			continue
-		}
-
-		// Merge feed styles with any tags configured on the source.
-		tags := make([]string, 0, len(fe.Styles)+len(src.Tags))
-		seen := make(map[string]bool)
-		for _, s := range fe.Styles {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				tags = append(tags, s)
-			}
-		}
-		for _, s := range src.Tags {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				tags = append(tags, s)
-			}
-		}
-
-		var eventURL string
-		if len(fe.Links) > 0 {
-			eventURL = fe.Links[0]
-		}
-
-		locStr := folkdanceLocationString(fe.City, fe.State, fe.Country)
-
-		eventReq := EventCreateRequest{
-			Source:        src.URL,
-			FetchSourceID: src.ID,
-			EventWriteRequest: EventWriteRequest{
-				Title:       fe.Name,
-				Description: fe.Details,
-				StartTime:   startTime,
-				EndTime:     endTime,
-				HasBall:     fe.Social,
-				HasWorkshop: fe.Workshop,
-				IsCancelled: fe.Cancelled,
-				Tags:        tags,
-				URL:         eventURL,
-				OrganizationID: func() *int {
-					if src.OrganizationID != nil {
-						return src.OrganizationID
-					}
-					return ensureOrgByName(fe.Organisation)
-				}(),
-				Dances:  src.DanceIDs,
-				Pricing: parseFolkdancePrice(fe.Price),
-				Location: EventLocationRequest{
-					Location: locStr,
-					Town:     fe.City,
-					Country:  fe.Country,
-				},
-			},
-		}
-
-		if err := withEntrySavepoint(tx, func() error {
 			var musicianIDs []int
 			seenMusician := make(map[string]bool)
-			for _, name := range append(fe.Bands, fe.Callers...) {
+			for _, name := range append(e.bands, e.callers...) {
 				if name == "" || seenMusician[name] {
 					continue
 				}
@@ -350,20 +288,10 @@ func importFromFolkdanceJSON(ctx context.Context, src FetchSource) ([]Event, Imp
 					musicianIDs = append(musicianIDs, int(id))
 				}
 			}
-			eventReq.Musicians = musicianIDs
-			_, err := importSingleEvent(tx, eventReq, td, src.TemplateMode, &counts, &allEvents)
+			req.Musicians = musicianIDs
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
 			return err
-		}); err != nil {
-			counts.Failed++
-			logFailedImportEntry(src, eventReq, err)
-			continue
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
-	}
-	return allEvents, counts, nil
+		})
 }
 
 // folkdanceJSONProbe returns true when the URL looks like a folkdance.page JSON feed.

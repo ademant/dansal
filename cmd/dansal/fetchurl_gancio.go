@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -109,130 +108,7 @@ func gancioEventsToRequests(events []gancioEvent, src FetchSource) []EventCreate
 
 		town, country := parseGancioAddress(ge.Place.Address)
 
-		tags := make([]string, 0, len(ge.Tags)+len(src.Tags))
-		seen := make(map[string]bool)
-		for _, t := range ge.Tags {
-			if t != "" && !seen[t] {
-				seen[t] = true
-				tags = append(tags, t)
-			}
-		}
-		for _, t := range src.Tags {
-			if t != "" && !seen[t] {
-				seen[t] = true
-				tags = append(tags, t)
-			}
-		}
-
-		var eventURL string
-		if ge.Slug != "" && base != "" {
-			eventURL = base + "/event/" + ge.Slug
-		}
-
-		var bookingURL string
-		if len(ge.OnlineLocations) > 0 {
-			bookingURL = ge.OnlineLocations[0]
-		}
-
-		uid := fmt.Sprintf("%d@%s", ge.ID, strings.TrimPrefix(strings.TrimPrefix(base, "https://"), "http://"))
-
-		req := EventCreateRequest{
-			UID:    uid,
-			Source: src.URL,
-			EventWriteRequest: EventWriteRequest{
-				Title:          ge.Title,
-				StartTime:      startTime.Format(time.RFC3339),
-				EndTime:        endTime.Format(time.RFC3339),
-				Tags:           tags,
-				URL:            eventURL,
-				BookingURL:     bookingURL,
-				OrganizationID: src.OrganizationID,
-				Dances:         src.DanceIDs,
-				Location: EventLocationRequest{
-					Location:  ge.Place.Name,
-					Address:   ge.Place.Address,
-					Town:      town,
-					Country:   country,
-					Latitude:  ge.Place.Latitude,
-					Longitude: ge.Place.Longitude,
-				},
-			},
-		}
-		reqs = append(reqs, req)
-	}
-	return reqs
-}
-
-// parseGancioJSONToRequests converts a Gancio /api/events JSON body to
-// EventCreateRequests without touching the database. Used by the preview endpoint.
-func parseGancioJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
-	var events []gancioEvent
-	if err := json.Unmarshal(body, &events); err != nil {
-		return nil, fmt.Errorf("parse gancio JSON: %w", err)
-	}
-	return gancioEventsToRequests(events, src), nil
-}
-
-func importFromGancioJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
-	resp, err := getWithRetry(ctx, safeClient, src.URL)
-	if err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("fetch: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, ImportCounts{}, fmt.Errorf("remote returned %d", resp.StatusCode)
-	}
-
-	var events []gancioEvent
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&events); err != nil {
-		return nil, ImportCounts{}, fmt.Errorf("parse gancio JSON: %w", err)
-	}
-
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
-
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
-	base := gancioBaseURL(src.URL)
-	now := time.Now().UTC()
-	var allEvents []Event
-	var counts ImportCounts
-
-	for _, ge := range events {
-		if ge.Title == "" || ge.StartDatetime == 0 {
-			continue
-		}
-
-		startTime := time.Unix(ge.StartDatetime, 0).UTC()
-		endTime := startTime
-		if ge.EndDatetime > ge.StartDatetime {
-			endTime = time.Unix(ge.EndDatetime, 0).UTC()
-		}
-		if endTime.Before(now) {
-			continue
-		}
-
-		town, country := parseGancioAddress(ge.Place.Address)
-
-		tags := make([]string, 0, len(ge.Tags)+len(src.Tags))
-		seen := make(map[string]bool)
-		for _, t := range ge.Tags {
-			if t != "" && !seen[t] {
-				seen[t] = true
-				tags = append(tags, t)
-			}
-		}
-		for _, t := range src.Tags {
-			if t != "" && !seen[t] {
-				seen[t] = true
-				tags = append(tags, t)
-			}
-		}
+		tags := mergeTags(ge.Tags, src.Tags)
 
 		var eventURL string
 		if ge.Slug != "" && base != "" {
@@ -269,21 +145,25 @@ func importFromGancioJSON(ctx context.Context, src FetchSource) ([]Event, Import
 				},
 			},
 		}
-
-		if err := withEntrySavepoint(tx, func() error {
-			_, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents)
-			return err
-		}); err != nil {
-			counts.Failed++
-			logFailedImportEntry(src, req, err)
-			continue
-		}
+		reqs = append(reqs, req)
 	}
+	return reqs
+}
 
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
+// parseGancioJSONToRequests converts a Gancio /api/events JSON body to
+// EventCreateRequests without touching the database. Used by the preview endpoint.
+func parseGancioJSONToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
+	var events []gancioEvent
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("parse gancio JSON: %w", err)
 	}
-	return allEvents, counts, nil
+	return gancioEventsToRequests(events, src), nil
+}
+
+func importFromGancioJSON(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	return importParsedFeed(ctx, src, func(body []byte) ([]EventCreateRequest, error) {
+		return parseGancioJSONToRequests(body, src)
+	})
 }
 
 // gancioJSONProbe returns true when the URL looks like a Gancio API events endpoint.

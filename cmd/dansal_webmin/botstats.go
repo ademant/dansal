@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 )
 
 // botCat defines the stacking order (bottom → top) and colours for the traffic chart.
@@ -193,6 +192,18 @@ func loadFediStatsDB(dbPath string) ([]fediStatDay, []fediSourceInstance, error)
 	}
 	defer db.Close()
 
+	// The fedi stats tables don't exist on a fresh bot-stats DB — not an
+	// error, just no data. Check the schema explicitly instead of parsing the
+	// error text.
+	var exists int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='fedi_stats_daily'").Scan(&exists); err != nil {
+		return nil, nil, err
+	}
+	if exists == 0 {
+		return nil, nil, nil
+	}
+
 	rows, err := db.Query(`
 		SELECT date,
 		       followers_gained, events_delivered_creates, events_delivered_updates,
@@ -202,10 +213,6 @@ func loadFediStatsDB(dbPath string) ([]fediStatDay, []fediSourceInstance, error)
 		FROM fedi_stats_daily
 		ORDER BY date DESC LIMIT 60`)
 	if err != nil {
-		// Table doesn't exist yet — not an error, just no data.
-		if strings.Contains(err.Error(), "no such table") {
-			return nil, nil, nil
-		}
 		return nil, nil, err
 	}
 	defer rows.Close()
@@ -270,18 +277,27 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 	snap := &fediLiveSnapshot{}
 
 	// Total followers.
-	db.QueryRow("SELECT COUNT(*) FROM followers").Scan(&snap.TotalFollowers)
+	if err := db.QueryRow("SELECT COUNT(*) FROM followers").Scan(&snap.TotalFollowers); err != nil {
+		log.Printf("fedi live: count followers: %v", err)
+	}
 
 	// Pending delivery failures.
-	db.QueryRow("SELECT COUNT(*) FROM delivery_failures").Scan(&snap.PendingDeliveryFailures)
+	if err := db.QueryRow("SELECT COUNT(*) FROM delivery_failures").Scan(&snap.PendingDeliveryFailures); err != nil {
+		log.Printf("fedi live: count delivery failures: %v", err)
+	}
 
 	// Followers per org.
 	orgRows, err := db.Query("SELECT org_id, COUNT(*) FROM followers GROUP BY org_id ORDER BY COUNT(*) DESC")
-	if err == nil {
+	if err != nil {
+		log.Printf("fedi live: followers by org: %v", err)
+	} else {
 		defer orgRows.Close()
 		for orgRows.Next() {
 			var of fediOrgFollowers
-			orgRows.Scan(&of.OrgID, &of.Count)
+			if err := orgRows.Scan(&of.OrgID, &of.Count); err != nil {
+				log.Printf("fedi live: followers by org scan: %v", err)
+				continue
+			}
 			snap.FollowersByOrg = append(snap.FollowersByOrg, of)
 		}
 	}
@@ -300,11 +316,16 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 		GROUP BY host
 		ORDER BY n DESC
 		LIMIT 15`)
-	if err == nil {
+	if err != nil {
+		log.Printf("fedi live: top instances: %v", err)
+	} else {
 		defer instRows.Close()
 		for instRows.Next() {
 			var fi fediSourceInstance
-			instRows.Scan(&fi.Instance, &fi.Count)
+			if err := instRows.Scan(&fi.Instance, &fi.Count); err != nil {
+				log.Printf("fedi live: top instances scan: %v", err)
+				continue
+			}
 			snap.TopInstances = append(snap.TopInstances, fi)
 		}
 	}

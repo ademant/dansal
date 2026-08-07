@@ -285,7 +285,9 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 			return
 		}
 		event, fetchErr := client.GetEvent(r.Context(), id)
-		_ = client.DeleteEvent(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteEvent(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete event %d: %v", id, err)
+		}
 		if fetchErr == nil && event.OrganizationID != nil {
 			go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
 		}
@@ -348,7 +350,7 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -359,7 +361,9 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 		for _, s := range r.Form["event_ids"] {
 			if id, err := strconv.Atoi(s); err == nil {
 				event, fetchErr := client.GetEvent(r.Context(), id)
-				_ = client.DeleteEvent(r.Context(), id, token)
+				if err := client.DeleteEvent(r.Context(), id, token); err != nil {
+					log.Printf("bulk delete event %d: %v", id, err)
+				}
 				if fetchErr == nil && event.OrganizationID != nil {
 					go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
 				}
@@ -387,7 +391,9 @@ func adminEventAssignSeriesHandler(cfg *Config, client *DansalClient) http.Handl
 		seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
 		token := getSessionToken(r)
 		if seriesID > 0 {
-			_ = client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, token)
+			if err := client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, token); err != nil {
+				log.Printf("assign event %d to series %d: %v", id, seriesID, err)
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 	}
@@ -405,7 +411,9 @@ func adminEventRemoveFromSeriesHandler(cfg *Config, client *DansalClient) http.H
 			return
 		}
 		token := getSessionToken(r)
-		_ = client.RemoveEventFromSeries(r.Context(), id, token)
+		if err := client.RemoveEventFromSeries(r.Context(), id, token); err != nil {
+			log.Printf("remove event %d from series: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 	}
 }
@@ -432,7 +440,9 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 			}
 		}
 		if len(ids) > 0 {
-			_ = client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r))
+			if err := client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r)); err != nil {
+				log.Printf("bulk assign location %d to %d events: %v", locationID, len(ids), err)
+			}
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
@@ -461,7 +471,9 @@ func adminEventBulkSetTimeHandler(cfg *Config, client *DansalClient) http.Handle
 			}
 		}
 		if len(ids) > 0 {
-			_ = client.BulkSetEventTime(r.Context(), ids, startTime, endTime, getSessionToken(r))
+			if err := client.BulkSetEventTime(r.Context(), ids, startTime, endTime, getSessionToken(r)); err != nil {
+				log.Printf("bulk set time on %d events: %v", len(ids), err)
+			}
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
@@ -494,7 +506,9 @@ func adminEventBulkAssignSeriesHandler(cfg *Config, tmpls *Templates, client *Da
 
 		if seriesID > 0 {
 			// Path A: assign to existing series
-			_ = client.AssignEventsToSeries(r.Context(), seriesID, ids, token)
+			if err := client.AssignEventsToSeries(r.Context(), seriesID, ids, token); err != nil {
+				log.Printf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
+			}
 			http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 			return
 		}
@@ -568,12 +582,16 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 		// generic attributes payload because they use dedicated API endpoints.
 		if v := r.FormValue("location_id"); v != "" {
 			if locID, err := strconv.Atoi(v); err == nil && locID > 0 {
-				_ = client.BulkSetEventLocation(r.Context(), ids, locID, token)
+				if err := client.BulkSetEventLocation(r.Context(), ids, locID, token); err != nil {
+					log.Printf("bulk assign location %d to %d events: %v", locID, len(ids), err)
+				}
 			}
 		}
 		if v := r.FormValue("series_id"); v != "" {
 			if seriesID, err := strconv.Atoi(v); err == nil && seriesID > 0 {
-				_ = client.AssignEventsToSeries(r.Context(), seriesID, ids, token)
+				if err := client.AssignEventsToSeries(r.Context(), seriesID, ids, token); err != nil {
+					log.Printf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
+				}
 			}
 		}
 		payload := map[string]any{"ids": ids}
@@ -641,7 +659,9 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 		if v := r.FormValue("pricing_type"); v != "" && v != "__skip__" {
 			payload["pricing_type"] = v
 		}
-		_ = client.BulkSetEventAttributes(r.Context(), payload, token)
+		if err := client.BulkSetEventAttributes(r.Context(), payload, token); err != nil {
+			log.Printf("bulk set attributes on %d events: %v", len(ids), err)
+		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
@@ -657,7 +677,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			return
 		}
 		if user.Role != "admin" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -869,11 +889,15 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			Musicians:          mids,
 			Dances:             danceIDs,
 		}
-		_, _ = client.UpdateEvent(ctx, baseID, req, token)
+		if _, err := client.UpdateEvent(ctx, baseID, req, token); err != nil {
+			log.Printf("merge events: update base %d: %v", baseID, err)
+		}
 
 		for _, id := range ids {
 			if id != baseID {
-				_ = client.DeleteEvent(ctx, id, token)
+				if err := client.DeleteEvent(ctx, id, token); err != nil {
+					log.Printf("merge events: delete %d: %v", id, err)
+				}
 			}
 		}
 
@@ -917,7 +941,9 @@ func adminEventImageDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 			http.NotFound(w, r)
 			return
 		}
-		_ = client.DeleteEventImage(r.Context(), id, getSessionToken(r))
+		if err := client.DeleteEventImage(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete event image %d: %v", id, err)
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 	}
 }
@@ -2290,7 +2316,9 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 			if created, lerr := client.CreateLocation(r.Context(), newLoc, getSessionToken(r)); lerr == nil {
 				if orgID != nil {
-					_ = client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, orgID, getSessionToken(r))
+					if err := client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, orgID, getSessionToken(r)); err != nil {
+						log.Printf("assign org %d to new location %d: %v", *orgID, created.ID, err)
+					}
 				}
 			} else {
 				log.Printf("create standalone location error: %v", lerr)
@@ -3168,11 +3196,15 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "assign-series":
 			if seriesID, serr := strconv.Atoi(r.FormValue("series_id")); serr == nil && seriesID > 0 {
-				_ = client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, getSessionToken(r))
+				if err := client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, getSessionToken(r)); err != nil {
+					log.Printf("assign event %d to series %d: %v", id, seriesID, err)
+				}
 			}
 			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "remove-series":
-			_ = client.RemoveEventFromSeries(r.Context(), id, getSessionToken(r))
+			if err := client.RemoveEventFromSeries(r.Context(), id, getSessionToken(r)); err != nil {
+				log.Printf("remove event %d from series: %v", id, err)
+			}
 			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "create-series":
 			seriesURL := fmt.Sprintf("/admin/series/new?ids=%d&prefill_event_id=%d", id, id)

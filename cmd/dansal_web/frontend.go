@@ -310,8 +310,11 @@ type EventData struct {
 	BoardContactTgURL string
 	BoardError        string
 	BoardErrorMsg     string // detailed message from the API, when available (#973); falls back to BoardError's i18n key otherwise
+	BoardErrorID      string // error_id to quote when reporting the problem (#985)
 	BookingOK         bool
 	BookingError      string
+	BookingErrorMsg   string
+	BookingErrorID    string
 	UserOrgs          []Organization
 	BookFormToken     string
 	BoardFormToken    string
@@ -1937,14 +1940,12 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			}
 		}
 
-		boardPosted := r.URL.Query().Get("board_posted") == "1"
-		boardTelegramURL := r.URL.Query().Get("board_tg_url")
-		boardContacted := r.URL.Query().Get("board_contacted") == "1"
-		boardContactTgURL := r.URL.Query().Get("board_contact_tg_url")
-		boardError := r.URL.Query().Get("board_error")
-		boardErrorMsg := r.URL.Query().Get("board_error_msg")
-		bookingOK := r.URL.Query().Get("book_ok") == "1"
-		bookingError := r.URL.Query().Get("book_error")
+		// One-time flash (#985): the redirect after a board/booking form
+		// submission carries only an opaque ?msg=<token>; flashTake reads and
+		// deletes the payload in one shot, so reopening the same URL later
+		// (bookmark, history, a shared link) renders a clean page instead of
+		// the banner forever.
+		flash := flashTake(r.URL.Query().Get("msg"))
 
 		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
@@ -1968,14 +1969,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			TagMap:            tagMap,
 			ContactPosts:      posts,
 			CanManageBoard:    canManage,
-			BoardPosted:       boardPosted,
-			BoardTelegramURL:  boardTelegramURL,
-			BoardContacted:    boardContacted,
-			BoardContactTgURL: boardContactTgURL,
-			BoardError:        boardError,
-			BoardErrorMsg:     boardErrorMsg,
-			BookingOK:         bookingOK,
-			BookingError:      bookingError,
+			BoardPosted:       flash.BoardPosted,
+			BoardTelegramURL:  flash.BoardTelegramURL,
+			BoardContacted:    flash.BoardContacted,
+			BoardContactTgURL: flash.BoardContactTgURL,
+			BoardError:        flash.BoardError,
+			BoardErrorMsg:     flash.BoardErrorMsg,
+			BoardErrorID:      flash.BoardErrorID,
+			BookingOK:         flash.BookingOK,
+			BookingError:      flash.BookingError,
+			BookingErrorMsg:   flash.BookingErrorMsg,
+			BookingErrorID:    flash.BookingErrorID,
 			UserOrgs:          userOrgs,
 			BookFormToken:     issueFormToken(clientIP),
 			BoardFormToken:    issueFormToken(clientIP),

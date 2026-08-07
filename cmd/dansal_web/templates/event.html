@@ -512,7 +512,7 @@
   <p class="msg msg-ok">{{$.Strings.T "book_ok"}}</p>
   {{end}}
   {{if .BookingError}}
-  <p class="msg msg-error">{{$.Strings.T .BookingError}}</p>
+  <p class="msg msg-error">{{if .BookingErrorMsg}}{{.BookingErrorMsg}}{{else}}{{$.Strings.T .BookingError}}{{end}}{{if .BookingErrorID}} <span class="err-id">({{$.Strings.T "error_id_label"}}: {{.BookingErrorID}})</span>{{end}}</p>
   {{end}}
 
   {{if not .BookingOK}}
@@ -568,7 +568,7 @@
   {{end}}
   {{end}}
   {{if .BoardError}}
-  <p class="msg msg-error">{{if .BoardErrorMsg}}{{.BoardErrorMsg}}{{else}}{{$.Strings.T .BoardError}}{{end}}</p>
+  <p class="msg msg-error">{{if .BoardErrorMsg}}{{.BoardErrorMsg}}{{else}}{{$.Strings.T .BoardError}}{{end}}{{if .BoardErrorID}} <span class="err-id">({{$.Strings.T "error_id_label"}}: {{.BoardErrorID}})</span>{{end}}</p>
   {{end}}
 
   {{if .ContactPosts}}
@@ -838,6 +838,7 @@
 .msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:.75rem}
 .msg-ok{background:var(--badge-ok-bg);color:var(--badge-ok-fg);border:1px solid var(--badge-ok-fg)}
 .msg-error{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border:1px solid var(--badge-danger-fg)}
+.err-id{opacity:.7;font-size:.85em;font-family:monospace}
 .board-contact-method{display:flex;gap:1rem;margin:.4rem 0}
 .board-method-radio{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
 .btn-tg-verify{display:inline-block;margin-top:.4rem;padding:.45rem 1.1rem;background:#2481cc;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}

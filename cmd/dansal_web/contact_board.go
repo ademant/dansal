@@ -7,22 +7,41 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 )
 
-// redirectBoardError redirects to the event page with both the generic
-// board_error i18n key (fallback, always present) and the API's actual
-// validation message when available (#973) — e.g. "message must not contain
-// links" instead of just "Could not save post." errMsg is server-controlled
-// text from dansal's own writeError() calls, not raw user input.
+// redirectBoardError redirects to the event page with a one-time flash
+// (#985) carrying both the generic board_error i18n key (fallback, always
+// present) and the API's actual validation message when available (#973) —
+// e.g. "message must not contain links" instead of just "Could not save
+// post." The flash is keyed by the API's error_id when err carries one, so a
+// URL a user shares with an admin correlates directly with a specific API
+// log line; reopening the same URL later (bookmark, history) then renders a
+// clean page instead of the error banner forever.
 func redirectBoardError(w http.ResponseWriter, r *http.Request, eventID int, key string, err error) {
-	u := fmt.Sprintf("/events/%d?board_error=%s", eventID, key)
-	if msg := apiErrUserMessage(err); msg != "" {
-		u += "&board_error_msg=" + url.QueryEscape(msg)
-	}
-	http.Redirect(w, r, u, http.StatusSeeOther)
+	tok := flashToken(err)
+	log.Printf("dansal-web: board error error_id=%s key=%s path=%s err=%v", tok, key, r.URL.Path, err)
+	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
+		BoardError:    key,
+		BoardErrorMsg: apiErrUserMessage(err),
+		BoardErrorID:  tok,
+	})
+}
+
+// boardErrorRedirect is redirectBoardError for failures the web caught
+// itself (form parsing, throttling) with no API error to correlate against —
+// still gets a local token so the message and its error_id both flow through
+// the same one-time flash mechanism.
+func boardErrorRedirect(w http.ResponseWriter, r *http.Request, eventID int, key string) {
+	redirectBoardError(w, r, eventID, key, nil)
+}
+
+// boardSuccessRedirect stores msg as a one-time success flash and redirects
+// to the event page (#985) — same mechanism as the error path, just without
+// an error_id.
+func boardSuccessRedirect(w http.ResponseWriter, r *http.Request, eventID int, msg FlashMsg) {
+	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), msg)
 }
 
 // POST /events/{id}/board
@@ -36,26 +55,26 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
 		if err := r.ParseForm(); err != nil {
 			log.Printf("dansal-web: board parse form ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
 		if r.FormValue("honeypot") != "" {
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
+			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardPosted: true})
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
 		if hasPendingSubmission(ip, r.UserAgent()) {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
 
@@ -88,11 +107,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		if firstPost {
 			go triggerBoardOpenNote(cfg, db, client, eventID)
 		}
-		if tgURL != "" {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1&board_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
+		boardSuccessRedirect(w, r, eventID, FlashMsg{BoardPosted: true, BoardTelegramURL: tgURL})
 	}
 }
 
@@ -171,21 +186,21 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
 		if r.FormValue("honeypot") != "" {
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
+			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardContacted: true})
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
+			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
 
@@ -201,11 +216,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			redirectBoardError(w, r, eventID, "board_contact_error", err)
 			return
 		}
-		if tgURL != "" {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1&board_contact_tg_url=%s", eventID, url.QueryEscape(tgURL)), http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
+		boardSuccessRedirect(w, r, eventID, FlashMsg{BoardContacted: true, BoardContactTgURL: tgURL})
 	}
 }
 
@@ -261,16 +272,23 @@ func contactManageGetHandler(cfg *Config, db *sql.DB, tmpls *Templates, client *
 			go triggerBoardOpenNote(cfg, db, client, post.EventID)
 		}
 
+		flash := flashTake(r.URL.Query().Get("msg"))
 		ip := getClientIP(r)
 		data := ContactManageData{
 			Token:     token,
 			Post:      post,
 			FormToken: issueFormToken(ip),
-			Updated:   r.URL.Query().Get("updated") == "1",
-			Deleted:   r.URL.Query().Get("deleted") == "1",
+			Updated:   flash.ManageUpdated,
+			Deleted:   flash.ManageDeleted,
 		}
 		renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title, data))
 	}
+}
+
+// manageRedirect stores msg as a one-time flash (#985) and redirects back to
+// the contact-manage page for token, keyed by tok.
+func manageRedirect(w http.ResponseWriter, r *http.Request, token, tok string, msg FlashMsg) {
+	flashRedirect(w, r, "/contact-posts/manage/"+token, tok, msg)
 }
 
 // POST /contact-posts/manage/{token}
@@ -289,10 +307,11 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 
 		if r.FormValue("_action") == "delete" {
 			if err := client.DeleteContactPostByManageToken(r.Context(), token); err != nil {
+				log.Printf("dansal-web: manage delete failed path=%s err=%v", r.URL.Path, err)
 				http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 				return
 			}
-			http.Redirect(w, r, "/contact-posts/manage/"+token+"?deleted=1", http.StatusSeeOther)
+			manageRedirect(w, r, token, flashToken(nil), FlashMsg{ManageDeleted: true})
 			return
 		}
 
@@ -314,10 +333,11 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			"nickname": r.FormValue("nickname"),
 		}
 		if err := client.UpdateContactPost(r.Context(), postID, token, fields); err != nil {
+			log.Printf("dansal-web: manage update failed path=%s err=%v", r.URL.Path, err)
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
-		http.Redirect(w, r, "/contact-posts/manage/"+token+"?updated=1", http.StatusSeeOther)
+		manageRedirect(w, r, token, flashToken(nil), FlashMsg{ManageUpdated: true})
 	}
 }
 

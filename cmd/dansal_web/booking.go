@@ -8,6 +8,20 @@ import (
 	"time"
 )
 
+// redirectBookingError redirects to the event page with a one-time flash
+// (#985) carrying the generic book_error i18n key plus the API's actual
+// message and error_id when available, using the same mechanism as
+// redirectBoardError.
+func redirectBookingError(w http.ResponseWriter, r *http.Request, eventID int, err error) {
+	tok := flashToken(err)
+	log.Printf("dansal-web: booking error error_id=%s path=%s err=%v", tok, r.URL.Path, err)
+	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
+		BookingError:    "book_error",
+		BookingErrorMsg: apiErrUserMessage(err),
+		BookingErrorID:  tok,
+	})
+}
+
 // POST /events/{id}/book
 func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -19,25 +33,25 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			redirectBookingError(w, r, eventID, nil)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			redirectBookingError(w, r, eventID, nil)
 			return
 		}
 		if r.FormValue("honeypot") != "" {
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
+			flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), FlashMsg{BookingOK: true})
 			return
 		}
 		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			redirectBookingError(w, r, eventID, nil)
 			return
 		}
 		if hasPendingSubmission(ip, r.UserAgent()) {
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			redirectBookingError(w, r, eventID, nil)
 			return
 		}
 
@@ -58,10 +72,10 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 		globalEmailSendRate.record()
 		if err := client.CreateBooking(r.Context(), eventID, fields, cfg.publicBaseURL()); err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
-			http.Redirect(w, r, fmt.Sprintf("/events/%d?book_error=book_error", eventID), http.StatusSeeOther)
+			redirectBookingError(w, r, eventID, err)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/events/%d?book_ok=1", eventID), http.StatusSeeOther)
+		flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), FlashMsg{BookingOK: true})
 	}
 }
 

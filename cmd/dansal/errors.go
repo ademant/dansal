@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 )
 
@@ -147,5 +148,22 @@ func ErrorIDMiddleware(next http.Handler) http.Handler {
 		eiw := &errorIDWriter{ResponseWriter: w, req: r}
 		next.ServeHTTP(eiw, r)
 		eiw.flush()
+	})
+}
+
+// PanicRecoveryMiddleware recovers from a panic anywhere downstream, logs the
+// stack trace with the request method/path, and writes a generic JSON 500
+// instead of letting net/http kill the connection with a bare stack trace
+// (#991). It must sit inside ErrorIDMiddleware so the 500 still gets an
+// error_id assigned and logged the same way as any other error response.
+func PanicRecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
+				writeError(w, "Internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
 	})
 }

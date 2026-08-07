@@ -207,6 +207,13 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.InviteSigningKeyPath == "" {
 		cfg.Server.InviteSigningKeyPath = filepath.Join(filepath.Dir(cfg.Server.DBPath), "invite_signing_key.pem")
 	}
+	if cfg.Server.RateLimit == 0 {
+		// An unset rate_limit must not silently reject every request
+		// (NewRateLimiter(0, ...) allows nothing — a total self-DoS, #988).
+		// nginx already enforces 10r/s per IP in front; this is
+		// defense-in-depth, so 30/min is a safe, generous default.
+		cfg.Server.RateLimit = 30
+	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5
 	}

@@ -117,6 +117,35 @@ func (c *imageCache) remove(id int) {
 
 var errNotImage = errors.New("data is not an image")
 
+// maxImageMegapixels caps decoded pixel dimensions before the full pixel
+// buffer is allocated, comfortably above the 1024×1024 default resize
+// target (fitImage runs after decode) while still rejecting a crafted
+// image that declares e.g. 50000x50000 px to force a multi-GB allocation
+// (decompression-bomb DoS, #990). 50MP covers legitimate large phone
+// photos (~8000x6000).
+const maxImageMegapixels = 50
+
+// decodeImageSafely sniffs data's content type, rejects declared pixel
+// dimensions above maxImageMegapixels via the cheap header-only
+// image.DecodeConfig (no pixel allocation) before running the full
+// image.Decode. Applies uniformly to JPEG/PNG/GIF/AVIF uploads and iCal
+// ATTACH images, since all funnel through saveImageToDir/saveAvatarToDir.
+func decodeImageSafely(data []byte) (image.Image, error) {
+	if !strings.HasPrefix(http.DetectContentType(data), "image/") && !isAVIF(data) {
+		return nil, errNotImage
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
+		if mp := (int64(cfg.Width) * int64(cfg.Height)) / 1_000_000; mp > maxImageMegapixels {
+			return nil, fmt.Errorf("image dimensions %dx%d exceed the %dMP limit", cfg.Width, cfg.Height, maxImageMegapixels)
+		}
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return img, nil
+}
+
 // isAVIF reports whether head contains an ISO BMFF ftyp box with an AVIF brand.
 // http.DetectContentType misidentifies AVIF as video/mp4 because they share the
 // ISO Base Media File Format container; this check catches the case it misses.
@@ -149,17 +178,13 @@ func isAVIF(head []byte) bool {
 // saveImageToDir decodes image data from r, resizes, and stores as AVIF in the given directory.
 // The file is named "{id}.avif". The caller is responsible for updating any cache.
 func saveImageToDir(id int, dir string, r io.Reader) error {
-	head := make([]byte, 512)
-	n, err := io.ReadFull(r, head)
-	if err != nil && err != io.ErrUnexpectedEOF {
+	data, err := io.ReadAll(r)
+	if err != nil {
 		return fmt.Errorf("read: %w", err)
 	}
-	if !strings.HasPrefix(http.DetectContentType(head[:n]), "image/") && !isAVIF(head[:n]) {
-		return errNotImage
-	}
-	img, _, err := image.Decode(io.MultiReader(bytes.NewReader(head[:n]), r))
+	img, err := decodeImageSafely(data)
 	if err != nil {
-		return fmt.Errorf("decode: %w", err)
+		return err
 	}
 	img = fitImage(img, config.Server.ImageXMax, config.Server.ImageYMax)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -187,17 +212,13 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 // saveAvatarToDir decodes r, resizes to fit 400×400, and stores as JPEG.
 // Always uses JPEG regardless of server image format config. File is named "{id}.jpg".
 func saveAvatarToDir(id int, dir string, r io.Reader) error {
-	head := make([]byte, 512)
-	n, err := io.ReadFull(r, head)
-	if err != nil && err != io.ErrUnexpectedEOF {
+	data, err := io.ReadAll(r)
+	if err != nil {
 		return fmt.Errorf("read: %w", err)
 	}
-	if !strings.HasPrefix(http.DetectContentType(head[:n]), "image/") && !isAVIF(head[:n]) {
-		return errNotImage
-	}
-	img, _, err := image.Decode(io.MultiReader(bytes.NewReader(head[:n]), r))
+	img, err := decodeImageSafely(data)
 	if err != nil {
-		return fmt.Errorf("decode: %w", err)
+		return err
 	}
 	img = fitImage(img, 400, 400)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

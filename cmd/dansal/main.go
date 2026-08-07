@@ -3880,7 +3880,8 @@ func main() {
 		CORSMiddleware,
 		SecurityHeadersMiddleware,
 		GzipMiddleware,
-		ErrorIDMiddleware, // inside Gzip so it sees uncompressed JSON
+		ErrorIDMiddleware,       // inside Gzip so it sees uncompressed JSON
+		PanicRecoveryMiddleware, // inside ErrorID so a recovered panic still gets an error_id (#991)
 		MaxBodyMiddleware,
 		ConnLimitMiddleware,
 		RateLimitMiddleware,

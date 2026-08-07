@@ -21,11 +21,12 @@ const (
 	argon2SaltLen = 16
 )
 
-// PBKDF2-HMAC-SHA256 iteration count per OWASP's 2024 recommendation. This
-// is the FIPS 140-approved option (see #802) — pick it via password_kdf in
-// config.yaml when FIPS compliance is required.
+// PBKDF2-HMAC-SHA256 iteration count per OWASP's current recommendation
+// (600,000 — the 210,000 figure was superseded, #987). This is the FIPS
+// 140-approved option (see #802) — pick it via password_kdf in config.yaml
+// when FIPS compliance is required.
 const (
-	pbkdf2Iterations = 210000
+	pbkdf2Iterations = 600000
 	pbkdf2KeyLen     = 32
 	pbkdf2SaltLen    = 16
 )

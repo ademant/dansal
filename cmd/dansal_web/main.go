@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -515,7 +516,7 @@ func main() {
 		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           securityHeadersMiddleware(&live),
+		Handler:           panicRecoveryMiddleware(securityHeadersMiddleware(&live)),
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutSecs) * time.Second,
 		ReadTimeout:       time.Duration(cfg.ReadTimeoutSecs) * time.Second,
 		WriteTimeout:      time.Duration(cfg.WriteTimeoutSecs) * time.Second,
@@ -553,6 +554,22 @@ const baselineCSP = "default-src 'self'; " +
 	"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
 	"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
 	"object-src 'none'; base-uri 'self'; "
+
+// panicRecoveryMiddleware recovers from a panic anywhere downstream, logs the
+// stack trace with the request method/path, and writes a generic 500 instead
+// of letting net/http kill the connection with a bare stack trace (#991). It
+// is outermost so it also covers a panic inside securityHeadersMiddleware.
+func panicRecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

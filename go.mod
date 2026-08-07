@@ -44,7 +44,7 @@ require (
 	github.com/gen2brain/avif v0.4.4
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	golang.org/x/crypto v0.53.0
-	golang.org/x/image v0.42.0
+	golang.org/x/image v0.43.0
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0
 )

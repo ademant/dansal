@@ -282,7 +282,10 @@ func adminEnrichPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 		if !ok {
 			return
 		}
-		aliases, _ := listCityAliases(db)
+		aliases, err := listCityAliases(db)
+		if err != nil {
+			log.Printf("admin enrich: could not load city aliases: %v", err)
+		}
 		renderTemplate(w, tmpls.adminEnrich, tmplData(r, cfg, i18n, "Enrich from folkdance.page", AdminEnrichData{
 			CityAliases: aliases,
 		}))
@@ -296,9 +299,15 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			return
 		}
 
-		aliases, _ := listCityAliases(db)
+		aliases, err := listCityAliases(db)
+		if err != nil {
+			log.Printf("admin enrich: could not load city aliases: %v", err)
+		}
 		cityMap := aliasMap(aliases)
-		musicians, _ := client.GetMusicians(r.Context())
+		musicians, err := client.GetMusicians(r.Context())
+		if err != nil {
+			log.Printf("admin enrich: could not load musicians: %v", err)
+		}
 
 		// Pre-build normalized musician name → ID map.
 		normMusician := make(map[string]int, len(musicians))

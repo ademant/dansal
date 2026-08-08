@@ -72,7 +72,7 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 			PublicKeyPem string `json:"publicKeyPem"`
 		} `json:"publicKey"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&actor); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRemoteJSONBody)).Decode(&actor); err != nil {
 		return "", "", fmt.Errorf("decode actor: %w", err)
 	}
 	if actor.PublicKey.PublicKeyPem == "" {

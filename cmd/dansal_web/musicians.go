@@ -46,7 +46,11 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			return
 		}
 
-		allEvents, _ := client.GetAllPublicEventsByMusician(r.Context(), id)
+		allEvents, err := client.GetAllPublicEventsByMusician(r.Context(), id)
+		if err != nil {
+			logHTTPError(w, r, "could not load musician events", http.StatusBadGateway)
+			return
+		}
 
 		now := time.Now()
 		var futureEvents []Event

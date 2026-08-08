@@ -22,13 +22,13 @@ type SuggestPageData struct {
 	// ManageToken/PrefillJSON/PrefillTags/PrefillDanceIDs are set when the
 	// wizard is loaded via the #928 magic link (/events/suggest/manage/{token}),
 	// pre-filling the same form instead of a separate simpler edit page.
-	ManageToken      string
-	PrefillJSON      template.JS
-	PrefillTags      map[string]bool // set of tags to pre-check in the template
-	PrefillDanceIDs  map[int]bool    // set of dance IDs to pre-check in the template
-	ExistingImageURL string          // current event image URL, shown as preview in manage mode
-	IsImportMode     bool            // true when returning from import: wizard is pre-filled
-	ImportAllPrefills []string       // each imported event as wizPrefill JSON (for picker)
+	ManageToken       string
+	PrefillJSON       template.JS
+	PrefillTags       map[string]bool // set of tags to pre-check in the template
+	PrefillDanceIDs   map[int]bool    // set of dance IDs to pre-check in the template
+	ExistingImageURL  string          // current event image URL, shown as preview in manage mode
+	IsImportMode      bool            // true when returning from import: wizard is pre-filled
+	ImportAllPrefills []string        // each imported event as wizPrefill JSON (for picker)
 }
 
 type SuggestDoneData struct {
@@ -60,7 +60,10 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			return
 		}
 		tokenThrottle.record(ip)
-		dances, _ := client.GetDances(r.Context())
+		dances, err := client.GetDances(r.Context())
+		if err != nil {
+			log.Printf("suggest: could not load dances: %v", err)
+		}
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
@@ -150,7 +153,10 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}
 		}
 
-		dances, _ := client.GetDances(r.Context())
+		dances, err := client.GetDances(r.Context())
+		if err != nil {
+			log.Printf("suggest: could not load dances: %v", err)
+		}
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
@@ -372,28 +378,28 @@ func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerF
 // wizPrefill is the JSON shape embedded into the page for the wizard's
 // client-side prefill script (#928 magic-link edit).
 type wizPrefill struct {
-	Title        string               `json:"title"`
-	Description  string               `json:"description"`
-	URL          string               `json:"url"`
-	StartTime    string               `json:"start_time"`
-	EndTime      string               `json:"end_time"`
-	Tags         []string             `json:"tags"`
-	DanceIDs     []int                `json:"dance_ids,omitempty"`
-	Location     string               `json:"location"`
-	Town         string               `json:"town"`
-	Country      string               `json:"country"`
-	Address      string               `json:"address"`
-	Zipcode      string               `json:"zipcode"`
-	Lat          string               `json:"lat,omitempty"`
-	Lon          string               `json:"lon,omitempty"`
-	Food         string               `json:"food"`
-	Drink        string               `json:"drink"`
-	Pricing      *Pricing             `json:"pricing,omitempty"`
-	ContactName  string               `json:"contact_name"`
-	ContactEmail string               `json:"contact_email"`
-	Musicians    []string             `json:"musicians"`
-	Instructors  []string             `json:"instructors"`
-	Timetable    []TimetableEntryReq  `json:"timetable,omitempty"`
+	Title        string              `json:"title"`
+	Description  string              `json:"description"`
+	URL          string              `json:"url"`
+	StartTime    string              `json:"start_time"`
+	EndTime      string              `json:"end_time"`
+	Tags         []string            `json:"tags"`
+	DanceIDs     []int               `json:"dance_ids,omitempty"`
+	Location     string              `json:"location"`
+	Town         string              `json:"town"`
+	Country      string              `json:"country"`
+	Address      string              `json:"address"`
+	Zipcode      string              `json:"zipcode"`
+	Lat          string              `json:"lat,omitempty"`
+	Lon          string              `json:"lon,omitempty"`
+	Food         string              `json:"food"`
+	Drink        string              `json:"drink"`
+	Pricing      *Pricing            `json:"pricing,omitempty"`
+	ContactName  string              `json:"contact_name"`
+	ContactEmail string              `json:"contact_email"`
+	Musicians    []string            `json:"musicians"`
+	Instructors  []string            `json:"instructors"`
+	Timetable    []TimetableEntryReq `json:"timetable,omitempty"`
 }
 
 func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -413,7 +419,10 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 
 		ip := getClientIP(r)
-		dances, _ := client.GetDances(r.Context())
+		dances, err := client.GetDances(r.Context())
+		if err != nil {
+			log.Printf("suggest: could not load dances: %v", err)
+		}
 
 		// Build a name→ID map so we can pre-check dance checkboxes both
 		// server-side (PrefillDanceIDs) and via the JS wizard (pf.DanceIDs).

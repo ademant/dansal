@@ -2,6 +2,7 @@ package main
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -38,8 +39,22 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		var dances []Dance
 		var locs []Location
 		err := fetchParallel(
-			func() error { dances, _ = client.GetDances(r.Context()); return nil },
-			func() error { locs, _ = client.GetLocations(r.Context()); return nil },
+			func() error {
+				var err error
+				dances, err = client.GetDances(r.Context())
+				if err != nil {
+					log.Printf("search: could not load dances: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				locs, err = client.GetLocations(r.Context())
+				if err != nil {
+					log.Printf("search: could not load locations: %v", err)
+				}
+				return nil
+			},
 		)
 		if err != nil {
 			logHTTPError(w, r, "could not load search data", http.StatusBadGateway)

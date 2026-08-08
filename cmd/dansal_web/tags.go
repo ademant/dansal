@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -86,7 +87,11 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 			return
 		}
 
-		events, _ := client.GetEventsFiltered(r.Context(), url.Values{"tag": {slug}, "is_published": {"true"}})
+		events, err := client.GetEventsFiltered(r.Context(), url.Values{"tag": {slug}, "is_published": {"true"}})
+		if err != nil {
+			logHTTPError(w, r, "could not load tag events", http.StatusBadGateway)
+			return
+		}
 		if events == nil {
 			events = []Event{}
 		}
@@ -140,7 +145,10 @@ func serveTagCollection(w http.ResponseWriter, r *http.Request, cfg *Config, cli
 		return
 	}
 
-	orgs, _ := client.GetOrganizations(r.Context())
+	orgs, err := client.GetOrganizations(r.Context())
+	if err != nil {
+		log.Printf("tag collection: could not load organizations: %v", err)
+	}
 	slugByOrgID := make(map[int]string, len(orgs))
 	for _, o := range orgs {
 		slugByOrgID[o.ID] = effectiveSlug(o)

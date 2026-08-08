@@ -728,9 +728,30 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		var tagMap map[string]Tag
 		err := fetchParallel(
 			func() error { var err error; events, err = client.GetEvents(r.Context(), ""); return err },
-			func() error { orgs, _ = client.GetOrganizations(r.Context()); return nil },
-			func() error { dances, _ = client.GetDances(r.Context()); return nil },
-			func() error { tagMap, _ = client.GetTagMap(r.Context()); return nil },
+			func() error {
+				var err error
+				orgs, err = client.GetOrganizations(r.Context())
+				if err != nil {
+					log.Printf("index: could not load organizations: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				dances, err = client.GetDances(r.Context())
+				if err != nil {
+					log.Printf("index: could not load dances: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				tagMap, err = client.GetTagMap(r.Context())
+				if err != nil {
+					log.Printf("index: could not load tag map: %v", err)
+				}
+				return nil
+			},
 		)
 		if err != nil {
 			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
@@ -1040,15 +1061,32 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 		var locs []Location
 		err := fetchParallel(
 			func() error { var err error; orgs, err = client.GetOrganizations(r.Context()); return err },
-			func() error { statMap, _ = client.GetOrgStats(r.Context()); return nil },
-			func() error { locs, _ = client.GetLocations(r.Context()); return nil },
+			func() error {
+				var err error
+				statMap, err = client.GetOrgStats(r.Context())
+				if err != nil {
+					log.Printf("orgs: could not load stats: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				locs, err = client.GetLocations(r.Context())
+				if err != nil {
+					log.Printf("orgs: could not load locations: %v", err)
+				}
+				return nil
+			},
 		)
 		if err != nil {
 			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
 			return
 		}
 
-		actorSlugs, _ := listOrgActorSlugs(db)
+		actorSlugs, aErr := listOrgActorSlugs(db)
+		if aErr != nil {
+			log.Printf("orgs: could not load actor slugs: %v", aErr)
+		}
 
 		orgSlugMap := make(map[int]string, len(orgs))
 		for _, o := range orgs {

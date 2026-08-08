@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
-	"sync"
 )
 
 // TimetableRoom is a room option for the timetable editor's room picker.
@@ -45,36 +45,39 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 
 		var (
 			event       Event
-			eventErr    error
 			allLocs     []Location
 			musicians   []Musician
 			instructors []Instructor
-			wg          sync.WaitGroup
 		)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			event, eventErr = client.GetEventAuthed(ctx, id, tok)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			allLocs, _ = client.GetLocations(ctx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			musicians, _ = client.GetMusicians(ctx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			instructors, _ = client.GetInstructors(ctx)
-		}()
-		wg.Wait()
-
-		if eventErr != nil {
+		err = fetchParallel(
+			func() error { var err error; event, err = client.GetEventAuthed(ctx, id, tok); return err },
+			func() error {
+				var err error
+				allLocs, err = client.GetLocations(ctx)
+				if err != nil {
+					log.Printf("timetable: could not load locations: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				musicians, err = client.GetMusicians(ctx)
+				if err != nil {
+					log.Printf("timetable: could not load musicians: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				instructors, err = client.GetInstructors(ctx)
+				if err != nil {
+					log.Printf("timetable: could not load instructors: %v", err)
+				}
+				return nil
+			},
+		)
+		if err != nil {
 			http.Error(w, "event not found", http.StatusNotFound)
 			return
 		}
@@ -207,7 +210,7 @@ func adminTimetableSaveHandler(client *DansalClient) http.HandlerFunc {
 		}
 		tok := getSessionToken(r)
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
 			http.Error(w, "read error", http.StatusBadRequest)
 			return

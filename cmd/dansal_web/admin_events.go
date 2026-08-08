@@ -844,14 +844,19 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			mids = append(mids, id)
 		}
 
-		drows, _ := db.QueryContext(ctx,
+		drows, qErr := db.QueryContext(ctx,
 			"SELECT DISTINCT dance_id FROM event_dances WHERE event_id IN "+inClause,
 			qargs...)
 		var danceIDs []int
-		if drows != nil {
+		if qErr != nil {
+			log.Printf("admin event save: could not query dance ids: %v", qErr)
+		} else if drows != nil {
 			for drows.Next() {
 				var did int
-				drows.Scan(&did)
+				if err := drows.Scan(&did); err != nil {
+					log.Printf("admin event save: could not scan dance id: %v", err)
+					continue
+				}
 				danceIDs = append(danceIDs, did)
 			}
 			drows.Close()
@@ -3289,14 +3294,29 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 			return
 		}
 
-		locs, _ := client.GetLocations(r.Context())
-		dances, _ := client.GetDances(r.Context())
-		allTags, _ := client.GetTags(r.Context())
-		series, _ := client.GetSeriesList(r.Context(), token)
+		locs, err := client.GetLocations(r.Context())
+		if err != nil {
+			log.Printf("admin location: could not load locations: %v", err)
+		}
+		dances, err := client.GetDances(r.Context())
+		if err != nil {
+			log.Printf("admin location: could not load dances: %v", err)
+		}
+		allTags, err := client.GetTags(r.Context())
+		if err != nil {
+			log.Printf("admin location: could not load tags: %v", err)
+		}
+		series, err := client.GetSeriesList(r.Context(), token)
+		if err != nil {
+			log.Printf("admin location: could not load series: %v", err)
+		}
 
 		var roomEventCounts map[int]int
 		if len(loc.Children) > 0 {
-			roomEventCounts, _ = client.GetLocationEventCounts(r.Context(), token)
+			roomEventCounts, err = client.GetLocationEventCounts(r.Context(), token)
+			if err != nil {
+				log.Printf("admin location: could not load room event counts: %v", err)
+			}
 		}
 
 		locTitle := loc.ShortName

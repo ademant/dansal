@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -45,9 +46,24 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 	needMembers := su != nil && su.Role != "admin" && event.OrganizationID != nil
 
 	var data eventPageData
+	var errs []string
+	var mu sync.Mutex
+	addErr := func(fn string, err error) {
+		if err == nil {
+			return
+		}
+		mu.Lock()
+		errs = append(errs, fn+": "+err.Error())
+		mu.Unlock()
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func() { defer wg.Done(); data.tagMap, _ = client.GetTagMap(r.Context()) }()
+	go func() {
+		defer wg.Done()
+		tm, err := client.GetTagMap(r.Context())
+		addErr("GetTagMap", err)
+		data.tagMap = tm
+	}()
 	if event.OrganizationID != nil {
 		wg.Add(1)
 		go func() {
@@ -56,22 +72,28 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 			if err == nil {
 				data.org = &o
 				data.slug = effectiveSlug(o)
+			} else {
+				addErr("GetOrganization", err)
 			}
 		}()
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		data.posts, _ = client.GetContactPosts(r.Context(), event.ID)
+		posts, err := client.GetContactPosts(r.Context(), event.ID)
+		addErr("GetContactPosts", err)
+		data.posts = posts
 	}()
 	if needMembers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			ms, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
-			if err == nil {
-				data.members = ms
+			if err != nil {
+				addErr("GetOrganizationMembers", err)
+				return
 			}
+			data.members = ms
 		}()
 	}
 	// Series siblings for prev/next navigation.
@@ -81,6 +103,7 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 			defer wg.Done()
 			siblings, err := client.GetEventsBySeries(r.Context(), *event.SeriesID)
 			if err != nil {
+				addErr("GetEventsBySeries", err)
 				return
 			}
 			for i, e := range siblings {
@@ -103,7 +126,11 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			allOrgs, _ := client.GetOrganizations(r.Context())
+			allOrgs, err := client.GetOrganizations(r.Context())
+			if err != nil {
+				addErr("GetOrganizations", err)
+				return
+			}
 			if su.Role == "admin" {
 				data.userOrgs = allOrgs
 			} else {
@@ -121,6 +148,9 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 		}()
 	}
 	wg.Wait()
+	for _, e := range errs {
+		log.Printf("event page: %s", e)
+	}
 	return data
 }
 

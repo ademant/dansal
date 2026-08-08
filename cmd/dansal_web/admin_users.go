@@ -34,14 +34,20 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		token := getSessionToken(r)
 		isAdmin := su.Role == "admin"
 
-		orgs, _ := client.GetOrganizations(r.Context())
+		orgs, oErr := client.GetOrganizations(r.Context())
+		if oErr != nil {
+			log.Printf("admin users: could not load organizations: %v", oErr)
+		}
 		orgMap := buildOrgMap(orgs)
 
 		orgIDs := make([]int, len(orgs))
 		for i, o := range orgs {
 			orgIDs[i] = o.ID
 		}
-		bulkMembers, _ := client.GetOrganizationMembersBulk(r.Context(), orgIDs, token)
+		bulkMembers, bErr := client.GetOrganizationMembersBulk(r.Context(), orgIDs, token)
+		if bErr != nil {
+			log.Printf("admin users: could not load memberships: %v", bErr)
+		}
 
 		userOrgs := make(map[int][]int)
 		for orgID, members := range bulkMembers {
@@ -52,7 +58,12 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		var users []UserInfo
 		if isAdmin {
-			users, _ = client.GetAllUsers(r.Context(), token)
+			var uErr error
+			users, uErr = client.GetAllUsers(r.Context(), token)
+			if uErr != nil {
+				logHTTPError(w, r, "could not load users", http.StatusBadGateway)
+				return
+			}
 		} else {
 			seen := make(map[int]bool)
 			for _, orgID := range userOrgs[su.ID] {
@@ -65,7 +76,10 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			}
 		}
 
-		invites, _ := client.ListInvites(r.Context(), token)
+		invites, iErr := client.ListInvites(r.Context(), token)
+		if iErr != nil {
+			log.Printf("admin users: could not load invites: %v", iErr)
+		}
 		active := make([]InviteLink, 0, len(invites))
 		for _, inv := range invites {
 			if inv.UsedAt == "" {

@@ -42,7 +42,11 @@ func instructorHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			return
 		}
 
-		allEvents, _ := client.GetAllPublicEventsByInstructor(r.Context(), id)
+		allEvents, err := client.GetAllPublicEventsByInstructor(r.Context(), id)
+		if err != nil {
+			logHTTPError(w, r, "could not load instructor events", http.StatusBadGateway)
+			return
+		}
 
 		now := time.Now()
 		var futureEvents []Event

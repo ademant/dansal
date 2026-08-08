@@ -203,7 +203,11 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.Ha
 		// cursor value, not a raw querystring — "?tag="+tag would have been
 		// glued onto start_time_after= instead of becoming its own &tag=
 		// param. GetEventsFiltered builds the query correctly (issue #949).
-		events, _ := client.GetEventsFiltered(r.Context(), url.Values{"tag": {tag}, "is_published": {"true"}})
+		events, err := client.GetEventsFiltered(r.Context(), url.Values{"tag": {tag}, "is_published": {"true"}})
+		if err != nil {
+			logHTTPError(w, r, "could not load feed events", http.StatusBadGateway)
+			return
+		}
 		if events == nil {
 			events = []Event{}
 		}
@@ -508,26 +512,33 @@ func serveJSONFeedSpec(w http.ResponseWriter, cfg *Config, title, selfURL, altUR
 // events for the /tags/{slug}.atom and /tags/{slug}.jsonfeed handlers.
 // ok is false for an unknown slug, so callers 404 rather than serving an
 // always-empty feed for arbitrary input.
-func tagFeedEvents(ctx context.Context, client *DansalClient, slug string) (tag Tag, events []Event, ok bool) {
+func tagFeedEvents(ctx context.Context, client *DansalClient, slug string) (tag Tag, events []Event, ok bool, err error) {
 	tagMap, err := client.GetTagMap(ctx)
 	if err != nil {
-		return Tag{}, nil, false
+		return Tag{}, nil, false, err
 	}
 	tag, ok = tagMap[slug]
 	if !ok {
-		return Tag{}, nil, false
+		return Tag{}, nil, false, nil
 	}
-	events, _ = client.GetEventsFiltered(ctx, url.Values{"tag": {slug}, "is_published": {"true"}})
+	events, err = client.GetEventsFiltered(ctx, url.Values{"tag": {slug}, "is_published": {"true"}})
+	if err != nil {
+		return Tag{}, nil, false, err
+	}
 	if events == nil {
 		events = []Event{}
 	}
-	return tag, events, true
+	return tag, events, true, nil
 }
 
 func tagAtomHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
-		tag, events, ok := tagFeedEvents(r.Context(), client, slug)
+		tag, events, ok, err := tagFeedEvents(r.Context(), client, slug)
+		if err != nil {
+			logHTTPError(w, r, "could not load tag feed", http.StatusBadGateway)
+			return
+		}
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -545,7 +556,11 @@ func tagAtomHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 func tagJSONFeedHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
-		tag, events, ok := tagFeedEvents(r.Context(), client, slug)
+		tag, events, ok, err := tagFeedEvents(r.Context(), client, slug)
+		if err != nil {
+			logHTTPError(w, r, "could not load tag feed", http.StatusBadGateway)
+			return
+		}
 		if !ok {
 			http.NotFound(w, r)
 			return

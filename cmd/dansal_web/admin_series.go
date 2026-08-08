@@ -48,7 +48,9 @@ type seriesDefaults struct {
 func parseSeriesDefaults(raw json.RawMessage) seriesDefaults {
 	var d seriesDefaults
 	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &d)
+		if err := json.Unmarshal(raw, &d); err != nil {
+			log.Printf("could not parse series defaults: %v", err)
+		}
 	}
 	return d
 }

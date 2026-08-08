@@ -126,7 +126,10 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		if !ok {
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
+		orgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			log.Printf("admin fetchurl: could not load organizations: %v", err)
+		}
 		if su.Role != "admin" {
 			userOrgSet := memberOrgSet(r, client, su)
 			var filtered []Organization
@@ -139,7 +142,10 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		}
 		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
 		orgIDs := orgIDsForTemplates(r, client, su)
-		templates, _ := listTemplates(db, su.ID, orgIDs)
+		templates, err := listTemplates(db, su.ID, orgIDs)
+		if err != nil {
+			log.Printf("admin fetchurl: could not load templates: %v", err)
+		}
 		title := i18n.T(r, "fetch_new_title")
 		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
 			Orgs:         orgs,

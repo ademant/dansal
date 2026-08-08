@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -144,7 +145,7 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			"OrgNames": orgNames,
 			"Strings":  strs,
 			"BaseURL":  cfg.BaseURL,
-				"SiteName": embedSiteName(cfg),
+			"SiteName": embedSiteName(cfg),
 		})
 	}
 }
@@ -460,7 +461,10 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 		calJSON, _ := json.Marshal(cal)
 
-		allTags, _ := client.GetTags(r.Context())
+		allTags, err := client.GetTags(r.Context())
+		if err != nil {
+			log.Printf("embed calendar: could not load tags: %v", err)
+		}
 
 		fpLocales := map[string]string{
 			"de": "de", "fr": "fr", "es": "es", "it": "it",

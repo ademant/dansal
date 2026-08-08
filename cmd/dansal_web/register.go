@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strconv"
@@ -9,6 +10,22 @@ import (
 )
 
 const pendingRegCookie = "pending_reg"
+
+// loadRegisterFormData best-effort loads the org list and service info for
+// re-rendering the register form after a duplicate/error submission. Failures
+// are logged — the render's primary purpose is showing the error, and a 502
+// would hide it.
+func loadRegisterFormData(ctx context.Context, client *DansalClient) ([]Organization, DansalInfo) {
+	orgs, err := client.GetOrganizations(ctx)
+	if err != nil {
+		log.Printf("register: could not load organizations: %v", err)
+	}
+	info, err := client.GetServiceInfo(ctx)
+	if err != nil {
+		log.Printf("register: could not load service info: %v", err)
+	}
+	return orgs, info
+}
 
 type RegisterPageData struct {
 	Orgs              []Organization
@@ -135,8 +152,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
 		phone2 := r.FormValue(honeypotField)
 		if hasPendingSubmission(ip, r.UserAgent()) {
-			orgs, _ := client.GetOrganizations(r.Context())
-			info, _ := client.GetServiceInfo(r.Context())
+			orgs, info := loadRegisterFormData(r.Context(), client)
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 				Orgs:              orgs,
@@ -188,8 +204,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 					errKey = "register_error_no_org"
 				}
 			}
-			orgs, _ := client.GetOrganizations(r.Context())
-			info, _ := client.GetServiceInfo(r.Context())
+			orgs, info := loadRegisterFormData(r.Context(), client)
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 				Orgs:              orgs,
@@ -263,7 +278,10 @@ func adminRegistrationsHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			log.Printf("admin registrations list: %v", err)
 			regs = nil
 		}
-		pendingInvites, _ := client.ListPendingInvites(r.Context(), token)
+		pendingInvites, ierr := client.ListPendingInvites(r.Context(), token)
+		if ierr != nil {
+			log.Printf("admin registrations: could not load pending invites: %v", ierr)
+		}
 		title := i18n.T(r, "admin_registrations_title")
 		renderTemplate(w, tmpls.adminRegistrations, tmplData(r, cfg, i18n, title, AdminRegistrationsData{
 			Regs:           regs,

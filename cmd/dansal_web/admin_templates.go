@@ -23,10 +23,19 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if !ok {
 			return
 		}
-		ts, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
-		orgs, _ := client.GetOrganizations(r.Context())
+		ts, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
+		if err != nil {
+			log.Printf("admin templates: could not load templates: %v", err)
+		}
+		orgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			log.Printf("admin templates: could not load organizations: %v", err)
+		}
 		orgMap := buildOrgMap(orgs)
-		pinnedIDs, _ := listPinnedTemplateIDs(db, su.ID)
+		pinnedIDs, err := listPinnedTemplateIDs(db, su.ID)
+		if err != nil {
+			log.Printf("admin templates: could not load pinned templates: %v", err)
+		}
 		title := i18n.T(r, "admin_templates_title")
 		renderTemplate(w, tmpls.adminTemplates, tmplData(r, cfg, i18n, title, AdminTemplatesData{
 			Templates: ts,
@@ -42,7 +51,11 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 // the unified event form's intent=save-template path (which saves the main
 // form first, then calls this against the freshly-saved event).
 func saveEventAsTemplate(db *sql.DB, userID int, orgID *int, name string, ev Event) (int64, error) {
-	data, _ := json.Marshal(templateDataFromEvent(ev))
+	data, err := json.Marshal(templateDataFromEvent(ev))
+	if err != nil {
+		log.Printf("save template: could not marshal template data: %v", err)
+		return 0, err
+	}
 	return saveTemplate(db, userID, orgID, nil, nil, name, string(data))
 }
 
@@ -239,7 +252,10 @@ func adminTemplateAssignPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, c
 			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 			return
 		}
-		ts, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
+		ts, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
+		if err != nil {
+			log.Printf("admin template assign: could not load templates: %v", err)
+		}
 		title := i18n.T(r, "admin_template_assign_title")
 		renderTemplate(w, tmpls.adminTemplateAssign, tmplData(r, cfg, i18n, title, AdminTemplateAssignData{
 			EventIDs:  eventIDs,

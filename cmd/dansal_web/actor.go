@@ -422,7 +422,10 @@ func buildNodeInfo(cfg *Config, schemaVersion string, info DansalInfo) NodeInfo 
 
 func nodeinfoHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		info, _ := client.GetServiceInfo(r.Context())
+		info, err := client.GetServiceInfo(r.Context())
+		if err != nil {
+			log.Printf("nodeinfo: could not load service info: %v", err)
+		}
 		ni := buildNodeInfo(cfg, "2.0", info)
 		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.0#"`)
 		json.NewEncoder(w).Encode(ni)
@@ -431,7 +434,10 @@ func nodeinfoHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func nodeinfo21Handler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		info, _ := client.GetServiceInfo(r.Context())
+		info, err := client.GetServiceInfo(r.Context())
+		if err != nil {
+			log.Printf("nodeinfo: could not load service info: %v", err)
+		}
 		ni := buildNodeInfo(cfg, "2.1", info)
 		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"`)
 		json.NewEncoder(w).Encode(ni)

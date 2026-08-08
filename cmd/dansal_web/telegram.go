@@ -23,7 +23,7 @@ func telegramWebhookProxyHandler(cfg *Config) http.HandlerFunc {
 			}
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
 			log.Printf("telegram proxy: read body: %v", err)
 			w.WriteHeader(http.StatusOK)

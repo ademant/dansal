@@ -178,7 +178,11 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 		if includePast {
 			params.Set("include_past", "true")
 		}
-		events, _ := client.GetEventsFiltered(r.Context(), params)
+		events, err := client.GetEventsFiltered(r.Context(), params)
+		if err != nil {
+			logHTTPError(w, r, "could not load city events", http.StatusBadGateway)
+			return
+		}
 		if events == nil {
 			events = []Event{}
 		}
@@ -225,7 +229,11 @@ func cityPastEventsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) h
 			// Only past events: end_time before now (approximate via start_time_before).
 			// Actual filtering happens client-side or via a future API param.
 		}
-		events, _ := client.GetEventsFiltered(r.Context(), params)
+		events, err := client.GetEventsFiltered(r.Context(), params)
+		if err != nil {
+			http.Error(w, "could not load city events", http.StatusBadGateway)
+			return
+		}
 
 		// Render as JSON array for the JS to consume.
 		type pastEvent struct {

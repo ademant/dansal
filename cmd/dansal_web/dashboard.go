@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -35,28 +36,42 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			allOrgs    []Organization
 			stats      MeStats
 			orgStats   map[int]OrgStatRecord
-			mu         sync.Mutex
-			wg         sync.WaitGroup
 		)
 
-		wg.Add(4)
-		go func() {
-			defer wg.Done()
-			userOrgIDs, _ = client.GetUserOrganizationIDs(ctx, su.ID, token)
-		}()
-		go func() {
-			defer wg.Done()
-			allOrgs, _ = client.GetOrganizations(ctx)
-		}()
-		go func() {
-			defer wg.Done()
-			stats, _ = client.GetMeStats(ctx, token)
-		}()
-		go func() {
-			defer wg.Done()
-			orgStats, _ = client.GetOrgStats(ctx)
-		}()
-		wg.Wait()
+		fetchParallel(
+			func() error {
+				var err error
+				userOrgIDs, err = client.GetUserOrganizationIDs(ctx, su.ID, token)
+				if err != nil {
+					log.Printf("dashboard: could not load user orgs: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				allOrgs, err = client.GetOrganizations(ctx)
+				if err != nil {
+					log.Printf("dashboard: could not load organizations: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				stats, err = client.GetMeStats(ctx, token)
+				if err != nil {
+					log.Printf("dashboard: could not load stats: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				orgStats, err = client.GetOrgStats(ctx)
+				if err != nil {
+					log.Printf("dashboard: could not load org stats: %v", err)
+				}
+				return nil
+			},
+		)
 
 		orgSet := make(map[int]bool, len(userOrgIDs))
 		for _, id := range userOrgIDs {
@@ -72,6 +87,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 		var events []Event
 		if len(userOrgIDs) > 0 {
 			var evtWg sync.WaitGroup
+			var evtMu sync.Mutex
 			for _, oid := range userOrgIDs {
 				oid := oid
 				evtWg.Add(1)
@@ -79,10 +95,13 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 					defer evtWg.Done()
 					params := url.Values{}
 					params.Set("organization_id", strconv.Itoa(oid))
-					evts, _ := client.GetAdminEvents(ctx, token, params)
-					mu.Lock()
+					evts, err := client.GetAdminEvents(ctx, token, params)
+					if err != nil {
+						log.Printf("dashboard: could not load events for org %d: %v", oid, err)
+					}
+					evtMu.Lock()
 					events = append(events, evts...)
-					mu.Unlock()
+					evtMu.Unlock()
 				}()
 			}
 			evtWg.Wait()

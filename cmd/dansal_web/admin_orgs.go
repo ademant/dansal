@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -88,15 +87,34 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		var statMap map[int]OrgStatRecord
 		var sources []FetchSource
 		var locations []Location
-		var orgsErr error
-		var wg sync.WaitGroup
-		wg.Add(4)
-		go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
-		go func() { defer wg.Done(); statMap, _ = client.GetOrgStats(r.Context()) }()
-		go func() { defer wg.Done(); sources, _ = client.GetFetchSources(r.Context(), token) }()
-		go func() { defer wg.Done(); locations, _ = client.GetLocations(r.Context()) }()
-		wg.Wait()
-		if orgsErr != nil {
+		err := fetchParallel(
+			func() error { var err error; orgs, err = client.GetOrganizations(r.Context()); return err },
+			func() error {
+				var err error
+				statMap, err = client.GetOrgStats(r.Context())
+				if err != nil {
+					log.Printf("admin orgs: could not load stats: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				sources, err = client.GetFetchSources(r.Context(), token)
+				if err != nil {
+					log.Printf("admin orgs: could not load fetch sources: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				locations, err = client.GetLocations(r.Context())
+				if err != nil {
+					log.Printf("admin orgs: could not load locations: %v", err)
+				}
+				return nil
+			},
+		)
+		if err != nil {
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
 			return
 		}

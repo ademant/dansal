@@ -189,7 +189,10 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 		return nil
 	}
 	var ids []int
-	json.Unmarshal([]byte(raw), &ids)
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		log.Printf("default dance ids: parse %q: %v", raw, err)
+		return nil
+	}
 	m := make(map[int]bool, len(ids))
 	for _, id := range ids {
 		m[id] = true

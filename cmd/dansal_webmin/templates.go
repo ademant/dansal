@@ -30,7 +30,7 @@ var tmplFuncs = template.FuncMap{
 		}
 		return fmt.Sprintf("%d", 100*part/total)
 	},
-	"add": func(a, b int) int { return a + b },
+	"add":   func(a, b int) int { return a + b },
 	"bytes": fmtBytes,
 }
 
@@ -66,8 +66,9 @@ type TemplateData struct {
 
 func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData {
 	nav := r.URL.Path
-	// normalise sub-pages to their top-level nav entry
-	if strings.HasPrefix(nav, "/sessions") {
+	// normalise sub-pages to their top-level nav entry: sessions live under
+	// /users/{email}/sessions, which must highlight the Users nav item.
+	if strings.HasPrefix(nav, "/users/") {
 		nav = "/users"
 	}
 	return TemplateData{

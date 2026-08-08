@@ -1928,7 +1928,9 @@ func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (s
 	var result struct {
 		Channel string `json:"channel"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
 	return result.Channel, nil
 }
 
@@ -2065,7 +2067,9 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 		TelegramVerifyURL string `json:"telegram_verify_url"`
 		FirstPost         bool   `json:"first_post"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", false, err
+	}
 	return result.TelegramVerifyURL, result.FirstPost, nil
 }
 
@@ -2229,11 +2233,15 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegra
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
 		return "", apiErr(resp)
 	}
+	if resp.StatusCode == http.StatusNoContent {
+		return "", nil
+	}
 	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-		if tgURL, ok := result["telegram_verify_url"].(string); ok {
-			return tgURL, nil
-		}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if tgURL, ok := result["telegram_verify_url"].(string); ok {
+		return tgURL, nil
 	}
 	return "", nil
 }
@@ -2790,7 +2798,9 @@ func (c *DansalClient) PatchSuggestManageEvent(ctx context.Context, token string
 	var result struct {
 		NeedsReview bool `json:"needs_review"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
 	return result.NeedsReview, nil
 }
 
@@ -2827,7 +2837,9 @@ func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL st
 		return nil, apiErr(resp)
 	}
 	var result map[string]string
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -2945,11 +2957,18 @@ type PendingRegStatus struct {
 }
 
 func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int, token string) (*PendingRegStatus, error) {
-	url := fmt.Sprintf("%s/api/v1/register/status/%d", c.BaseURL, id)
-	if token != "" {
-		url += "?token=" + token
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/register/status/%d", c.BaseURL, id), nil)
+	if err != nil {
+		return nil, err
 	}
-	resp, err := c.HTTP.Get(url)
+	if token != "" {
+		q := req.URL.Query()
+		q.Set("token", token)
+		req.URL.RawQuery = q.Encode()
+	}
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -2965,7 +2984,13 @@ func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int, token 
 }
 
 func (c *DansalClient) ResendRegistration(ctx context.Context, token string) error {
-	resp, err := c.HTTP.Post(fmt.Sprintf("%s/api/v1/register/resend/%s", c.BaseURL, token), "application/json", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/register/resend/%s", c.BaseURL, token), nil)
+	if err != nil {
+		return err
+	}
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
 	}

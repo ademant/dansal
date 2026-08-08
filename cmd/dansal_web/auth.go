@@ -222,10 +222,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		throttle.reset(ip)
-		expiresAt, err := time.Parse(time.RFC3339, lr.ExpiresAt)
-		if err != nil {
-			expiresAt = time.Now().Add(24 * time.Hour)
-		}
+		expiresAt := parseSessionExpiry(lr.ExpiresAt)
 
 		setSession(w, lr.Token, SessionUser{
 			ID:          lr.User.ID,
@@ -295,10 +292,7 @@ func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			return
 		}
 
-		expiresAt, err := time.Parse(time.RFC3339, lr.ExpiresAt)
-		if err != nil {
-			expiresAt = time.Now().Add(24 * time.Hour)
-		}
+		expiresAt := parseSessionExpiry(lr.ExpiresAt)
 		setSession(w, lr.Token, SessionUser{
 			ID:          lr.User.ID,
 			Email:       lr.User.Email,

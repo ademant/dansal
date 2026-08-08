@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"time"
 )
 
 // webauthnInviteProxy proxies invite-scoped WebAuthn calls, injecting the {token} path value.
@@ -92,10 +91,7 @@ func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.R
 			Role      string `json:"role"`
 		}
 		if json.Unmarshal(respBody, &result) == nil && result.Token != "" {
-			expiresAt, errP := time.Parse(time.RFC3339, result.ExpiresAt)
-			if errP != nil {
-				expiresAt = time.Now().Add(24 * time.Hour)
-			}
+			expiresAt := parseSessionExpiry(result.ExpiresAt)
 			setSession(w, result.Token, SessionUser{
 				ID:    result.UserID,
 				Email: result.Email,

@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // certExtractCN parses the CN value from a DN string like "CN=alice,O=dansal"
@@ -42,10 +41,7 @@ func certAuthMiddleware(client *DansalClient) func(http.Handler) http.Handler {
 				return
 			}
 
-			expiresAt, err := time.Parse(time.RFC3339, lr.ExpiresAt)
-			if err != nil {
-				expiresAt = time.Now().Add(24 * time.Hour)
-			}
+			expiresAt := parseSessionExpiry(lr.ExpiresAt)
 
 			su := &SessionUser{
 				ID:          lr.User.ID,

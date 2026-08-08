@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 // redirectBookingError redirects to the event page with a one-time flash
@@ -36,16 +35,15 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			redirectBookingError(w, r, eventID, nil)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
 			redirectBookingError(w, r, eventID, nil)
 			return
-		}
-		if r.FormValue("honeypot") != "" {
+		case formGuardHoneypot:
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), FlashMsg{BookingOK: true})
 			return
-		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		case formGuardBadToken:
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			redirectBookingError(w, r, eventID, nil)
 			return

@@ -231,11 +231,33 @@ func apiErr(resp *http.Response) error {
 // exact strings older callers compared with err.Error() (e.g. "expired"), so
 // errors.Is comparisons and string checks both keep working.
 var (
-	errNotFound  = errors.New("not found")
-	errForbidden = errors.New("forbidden")
-	errExpired   = errors.New("expired")
-	errInvalid   = errors.New("invalid")
+	errNotFound           = errors.New("not found")
+	errForbidden          = errors.New("forbidden")
+	errExpired            = errors.New("expired")
+	errInvalid            = errors.New("invalid")
+	errConflict           = errors.New("conflict")
+	errRateLimited        = errors.New("rate limit exceeded")
+	errServiceUnavailable = errors.New("service unavailable")
 )
+
+// classifyAPIError maps an apiHTTPError whose status falls into a known class
+// (409 conflict, 429 rate limited, 503 unavailable) onto the matching sentinel
+// so callers can compare with errors.Is instead of sniffing error strings.
+// Any other error is returned unchanged.
+func classifyAPIError(err error) error {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) {
+		switch ae.StatusCode {
+		case http.StatusConflict:
+			return errConflict
+		case http.StatusTooManyRequests:
+			return errRateLimited
+		case http.StatusServiceUnavailable:
+			return errServiceUnavailable
+		}
+	}
+	return err
+}
 
 // do runs a single request against the dansal API. It sets the internal
 // header, adds the Bearer token when token != "", sends an application/json

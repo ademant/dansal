@@ -26,11 +26,7 @@ func authRefreshMiddleware(client *DansalClient) func(http.Handler) http.Handler
 							DisplayName: me.DisplayName,
 							Role:        me.Role,
 						}
-						expiresAt, _ := time.Parse(time.RFC3339, me.TokenExpiresAt)
-						if expiresAt.IsZero() {
-							expiresAt = time.Now().Add(24 * time.Hour)
-						}
-						sessionCookies.SetUser(w, su, expiresAt)
+						sessionCookies.SetUser(w, su, parseSessionExpiry(me.TokenExpiresAt))
 						r = withSessionUser(r, su)
 					}
 				}
@@ -45,6 +41,20 @@ type sessionContextKey int
 const ctxSessionUser sessionContextKey = 1
 
 var sessionCookies = websession.New("dsw_token", "dsw_user")
+
+// defaultSessionTTL is the fallback session lifetime when the API response
+// carries no parseable expires_at.
+const defaultSessionTTL = 24 * time.Hour
+
+// parseSessionExpiry parses the API-provided session expiry (RFC3339),
+// defaulting to defaultSessionTTL when it is missing or malformed.
+func parseSessionExpiry(s string) time.Time {
+	expiresAt, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Now().Add(defaultSessionTTL)
+	}
+	return expiresAt
+}
 
 type SessionUser struct {
 	ID          int    `json:"id"`

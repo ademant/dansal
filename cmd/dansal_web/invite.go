@@ -63,10 +63,7 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if req.Email != "" && req.Password != "" {
 			ip := getClientIP(r)
 			if lr, err := client.Login(ctx, req.Email, req.Password, "", ip, r.UserAgent()); err == nil {
-				expAt, parseErr := time.Parse(time.RFC3339, lr.ExpiresAt)
-				if parseErr != nil {
-					expAt = time.Now().Add(24 * time.Hour)
-				}
+				expAt := parseSessionExpiry(lr.ExpiresAt)
 				setSession(w, lr.Token, SessionUser{
 					ID:          lr.User.ID,
 					Email:       lr.User.Email,

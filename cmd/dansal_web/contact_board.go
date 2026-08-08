@@ -58,17 +58,15 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			log.Printf("dansal-web: board parse form ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
-		}
-		if r.FormValue("honeypot") != "" {
+		case formGuardHoneypot:
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardPosted: true})
 			return
-		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		case formGuardBadToken:
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
@@ -159,11 +157,9 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			http.NotFound(w, r)
 			return
 		}
-		su, ok := requireLogin(w, r)
-		if !ok {
+		if _, ok := requireLogin(w, r); !ok {
 			return
 		}
-		_ = su
 		token := getSessionToken(r)
 
 		if err := client.DeleteContactPost(r.Context(), postID, token); err != nil {
@@ -194,16 +190,15 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
-		}
-		if r.FormValue("honeypot") != "" {
+		case formGuardHoneypot:
 			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardContacted: true})
 			return
-		}
-		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		case formGuardBadToken:
 			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return

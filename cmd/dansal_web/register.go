@@ -114,8 +114,12 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}))
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
 			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		case formGuardHoneypot, formGuardBadToken:
+			http.Redirect(w, r, "/register/done?ch=email", http.StatusSeeOther)
 			return
 		}
 
@@ -129,12 +133,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgDesc := strings.TrimSpace(r.FormValue("org_description"))
 		orgWebsite := strings.TrimSpace(r.FormValue("org_website"))
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
-		phone2 := r.FormValue("phone2")
-
-		if phone2 != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
-			http.Redirect(w, r, "/register/done?ch=email", http.StatusSeeOther)
-			return
-		}
+		phone2 := r.FormValue(honeypotField)
 		if hasPendingSubmission(ip, r.UserAgent()) {
 			orgs, _ := client.GetOrganizations(r.Context())
 			info, _ := client.GetServiceInfo(r.Context())
@@ -179,13 +178,15 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
 			errKey := "register_error_other"
-			msg := err.Error()
-			if strings.Contains(msg, " 409") || strings.Contains(msg, "already") {
+			switch classifyAPIError(err) {
+			case errConflict:
 				errKey = "register_error_conflict"
-			} else if strings.Contains(msg, " 429") || strings.Contains(msg, "Rate limit") {
+			case errRateLimited:
 				errKey = "register_error_rate"
-			} else if strings.Contains(msg, "org_id") {
-				errKey = "register_error_no_org"
+			default:
+				if strings.Contains(err.Error(), "org_id") {
+					errKey = "register_error_no_org"
+				}
 			}
 			orgs, _ := client.GetOrganizations(r.Context())
 			info, _ := client.GetServiceInfo(r.Context())

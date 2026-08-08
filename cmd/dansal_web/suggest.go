@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type SuggestPageData struct {
@@ -178,6 +177,18 @@ func trimmedNonEmpty(vals []string) []string {
 	return out
 }
 
+// suggestError re-renders the suggest form with an error message. Shared by
+// the throttle, pending, captcha, link, and submit-failure paths — each used
+// to repeat the same 8-line template block.
+func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, i18n *I18n, errMsg, ip string) {
+	title := i18n.T(r, "suggest_event_title")
+	renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
+		HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+		Error:     errMsg,
+		FormToken: issueFormToken(ip),
+	}))
+}
+
 func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !suggestAvailable(cfg) {
@@ -188,44 +199,28 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		key := ip + "|" + r.UserAgent()
 		if publicThrottle.isBlocked(key) {
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
-			title := i18n.T(r, "suggest_event_title")
-			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_rate_limit"),
-				FormToken: issueFormToken(ip),
-			}))
+			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
 			return
 		}
 
-		if err := r.ParseForm(); err != nil {
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
-		}
-
-		if r.FormValue("dansal_phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		case formGuardHoneypot, formGuardBadToken:
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 
 		if hasPendingSubmission(ip, r.UserAgent()) {
-			pageTitle := i18n.T(r, "suggest_event_title")
-			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_rate_limit"),
-				FormToken: issueFormToken(ip),
-			}))
+			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
 			return
 		}
 
 		// Captcha check.
 		if cfg.CaptchaSiteKey != "" {
 			if err := verifyTurnstile(cfg, r.FormValue("cf-turnstile-response")); err != nil {
-				title := i18n.T(r, "suggest_event_title")
-				renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-					HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-					Error:     i18n.T(r, "suggest_error_captcha"),
-					FormToken: issueFormToken(ip),
-				}))
+				suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_captcha"), ip)
 				return
 			}
 		}
@@ -235,12 +230,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		if strings.Contains(title, "http://") || strings.Contains(title, "https://") ||
 			strings.Contains(description, "http://") || strings.Contains(description, "https://") {
-			pageTitle := i18n.T(r, "suggest_event_title")
-			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_links"),
-				FormToken: issueFormToken(ip),
-			}))
+			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_links"), ip)
 			return
 		}
 
@@ -362,12 +352,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
-			pageTitle := i18n.T(r, "suggest_event_title")
-			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, pageTitle, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_submit"),
-				FormToken: issueFormToken(ip),
-			}))
+			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
 		}
 

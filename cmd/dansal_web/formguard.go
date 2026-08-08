@@ -60,6 +60,44 @@ func formMAC(ts int64) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// ── Shared public-submit guard (#1036) ────────────────────────────────────────
+//
+// honeypotField is the single hidden honeypot input shared by every public
+// POST form (register, suggest, board, contact, booking). A bot that autofills
+// all text inputs trips it; a human never sees it.
+const honeypotField = "dansal_phone2"
+
+// formGuardResult tells the caller which part of the anti-bot prologue
+// rejected the submission, so each pipeline can answer in its own way (silent
+// success vs error redirect vs re-render).
+type formGuardResult int
+
+const (
+	formGuardOK formGuardResult = iota
+	formGuardParseError
+	formGuardHoneypot
+	formGuardBadToken
+)
+
+// guardFormSubmit is the shared anti-bot prologue of the public POST pipelines
+// (register, suggest, board, contact, booking): parse the form, trip the
+// honeypot, and consume the one-time form token. The per-pipeline throttle
+// checks stay in the callers — they use different throttle stores and respond
+// differently.
+func guardFormSubmit(w http.ResponseWriter, r *http.Request, cfg *Config, ip string) formGuardResult {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("dansal-web: form parse ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
+		return formGuardParseError
+	}
+	if r.FormValue(honeypotField) != "" {
+		return formGuardHoneypot
+	}
+	if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		return formGuardBadToken
+	}
+	return formGuardOK
+}
+
 // ── One-time form tokens ──────────────────────────────────────────────────────
 //
 // issueFormToken generates a random one-time token stored server-side. The

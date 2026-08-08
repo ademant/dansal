@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -26,6 +27,18 @@ type SettingsData struct {
 	Passkeys         []PasskeyInfo
 	TOTPSetupURI     string // non-empty during setup flow
 	TOTPSetupSecret  string // shown as manual-entry fallback during setup
+}
+
+// settingsThrottleCheck redirects to /settings when the client's IP is
+// auth-throttled. Returns true when the caller should abort. Shared by the
+// verify, verify-telegram, and verify-matrix handlers.
+func settingsThrottleCheck(w http.ResponseWriter, r *http.Request, ip, path string) bool {
+	if authThrottle.isBlocked(ip) {
+		log.Printf("%s ip=%s path=%s", authBlock, ip, path)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return true
+	}
+	return false
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -97,9 +110,7 @@ func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			return
 		}
 		ip := getClientIP(r)
-		if authThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/settings/verify", authBlock, ip)
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		if settingsThrottleCheck(w, r, ip, "/settings/verify") {
 			return
 		}
 		authThrottle.record(ip)
@@ -126,9 +137,7 @@ func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *Dansal
 			return
 		}
 		ip := getClientIP(r)
-		if authThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/settings/verify-telegram", authBlock, ip)
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		if settingsThrottleCheck(w, r, ip, "/settings/verify-telegram") {
 			return
 		}
 		authThrottle.record(ip)
@@ -159,9 +168,7 @@ func settingsMatrixVerifyHandler(cfg *Config, tmpls *Templates, client *DansalCl
 			return
 		}
 		ip := getClientIP(r)
-		if authThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/settings/verify-matrix", authBlock, ip)
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		if settingsThrottleCheck(w, r, ip, "/settings/verify-matrix") {
 			return
 		}
 		authThrottle.record(ip)
@@ -326,7 +333,7 @@ func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		var data VerifyData
 		if err == nil {
 			data = VerifyData{Success: true}
-		} else if err.Error() == "expired" {
+		} else if errors.Is(err, errExpired) {
 			data = VerifyData{ErrorKey: "verify_error_expired"}
 		} else {
 			data = VerifyData{ErrorKey: "verify_error_invalid"}

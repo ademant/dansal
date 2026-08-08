@@ -120,6 +120,91 @@ var lostFoundTypes = map[string]bool{"lost_item": true, "found_item": true}
 // ticket_*, lost_item, found_item are scoped to the event itself — no departure/stay city needed.
 var cityRequiredTypes = map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true}
 
+// postTypeCategoryGroup maps each post type to its category name for cap enforcement (#1048).
+var postTypeCategoryGroup = map[string]string{
+	"ride_offer": "ride", "ride_request": "ride",
+	"sleep_offer": "sleep", "sleep_request": "sleep",
+	"ticket_offer": "ticket", "ticket_request": "ticket",
+	"lost_item": "lost_found", "found_item": "lost_found",
+}
+
+// postCategoryCap is the maximum number of live posts per identity per event
+// for each category. "Live" means expires_at > now, regardless of email_verified.
+var postCategoryCap = map[string]int{
+	"ride": 1, "sleep": 1, "ticket": 1, "lost_found": 5,
+}
+
+// boardPostCapExceeded reports whether the identity (email / callerID / tgUsername)
+// already has postCategoryCap or more live posts in the same category as postType
+// on eventID. excludeID is the post being replaced by an edit (0 for new posts).
+func boardPostCapExceeded(eventID int, postType, email, tgUsername string, callerID, excludeID int) bool {
+	category := postTypeCategoryGroup[postType]
+	cap, ok := postCategoryCap[category]
+	if !ok {
+		return false
+	}
+	// Build IN list: all type strings in the same category.
+	var ph []string
+	args := []any{eventID, excludeID}
+	for t, c := range postTypeCategoryGroup {
+		if c == category {
+			ph = append(ph, "?")
+			args = append(args, t)
+		}
+	}
+	args = append(args,
+		time.Now().UTC().Unix(),
+		email, email,
+		callerID, callerID,
+		email, callerID, tgUsername,
+	)
+	var count int
+	db.QueryRow(`SELECT COUNT(*) FROM contact_posts
+		WHERE event_id = ?
+		  AND id != ?
+		  AND type IN (`+strings.Join(ph, ",")+`)
+		  AND expires_at > ?
+		  AND (
+		    (? != '' AND LOWER(email) = LOWER(?))
+		    OR (? > 0 AND user_id = ?)
+		    OR (? = '' AND ? = 0 AND email = '' AND telegram_username != '' AND telegram_username = ?)
+		  )`, args...).Scan(&count)
+	return count >= cap
+}
+
+// checkBoardPostCap loads a post's event/identity from the DB and calls
+// boardPostCapExceeded for newType. Writes a 409 and returns false if the cap
+// would be exceeded. Used by PUT and PATCH to re-check on type changes.
+func checkBoardPostCap(w http.ResponseWriter, postID int, newType string) bool {
+	var eventID int
+	var email, tg string
+	var uid sql.NullInt64
+	if err := db.QueryRow(
+		"SELECT event_id, COALESCE(email,''), COALESCE(telegram_username,''), user_id FROM contact_posts WHERE id=?",
+		postID,
+	).Scan(&eventID, &email, &tg, &uid); err != nil {
+		return true // post not found — handled later in the handler
+	}
+	callerUID := 0
+	if uid.Valid {
+		callerUID = int(uid.Int64)
+	}
+	if boardPostCapExceeded(eventID, newType, email, tg, callerUID, postID) {
+		msg := capExceededMsg(newType)
+		writeError(w, msg, http.StatusConflict)
+		return false
+	}
+	return true
+}
+
+// capExceededMsg returns a human-readable message for a 409 cap rejection.
+func capExceededMsg(postType string) string {
+	if postTypeCategoryGroup[postType] == "lost_found" {
+		return "you have reached the maximum number of lost/found posts for this event"
+	}
+	return "you already have a post in this category — edit or delete it first"
+}
+
 // ContactPostCreateRequest is the body accepted by POST /api/v1/events/{id}/contact-posts.
 type ContactPostCreateRequest struct {
 	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
@@ -307,6 +392,12 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	expiresAt := computeContactPostExpiry(eventID, req.Type)
 	if !time.Now().Before(expiresAt) {
 		writeError(w, "this event has ended — board posts are no longer accepted", http.StatusGone)
+		return
+	}
+
+	// Per-identity per-event board post cap (#1048).
+	if boardPostCapExceeded(eventID, req.Type, req.Email, req.Telegram, callerID, 0) {
+		writeError(w, capExceededMsg(req.Type), http.StatusConflict)
 		return
 	}
 
@@ -575,6 +666,12 @@ func putContactPost(w http.ResponseWriter, r *http.Request) {
 		req.Persons = 1
 	}
 
+	// Re-check cap for the new type (#1048): the edit may move the post to a
+	// different or conflicting category.
+	if !checkBoardPostCap(w, postID, req.Type) {
+		return
+	}
+
 	if err := writeContactPostFields(postID, req.Type, req.City, req.Message, req.Nickname, req.Persons); err != nil {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
@@ -651,6 +748,11 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		persons = 1
 	} else if persons < 1 {
 		persons = 1
+	}
+
+	// Re-check cap when type changed (#1048).
+	if req.Type != nil && !checkBoardPostCap(w, postID, type_) {
+		return
 	}
 
 	if err := writeContactPostFields(postID, type_, city, message, nickname, persons); err != nil {

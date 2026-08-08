@@ -14,6 +14,13 @@ gh issue create --title "short description" --body "problem, solution, impact"
 git commit -m "fix: description\n\nCloses #NNN\n\nCo-Authored-By: ..."
 ```
 
+**Multiple issues in one commit need one `Closes #NNN` line each** — `Closes #1040, #1041` on a single line only closes #1040 on GitHub; the keyword doesn't carry across a comma-separated list, and the second issue silently stays open (no error, no warning). Always write:
+```
+Closes #1040
+Closes #1041
+```
+When in doubt after pushing a multi-issue commit, spot-check the non-first issues with `gh issue view <N> --json state`.
+
 Discussion and issue creation (steps 1–2) do not have to be immediately followed by implementation (steps 3–4). The user may want to discuss and open issues for several features in a row, then come back and implement each one later, in any order. Only create an issue after the user has explicitly said ok to that specific proposal — don't create it as part of a general discussion. Each issue is still closed via its own `Closes #NNN` commit whenever it's eventually implemented.
 
 Skip the discussion step only for obvious typos or single-line fixes, which may be implemented directly without an issue. Always create the issue before writing code for anything else.

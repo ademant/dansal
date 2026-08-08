@@ -748,10 +748,6 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 				break
 			}
 		}
-		if len(evMetas) == 0 {
-			http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
-			return
-		}
 		baseMeta := evMetas[0]
 		for _, em := range evMetas[1:] {
 			if hasEdited {
@@ -1010,9 +1006,6 @@ func prefillFromEvent(ev Event) *EventPrefill {
 		pf.PricingCurrency = p.Currency
 		pf.PricingLines = p.Prices
 	}
-	for _, dn := range ev.DanceNames {
-		_ = dn // dance names need to be resolved to IDs separately
-	}
 	return pf
 }
 
@@ -1126,19 +1119,43 @@ func fetchTemplateData(db *sql.DB, templateID *int) string {
 
 // applyTemplateFields copies selected fields from td into req.
 // locations is used to resolve td.LocID; passing nil skips the location lookup.
-func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[string]bool, locations []Location) {
+// templateFieldSet carries the subset of event fields the template-override
+// path writes, so one implementation serves both EventCreateReq and
+// EventUpdateReq.
+type templateFieldSet struct {
+	StartTime          string
+	EndTime            string
+	OrgID              *int
+	Location           EventLocReq
+	HasBall            bool
+	HasWorkshop        bool
+	HasFestival        bool
+	WorkshopDifficulty string
+	URL                string
+	BookingURL         string
+	Pricing            *Pricing
+	Tags               []string
+	Dances             []int
+	Food               string
+	Drink              string
+	FloorCondition     string
+	BookingEnabled     bool
+	TicketsTotal       int
+}
+
+func applyTemplateFieldsTo(t *templateFieldSet, td *templateEventData, fields map[string]bool, locations []Location) {
 	if fields["timing"] {
-		req.StartTime = mergeTemplateTime(req.StartTime, td.StartTime)
-		req.EndTime = mergeTemplateTime(req.EndTime, td.EndTime)
+		t.StartTime = mergeTemplateTime(t.StartTime, td.StartTime)
+		t.EndTime = mergeTemplateTime(t.EndTime, td.EndTime)
 	}
 	if fields["org"] && td.OrgID > 0 {
 		oid := td.OrgID
-		req.OrganizationID = &oid
+		t.OrgID = &oid
 	}
 	if fields["loc"] && td.LocID > 0 {
 		for _, l := range locations {
 			if l.ID == td.LocID {
-				req.Location = EventLocReq{
+				t.Location = EventLocReq{
 					Location:  l.Location,
 					Address:   l.Address,
 					Town:      l.Town,
@@ -1151,14 +1168,14 @@ func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[
 		}
 	}
 	if fields["type_flags"] {
-		req.HasBall = td.HasBall
-		req.HasWorkshop = td.HasWorkshop
-		req.HasFestival = td.HasFestival
-		req.WorkshopDifficulty = td.WorkshopDifficulty
+		t.HasBall = td.HasBall
+		t.HasWorkshop = td.HasWorkshop
+		t.HasFestival = td.HasFestival
+		t.WorkshopDifficulty = td.WorkshopDifficulty
 	}
 	if fields["url"] {
-		req.URL = td.URL
-		req.BookingURL = td.BookingURL
+		t.URL = td.URL
+		t.BookingURL = td.BookingURL
 	}
 	if fields["pricing"] {
 		if td.PricingType != "" && td.PricingType != "none" {
@@ -1170,91 +1187,88 @@ func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[
 			case "multiple":
 				p.Prices = td.PricingLines
 			}
-			req.Pricing = p
+			t.Pricing = p
 		} else {
-			req.Pricing = nil
+			t.Pricing = nil
 		}
 	}
 	if fields["tags"] {
-		req.Tags = td.Tags
+		t.Tags = td.Tags
 	}
 	if fields["dances"] {
-		req.Dances = td.DanceIDs
+		t.Dances = td.DanceIDs
 	}
 	if fields["food_drink"] {
-		req.Food = td.Food
-		req.Drink = td.Drink
-		req.FloorCondition = td.FloorCondition
+		t.Food = td.Food
+		t.Drink = td.Drink
+		t.FloorCondition = td.FloorCondition
 	}
 	if fields["booking"] {
-		req.BookingEnabled = td.BookingEnabled
-		req.TicketsTotal = td.TicketsTotal
+		t.BookingEnabled = td.BookingEnabled
+		t.TicketsTotal = td.TicketsTotal
 	}
+}
+
+func applyTemplateFields(req *EventUpdateReq, td *templateEventData, fields map[string]bool, locations []Location) {
+	t := templateFieldSet{
+		StartTime: req.StartTime, EndTime: req.EndTime, OrgID: req.OrganizationID,
+		Location: req.Location, HasBall: req.HasBall, HasWorkshop: req.HasWorkshop,
+		HasFestival: req.HasFestival, WorkshopDifficulty: req.WorkshopDifficulty,
+		URL: req.URL, BookingURL: req.BookingURL, Pricing: req.Pricing,
+		Tags: req.Tags, Dances: req.Dances, Food: req.Food, Drink: req.Drink,
+		FloorCondition: req.FloorCondition, BookingEnabled: req.BookingEnabled,
+		TicketsTotal: req.TicketsTotal,
+	}
+	applyTemplateFieldsTo(&t, td, fields, locations)
+	req.StartTime = t.StartTime
+	req.EndTime = t.EndTime
+	req.OrganizationID = t.OrgID
+	req.Location = t.Location
+	req.HasBall = t.HasBall
+	req.HasWorkshop = t.HasWorkshop
+	req.HasFestival = t.HasFestival
+	req.WorkshopDifficulty = t.WorkshopDifficulty
+	req.URL = t.URL
+	req.BookingURL = t.BookingURL
+	req.Pricing = t.Pricing
+	req.Tags = t.Tags
+	req.Dances = t.Dances
+	req.Food = t.Food
+	req.Drink = t.Drink
+	req.FloorCondition = t.FloorCondition
+	req.BookingEnabled = t.BookingEnabled
+	req.TicketsTotal = t.TicketsTotal
 }
 
 // applyTemplateFieldsCreate mirrors applyTemplateFields for the create path.
 // EventCreateReq has no BookingEnabled/TicketsTotal fields (the create API
 // doesn't support them yet), so the "booking" field set is a no-op here.
 func applyTemplateFieldsCreate(req *EventCreateReq, td *templateEventData, fields map[string]bool, locations []Location) {
-	if fields["timing"] {
-		req.StartTime = mergeTemplateTime(req.StartTime, td.StartTime)
-		req.EndTime = mergeTemplateTime(req.EndTime, td.EndTime)
+	t := templateFieldSet{
+		StartTime: req.StartTime, EndTime: req.EndTime, OrgID: req.OrganizationID,
+		Location: req.Location, HasBall: req.HasBall, HasWorkshop: req.HasWorkshop,
+		HasFestival: req.HasFestival, WorkshopDifficulty: req.WorkshopDifficulty,
+		URL: req.URL, BookingURL: req.BookingURL, Pricing: req.Pricing,
+		Tags: req.Tags, Dances: req.Dances, Food: req.Food, Drink: req.Drink,
+		FloorCondition: req.FloorCondition,
 	}
-	if fields["org"] && td.OrgID > 0 {
-		oid := td.OrgID
-		req.OrganizationID = &oid
-	}
-	if fields["loc"] && td.LocID > 0 {
-		for _, l := range locations {
-			if l.ID == td.LocID {
-				req.Location = EventLocReq{
-					Location:  l.Location,
-					Address:   l.Address,
-					Town:      l.Town,
-					Country:   l.Country,
-					Latitude:  l.Latitude,
-					Longitude: l.Longitude,
-				}
-				break
-			}
-		}
-	}
-	if fields["type_flags"] {
-		req.HasBall = td.HasBall
-		req.HasWorkshop = td.HasWorkshop
-		req.HasFestival = td.HasFestival
-		req.WorkshopDifficulty = td.WorkshopDifficulty
-	}
-	if fields["url"] {
-		req.URL = td.URL
-		req.BookingURL = td.BookingURL
-	}
-	if fields["pricing"] {
-		if td.PricingType != "" && td.PricingType != "none" {
-			p := &Pricing{Type: td.PricingType}
-			switch td.PricingType {
-			case "single":
-				p.Amount = td.PricingAmount
-				p.Currency = td.PricingCurrency
-			case "multiple":
-				p.Prices = td.PricingLines
-			}
-			req.Pricing = p
-		} else {
-			req.Pricing = nil
-		}
-	}
-	if fields["tags"] {
-		req.Tags = td.Tags
-	}
-	if fields["dances"] {
-		req.Dances = td.DanceIDs
-	}
-	if fields["food_drink"] {
-		req.Food = td.Food
-		req.Drink = td.Drink
-		req.FloorCondition = td.FloorCondition
-	}
+	applyTemplateFieldsTo(&t, td, fields, locations)
+	req.StartTime = t.StartTime
+	req.EndTime = t.EndTime
+	req.OrganizationID = t.OrgID
+	req.Location = t.Location
+	req.HasBall = t.HasBall
+	req.HasWorkshop = t.HasWorkshop
+	req.HasFestival = t.HasFestival
+	req.WorkshopDifficulty = t.WorkshopDifficulty
+	req.URL = t.URL
+	req.BookingURL = t.BookingURL
+	req.Pricing = t.Pricing
+	req.Tags = t.Tags
+	req.Dances = t.Dances
+	req.Food = t.Food
+	req.Drink = t.Drink
+	req.FloorCondition = t.FloorCondition
 }
 
 func locationDisplayName(l Location) string {
@@ -1835,21 +1849,11 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		}
 
 		var orgID int
-		switch r.FormValue("org_choice") {
-		case "existing":
-			if v := r.FormValue("org_id"); v != "" {
-				orgID, _ = strconv.Atoi(v)
-			}
-		case "new":
-			newOrgName := strings.TrimSpace(r.FormValue("new_org_name"))
-			if newOrgName != "" {
-				created, err := client.CreateOrganization(r.Context(), Organization{Name: newOrgName}, token)
-				if err != nil {
-					renderErr("admin_save_error")
-					return
-				}
-				orgID = created.ID
-			}
+		if orgPtr, err := parseOrgChoice(r, client); err != nil {
+			renderErr("admin_save_error")
+			return
+		} else if orgPtr != nil {
+			orgID = *orgPtr
 		}
 
 		var locID int
@@ -1859,105 +1863,12 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			}
 		}
 
-		var pricing *Pricing
-		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
-			p := &Pricing{Type: pt}
-			switch pt {
-			case "single":
-				if amt := r.FormValue("pricing_amount"); amt != "" {
-					if f, err := strconv.ParseFloat(amt, 64); err == nil {
-						p.Amount = f
-					}
-				}
-				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
-			case "multiple":
-				labels := r.Form["pl_label"]
-				amounts := r.Form["pl_amount"]
-				for i, lbl := range labels {
-					lbl = strings.TrimSpace(lbl)
-					if lbl == "" {
-						continue
-					}
-					var amt float64
-					if i < len(amounts) {
-						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
-							amt = f
-						}
-					}
-					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
-				}
-				if len(p.Prices) == 0 {
-					p = nil
-				}
-			}
-			pricing = p
-		}
+		pricing := parsePricing(r)
 
 		tags := r.Form["tags"]
-		var danceIDs []int
-		for _, v := range r.Form["dance_ids"] {
-			if n, err := strconv.Atoi(v); err == nil {
-				danceIDs = append(danceIDs, n)
-			}
-		}
+		danceIDs, _, _ := parseEventIDs(r)
 
-		starts := r.Form["tt_start"]
-		ends := r.Form["tt_end"]
-		titles := r.Form["tt_title"]
-		descs := r.Form["tt_desc"]
-		rooms := r.Form["tt_room"]
-		ttTypes := r.Form["tt_type"]
-		locIDs := r.Form["tt_loc_id"]
-		musIDs := r.Form["tt_musician_id"]
-		insIDs := r.Form["tt_instructor_id"]
-		dates := r.Form["tt_entry_date"]
-		var ttEntries []TimetableEntry
-		for i, s := range starts {
-			s = strings.TrimSpace(s)
-			if i >= len(titles) {
-				break
-			}
-			t := strings.TrimSpace(titles[i])
-			if s == "" && t == "" {
-				continue
-			}
-			entry := TimetableEntry{StartTime: s, Title: t}
-			if i < len(ends) {
-				entry.EndTime = strings.TrimSpace(ends[i])
-			}
-			if i < len(descs) {
-				entry.Description = strings.TrimSpace(descs[i])
-			}
-			if i < len(rooms) {
-				entry.Room = strings.TrimSpace(rooms[i])
-			}
-			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
-					entry.EntryType = v
-				} else {
-					entry.EntryType = "bal"
-				}
-			}
-			if i < len(locIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
-					entry.LocationID = &v
-				}
-			}
-			if i < len(musIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
-					entry.MusicianID = &v
-				}
-			}
-			if i < len(insIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
-					entry.InstructorID = &v
-				}
-			}
-			if i < len(dates) {
-				entry.EntryDate = strings.TrimSpace(dates[i])
-			}
-			ttEntries = append(ttEntries, entry)
-		}
+		ttEntries := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 
 		td := templateEventData{
 			URL:                strings.TrimSpace(r.FormValue("url")),
@@ -2005,6 +1916,295 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 	}
 }
 
+// ── Shared event-form parsing ────────────────────────────────────────────────
+
+// parseEventDateTimes returns ISO-style "YYYY-MM-DDTHH:MM:00" start/end times
+// from the date/end_date/start_time/end_time fields; end_date defaults to date
+// and either time may be left empty.
+func parseEventDateTimes(r *http.Request) (startTime, endTime string) {
+	date := r.FormValue("date")
+	endDate := r.FormValue("end_date")
+	if endDate == "" {
+		endDate = date
+	}
+	startT := r.FormValue("start_time")
+	endT := r.FormValue("end_time")
+	if date != "" && startT != "" {
+		startTime = date + "T" + startT + ":00"
+	}
+	if endDate != "" && endT != "" {
+		endTime = endDate + "T" + endT + ":00"
+	}
+	return startTime, endTime
+}
+
+// parseOrgChoice resolves the org_choice field ("existing"/"new") to an org ID,
+// creating the org inline for "new". The error from a failed org creation is
+// returned so the caller can re-render the form.
+func parseOrgChoice(r *http.Request, client *DansalClient) (*int, error) {
+	var orgID *int
+	switch r.FormValue("org_choice") {
+	case "existing":
+		if v := r.FormValue("org_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				orgID = &n
+			}
+		}
+	case "new":
+		newOrg := Organization{Name: strings.TrimSpace(r.FormValue("new_org_name"))}
+		if newOrg.Name != "" {
+			created, err := client.CreateOrganization(r.Context(), newOrg, getSessionToken(r))
+			if err != nil {
+				return nil, err
+			}
+			orgID = &created.ID
+		}
+	}
+	return orgID, nil
+}
+
+// parseLocChoice resolves the loc_choice field to a location request plus the
+// selected existing location ID (0 when a new location name was typed).
+func parseLocChoice(r *http.Request, bundle RefBundle) (EventLocReq, int) {
+	var locReq EventLocReq
+	var selectedLocID int
+	switch r.FormValue("loc_choice") {
+	case "existing":
+		if v := r.FormValue("loc_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				for _, l := range bundle.Locations {
+					if l.ID == n {
+						selectedLocID = l.ID
+						locReq = EventLocReq{
+							Location:  l.Location,
+							Address:   l.Address,
+							Town:      l.Town,
+							Country:   l.Country,
+							Latitude:  l.Latitude,
+							Longitude: l.Longitude,
+						}
+						break
+					}
+				}
+			}
+		}
+	case "new":
+		locReq = EventLocReq{
+			Location:    strings.TrimSpace(r.FormValue("new_loc_name")),
+			ShortName:   strings.TrimSpace(r.FormValue("new_loc_short_name")),
+			Address:     strings.TrimSpace(r.FormValue("new_loc_address")),
+			Zipcode:     strings.TrimSpace(r.FormValue("new_loc_zip")),
+			Town:        strings.TrimSpace(r.FormValue("new_loc_town")),
+			Country:     strings.TrimSpace(r.FormValue("new_loc_country")),
+			CountryCode: strings.TrimSpace(r.FormValue("new_loc_country_code")),
+			Region:      strings.TrimSpace(r.FormValue("new_loc_region")),
+			Latitude:    parseLatLng(r.FormValue("new_loc_lat")),
+			Longitude:   parseLatLng(r.FormValue("new_loc_lng")),
+		}
+	}
+	return locReq, selectedLocID
+}
+
+// parsePricing reads the pricing_type block, returning nil for "none" or when
+// all multiple-price rows are empty.
+func parsePricing(r *http.Request) *Pricing {
+	pt := r.FormValue("pricing_type")
+	if pt == "" || pt == "none" {
+		return nil
+	}
+	p := &Pricing{Type: pt}
+	switch pt {
+	case "single":
+		if amt := r.FormValue("pricing_amount"); amt != "" {
+			if f, err := strconv.ParseFloat(amt, 64); err == nil {
+				p.Amount = f
+			}
+		}
+		p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+	case "multiple":
+		labels := r.Form["pl_label"]
+		amounts := r.Form["pl_amount"]
+		for i, lbl := range labels {
+			lbl = strings.TrimSpace(lbl)
+			if lbl == "" {
+				continue
+			}
+			var amt float64
+			if i < len(amounts) {
+				if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
+					amt = f
+				}
+			}
+			p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+		}
+		if len(p.Prices) == 0 {
+			return nil
+		}
+	}
+	return p
+}
+
+// parseEventIDs reads the dance/musician/instructor multi-select fields into
+// int slices.
+func parseEventIDs(r *http.Request) (danceIDs, musicianIDs, instructorIDs []int) {
+	for _, v := range r.Form["dance_ids"] {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			danceIDs = append(danceIDs, n)
+		}
+	}
+	for _, v := range r.Form["musician_ids"] {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			musicianIDs = append(musicianIDs, n)
+		}
+	}
+	for _, v := range r.Form["instructor_ids"] {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			instructorIDs = append(instructorIDs, n)
+		}
+	}
+	return danceIDs, musicianIDs, instructorIDs
+}
+
+// roomIDFromForm returns the room_id field as an int pointer (nil when absent
+// or invalid). A room is just a child location (#687).
+func roomIDFromForm(r *http.Request) *int {
+	if v := r.FormValue("room_id"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return &n
+		}
+	}
+	return nil
+}
+
+// parseTimetableEntryReqs reads the tt_* rows into API timetable entries,
+// auto-creating musicians/instructors from the free-text name columns.
+func parseTimetableEntryReqs(r *http.Request, client *DansalClient) []TimetableEntryReq {
+	starts := r.Form["tt_start"]
+	ends := r.Form["tt_end"]
+	titles := r.Form["tt_title"]
+	descs := r.Form["tt_desc"]
+	rooms := r.Form["tt_room"]
+	ttTypes := r.Form["tt_type"]
+	locIDs := r.Form["tt_loc_id"]
+	musIDs := r.Form["tt_musician_id"]
+	musNames := r.Form["tt_musician_name"]
+	insIDs := r.Form["tt_instructor_id"]
+	insNames := r.Form["tt_instructor_name"]
+	dates := r.Form["tt_entry_date"]
+	var ttEntries []TimetableEntryReq
+	for i, s := range starts {
+		s = strings.TrimSpace(s)
+		if i >= len(titles) {
+			break
+		}
+		t := strings.TrimSpace(titles[i])
+		if s == "" && t == "" {
+			continue
+		}
+		entry := TimetableEntryReq{StartTime: s, Title: t}
+		if i < len(ends) {
+			entry.EndTime = strings.TrimSpace(ends[i])
+		}
+		if i < len(descs) {
+			entry.Description = strings.TrimSpace(descs[i])
+		}
+		if i < len(rooms) {
+			entry.Room = strings.TrimSpace(rooms[i])
+		}
+		if i < len(ttTypes) {
+			if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
+				entry.EntryType = v
+			} else {
+				entry.EntryType = "bal"
+			}
+		}
+		if i < len(locIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+				entry.LocationID = &v
+			}
+		}
+		if i < len(musIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
+				entry.MusicianID = &v
+			}
+		}
+		if entry.MusicianID == nil && i < len(musNames) {
+			if name := strings.TrimSpace(musNames[i]); name != "" {
+				if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
+					entry.MusicianID = &m.ID
+				} else {
+					log.Printf("create musician %q: %v", name, merr)
+				}
+			}
+		}
+		if i < len(insIDs) {
+			if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
+				entry.InstructorID = &v
+			}
+		}
+		if entry.InstructorID == nil && i < len(insNames) {
+			if name := strings.TrimSpace(insNames[i]); name != "" {
+				if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
+					entry.InstructorID = &ins.ID
+				} else {
+					log.Printf("create instructor %q: %v", name, ierr)
+				}
+			}
+		}
+		if i < len(dates) {
+			entry.EntryDate = strings.TrimSpace(dates[i])
+		}
+		ttEntries = append(ttEntries, entry)
+	}
+	return ttEntries
+}
+
+// renderEventFormError re-renders the event form with errKey after a failed
+// create/save, preserving the submitted state carried in ev. danceNames must be
+// pre-computed via buildSelectedDanceNames or buildSelectedDanceNamesFromIDs.
+func renderEventFormError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, bundle RefBundle, su *SessionUser, ev Event, danceNames map[string]bool, isNew bool, errKey string) {
+	locOrgFirst, locOthers := splitEventLocations(bundle.Locations, ev)
+	var evtOrg *Organization
+	if ev.OrganizationID != nil {
+		for i := range bundle.Orgs {
+			if bundle.Orgs[i].ID == *ev.OrganizationID {
+				evtOrg = &bundle.Orgs[i]
+				break
+			}
+		}
+	}
+	var userOrgs []Organization
+	if su.Role == "admin" {
+		userOrgs = bundle.Orgs
+	} else {
+		memberSet := orgIDSet(getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r)))
+		for _, o := range bundle.Orgs {
+			if memberSet[o.ID] {
+				userOrgs = append(userOrgs, o)
+			}
+		}
+	}
+	titleKey := "admin_event_edit_title"
+	if isNew {
+		titleKey = "admin_event_new_title"
+	}
+	renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, i18n.T(r, titleKey), AdminEventFormData{
+		IsNew:              isNew,
+		Event:              ev,
+		Org:                evtOrg,
+		Organizations:      bundle.Orgs,
+		Locations:          topLevelLocations(bundle.Locations),
+		LocOrgFirst:        locOrgFirst,
+		LocOthers:          locOthers,
+		Musicians:          bundle.Musicians,
+		Instructors:        bundle.Instructors,
+		Dances:             bundle.Dances,
+		SelectedDanceNames: danceNames,
+		UserOrgs:           userOrgs,
+		ErrorKey:           errKey,
+	}))
+}
+
 func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -2019,158 +2219,30 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		bundle := client.FetchRefBundle(r.Context())
 		token := getSessionToken(r)
 		renderErr := func(errKey string) {
-			title := i18n.T(r, "admin_event_new_title")
-			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
-				IsNew:         true,
-				Organizations: bundle.Orgs,
-				Locations:     topLevelLocations(bundle.Locations),
-				Musicians:     bundle.Musicians,
-				Instructors:   bundle.Instructors,
-				Dances:        bundle.Dances,
-				ErrorKey:      errKey,
-			}))
+			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, Event{}, nil, true, errKey)
 		}
 
 		intent := r.FormValue("intent")
+		startTime, endTime := parseEventDateTimes(r)
 
-		date := r.FormValue("date")
-		endDate := r.FormValue("end_date")
-		if endDate == "" {
-			endDate = date
-		}
-		startT := r.FormValue("start_time")
-		endT := r.FormValue("end_time")
-		startTime, endTime := "", ""
-		if date != "" && startT != "" {
-			startTime = date + "T" + startT + ":00"
-		}
-		if endDate != "" && endT != "" {
-			endTime = endDate + "T" + endT + ":00"
+		orgID, err := parseOrgChoice(r, client)
+		if err != nil {
+			renderErr("admin_save_error")
+			return
 		}
 
-		var orgID *int
-		switch r.FormValue("org_choice") {
-		case "existing":
-			if v := r.FormValue("org_id"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil {
-					orgID = &n
-				}
-			}
-		case "new":
-			newOrg := Organization{Name: strings.TrimSpace(r.FormValue("new_org_name"))}
-			if newOrg.Name != "" {
-				created, err := client.CreateOrganization(r.Context(), newOrg, getSessionToken(r))
-				if err != nil {
-					renderErr("admin_save_error")
-					return
-				}
-				orgID = &created.ID
-			}
-		}
-
-		var locReq EventLocReq
-		var selectedLocID int
-		switch r.FormValue("loc_choice") {
-		case "existing":
-			if v := r.FormValue("loc_id"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil {
-					for _, l := range bundle.Locations {
-						if l.ID == n {
-							selectedLocID = l.ID
-							locReq = EventLocReq{
-								Location:  l.Location,
-								Address:   l.Address,
-								Town:      l.Town,
-								Country:   l.Country,
-								Latitude:  l.Latitude,
-								Longitude: l.Longitude,
-							}
-							break
-						}
-					}
-				}
-			}
-		case "new":
-			locReq = EventLocReq{
-				Location:    strings.TrimSpace(r.FormValue("new_loc_name")),
-				ShortName:   strings.TrimSpace(r.FormValue("new_loc_short_name")),
-				Address:     strings.TrimSpace(r.FormValue("new_loc_address")),
-				Zipcode:     strings.TrimSpace(r.FormValue("new_loc_zip")),
-				Town:        strings.TrimSpace(r.FormValue("new_loc_town")),
-				Country:     strings.TrimSpace(r.FormValue("new_loc_country")),
-				CountryCode: strings.TrimSpace(r.FormValue("new_loc_country_code")),
-				Region:      strings.TrimSpace(r.FormValue("new_loc_region")),
-				Latitude:    parseLatLng(r.FormValue("new_loc_lat")),
-				Longitude:   parseLatLng(r.FormValue("new_loc_lng")),
-			}
-		}
-
+		locReq, selectedLocID := parseLocChoice(r, bundle)
 		createStandaloneLocation := r.FormValue("loc_choice") == "new" && locReq.Location != ""
-		var pricing *Pricing
-		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
-			p := &Pricing{Type: pt}
-			switch pt {
-			case "single":
-				if amt := r.FormValue("pricing_amount"); amt != "" {
-					if f, err := strconv.ParseFloat(amt, 64); err == nil {
-						p.Amount = f
-					}
-				}
-				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
-			case "multiple":
-				labels := r.MultipartForm.Value["pl_label"]
-				amounts := r.MultipartForm.Value["pl_amount"]
-				for i, lbl := range labels {
-					lbl = strings.TrimSpace(lbl)
-					if lbl == "" {
-						continue
-					}
-					var amt float64
-					if i < len(amounts) {
-						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
-							amt = f
-						}
-					}
-					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
-				}
-				if len(p.Prices) == 0 {
-					p = nil
-				}
-			}
-			pricing = p
-		}
 
-		tags := r.MultipartForm.Value["tags"]
+		pricing := parsePricing(r)
 
-		var danceIDs []int
-		for _, v := range r.MultipartForm.Value["dance_ids"] {
-			if n, err2 := strconv.Atoi(v); err2 == nil {
-				danceIDs = append(danceIDs, n)
-			}
-		}
-
-		var musicianIDs []int
-		for _, v := range r.MultipartForm.Value["musician_ids"] {
-			if n, err2 := strconv.Atoi(strings.TrimSpace(v)); err2 == nil {
-				musicianIDs = append(musicianIDs, n)
-			}
-		}
-		var instructorIDs []int
-		for _, v := range r.MultipartForm.Value["instructor_ids"] {
-			if n, err2 := strconv.Atoi(strings.TrimSpace(v)); err2 == nil {
-				instructorIDs = append(instructorIDs, n)
-			}
-		}
+		tags := r.Form["tags"]
+		danceIDs, musicianIDs, instructorIDs := parseEventIDs(r)
 
 		// A room is just a child location (#687): if one was picked, point
 		// location_id straight at it, taking precedence over the venue-name
 		// match derived from locReq below.
-		var createLocationID *int
-		if v := r.FormValue("room_id"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				createLocationID = &n
-			}
-		}
+		createLocationID := roomIDFromForm(r)
 		req := EventCreateReq{
 			Title:            strings.TrimSpace(r.FormValue("title")),
 			Description:      strings.TrimSpace(r.FormValue("description")),
@@ -2243,46 +2315,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			if selectedLocID > 0 {
 				ev.LocationID = &selectedLocID
 			}
-			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, ev)
-			var eventOrg *Organization
-			if ev.OrganizationID != nil {
-				for i := range bundle.Orgs {
-					if bundle.Orgs[i].ID == *ev.OrganizationID {
-						eventOrg = &bundle.Orgs[i]
-						break
-					}
-				}
-			}
-			var userOrgs []Organization
-			if su.Role == "admin" {
-				userOrgs = bundle.Orgs
-			} else {
-				orgIDSet := make(map[int]bool)
-				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
-					orgIDSet[oid] = true
-				}
-				for _, o := range bundle.Orgs {
-					if orgIDSet[o.ID] {
-						userOrgs = append(userOrgs, o)
-					}
-				}
-			}
-			title := i18n.T(r, "admin_event_new_title")
-			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
-				IsNew:              true,
-				Event:              ev,
-				Org:                eventOrg,
-				Organizations:      bundle.Orgs,
-				Locations:          topLevelLocations(bundle.Locations),
-				LocOrgFirst:        locOrgFirst,
-				LocOthers:          locOthers,
-				Musicians:          bundle.Musicians,
-				Instructors:        bundle.Instructors,
-				Dances:             bundle.Dances,
-				SelectedDanceNames: buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances),
-				UserOrgs:           userOrgs,
-				ErrorKey:           errKey,
-			}))
+			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, ev,
+				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), true, errKey)
 		}
 
 		if req.Title == "" {
@@ -2335,83 +2369,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
-		starts := r.MultipartForm.Value["tt_start"]
-		ends := r.MultipartForm.Value["tt_end"]
-		titles := r.MultipartForm.Value["tt_title"]
-		descs := r.MultipartForm.Value["tt_desc"]
-		rooms := r.MultipartForm.Value["tt_room"]
-		ttTypes := r.MultipartForm.Value["tt_type"]
-		locIDs := r.MultipartForm.Value["tt_loc_id"]
-		musIDs := r.MultipartForm.Value["tt_musician_id"]
-		musNames := r.MultipartForm.Value["tt_musician_name"]
-		insIDs := r.MultipartForm.Value["tt_instructor_id"]
-		insNames := r.MultipartForm.Value["tt_instructor_name"]
-		dates := r.MultipartForm.Value["tt_entry_date"]
-		var ttEntries []TimetableEntryReq
-		for i, s := range starts {
-			s = strings.TrimSpace(s)
-			if i >= len(titles) {
-				break
-			}
-			t := strings.TrimSpace(titles[i])
-			if s == "" && t == "" {
-				continue
-			}
-			entry := TimetableEntryReq{StartTime: s, Title: t}
-			if i < len(ends) {
-				entry.EndTime = strings.TrimSpace(ends[i])
-			}
-			if i < len(descs) {
-				entry.Description = strings.TrimSpace(descs[i])
-			}
-			if i < len(rooms) {
-				entry.Room = strings.TrimSpace(rooms[i])
-			}
-			if i < len(ttTypes) {
-				if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
-					entry.EntryType = v
-				} else {
-					entry.EntryType = "bal"
-				}
-			}
-			if i < len(locIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
-					entry.LocationID = &v
-				}
-			}
-			if i < len(musIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
-					entry.MusicianID = &v
-				}
-			}
-			if entry.MusicianID == nil && i < len(musNames) {
-				if name := strings.TrimSpace(musNames[i]); name != "" {
-					if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
-						entry.MusicianID = &m.ID
-					} else {
-						log.Printf("create musician %q: %v", name, merr)
-					}
-				}
-			}
-			if i < len(insIDs) {
-				if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
-					entry.InstructorID = &v
-				}
-			}
-			if entry.InstructorID == nil && i < len(insNames) {
-				if name := strings.TrimSpace(insNames[i]); name != "" {
-					if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
-						entry.InstructorID = &ins.ID
-					} else {
-						log.Printf("create instructor %q: %v", name, ierr)
-					}
-				}
-			}
-			if i < len(dates) {
-				entry.EntryDate = strings.TrimSpace(dates[i])
-			}
-			ttEntries = append(ttEntries, entry)
-		}
+		ttEntries := parseTimetableEntryReqs(r, client)
 		if len(ttEntries) > 0 {
 			if terr := client.AddTimetableEntries(r.Context(), event.ID, ttEntries, getSessionToken(r)); terr != nil {
 				log.Printf("add timetable error: %v", terr)
@@ -2501,16 +2459,16 @@ func parseTimetableFormEntries(r *http.Request, musicians []Musician, instructor
 		}
 	}
 
-	starts := r.MultipartForm.Value["tt_start"]
-	ends := r.MultipartForm.Value["tt_end"]
-	titles := r.MultipartForm.Value["tt_title"]
-	descs := r.MultipartForm.Value["tt_desc"]
-	rooms := r.MultipartForm.Value["tt_room"]
-	ttTypes := r.MultipartForm.Value["tt_type"]
-	locIDs := r.MultipartForm.Value["tt_loc_id"]
-	musIDs := r.MultipartForm.Value["tt_musician_id"]
-	insIDs := r.MultipartForm.Value["tt_instructor_id"]
-	dates := r.MultipartForm.Value["tt_entry_date"]
+	starts := r.Form["tt_start"]
+	ends := r.Form["tt_end"]
+	titles := r.Form["tt_title"]
+	descs := r.Form["tt_desc"]
+	rooms := r.Form["tt_room"]
+	ttTypes := r.Form["tt_type"]
+	locIDs := r.Form["tt_loc_id"]
+	musIDs := r.Form["tt_musician_id"]
+	insIDs := r.Form["tt_instructor_id"]
+	dates := r.Form["tt_entry_date"]
 
 	var entries []TimetableEntry
 	for i, s := range starts {
@@ -2737,170 +2695,35 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		saveTok := getSessionToken(r)
 		intent := r.FormValue("intent")
 		renderErr := func(errKey string) {
-			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
-			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
-			var evtOrg *Organization
-			if event.OrganizationID != nil {
-				for i := range bundle.Orgs {
-					if bundle.Orgs[i].ID == *event.OrganizationID {
-						evtOrg = &bundle.Orgs[i]
-						break
-					}
-				}
+			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
+			if gerr != nil {
+				log.Printf("reload event %d after save error: %v", id, gerr)
+				http.Error(w, "could not reload event", http.StatusBadGateway)
+				return
 			}
-			title := i18n.T(r, "admin_event_edit_title")
-			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
-				IsNew:              false,
-				Event:              event,
-				Org:                evtOrg,
-				Organizations:      bundle.Orgs,
-				Locations:          topLevelLocations(bundle.Locations),
-				LocOrgFirst:        locOrgFirst,
-				LocOthers:          locOthers,
-				Musicians:          bundle.Musicians,
-				Instructors:        bundle.Instructors,
-				Dances:             bundle.Dances,
-				SelectedDanceNames: buildSelectedDanceNames(event),
-				ErrorKey:           errKey,
-			}))
+			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, event,
+				buildSelectedDanceNames(event), false, errKey)
 		}
 
-		date := r.FormValue("date")
-		endDate := r.FormValue("end_date")
-		if endDate == "" {
-			endDate = date
-		}
-		startT := r.FormValue("start_time")
-		endT := r.FormValue("end_time")
-		startTime, endTime := "", ""
-		if date != "" && startT != "" {
-			startTime = date + "T" + startT + ":00"
-		}
-		if endDate != "" && endT != "" {
-			endTime = endDate + "T" + endT + ":00"
+		startTime, endTime := parseEventDateTimes(r)
+
+		orgID, err := parseOrgChoice(r, client)
+		if err != nil {
+			renderErr("admin_save_error")
+			return
 		}
 
-		var orgID *int
-		switch r.FormValue("org_choice") {
-		case "existing":
-			if v := r.FormValue("org_id"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil {
-					orgID = &n
-				}
-			}
-		case "new":
-			newOrg := Organization{Name: strings.TrimSpace(r.FormValue("new_org_name"))}
-			if newOrg.Name != "" {
-				created, err := client.CreateOrganization(r.Context(), newOrg, getSessionToken(r))
-				if err != nil {
-					renderErr("admin_save_error")
-					return
-				}
-				orgID = &created.ID
-			}
-		}
+		locReq, selectedLocID := parseLocChoice(r, bundle)
 
-		var locReq EventLocReq
-		var selectedLocID int
-		switch r.FormValue("loc_choice") {
-		case "existing":
-			if v := r.FormValue("loc_id"); v != "" {
-				if n, err := strconv.Atoi(v); err == nil {
-					for _, l := range bundle.Locations {
-						if l.ID == n {
-							selectedLocID = l.ID
-							locReq = EventLocReq{
-								Location:  l.Location,
-								Address:   l.Address,
-								Town:      l.Town,
-								Country:   l.Country,
-								Latitude:  l.Latitude,
-								Longitude: l.Longitude,
-							}
-							break
-						}
-					}
-				}
-			}
-		case "new":
-			locReq = EventLocReq{
-				Location:    strings.TrimSpace(r.FormValue("new_loc_name")),
-				ShortName:   strings.TrimSpace(r.FormValue("new_loc_short_name")),
-				Address:     strings.TrimSpace(r.FormValue("new_loc_address")),
-				Zipcode:     strings.TrimSpace(r.FormValue("new_loc_zip")),
-				Town:        strings.TrimSpace(r.FormValue("new_loc_town")),
-				Country:     strings.TrimSpace(r.FormValue("new_loc_country")),
-				CountryCode: strings.TrimSpace(r.FormValue("new_loc_country_code")),
-				Region:      strings.TrimSpace(r.FormValue("new_loc_region")),
-				Latitude:    parseLatLng(r.FormValue("new_loc_lat")),
-				Longitude:   parseLatLng(r.FormValue("new_loc_lng")),
-			}
-		}
+		pricing := parsePricing(r)
 
-		var pricing *Pricing
-		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
-			p := &Pricing{Type: pt}
-			switch pt {
-			case "single":
-				if amt := r.FormValue("pricing_amount"); amt != "" {
-					if f, err := strconv.ParseFloat(amt, 64); err == nil {
-						p.Amount = f
-					}
-				}
-				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
-			case "multiple":
-				labels := r.MultipartForm.Value["pl_label"]
-				amounts := r.MultipartForm.Value["pl_amount"]
-				for i, lbl := range labels {
-					lbl = strings.TrimSpace(lbl)
-					if lbl == "" {
-						continue
-					}
-					var amt float64
-					if i < len(amounts) {
-						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
-							amt = f
-						}
-					}
-					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
-				}
-				if len(p.Prices) == 0 {
-					p = nil
-				}
-			}
-			pricing = p
-		}
-
-		tags := r.MultipartForm.Value["tags"]
-
-		var musicianIDs []int
-		for _, v := range r.MultipartForm.Value["musician_ids"] {
-			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-				musicianIDs = append(musicianIDs, n)
-			}
-		}
-		var instructorIDs []int
-		for _, v := range r.MultipartForm.Value["instructor_ids"] {
-			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-				instructorIDs = append(instructorIDs, n)
-			}
-		}
-		var danceIDs []int
-		for _, v := range r.MultipartForm.Value["dance_ids"] {
-			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-				danceIDs = append(danceIDs, n)
-			}
-		}
+		tags := r.Form["tags"]
+		danceIDs, musicianIDs, instructorIDs := parseEventIDs(r)
 
 		// A room is just a child location (#687): if one was picked, point
 		// location_id straight at it, taking precedence over the venue-name
 		// match derived from locReq below.
-		var saveLocationID *int
-		if v := r.FormValue("room_id"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				saveLocationID = &n
-			}
-		}
+		saveLocationID := roomIDFromForm(r)
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
 			Title:            strings.TrimSpace(r.FormValue("title")),
@@ -2957,7 +2780,12 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 
 		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
 		renderErrFull := func(errKey string) {
-			event, _ := client.GetEventAuthed(r.Context(), id, saveTok)
+			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
+			if gerr != nil {
+				log.Printf("reload event %d after save error: %v", id, gerr)
+				http.Error(w, "could not reload event", http.StatusBadGateway)
+				return
+			}
 			event.Timetable = formTimetable
 			event.Title = req.Title
 			event.Description = req.Description
@@ -2988,46 +2816,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			if selectedLocID > 0 {
 				event.LocationID = &selectedLocID
 			}
-			locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
-			var evtOrg *Organization
-			if event.OrganizationID != nil {
-				for i := range bundle.Orgs {
-					if bundle.Orgs[i].ID == *event.OrganizationID {
-						evtOrg = &bundle.Orgs[i]
-						break
-					}
-				}
-			}
-			var userOrgs []Organization
-			if su.Role == "admin" {
-				userOrgs = bundle.Orgs
-			} else {
-				orgIDSet := make(map[int]bool)
-				for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, saveTok) {
-					orgIDSet[oid] = true
-				}
-				for _, o := range bundle.Orgs {
-					if orgIDSet[o.ID] {
-						userOrgs = append(userOrgs, o)
-					}
-				}
-			}
-			title := i18n.T(r, "admin_event_edit_title")
-			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
-				IsNew:              false,
-				Event:              event,
-				Org:                evtOrg,
-				Organizations:      bundle.Orgs,
-				Locations:          topLevelLocations(bundle.Locations),
-				LocOrgFirst:        locOrgFirst,
-				LocOthers:          locOthers,
-				Musicians:          bundle.Musicians,
-				Instructors:        bundle.Instructors,
-				Dances:             bundle.Dances,
-				SelectedDanceNames: buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances),
-				UserOrgs:           userOrgs,
-				ErrorKey:           errKey,
-			}))
+			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, event,
+				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), false, errKey)
 		}
 
 		if req.Title == "" {
@@ -3071,82 +2861,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				})
 			}
 		} else {
-			starts := r.MultipartForm.Value["tt_start"]
-			ends := r.MultipartForm.Value["tt_end"]
-			titles := r.MultipartForm.Value["tt_title"]
-			descs := r.MultipartForm.Value["tt_desc"]
-			rooms := r.MultipartForm.Value["tt_room"]
-			ttTypes := r.MultipartForm.Value["tt_type"]
-			locIDs := r.MultipartForm.Value["tt_loc_id"]
-			musIDs := r.MultipartForm.Value["tt_musician_id"]
-			musNames := r.MultipartForm.Value["tt_musician_name"]
-			insIDs := r.MultipartForm.Value["tt_instructor_id"]
-			insNames := r.MultipartForm.Value["tt_instructor_name"]
-			dates := r.MultipartForm.Value["tt_entry_date"]
-			for i, s := range starts {
-				s = strings.TrimSpace(s)
-				if i >= len(titles) {
-					break
-				}
-				t := strings.TrimSpace(titles[i])
-				if s == "" && t == "" {
-					continue
-				}
-				entry := TimetableEntryReq{StartTime: s, Title: t}
-				if i < len(ends) {
-					entry.EndTime = strings.TrimSpace(ends[i])
-				}
-				if i < len(descs) {
-					entry.Description = strings.TrimSpace(descs[i])
-				}
-				if i < len(rooms) {
-					entry.Room = strings.TrimSpace(rooms[i])
-				}
-				if i < len(ttTypes) {
-					if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
-						entry.EntryType = v
-					} else {
-						entry.EntryType = "bal"
-					}
-				}
-				if i < len(locIDs) {
-					if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
-						entry.LocationID = &v
-					}
-				}
-				if i < len(musIDs) {
-					if v, err := strconv.Atoi(strings.TrimSpace(musIDs[i])); err == nil && v > 0 {
-						entry.MusicianID = &v
-					}
-				}
-				if entry.MusicianID == nil && i < len(musNames) {
-					if name := strings.TrimSpace(musNames[i]); name != "" {
-						if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
-							entry.MusicianID = &m.ID
-						} else {
-							log.Printf("create musician %q: %v", name, merr)
-						}
-					}
-				}
-				if i < len(insIDs) {
-					if v, err := strconv.Atoi(strings.TrimSpace(insIDs[i])); err == nil && v > 0 {
-						entry.InstructorID = &v
-					}
-				}
-				if entry.InstructorID == nil && i < len(insNames) {
-					if name := strings.TrimSpace(insNames[i]); name != "" {
-						if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
-							entry.InstructorID = &ins.ID
-						} else {
-							log.Printf("create instructor %q: %v", name, ierr)
-						}
-					}
-				}
-				if i < len(dates) {
-					entry.EntryDate = strings.TrimSpace(dates[i])
-				}
-				ttEntries = append(ttEntries, entry)
-			}
+			ttEntries = parseTimetableEntryReqs(r, client)
 		}
 		// Only replace the timetable when the form signals it was touched.
 		// Skipping when untouched prevents a parsing failure or premature

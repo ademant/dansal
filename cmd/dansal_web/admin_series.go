@@ -223,7 +223,7 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 
 func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -265,8 +265,6 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				body["occurrences"] = n
 			}
 		}
-		_ = user
-
 		created, err := client.CreateSeries(r.Context(), body, token)
 		if err != nil {
 			http.Error(w, "failed to create series: "+err.Error(), http.StatusBadGateway)

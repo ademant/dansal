@@ -99,7 +99,7 @@ func adminMusicianCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
@@ -173,7 +173,7 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return

@@ -64,7 +64,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			}))
 		}
 
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			renderErr("invalid form", "", "ical")
 			return
 		}

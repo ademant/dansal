@@ -65,7 +65,7 @@ func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
@@ -127,7 +127,7 @@ func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return

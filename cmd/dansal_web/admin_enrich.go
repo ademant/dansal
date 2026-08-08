@@ -379,7 +379,7 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 					if diff < 0 {
 						diff = -diff
 					}
-					if diff <= 3*3600 { // ±3 hours
+					if diff <= fdpMatchWindow { // ±3 hours
 						candidates = append(candidates, ev)
 					}
 				}
@@ -450,7 +450,7 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 
 func adminEnrichApplyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -517,7 +517,6 @@ func adminEnrichApplyHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			}
 		}
 
-		_ = su
 		http.Redirect(w, r, "/admin/enrich?applied=1", http.StatusSeeOther)
 	}
 }

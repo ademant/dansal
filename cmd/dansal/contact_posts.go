@@ -1148,3 +1148,81 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(posts)
 }
+
+// POST /api/v1/contact-posts/resend-manage
+// Public. Given an email address, looks up all live verified contact_posts
+// for that email and sends one email listing all their manage URLs. Always
+// returns 200 (enumeration resistance — no hint whether posts exist for
+// that address).
+func resendContactManage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email == "" || !isValidEmail(req.Email) {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	base := buildBaseURL(r)
+
+	type postRow struct {
+		postType   string
+		nickname   string
+		expiresAt  time.Time
+		eventTitle string
+		manageURL  string
+	}
+
+	rows, err := db.Query(
+		`SELECT cp.manage_token, cp.type, cp.nickname, cp.expires_at, e.title
+		   FROM contact_posts cp
+		   JOIN events e ON e.id = cp.event_id
+		  WHERE LOWER(cp.email) = LOWER(?)
+		    AND cp.email_verified = 1
+		    AND cp.expires_at > ?
+		  ORDER BY cp.expires_at ASC`,
+		req.Email, time.Now().UTC().Unix(),
+	)
+	if err != nil {
+		log.Printf("contact_posts: resend-manage query error email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	defer rows.Close()
+
+	var posts []postRow
+	for rows.Next() {
+		var p postRow
+		var token string
+		var expiresEpoch int64
+		if err := rows.Scan(&token, &p.postType, &p.nickname, &expiresEpoch, &p.eventTitle); err != nil {
+			continue
+		}
+		p.expiresAt = time.Unix(expiresEpoch, 0).UTC()
+		p.manageURL = base + "/contact-posts/manage/" + token
+		posts = append(posts, p)
+	}
+
+	if len(posts) > 0 {
+		go func() {
+			var sb strings.Builder
+			sb.WriteString("Hello,\n\nHere are your manage links for your active board posts:\n\n")
+			for _, p := range posts {
+				sb.WriteString(fmt.Sprintf(
+					"Event: %s\nType:  %s\nLink:  %s\nValid until: %s\n\n",
+					p.eventTitle, p.postType, p.manageURL, p.expiresAt.Format("2006-01-02"),
+				))
+			}
+			if _, err := SendEmail(req.Email, "Your board post manage links", sb.String(), false); err != nil {
+				log.Printf("contact_posts: resend-manage email failed email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
+			}
+		}()
+	}
+
+	log.Printf("contact_posts: resend-manage email_hash=%s posts=%d", sha256Hex(req.Email)[:8], len(posts))
+	w.WriteHeader(http.StatusOK)
+}

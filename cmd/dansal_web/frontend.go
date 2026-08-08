@@ -1242,6 +1242,7 @@ type BoardData struct {
 	ShowTickets   bool
 	ShowLostFound bool
 	FormToken     string
+	ResendSent    bool // true when redirected back from POST /board/resend-manage
 }
 
 func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1339,6 +1340,7 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowTickets:   showTickets,
 			ShowLostFound: showLostFound,
 			FormToken:     issueFormToken(getClientIP(r)),
+			ResendSent:    q.Get("resend") == "1",
 		}
 		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
 	}

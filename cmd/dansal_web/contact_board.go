@@ -341,6 +341,43 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 	}
 }
 
+// POST /board/resend-manage — accepts an email address and asks the API to
+// send the manage links for all that address's live board posts. Always
+// redirects to /board?resend=1 so the page can show a neutral confirmation
+// banner regardless of whether posts were found (enumeration resistance).
+func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
+			return
+		}
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
+			http.Redirect(w, r, "/board", http.StatusSeeOther)
+			return
+		case formGuardHoneypot:
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
+			return
+		case formGuardBadToken:
+			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			http.Redirect(w, r, "/board", http.StatusSeeOther)
+			return
+		}
+
+		email := r.FormValue("email")
+		publicThrottle.record(ip + "|" + r.UserAgent())
+		globalEmailSendRate.record()
+
+		if err := client.ResendManage(r.Context(), email, cfg.publicBaseURL()); err != nil {
+			log.Printf("dansal-web: resend-manage failed ip_hash=%s err=%v", hashIP(ip), err)
+		}
+		http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
+	}
+}
+
 // triggerBoardOpenNote fetches the event from the API and delivers the AP Note
 // to the org's followers. Runs in a goroutine; logs and returns silently on error.
 func triggerBoardOpenNote(cfg *Config, db *sql.DB, client *DansalClient, eventID int) {

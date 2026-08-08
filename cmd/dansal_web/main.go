@@ -251,6 +251,7 @@ func main() {
 		r.HandleFunc("POST /events/{id}/book", bookingPostHandler(cfg, client, i18n))
 		r.HandleFunc("GET /bookings/verify/{token}", bookingVerifyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /board", boardHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /board/resend-manage", boardResendManageHandler(cfg, client, i18n))
 		r.HandleFunc("GET /tags", tagsIndexHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /tags/{slug}", tagHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /tags/{slug}/followers", tagFollowersHandler(cfg, db, client))

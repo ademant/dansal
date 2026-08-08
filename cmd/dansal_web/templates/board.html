@@ -3,6 +3,9 @@
 <h1>{{.Strings.T "nav_board"}}</h1>
 
 {{with .Data}}
+{{if .ResendSent}}
+<div class="board-resend-ok">{{$.Strings.T "board_resend_ok"}}</div>
+{{end}}
 <form class="board-filter-form" method="get" action="/board">
   <div class="board-filter-bar">
     <div class="board-type-toggles">
@@ -38,7 +41,7 @@
 </form>
 
 {{if .Posts}}
-<div class="board-global-list">
+<div class="board-global-list" id="board-list">
   {{range .Posts}}
   <div class="board-global-card">
     <div class="bgc-header">
@@ -76,6 +79,22 @@
 {{else}}
 <p class="board-empty">{{$.Strings.T "board_global_empty"}}</p>
 {{end}}
+
+<details class="board-resend-panel">
+  <summary class="board-resend-summary">{{$.Strings.T "board_resend_btn"}}</summary>
+  <div class="board-resend-body">
+    <p class="board-resend-title">{{$.Strings.T "board_resend_title"}}</p>
+    <form class="board-resend-form" method="post" action="/board/resend-manage">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
+      <div style="display:none"><input type="text" name="_hp" tabindex="-1" autocomplete="off"></div>
+      <label class="board-resend-label" for="resend-email">{{$.Strings.T "board_resend_email_label"}}</label>
+      <div class="board-resend-row">
+        <input type="email" id="resend-email" name="email" required placeholder="you@example.com" class="board-resend-input">
+        <button type="submit">{{$.Strings.T "board_resend_submit"}}</button>
+      </div>
+    </form>
+  </div>
+</details>
 {{end}}
 
 <style>
@@ -99,6 +118,16 @@
 .bgc-event-link{color:var(--link);font-weight:500}
 .bgc-meta{color:var(--fg-3)}
 .bgc-actions{margin-top:.5rem}
+.board-resend-ok{background:var(--success-bg,#d4edda);color:var(--success-fg,#155724);border:1px solid var(--success-border,#c3e6cb);padding:.7rem 1rem;border-radius:5px;margin:.8rem 0 1rem}
+.board-resend-panel{margin-top:2rem;border-top:1px solid var(--border-light);padding-top:.8rem}
+.board-resend-summary{cursor:pointer;color:var(--fg-3);font-size:.88rem;list-style:none;padding:.2rem 0}
+.board-resend-summary::-webkit-details-marker{display:none}
+.board-resend-body{margin-top:.8rem}
+.board-resend-title{font-size:.88rem;color:var(--fg-2);margin-bottom:.5rem}
+.board-resend-form{max-width:420px}
+.board-resend-label{display:block;font-size:.85rem;color:var(--fg-2);margin-bottom:.3rem}
+.board-resend-row{display:flex;gap:.4rem}
+.board-resend-input{flex:1;padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
 </style>
 
 <script>

@@ -2278,6 +2278,31 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, telegra
 	return "", nil
 }
 
+// ResendManage asks the API to email manage links for all live posts at email.
+// The API always returns 200 (enumeration resistance); errors here are network
+// or server failures. baseURL is forwarded as X-Base-URL so the API can
+// construct correct public links in the email.
+func (c *DansalClient) ResendManage(ctx context.Context, email, baseURL string) error {
+	body, _ := json.Marshal(map[string]string{"email": email})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/api/v1/contact-posts/resend-manage",
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		req.Header.Set("X-Base-URL", baseURL)
+	}
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 // InviteInfo holds the public fields returned by GET /api/v1/invites/{token}.
 type InviteInfo struct {
 	Role        string `json:"role"`

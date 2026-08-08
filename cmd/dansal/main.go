@@ -3608,6 +3608,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/contact-posts", optAuth(http.HandlerFunc(createContactPost)))
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}/contact-posts", optionsSchema[ContactPostCreateRequest])
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
+	smux.HandleFunc("POST /api/v1/contact-posts/resend-manage", resendContactManage)
 	smux.HandleFunc("PUT /api/v1/contact-posts/{id}", putContactPost)
 	smux.HandleFunc("PATCH /api/v1/contact-posts/{id}", updateContactPost)
 	smux.HandleFunc("OPTIONS /api/v1/contact-posts/{id}", optionsSchema[ContactPostWriteRequest])

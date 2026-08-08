@@ -122,8 +122,6 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 
 	// Migration v1: add description/image_url/tags to federated_events and
 	// transfer/update tracking columns to delivered.
-	// Safety-net ALTERs run unconditionally (idempotent on existing columns);
-	// the migration record prevents re-running expensive operations in future.
 	if !migrationApplied(db, 1) {
 		db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
 		db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
@@ -132,6 +130,35 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 		db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
 		db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
 		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (1)")
+	}
+	// Safety net: ensure the v1 columns exist even if the migration was
+	// pre-marked or only partially applied.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('federated_events') WHERE name='description'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE federated_events ADD COLUMN description TEXT")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('federated_events') WHERE name='image_url'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE federated_events ADD COLUMN image_url TEXT")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('federated_events') WHERE name='tags'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE federated_events ADD COLUMN tags TEXT")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('delivered') WHERE name='transferred_to'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE delivered ADD COLUMN transferred_to INTEGER")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('delivered') WHERE name='transferred_at'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE delivered ADD COLUMN transferred_at DATETIME")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('delivered') WHERE name='is_update'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE delivered ADD COLUMN is_update INTEGER DEFAULT 0")
+		}
 	}
 
 	// Migration v2: city alias table for folkdance.page enrichment
@@ -163,6 +190,19 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 			db.Exec("INSERT OR IGNORE INTO city_aliases(alias, canonical) VALUES(?,?)", s[0], s[1])
 		}
 		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (2)")
+	}
+	// Safety net: ensure the table exists even if v2 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='city_aliases'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS city_aliases (
+				id        INTEGER PRIMARY KEY AUTOINCREMENT,
+				alias     TEXT    NOT NULL COLLATE NOCASE,
+				canonical TEXT    NOT NULL,
+				UNIQUE(alias)
+			)`)
+		}
 	}
 
 	// Migration v3: event_templates.musician_id/instructor_id — let a preset
@@ -260,11 +300,10 @@ func removeTagFollower(db *sql.DB, slug, actorURI string) error {
 	return err
 }
 
-func listTagFollowers(db *sql.DB, slug string) ([]struct{ ActorURI, InboxURL string }, error) {
-	rows, err := db.Query(
-		"SELECT actor_uri, inbox_url FROM tag_followers WHERE tag_slug = ? ORDER BY created_at",
-		slug,
-	)
+// listFollowerRows runs a query selecting actor_uri, inbox_url and scans the
+// rows into the (ActorURI, InboxURL) shape shared by org and tag followers.
+func listFollowerRows(db *sql.DB, query string, args ...any) ([]struct{ ActorURI, InboxURL string }, error) {
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +319,13 @@ func listTagFollowers(db *sql.DB, slug string) ([]struct{ ActorURI, InboxURL str
 	return fs, rows.Err()
 }
 
+func listTagFollowers(db *sql.DB, slug string) ([]struct{ ActorURI, InboxURL string }, error) {
+	return listFollowerRows(db,
+		"SELECT actor_uri, inbox_url FROM tag_followers WHERE tag_slug = ? ORDER BY created_at",
+		slug,
+	)
+}
+
 type ActorRecord struct {
 	ID            int
 	OrgID         int
@@ -288,12 +334,15 @@ type ActorRecord struct {
 	PrivateKeyPEM string
 }
 
-func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
+// getActorBy loads the actor whose column matches value (org_slug or org_id),
+// decrypting the stored private key. column is an internal constant, never
+// user input.
+func getActorBy(db *sql.DB, column string, value any) (*ActorRecord, error) {
 	var a ActorRecord
 	var storedKey string
 	err := db.QueryRow(
-		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem FROM actors WHERE org_slug = ?",
-		slug,
+		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem FROM actors WHERE "+column+" = ?",
+		value,
 	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &storedKey)
 	if err != nil {
 		return nil, err
@@ -305,21 +354,12 @@ func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
 	return &a, nil
 }
 
+func getActorBySlug(db *sql.DB, slug string) (*ActorRecord, error) {
+	return getActorBy(db, "org_slug", slug)
+}
+
 func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
-	var a ActorRecord
-	var storedKey string
-	err := db.QueryRow(
-		"SELECT id, org_id, org_slug, public_key_pem, private_key_pem FROM actors WHERE org_id = ?",
-		orgID,
-	).Scan(&a.ID, &a.OrgID, &a.OrgSlug, &a.PublicKeyPEM, &storedKey)
-	if err != nil {
-		return nil, err
-	}
-	a.PrivateKeyPEM, err = actorKeyDecrypt(storedKey)
-	if err != nil {
-		return nil, err
-	}
-	return &a, nil
+	return getActorBy(db, "org_id", orgID)
 }
 
 // ensureRelayActor creates (or fetches) the special relay actor with org_id=0.
@@ -429,35 +469,15 @@ func countFollowers(db *sql.DB, orgID int) (int, error) {
 }
 
 func listFollowers(db *sql.DB, orgID int) ([]struct{ ActorURI, InboxURL string }, error) {
-	rows, err := db.Query(
+	return listFollowerRows(db,
 		"SELECT actor_uri, inbox_url FROM followers WHERE org_id = ? ORDER BY created_at",
 		orgID,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var fs []struct{ ActorURI, InboxURL string }
-	for rows.Next() {
-		var f struct{ ActorURI, InboxURL string }
-		if err := rows.Scan(&f.ActorURI, &f.InboxURL); err != nil {
-			return nil, err
-		}
-		fs = append(fs, f)
-	}
-	return fs, nil
 }
 
-func markDelivered(db *sql.DB, eventID, orgID int) error {
-	_, err := db.Exec(
-		"INSERT OR IGNORE INTO delivered (event_id, org_id) VALUES (?, ?)",
-		eventID, orgID,
-	)
-	return err
-}
-
-// markDeliveredWithType records delivery with specific type (update/transfer)
-func markDeliveredWithType(db *sql.DB, eventID, orgID int, isUpdate bool) error {
+// markDelivered records that eventID's ActivityPub delivery to orgID succeeded.
+// isUpdate marks the delivery as an update/transfer-type payload.
+func markDelivered(db *sql.DB, eventID, orgID int, isUpdate bool) error {
 	_, err := db.Exec(
 		"INSERT OR IGNORE INTO delivered (event_id, org_id, is_update) VALUES (?, ?, ?)",
 		eventID, orgID, isUpdate,
@@ -776,13 +796,13 @@ func listTemplates(db *sql.DB, userID int, orgIDs []int) ([]EventTemplate, error
 	return ts, nil
 }
 
-// listTemplatesForOrg returns every preset scoped to orgID, regardless of who
-// created it — unlike listTemplates' owner-or-member rule, any member
-// browsing /admin/organization/{slug} should see all of the org's presets.
-func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
+// listTemplatesBy returns every preset matching the given WHERE clause,
+// regardless of who created it — used for org/musician/instructor-scoped
+// template lists on the admin dashboards.
+func listTemplatesBy(db *sql.DB, whereClause string, arg any) ([]EventTemplate, error) {
 	rows, err := db.Query(
-		"SELECT "+eventTemplateCols+" FROM event_templates WHERE org_id = ? ORDER BY name",
-		orgID,
+		"SELECT "+eventTemplateCols+" FROM event_templates WHERE "+whereClause+" ORDER BY name",
+		arg,
 	)
 	if err != nil {
 		return nil, err
@@ -797,49 +817,24 @@ func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
 		ts = append(ts, t)
 	}
 	return ts, nil
+}
+
+// listTemplatesForOrg returns every preset scoped to orgID, regardless of who
+// created it — unlike listTemplates' owner-or-member rule, any member
+// browsing /admin/organization/{slug} should see all of the org's presets.
+func listTemplatesForOrg(db *sql.DB, orgID int) ([]EventTemplate, error) {
+	return listTemplatesBy(db, "org_id = ?", orgID)
 }
 
 // listTemplatesForMusician / listTemplatesForInstructor are the musician/
 // instructor equivalents of listTemplatesForOrg, for the admin musician/
 // instructor dashboards.
 func listTemplatesForMusician(db *sql.DB, musicianID int) ([]EventTemplate, error) {
-	rows, err := db.Query(
-		"SELECT "+eventTemplateCols+" FROM event_templates WHERE musician_id = ? ORDER BY name",
-		musicianID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ts []EventTemplate
-	for rows.Next() {
-		t, err := scanEventTemplate(rows)
-		if err != nil {
-			return nil, err
-		}
-		ts = append(ts, t)
-	}
-	return ts, nil
+	return listTemplatesBy(db, "musician_id = ?", musicianID)
 }
 
 func listTemplatesForInstructor(db *sql.DB, instructorID int) ([]EventTemplate, error) {
-	rows, err := db.Query(
-		"SELECT "+eventTemplateCols+" FROM event_templates WHERE instructor_id = ? ORDER BY name",
-		instructorID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ts []EventTemplate
-	for rows.Next() {
-		t, err := scanEventTemplate(rows)
-		if err != nil {
-			return nil, err
-		}
-		ts = append(ts, t)
-	}
-	return ts, nil
+	return listTemplatesBy(db, "instructor_id = ?", instructorID)
 }
 
 func getTemplate(db *sql.DB, id int) (EventTemplate, error) {

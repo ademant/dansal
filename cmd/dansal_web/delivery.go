@@ -99,7 +99,7 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 			if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
 				log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
 			} else {
-				if err := markDelivered(db, e.ID, orgID); err != nil {
+				if err := markDelivered(db, e.ID, orgID, false); err != nil {
 					log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
 				}
 			}
@@ -112,7 +112,7 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 			if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
 				log.Printf("relay delivery event %d: %v", e.ID, err)
 			} else {
-				if err := markDelivered(db, e.ID, 0); err != nil {
+				if err := markDelivered(db, e.ID, 0, false); err != nil {
 					log.Printf("mark relay delivered event %d: %v", e.ID, err)
 				}
 			}
@@ -125,7 +125,7 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 			if err := deliverEventToTagFollowers(cfg, db, relayActor, e); err != nil {
 				log.Printf("tag delivery event %d: %v", e.ID, err)
 			} else {
-				if err := markDelivered(db, e.ID, -1); err != nil {
+				if err := markDelivered(db, e.ID, -1, false); err != nil {
 					log.Printf("mark tag delivered event %d: %v", e.ID, err)
 				}
 			}
@@ -392,7 +392,7 @@ func handleEventTransfer(cfg *Config, db *sql.DB, client *DansalClient, eventID,
 
 	// 3. Update delivery tracking
 	markEventTransferred(db, eventID, oldOrgID, newOrgID)
-	markDeliveredWithType(db, eventID, newOrgID, false) // Mark as delivered to new org
+	markDelivered(db, eventID, newOrgID, false) // Mark as delivered to new org
 }
 
 // deliverTransferNotification sends Move activities to old organization's followers

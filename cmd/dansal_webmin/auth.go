@@ -191,6 +191,14 @@ func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt
 	sessionCookies.Set(w, token, user, expiresAt)
 }
 
+// startCertSession issues a fresh sessionTTL cookie for a cert-authenticated
+// user — the one line still shared between requireLogin and loginPageHandler
+// once certAuthSession/sessionTTL absorbed the rest of the duplication
+// (#1017).
+func startCertSession(w http.ResponseWriter, su *SessionUser) {
+	setSession(w, "", *su, time.Now().Add(sessionTTL))
+}
+
 func clearSession(w http.ResponseWriter) {
 	sessionCookies.Clear(w)
 }
@@ -205,7 +213,7 @@ func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 		// out an already-authenticated admin (#994).
 		if su := certAuthSession(cfg, r); su != nil {
 			// Refresh session cookie and inject user into context for this request
-			setSession(w, "", *su, time.Now().Add(sessionTTL))
+			startCertSession(w, su)
 			next(w, r.WithContext(context.WithValue(r.Context(), ctxSessionUser, su)))
 			return
 		}
@@ -264,7 +272,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Auto-login via cert if verified (loopback-only, see #994)
 		if su := certAuthSession(cfg, r); su != nil {
-			setSession(w, "", *su, time.Now().Add(sessionTTL))
+			startCertSession(w, su)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}

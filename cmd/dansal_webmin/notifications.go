@@ -272,13 +272,8 @@ func notificationsSMTPTestHandler(cfg *Config) http.HandlerFunc {
 			respondJSON(w, http.StatusOK, false, "No recipient address configured — fill in the Admin To field first.")
 			return
 		}
-		testResp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "smtp-test", SMTPTo: to})
-		if err != nil {
-			respondJSON(w, http.StatusOK, false, "socket error: "+err.Error())
-			return
-		}
-		if !testResp.OK {
-			respondJSON(w, http.StatusOK, false, testResp.Error)
+		if _, err := doSocket(cfg, socketRequest{Cmd: "smtp-test", SMTPTo: to}); err != nil {
+			respondJSON(w, http.StatusOK, false, err.Error())
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")
@@ -300,13 +295,8 @@ func notificationsTelegramTestHandler(cfg *Config) http.HandlerFunc {
 			respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
 			return
 		}
-		test, err2 := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "telegram-test"})
-		if err2 != nil {
-			respondJSON(w, http.StatusBadGateway, false, err2.Error())
-			return
-		}
-		if !test.OK {
-			respondJSON(w, http.StatusOK, false, test.Error)
+		if _, err := doSocket(cfg, socketRequest{Cmd: "telegram-test"}); err != nil {
+			respondJSON(w, http.StatusBadGateway, false, err.Error())
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")
@@ -351,13 +341,8 @@ func notificationsMatrixTestHandler(cfg *Config) http.HandlerFunc {
 				return
 			}
 		}
-		test, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "matrix-test"})
-		if err != nil {
+		if _, err := doSocket(cfg, socketRequest{Cmd: "matrix-test"}); err != nil {
 			respondJSON(w, http.StatusBadGateway, false, err.Error())
-			return
-		}
-		if !test.OK {
-			respondJSON(w, http.StatusOK, false, test.Error)
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")

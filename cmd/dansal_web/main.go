@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/ademant/dansal/internal/instance"
 )
 
 // authThrottle is the shared rate limiter for register, magic-login, and verify endpoints.
@@ -57,32 +58,12 @@ func (lh *liveHandler) store(h http.Handler) {
 	lh.p.Store(&h)
 }
 
-// instanceFromConfigArg extracts the instance name from the --config path
-// (e.g. "/etc/dansal/dev/web.yaml" → "dev") without calling flag.Parse().
-func instanceFromConfigArg() string {
-	for i, arg := range os.Args {
-		var path string
-		switch {
-		case (arg == "--config" || arg == "-config") && i+1 < len(os.Args):
-			path = os.Args[i+1]
-		case strings.HasPrefix(arg, "--config="):
-			path = arg[len("--config="):]
-		case strings.HasPrefix(arg, "-config="):
-			path = arg[len("-config="):]
-		}
-		if path != "" {
-			return filepath.Base(filepath.Dir(path))
-		}
-	}
-	return ""
-}
-
 func main() {
 	// Register --version before loadConfig() calls flag.Parse().
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
 
 	tag := "dansal-web"
-	if inst := instanceFromConfigArg(); inst != "" {
+	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal-web@" + inst
 	}
 	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {

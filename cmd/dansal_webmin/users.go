@@ -60,13 +60,11 @@ func usersPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.PathValue("email")
-		resp, err := sendSocket(cfg.AdminSocket, socketRequest{Cmd: "list-sessions", Email: email})
+		resp, err := doSocket(cfg, socketRequest{Cmd: "list-sessions", Email: email})
 		errMsg := ""
 		var sessions []adminSession
 		if err != nil {
 			errMsg = err.Error()
-		} else if !resp.OK {
-			errMsg = resp.Error
 		} else if err := json.Unmarshal(resp.Data, &sessions); err != nil {
 			log.Printf("list-sessions %s: decode: %v", email, err)
 			errMsg = "could not parse session list"

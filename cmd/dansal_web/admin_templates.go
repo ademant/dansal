@@ -306,15 +306,21 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 				continue
 			}
 			var danceIDs []int
-			drows, _ := db.QueryContext(r.Context(), "SELECT dance_id FROM event_dances WHERE event_id = ?", evID)
-			if drows != nil {
-				for drows.Next() {
-					var did int
-					drows.Scan(&did)
-					danceIDs = append(danceIDs, did)
-				}
-				drows.Close()
+			drows, err := db.QueryContext(r.Context(), "SELECT dance_id FROM event_dances WHERE event_id = ?", evID)
+			if err != nil {
+				log.Printf("template assign event_dances query %d: %v", evID, err)
+				continue
 			}
+			for drows.Next() {
+				var did int
+				if err := drows.Scan(&did); err != nil {
+					drows.Close()
+					log.Printf("template assign event_dances scan %d: %v", evID, err)
+					continue
+				}
+				danceIDs = append(danceIDs, did)
+			}
+			drows.Close()
 			var musicianIDs []int
 			for _, m := range ev.Musicians {
 				musicianIDs = append(musicianIDs, m.ID)

@@ -29,7 +29,9 @@ func newSubmissionThrottleForget(limit int, window, forgetAfter time.Duration) *
 		window:      window,
 		forgetAfter: forgetAfter,
 	}
-	go st.sweep()
+	if window > 0 {
+		go st.sweep()
+	}
 	return st
 }
 

@@ -46,7 +46,9 @@ func newLoginThrottle(maxFailures int, window time.Duration) *loginThrottle {
 		maxFailures: maxFailures,
 		window:      window,
 	}
-	go lt.sweep()
+	if window > 0 {
+		go lt.sweep()
+	}
 	return lt
 }
 

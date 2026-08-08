@@ -455,7 +455,11 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 
 		var events []Event
 		if actor.OrgID == 0 {
-			events, _ = client.GetEvents(r.Context(), "")
+			events, err = client.GetEvents(r.Context(), "")
+			if err != nil {
+				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
+				return
+			}
 			published := events[:0]
 			for _, e := range events {
 				if e.IsPublished {
@@ -464,7 +468,11 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 			}
 			events = published
 		} else {
-			events, _ = client.GetEventsByOrg(r.Context(), actor.OrgID)
+			events, err = client.GetEventsByOrg(r.Context(), actor.OrgID)
+			if err != nil {
+				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
+				return
+			}
 		}
 
 		if r.URL.Query().Get("page") != "true" {
@@ -543,7 +551,7 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
 			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return
@@ -559,7 +567,7 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 
 func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
 			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return
@@ -902,7 +910,7 @@ func resolveInboxURL(ctx context.Context, _ *DansalClient, actorURI string) (str
 		return "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
 	}
 	var actor map[string]any
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&actor); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRemoteJSONBody)).Decode(&actor); err != nil {
 		return "", err
 	}
 	inbox, _ := actor["inbox"].(string)
@@ -1209,7 +1217,7 @@ func resolveActorFromInput(ctx context.Context, _ *http.Client, input string) (a
 				Href string `json:"href"`
 			} `json:"links"`
 		}
-		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&wf); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, maxRemoteJSONBody)).Decode(&wf); err != nil {
 			return "", "", err
 		}
 		for _, l := range wf.Links {
@@ -1244,7 +1252,7 @@ func resolveActorFromInput(ctx context.Context, _ *http.Client, input string) (a
 		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
 	}
 	var actor map[string]any
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<19)).Decode(&actor); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRemoteJSONBody)).Decode(&actor); err != nil {
 		return "", "", err
 	}
 	inboxURL, _ = actor["inbox"].(string)

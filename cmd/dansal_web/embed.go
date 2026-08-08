@@ -102,7 +102,11 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		allOrgs, _ := client.GetOrganizations(r.Context())
+		allOrgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
+			return
+		}
 		orgFilter := resolveOrgSlugs(allOrgs, orgSlugs)
 		locFilter := resolveLocationIDs(locIDs)
 
@@ -249,7 +253,11 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		allOrgs, _ := client.GetOrganizations(r.Context())
+		allOrgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
+			return
+		}
 		orgFilter := resolveOrgSlugs(allOrgs, orgSlugs)
 		locFilter := resolveLocationIDs(locIDs)
 
@@ -312,7 +320,11 @@ func embedLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		allOrgs, _ := client.GetOrganizations(r.Context())
+		allOrgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
+			return
+		}
 		orgFilter := resolveOrgSlugs(allOrgs, q["org"])
 
 		markers := make([]locMarker, 0, len(allLocations))
@@ -404,7 +416,11 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 		sort.Slice(allEvents, func(i, j int) bool { return allEvents[i].StartTime < allEvents[j].StartTime })
 
-		allOrgs, _ := client.GetOrganizations(r.Context())
+		allOrgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
+			return
+		}
 		orgFilter := resolveOrgSlugs(allOrgs, q["org"])
 		locFilter := resolveLocationIDs(q["location"])
 		orgNames := make(map[int]string, len(allOrgs))

@@ -50,7 +50,9 @@ func listCityAliases(db *sql.DB) ([]CityAlias, error) {
 	var out []CityAlias
 	for rows.Next() {
 		var a CityAlias
-		rows.Scan(&a.ID, &a.Alias, &a.Canonical)
+		if err := rows.Scan(&a.ID, &a.Alias, &a.Canonical); err != nil {
+			return nil, err
+		}
 		out = append(out, a)
 	}
 	return out, rows.Err()
@@ -538,7 +540,9 @@ func adminEnrichAliasNewHandler(db *sql.DB) http.HandlerFunc {
 			http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 			return
 		}
-		db.Exec("INSERT OR REPLACE INTO city_aliases(alias, canonical) VALUES(?,?)", alias, canonical)
+		if _, err := db.Exec("INSERT OR REPLACE INTO city_aliases(alias, canonical) VALUES(?,?)", alias, canonical); err != nil {
+			log.Printf("could not insert city alias %q→%q: %v", alias, canonical, err)
+		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}
 }
@@ -555,7 +559,9 @@ func adminEnrichAliasDeleteHandler(db *sql.DB) http.HandlerFunc {
 			http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 			return
 		}
-		db.Exec("DELETE FROM city_aliases WHERE id=?", id)
+		if _, err := db.Exec("DELETE FROM city_aliases WHERE id=?", id); err != nil {
+			log.Printf("could not delete city alias %d: %v", id, err)
+		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}
 }

@@ -131,15 +131,21 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 		importAllPrefills := make([]string, len(prefills))
 		for i, pf := range prefills {
-			b, _ := json.Marshal(pf)
-			importAllPrefills[i] = string(b)
+			if b, err := json.Marshal(pf); err == nil {
+				importAllPrefills[i] = string(b)
+			} else {
+				log.Printf("could not marshal import prefill: %v", err)
+			}
 		}
 
 		var prefillJSON template.JS
 		prefillTags := make(map[string]bool)
 		if len(prefills) > 0 {
-			b, _ := json.Marshal(prefills[0])
-			prefillJSON = template.JS(b)
+			if b, err := json.Marshal(prefills[0]); err == nil {
+				prefillJSON = template.JS(b)
+			} else {
+				log.Printf("could not marshal prefill JSON: %v", err)
+			}
 			for _, t := range prefills[0].Tags {
 				prefillTags[t] = true
 			}
@@ -472,7 +478,11 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		for id := range prefillDanceIDs {
 			pf.DanceIDs = append(pf.DanceIDs, id)
 		}
-		b, _ := json.Marshal(pf)
+		b, err := json.Marshal(pf)
+		if err != nil {
+			log.Printf("could not marshal manage prefill: %v", err)
+			b = []byte("{}")
+		}
 		prefillTags := make(map[string]bool, len(pf.Tags))
 		for _, t := range pf.Tags {
 			prefillTags[t] = true

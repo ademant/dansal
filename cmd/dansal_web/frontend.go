@@ -633,15 +633,18 @@ func fetchAndRenderEventRows(r *http.Request, tmpl *template.Template, i18n *I18
 	var events []Event
 	var orgs []Organization
 	var tagMap map[string]Tag
-	var fetchErr error
+	var fetchErr, orgsErr, tagErr error
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() { defer wg.Done(); events, fetchErr = fetchEvents() }()
-	go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
-	go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
+	go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
+	go func() { defer wg.Done(); tagMap, tagErr = client.GetTagMap(r.Context()) }()
 	wg.Wait()
 	if fetchErr != nil {
 		return nil, "", fetchErr
+	}
+	if orgsErr != nil || tagErr != nil {
+		return nil, "", fmt.Errorf("fetch org/tag data for event rows: orgs=%v tags=%v", orgsErr, tagErr)
 	}
 
 	orgMap := make(map[int]Organization, len(orgs))
@@ -1696,7 +1699,10 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		var eventURL string
-		rows.Scan(&eventURL)
+		if err := rows.Scan(&eventURL); err != nil {
+			logHTTPError(w, r, "could not read federated event URL", http.StatusInternalServerError)
+			return
+		}
 		// Defense-in-depth (#1000): apObjectToFederatedEvent already drops
 		// unsafe URLs at ingest, but re-validate here too in case a row was
 		// written before that check existed.
@@ -1782,7 +1788,11 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		}
 		var fedEvents []FederatedEvent
 		if cfg.ShowFederatedEvents {
-			fedEvents, _ = listFederatedEvents(db)
+			fedEvents, fetchErr = listFederatedEvents(db)
+			if fetchErr != nil {
+				logHTTPError(w, r, "could not load federated events", http.StatusBadGateway)
+				return
+			}
 		}
 		title := i18n.T(r, "events_title")
 		holidayDates := template.JS("[]")
@@ -2075,9 +2085,21 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			return
 		}
 
-		allEvents, _ := client.GetAllEventsByOrg(r.Context(), actor.OrgID)
-		musicians, _ := client.GetMusiciansByOrg(r.Context(), actor.OrgID)
-		followerCount, _ := countFollowers(db, actor.OrgID)
+		allEvents, err := client.GetAllEventsByOrg(r.Context(), actor.OrgID)
+		if err != nil {
+			logHTTPError(w, r, "could not load org events", http.StatusBadGateway)
+			return
+		}
+		musicians, err := client.GetMusiciansByOrg(r.Context(), actor.OrgID)
+		if err != nil {
+			logHTTPError(w, r, "could not load org musicians", http.StatusBadGateway)
+			return
+		}
+		followerCount, err := countFollowers(db, actor.OrgID)
+		if err != nil {
+			logHTTPError(w, r, "could not load follower count", http.StatusBadGateway)
+			return
+		}
 
 		now := time.Now()
 		var upcoming, past []Event
@@ -2124,12 +2146,20 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetEventsByLocation(r.Context(), id)
+		events, err := client.GetEventsByLocation(r.Context(), id)
+		if err != nil {
+			logHTTPError(w, r, "could not load location events", http.StatusBadGateway)
+			return
+		}
 		// A parent (building) page aggregates events across all its rooms
 		// (#687) — a room is a child Location, so its events live under its
 		// own location_id and wouldn't otherwise show up on the building page.
 		for _, child := range loc.Children {
-			childEvents, _ := client.GetEventsByLocation(r.Context(), child.ID)
+			childEvents, cErr := client.GetEventsByLocation(r.Context(), child.ID)
+			if cErr != nil {
+				logHTTPError(w, r, "could not load room events", http.StatusBadGateway)
+				return
+			}
 			events = append(events, childEvents...)
 		}
 		if len(loc.Children) > 0 {
@@ -2376,13 +2406,21 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			params.Set("q", search)
 		}
 
-		posts, _ := client.GetAllContactPosts(r.Context(), params)
+		posts, err := client.GetAllContactPosts(r.Context(), params)
+		if err != nil {
+			logHTTPError(w, r, "could not load board posts", http.StatusBadGateway)
+			return
+		}
 
 		// Reuse posts for the town dropdown when no filter narrowed the
 		// results; only fetch the unfiltered list separately if needed.
 		allPosts := posts
 		if len(params) > 0 {
-			allPosts, _ = client.GetAllContactPosts(r.Context(), url.Values{})
+			allPosts, err = client.GetAllContactPosts(r.Context(), url.Values{})
+			if err != nil {
+				logHTTPError(w, r, "could not load board posts", http.StatusBadGateway)
+				return
+			}
 		}
 		townSet := map[string]struct{}{}
 		for _, p := range allPosts {

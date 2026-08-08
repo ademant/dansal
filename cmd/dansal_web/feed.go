@@ -91,7 +91,11 @@ func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetEventsByOrg(r.Context(), actor.OrgID)
+		events, err := client.GetEventsByOrg(r.Context(), actor.OrgID)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
 		serveEventFeed(w, r, cfg, org.Name, events)
 	}
 }
@@ -116,7 +120,11 @@ func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetPublicEventsByMusician(r.Context(), found.ID)
+		events, err := client.GetPublicEventsByMusician(r.Context(), found.ID)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
 		serveEventFeed(w, r, cfg, found.Bandname, events)
 	}
 }
@@ -134,7 +142,11 @@ func feedInstructorHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetPublicEventsByInstructor(r.Context(), id)
+		events, err := client.GetPublicEventsByInstructor(r.Context(), id)
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
 		serveEventFeed(w, r, cfg, instructor.Name, events)
 	}
 }
@@ -159,7 +171,11 @@ func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		all, _ := client.GetEvents(r.Context(), "")
+		all, err := client.GetEvents(r.Context(), "")
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
 		var events []Event
 		for _, e := range all {
 			if e.Location != nil && e.Location.Location == found.Location {

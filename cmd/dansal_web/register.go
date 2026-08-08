@@ -83,8 +83,12 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			return
 		}
 		tokenThrottle.record(ip)
-		orgs, _ := client.GetOrganizations(r.Context())
-		info, _ := client.GetServiceInfo(r.Context())
+		orgs, err := client.GetOrganizations(r.Context())
+		info, err2 := client.GetServiceInfo(r.Context())
+		if err != nil || err2 != nil {
+			logHTTPError(w, r, "could not load register data", http.StatusBadGateway)
+			return
+		}
 		title := i18n.T(r, "register_title")
 		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 			Orgs:              orgs,

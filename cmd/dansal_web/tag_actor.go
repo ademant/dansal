@@ -73,7 +73,7 @@ func tagInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handler
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
 			writeJSONError(w, r, http.StatusBadRequest, "read error")
 			return

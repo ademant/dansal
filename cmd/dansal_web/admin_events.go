@@ -2567,7 +2567,10 @@ func loadDefaultDanceIDs(db *sql.DB) []int {
 		return nil
 	}
 	var ids []int
-	json.Unmarshal([]byte(raw), &ids)
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		log.Printf("could not parse default_dance_ids %q: %v", raw, err)
+		return nil
+	}
 	return ids
 }
 

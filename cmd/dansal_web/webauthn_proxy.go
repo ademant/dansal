@@ -55,7 +55,7 @@ func doProxyPost(ctx context.Context, client *DansalClient, apiPath, rawQuery, t
 // webauthnAuthedProxyDo is like webauthnProxyDo but forwards a Bearer token so
 // the API endpoint can verify the caller's identity.
 func webauthnAuthedProxyDo(cfg *Config, client *DansalClient, apiPath string, token string, w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
@@ -71,7 +71,7 @@ func webauthnAuthedProxyDo(cfg *Config, client *DansalClient, apiPath string, to
 }
 
 func webauthnProxyDo(cfg *Config, client *DansalClient, apiPath string, w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return

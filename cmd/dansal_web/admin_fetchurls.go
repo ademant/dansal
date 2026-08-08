@@ -114,6 +114,7 @@ func kuferConfigFromForm(r *http.Request) string {
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {
+		log.Printf("could not marshal kufer config: %v", err)
 		return ""
 	}
 	return string(b)

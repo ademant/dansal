@@ -26,8 +26,12 @@ type eventPageData struct {
 // fetchEventWithFallback fetches event id, preferring the authed endpoint when
 // a session token is present and falling back to the public one.
 func fetchEventWithFallback(r *http.Request, client *DansalClient, id int) (Event, error) {
-	if token := getSessionToken(r); token != "" {
-		if e, err := client.GetEventAuthed(r.Context(), id, token); err == nil {
+	// Only attempt the authed endpoint for a confirmed session (valid signed
+	// user cookie). A stale/invalid token cookie would otherwise make the
+	// authed call fail, then fall back to the public one — a doubled round
+	// trip on every such page view (perf #1032).
+	if getSessionUser(r) != nil {
+		if e, err := client.GetEventAuthed(r.Context(), id, getSessionToken(r)); err == nil {
 			return e, nil
 		}
 	}

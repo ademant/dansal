@@ -954,6 +954,16 @@ func (c *DansalClient) EventsTotal() int {
 	return c.eventsTotal
 }
 
+// RefreshEventsTotal re-syncs the shared events total with the server. It goes
+// through GetEvents(ctx, "")'s cached conditional-GET path, so it is free
+// (in-memory) while the events cache is fresh and costs at most one 304
+// round-trip per TTL window — never a full payload on an unchanged server.
+// Paging endpoints call it so their totals don't drift from page-load values
+// (perf #1032).
+func (c *DansalClient) RefreshEventsTotal(ctx context.Context) {
+	_, _ = c.GetEvents(ctx, "")
+}
+
 // maxEventsPages caps how many 1000-event pages GetAllFutureEvents will fetch,
 // so a data anomaly (e.g. a buggy importer flooding the table) can't turn one
 // feed request into an unbounded fetch loop.

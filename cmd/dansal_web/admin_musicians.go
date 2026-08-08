@@ -115,17 +115,18 @@ func musicianEditPath(id int) string {
 // and pings IndexNow for the musician page. Runs after the entity is saved so
 // the backend has an ID to attach the files to.
 func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id int) {
+	token := getSessionToken(r)
 	if file, header, ferr := r.FormFile("image"); ferr == nil {
 		data, _ := io.ReadAll(file)
 		file.Close()
-		if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+		if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, token); uerr != nil {
 			log.Printf("upload musician image error: %v", uerr)
 		}
 	}
 	if file, header, ferr := r.FormFile("avatar"); ferr == nil {
 		data, _ := io.ReadAll(file)
 		file.Close()
-		if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+		if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
 			log.Printf("upload musician avatar error: %v", uerr)
 		}
 	}

@@ -36,6 +36,11 @@ func eventsMoreHandler(tmpls *Templates, i18n *I18n, client *DansalClient) http.
 			return
 		}
 
+		// Refresh the shared total so pagination counters and the "all loaded"
+		// cutoff reflect the current server state, not the page-load snapshot
+		// (the after-path fetch alone doesn't update it; #1032).
+		client.RefreshEventsTotal(r.Context())
+
 		writeJSONResponse(w, http.StatusOK, eventsMoreResponse{
 			RowsHTML: rowsHTML,
 			Geo:      eventsToGeo(events),

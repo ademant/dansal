@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yuin/goldmark"
@@ -61,16 +62,59 @@ type TemplateData struct {
 	RelayActorURL          string // absolute ActivityPub actor URL of the relay actor, for a site-wide discovery link (#951)
 }
 
+// attentionCache serves the scoped "needs attention" counts from a short-TTL
+// cache keyed by user ID, so the nav badge doesn't block every page render on
+// a round-trip to the API. The 10s window matches siteSettingsCache and is
+// fine for a badge: admin actions that change the counts are visible within
+// a refresh or two (perf #1032).
+type attentionCache struct {
+	ttl time.Duration
+	mu  sync.Mutex
+	at  map[int]time.Time
+	val map[int]DashboardAttention
+}
+
+func newAttentionCache() *attentionCache {
+	return &attentionCache{
+		ttl: 10 * time.Second,
+		at:  make(map[int]time.Time),
+		val: make(map[int]DashboardAttention),
+	}
+}
+
+// get returns the cached attention for userID, ok=false when missing or stale.
+func (c *attentionCache) get(userID int) (DashboardAttention, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t, ok := c.at[userID]
+	if !ok || time.Since(t) > c.ttl {
+		return DashboardAttention{}, false
+	}
+	return c.val[userID], true
+}
+
+func (c *attentionCache) put(userID int, a DashboardAttention) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.at[userID] = time.Now()
+	c.val[userID] = a
+}
+
 // dashboardAttentionMiddleware fetches the scoped "needs attention" counts for
 // logged-in admin/user roles and stores them in the request context so tmplData
 // can inject them into every rendered page without each handler needing to ask.
+// The fetch is served from attentionCache so a slow API stalls at most one
+// request per user per 10s window instead of every page render (#1032).
 func dashboardAttentionMiddleware(client *DansalClient) func(http.Handler) http.Handler {
+	cache := newAttentionCache()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			su := getSessionUser(r)
 			if su != nil && (su.Role == "admin" || su.Role == "user") {
-				token := getSessionToken(r)
-				if att, err := client.GetDashboardAttention(r.Context(), token); err == nil {
+				if att, ok := cache.get(su.ID); ok {
+					r = r.WithContext(context.WithValue(r.Context(), ctxDashboardAttention, att))
+				} else if att, err := client.GetDashboardAttention(r.Context(), getSessionToken(r)); err == nil {
+					cache.put(su.ID, att)
 					r = r.WithContext(context.WithValue(r.Context(), ctxDashboardAttention, att))
 				}
 			}
@@ -928,21 +972,35 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.GetEventsByLocation(r.Context(), id)
-		if err != nil {
-			logHTTPError(w, r, "could not load location events", http.StatusBadGateway)
-			return
-		}
 		// A parent (building) page aggregates events across all its rooms
 		// (#687) — a room is a child Location, so its events live under its
 		// own location_id and wouldn't otherwise show up on the building page.
+		// Fetch the parent and every room in parallel instead of one N+1
+		// round-trip per child (perf #1032).
+		ids := []int{id}
 		for _, child := range loc.Children {
-			childEvents, cErr := client.GetEventsByLocation(r.Context(), child.ID)
-			if cErr != nil {
-				logHTTPError(w, r, "could not load room events", http.StatusBadGateway)
-				return
+			ids = append(ids, child.ID)
+		}
+		eventsByLoc := make([][]Event, len(ids))
+		fns := make([]func() error, len(ids))
+		for i, lid := range ids {
+			i, lid := i, lid
+			fns[i] = func() error {
+				ev, eErr := client.GetEventsByLocation(r.Context(), lid)
+				if eErr != nil {
+					return eErr
+				}
+				eventsByLoc[i] = ev
+				return nil
 			}
-			events = append(events, childEvents...)
+		}
+		if err := fetchParallel(fns...); err != nil {
+			logHTTPError(w, r, "could not load location events", http.StatusBadGateway)
+			return
+		}
+		var events []Event
+		for _, ev := range eventsByLoc {
+			events = append(events, ev...)
 		}
 		if len(loc.Children) > 0 {
 			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
@@ -1185,21 +1243,40 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			params.Set("q", search)
 		}
 
-		posts, err := client.GetAllContactPosts(r.Context(), params)
-		if err != nil {
-			logHTTPError(w, r, "could not load board posts", http.StatusBadGateway)
-			return
-		}
-
-		// Reuse posts for the town dropdown when no filter narrowed the
-		// results; only fetch the unfiltered list separately if needed.
-		allPosts := posts
+		var posts, allPosts []ContactPost
 		if len(params) > 0 {
-			allPosts, err = client.GetAllContactPosts(r.Context(), url.Values{})
+			// Filtered view: the town dropdown needs the unfiltered list, so
+			// run both fetches concurrently instead of back-to-back (#1032).
+			err := fetchParallel(
+				func() error {
+					p, eErr := client.GetAllContactPosts(r.Context(), params)
+					if eErr != nil {
+						return eErr
+					}
+					posts = p
+					return nil
+				},
+				func() error {
+					p, eErr := client.GetAllContactPosts(r.Context(), url.Values{})
+					if eErr != nil {
+						return eErr
+					}
+					allPosts = p
+					return nil
+				},
+			)
 			if err != nil {
 				logHTTPError(w, r, "could not load board posts", http.StatusBadGateway)
 				return
 			}
+		} else {
+			var err error
+			posts, err = client.GetAllContactPosts(r.Context(), params)
+			if err != nil {
+				logHTTPError(w, r, "could not load board posts", http.StatusBadGateway)
+				return
+			}
+			allPosts = posts
 		}
 		townSet := map[string]struct{}{}
 		for _, p := range allPosts {

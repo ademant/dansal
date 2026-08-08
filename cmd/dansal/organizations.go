@@ -235,15 +235,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	}
 	var args []any
 	where := false
-	addWhere := func(clause string, vals ...any) {
-		if !where {
-			query += " WHERE " + clause
-			where = true
-		} else {
-			query += " AND " + clause
-		}
-		args = append(args, vals...)
-	}
+	addWhere := newWhereAppender(&query, &where, &args)
 	if name := q.Get("name"); name != "" {
 		addWhere(`LOWER(organizations.name) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
@@ -294,10 +286,7 @@ func writeOrgsAtom(w http.ResponseWriter, r *http.Request, orgs []Organization) 
 	host := r.Host
 	entries := make([]apiFeedEntry, 0, len(orgs))
 	for _, o := range orgs {
-		summary := o.Description
-		if len(summary) > 200 {
-			summary = summary[:200]
-		}
+		summary := truncateUTF8(o.Description, 200)
 		e := apiFeedEntry{
 			Title:   o.Name,
 			ID:      "https://" + host + "/api/v1/organizations/" + strconv.Itoa(o.ID),
@@ -414,6 +403,37 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(o)
 }
 
+// checkActorNameAvailable enforces the actor_name uniqueness/reserved-word
+// rules shared by updateOrganization (PUT) and patchOrganization (PATCH)
+// (#1012) — writes the error response and returns false on conflict.
+// excludeID is the organization's own id so renaming to the name it already
+// has doesn't self-conflict.
+func checkActorNameAvailable(w http.ResponseWriter, actorName, excludeID string) bool {
+	if actorName == "relay" {
+		writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
+		return false
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", actorName, excludeID).Scan(&n)
+	if n > 0 {
+		writeError(w, "actor_name already in use", http.StatusConflict)
+		return false
+	}
+	return true
+}
+
+// writeOrganizationFields runs the UPDATE shared by updateOrganization (PUT)
+// and patchOrganization (PATCH) — both end up replacing the same editable
+// columns on o (#1012).
+func writeOrganizationFields(id string, o Organization, updatedBy string) error {
+	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
+	_, err := db.Exec(
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), updatedBy, id,
+	)
+	return err
+}
+
 // PUT /api/v1/organizations/{id}
 // Admins may update all fields. Org members with role user may update
 // description, contact_email, and social media fields only.
@@ -448,17 +468,8 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if callerRole == RoleAdmin {
-		if req.ActorName != "" {
-			if req.ActorName == "relay" {
-				writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
-				return
-			}
-			var n int
-			db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", req.ActorName, id).Scan(&n)
-			if n > 0 {
-				writeError(w, "actor_name already in use", http.StatusConflict)
-				return
-			}
+		if req.ActorName != "" && !checkActorNameAvailable(w, req.ActorName, id) {
+			return
 		}
 		if req.Name != "" {
 			o.Name = req.Name
@@ -475,11 +486,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
 	o.ChatLinks = filterChatLinks(req.ChatLinks)
-	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
-	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), resolveDisplayName(callerID), id,
-	); err != nil {
+	if err := writeOrganizationFields(id, o, resolveDisplayName(callerID)); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
@@ -525,14 +532,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 	}
 	if callerRole == RoleAdmin {
 		if req.ActorName != nil {
-			if *req.ActorName == "relay" {
-				writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
-				return
-			}
-			var n int
-			db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", *req.ActorName, id).Scan(&n)
-			if n > 0 {
-				writeError(w, "actor_name already in use", http.StatusConflict)
+			if !checkActorNameAvailable(w, *req.ActorName, id) {
 				return
 			}
 			o.ActorName = *req.ActorName
@@ -571,11 +571,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 	if req.ChatLinks != nil {
 		o.ChatLinks = filterChatLinks(*req.ChatLinks)
 	}
-	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
-	if _, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), resolveDisplayName(callerID), id,
-	); err != nil {
+	if err := writeOrganizationFields(id, o, resolveDisplayName(callerID)); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}

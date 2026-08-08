@@ -120,24 +120,15 @@ func tecEventToRequest(te tecEvent, src FetchSource, allowOrgLookup bool) (Event
 		}
 	}
 
-	tags := make([]string, 0, len(te.Categories)+len(src.Tags))
-	seen := make(map[string]bool)
+	feedTags := make([]string, 0, len(te.Categories))
 	for _, c := range te.Categories {
 		slug := c.Slug
 		if slug == "" {
 			slug = strings.ToLower(strings.ReplaceAll(c.Name, " ", "-"))
 		}
-		if slug != "" && !seen[slug] {
-			seen[slug] = true
-			tags = append(tags, slug)
-		}
+		feedTags = append(feedTags, slug)
 	}
-	for _, t := range src.Tags {
-		if t != "" && !seen[t] {
-			seen[t] = true
-			tags = append(tags, t)
-		}
-	}
+	tags := mergeTags(feedTags, src.Tags)
 
 	var orgID *int
 	if src.OrganizationID != nil {
@@ -225,40 +216,28 @@ func importFromTECJSON(ctx context.Context, src FetchSource) ([]Event, ImportCou
 		}
 	}
 
-	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
-
-	td := parseTemplateData(src.TemplateData)
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, ImportCounts{}, err
-	}
-	defer tx.Rollback()
-
+	// TEC needs the paginated fetch above before entries exist to import, so
+	// it can't go through importParsedFeed like the single-request formats —
+	// but the transaction/savepoint/commit skeleton is identical, so build
+	// the request list first and hand it to the same shared importEntries
+	// (#1006) the other importers use.
 	now := time.Now().UTC()
-	var allEvents []Event
-	var counts ImportCounts
-
+	var reqs []EventCreateRequest
 	for _, te := range allTECEvents {
 		req, ok := tecEventToRequest(te, src, true)
 		if !ok {
 			continue
 		}
-		if et, err2 := time.Parse(time.RFC3339, req.EndTime); err2 == nil && et.Before(now) {
+		if et, err := time.Parse(time.RFC3339, req.EndTime); err == nil && et.Before(now) {
 			continue
 		}
-		if err := withEntrySavepoint(tx, func() error {
-			_, err := importSingleEvent(tx, req, td, src.TemplateMode, &counts, &allEvents)
-			return err
-		}); err != nil {
-			counts.Failed++
-			logFailedImportEntry(src, req, err)
-			continue
-		}
+		reqs = append(reqs, req)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
-	}
-	return allEvents, counts, nil
+	return importEntries(ctx, src, reqs,
+		func(r EventCreateRequest) EventCreateRequest { return r },
+		func(tx querier, req EventCreateRequest, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
+			return err
+		})
 }

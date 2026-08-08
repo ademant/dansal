@@ -123,10 +123,6 @@ type EventWriteRequest struct {
 	ImageAIGenerated   bool                 `json:"image_ai_generated,omitempty"`
 }
 
-type EventUpdateRequest struct {
-	EventWriteRequest
-}
-
 // EventMergePatchRequest is the body accepted by PATCH /api/v1/events/{id}
 // (Content-Type: application/merge-patch+json — RFC 7396). Every field is a
 // pointer: an omitted key leaves the existing value unchanged; a present key
@@ -713,24 +709,6 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		*args = append(*args, town)
 	}
 	return nil
-}
-
-// applyPagination appends ORDER BY + LIMIT/OFFSET clauses.
-func applyPagination(r *http.Request, query *string, args *[]any) {
-	q := r.URL.Query()
-	limit, offset := 100, 0
-	if l := q.Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 1000 {
-			limit = parsed
-		}
-	}
-	if o := q.Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-	*query += " ORDER BY e.start_time ASC LIMIT ? OFFSET ?"
-	*args = append(*args, limit, offset)
 }
 
 // applyListPagination appends "ORDER BY <orderBy> LIMIT ? OFFSET ?" to a list query.
@@ -1604,7 +1582,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	var totalCount int
 	db.QueryRow("SELECT COUNT(*) FROM ("+query+")", args...).Scan(&totalCount)
 
-	applyPagination(r, &query, &args)
+	applyListPagination(r, "e.start_time ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -1668,10 +1646,7 @@ func writeEventsAtom(w http.ResponseWriter, r *http.Request, events []Event) {
 		if updatedAt == "" {
 			updatedAt = ev.CreatedAt
 		}
-		summary := ev.Description
-		if len(summary) > 300 {
-			summary = summary[:300]
-		}
+		summary := truncateUTF8(ev.Description, 300)
 		e := apiFeedEntry{
 			Title:   ev.Title,
 			ID:      "https://" + host + "/api/v1/events/" + strconv.Itoa(ev.ID),
@@ -1827,10 +1802,9 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i := range requests {
-		syncEventTypeTags(&requests[i].EventWriteRequest)
-	}
-
+	// syncEventTypeTags is not called here — createEventFromRequest already
+	// calls it per-request (#1015), and nothing between here and that call
+	// depends on the synced tags/booleans.
 	for _, req := range requests {
 		if !validFood(req.Food) {
 			writeError(w, "invalid food value", http.StatusBadRequest)
@@ -2042,7 +2016,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req EventUpdateRequest
+	var req EventWriteRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
@@ -2101,7 +2075,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	syncEventTypeTags(&req.EventWriteRequest)
+	syncEventTypeTags(&req)
 
 	locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 	if err != nil {
@@ -2769,7 +2743,6 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 				orgs := userOrgSet(callerID)
 				if len(orgs) == 1 {
 					for id := range orgs {
-						id := id
 						targetOrgID = &id
 					}
 				} else if len(orgs) > 1 {

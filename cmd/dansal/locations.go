@@ -387,15 +387,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	var args []any
 	where := false
 
-	addWhere := func(clause string, vals ...any) {
-		if !where {
-			query += " WHERE " + clause
-			where = true
-		} else {
-			query += " AND " + clause
-		}
-		args = append(args, vals...)
-	}
+	addWhere := newWhereAppender(&query, &where, &args)
 
 	if country := q.Get("country"); country != "" {
 		codes, err := parseCountryCodes(country)
@@ -829,6 +821,74 @@ func checkLocationWriteAccess(w http.ResponseWriter, callerID int, requesterRole
 	return true
 }
 
+// checkParentIDValid enforces the shared parent_id rules used by putLocation
+// (PUT) and patchLocation (PATCH) (#1012): a location can't be its own
+// parent, and the parent must itself be top-level (no grandparent chains).
+// Writes the error response and returns false on violation.
+func checkParentIDValid(w http.ResponseWriter, parentID *int, selfID int) bool {
+	if parentID == nil {
+		return true
+	}
+	if *parentID == selfID {
+		writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
+		return false
+	}
+	var parentParentID sql.NullInt64
+	if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *parentID).Scan(&parentParentID); err == sql.ErrNoRows {
+		writeError(w, "parent_id not found", http.StatusBadRequest)
+		return false
+	} else if err != nil {
+		writeInternalError(w, err)
+		return false
+	}
+	if parentParentID.Valid {
+		writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// checkOsmIDAvailable enforces the shared osm_id/osm_type uniqueness check
+// used by putLocation (PUT) and patchLocation (PATCH) (#1012) — a location
+// already imported from the same OSM object must not be duplicated. Writes
+// the 409 response (with the conflicting id) and returns false on conflict.
+func checkOsmIDAvailable(w http.ResponseWriter, osmType string, osmID *int64, selfID string) bool {
+	if osmID == nil || osmType == "" {
+		return true
+	}
+	var existingID int
+	if db.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=? AND id!=?", osmType, *osmID, selfID).Scan(&existingID) == nil {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
+		return false
+	}
+	return true
+}
+
+// locationUpdateFields holds the columns shared by putLocation (PUT) and
+// patchLocation (PATCH)'s otherwise-identical final UPDATE (#1012).
+type locationUpdateFields struct {
+	Location, ShortName, Address, Zipcode, Town, Country, CountryCode, Region string
+	Latitude, Longitude                                                       *float64
+	Internetsite                                                              string
+	OsmID                                                                     *int64
+	OsmType, Geohash, WikidataID, MBPlaceID, NotesMd                          string
+	Attributes                                                                map[string]bool
+	Parking, FloorCondition                                                   string
+	NoStreetShoes                                                             bool
+	ParentID                                                                  *int
+	Capacity, SizeSqm                                                         *int
+	PlanX, PlanY                                                              *float64
+}
+
+func writeLocationFields(id string, f locationUpdateFields, updatedBy string) error {
+	_, err := db.Exec(
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		f.Location, f.ShortName, f.Address, f.Zipcode, f.Town, f.Country, f.CountryCode, f.Region, f.Latitude, f.Longitude, f.Internetsite, f.OsmID, f.OsmType, f.Geohash, f.WikidataID, f.MBPlaceID, f.NotesMd, attrsJSON(f.Attributes), f.Parking, f.FloorCondition, f.NoStreetShoes, f.ParentID, f.Capacity, f.SizeSqm, f.PlanX, f.PlanY, updatedBy, id,
+	)
+	return err
+}
+
 // PUT /api/v1/locations/{id} — full replace. Requires the complete object;
 // fields omitted from the body are cleared to their zero value, matching PUT
 // semantics elsewhere (e.g. events).
@@ -871,46 +931,30 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
-	if req.ParentID != nil {
-		if strconv.Itoa(*req.ParentID) == id {
-			writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
-			return
-		}
-		var parentParentID sql.NullInt64
-		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *req.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
-			writeError(w, "parent_id not found", http.StatusBadRequest)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		if parentParentID.Valid {
-			writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
-			return
-		}
+	idInt, _ := strconv.Atoi(id)
+	if !checkParentIDValid(w, req.ParentID, idInt) {
+		return
 	}
-
-	if req.OsmID != nil && req.OsmType != "" {
-		var existingID int
-		if db.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=? AND id!=?", req.OsmType, *req.OsmID, id).Scan(&existingID) == nil {
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
-			return
-		}
+	if !checkOsmIDAvailable(w, req.OsmType, req.OsmID, id) {
+		return
 	}
 
 	gh := ""
 	if req.Latitude != nil && req.Longitude != nil {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
 	}
-	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, gh, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, req.PlanX, req.PlanY, resolveDisplayName(callerID), id,
-	); err != nil {
+	if err := writeLocationFields(id, locationUpdateFields{
+		Location: req.Location, ShortName: req.ShortName, Address: req.Address, Zipcode: req.Zipcode,
+		Town: req.Town, Country: req.Country, CountryCode: req.CountryCode, Region: req.Region,
+		Latitude: req.Latitude, Longitude: req.Longitude, Internetsite: req.Internetsite,
+		OsmID: req.OsmID, OsmType: req.OsmType, Geohash: gh, WikidataID: req.WikidataID, MBPlaceID: req.MBPlaceID,
+		NotesMd: req.NotesMd, Attributes: req.Attributes, Parking: req.Parking, FloorCondition: req.FloorCondition,
+		NoStreetShoes: req.NoStreetShoes, ParentID: req.ParentID, Capacity: req.Capacity, SizeSqm: req.SizeSqm,
+		PlanX: req.PlanX, PlanY: req.PlanY,
+	}, resolveDisplayName(callerID)); err != nil {
 		writeInternalError(w, err)
 		return
 	}
-	idInt, _ := strconv.Atoi(id)
 	syncLocationOrgs(idInt, req.OrganizationIDs)
 	syncLocationAliases(idInt, req.Aliases)
 
@@ -1057,42 +1101,26 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		loc.PlanY = req.PlanY
 	}
 
-	if loc.ParentID != nil {
-		if *loc.ParentID == loc.ID {
-			writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
-			return
-		}
-		var parentParentID sql.NullInt64
-		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *loc.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
-			writeError(w, "parent_id not found", http.StatusBadRequest)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		if parentParentID.Valid {
-			writeError(w, "parent_id must reference a top-level location, not another child", http.StatusBadRequest)
-			return
-		}
+	if !checkParentIDValid(w, loc.ParentID, loc.ID) {
+		return
 	}
-
-	if loc.OsmID != nil && loc.OsmType != "" {
-		var existingID int
-		if db.QueryRow("SELECT id FROM locations WHERE osm_type=? AND osm_id=? AND id!=?", loc.OsmType, *loc.OsmID, loc.ID).Scan(&existingID) == nil {
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
-			return
-		}
+	if !checkOsmIDAvailable(w, loc.OsmType, loc.OsmID, strconv.Itoa(loc.ID)) {
+		return
 	}
 
 	gh := loc.Geohash
 	if loc.Latitude != nil && loc.Longitude != nil {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
 	}
-	if _, err := db.Exec(
-		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Internetsite, loc.OsmID, loc.OsmType, gh, loc.WikidataID, loc.MBPlaceID, loc.NotesMd, attrsJSON(loc.Attributes), loc.Parking, loc.FloorCondition, loc.NoStreetShoes, loc.ParentID, loc.Capacity, loc.SizeSqm, loc.PlanX, loc.PlanY, resolveDisplayName(callerID), loc.ID,
-	); err != nil {
+	if err := writeLocationFields(id, locationUpdateFields{
+		Location: loc.Location, ShortName: loc.ShortName, Address: loc.Address, Zipcode: loc.Zipcode,
+		Town: loc.Town, Country: loc.Country, CountryCode: loc.CountryCode, Region: loc.Region,
+		Latitude: loc.Latitude, Longitude: loc.Longitude, Internetsite: loc.Internetsite,
+		OsmID: loc.OsmID, OsmType: loc.OsmType, Geohash: gh, WikidataID: loc.WikidataID, MBPlaceID: loc.MBPlaceID,
+		NotesMd: loc.NotesMd, Attributes: loc.Attributes, Parking: loc.Parking, FloorCondition: loc.FloorCondition,
+		NoStreetShoes: loc.NoStreetShoes, ParentID: loc.ParentID, Capacity: loc.Capacity, SizeSqm: loc.SizeSqm,
+		PlanX: loc.PlanX, PlanY: loc.PlanY,
+	}, resolveDisplayName(callerID)); err != nil {
 		writeInternalError(w, err)
 		return
 	}

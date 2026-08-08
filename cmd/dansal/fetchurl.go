@@ -1148,15 +1148,7 @@ func applyTemplateToRequest(req *EventCreateRequest, td templateImportData, mode
 		if override {
 			req.Tags = td.Tags
 		} else {
-			seen := make(map[string]bool)
-			for _, t := range req.Tags {
-				seen[t] = true
-			}
-			for _, t := range td.Tags {
-				if !seen[t] {
-					req.Tags = append(req.Tags, t)
-				}
-			}
+			req.Tags = mergeTags(req.Tags, td.Tags)
 		}
 	}
 	if len(td.DanceIDs) > 0 && (override || len(req.Dances) == 0) {
@@ -1204,16 +1196,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 			continue
 		}
 
-		tags := parseICalCategories(vevent)
-		seen := make(map[string]bool)
-		for _, t := range tags {
-			seen[t] = true
-		}
-		for _, t := range src.Tags {
-			if !seen[t] {
-				tags = append(tags, t)
-			}
-		}
+		tags := mergeTags(parseICalCategories(vevent), src.Tags)
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)
 

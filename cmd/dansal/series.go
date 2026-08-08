@@ -158,18 +158,22 @@ func uniqueSlug(base string, excludeID int) string {
 	}
 }
 
-// scanSeries scans one row from event_series.
-func scanSeries(row interface{ Scan(...any) error }) (EventSeries, error) {
+// scanSeries scans one row from event_series. Extra destination pointers
+// (e.g. for an appended event_count column) can be passed via extra —
+// getSeries uses this to fold its own hand-copied 14-column scan into the
+// shared one (#1015).
+func scanSeries(row interface{ Scan(...any) error }, extra ...any) (EventSeries, error) {
 	var s EventSeries
 	var orgID, musicianID, instructorID, locID sql.NullInt64
 	var inviteToken sql.NullString
 	var templateData string
-	if err := row.Scan(
+	dest := []any{
 		&s.ID, &s.Slug, &s.Title, &s.Description,
 		&orgID, &musicianID, &instructorID, &locID,
 		&s.DefaultStartTime, &s.DefaultEndTime,
 		&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
-	); err != nil {
+	}
+	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return s, err
 	}
 	if orgID.Valid {
@@ -366,40 +370,13 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 
 	result := []EventSeries{}
 	for rows.Next() {
-		var s EventSeries
-		var orgID, musicianID, instructorID, locID sql.NullInt64
-		var inviteToken sql.NullString
-		var templateData string
-		if err := rows.Scan(
-			&s.ID, &s.Slug, &s.Title, &s.Description,
-			&orgID, &musicianID, &instructorID, &locID,
-			&s.DefaultStartTime, &s.DefaultEndTime,
-			&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
-			&s.EventCount,
-		); err != nil {
+		var eventCount int
+		s, err := scanSeries(rows, &eventCount)
+		if err != nil {
 			writeInternalError(w, err)
 			return
 		}
-		if orgID.Valid {
-			v := int(orgID.Int64)
-			s.OrganizationID = &v
-		}
-		if musicianID.Valid {
-			v := int(musicianID.Int64)
-			s.MusicianID = &v
-		}
-		if instructorID.Valid {
-			v := int(instructorID.Int64)
-			s.InstructorID = &v
-		}
-		if locID.Valid {
-			v := int(locID.Int64)
-			s.DefaultLocationID = &v
-		}
-		if inviteToken.Valid {
-			s.InviteToken = inviteToken.String
-		}
-		s.TemplateData = json.RawMessage(templateData)
+		s.EventCount = eventCount
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")

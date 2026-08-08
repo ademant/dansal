@@ -147,15 +147,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	var args []any
 	where := false
 
-	addWhere := func(clause string, vals ...any) {
-		if !where {
-			query += " WHERE " + clause
-			where = true
-		} else {
-			query += " AND " + clause
-		}
-		args = append(args, vals...)
-	}
+	addWhere := newWhereAppender(&query, &where, &args)
 
 	if orgIDStr := q.Get("organization_id"); orgIDStr != "" {
 		if orgID, err := strconv.Atoi(orgIDStr); err == nil {
@@ -228,10 +220,7 @@ func writeMusiciansAtom(w http.ResponseWriter, r *http.Request, musicians []Musi
 	host := r.Host
 	entries := make([]apiFeedEntry, 0, len(musicians))
 	for _, m := range musicians {
-		summary := m.Description
-		if len(summary) > 200 {
-			summary = summary[:200]
-		}
+		summary := truncateUTF8(m.Description, 200)
 		e := apiFeedEntry{
 			Title:   m.Bandname,
 			ID:      "https://" + host + "/api/v1/musicians/" + strconv.Itoa(m.ID),

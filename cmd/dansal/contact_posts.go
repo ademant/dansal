@@ -501,6 +501,17 @@ func checkContactPostManageToken(w http.ResponseWriter, postID int, token string
 	return true
 }
 
+// writeContactPostFields runs the UPDATE shared by putContactPost (PUT) and
+// updateContactPost (PATCH) — both end up replacing the same five editable
+// columns, just via different validation paths (#1012).
+func writeContactPostFields(postID int, typ, city, message, nickname string, persons int) error {
+	_, err := db.Exec(
+		"UPDATE contact_posts SET type=?, city=?, persons=?, message=?, nickname=? WHERE id=?",
+		typ, city, persons, message, nickname, postID,
+	)
+	return err
+}
+
 // PUT /api/v1/contact-posts/{id}?token={manage_token}
 // Public. Full replace of type, city, persons, message, nickname. Token must
 // match and post must not be expired. Authorization is the manage_token, not
@@ -539,10 +550,7 @@ func putContactPost(w http.ResponseWriter, r *http.Request) {
 		req.Persons = 1
 	}
 
-	if _, err := db.Exec(
-		"UPDATE contact_posts SET type=?, city=?, persons=?, message=?, nickname=? WHERE id=?",
-		req.Type, req.City, req.Persons, req.Message, req.Nickname, postID,
-	); err != nil {
+	if err := writeContactPostFields(postID, req.Type, req.City, req.Message, req.Nickname, req.Persons); err != nil {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
 	}
@@ -610,10 +618,7 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		persons = 1
 	}
 
-	if _, err := db.Exec(
-		"UPDATE contact_posts SET type=?, city=?, persons=?, message=?, nickname=? WHERE id=?",
-		type_, city, persons, message, nickname, postID,
-	); err != nil {
+	if err := writeContactPostFields(postID, type_, city, message, nickname, persons); err != nil {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
 	}

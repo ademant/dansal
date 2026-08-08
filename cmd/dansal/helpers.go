@@ -11,12 +11,45 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // sha256Hex returns the hex-encoded SHA-256 digest of s.
 func sha256Hex(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+// truncateUTF8 truncates s to at most max bytes without splitting a
+// multi-byte UTF-8 rune (a plain s[:max] byte slice can — #1015). Shared by
+// the Atom-feed summary truncation in events.go/organizations.go/
+// musicians.go.
+func truncateUTF8(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return s[:max]
+}
+
+// newWhereAppender returns a closure that appends "WHERE clause" (first
+// call) or "AND clause" (subsequent calls) to *query and the clause's bind
+// values to *args, tracking whether WHERE has been written yet via *where.
+// Shared by the getX list handlers (locations/organizations/instructors/
+// musicians) that build a WHERE clause incrementally from query-string
+// filters (#1015) — each previously hand-copied this exact closure.
+func newWhereAppender(query *string, where *bool, args *[]any) func(clause string, vals ...any) {
+	return func(clause string, vals ...any) {
+		if !*where {
+			*query += " WHERE " + clause
+			*where = true
+		} else {
+			*query += " AND " + clause
+		}
+		*args = append(*args, vals...)
+	}
 }
 
 // escapeLike escapes SQLite LIKE metacharacters (\, %, _) in s so that the

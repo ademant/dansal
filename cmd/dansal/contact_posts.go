@@ -360,6 +360,18 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Board session shortcut (#1047): anonymous poster with a valid verified-email
+	// session skips email verification and creates the post immediately visible.
+	bsID, bsEmail, bsNick, bsOk := lookupBoardSession(r)
+	if callerID == 0 && bsOk && bsEmail != "" {
+		if req.Email == "" {
+			req.Email = bsEmail
+		}
+		if req.Nickname == "" {
+			req.Nickname = bsNick
+		}
+	}
+
 	if req.Nickname == "" {
 		writeError(w, "nickname is required", http.StatusBadRequest)
 		return
@@ -437,6 +449,35 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		}
 		id, _ := result.LastInsertId()
 		log.Printf("contact_posts: logged-in user %d created verified post %d", callerID, id)
+		base := buildBaseURL(r)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":         id,
+			"message":    "Post created.",
+			"manage_url": base + "/contact-posts/manage/" + manageToken,
+			"first_post": isFirstLiveBoardPost(eventID, int(id)),
+		})
+		return
+	}
+
+	if bsOk && bsEmail != "" {
+		// Board session shortcut (#1047): skip email verification, create immediately.
+		var bsIDArg any
+		if bsID > 0 {
+			bsIDArg = bsID
+		}
+		result, err := db.Exec(
+			`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, board_session_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+			manageToken, bsIDArg, expiresAt.Unix(),
+		)
+		if err != nil {
+			writeError(w, "failed to create post", http.StatusInternalServerError)
+			return
+		}
+		id, _ := result.LastInsertId()
+		log.Printf("contact_posts: board-session post %d created verified (session %d)", id, bsID)
 		base := buildBaseURL(r)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{

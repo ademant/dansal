@@ -356,7 +356,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 
-		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL()); err != nil {
+		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r)); err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
 			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return

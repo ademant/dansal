@@ -2073,7 +2073,7 @@ func (c *DansalClient) GetAllContactPosts(ctx context.Context, params url.Values
 // baseURL is forwarded so the API can generate correct public links in emails.
 // CreateContactPost submits a board post and returns (telegramVerifyURL, firstPost, error).
 // firstPost is true when this was the first live post for the event (AP notification needed).
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL, sessionToken string) (string, bool, error) {
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any, baseURL, sessionToken, bsToken string) (string, bool, error) {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
@@ -2088,6 +2088,10 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 	if sessionToken != "" {
 		req.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
+	if bsToken != "" {
+		req.Header.Set("X-Board-Session", bsToken)
+	}
+	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", false, err
@@ -2179,6 +2183,127 @@ func (c *DansalClient) UpdateContactPost(ctx context.Context, id int, token stri
 		return apiErr(resp)
 	}
 	return nil
+}
+
+// ── board sessions (#1047) ───────────────────────────────────────────────────
+
+// BoardSessionInfo holds the email and expiry returned by GET /api/v1/board-sessions/me.
+type BoardSessionInfo struct {
+	Email     string `json:"email"`
+	Nickname  string `json:"nickname"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// CreateBoardSession calls POST /api/v1/board-sessions with manageToken as proof
+// of email ownership and returns the session token and its expiry string.
+func (c *DansalClient) CreateBoardSession(ctx context.Context, manageToken string) (token, expiresAt string, err error) {
+	body, _ := json.Marshal(map[string]string{"manage_token": manageToken})
+	req, e := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/board-sessions", bytes.NewReader(body))
+	if e != nil {
+		return "", "", e
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setInternalHeader(req)
+	resp, e := c.HTTP.Do(req)
+	if e != nil {
+		return "", "", e
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", apiErr(resp)
+	}
+	var out struct {
+		Token     string `json:"token"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if e := json.NewDecoder(resp.Body).Decode(&out); e != nil {
+		return "", "", e
+	}
+	return out.Token, out.ExpiresAt, nil
+}
+
+// GetBoardSessionMe validates a board session cookie token and returns its info.
+// bsToken is the raw token from the dsw_board cookie.
+func (c *DansalClient) GetBoardSessionMe(ctx context.Context, bsToken string) (BoardSessionInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/board-sessions/me", nil)
+	if err != nil {
+		return BoardSessionInfo{}, err
+	}
+	req.Header.Set("X-Board-Session", bsToken)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return BoardSessionInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return BoardSessionInfo{}, errNotFound
+	}
+	var info BoardSessionInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return BoardSessionInfo{}, err
+	}
+	return info, nil
+}
+
+// DeleteBoardSession removes the session identified by bsToken from the server.
+func (c *DansalClient) DeleteBoardSession(ctx context.Context, bsToken string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/board-sessions/me", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Board-Session", bsToken)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// RequestBoardSessionRenew asks the API to send a one-time renew link to email.
+// Always succeeds (enumeration resistance); errors are suppressed.
+func (c *DansalClient) RequestBoardSessionRenew(ctx context.Context, email, baseURL string) error {
+	body, _ := json.Marshal(map[string]string{"email": email, "base_url": baseURL})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/board-sessions/renew-request", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// UseBoardSessionRenew consumes a single-use renew token from the URL path and
+// returns a new board session token and expiry.
+func (c *DansalClient) UseBoardSessionRenew(ctx context.Context, renewToken string) (token, expiresAt string, err error) {
+	req, e := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/board-sessions/renew/"+renewToken, nil)
+	if e != nil {
+		return "", "", e
+	}
+	c.setInternalHeader(req)
+	resp, e := c.HTTP.Do(req)
+	if e != nil {
+		return "", "", e
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", apiErr(resp)
+	}
+	var out struct {
+		Token     string `json:"token"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if e := json.NewDecoder(resp.Body).Decode(&out); e != nil {
+		return "", "", e
+	}
+	return out.Token, out.ExpiresAt, nil
 }
 
 // ── bookings ─────────────────────────────────────────────────────────────────
@@ -2829,7 +2954,7 @@ func (c *DansalClient) SuggestEventPreview(ctx context.Context, body io.Reader, 
 }
 
 // SuggestEvent calls POST /api/v1/events/suggest.
-func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL string) error {
+func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL, bsToken string) error {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest", bytes.NewReader(body))
 	if err != nil {
@@ -2839,6 +2964,10 @@ func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, ba
 	if baseURL != "" {
 		httpReq.Header.Set("X-Base-URL", baseURL)
 	}
+	if bsToken != "" {
+		httpReq.Header.Set("X-Board-Session", bsToken)
+	}
+	c.setInternalHeader(httpReq)
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
 		return err
@@ -2928,7 +3057,7 @@ func (c *DansalClient) RejectPendingEdit(ctx context.Context, id int, token stri
 // baseURL is the public frontend URL (e.g. https://example.com), passed as X-Base-URL so the
 // API can build a correct email verification link pointing to the frontend.
 // Returns the raw JSON response (may contain telegram_token).
-func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL string) (map[string]string, error) {
+func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL, bsToken string) (map[string]string, error) {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/register", bytes.NewReader(body))
 	if err != nil {
@@ -2938,6 +3067,10 @@ func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL st
 	if baseURL != "" {
 		httpReq.Header.Set("X-Base-URL", baseURL)
 	}
+	if bsToken != "" {
+		httpReq.Header.Set("X-Board-Session", bsToken)
+	}
+	c.setInternalHeader(httpReq)
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
 		return nil, err

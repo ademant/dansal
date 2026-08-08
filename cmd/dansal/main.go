@@ -313,6 +313,7 @@ func startTokenCleanup() {
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", now)
 			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", now)
 			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", now)
+			cleanExpiredBoardSessions(now)
 			if config != nil && config.Server.SessionIdleTimeoutMins > 0 {
 				idleCutoff := now - int64(config.Server.SessionIdleTimeoutMins*60)
 				db.Exec("DELETE FROM tokens WHERE last_seen_at IS NOT NULL AND last_seen_at < ?", idleCutoff)
@@ -1715,6 +1716,55 @@ func migrateDB() {
 				created_at      INTEGER NOT NULL DEFAULT (unixepoch())
 			)`)
 			db.Exec(`CREATE INDEX IF NOT EXISTS idx_contact_post_images_post_id ON contact_post_images(contact_post_id)`)
+		}
+	}
+	if !applied(26) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS verified_email_sessions (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			token_hash      TEXT    NOT NULL UNIQUE,
+			email           TEXT    NOT NULL,
+			nickname        TEXT    NOT NULL DEFAULT '',
+			created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+			absolute_expiry INTEGER NOT NULL,
+			expires_at      INTEGER NOT NULL,
+			last_seen_at    INTEGER NOT NULL DEFAULT (unixepoch())
+		)`)
+		db.Exec(`CREATE TABLE IF NOT EXISTS verified_email_session_renew_tokens (
+			token_hash TEXT    PRIMARY KEY,
+			email      TEXT    NOT NULL,
+			expires_at INTEGER NOT NULL
+		)`)
+		db.Exec("ALTER TABLE contact_posts ADD COLUMN board_session_id INTEGER")
+		mark(26)
+	}
+	// Safety net: ensure v26 tables exist even if migration was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='verified_email_sessions'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS verified_email_sessions (
+				id              INTEGER PRIMARY KEY AUTOINCREMENT,
+				token_hash      TEXT    NOT NULL UNIQUE,
+				email           TEXT    NOT NULL,
+				nickname        TEXT    NOT NULL DEFAULT '',
+				created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+				absolute_expiry INTEGER NOT NULL,
+				expires_at      INTEGER NOT NULL,
+				last_seen_at    INTEGER NOT NULL DEFAULT (unixepoch())
+			)`)
+			db.Exec(`CREATE TABLE IF NOT EXISTS verified_email_session_renew_tokens (
+				token_hash TEXT    PRIMARY KEY,
+				email      TEXT    NOT NULL,
+				expires_at INTEGER NOT NULL
+			)`)
+		}
+	}
+	// Safety net: ensure board_session_id column exists even if v26 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('contact_posts') WHERE name='board_session_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE contact_posts ADD COLUMN board_session_id INTEGER")
 		}
 	}
 	// Safety net: backfill any events that slipped through (e.g. imported after
@@ -3440,6 +3490,21 @@ func createTables() error {
 		created_at      INTEGER NOT NULL DEFAULT (unixepoch())
 	);
 	CREATE INDEX IF NOT EXISTS idx_contact_post_images_post_id ON contact_post_images(contact_post_id);
+	CREATE TABLE IF NOT EXISTS verified_email_sessions (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		token_hash      TEXT    NOT NULL UNIQUE,
+		email           TEXT    NOT NULL,
+		nickname        TEXT    NOT NULL DEFAULT '',
+		created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+		absolute_expiry INTEGER NOT NULL,
+		expires_at      INTEGER NOT NULL,
+		last_seen_at    INTEGER NOT NULL DEFAULT (unixepoch())
+	);
+	CREATE TABLE IF NOT EXISTS verified_email_session_renew_tokens (
+		token_hash TEXT    PRIMARY KEY,
+		email      TEXT    NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
 	`
 	_, err := db.Exec(schema)
 	if err != nil {
@@ -3471,6 +3536,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(23)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(24)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(25)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(26)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3642,6 +3708,11 @@ func main() {
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}/contact-posts", optionsSchema[ContactPostCreateRequest])
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
 	smux.HandleFunc("POST /api/v1/contact-posts/resend-manage", resendContactManage)
+	smux.HandleFunc("POST /api/v1/board-sessions", createBoardSessionHandler)
+	smux.HandleFunc("GET /api/v1/board-sessions/me", getBoardSessionMeHandler)
+	smux.HandleFunc("DELETE /api/v1/board-sessions/me", deleteBoardSessionMeHandler)
+	smux.HandleFunc("POST /api/v1/board-sessions/renew-request", requestBoardSessionRenewHandler)
+	smux.HandleFunc("GET /api/v1/board-sessions/renew/{token}", useBoardSessionRenewHandler)
 	smux.HandleFunc("GET /api/v1/contact-post-images/{img_id}", getContactPostImage)
 	smux.HandleFunc("POST /api/v1/contact-posts/{id}/images", uploadContactPostImage)
 	smux.HandleFunc("DELETE /api/v1/contact-posts/{id}/images/{img_id}", deleteContactPostImage)

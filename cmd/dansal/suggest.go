@@ -274,6 +274,15 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	// suggestion is immediately visible to admins for review, same as
 	// before this token became a standing link.
 	emailVerified := !smtpConfigured
+	// Board session shortcut (#1047): if caller has a valid board session for
+	// the same email, skip email verification and notify admins immediately.
+	boardSessionVerified := false
+	if smtpConfigured && req.Email != "" {
+		if _, bsEmail, _, bsOk := lookupBoardSession(r); bsOk && strings.EqualFold(bsEmail, req.Email) {
+			emailVerified = true
+			boardSessionVerified = true
+		}
+	}
 	if suggestionToken != "" {
 		tokenArg = suggestionToken
 		// Token is a standing edit link valid until 3 days after the event ends.
@@ -366,7 +375,26 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if smtpConfigured {
+	if smtpConfigured && boardSessionVerified {
+		// Board session verified the email — send manage link only; no verify step.
+		base := buildBaseURL(r)
+		manageURL := base + "/events/suggest/manage/" + suggestionToken
+		subject := "Your event suggestion"
+		if req.Title != "" {
+			subject = fmt.Sprintf("Your event suggestion: %s", req.Title)
+		}
+		go func() {
+			msg := fmt.Sprintf(
+				"Thank you for suggesting an event! Your submission has been received.\n\n"+
+					"Use this link to review or edit it at any time:\n\n%s\n",
+				manageURL,
+			)
+			if _, err := SendEmail(req.Email, subject, msg, false); err != nil {
+				log.Printf("suggest: send manage email (board-session path): %v", err)
+			}
+		}()
+		go notifyAdminsSuggestion(req.Title, req.StartTime)
+	} else if smtpConfigured {
 		base := buildBaseURL(r)
 		verifyURL := base + "/events/suggest/verify/" + suggestionToken
 		manageURL := base + "/events/suggest/manage/" + suggestionToken

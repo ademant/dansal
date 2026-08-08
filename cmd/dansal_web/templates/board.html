@@ -6,6 +6,12 @@
 {{if .ResendSent}}
 <div class="board-resend-ok">{{$.Strings.T "board_resend_ok"}}</div>
 {{end}}
+{{if .RenewSent}}
+<div class="board-resend-ok">{{$.Strings.T "board_renew_ok"}}</div>
+{{end}}
+{{if .RenewDone}}
+<div class="board-resend-ok">{{$.Strings.T "board_session_active"}} ✓</div>
+{{end}}
 <form class="board-filter-form" method="get" action="/board">
   <div class="board-filter-bar">
     <div class="board-type-toggles">
@@ -96,6 +102,23 @@
       <div class="board-resend-row">
         <input type="email" id="resend-email" name="email" required placeholder="you@example.com" class="board-resend-input">
         <button type="submit">{{$.Strings.T "board_resend_submit"}}</button>
+      </div>
+    </form>
+  </div>
+</details>
+
+<details class="board-resend-panel">
+  <summary class="board-resend-summary">{{$.Strings.T "board_renew_title"}}</summary>
+  <div class="board-resend-body">
+    <p class="board-resend-title">{{$.Strings.T "board_renew_title"}}</p>
+    <p class="board-resend-body-text">{{$.Strings.T "board_renew_body"}}</p>
+    <form class="board-resend-form" method="post" action="/board/renew-session">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
+      <div style="display:none"><input type="text" name="phone2" tabindex="-1" autocomplete="off"></div>
+      <label class="board-resend-label" for="renew-email">{{$.Strings.T "board_resend_email_label"}}</label>
+      <div class="board-resend-row">
+        <input type="email" id="renew-email" name="email" required placeholder="you@example.com" class="board-resend-input">
+        <button type="submit">{{$.Strings.T "board_renew_submit"}}</button>
       </div>
     </form>
   </div>

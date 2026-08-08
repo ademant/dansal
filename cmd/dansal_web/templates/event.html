@@ -674,7 +674,7 @@
       </div>
       <div class="board-form-row">
         <label>{{$.Strings.T "board_nickname_label"}}</label>
-        <input type="text" name="nickname" required placeholder="{{$.Strings.T "board_nickname_placeholder"}}">
+        <input type="text" name="nickname" required placeholder="{{$.Strings.T "board_nickname_placeholder"}}"{{if .BoardSessionNickname}} value="{{.BoardSessionNickname}}"{{end}}>
       </div>
       <div class="board-contact-method board-contact-method-icons">
         <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">
@@ -685,8 +685,12 @@
         </label>
       </div>
       <div class="board-form-row" id="board-email-row">
+        {{if .BoardSessionEmail}}
+        <input type="email" name="email" value="{{.BoardSessionEmail}}" readonly>
+        {{else}}
         <input type="email" name="email" placeholder="{{$.Strings.T "board_email_placeholder"}}">
         <span class="board-hint">{{$.Strings.T "board_email_hint"}}</span>
+        {{end}}
       </div>
       <div class="board-form-row" id="board-telegram-row" style="display:none">
         <input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}">

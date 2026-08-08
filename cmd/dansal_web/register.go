@@ -190,7 +190,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		authThrottle.record(ip)
 		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
-		result, err := client.Register(r.Context(), req, cfg.publicBaseURL())
+		result, err := client.Register(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
 			errKey := "register_error_other"

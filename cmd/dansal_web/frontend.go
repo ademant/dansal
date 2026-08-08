@@ -241,6 +241,9 @@ type EventData struct {
 	BoardFormToken    string
 	PrevEvent         *Event
 	NextEvent         *Event
+	// Board session prefill (#1047): populated from dsw_board cookie when valid.
+	BoardSessionEmail    string
+	BoardSessionNickname string
 }
 
 type OrgData struct {
@@ -830,29 +833,41 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
 		pageTitle := eventPageTitle(event, lang)
+
+		// Board session prefill (#1047): fetch email/nickname from dsw_board cookie.
+		var bsEmail, bsNickname string
+		if bsToken := getBoardSessionToken(r); bsToken != "" && getSessionUser(r) == nil {
+			if info, err := client.GetBoardSessionMe(r.Context(), bsToken); err == nil {
+				bsEmail = info.Email
+				bsNickname = info.Nickname
+			}
+		}
+
 		td := tmplData(r, cfg, i18n, pageTitle, EventData{
-			Event:             event,
-			Org:               epd.org,
-			OrgSlug:           epd.slug,
-			TagMap:            epd.tagMap,
-			ContactPosts:      epd.posts,
-			CanManageBoard:    canManage,
-			BoardPosted:       flash.BoardPosted,
-			BoardTelegramURL:  flash.BoardTelegramURL,
-			BoardContacted:    flash.BoardContacted,
-			BoardContactTgURL: flash.BoardContactTgURL,
-			BoardError:        flash.BoardError,
-			BoardErrorMsg:     flash.BoardErrorMsg,
-			BoardErrorID:      flash.BoardErrorID,
-			BookingOK:         flash.BookingOK,
-			BookingError:      flash.BookingError,
-			BookingErrorMsg:   flash.BookingErrorMsg,
-			BookingErrorID:    flash.BookingErrorID,
-			UserOrgs:          epd.userOrgs,
-			BookFormToken:     issueFormToken(clientIP),
-			BoardFormToken:    issueFormToken(clientIP),
-			PrevEvent:         epd.prevEvent,
-			NextEvent:         epd.nextEvent,
+			Event:                event,
+			Org:                  epd.org,
+			OrgSlug:              epd.slug,
+			TagMap:               epd.tagMap,
+			ContactPosts:         epd.posts,
+			CanManageBoard:       canManage,
+			BoardPosted:          flash.BoardPosted,
+			BoardTelegramURL:     flash.BoardTelegramURL,
+			BoardContacted:       flash.BoardContacted,
+			BoardContactTgURL:    flash.BoardContactTgURL,
+			BoardError:           flash.BoardError,
+			BoardErrorMsg:        flash.BoardErrorMsg,
+			BoardErrorID:         flash.BoardErrorID,
+			BookingOK:            flash.BookingOK,
+			BookingError:         flash.BookingError,
+			BookingErrorMsg:      flash.BookingErrorMsg,
+			BookingErrorID:       flash.BookingErrorID,
+			UserOrgs:             epd.userOrgs,
+			BookFormToken:        issueFormToken(clientIP),
+			BoardFormToken:       issueFormToken(clientIP),
+			PrevEvent:            epd.prevEvent,
+			NextEvent:            epd.nextEvent,
+			BoardSessionEmail:    bsEmail,
+			BoardSessionNickname: bsNickname,
 		})
 		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), event.ImageURL)
 	}
@@ -1243,6 +1258,8 @@ type BoardData struct {
 	ShowLostFound bool
 	FormToken     string
 	ResendSent    bool // true when redirected back from POST /board/resend-manage
+	RenewSent     bool // true when redirected back from POST /board/renew-session
+	RenewDone     bool // true when redirected back from GET /board/renew-session/{token} (session set)
 }
 
 func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1341,6 +1358,8 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowLostFound: showLostFound,
 			FormToken:     issueFormToken(getClientIP(r)),
 			ResendSent:    q.Get("resend") == "1",
+			RenewSent:     q.Get("renew") == "1",
+			RenewDone:     q.Get("renewed") == "1",
 		}
 		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
 	}

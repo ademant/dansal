@@ -95,6 +95,26 @@
   </div>
   {{end}}
 
+  {{if .ShowRemember}}
+  <div class="board-remember-box">
+    <p class="board-remember-title">{{$.Strings.T "board_remember_title"}}</p>
+    <p class="board-remember-body">{{$.Strings.T "board_remember_body"}}</p>
+    <form method="post" action="/contact-posts/manage/{{.Token}}/remember">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
+      <button type="submit" class="btn-primary">{{$.Strings.T "board_remember_yes"}}</button>
+    </form>
+  </div>
+  {{end}}
+  {{if .BoardSession}}
+  <div class="board-session-box">
+    <p>{{$.Strings.T "board_session_active"}} <strong>{{.BoardSession.Email}}</strong></p>
+    <form method="post" action="/contact-posts/manage/{{.Token}}/forget">
+      <input type="hidden" name="_form_token" value="{{.FormToken}}">
+      <button type="submit" class="btn-forget">{{$.Strings.T "board_forget_btn"}}</button>
+    </form>
+  </div>
+  {{end}}
+
   <form class="manage-delete-form" method="post" action="/contact-posts/manage/{{.Token}}"
         onsubmit="return confirm('{{$.Strings.T "board_manage_delete_confirm"}}')">
     <input type="hidden" name="_form_token" value="{{.FormToken}}">
@@ -135,5 +155,10 @@
 .manage-img-add-btn{display:inline-block;padding:.35rem .9rem;border:1px dashed var(--border-mid);border-radius:5px;font-size:.88rem;color:var(--fg-2);background:var(--btn-bg)}
 .manage-img-add-btn:hover{border-color:var(--heading);color:var(--heading)}
 .manage-img-cap{font-size:.85rem;color:var(--fg-3);font-style:italic}
+.board-remember-box,.board-session-box{margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem}
+.board-remember-title{font-weight:600;margin-bottom:.25rem}
+.board-remember-body{font-size:.88rem;color:var(--fg-2);margin-bottom:.75rem}
+.btn-forget{padding:.35rem .9rem;background:transparent;color:var(--fg-2);border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;cursor:pointer}
+.btn-forget:hover{border-color:var(--heading);color:var(--heading)}
 </style>
 {{end}}

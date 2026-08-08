@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -122,6 +123,16 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	// requiring an email link. The admin sees a "no contact" badge.
 	contactFree := req.Email == "" && req.Telegram == ""
 
+	// Board session shortcut (#1047): if the caller has a valid board session for
+	// the same email address, skip email verification (treat as contact-free path
+	// for channel purposes while preserving email for admin review).
+	boardSessionVerified := false
+	if !contactFree && req.Email != "" {
+		if _, bsEmail, _, bsOk := lookupBoardSession(r); bsOk && strings.EqualFold(bsEmail, req.Email) {
+			boardSessionVerified = true
+		}
+	}
+
 	// Validate channel when contact info is provided.
 	var channel string
 	if !contactFree {
@@ -213,10 +224,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = *req.OrgID
 	}
 
-	// Contact-free registrations are marked verified immediately — no email link,
-	// so they enter the approval queue right away with a "no contact" badge.
+	// Contact-free and board-session-verified registrations are marked verified
+	// immediately — no email link needed, so they enter the approval queue right away.
 	verifiedInitial := 0
-	if contactFree {
+	if contactFree || boardSessionVerified {
 		verifiedInitial = 1
 	}
 
@@ -244,7 +255,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 
-	if contactFree {
+	if contactFree || boardSessionVerified {
 		go notifyApprovers(int(pendingID))
 		json.NewEncoder(w).Encode(map[string]string{
 			"status":             "pending_approval",

@@ -100,7 +100,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		publicThrottle.record(ip + "|" + r.UserAgent())
 		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
-		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r))
+		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r), getBoardSessionToken(r))
 		if err != nil {
 			log.Printf("dansal-web: board post failed ip_hash=%s path=%s type=%q city=%q message_len=%d err=%v",
 				hashIP(ip), r.URL.Path, r.FormValue("type"), r.FormValue("city"), len(r.FormValue("message")), err)
@@ -249,12 +249,14 @@ func contactBoardDeleteRedirect(w http.ResponseWriter, r *http.Request) {
 
 // ContactManageData is passed to the contact_manage template.
 type ContactManageData struct {
-	Token     string
-	Post      ContactManageResult
-	FormToken string
-	Updated   bool
-	Deleted   bool
-	NotFound  bool
+	Token        string
+	Post         ContactManageResult
+	FormToken    string
+	Updated      bool
+	Deleted      bool
+	NotFound     bool
+	BoardSession *BoardSessionInfo // non-nil when a valid board session cookie is present
+	ShowRemember bool              // true when post is live+verified and no session exists
 }
 
 // GET /contact-posts/manage/{token}
@@ -275,12 +277,27 @@ func contactManageGetHandler(cfg *Config, db *sql.DB, tmpls *Templates, client *
 
 		flash := flashTake(r.URL.Query().Get("msg"))
 		ip := getClientIP(r)
+
+		// Check for an existing board session cookie (#1047).
+		var boardSession *BoardSessionInfo
+		if bsToken := getBoardSessionToken(r); bsToken != "" {
+			if info, err := client.GetBoardSessionMe(r.Context(), bsToken); err == nil {
+				boardSession = &info
+			} else {
+				// Session expired or invalid — clear the stale cookie.
+				clearBoardSessionCookie(w)
+			}
+		}
+		showRemember := !post.Expired && post.EmailVerified && boardSession == nil
+
 		data := ContactManageData{
-			Token:     token,
-			Post:      post,
-			FormToken: issueFormToken(ip),
-			Updated:   flash.ManageUpdated,
-			Deleted:   flash.ManageDeleted,
+			Token:        token,
+			Post:         post,
+			FormToken:    issueFormToken(ip),
+			Updated:      flash.ManageUpdated,
+			Deleted:      flash.ManageDeleted,
+			BoardSession: boardSession,
+			ShowRemember: showRemember,
 		}
 		renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title, data))
 	}
@@ -432,6 +449,111 @@ func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			log.Printf("dansal-web: resend-manage failed ip_hash=%s err=%v", hashIP(ip), err)
 		}
 		http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
+	}
+}
+
+// POST /contact-posts/manage/{token}/remember — opt in to a board session (#1047).
+// Validates the manage token via the API (which proves email ownership), creates
+// a verified_email_sessions row, and sets the dsw_board HttpOnly cookie.
+func contactManageRememberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		ip := getClientIP(r)
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+
+		bsRaw, expiresAtStr, err := client.CreateBoardSession(r.Context(), token)
+		if err != nil {
+			log.Printf("dansal-web: board session create failed path=%s err=%v", r.URL.Path, err)
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		expiresAt := parseSessionExpiry(expiresAtStr)
+		setBoardSessionCookie(w, bsRaw, expiresAt)
+		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+	}
+}
+
+// POST /contact-posts/manage/{token}/forget — remove the board session cookie
+// and delete the server-side session row (#1047).
+func contactManageForgetHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		ip := getClientIP(r)
+		if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+
+		if bsToken := getBoardSessionToken(r); bsToken != "" {
+			if err := client.DeleteBoardSession(r.Context(), bsToken); err != nil {
+				log.Printf("dansal-web: board session delete failed path=%s err=%v", r.URL.Path, err)
+			}
+		}
+		clearBoardSessionCookie(w)
+		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+	}
+}
+
+// POST /board/renew-session — request a one-time renew link by email (#1047).
+// Always redirects to /board?renew=1 (enumeration resistance).
+func boardRenewRequestHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
+			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
+			return
+		}
+		switch guardFormSubmit(w, r, cfg, ip) {
+		case formGuardParseError:
+			http.Redirect(w, r, "/board", http.StatusSeeOther)
+			return
+		case formGuardHoneypot:
+			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
+			return
+		case formGuardBadToken:
+			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
+			http.Redirect(w, r, "/board", http.StatusSeeOther)
+			return
+		}
+
+		email := r.FormValue("email")
+		publicThrottle.record(ip + "|" + r.UserAgent())
+		globalEmailSendRate.record()
+
+		if err := client.RequestBoardSessionRenew(r.Context(), email, cfg.publicBaseURL()); err != nil {
+			log.Printf("dansal-web: board session renew-request failed ip_hash=%s err=%v", hashIP(ip), err)
+		}
+		http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
+	}
+}
+
+// GET /board/renew-session/{token} — consume a single-use renew link, issue a
+// new board session cookie, and redirect to /board (#1047).
+func boardRenewUseHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		renewToken := r.PathValue("token")
+		bsRaw, expiresAtStr, err := client.UseBoardSessionRenew(r.Context(), renewToken)
+		if err != nil {
+			// Invalid / expired: redirect to board with a neutral message.
+			http.Redirect(w, r, "/board", http.StatusSeeOther)
+			return
+		}
+		expiresAt := parseSessionExpiry(expiresAtStr)
+		setBoardSessionCookie(w, bsRaw, expiresAt)
+		http.Redirect(w, r, "/board?renewed=1", http.StatusSeeOther)
 	}
 }
 

@@ -92,6 +92,11 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			"email":    r.FormValue("email"),
 			"telegram": r.FormValue("telegram"),
 		}
+		// osm_id (#1041) is display-only for now — populated by the Nominatim
+		// city search, left unset if the visitor typed the city freehand.
+		if osmID, err := strconv.ParseInt(r.FormValue("osm_id"), 10, 64); err == nil {
+			post["osm_id"] = osmID
+		}
 
 		publicThrottle.record(ip + "|" + r.UserAgent())
 		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))

@@ -535,8 +535,9 @@ type Musician struct {
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
 	UpdatedBy    string `json:"updated_by,omitempty"`
 
-	FutureEventCount int `json:"future_event_count,omitempty"`
-	PastEventCount   int `json:"past_event_count,omitempty"`
+	FutureEventCount int    `json:"future_event_count,omitempty"`
+	PastEventCount   int    `json:"past_event_count,omitempty"`
+	NextEventAt      string `json:"next_event_at,omitempty"`
 }
 
 type Location struct {

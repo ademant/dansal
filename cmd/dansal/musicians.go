@@ -36,8 +36,9 @@ type Musician struct {
 	UpdatedAt    int64  `json:"updated_at,omitempty"`
 	UpdatedBy    string `json:"updated_by,omitempty"`
 
-	FutureEventCount int `json:"future_event_count,omitempty"`
-	PastEventCount   int `json:"past_event_count,omitempty"`
+	FutureEventCount int    `json:"future_event_count,omitempty"`
+	PastEventCount   int    `json:"past_event_count,omitempty"`
+	NextEventAt      string `json:"next_event_at,omitempty"`
 }
 
 type MusicianCreateRequest struct {
@@ -121,14 +122,17 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 
 	query := "SELECT " + musicianCols
 	if withCounts {
-		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0)`
+		query += `, COALESCE(ec.future_count,0), COALESCE(ec.past_count,0), ec.next_event_at`
 	}
 	query += " FROM musicians"
 	if withCounts {
+		// next_event_at (#1040) uses the same "future" definition as
+		// future_count: start_time > now AND published.
 		query += ` LEFT JOIN (
 			SELECT musician_id,
 				SUM(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS future_count,
-				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count
+				SUM(CASE WHEN start_time <= strftime('%s','now') AND is_published=1 THEN 1 ELSE 0 END) AS past_count,
+				MIN(CASE WHEN start_time > strftime('%s','now') AND is_published=1 THEN start_time END) AS next_event_at
 			FROM (
 				SELECT DISTINCT em.musician_id AS musician_id, e.id AS event_id, e.start_time AS start_time, e.is_published AS is_published
 				FROM event_musicians em JOIN events e ON e.id = em.event_id
@@ -193,8 +197,9 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var extra []any
 		var futureCount, pastCount int
+		var nextEventAt sql.NullInt64
 		if withCounts {
-			extra = append(extra, &futureCount, &pastCount)
+			extra = append(extra, &futureCount, &pastCount, &nextEventAt)
 		}
 		m, err := scanMusician(rows, extra...)
 		if err != nil {
@@ -204,6 +209,9 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		if withCounts {
 			m.FutureEventCount = futureCount
 			m.PastEventCount = pastCount
+			if nextEventAt.Valid {
+				m.NextEventAt = epochToLocal(nextEventAt.Int64)
+			}
 		}
 		musicians = append(musicians, m)
 	}

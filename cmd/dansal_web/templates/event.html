@@ -572,9 +572,16 @@
   {{end}}
 
   {{if .ContactPosts}}
+  <div class="board-filter-bar" id="board-filter-bar">
+    <button type="button" class="board-filter-btn active" data-filter="ride" title="{{$.Strings.T "board_ride_offer"}} / {{$.Strings.T "board_ride_request"}}">🚗</button>
+    <button type="button" class="board-filter-btn active" data-filter="sleep" title="{{$.Strings.T "board_sleep_offer"}} / {{$.Strings.T "board_sleep_request"}}">🏠</button>
+    <button type="button" class="board-filter-btn active" data-filter="ticket" title="{{$.Strings.T "board_ticket_offer"}} / {{$.Strings.T "board_ticket_request"}}">🎟️</button>
+    <button type="button" class="board-filter-btn active" data-filter="lost_item" title="{{$.Strings.T "board_lost_item"}}">🔍</button>
+    <button type="button" class="board-filter-btn active" data-filter="found_item" title="{{$.Strings.T "board_found_item"}}">📦</button>
+  </div>
   <div class="board-list">
     {{range .ContactPosts}}
-    <div class="board-item">
+    <div class="board-item" data-type="{{.Type}}">
       <div class="board-item-header">
         <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
         <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
@@ -593,9 +600,13 @@
       </div>
       <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact" onsubmit="return boardContactValidate(this)">
         <input type="hidden" name="_form_token" value="{{$.Data.BoardFormToken}}">
-        <div class="board-contact-method">
-          <label class="board-method-radio"><input type="radio" name="contact_method" value="email" checked onchange="boardContactToggle(this.closest('form'),this.value)"> {{$.Strings.T "board_email_label"}}</label>
-          <label class="board-method-radio"><input type="radio" name="contact_method" value="telegram" onchange="boardContactToggle(this.closest('form'),this.value)"> {{$.Strings.T "board_telegram_label"}}</label>
+        <div class="board-contact-method board-contact-method-icons">
+          <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">
+            <input type="radio" name="contact_method" value="email" checked onchange="boardContactToggle(this.closest('form'),this.value)"><span aria-hidden="true">✉️</span>
+          </label>
+          <label class="board-method-icon" data-value="telegram" title="{{$.Strings.T "board_telegram_label"}}">
+            <input type="radio" name="contact_method" value="telegram" onchange="boardContactToggle(this.closest('form'),this.value)"><span aria-hidden="true">✈️</span>
+          </label>
         </div>
         <div class="board-contact-email-row">
           <input type="email" name="email" placeholder="{{$.Strings.T "board_your_email"}}">
@@ -621,24 +632,36 @@
       <input type="hidden" name="_form_token" value="{{$.Data.BoardFormToken}}">
       <div class="board-form-row">
         <label>{{$.Strings.T "board_type_label"}}</label>
-        <select name="type" required onchange="boardTypeChanged(this.value)">
-          <option value="ride_offer">{{$.Strings.T "board_ride_offer"}}</option>
-          <option value="ride_request">{{$.Strings.T "board_ride_request"}}</option>
-          <option value="sleep_offer">{{$.Strings.T "board_sleep_offer"}}</option>
-          <option value="sleep_request">{{$.Strings.T "board_sleep_request"}}</option>
-          <option value="ticket_offer">{{$.Strings.T "board_ticket_offer"}}</option>
-          <option value="ticket_request">{{$.Strings.T "board_ticket_request"}}</option>
-          <option value="lost_item">{{$.Strings.T "board_lost_item"}}</option>
-          <option value="found_item">{{$.Strings.T "board_found_item"}}</option>
-        </select>
+        <div class="board-type-tabs" id="board-type-tabs">
+          <button type="button" class="board-type-tab active" data-type="ride_offer">🚗 {{$.Strings.T "board_ride_offer"}}</button>
+          <button type="button" class="board-type-tab" data-type="ride_request">🚗 {{$.Strings.T "board_ride_request"}}</button>
+          <button type="button" class="board-type-tab" data-type="sleep_offer">🏠 {{$.Strings.T "board_sleep_offer"}}</button>
+          <button type="button" class="board-type-tab" data-type="sleep_request">🏠 {{$.Strings.T "board_sleep_request"}}</button>
+          <button type="button" class="board-type-tab" data-type="ticket_offer">🎟️ {{$.Strings.T "board_ticket_offer"}}</button>
+          <button type="button" class="board-type-tab" data-type="ticket_request">🎟️ {{$.Strings.T "board_ticket_request"}}</button>
+          <button type="button" class="board-type-tab" data-type="lost_item">🔍 {{$.Strings.T "board_lost_item"}}</button>
+          <button type="button" class="board-type-tab" data-type="found_item">📦 {{$.Strings.T "board_found_item"}}</button>
+        </div>
+        <input type="hidden" name="type" id="board-type-input" value="ride_offer" required>
       </div>
       <div class="board-form-row" id="board-city-row">
         <label>{{$.Strings.T "board_city_label"}}</label>
-        <input type="text" name="city" required placeholder="{{$.Strings.T "board_city_placeholder"}}">
+        <div class="board-city-search">
+          <input type="text" id="board-city-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}">
+          <button type="button" id="board-city-search-btn">{{$.Strings.T "suggest_location_search_btn"}}</button>
+        </div>
+        <ul id="board-city-results" hidden></ul>
+        <input type="text" name="city" id="board-city-input" required placeholder="{{$.Strings.T "board_city_placeholder"}}">
+        <input type="hidden" name="osm_id" id="board-osm-id">
       </div>
-      <div class="board-form-row">
+      <div class="board-form-row" id="board-persons-row">
         <label id="board-persons-label">{{$.Strings.T "board_persons_label"}}</label>
-        <input type="number" name="persons" value="1" min="1" max="20" style="width:5rem">
+        <div class="board-persons-control" id="board-persons-control">
+          <button type="button" class="board-persons-btn" data-dir="-1" aria-label="-">−</button>
+          <span class="board-persons-value" id="board-persons-value">1</span>
+          <button type="button" class="board-persons-btn" data-dir="1" aria-label="+">+</button>
+        </div>
+        <input type="hidden" name="persons" id="board-persons-input" value="1">
       </div>
       <div class="board-form-row">
         <label>{{$.Strings.T "board_message_label"}}</label>
@@ -648,12 +671,12 @@
         <label>{{$.Strings.T "board_nickname_label"}}</label>
         <input type="text" name="nickname" required placeholder="{{$.Strings.T "board_nickname_placeholder"}}">
       </div>
-      <div class="board-contact-method">
-        <label class="board-method-radio">
-          <input type="radio" name="contact_method" value="email" checked onchange="boardToggleMethod(this.value)"> {{$.Strings.T "board_email_label"}}
+      <div class="board-contact-method board-contact-method-icons">
+        <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">
+          <input type="radio" name="contact_method" value="email" checked onchange="boardToggleMethod(this.value)"><span aria-hidden="true">✉️</span>
         </label>
-        <label class="board-method-radio">
-          <input type="radio" name="contact_method" value="telegram" onchange="boardToggleMethod(this.value)"> {{$.Strings.T "board_telegram_label"}}
+        <label class="board-method-icon" data-value="telegram" title="{{$.Strings.T "board_telegram_label"}}">
+          <input type="radio" name="contact_method" value="telegram" onchange="boardToggleMethod(this.value)"><span aria-hidden="true">✈️</span>
         </label>
       </div>
       <div class="board-form-row" id="board-email-row">
@@ -823,6 +846,27 @@
 .board-contact-form button:hover{background:#0d4a80}
 .hidden{display:none}
 .board-empty{color:var(--fg-faint);font-size:.9rem}
+.board-filter-bar{display:flex;gap:.4rem;margin-bottom:.75rem;flex-wrap:wrap}
+.board-filter-btn{padding:.3rem .6rem;font-size:1rem;line-height:1;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;cursor:pointer;opacity:.4;filter:grayscale(1)}
+.board-filter-btn.active{opacity:1;filter:none;border-color:var(--link);background:var(--tag-bg)}
+.board-type-tabs{display:flex;flex-wrap:wrap;gap:.4rem}
+.board-type-tab{padding:.35rem .7rem;font-size:.85rem;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;cursor:pointer;color:var(--fg)}
+.board-type-tab.active{border-color:var(--link);background:var(--tag-bg);color:var(--link);font-weight:600}
+.board-city-search{display:flex;gap:.4rem}
+.board-city-search input{flex:1}
+.board-city-search button{padding:.4rem .8rem;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:4px;font-size:.85rem;cursor:pointer;white-space:nowrap}
+#board-city-results{list-style:none;margin:.25rem 0 0;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);max-height:180px;overflow-y:auto}
+#board-city-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid var(--border-lite)}
+#board-city-results li:last-child{border-bottom:none}
+#board-city-results li:hover{background:var(--bg-hover)}
+.board-persons-control{display:flex;align-items:center;gap:.9rem;width:fit-content;touch-action:pan-y}
+.board-persons-btn{width:2rem;height:2rem;border-radius:50%;border:1px solid var(--border-mid);background:var(--bg-card);color:var(--fg);font-size:1.1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.board-persons-btn:hover{background:var(--bg-hover)}
+.board-persons-value{min-width:1.5rem;text-align:center;font-weight:600}
+.board-contact-method-icons{gap:.5rem}
+.board-method-icon{position:relative;display:flex;align-items:center;justify-content:center;width:2.4rem;height:2.4rem;border:1px solid var(--border-mid);border-radius:6px;background:var(--bg-card);cursor:pointer;font-size:1.1rem}
+.board-method-icon input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.board-method-icon.active{border-color:var(--link);background:var(--tag-bg)}
 .board-post-details{margin-top:1rem}
 .board-post-details summary{cursor:pointer;font-weight:600;font-size:.92rem;color:var(--link);list-style:none;padding:.4rem 0}
 .board-post-details summary::-webkit-details-marker{display:none}
@@ -901,10 +945,13 @@ var _boardLabelPlaces  = {{$.Strings.T "board_num_places_label" | jsStr}};
 var _boardLabelTickets = {{$.Strings.T "board_num_tickets_label" | jsStr}};
 function boardTypeChanged(type) {
   var cityRow = document.getElementById('board-city-row');
-  var cityInput = cityRow && cityRow.querySelector('input');
+  var cityInput = document.getElementById('board-city-input');
   var isTicket = type === 'ticket_offer' || type === 'ticket_request';
   if (cityRow) cityRow.style.display = isTicket ? 'none' : '';
   if (cityInput) cityInput.required = !isTicket;
+  var isLostFound = type === 'lost_item' || type === 'found_item';
+  var personsRow = document.getElementById('board-persons-row');
+  if (personsRow) personsRow.style.display = isLostFound ? 'none' : '';
   var lbl = document.getElementById('board-persons-label');
   if (lbl) {
     if (isTicket) lbl.textContent = _boardLabelTickets;
@@ -912,6 +959,129 @@ function boardTypeChanged(type) {
     else lbl.textContent = _boardLabelPersons;
   }
 }
+document.querySelectorAll('.board-type-tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var tabs = btn.closest('#board-type-tabs');
+    if (tabs) tabs.querySelectorAll('.board-type-tab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var input = document.getElementById('board-type-input');
+    if (input) input.value = btn.dataset.type;
+    boardTypeChanged(btn.dataset.type);
+  });
+});
+if (document.getElementById('board-type-input')) boardTypeChanged(document.getElementById('board-type-input').value);
+// Icon-based contact-method toggle (#1041): the radios still drive
+// boardToggleMethod/boardContactToggle unchanged, this just mirrors the
+// checked state onto the surrounding label's "active" class for styling.
+document.querySelectorAll('.board-method-icon input[type="radio"]').forEach(function(radio){
+  radio.addEventListener('change', function(){
+    var group = radio.closest('.board-contact-method-icons');
+    if (group) group.querySelectorAll('.board-method-icon').forEach(function(l){ l.classList.remove('active'); });
+    var label = radio.closest('.board-method-icon');
+    if (label) label.classList.add('active');
+  });
+});
+// Persons +/- control (#1041), click and horizontal swipe on mobile.
+document.querySelectorAll('.board-persons-control').forEach(function(ctrl){
+  var valueEl = ctrl.querySelector('.board-persons-value');
+  var input = document.getElementById('board-persons-input');
+  function setVal(n) {
+    n = Math.max(1, Math.min(20, n));
+    if (valueEl) valueEl.textContent = n;
+    if (input) input.value = n;
+  }
+  ctrl.querySelectorAll('.board-persons-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      setVal(parseInt(input.value, 10) + parseInt(btn.dataset.dir, 10));
+    });
+  });
+  var startX = null;
+  ctrl.addEventListener('touchstart', function(e){ startX = e.touches[0].clientX; }, {passive: true});
+  ctrl.addEventListener('touchend', function(e){
+    if (startX === null) return;
+    var dx = e.changedTouches[0].clientX - startX;
+    startX = null;
+    if (Math.abs(dx) < 30) return;
+    setVal(parseInt(input.value, 10) + (dx > 0 ? 1 : -1));
+  });
+});
+// Board type/list filter buttons (#1041) — client-side only, the API
+// already returns verified posts alone in creation order.
+(function(){
+  var bar = document.getElementById('board-filter-bar');
+  if (!bar) return;
+  function categoryOf(type) {
+    if (type.indexOf('ride') === 0) return 'ride';
+    if (type.indexOf('sleep') === 0) return 'sleep';
+    if (type.indexOf('ticket') === 0) return 'ticket';
+    return type; // lost_item / found_item
+  }
+  function applyFilter() {
+    var active = Array.prototype.map.call(bar.querySelectorAll('.board-filter-btn.active'), function(b){ return b.dataset.filter; });
+    document.querySelectorAll('.board-item').forEach(function(item){
+      item.style.display = active.indexOf(categoryOf(item.dataset.type)) !== -1 ? '' : 'none';
+    });
+  }
+  bar.querySelectorAll('.board-filter-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      btn.classList.toggle('active');
+      applyFilter();
+    });
+  });
+})();
+// Nominatim city search for the board post form (#1041), reusing the same
+// public API as events_suggest.html's location search.
+(function(){
+  var btn = document.getElementById('board-city-search-btn');
+  if (!btn) return;
+  var q = document.getElementById('board-city-q');
+  var ul = document.getElementById('board-city-results');
+  var cityInput = document.getElementById('board-city-input');
+  var osmInput = document.getElementById('board-osm-id');
+  var noResultsMsg = {{$.Strings.T "suggest_location_no_results" | jsStr}};
+  function search() {
+    var query = q.value.trim();
+    if (!query) return;
+    btn.disabled = true;
+    osmInput.value = '';
+    var lang = document.documentElement.lang || 'en';
+    var fetchP = fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5&addressdetails=1', {
+      headers: {'Accept-Language': lang}
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(results){
+      ul.innerHTML = '';
+      if (!results.length) {
+        var li = document.createElement('li');
+        li.textContent = noResultsMsg;
+        ul.appendChild(li); ul.hidden = false; return;
+      }
+      results.forEach(function(res){
+        var li = document.createElement('li');
+        li.textContent = res.display_name;
+        li.addEventListener('click', function(){
+          var a = res.address || {};
+          var city = a.city || a.town || a.village || a.municipality || '';
+          var district = a.suburb || a.city_district || a.neighbourhood || '';
+          cityInput.value = (city && district && district !== city) ? (city + ' - ' + district) : (city || res.display_name);
+          osmInput.value = res.osm_id || '';
+          ul.hidden = true;
+        });
+        ul.appendChild(li);
+      });
+      ul.hidden = false;
+    })
+    .catch(function(){});
+    Promise.all([fetchP, new Promise(function(r){ setTimeout(r, 2000); })])
+      .then(function(){ btn.disabled = false; })
+      .catch(function(){ btn.disabled = false; });
+  }
+  btn.addEventListener('click', search);
+  q.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); search(); } });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('#board-city-results') && e.target !== q) ul.hidden = true;
+  });
+})();
 function boardContainsLink(s) {
   var l = s.toLowerCase();
   return l.indexOf('http://') !== -1 || l.indexOf('https://') !== -1 || l.indexOf('mailto:') !== -1;

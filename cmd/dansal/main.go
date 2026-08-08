@@ -2114,6 +2114,17 @@ func migrateDB() {
 	// by public-listing checks going forward.
 	db.Exec("UPDATE events SET email_verified = 1 WHERE suggester_email = '' OR suggester_email IS NULL")
 	db.Exec("UPDATE events SET email_verified = 1 WHERE suggestion_token IS NULL OR suggestion_token = ''")
+
+	// #1041: contact_posts gain osm_id, populated by the board post form's
+	// Nominatim city search (display-only for now — used to disambiguate
+	// e.g. "Köln" vs "Köln-Ehrenfeld" in the city text itself).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('contact_posts') WHERE name='osm_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE contact_posts ADD COLUMN osm_id INTEGER")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3256,6 +3267,7 @@ func createTables() error {
 		event_id INTEGER NOT NULL,
 		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request','lost_item','found_item')),
 		city TEXT NOT NULL,
+		osm_id INTEGER,
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		nickname TEXT NOT NULL,

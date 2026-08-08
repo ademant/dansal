@@ -70,6 +70,30 @@ func isFirstLiveBoardPost(eventID, postID int) bool {
 	return count == 0
 }
 
+// wipeAndDeleteContactPost clears a post's private contact fields (email,
+// telegram_username, poster_telegram_chat_id, manage_token) before deleting
+// the row (#1041), rather than relying on the DELETE alone — a backup or
+// WAL snapshot taken between the two statements then already sees blanked
+// contact data instead of the real values, so nothing sensitive lingers in
+// backups/logs beyond the moment of deletion.
+func wipeAndDeleteContactPost(id int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		"UPDATE contact_posts SET email='', telegram_username=NULL, poster_telegram_chat_id=NULL, manage_token=NULL WHERE id=?",
+		id,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM contact_posts WHERE id=?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // isOrgMemberOfEvent returns true when userID is a member of the organisation
 // that owns the given event.
 func isOrgMemberOfEvent(userID, eventID int) bool {
@@ -96,6 +120,7 @@ var lostFoundTypes = map[string]bool{"lost_item": true, "found_item": true}
 type ContactPostCreateRequest struct {
 	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
 	City     string `json:"city"`
+	OsmID    *int64 `json:"osm_id"`
 	Persons  int    `json:"persons"`
 	Message  string `json:"message"`
 	Nickname string `json:"nickname"`
@@ -280,12 +305,17 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		userIDArg = callerID
 	}
 
+	var osmIDArg any
+	if req.OsmID != nil {
+		osmIDArg = *req.OsmID
+	}
+
 	if callerID > 0 {
 		// Logged-in: immediately verified, no email.
 		result, err := db.Exec(
-			`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, email_verified, user_id, expires_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-			eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+			`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, user_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 			manageToken, userIDArg, expiresAt.Unix(),
 		)
 		if err != nil {
@@ -314,9 +344,9 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		`INSERT INTO contact_posts (event_id, type, city, persons, message, nickname, email, telegram_username, manage_token, email_verified, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		eventID, req.Type, req.City, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+		`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 		manageToken, initialVerified, expiresAt.Unix(),
 	)
 	if err != nil {
@@ -614,7 +644,10 @@ func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Exec("DELETE FROM contact_posts WHERE id=?", id)
+	if err := wipeAndDeleteContactPost(id); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	log.Printf("contact_posts: self-deleted post %d via manage token", id)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -646,7 +679,10 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Exec("DELETE FROM contact_posts WHERE id=?", postID)
+	if err := wipeAndDeleteContactPost(postID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	log.Printf("contact_posts: admin/org deleted post %d by user %d", postID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }

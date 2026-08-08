@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -32,169 +34,63 @@ func instructorFromForm(r *http.Request) Instructor {
 	}
 }
 
-func adminInstructorsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		instructors, err := client.GetInstructors(r.Context())
-		if err != nil {
-			http.Error(w, "could not load instructors", http.StatusBadGateway)
-			return
-		}
-		title := i18n.T(r, "admin_instructors_title")
-		renderTemplate(w, tmpls.adminInstructors, tmplData(r, cfg, i18n, title, AdminInstructorsData{Instructors: instructors}))
-	}
+// instructorEntity wires the generic CRUD scaffold to the Instructor client API.
+var instructorEntity = adminEntity[Instructor]{
+	listPath:     "/admin/instructors",
+	editPath:     instructorEditPath,
+	listTmpl:     func(t *Templates) *template.Template { return t.adminInstructors },
+	editTmpl:     func(t *Templates) *template.Template { return t.adminInstructorEdit },
+	listTitleKey: "admin_instructors_title",
+	listData: func(items []Instructor) any {
+		return AdminInstructorsData{Instructors: items}
+	},
+	editData: func(i Instructor, isNew bool, errKey, from string) any {
+		return AdminInstructorEditData{Instructor: i, IsNew: isNew, ErrorKey: errKey, From: from}
+	},
+	listFn: func(ctx context.Context, client *DansalClient) ([]Instructor, error) {
+		return client.GetInstructors(ctx)
+	},
+	getFn: func(ctx context.Context, client *DansalClient, id int) (Instructor, error) {
+		return client.GetInstructor(ctx, id)
+	},
+	createFn: func(ctx context.Context, client *DansalClient, i Instructor, token string) (Instructor, error) {
+		return client.CreateInstructor(ctx, i, token)
+	},
+	updateFn: func(ctx context.Context, client *DansalClient, id int, i Instructor, token string) error {
+		return client.UpdateInstructor(ctx, id, i, token)
+	},
+	deleteFn: func(ctx context.Context, client *DansalClient, id int, token string) error {
+		return client.DeleteInstructor(ctx, id, token)
+	},
+	fromForm: instructorFromForm,
+	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Instructor) {
+		uploadInstructorAvatar(cfg, client, r, created.ID)
+	},
+	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) {
+		uploadInstructorAvatar(cfg, client, r, id)
+	},
+	loadErrMsg: "could not load instructors",
+	name:       "instructor",
 }
 
-func adminInstructorNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{IsNew: true}))
-	}
+func instructorEditPath(id int) string {
+	return "/admin/instructors/" + strconv.Itoa(id) + "/edit"
 }
 
-func adminInstructorCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
+// uploadInstructorAvatar pushes the avatar from the create/save form and pings
+// IndexNow for the instructor page. Runs after the entity is saved so the
+// backend has an ID to attach the file to.
+func uploadInstructorAvatar(cfg *Config, client *DansalClient, r *http.Request, id int) {
+	if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+		data, _ := io.ReadAll(file)
+		file.Close()
+		if uerr := client.UploadInstructorAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+			log.Printf("upload instructor avatar error: %v", uerr)
 		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-		}
-		inst := instructorFromForm(r)
-		created, err := client.CreateInstructor(r.Context(), inst, getSessionToken(r))
-		if err != nil {
-			title := i18n.T(r, "admin_new")
-			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
-				Instructor: inst, IsNew: true, ErrorKey: "admin_save_error",
-			}))
-			return
-		}
-		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadInstructorAvatar(r.Context(), created.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload instructor avatar error: %v", uerr)
-			}
-		}
-		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", created.ID)})
-		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
 	}
-}
-
-func adminInstructorEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		inst, err := client.GetInstructor(r.Context(), id)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
-			Instructor: inst,
-			From:       safeReturnPath(r.URL.Query().Get("from")),
-		}))
-	}
-}
-
-func adminInstructorSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-		}
-		from := safeReturnPath(r.FormValue("from"))
-		inst := instructorFromForm(r)
-		if err := client.UpdateInstructor(r.Context(), id, inst, getSessionToken(r)); err != nil {
-			title := i18n.T(r, "admin_edit")
-			renderTemplate(w, tmpls.adminInstructorEdit, tmplData(r, cfg, i18n, title, AdminInstructorEditData{
-				Instructor: inst, ErrorKey: "admin_save_error", From: from,
-			}))
-			return
-		}
-		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadInstructorAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload instructor avatar error: %v", uerr)
-			}
-		}
-		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", id)})
-		target := "/admin/instructors"
-		if from != "" {
-			target = from
-		}
-		if p := safeReturnPath(target); p != "" {
-			target = p
-		} else {
-			target = "/admin/instructors"
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
-	}
+	go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", id)})
 }
 
 func adminInstructorAvatarDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteInstructorAvatar(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete instructor avatar %d: %v", id, err)
-		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/instructors/%d/edit", id), http.StatusSeeOther)
-	}
-}
-
-func adminInstructorDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteInstructor(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete instructor %d: %v", id, err)
-		}
-		http.Redirect(w, r, "/admin/instructors", http.StatusSeeOther)
-	}
+	return adminSubResourceDeleteHandler(client, client.DeleteInstructorAvatar, "delete instructor avatar %d: %v", instructorEditPath)
 }

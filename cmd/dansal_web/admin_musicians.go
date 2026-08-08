@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -18,7 +20,6 @@ type AdminMusiciansData struct {
 
 type AdminMusicianEditData struct {
 	Musician Musician
-	Events   []Event
 	IsNew    bool
 	ErrorKey string
 	From     string
@@ -66,206 +67,75 @@ func linesToJSON(s string) string {
 	return string(b)
 }
 
-func adminMusiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		musicians, err := client.GetMusicians(r.Context())
-		if err != nil {
-			http.Error(w, "could not load musicians", http.StatusBadGateway)
-			return
-		}
-		title := i18n.T(r, "admin_musicians_title")
-		renderTemplate(w, tmpls.adminMusicians, tmplData(r, cfg, i18n, title, AdminMusiciansData{Musicians: musicians}))
-	}
+// musicianEntity wires the generic CRUD scaffold to the Musician client API.
+var musicianEntity = adminEntity[Musician]{
+	listPath:     "/admin/musicians",
+	editPath:     musicianEditPath,
+	listTmpl:     func(t *Templates) *template.Template { return t.adminMusicians },
+	editTmpl:     func(t *Templates) *template.Template { return t.adminMusicianEdit },
+	listTitleKey: "admin_musicians_title",
+	listData: func(items []Musician) any {
+		return AdminMusiciansData{Musicians: items}
+	},
+	editData: func(m Musician, isNew bool, errKey, from string) any {
+		return AdminMusicianEditData{Musician: m, IsNew: isNew, ErrorKey: errKey, From: from}
+	},
+	listFn: func(ctx context.Context, client *DansalClient) ([]Musician, error) {
+		return client.GetMusicians(ctx)
+	},
+	getFn: func(ctx context.Context, client *DansalClient, id int) (Musician, error) {
+		return client.GetMusician(ctx, id)
+	},
+	createFn: func(ctx context.Context, client *DansalClient, m Musician, token string) (Musician, error) {
+		return client.CreateMusician(ctx, m, token)
+	},
+	updateFn: func(ctx context.Context, client *DansalClient, id int, m Musician, token string) error {
+		return client.UpdateMusician(ctx, id, m, token)
+	},
+	deleteFn: func(ctx context.Context, client *DansalClient, id int, token string) error {
+		return client.DeleteMusician(ctx, id, token)
+	},
+	fromForm: musicianFromForm,
+	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Musician) {
+		uploadMusicianFiles(cfg, client, r, created.ID)
+	},
+	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) {
+		uploadMusicianFiles(cfg, client, r, id)
+	},
+	needDeadline: true,
+	loadErrMsg:   "could not load musicians",
+	name:         "musician",
 }
 
-func adminMusicianNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		title := i18n.T(r, "admin_new")
-		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{IsNew: true}))
-	}
+func musicianEditPath(id int) string {
+	return "/admin/musicians/" + strconv.Itoa(id) + "/edit"
 }
 
-func adminMusicianCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
+// uploadMusicianFiles pushes the image/avatar files from the create/save form
+// and pings IndexNow for the musician page. Runs after the entity is saved so
+// the backend has an ID to attach the files to.
+func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id int) {
+	if file, header, ferr := r.FormFile("image"); ferr == nil {
+		data, _ := io.ReadAll(file)
+		file.Close()
+		if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+			log.Printf("upload musician image error: %v", uerr)
 		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-		}
-		m := musicianFromForm(r)
-		created, err := client.CreateMusician(r.Context(), m, getSessionToken(r))
-		if err != nil {
-			title := i18n.T(r, "admin_new")
-			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
-				Musician: m, IsNew: true, ErrorKey: "admin_save_error",
-			}))
-			return
-		}
-		if file, header, ferr := r.FormFile("image"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadMusicianImage(r.Context(), created.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload musician image error: %v", uerr)
-			}
-		}
-		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadMusicianAvatar(r.Context(), created.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload musician avatar error: %v", uerr)
-			}
-		}
-		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", created.ID)})
-		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
 	}
-}
-
-func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
+	if file, header, ferr := r.FormFile("avatar"); ferr == nil {
+		data, _ := io.ReadAll(file)
+		file.Close()
+		if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+			log.Printf("upload musician avatar error: %v", uerr)
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		musician, err := client.GetMusician(r.Context(), id)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
-			Musician: musician,
-			From:     safeReturnPath(r.URL.Query().Get("from")),
-		}))
 	}
-}
-
-func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		// A photo upload triggers a slow AVIF re-encode on the backend (WASM-based
-		// encoder, can take well over the server's default 30s WriteTimeout for a
-		// detailed photo) — extend the deadline for this request rather than
-		// raising it server-wide.
-		adminWriteDeadline(w)
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-		}
-		from := safeReturnPath(r.FormValue("from"))
-		m := musicianFromForm(r)
-		if err := client.UpdateMusician(r.Context(), id, m, getSessionToken(r)); err != nil {
-			title := i18n.T(r, "admin_edit")
-			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
-				Musician: m, ErrorKey: "admin_save_error", From: from,
-			}))
-			return
-		}
-		if file, header, ferr := r.FormFile("image"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload musician image error: %v", uerr)
-			}
-		}
-		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
-			data, _ := io.ReadAll(file)
-			file.Close()
-			if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
-				log.Printf("upload musician avatar error: %v", uerr)
-			}
-		}
-		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", id)})
-		target := "/admin/musicians"
-		if from != "" {
-			target = from
-		}
-		if p := safeReturnPath(target); p != "" {
-			target = p
-		} else {
-			target = "/admin/musicians"
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
-	}
-}
-
-func adminMusicianDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteMusician(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete musician %d: %v", id, err)
-		}
-		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
-	}
+	go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", id)})
 }
 
 func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteMusicianImage(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete musician image %d: %v", id, err)
-		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/musicians/%d/edit", id), http.StatusSeeOther)
-	}
+	return adminSubResourceDeleteHandler(client, client.DeleteMusicianImage, "delete musician image %d: %v", musicianEditPath)
 }
 
 func adminMusicianAvatarDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
-		if !ok {
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if err := client.DeleteMusicianAvatar(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete musician avatar %d: %v", id, err)
-		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/musicians/%d/edit", id), http.StatusSeeOther)
-	}
+	return adminSubResourceDeleteHandler(client, client.DeleteMusicianAvatar, "delete musician avatar %d: %v", musicianEditPath)
 }

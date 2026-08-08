@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 )
@@ -37,8 +36,7 @@ func eventsMoreHandler(tmpls *Templates, i18n *I18n, client *DansalClient) http.
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(eventsMoreResponse{
+		writeJSONResponse(w, http.StatusOK, eventsMoreResponse{
 			RowsHTML: rowsHTML,
 			Geo:      eventsToGeo(events),
 			Total:    client.EventsTotal(),

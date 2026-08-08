@@ -6,18 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/yuin/goldmark"
@@ -167,126 +164,6 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 }
 
-// metaDesc returns the first maxLen chars of s with markdown syntax stripped,
-// suitable for use as a meta description or OG description.
-func metaDesc(s string, maxLen int) string {
-	// strip markdown: links, bold/italic, headings, list markers
-	s = reMetaMD.ReplaceAllString(s, "$1")
-	s = strings.Join(strings.Fields(s), " ")
-	s = strings.TrimSpace(s)
-	if len([]rune(s)) > maxLen {
-		runes := []rune(s)[:maxLen]
-		s = string(runes[:strings.LastIndex(string(runes), " ")]) + "…"
-	}
-	return s
-}
-
-var reMetaMD = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)|[*_~` + "`" + `#>]+`)
-
-var tagDisplayNames = map[string]string{
-	"bal-folk":          "Bal-folk",
-	"fest-noz":          "Fest-noz",
-	"session":           "Session",
-	"concert":           "Concert",
-	"festival":          "Festival",
-	"open-air":          "Open-air",
-	"workshop":          "Workshop",
-	"music-course":      "Music course",
-	"dance-workshop":    "Dance workshop",
-	"musician-workshop": "Musician workshop",
-}
-
-// eventMetaDesc returns a concise meta description for an event page.
-// If the event has a description, it is used (markdown-stripped). Otherwise
-// a unique description is assembled from structured fields (type tag, date,
-// location, musicians/instructors) so that every page gets a distinct value.
-func eventMetaDesc(event Event, lang string) string {
-	if event.Description != "" {
-		return metaDesc(event.Description, 155)
-	}
-
-	var parts []string
-
-	// Lead with format/type tag if present.
-	for _, tag := range event.Tags {
-		if name, ok := tagDisplayNames[tag]; ok {
-			// Append level qualifier if any.
-			for _, t2 := range event.Tags {
-				switch t2 {
-				case "beginners", "intermediate", "advanced":
-					name += " (" + t2 + ")"
-				}
-			}
-			parts = append(parts, name)
-			break
-		}
-	}
-	if len(parts) == 0 {
-		parts = append(parts, event.Title)
-	}
-
-	// Date.
-	if t, ok := parseTime(event.StartTime); ok {
-		mo := locMonth(lang, t.Month())
-		var d string
-		if lang == "de" {
-			d = fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
-		} else {
-			d = fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
-		}
-		parts = append(parts, d)
-	}
-
-	// Location name + city.
-	if event.Location != nil {
-		loc := event.Location.Location
-		if event.Location.Town != "" {
-			loc += ", " + event.Location.Town
-		}
-		parts = append(parts, loc)
-	}
-
-	desc := strings.Join(parts, " · ")
-
-	// Musicians (up to 3).
-	if len(event.Musicians) > 0 {
-		names := make([]string, 0, min(3, len(event.Musicians)))
-		for i, m := range event.Musicians {
-			if i >= 3 {
-				break
-			}
-			names = append(names, m.Bandname)
-		}
-		suffix := ""
-		if len(event.Musicians) > 3 {
-			suffix = "…"
-		}
-		desc += ". " + strings.Join(names, ", ") + suffix
-	}
-
-	// Instructors (up to 3).
-	if len(event.Instructors) > 0 {
-		names := make([]string, 0, min(3, len(event.Instructors)))
-		for i, inst := range event.Instructors {
-			if i >= 3 {
-				break
-			}
-			names = append(names, inst.Name)
-		}
-		suffix := ""
-		if len(event.Instructors) > 3 {
-			suffix = "…"
-		}
-		desc += ". " + strings.Join(names, ", ") + suffix
-	}
-
-	if len([]rune(desc)) > 155 {
-		runes := []rune(desc)[:155]
-		desc = string(runes[:strings.LastIndex(string(runes), " ")]) + "…"
-	}
-	return desc
-}
-
 type IndexData struct {
 	Events          []Event
 	TotalEvents     int // true server-side count; may exceed len(Events) when the API's pagination cap truncated the result
@@ -424,99 +301,7 @@ func dynamicSVGHandler(imagesDir, key string, fallback []byte) http.HandlerFunc 
 	}
 }
 
-var locMonths = map[string][12]string{
-	"br": {"Gen.", "C'hwev.", "Meur.", "Ebr.", "Mae", "Mezh.", "Gouer.", "Eost", "Gwen.", "Here", "Du", "Kerz."},
-	"de": {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
-	"en": {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
-	"fr": {"jan.", "fév.", "mar.", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."},
-	"es": {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"},
-	"it": {"Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"},
-	"nl": {"Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"},
-}
-var locWeekdays = map[string][7]string{
-	"br": {"Sul.", "Lun.", "Meur.", "Merc'h.", "Yaou.", "Gwen.", "Sad."},
-	"de": {"So.", "Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa."},
-	"en": {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
-	"fr": {"Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."},
-	"es": {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"},
-	"it": {"Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"},
-	"nl": {"Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"},
-}
-
-func locMonth(lang string, m time.Month) string {
-	if names, ok := locMonths[lang]; ok {
-		return names[m-1]
-	}
-	return locMonths["en"][m-1]
-}
-func locWeekday(lang string, w time.Weekday) string {
-	if names, ok := locWeekdays[lang]; ok {
-		return names[w]
-	}
-	return locWeekdays["en"][w]
-}
-
-func formatDateStr(lang, s string) string {
-	t, ok := parseTime(s)
-	if !ok {
-		return s
-	}
-	mo := locMonth(lang, t.Month())
-	if lang == "de" {
-		return fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
-	}
-	return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
-}
-
-var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"}
-
-func parseTime(s string) (time.Time, bool) {
-	for _, layout := range parseLayouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
-		}
-	}
-	return time.Time{}, false
-}
-
-// reURLAttr matches href="..." and src="..." produced by goldmark's renderer.
-var reURLAttr = regexp.MustCompile(`(?i)(href|src)="([^"]*)"`)
-
-// safeSchemes lists URL schemes allowed in rendered markdown output.
-var safeSchemes = map[string]bool{
-	"http": true, "https": true, "mailto": true, "tel": true,
-}
-
-// sanitizeMarkdownHTML strips dangerous URI schemes (javascript:, data:,
-// vbscript:) from href and src attributes in goldmark-rendered HTML.
-// Relative URLs (no scheme) are left untouched.
-func sanitizeMarkdownHTML(s string) string {
-	return reURLAttr.ReplaceAllStringFunc(s, func(m string) string {
-		parts := reURLAttr.FindStringSubmatch(m)
-		if parts == nil {
-			return m
-		}
-		u, err := url.Parse(parts[2])
-		if err != nil {
-			return parts[1] + `="#"`
-		}
-		scheme := strings.ToLower(u.Scheme)
-		if scheme != "" && !safeSchemes[scheme] {
-			return parts[1] + `="#"`
-		}
-		return m
-	})
-}
-
-func validMatrixID(s string) bool {
-	if !strings.HasPrefix(s, "@") {
-		return false
-	}
-	colon := strings.IndexByte(s, ':')
-	return colon > 1 && colon < len(s)-1
-}
-
-// emailLocal returns the local part of an email address (before @).
+// geoEvent is the compact event projection used for map markers, both in the
 func emailLocal(email string) string {
 	if idx := strings.Index(email, "@"); idx > 0 {
 		return email[:idx]
@@ -633,24 +418,16 @@ func fetchAndRenderEventRows(r *http.Request, tmpl *template.Template, i18n *I18
 	var events []Event
 	var orgs []Organization
 	var tagMap map[string]Tag
-	var fetchErr, orgsErr, tagErr error
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() { defer wg.Done(); events, fetchErr = fetchEvents() }()
-	go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
-	go func() { defer wg.Done(); tagMap, tagErr = client.GetTagMap(r.Context()) }()
-	wg.Wait()
-	if fetchErr != nil {
-		return nil, "", fetchErr
-	}
-	if orgsErr != nil || tagErr != nil {
-		return nil, "", fmt.Errorf("fetch org/tag data for event rows: orgs=%v tags=%v", orgsErr, tagErr)
+	err := fetchParallel(
+		func() error { var err error; events, err = fetchEvents(); return err },
+		func() error { var err error; orgs, err = client.GetOrganizations(r.Context()); return err },
+		func() error { var err error; tagMap, err = client.GetTagMap(r.Context()); return err },
+	)
+	if err != nil {
+		return nil, "", err
 	}
 
-	orgMap := make(map[int]Organization, len(orgs))
-	for _, o := range orgs {
-		orgMap[o.ID] = o
-	}
+	orgMap := orgMapByID(orgs)
 	strs := i18n.Strings(i18n.detectLang(r))
 
 	var rowsHTML strings.Builder
@@ -662,848 +439,18 @@ func fetchAndRenderEventRows(r *http.Request, tmpl *template.Template, i18n *I18
 	return events, rowsHTML.String(), nil
 }
 
-// fmtClock formats an hour/minute pair in 24h ("13:00") or 12h ("1:00 PM") notation.
-func fmtClock(timeFormat string, h, m int) string {
-	if timeFormat == "12h" {
-		ampm := "AM"
-		if h >= 12 {
-			ampm = "PM"
-		}
-		if h > 12 {
-			h -= 12
-		} else if h == 0 {
-			h = 12
-		}
-		return fmt.Sprintf("%d:%02d %s", h, m, ampm)
-	}
-	return fmt.Sprintf("%02d:%02d", h, m)
-}
-
-// parseTimetableClock parses an "HH:MM" timetable time into minutes since
-// midnight. Timetable start/end times are always validated to this exact
-// format server-side (cmd/dansal/timetable.go, validTimeSlot), so failure
-// here only happens for legacy/corrupt data.
-func parseTimetableClock(s string) (int, bool) {
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 {
-		return 0, false
-	}
-	h, err1 := strconv.Atoi(parts[0])
-	m, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
-		return 0, false
-	}
-	return h*60 + m, true
-}
-
-// TimetableDay groups timetable entries under the calendar date they
-// belong to, for multi-day events (festivals, workshop weekends, #894).
-type TimetableDay struct {
-	Date    string // YYYY-MM-DD
-	Entries []TimetableEntry
-}
-
-// timetableDays splits entries into day buckets covering every calendar day
-// of the event's own start/end range — not just the days that happen to
-// have dated entries — so a multi-day event always shows a section per day
-// (e.g. day 1 with everything still undated, day 2 empty until entries get
-// assigned a date via the admin picker) rather than collapsing everything
-// into a single block. An entry without its own EntryDate belongs to the
-// event's start date; single-day events always yield exactly one day (no
-// visible change from before #894).
-func timetableDays(entries []TimetableEntry, eventStart, eventEnd string) []TimetableDay {
-	startDate := eventStart
-	if t, ok := parseTime(eventStart); ok {
-		startDate = t.Format("2006-01-02")
-	}
-	endDate := startDate
-	if t, ok := parseTime(eventEnd); ok {
-		endDate = t.Format("2006-01-02")
-	}
-
-	byDate := map[string][]TimetableEntry{}
-	for _, e := range entries {
-		d := strings.TrimSpace(e.EntryDate)
-		if d == "" {
-			d = startDate
-		}
-		byDate[d] = append(byDate[d], e)
-	}
-
-	var order []string
-	seen := map[string]bool{}
-	st, errSt := time.Parse("2006-01-02", startDate)
-	en, errEn := time.Parse("2006-01-02", endDate)
-	if errSt == nil && errEn == nil && !en.Before(st) {
-		for d := st; !d.After(en); d = d.AddDate(0, 0, 1) {
-			ds := d.Format("2006-01-02")
-			order = append(order, ds)
-			seen[ds] = true
+// tmplFuncMap is the merged template function map, assembled from per-domain
+// fragments in templatefuncs_*.go (time, location, tags, chat, misc) so the
+// literal no longer dominates frontend.go (#1031).
+var tmplFuncMap = func() template.FuncMap {
+	m := template.FuncMap{}
+	for _, part := range []template.FuncMap{tmplFuncsTime, tmplFuncsLocation, tmplFuncsTags, tmplFuncsChat, tmplFuncsMisc} {
+		for k, v := range part {
+			m[k] = v
 		}
 	}
-	// Entries dated outside the event's own range (shouldn't normally
-	// happen — the admin picker only offers in-range dates — but must not
-	// be silently dropped if it does) get appended as trailing days.
-	var extra []string
-	for d := range byDate {
-		if !seen[d] {
-			extra = append(extra, d)
-		}
-	}
-	sort.Strings(extra)
-	order = append(order, extra...)
-
-	days := make([]TimetableDay, 0, len(order))
-	for _, d := range order {
-		days = append(days, TimetableDay{Date: d, Entries: byDate[d]})
-	}
-	return days
-}
-
-// timetableColumnKey returns the grouping key/label/other-flag for one
-// timetable entry, shared by timetableGrid's column bucketing.
-func timetableColumnKey(e TimetableEntry) (key, label string, isOther bool) {
-	switch {
-	case e.LocationID != nil:
-		return fmt.Sprintf("loc:%d", *e.LocationID), e.LocationName, false
-	case strings.TrimSpace(e.Room) != "":
-		label := strings.TrimSpace(e.Room)
-		return "room:" + strings.ToLower(label), label, false
-	default:
-		return "other", "", true
-	}
-}
-
-func timetableGrid(entries []TimetableEntry) TimetableGrid {
-	const minPxPerMin = 1.4
-	const maxPxPerMin = 4.0
-	const minTotalHeightPx = 220.0
-
-	rangeMin, rangeMax := 0, 0
-	haveRange := false
-	type parsed struct {
-		entry            TimetableEntry
-		startMin, endMin int
-	}
-	var parsedEntries []parsed
-	for _, e := range entries {
-		start, ok1 := parseTimetableClock(e.StartTime)
-		end, ok2 := parseTimetableClock(e.EndTime)
-		if !ok1 || !ok2 {
-			continue
-		}
-		if end <= start {
-			end += 24 * 60 // crosses midnight (e.g. a fest-noz running past 00:00)
-		}
-		parsedEntries = append(parsedEntries, parsed{entry: e, startMin: start, endMin: end})
-		if !haveRange || start < rangeMin {
-			rangeMin = start
-		}
-		if !haveRange || end > rangeMax {
-			rangeMax = end
-		}
-		haveRange = true
-	}
-	if !haveRange {
-		return TimetableGrid{}
-	}
-
-	// Pick a mark step from the raw range before rounding, then round the
-	// range itself out to that step so the axis starts/ends on a mark.
-	step := 60
-	if rangeMax-rangeMin <= 180 {
-		step = 30
-	}
-	rangeMin -= rangeMin % step
-	if r := rangeMax % step; r != 0 {
-		rangeMax += step - r
-	}
-	totalMin := rangeMax - rangeMin
-	if totalMin <= 0 {
-		totalMin = step
-		rangeMax = rangeMin + step
-	}
-
-	pxPerMin := minPxPerMin
-	if h := float64(totalMin) * pxPerMin; h < minTotalHeightPx {
-		pxPerMin = minTotalHeightPx / float64(totalMin)
-	}
-	if pxPerMin > maxPxPerMin {
-		pxPerMin = maxPxPerMin
-	}
-
-	grid := TimetableGrid{HeightPx: float64(totalMin) * pxPerMin}
-	for m := rangeMin; m <= rangeMax; m += step {
-		grid.Marks = append(grid.Marks, TimetableGridMark{
-			Label: fmt.Sprintf("%02d:%02d", (m/60)%24, m%60),
-			TopPx: float64(m-rangeMin) * pxPerMin,
-		})
-	}
-
-	colIdx := map[string]int{}
-	for _, p := range parsedEntries {
-		key, label, isOther := timetableColumnKey(p.entry)
-		i, ok := colIdx[key]
-		if !ok {
-			grid.Columns = append(grid.Columns, TimetableGridColumn{Label: label, IsOther: isOther})
-			i = len(grid.Columns) - 1
-			colIdx[key] = i
-		}
-		grid.Columns[i].Panels = append(grid.Columns[i].Panels, TimetablePanel{
-			Entry:    p.entry,
-			TopPx:    float64(p.startMin-rangeMin) * pxPerMin,
-			HeightPx: float64(p.endMin-p.startMin) * pxPerMin,
-		})
-	}
-	return grid
-}
-
-var tmplFuncMap = template.FuncMap{
-	"formatTime": func(lang, timeFormat, s string) string {
-		t, ok := parseTime(s)
-		if !ok {
-			return s
-		}
-		wd := locWeekday(lang, t.Weekday())
-		mo := locMonth(lang, t.Month())
-		clock := fmtClock(timeFormat, t.Hour(), t.Minute())
-		if lang == "de" {
-			return fmt.Sprintf("%s %02d. %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
-		}
-		return fmt.Sprintf("%s %02d %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
-	},
-	"formatDate": func(lang, s string) string {
-		return formatDateStr(lang, s)
-	},
-	"isoDate": func(s string) string {
-		if t, ok := parseTime(s); ok {
-			return t.Format("2006-01-02")
-		}
-		return s
-	},
-	// isoEndDate is like isoDate but treats 00:00–04:59 end times as
-	// belonging to the previous calendar day — but only when start and end
-	// are already on different dates (an event starting and ending on the
-	// same date should never be rolled back, even at 01:00).
-	"isoEndDate": func(startS, endS string) string {
-		if t, ok := parseTime(endS); ok {
-			if t.Hour() < 5 {
-				if ts, ok2 := parseTime(startS); ok2 {
-					if t.Format("2006-01-02") != ts.Format("2006-01-02") {
-						t = t.Add(-24 * time.Hour)
-					}
-				}
-			}
-			return t.Format("2006-01-02")
-		}
-		return endS
-	},
-	"fmtUnix": func(ts int64) string {
-		if ts == 0 {
-			return ""
-		}
-		return time.Unix(ts, 0).UTC().Format("2006-01-02")
-	},
-	"parseChangedAt": parseChangedAt,
-	"dict": func(pairs ...interface{}) (map[string]interface{}, error) {
-		if len(pairs)%2 != 0 {
-			return nil, fmt.Errorf("dict: odd number of arguments")
-		}
-		m := make(map[string]interface{}, len(pairs)/2)
-		for i := 0; i < len(pairs); i += 2 {
-			key, ok := pairs[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("dict: key %v is not a string", pairs[i])
-			}
-			m[key] = pairs[i+1]
-		}
-		return m, nil
-	},
-	"isoTime": func(s string) string {
-		if t, ok := parseTime(s); ok {
-			return t.Format("15:04")
-		}
-		return ""
-	},
-	"formatHourMin": func(timeFormat, s string) string {
-		if t, ok := parseTime(s); ok {
-			return fmtClock(timeFormat, t.Hour(), t.Minute())
-		}
-		return ""
-	},
-	"sameDate": func(s1, s2 string) bool {
-		t1, ok1 := parseTime(s1)
-		t2, ok2 := parseTime(s2)
-		if !ok1 || !ok2 {
-			return false
-		}
-		return t1.Year() == t2.Year() && t1.Month() == t2.Month() && t1.Day() == t2.Day()
-	},
-	"join": func(ss []string) string {
-		return strings.Join(ss, ", ")
-	},
-	"emailLocal":         emailLocal,
-	"displayNameOrEmail": displayNameOrEmail,
-	"jsStr": func(s string) template.JS {
-		b, _ := json.Marshal(s)
-		return template.JS(b)
-	},
-	"floatVal": func(f *float64) string {
-		if f == nil {
-			return ""
-		}
-		return strconv.FormatFloat(*f, 'f', -1, 64)
-	},
-	// pct renders a 0-1 fraction (e.g. Location.PlanX/PlanY) as a percentage
-	// number for use in a CSS "%" value — floatVal alone would render 0.6 as
-	// "0.6%" instead of "60%" (#880).
-	"pct": func(f *float64) string {
-		if f == nil {
-			return ""
-		}
-		return strconv.FormatFloat(*f*100, 'f', -1, 64)
-	},
-	"int64Val": func(n *int64) string {
-		if n == nil {
-			return ""
-		}
-		return strconv.FormatInt(*n, 10)
-	},
-	// roomName looks up which of a building's rooms (children) an event's
-	// LocationID refers to, for the Room column on /admin/location/{id} (#883).
-	"roomName": func(children []Location, id *int) string {
-		if id == nil {
-			return ""
-		}
-		for _, c := range children {
-			if c.ID == *id {
-				return c.Location
-			}
-		}
-		return ""
-	},
-	"derefInt": func(p *int) int {
-		if p == nil {
-			return 0
-		}
-		return *p
-	},
-	// locName returns the short_name when set, otherwise the full location name.
-	// Useful for compact displays where town/address are shown separately.
-	"locName": func(l Location) string {
-		if l.ShortName != "" {
-			return l.ShortName
-		}
-		return l.Location
-	},
-	"intVal": func(p *int) string {
-		if p == nil {
-			return ""
-		}
-		return strconv.Itoa(*p)
-	},
-	// unplacedRooms/placedRooms split a building's Children (#877) by whether
-	// they've been dragged onto the building's site-plan image yet.
-	"unplacedRooms": func(children []Location) []Location {
-		var out []Location
-		for _, c := range children {
-			if c.PlanX == nil || c.PlanY == nil {
-				out = append(out, c)
-			}
-		}
-		return out
-	},
-	"placedRooms": func(children []Location) []Location {
-		var out []Location
-		for _, c := range children {
-			if c.PlanX != nil && c.PlanY != nil {
-				out = append(out, c)
-			}
-		}
-		return out
-	},
-	"timetableDays": timetableDays,
-	// usedRoomIDs collects the distinct real room references (LocationID) across
-	// an event's timetable entries — free-text Room strings can't be placed on
-	// a site plan, so those entries are ignored (#885).
-	"usedRoomIDs": func(entries []TimetableEntry) map[int]bool {
-		ids := map[int]bool{}
-		for _, e := range entries {
-			if e.LocationID != nil {
-				ids[*e.LocationID] = true
-			}
-		}
-		return ids
-	},
-	// timetableGrid groups timetable entries into per-room columns and
-	// positions each entry in pixels against one shared time axis, for a
-	// real day-view calendar layout on /event/{id} (#887, refines #886's
-	// independent-per-column stacked lists). Rooms are grouped primarily by
-	// LocationID (a stable reference, labeled by LocationName), falling back
-	// to the free-text Room string (trimmed/case-insensitive key) when no
-	// LocationID is set, and finally a single shared "other" column for
-	// entries with neither. Column order follows first appearance, i.e. the
-	// timetable's existing time order.
-	//
-	// The axis only spans the timetable's own earliest start to latest end
-	// (rounded to a mark boundary), not a fixed 24h range. Entries ending
-	// before they start (e.g. a fest-noz running past midnight) are treated
-	// as ending the next day. Overlapping entries within the same room are a
-	// known, deliberately deferred edge case (#888) — this only lays out
-	// columns/time, it doesn't detect or resolve overlaps.
-	"timetableGrid": timetableGrid,
-	// topLocationID resolves the top-level (building) location ID for an
-	// event whose location may itself be a room (#687): a room is a child
-	// Location with ParentID set, but venue pickers only ever offer the
-	// top-level building, so callers select against this instead of
-	// Event.LocationID directly.
-	"topLocationID": func(e Event) int {
-		if e.Location == nil {
-			return 0
-		}
-		if e.Location.ParentID != nil {
-			return *e.Location.ParentID
-		}
-		return e.Location.ID
-	},
-	"joinInts": func(ids []int) string {
-		parts := make([]string, len(ids))
-		for i, id := range ids {
-			parts[i] = strconv.Itoa(id)
-		}
-		return strings.Join(parts, ",")
-	},
-	// locationsJSON flattens top-level locations and their room children into
-	// one JS array. Rooms are labelled "RoomName — BuildingName" to disambiguate
-	// when two buildings share a room name (mirrors timetableLocationOptionsJSON).
-	// Rooms inherit the parent's orgIDs and town for org-based filtering.
-	"locationsJSON": func(locs []Location) template.JS {
-		type locItem struct {
-			ID     int    `json:"id"`
-			Label  string `json:"label"`
-			Town   string `json:"town"`
-			OrgIDs []int  `json:"orgIDs"`
-		}
-		items := make([]locItem, 0, len(locs))
-		for _, l := range locs {
-			if l.ParentID != nil {
-				continue // rooms appear as children of their building; skip here to avoid duplicates
-			}
-			label := l.Location
-			if l.ShortName != "" {
-				label = l.ShortName
-			}
-			bname := label
-			if l.Town != "" {
-				label += ", " + l.Town
-			}
-			orgIDs := l.OrganizationIDs
-			if orgIDs == nil {
-				orgIDs = []int{}
-			}
-			items = append(items, locItem{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs})
-			for _, c := range l.Children {
-				clabel := c.Location
-				if c.ShortName != "" {
-					clabel = c.ShortName
-				}
-				childOrgIDs := c.OrganizationIDs
-				if len(childOrgIDs) == 0 {
-					childOrgIDs = orgIDs
-				}
-				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs})
-			}
-		}
-		b, _ := json.Marshal(items)
-		return template.JS(b)
-	},
-	// timetableLocationOptionsJSON flattens every top-level location plus all
-	// of their rooms (children) into one searchable option list for the
-	// timetable's per-row location autocomplete (#889) — unlike locationsJSON,
-	// this isn't restricted to the event's own building. Rooms inherit their
-	// building's orgIDs for the existing org-based filtering, since rooms
-	// don't carry their own organization assignments.
-	"timetableLocationOptionsJSON": func(locs []Location) template.JS {
-		type locItem struct {
-			ID     int    `json:"id"`
-			Label  string `json:"label"`
-			OrgIDs []int  `json:"orgIDs"`
-		}
-		items := []locItem{}
-		for _, l := range locs {
-			if l.ParentID != nil {
-				continue // rooms appear as children of their building; skip here to avoid duplicates
-			}
-			label := l.Location
-			if l.ShortName != "" {
-				label = l.ShortName
-			}
-			bname := label
-			if l.Town != "" {
-				label += ", " + l.Town
-			}
-			orgIDs := l.OrganizationIDs
-			if orgIDs == nil {
-				orgIDs = []int{}
-			}
-			items = append(items, locItem{ID: l.ID, Label: label, OrgIDs: orgIDs})
-			for _, c := range l.Children {
-				clabel := c.Location
-				if c.ShortName != "" {
-					clabel = c.ShortName
-				}
-				items = append(items, locItem{ID: c.ID, Label: clabel + " — " + bname, OrgIDs: orgIDs})
-			}
-		}
-		b, _ := json.Marshal(items)
-		return template.JS(b)
-	},
-	// chatLinkPlatforms returns the known chat_links platforms in canonical
-	// display order, for the admin org edit form to render one input per
-	// platform. Adding a platform is one entry here, no DB migration (#925).
-	"chatLinkPlatforms": func() []ChatPlatformInfo {
-		return chatLinkPlatformOrder
-	},
-	// chatLinkURL looks up the URL for a platform within an org's ChatLinks,
-	// for prefilling the admin edit form. Returns "" when absent.
-	"chatLinkURL": func(links []ChatLink, platform string) string {
-		for _, l := range links {
-			if l.Platform == platform {
-				return l.URL
-			}
-		}
-		return ""
-	},
-	// chatPlatformLabel returns the display label for a chat_links platform
-	// slug (e.g. "mailing_list" -> "Mailing list"), for the public org page.
-	"chatPlatformLabel": func(platform string) string {
-		for _, p := range chatLinkPlatformOrder {
-			if p.Slug == platform {
-				return p.Label
-			}
-		}
-		return platform
-	},
-	// showRescheduledBadge reports whether the public "Rescheduled" badge
-	// should show for an event: it must have a recorded previous_start_time
-	// and its (new) start_time must be within site setting
-	// rescheduled_badge_days of now (default 7) — keeps the badge relevant
-	// without permanently flagging events rescheduled long ago (#927).
-	"showRescheduledBadge": func(startTime, previousStartTime string) bool {
-		if previousStartTime == "" {
-			return false
-		}
-		t, ok := parseTime(startTime)
-		if !ok {
-			return false
-		}
-		days := siteCfg.RescheduledBadgeDays()
-		return time.Until(t) <= time.Duration(days)*24*time.Hour
-	},
-	// mastodonURL converts "@user@instance.tld" → "https://instance.tld/@user".
-	// If the value already starts with "http", it is returned unchanged.
-	"mastodonURL": func(handle string) string {
-		if strings.HasPrefix(handle, "http") {
-			return handle
-		}
-		// strip leading @
-		h := strings.TrimPrefix(handle, "@")
-		parts := strings.SplitN(h, "@", 2)
-		if len(parts) == 2 {
-			return "https://" + parts[1] + "/@" + parts[0]
-		}
-		return handle
-	},
-	"eventsGeoJSON": func(events []Event) template.JS {
-		geo := eventsToGeo(events)
-		if geo == nil {
-			return template.JS("[]")
-		}
-		b, _ := json.Marshal(geo)
-		return template.JS(b)
-	},
-	"orgsMapJSON": func(pins []OrgMapPin) template.JS {
-		if len(pins) == 0 {
-			return template.JS("[]")
-		}
-		b, _ := json.Marshal(pins)
-		return template.JS(b)
-	},
-	"orgMapJSON": func(orgMap map[int]Organization) template.JS {
-		out := make(map[string]string, len(orgMap))
-		for id, o := range orgMap {
-			out[strconv.Itoa(id)] = o.Name
-		}
-		b, _ := json.Marshal(out)
-		return template.JS(b)
-	},
-	"limitTags": func(tags []string) []string {
-		typeCount := 0
-		if sliceContains(tags, "bal-folk") || sliceContains(tags, "fest-noz") {
-			typeCount++
-		}
-		if sliceContains(tags, "workshop") || sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop") || sliceContains(tags, "music-course") {
-			typeCount++
-		}
-		if sliceContains(tags, "festival") {
-			typeCount++
-		}
-		limit := 5 - typeCount
-		if limit < 0 {
-			limit = 0
-		}
-		if len(tags) <= limit {
-			return tags
-		}
-		return tags[:limit]
-	},
-	"hiddenTagCount": func(tags []string) int {
-		typeCount := 0
-		if sliceContains(tags, "bal-folk") || sliceContains(tags, "fest-noz") {
-			typeCount++
-		}
-		if sliceContains(tags, "workshop") || sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop") || sliceContains(tags, "music-course") {
-			typeCount++
-		}
-		if sliceContains(tags, "festival") {
-			typeCount++
-		}
-		limit := 5 - typeCount
-		if limit < 0 {
-			limit = 0
-		}
-		if len(tags) <= limit {
-			return 0
-		}
-		return len(tags) - limit
-	},
-	"orgName": func(orgMap map[int]Organization, id *int) string {
-		if id == nil {
-			return ""
-		}
-		if o, ok := orgMap[*id]; ok {
-			return o.Name
-		}
-		return ""
-	},
-	"tagName": func(tagMap map[string]Tag, slug string) string {
-		if t, ok := tagMap[slug]; ok {
-			return t.Name
-		}
-		return slug
-	},
-	"tagKey": func(slug string) string {
-		return "tag_" + strings.ReplaceAll(slug, "-", "_")
-	},
-	"tagCatKey": func(cat string) string {
-		return "tag_cat_" + cat
-	},
-	"orgSlug": orgSlug,
-	"checkinColor": func(status string) string {
-		switch status {
-		case "approved", "checked_in":
-			return "green"
-		case "confirmed":
-			return "amber"
-		default:
-			return "red"
-		}
-	},
-	"checkinIcon": func(status string) string {
-		switch status {
-		case "approved", "checked_in":
-			return "✓"
-		case "confirmed":
-			return "?"
-		default:
-			return "✗"
-		}
-	},
-	"capPct": func(approved, total int) int {
-		if total <= 0 {
-			return 0
-		}
-		pct := approved * 100 / total
-		if pct > 100 {
-			return 100
-		}
-		return pct
-	},
-	"locAttrs": func(loc *Location) map[string]bool {
-		if loc == nil {
-			return nil
-		}
-		return loc.Attributes
-	},
-	"mergeAttrs": func(loc, evt map[string]bool) map[string]bool {
-		merged := make(map[string]bool, len(loc)+len(evt))
-		for k, v := range loc {
-			merged[k] = v
-		}
-		for k, v := range evt {
-			merged[k] = v
-		}
-		return merged
-	},
-	"attrState": func(attrs map[string]bool, key string) string {
-		v, ok := attrs[key]
-		if !ok {
-			return ""
-		}
-		if v {
-			return "1"
-		}
-		return "0"
-	},
-	"markdownHTML": func(s string) template.HTML {
-		var buf bytes.Buffer
-		if err := goldmark.Convert([]byte(s), &buf); err != nil {
-			return template.HTML(template.HTMLEscapeString(s))
-		}
-		return template.HTML(sanitizeMarkdownHTML(buf.String()))
-	},
-	"jsonLines": func(s string) string {
-		if s == "" {
-			return ""
-		}
-		var arr []string
-		if err := json.Unmarshal([]byte(s), &arr); err != nil {
-			return s
-		}
-		return strings.Join(arr, "\n")
-	},
-	"countryList": func(events []Event) []string {
-		seen := make(map[string]bool)
-		var out []string
-		for _, e := range events {
-			if e.Location == nil || e.Location.Country == "" {
-				continue
-			}
-			if !seen[e.Location.Country] {
-				seen[e.Location.Country] = true
-				out = append(out, e.Location.Country)
-			}
-		}
-		sort.Strings(out)
-		return out
-	},
-	"sourceDomain": func(actorID string) string {
-		u, err := url.Parse(actorID)
-		if err != nil || u.Host == "" {
-			return actorID
-		}
-		return u.Host
-	},
-	"splitComma": func(s string) []string {
-		var out []string
-		for _, p := range strings.Split(s, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				out = append(out, p)
-			}
-		}
-		return out
-	},
-	"hasPrefix":     strings.HasPrefix,
-	"lower":         strings.ToLower,
-	"validMatrixID": validMatrixID,
-	"hasTag": func(tags []string, slug string) bool {
-		for _, t := range tags {
-			if t == slug {
-				return true
-			}
-		}
-		return false
-	},
-	"fmtBytes": func(b int64) string {
-		const unit = 1024
-		if b < unit {
-			return fmt.Sprintf("%d B", b)
-		}
-		div, exp := int64(unit), 0
-		for n := b / unit; n >= unit; n /= unit {
-			div *= unit
-			exp++
-		}
-		return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-	},
-	"friendlyUA": func() func(string) string {
-		type rule struct {
-			name    string
-			pattern *regexp.Regexp
-		}
-		rules := []rule{
-			{"Edge", regexp.MustCompile(`Edg(?:e)?/(\d+)`)},
-			{"Opera", regexp.MustCompile(`OPR/(\d+)`)},
-			{"Chrome", regexp.MustCompile(`Chrome/(\d+)`)},
-			{"Firefox", regexp.MustCompile(`Firefox/(\d+)`)},
-			{"Safari", regexp.MustCompile(`Version/(\d+)`)},
-		}
-		return func(ua string) string {
-			if ua == "" {
-				return ""
-			}
-			for _, r := range rules {
-				if m := r.pattern.FindStringSubmatch(ua); m != nil {
-					return r.name + " " + m[1]
-				}
-			}
-			if len(ua) > 40 {
-				return ua[:40] + "…"
-			}
-			return ua
-		}
-	}(),
-	"friendlyIP": func(ip string) string {
-		if ip == "127.0.0.1" || ip == "::1" {
-			return "localhost"
-		}
-		return ip
-	},
-	"parseUserMetadata": func(s string) map[string]string {
-		var m map[string]string
-		if s == "" {
-			return nil
-		}
-		json.Unmarshal([]byte(s), &m)
-		return m
-	},
-	"add": func(a, b int) int { return a + b },
-	"json": func(v any) template.JS {
-		b, _ := json.Marshal(v)
-		return template.JS(b)
-	},
-	"townSlug": townSlug,
-	// pagerRange returns page numbers to display, using -1 as an ellipsis sentinel.
-	"pagerRange": func(current, total int) []int {
-		if total <= 7 {
-			pages := make([]int, total)
-			for i := range pages {
-				pages[i] = i + 1
-			}
-			return pages
-		}
-		show := map[int]bool{1: true, total: true}
-		for _, p := range []int{current - 1, current, current + 1} {
-			if p >= 1 && p <= total {
-				show[p] = true
-			}
-		}
-		var sorted []int
-		for p := range show {
-			sorted = append(sorted, p)
-		}
-		sort.Ints(sorted)
-		var out []int
-		for i, p := range sorted {
-			if i > 0 && p-sorted[i-1] > 1 {
-				out = append(out, -1)
-			}
-			out = append(out, p)
-		}
-		return out
-	},
-}
+	return m
+}()
 
 type Templates struct {
 	index                     *template.Template
@@ -1714,41 +661,6 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// isClientDisconnect reports whether err is a routine client-side network
-// termination (broken pipe, connection reset, i/o timeout). These happen when
-// a browser navigates away mid-response and are not actionable server-side.
-func isClientDisconnect(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "broken pipe") ||
-		strings.Contains(s, "connection reset by peer") ||
-		strings.Contains(s, "i/o timeout")
-}
-
-func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
-		// The response status is already committed (streaming template), so
-		// calling http.Error here would trigger a superfluous WriteHeader
-		// warning. Log genuine template bugs; silently drop client disconnects.
-		if !isClientDisconnect(err) {
-			log.Printf("template error: %v", err)
-		}
-	}
-}
-
-// renderEmbed renders a standalone embed template (no base.html wrapper).
-func renderEmbed(w http.ResponseWriter, tmpl *template.Template, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		if !isClientDisconnect(err) {
-			log.Printf("template error: %v", err)
-		}
-	}
-}
-
 // legacyGancioRedirect 301s an unsupported Gancio-era URL pattern to target.
 // dansal's IDs/slugs don't correspond 1:1 to Gancio's (different DB), so we
 // can't resolve these to a specific equivalent page — a permanent redirect
@@ -1770,26 +682,21 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		var orgs []Organization
 		var dances []Dance
 		var tagMap map[string]Tag
-		var fetchErr error
-		var wg sync.WaitGroup
-		wg.Add(4)
-		go func() { defer wg.Done(); events, fetchErr = client.GetEvents(r.Context(), "") }()
-		go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
-		go func() { defer wg.Done(); dances, _ = client.GetDances(r.Context()) }()
-		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
-		wg.Wait()
-		if fetchErr != nil {
+		err := fetchParallel(
+			func() error { var err error; events, err = client.GetEvents(r.Context(), ""); return err },
+			func() error { orgs, _ = client.GetOrganizations(r.Context()); return nil },
+			func() error { dances, _ = client.GetDances(r.Context()); return nil },
+			func() error { tagMap, _ = client.GetTagMap(r.Context()); return nil },
+		)
+		if err != nil {
 			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
 			return
 		}
-		orgMap := make(map[int]Organization, len(orgs))
-		for _, o := range orgs {
-			orgMap[o.ID] = o
-		}
+		orgMap := orgMapByID(orgs)
 		var fedEvents []FederatedEvent
 		if cfg.ShowFederatedEvents {
-			fedEvents, fetchErr = listFederatedEvents(db)
-			if fetchErr != nil {
+			fedEvents, err = listFederatedEvents(db)
+			if err != nil {
 				logHTTPError(w, r, "could not load federated events", http.StatusBadGateway)
 				return
 			}
@@ -1824,15 +731,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			http.NotFound(w, r)
 			return
 		}
-		var event Event
-		if token := getSessionToken(r); token != "" {
-			event, err = client.GetEventAuthed(r.Context(), id, token)
-			if err != nil {
-				event, err = client.GetEvent(r.Context(), id)
-			}
-		} else {
-			event, err = client.GetEvent(r.Context(), id)
-		}
+		event, err := fetchEventWithFallback(r, client, id)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1852,106 +751,9 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			return
 		}
 
-		var (
-			org      *Organization
-			slug     string
-			posts    []ContactPost
-			members  []OrgMember
-			tagMap   map[string]Tag
-			userOrgs []Organization
-		)
-
 		su := getSessionUser(r)
-		needMembers := su != nil && su.Role != "admin" && event.OrganizationID != nil
-		token := getSessionToken(r)
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() { defer wg.Done(); tagMap, _ = client.GetTagMap(r.Context()) }()
-		if event.OrganizationID != nil {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				o, err := client.GetOrganization(r.Context(), *event.OrganizationID)
-				if err == nil {
-					org = &o
-					slug = effectiveSlug(o)
-				}
-			}()
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			posts, _ = client.GetContactPosts(r.Context(), id)
-		}()
-		if needMembers {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				ms, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
-				if err == nil {
-					members = ms
-				}
-			}()
-		}
-		// Series siblings for prev/next navigation.
-		var prevEvent, nextEvent *Event
-		if event.SeriesID != nil {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				siblings, err := client.GetEventsBySeries(r.Context(), *event.SeriesID)
-				if err != nil {
-					return
-				}
-				for i, e := range siblings {
-					if e.ID == event.ID {
-						if i > 0 {
-							prev := siblings[i-1]
-							prevEvent = &prev
-						}
-						if i < len(siblings)-1 {
-							next := siblings[i+1]
-							nextEvent = &next
-						}
-						break
-					}
-				}
-			}()
-		}
-		// For logged-in users: fetch their orgs (for assign/publish flow and save-as-template).
-		if su != nil {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				allOrgs, _ := client.GetOrganizations(r.Context())
-				if su.Role == "admin" {
-					userOrgs = allOrgs
-				} else {
-					orgIDs := getUserOrgIDs(r.Context(), client, su.ID, token)
-					idSet := make(map[int]bool, len(orgIDs))
-					for _, oid := range orgIDs {
-						idSet[oid] = true
-					}
-					for _, o := range allOrgs {
-						if idSet[o.ID] {
-							userOrgs = append(userOrgs, o)
-						}
-					}
-				}
-			}()
-		}
-		wg.Wait()
-
-		canManage := su != nil && su.Role == "admin"
-		if !canManage && needMembers {
-			for _, m := range members {
-				if m.UserID == su.ID {
-					canManage = true
-					break
-				}
-			}
-		}
+		epd := loadEventPageData(r, client, event, su)
+		canManage := eventCanManage(su, event, epd.members)
 
 		// One-time flash (#985): the redirect after a board/booking form
 		// submission carries only an opaque ?msg=<token>; flashTake reads and
@@ -1962,25 +764,13 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
-		pageTitle := event.Title
-		{
-			var suffix []string
-			if event.Location != nil && event.Location.Town != "" {
-				suffix = append(suffix, event.Location.Town)
-			}
-			if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
-				suffix = append(suffix, d)
-			}
-			if len(suffix) > 0 {
-				pageTitle = event.Title + " – " + strings.Join(suffix, ", ")
-			}
-		}
+		pageTitle := eventPageTitle(event, lang)
 		td := tmplData(r, cfg, i18n, pageTitle, EventData{
 			Event:             event,
-			Org:               org,
-			OrgSlug:           slug,
-			TagMap:            tagMap,
-			ContactPosts:      posts,
+			Org:               epd.org,
+			OrgSlug:           epd.slug,
+			TagMap:            epd.tagMap,
+			ContactPosts:      epd.posts,
 			CanManageBoard:    canManage,
 			BoardPosted:       flash.BoardPosted,
 			BoardTelegramURL:  flash.BoardTelegramURL,
@@ -1993,17 +783,13 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BookingError:      flash.BookingError,
 			BookingErrorMsg:   flash.BookingErrorMsg,
 			BookingErrorID:    flash.BookingErrorID,
-			UserOrgs:          userOrgs,
+			UserOrgs:          epd.userOrgs,
 			BookFormToken:     issueFormToken(clientIP),
 			BoardFormToken:    issueFormToken(clientIP),
-			PrevEvent:         prevEvent,
-			NextEvent:         nextEvent,
+			PrevEvent:         epd.prevEvent,
+			NextEvent:         epd.nextEvent,
 		})
-		td.MetaDescription = eventMetaDesc(event, lang)
-		if event.ImageURL != "" {
-			td.OGImage = "https://" + cfg.Domain + event.ImageURL
-		}
-		renderTemplate(w, tmpls.event, td)
+		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), event.ImageURL)
 	}
 }
 
@@ -2126,11 +912,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Handle:         handle,
 			FollowerCount:  followerCount,
 		})
-		td.MetaDescription = metaDesc(org.Description, 155)
-		if org.ImageURL != "" {
-			td.OGImage = "https://" + cfg.Domain + org.ImageURL
-		}
-		renderTemplate(w, tmpls.org, td)
+		renderPage(w, cfg, tmpls.org, td, metaDesc(org.Description, 155), org.ImageURL)
 	}
 }
 
@@ -2180,8 +962,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if loc.Country != "" {
 			parts = append(parts, loc.Country)
 		}
-		td.MetaDescription = strings.Join(parts, ", ")
-		renderTemplate(w, tmpls.location, td)
+		renderPage(w, cfg, tmpls.location, td, strings.Join(parts, ", "), "")
 	}
 }
 
@@ -2199,14 +980,12 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 		var orgs []Organization
 		var statMap map[int]OrgStatRecord
 		var locs []Location
-		var orgsErr error
-		var wg sync.WaitGroup
-		wg.Add(3)
-		go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
-		go func() { defer wg.Done(); statMap, _ = client.GetOrgStats(r.Context()) }()
-		go func() { defer wg.Done(); locs, _ = client.GetLocations(r.Context()) }()
-		wg.Wait()
-		if orgsErr != nil {
+		err := fetchParallel(
+			func() error { var err error; orgs, err = client.GetOrganizations(r.Context()); return err },
+			func() error { statMap, _ = client.GetOrgStats(r.Context()); return nil },
+			func() error { locs, _ = client.GetLocations(r.Context()); return nil },
+		)
+		if err != nil {
 			logHTTPError(w, r, "could not load organizations", http.StatusBadGateway)
 			return
 		}

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -39,11 +37,14 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 	return func(w http.ResponseWriter, r *http.Request) {
 		var dances []Dance
 		var locs []Location
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() { defer wg.Done(); dances, _ = client.GetDances(r.Context()) }()
-		go func() { defer wg.Done(); locs, _ = client.GetLocations(r.Context()) }()
-		wg.Wait()
+		err := fetchParallel(
+			func() error { dances, _ = client.GetDances(r.Context()); return nil },
+			func() error { locs, _ = client.GetLocations(r.Context()); return nil },
+		)
+		if err != nil {
+			logHTTPError(w, r, "could not load search data", http.StatusBadGateway)
+			return
+		}
 
 		dateFrom, dateTo := currentWeekRange()
 		title := i18n.T(r, "search_title")
@@ -77,9 +78,7 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if searchThrottle.isBlocked(ip) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error":"rate limit exceeded"}`))
+			writeJSONResponse(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit exceeded"})
 			return
 		}
 		searchThrottle.record(ip)
@@ -105,9 +104,8 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		if total > searchMaxResults {
-			json.NewEncoder(w).Encode(searchResultsResponse{Total: total, TooMany: true})
+			writeJSONResponse(w, http.StatusOK, searchResultsResponse{Total: total, TooMany: true})
 			return
 		}
 
@@ -119,7 +117,7 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 			return
 		}
 
-		json.NewEncoder(w).Encode(searchResultsResponse{
+		writeJSONResponse(w, http.StatusOK, searchResultsResponse{
 			RowsHTML: rowsHTML,
 			Geo:      eventsToGeo(events),
 			Total:    total,

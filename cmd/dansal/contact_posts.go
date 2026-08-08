@@ -116,6 +116,10 @@ var validContactPostTypes = map[string]bool{
 // lostFoundTypes holds the types that use a flat 30-day expiry regardless of event end.
 var lostFoundTypes = map[string]bool{"lost_item": true, "found_item": true}
 
+// cityRequiredTypes holds the types for which a non-empty city is required.
+// ticket_*, lost_item, found_item are scoped to the event itself — no departure/stay city needed.
+var cityRequiredTypes = map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true}
+
 // ContactPostCreateRequest is the body accepted by POST /api/v1/events/{id}/contact-posts.
 type ContactPostCreateRequest struct {
 	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
@@ -223,19 +227,31 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 	req.Telegram = strings.TrimPrefix(strings.TrimSpace(req.Telegram), "@")
 
-	if req.Type == "" || req.City == "" {
-		writeError(w, "type and city are required", http.StatusBadRequest)
+	if req.Type == "" {
+		writeError(w, "type is required", http.StatusBadRequest)
 		return
 	}
 	if !validContactPostTypes[req.Type] {
 		writeError(w, "invalid type", http.StatusBadRequest)
 		return
 	}
+	if cityRequiredTypes[req.Type] && req.City == "" {
+		writeError(w, "city is required for this post type", http.StatusBadRequest)
+		return
+	}
+	// ticket_*, lost_item, found_item: ignore osm_id and clear city
+	if !cityRequiredTypes[req.Type] {
+		req.City = ""
+		req.OsmID = nil
+	}
 	if containsLink(req.Message) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
 		return
 	}
-	if req.Persons < 1 {
+	// lost/found have no meaningful person count; normalize to 1
+	if lostFoundTypes[req.Type] {
+		req.Persons = 1
+	} else if req.Persons < 1 {
 		req.Persons = 1
 	}
 
@@ -534,19 +550,28 @@ func putContactPost(w http.ResponseWriter, r *http.Request) {
 	req.Type = strings.TrimSpace(req.Type)
 	req.City = strings.TrimSpace(req.City)
 	req.Nickname = strings.TrimSpace(req.Nickname)
-	if req.Type == "" || req.City == "" || req.Nickname == "" {
-		writeError(w, "type, city and nickname are required", http.StatusBadRequest)
+	if req.Type == "" || req.Nickname == "" {
+		writeError(w, "type and nickname are required", http.StatusBadRequest)
 		return
 	}
 	if !validContactPostTypes[req.Type] {
 		writeError(w, "invalid type", http.StatusBadRequest)
 		return
 	}
+	if cityRequiredTypes[req.Type] && req.City == "" {
+		writeError(w, "city is required for this post type", http.StatusBadRequest)
+		return
+	}
+	if !cityRequiredTypes[req.Type] {
+		req.City = ""
+	}
 	if containsLink(req.Message) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
 		return
 	}
-	if req.Persons < 1 {
+	if lostFoundTypes[req.Type] {
+		req.Persons = 1
+	} else if req.Persons < 1 {
 		req.Persons = 1
 	}
 
@@ -611,10 +636,20 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
 		return
 	}
+	// Re-check city requirement after any type or city change
+	if cityRequiredTypes[type_] && city == "" {
+		writeError(w, "city is required for this post type", http.StatusBadRequest)
+		return
+	}
+	if !cityRequiredTypes[type_] {
+		city = ""
+	}
 	if req.Persons != nil {
 		persons = *req.Persons
 	}
-	if persons < 1 {
+	if lostFoundTypes[type_] {
+		persons = 1
+	} else if persons < 1 {
 		persons = 1
 	}
 

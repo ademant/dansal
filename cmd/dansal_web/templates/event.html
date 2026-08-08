@@ -420,7 +420,7 @@
         {{if eq .Type "donation"}}<span>{{if gt .Amount 0.0}}ca. {{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}{{else}}{{$.Strings.T "evt_donation"}}{{end}}</span>{{end}}
         {{if eq .Type "single"}}<span>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</span>{{end}}
         {{if eq .Type "multiple"}}
-          <span>{{range $i, $p := .Prices}}{{if $i}}, {{end}}{{$p.Label}}: {{$p.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}{{end}}</span>
+          {{range $p := .Prices}}<span class="evt-price-entry">{{$p.Label}}: {{$p.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}</span>{{end}}
         {{end}}
       </div>
       {{end}}
@@ -585,8 +585,8 @@
       <div class="board-item-header">
         <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
         <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
-        <span class="board-city">{{.City}}</span>
-        <span class="board-persons">· {{.Persons}} {{$.Strings.T "board_persons"}}</span>
+        {{if and .City (or (eq .Type "ride_offer") (eq .Type "ride_request") (eq .Type "sleep_offer") (eq .Type "sleep_request"))}}<span class="board-city">{{.City}}</span>{{end}}
+        {{if not (or (eq .Type "lost_item") (eq .Type "found_item"))}}<span class="board-persons">· {{.Persons}} {{if or (eq .Type "ticket_offer") (eq .Type "ticket_request")}}{{$.Strings.T "board_type_group_tickets"}}{{else}}{{$.Strings.T "board_persons"}}{{end}}</span>{{end}}
         <span class="board-nick">· {{.Nickname}}</span>
       </div>
       {{if .Message}}<p class="board-message">{{.Message}}</p>{{end}}
@@ -806,6 +806,7 @@
 .access-badge{font-size:1.1rem;opacity:.85;cursor:default}
 .evt-admission{margin-top:.5rem;font-size:.9rem;color:var(--fg-2)}
 .evt-admission .sidebar-label{display:inline;margin-bottom:0;margin-right:.3rem}
+.evt-admission .evt-price-entry{display:block}
 .evt-loc-notes{margin-top:.6rem;font-size:.86rem;color:var(--fg-dim);line-height:1.55}
 .evt-loc-notes p{margin:.2rem 0}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
@@ -946,13 +947,15 @@ var _boardLabelTickets = {{$.Strings.T "board_num_tickets_label" | jsStr}};
 function boardTypeChanged(type) {
   var cityRow = document.getElementById('board-city-row');
   var cityInput = document.getElementById('board-city-input');
-  var isTicket = type === 'ticket_offer' || type === 'ticket_request';
-  if (cityRow) cityRow.style.display = isTicket ? 'none' : '';
-  if (cityInput) cityInput.required = !isTicket;
+  // city required only for ride_* and sleep_*; hidden (and not submitted) for ticket_* and lost/found
+  var cityRequired = type === 'ride_offer' || type === 'ride_request' || type === 'sleep_offer' || type === 'sleep_request';
+  if (cityRow) cityRow.style.display = cityRequired ? '' : 'none';
+  if (cityInput) { cityInput.required = cityRequired; if (!cityRequired) cityInput.value = ''; }
   var isLostFound = type === 'lost_item' || type === 'found_item';
   var personsRow = document.getElementById('board-persons-row');
   if (personsRow) personsRow.style.display = isLostFound ? 'none' : '';
   var lbl = document.getElementById('board-persons-label');
+  var isTicket = type === 'ticket_offer' || type === 'ticket_request';
   if (lbl) {
     if (isTicket) lbl.textContent = _boardLabelTickets;
     else if (type === 'ride_offer' || type === 'sleep_offer') lbl.textContent = _boardLabelPlaces;

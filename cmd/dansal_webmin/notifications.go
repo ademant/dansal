@@ -292,11 +292,11 @@ func notificationsTelegramTestHandler(cfg *Config) http.HandlerFunc {
 			TelegramBotToken: r.FormValue("bot_token"),
 			TelegramBotName:  r.FormValue("bot_name"),
 		}); err != nil {
-			respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
+			respondJSON(w, http.StatusOK, false, "save failed: "+err.Error())
 			return
 		}
 		if _, err := doSocket(cfg, socketRequest{Cmd: "telegram-test"}); err != nil {
-			respondJSON(w, http.StatusBadGateway, false, err.Error())
+			respondJSON(w, http.StatusOK, false, err.Error())
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")
@@ -337,12 +337,12 @@ func notificationsMatrixTestHandler(cfg *Config) http.HandlerFunc {
 				MatrixHomeserver:  r.FormValue("homeserver"),
 				MatrixAccessToken: token,
 			}); err != nil {
-				respondJSON(w, http.StatusBadGateway, false, "save failed: "+err.Error())
+				respondJSON(w, http.StatusOK, false, "save failed: "+err.Error())
 				return
 			}
 		}
 		if _, err := doSocket(cfg, socketRequest{Cmd: "matrix-test"}); err != nil {
-			respondJSON(w, http.StatusBadGateway, false, err.Error())
+			respondJSON(w, http.StatusOK, false, err.Error())
 			return
 		}
 		respondJSON(w, http.StatusOK, true, "")

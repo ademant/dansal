@@ -416,8 +416,7 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		if r.Header.Get("Accept") == "application/json" {
 			w.Header().Set("Content-Type", "application/json")
 			if runErr != nil {
-				w.WriteHeader(http.StatusBadGateway)
-				json.NewEncoder(w).Encode(map[string]string{"error": runErr.Error()})
+				writeJSONError(w, r, http.StatusBadGateway, runErr.Error())
 				return
 			}
 			json.NewEncoder(w).Encode(map[string]int{

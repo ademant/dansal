@@ -3476,12 +3476,15 @@ func adminMusicianDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, cl
 // Normalises the requested name, returns an existing instructor on a name match, or creates a new one.
 func adminInstructorQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		var req struct {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid")
 			return
 		}
 		name := strings.TrimSpace(req.Name)
@@ -3497,7 +3500,7 @@ func adminInstructorQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 
 		inst, err := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r))
 		if err != nil {
-			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			writeJSONError(w, r, http.StatusInternalServerError, "create failed")
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
@@ -3510,12 +3513,15 @@ func adminInstructorQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 // (using the same normalizeForMatch logic as enrichment), or creates a new one.
 func adminMusicianQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		var req struct {
 			Bandname string `json:"bandname"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Bandname) == "" {
-			http.Error(w, `{"error":"invalid"}`, http.StatusBadRequest)
+			writeJSONError(w, r, http.StatusBadRequest, "invalid")
 			return
 		}
 		name := strings.TrimSpace(req.Bandname)
@@ -3531,7 +3537,7 @@ func adminMusicianQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 
 		m, err := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r))
 		if err != nil {
-			http.Error(w, `{"error":"create failed"}`, http.StatusInternalServerError)
+			writeJSONError(w, r, http.StatusInternalServerError, "create failed")
 			return
 		}
 		w.WriteHeader(http.StatusCreated)

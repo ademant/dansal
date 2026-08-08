@@ -67,6 +67,34 @@
     </div>
   </form>
 
+  {{if or (eq .Post.Type "lost_item") (eq .Post.Type "found_item")}}
+  <div class="manage-images">
+    <h3 class="manage-images-title">{{$.Strings.T "board_images_title"}}</h3>
+    {{if .Post.Images}}
+    <div class="manage-img-grid">
+      {{range .Post.Images}}
+      <div class="manage-img-item">
+        <a href="{{.URL}}" target="_blank" rel="noopener"><img src="{{.URL}}" class="manage-img-thumb" loading="lazy"></a>
+        <form method="post" action="/contact-posts/manage/{{$.Data.Token}}/images/{{.ID}}/delete" class="manage-img-del-form">
+          <button type="submit" class="manage-img-del-btn" aria-label="Delete photo" title="Delete photo">×</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    {{if lt (len .Post.Images) 5}}
+    <form method="post" action="/contact-posts/manage/{{$.Data.Token}}/images" enctype="multipart/form-data" class="manage-img-add-form">
+      <label class="manage-img-add-label">
+        <input type="file" name="image" accept="image/*" capture="environment" required onchange="this.form.submit()">
+        <span class="manage-img-add-btn">+ {{$.Strings.T "board_images_add"}}</span>
+      </label>
+    </form>
+    {{else}}
+    <p class="manage-img-cap">{{$.Strings.T "board_images_cap"}}</p>
+    {{end}}
+  </div>
+  {{end}}
+
   <form class="manage-delete-form" method="post" action="/contact-posts/manage/{{.Token}}"
         onsubmit="return confirm('{{$.Strings.T "board_manage_delete_confirm"}}')">
     <input type="hidden" name="_form_token" value="{{.FormToken}}">
@@ -93,5 +121,19 @@
 .btn-primary:hover{opacity:.85}
 .btn-danger{padding:.4rem 1rem;background:#dc3545;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
 .btn-danger:hover{opacity:.85}
+.manage-images{margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem}
+.manage-images-title{font-size:.95rem;margin-bottom:.75rem;color:var(--fg-2)}
+.manage-img-grid{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem}
+.manage-img-item{position:relative;width:90px;height:90px}
+.manage-img-thumb{width:90px;height:90px;object-fit:cover;border-radius:5px;border:1px solid var(--border-light)}
+.manage-img-del-form{position:absolute;top:2px;right:2px;margin:0}
+.manage-img-del-btn{background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:.9rem;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+.manage-img-del-btn:hover{background:rgba(220,53,69,.85)}
+.manage-img-add-form{display:inline-block}
+.manage-img-add-label{cursor:pointer}
+.manage-img-add-label input[type=file]{display:none}
+.manage-img-add-btn{display:inline-block;padding:.35rem .9rem;border:1px dashed var(--border-mid);border-radius:5px;font-size:.88rem;color:var(--fg-2);background:var(--btn-bg)}
+.manage-img-add-btn:hover{border-color:var(--heading);color:var(--heading)}
+.manage-img-cap{font-size:.85rem;color:var(--fg-3);font-style:italic}
 </style>
 {{end}}

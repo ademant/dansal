@@ -245,6 +245,8 @@ func main() {
 		r.HandleFunc("GET /contact-posts/delete/{token}", contactBoardDeleteRedirect)
 		r.HandleFunc("GET /contact-posts/manage/{token}", contactManageGetHandler(cfg, db, tmpls, client, i18n))
 		r.HandleFunc("POST /contact-posts/manage/{token}", contactManagePostHandler(cfg, client, i18n))
+		r.HandleFunc("POST /contact-posts/manage/{token}/images", contactManageImageUploadHandler(client))
+		r.HandleFunc("POST /contact-posts/manage/{token}/images/{img_id}/delete", contactManageImageDeleteHandler(client))
 		r.HandleFunc("GET /contact-requests/verify/{token}", contactRequestVerifyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /checkin/{qr_token}", checkinGetHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /checkin/{qr_token}", checkinPostHandler(cfg, client))

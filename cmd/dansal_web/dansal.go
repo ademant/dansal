@@ -2043,6 +2043,7 @@ type ContactPost struct {
 	TelegramUsername string            `json:"telegram_username,omitempty"`
 	CreatedAt        string            `json:"created_at"`
 	Event            *ContactPostEvent `json:"event,omitempty"`
+	ImageURLs        []string          `json:"image_urls,omitempty"`
 }
 
 type ContactPostEvent struct {
@@ -2131,20 +2132,28 @@ func (c *DansalClient) DeleteContactPostByManageToken(ctx context.Context, token
 	return nil
 }
 
+// ContactPostImageInfo holds the ID and URL of a single contact-post image.
+// ID is included so the manage page can build per-image delete URLs.
+type ContactPostImageInfo struct {
+	ID  int    `json:"id"`
+	URL string `json:"url"`
+}
+
 // ContactManageResult holds the state of a contact post fetched by manage token.
 type ContactManageResult struct {
-	ID            int    `json:"id"`
-	EventID       int    `json:"event_id"`
-	Type          string `json:"type"`
-	City          string `json:"city"`
-	Persons       int    `json:"persons"`
-	Message       string `json:"message"`
-	Nickname      string `json:"nickname"`
-	EmailVerified bool   `json:"email_verified"`
-	ExpiresAt     string `json:"expires_at"`
-	Expired       bool   `json:"expired"`
-	JustVerified  bool   `json:"just_verified"`
-	FirstPost     bool   `json:"first_post"`
+	ID            int                    `json:"id"`
+	EventID       int                    `json:"event_id"`
+	Type          string                 `json:"type"`
+	City          string                 `json:"city"`
+	Persons       int                    `json:"persons"`
+	Message       string                 `json:"message"`
+	Nickname      string                 `json:"nickname"`
+	EmailVerified bool                   `json:"email_verified"`
+	ExpiresAt     string                 `json:"expires_at"`
+	Expired       bool                   `json:"expired"`
+	JustVerified  bool                   `json:"just_verified"`
+	FirstPost     bool                   `json:"first_post"`
+	Images        []ContactPostImageInfo `json:"images,omitempty"`
 }
 
 func (c *DansalClient) GetContactPostByToken(ctx context.Context, token string) (ContactManageResult, error) {
@@ -2301,6 +2310,50 @@ func (c *DansalClient) ResendManage(ctx context.Context, email, baseURL string) 
 	}
 	resp.Body.Close()
 	return nil
+}
+
+// UploadContactPostImage uploads imgData as a new image for postID, authorized
+// by the post's manage token. Returns the new image ID and URL on success.
+func (c *DansalClient) UploadContactPostImage(ctx context.Context, postID int, token string, imgData []byte, filename string) (ContactPostImageInfo, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return ContactPostImageInfo{}, err
+	}
+	if _, err := fw.Write(imgData); err != nil {
+		return ContactPostImageInfo{}, err
+	}
+	mw.Close()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/contact-posts/%d/images?token=%s", c.BaseURL, postID, url.QueryEscape(token)),
+		&buf)
+	if err != nil {
+		return ContactPostImageInfo{}, err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return ContactPostImageInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return ContactPostImageInfo{}, apiErr(resp)
+	}
+	var info ContactPostImageInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return ContactPostImageInfo{}, err
+	}
+	return info, nil
+}
+
+// DeleteContactPostImage deletes a single image from postID, authorized by token.
+func (c *DansalClient) DeleteContactPostImage(ctx context.Context, postID, imgID int, token string) error {
+	return c.do(ctx, http.MethodDelete,
+		fmt.Sprintf("/api/v1/contact-posts/%d/images/%d?token=%s", postID, imgID, url.QueryEscape(token)),
+		"", nil, nil, http.StatusNoContent)
 }
 
 // InviteInfo holds the public fields returned by GET /api/v1/invites/{token}.

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -338,6 +339,62 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			return
 		}
 		manageRedirect(w, r, token, flashToken(nil), FlashMsg{ManageUpdated: true})
+	}
+}
+
+// POST /contact-posts/manage/{token}/images — proxies a single image upload to the API.
+// Reads the multipart file into memory (≤10 MB) then re-posts to the API as
+// a new multipart request, using the manage_token already embedded in the URL.
+func contactManageImageUploadHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		// Fetch post to get the numeric ID needed by the API endpoint.
+		post, err := client.GetContactPostByToken(r.Context(), token)
+		if err != nil || post.Expired {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		file, fh, err := r.FormFile("image")
+		if err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		defer file.Close()
+		imgData, err := io.ReadAll(io.LimitReader(file, 11<<20))
+		if err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		if _, err := client.UploadContactPostImage(r.Context(), post.ID, token, imgData, fh.Filename); err != nil {
+			log.Printf("dansal-web: manage image upload failed post_id=%d err=%v", post.ID, err)
+		}
+		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+	}
+}
+
+// POST /contact-posts/manage/{token}/images/{img_id}/delete — proxies a
+// per-image deletion to the API. Uses the manage_token from the URL.
+func contactManageImageDeleteHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.PathValue("token")
+		imgID, err := strconv.Atoi(r.PathValue("img_id"))
+		if err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		post, err := client.GetContactPostByToken(r.Context(), token)
+		if err != nil {
+			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
+			return
+		}
+		if err := client.DeleteContactPostImage(r.Context(), post.ID, imgID, token); err != nil {
+			log.Printf("dansal-web: manage image delete failed post_id=%d img_id=%d err=%v", post.ID, imgID, err)
+		}
+		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 	}
 }
 

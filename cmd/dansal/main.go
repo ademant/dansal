@@ -1695,6 +1695,28 @@ func migrateDB() {
 		db.Exec("UPDATE events SET attributes = jsonb(attributes) WHERE attributes IS NOT NULL")
 		mark(24)
 	}
+	if !applied(25) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS contact_post_images (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			contact_post_id INTEGER NOT NULL REFERENCES contact_posts(id) ON DELETE CASCADE,
+			created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+		)`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_contact_post_images_post_id ON contact_post_images(contact_post_id)`)
+		mark(25)
+	}
+	// Safety net: ensure contact_post_images table exists even if v25 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='contact_post_images'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS contact_post_images (
+				id              INTEGER PRIMARY KEY AUTOINCREMENT,
+				contact_post_id INTEGER NOT NULL REFERENCES contact_posts(id) ON DELETE CASCADE,
+				created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+			)`)
+			db.Exec(`CREATE INDEX IF NOT EXISTS idx_contact_post_images_post_id ON contact_post_images(contact_post_id)`)
+		}
+	}
 	// Safety net: backfill any events that slipped through (e.g. imported after
 	// v21 ran but before insertEvent was updated). Idempotent via OR IGNORE.
 	db.Exec(`INSERT OR IGNORE INTO event_locations (event_id, location_id)
@@ -3412,6 +3434,12 @@ func createTables() error {
 		version    INTEGER PRIMARY KEY,
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS contact_post_images (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		contact_post_id INTEGER NOT NULL REFERENCES contact_posts(id) ON DELETE CASCADE,
+		created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+	);
+	CREATE INDEX IF NOT EXISTS idx_contact_post_images_post_id ON contact_post_images(contact_post_id);
 	`
 	_, err := db.Exec(schema)
 	if err != nil {
@@ -3438,6 +3466,11 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(18)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(19)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(20)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(21)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(22)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(23)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(24)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(25)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -3609,6 +3642,9 @@ func main() {
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}/contact-posts", optionsSchema[ContactPostCreateRequest])
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
 	smux.HandleFunc("POST /api/v1/contact-posts/resend-manage", resendContactManage)
+	smux.HandleFunc("GET /api/v1/contact-post-images/{img_id}", getContactPostImage)
+	smux.HandleFunc("POST /api/v1/contact-posts/{id}/images", uploadContactPostImage)
+	smux.HandleFunc("DELETE /api/v1/contact-posts/{id}/images/{img_id}", deleteContactPostImage)
 	smux.HandleFunc("PUT /api/v1/contact-posts/{id}", putContactPost)
 	smux.HandleFunc("PATCH /api/v1/contact-posts/{id}", updateContactPost)
 	smux.HandleFunc("OPTIONS /api/v1/contact-posts/{id}", optionsSchema[ContactPostWriteRequest])

@@ -23,6 +23,7 @@ type ContactPost struct {
 	EmailVerified    bool              `json:"email_verified"`
 	CreatedAt        string            `json:"created_at"`
 	Event            *ContactPostEvent `json:"event,omitempty"`
+	ImageURLs        []string          `json:"image_urls,omitempty"`
 }
 
 // ContactPostEvent holds the event summary included in the global contact-post listing.
@@ -77,6 +78,10 @@ func isFirstLiveBoardPost(eventID, postID int) bool {
 // contact data instead of the real values, so nothing sensitive lingers in
 // backups/logs beyond the moment of deletion.
 func wipeAndDeleteContactPost(id int) error {
+	// Delete image files before the DB row (ON DELETE CASCADE handles DB rows).
+	// Best-effort — a stale file doesn't block deletion.
+	deleteContactPostImageFiles(id)
+
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -279,6 +284,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		p.EmailVerified = ev == 1
 		posts = append(posts, p)
 	}
+	attachContactPostImages(posts)
 	json.NewEncoder(w).Encode(posts)
 }
 
@@ -559,6 +565,8 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 		log.Printf("contact_posts: manage-page verified post %d (first=%v)", id, firstPost)
 	}
 
+	images := contactPostImagesForPost(id)
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
 		"id":                id,
@@ -574,6 +582,7 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 		"expired":           expired,
 		"just_verified":     justVerified,
 		"first_post":        firstPost,
+		"images":            images,
 	})
 }
 
@@ -1146,7 +1155,42 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 		}
 		posts = append(posts, cp)
 	}
+	attachContactPostImages(posts)
 	json.NewEncoder(w).Encode(posts)
+}
+
+// attachContactPostImages populates each post's ImageURLs field from the DB.
+// A single batch query avoids N+1 when showing a list. Only lost_item /
+// found_item posts ever have images, so for other types the field stays nil.
+func attachContactPostImages(posts []ContactPost) {
+	if len(posts) == 0 {
+		return
+	}
+	ph := make([]string, len(posts))
+	args := make([]any, len(posts))
+	for i, p := range posts {
+		ph[i] = "?"
+		args[i] = p.ID
+	}
+	rows, err := db.Query(
+		"SELECT contact_post_id, id FROM contact_post_images WHERE contact_post_id IN ("+strings.Join(ph, ",")+") ORDER BY id",
+		args...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	idxByID := make(map[int]int, len(posts))
+	for i, p := range posts {
+		idxByID[p.ID] = i
+	}
+	for rows.Next() {
+		var postID, imgID int
+		rows.Scan(&postID, &imgID)
+		if idx, ok := idxByID[postID]; ok {
+			posts[idx].ImageURLs = append(posts[idx].ImageURLs, contactPostImageURL(imgID))
+		}
+	}
 }
 
 // POST /api/v1/contact-posts/resend-manage

@@ -51,6 +51,11 @@
       <span class="bgc-sep">·</span><span class="bgc-nick">{{.Nickname}}{{if .City}}, {{.City}}{{end}}</span>
     </div>
     {{if .Message}}<p class="bgc-message">{{.Message}}</p>{{end}}
+    {{if and .ImageURLs (or (eq .Type "lost_item") (eq .Type "found_item"))}}
+    <div class="board-item-imgs">
+      {{range .ImageURLs}}<a href="{{.}}" target="_blank" rel="noopener"><img src="{{.}}" class="board-item-img" loading="lazy"></a>{{end}}
+    </div>
+    {{end}}
     <div class="bgc-event">
       <a href="/events/{{.EventID}}" class="bgc-event-link">{{if .Event}}{{.Event.Title}}{{end}}</a>
       {{if and .Event .Event.Town}}<span class="bgc-meta">· {{.Event.Town}}</span>{{end}}
@@ -114,6 +119,8 @@
 .bgc-sep{color:var(--fg-3)}
 .bgc-persons,.bgc-nick{font-size:.88rem;color:var(--fg-2)}
 .bgc-message{margin:.3rem 0 .4rem;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
+.board-item-imgs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.board-item-img{width:80px;height:80px;object-fit:cover;border-radius:5px;border:1px solid var(--border-light)}
 .bgc-event{font-size:.85rem;color:var(--fg-2);margin-top:.35rem}
 .bgc-event-link{color:var(--link);font-weight:500}
 .bgc-meta{color:var(--fg-3)}

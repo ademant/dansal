@@ -590,6 +590,11 @@
         <span class="board-nick">· {{.Nickname}}</span>
       </div>
       {{if .Message}}<p class="board-message">{{.Message}}</p>{{end}}
+      {{if and .ImageURLs (or (eq .Type "lost_item") (eq .Type "found_item"))}}
+      <div class="board-item-imgs">
+        {{range .ImageURLs}}<a href="{{.}}" target="_blank" rel="noopener"><img src="{{.}}" class="board-item-img" loading="lazy"></a>{{end}}
+      </div>
+      {{end}}
       <div class="board-actions">
         {{if not .TelegramUsername}}<button class="btn-contact-toggle" data-target="contact-form-{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>{{end}}
         {{if $.Data.CanManageBoard}}
@@ -689,6 +694,7 @@
       </div>
       <input type="text" name="dansal_phone2" style="display:none" tabindex="-1" autocomplete="off">
       <button type="submit" class="btn-board-submit">{{$.Strings.T "board_submit_btn"}}</button>
+      <p class="board-hint board-images-hint hidden" id="board-images-hint">{{$.Strings.T "board_images_hint"}}</p>
     </form>
   </details>
 </section>
@@ -878,6 +884,8 @@
 .board-form-row label{font-size:.82rem;font-weight:600;color:var(--fg-dim)}
 .board-form-row input,.board-form-row select,.board-form-row textarea{padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;font-family:inherit;width:100%;background:var(--bg-card);color:var(--fg)}
 .board-hint{font-size:.78rem;color:var(--fg-faint)}
+.board-item-imgs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.board-item-img{width:80px;height:80px;object-fit:cover;border-radius:5px;border:1px solid var(--border-light)}
 .btn-board-submit{align-self:flex-start;padding:.45rem 1.1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;margin-top:.25rem}
 .btn-board-submit:hover{background:#0d4a80}
 .msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:.75rem}
@@ -954,6 +962,8 @@ function boardTypeChanged(type) {
   var isLostFound = type === 'lost_item' || type === 'found_item';
   var personsRow = document.getElementById('board-persons-row');
   if (personsRow) personsRow.style.display = isLostFound ? 'none' : '';
+  var imgsHint = document.getElementById('board-images-hint');
+  if (imgsHint) imgsHint.classList.toggle('hidden', !isLostFound);
   var lbl = document.getElementById('board-persons-label');
   var isTicket = type === 'ticket_offer' || type === 'ticket_request';
   if (lbl) {

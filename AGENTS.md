@@ -55,6 +55,21 @@ Do **not** run `go build ./cmd/...` and copy binaries manually — always use `m
 - Use User-Agent detection for layout decisions (use CSS `@media` queries instead).
 - Skip the safety-net structural check after a migration block.
 - Touch `has_ball` / `has_workshop` / `has_festival` without switching the code path to use tags.
+- Run `gh issue close` manually. Close issues via the `Closes #NNN` line in the commit message — GitHub auto-closes on push to the default branch.
+
+## Closing issues
+
+Close issues with the commit keyword, not `gh issue close`:
+
+```
+git commit -m "fix: description
+
+Closes #NNN
+```
+
+- GitHub only auto-closes once the commit is **pushed** to the default branch. Don't push without confirming with the user first (standing rule) — until then the issue stays open, which is expected.
+- Multiple issues per commit need one `Closes #NNN` line **each** — a comma-separated `Closes #1040, #1041` on a single line only closes #1040; the second issue silently stays open.
+- After pushing a multi-issue commit, spot-check the non-first issues with `gh issue view <N> --json state`.
 
 ## DB migrations
 

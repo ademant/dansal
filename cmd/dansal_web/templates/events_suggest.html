@@ -24,6 +24,15 @@
   {{end}}
   <a href="/events/suggest" class="import-back-link">&#8592; {{$.Strings.T "suggest_tab_import"}}</a>
   {{else}}
+  <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
+  <nav class="wiz-arrows" id="wiz-arrows" aria-label="Progress">
+    <button type="button" class="wiz-arrow" data-step="1">{{$.Strings.T "suggest_step_title"}}</button>
+    <button type="button" class="wiz-arrow" data-step="2">{{$.Strings.T "suggest_step_time"}}</button>
+    <button type="button" class="wiz-arrow" data-step="3">{{$.Strings.T "suggest_step_location"}}</button>
+    <button type="button" class="wiz-arrow" data-step="4">{{$.Strings.T "suggest_step_description"}}</button>
+    <button type="button" class="wiz-arrow" data-step="5">{{$.Strings.T "suggest_step_timetable"}}</button>
+    <button type="button" class="wiz-arrow" data-step="6">{{$.Strings.T "suggest_step_contact"}}</button>
+  </nav>
   <div class="suggest-tabs">
     <button class="tab-btn active" onclick="switchTab(this,'manual')">{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" onclick="switchTab(this,'import')">{{$.Strings.T "suggest_tab_import"}}</button>
@@ -311,10 +320,6 @@
 
     <div class="wiz-nav">
       <button type="button" id="wiz-back" class="btn-secondary wiz-arrow-btn" hidden>&#8592;</button>
-      <div class="wiz-progress">
-        <span id="wiz-progress-label"></span>
-        <div class="wiz-dots" id="wiz-dots"></div>
-      </div>
       <button type="button" id="wiz-next" class="btn-primary wiz-arrow-btn">&#8594;</button>
     </div>
   </form>
@@ -402,12 +407,30 @@
 .ac-item-new{color:#555;font-style:italic}
 .btn-secondary{padding:.5rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.95rem}
 .btn-secondary:hover{background:#e8e8e8}
+/* ── Progress arrows ──────────────────────────────────────────────────── */
+.wiz-arrows{display:flex;width:100%;margin-bottom:.75rem;border-radius:4px;overflow:hidden}
+.wiz-arrow{
+  flex:1;position:relative;padding:.45rem .2rem .45rem .9rem;
+  font-size:.78rem;font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:#e9ecef;color:#555;border:none;cursor:pointer;
+  clip-path:polygon(0 0,calc(100% - .6rem) 0,100% 50%,calc(100% - .6rem) 100%,0 100%,.6rem 50%);
+  margin-right:2px;transition:background .15s,color .15s
+}
+.wiz-arrow:first-child{
+  clip-path:polygon(0 0,calc(100% - .6rem) 0,100% 50%,calc(100% - .6rem) 100%,0 100%);
+  padding-left:.6rem
+}
+.wiz-arrow:last-child{
+  clip-path:polygon(.6rem 0,100% 0,100% 100%,.6rem 100%,0 50%);
+  margin-right:0;padding-right:.6rem
+}
+.wiz-arrow.is-done{background:#c8d8f5;color:#1a3a6e}
+.wiz-arrow.is-active{background:#1a6eb5;color:#fff;font-weight:700}
+.wiz-arrow:hover:not(.is-active){background:#d0dff5;color:#1a3a6e}
+@media(max-width:520px){.wiz-arrow{font-size:.7rem;padding:.4rem .05rem .4rem .6rem}.wiz-arrow:first-child{padding-left:.4rem}}
+/* ── Step nav (back/next buttons) ────────────────────────────────────── */
 .wiz-nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
 .wiz-arrow-btn{padding:.5rem .9rem;font-size:1.25rem;line-height:1;min-width:2.8rem}
-.wiz-progress{display:flex;flex-direction:column;align-items:center;gap:.3rem;font-size:.8rem;color:#666}
-.wiz-dots{display:flex;gap:.35rem}
-.wiz-dots span{width:.5rem;height:.5rem;border-radius:50%;background:#ccc;display:inline-block}
-.wiz-dots span.wiz-dot-active{background:#1a6eb5}
 .wiz-step{touch-action:pan-y}
 .import-picker{border:1px solid var(--border-mid,#ddd);border-radius:6px;padding:.5rem;margin-bottom:1rem}
 .import-pick-row{display:flex;align-items:center;gap:.75rem;padding:.4rem .5rem;border-bottom:1px solid var(--border-low,#eee)}
@@ -935,24 +958,18 @@ function applyWizardData(data) {
   var current = 1;
   var backBtn = document.getElementById('wiz-back');
   var nextBtn = document.getElementById('wiz-next');
-  var progressLabel = document.getElementById('wiz-progress-label');
-  var dotsWrap = document.getElementById('wiz-dots');
+  var arrowBtns = Array.prototype.slice.call((document.getElementById('wiz-arrows') || {querySelectorAll:function(){return [];}}).querySelectorAll('.wiz-arrow'));
   var titleInput = document.getElementById('wiz-title');
   var honeypot = form.querySelector('input[name="dansal_phone2"]');
-  var stepLabelTpl = {{$.Strings.T "suggest_wizard_step_label" | jsStr}};
-
-  for (var i = 0; i < total; i++) {
-    var dot = document.createElement('span');
-    dotsWrap.appendChild(dot);
-  }
 
   function render() {
     steps.forEach(function(s){ s.hidden = (parseInt(s.dataset.step, 10) !== current); });
     backBtn.hidden = (current === 1);
     nextBtn.hidden = (current === total);
-    progressLabel.textContent = stepLabelTpl.replace('%d', current).replace('%d', total);
-    Array.prototype.forEach.call(dotsWrap.children, function(dot, idx){
-      dot.classList.toggle('wiz-dot-active', idx === current - 1);
+    arrowBtns.forEach(function(btn, idx){
+      var n = idx + 1;
+      btn.classList.toggle('is-active', n === current);
+      btn.classList.toggle('is-done', n < current);
     });
   }
 
@@ -980,6 +997,18 @@ function applyWizardData(data) {
     goTo(current + 1);
   });
   backBtn.addEventListener('click', function() { goTo(current - 1); });
+
+  // Arrow clicks — allow jumping to any already-visited step; forward jumps
+  // go only one step at a time (same validation as Next button).
+  arrowBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = parseInt(btn.dataset.step, 10);
+      if (target < current) { goTo(target); return; }
+      if (target === current + 1) { nextBtn.click(); return; }
+      // Clicking further ahead: step through one at a time.
+      nextBtn.click();
+    });
+  });
 
   // Mobile: swipe left/right between steps (same plain touchstart/touchend
   // pattern as the homepage week-table swipe).

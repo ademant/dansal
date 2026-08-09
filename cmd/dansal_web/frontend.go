@@ -967,15 +967,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			return
 		}
 
-		now := time.Now()
-		var upcoming, past []Event
-		for _, e := range allEvents {
-			if t, err2 := time.Parse(time.RFC3339, e.EndTime); err2 == nil && t.Before(now) {
-				past = append(past, e)
-			} else {
-				upcoming = append(upcoming, e)
-			}
-		}
+		upcoming, past := splitUpcomingPast(allEvents, time.Now())
 		// Past events: most recent first
 		for i, j := 0, len(past)-1; i < j; i, j = i+1, j-1 {
 			past[i], past[j] = past[j], past[i]
@@ -992,7 +984,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Handle:         handle,
 			FollowerCount:  followerCount,
 		})
-		renderPage(w, cfg, tmpls.org, td, metaDesc(org.Description, 155), org.ImageURL)
+		renderPage(w, cfg, tmpls.org, td, metaDesc(org.Description, metaDescMaxLen), org.ImageURL)
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -391,26 +390,24 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		now := time.Now().UTC()
 		from := now.Truncate(24 * time.Hour)
 		to := from.AddDate(0, 0, 14)
-		if v, err := time.Parse("2006-01-02", q.Get("from")); err == nil {
+		if v, ok := parseISODate(q.Get("from")); ok {
 			from = v
 		}
-		if v, err := time.Parse("2006-01-02", q.Get("to")); err == nil {
+		if v, ok := parseISODate(q.Get("to")); ok {
 			to = v
 		}
 		if !to.After(from) || to.Sub(from) > 366*24*time.Hour {
 			to = from.AddDate(0, 0, 180)
 		}
 
-		params := url.Values{}
-		params.Set("is_published", "true")
-		params.Set("limit", "1000")
-		params.Set("start_time_after", strconv.FormatInt(from.Add(-time.Second).Unix(), 10))
-		params.Set("start_time_before", strconv.FormatInt(to.AddDate(0, 0, 1).Unix(), 10))
-		if !from.After(now) {
-			params.Set("include_past", "true")
+		filter := EventFilter{
+			IsPublished:     true,
+			IncludePast:     !from.After(now),
+			StartTimeAfter:  from.Add(-time.Second).Unix(),
+			StartTimeBefore: to.AddDate(0, 0, 1).Unix(),
+			Limit:           apiListLimit,
 		}
-
-		allEvents, err := client.GetEventsFiltered(r.Context(), params)
+		allEvents, err := client.GetEventsFiltered(r.Context(), filter.Values())
 		if err != nil {
 			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 			return

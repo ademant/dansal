@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -87,7 +86,7 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 			return
 		}
 
-		events, err := client.GetEventsFiltered(r.Context(), url.Values{"tag": {slug}, "is_published": {"true"}})
+		events, err := client.GetEventsFiltered(r.Context(), (EventFilter{IsPublished: true, Tag: slug}).Values())
 		if err != nil {
 			logHTTPError(w, r, "could not load tag events", http.StatusBadGateway)
 			return
@@ -106,7 +105,7 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 			title = slug
 		}
 		td := tmplData(r, cfg, i18n, title, TagPageData{Tag: tag, Events: events})
-		td.MetaDescription = metaDesc(title, 155)
+		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.tag, td)
 	}
 }

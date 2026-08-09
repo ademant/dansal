@@ -4,8 +4,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -14,6 +12,11 @@ import (
 // API's default pagination limit (applyPagination in cmd/dansal/events.go),
 // so it's consistent with the cap visitors already see on the main page.
 const searchMaxResults = 100
+
+// searchLimit caps how many events /search/results fetches in one shot. It sits
+// just above searchMaxResults so the whole displayable page (up to the
+// TooMany cutoff) always arrives in a single request.
+const searchLimit = 150
 
 // SearchData carries the initial-load defaults for the /search page.
 type SearchData struct {
@@ -98,22 +101,22 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 		}
 		searchThrottle.record(ip)
 
-		from, err1 := time.Parse("2006-01-02", r.URL.Query().Get("from"))
-		to, err2 := time.Parse("2006-01-02", r.URL.Query().Get("to"))
-		if err1 != nil || err2 != nil || to.Before(from) {
+		from, ok1 := parseISODate(r.URL.Query().Get("from"))
+		to, ok2 := parseISODate(r.URL.Query().Get("to"))
+		if !ok1 || !ok2 || to.Before(from) {
 			http.Error(w, "from/to are required ISO dates with to >= from", http.StatusBadRequest)
 			return
 		}
 		rangeStart := from.Unix()
 		rangeEnd := to.AddDate(0, 0, 1).Unix() // end of the "to" day
 
-		params := url.Values{
-			"is_published":      {"true"},
-			"end_time_after":    {strconv.FormatInt(rangeStart-1, 10)},
-			"start_time_before": {strconv.FormatInt(rangeEnd+1, 10)},
-			"limit":             {"150"},
+		filter := EventFilter{
+			IsPublished:     true,
+			EndTimeAfter:    rangeStart - 1,
+			StartTimeBefore: rangeEnd + 1,
+			Limit:           searchLimit,
 		}
-		events, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
+		events, total, err := client.GetEventsFilteredWithTotal(r.Context(), filter.Values())
 		if err != nil {
 			logHTTPError(w, r, "could not load events", http.StatusBadGateway)
 			return

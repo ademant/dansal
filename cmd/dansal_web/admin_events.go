@@ -1316,12 +1316,12 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			params.Set("include_past", "true")
 		}
 		if dateFrom != "" {
-			if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			if t, ok := parseISODate(dateFrom); ok {
 				params.Set("start_time_after", strconv.FormatInt(t.Unix()-1, 10))
 			}
 		}
 		if dateTo != "" {
-			if t, err := time.Parse("2006-01-02", dateTo); err == nil {
+			if t, ok := parseISODate(dateTo); ok {
 				params.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
 			}
 		}
@@ -1366,13 +1366,11 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
 			filterCity != "" || createdAfter != "" || filterSource != "" ||
 			filterUnpublished || filterNotVerified || filterFlagged || filterEmailNotVerified
-		limit := 100
+		limit := adminListPageSize
 		if hasFilter {
-			limit = 1000
-			params.Set("limit", "1000")
-		} else {
-			params.Set("limit", strconv.Itoa(limit))
+			limit = apiListLimit
 		}
+		params.Set("limit", strconv.Itoa(limit))
 
 		// org/type/dance/city/flagged are narrowed in-memory below (the API has
 		// no matching query params for them), which decouples the API's `total`

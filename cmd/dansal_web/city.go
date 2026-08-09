@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 	"unicode"
 )
@@ -142,7 +141,7 @@ func citiesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I1
 		}
 		title := i18n.T(r, "cities_title")
 		td := tmplData(r, cfg, i18n, title, CitiesData{Cities: cities, MapJSON: citiesMapJSON(cities)})
-		td.MetaDescription = metaDesc(title, 155)
+		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.cities, td)
 	}
 }
@@ -171,14 +170,8 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 
 		includePast := r.URL.Query().Get("include_past") == "true"
 
-		params := url.Values{
-			"town":         {city.Town},
-			"is_published": {"true"},
-		}
-		if includePast {
-			params.Set("include_past", "true")
-		}
-		events, err := client.GetEventsFiltered(r.Context(), params)
+		filter := EventFilter{IsPublished: true, Town: city.Town, IncludePast: includePast}
+		events, err := client.GetEventsFiltered(r.Context(), filter.Values())
 		if err != nil {
 			logHTTPError(w, r, "could not load city events", http.StatusBadGateway)
 			return
@@ -194,7 +187,7 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			GeoJSON:     cityEventsGeoJSON(events),
 			IncludePast: includePast,
 		})
-		td.MetaDescription = metaDesc(title, 155)
+		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.city, td)
 	}
 }
@@ -222,14 +215,14 @@ func cityPastEventsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) h
 			return
 		}
 
-		params := url.Values{
-			"town":         {town},
-			"is_published": {"true"},
-			"include_past": {"true"},
+		filter := EventFilter{
+			IsPublished: true,
+			Town:        town,
+			IncludePast: true,
 			// Only past events: end_time before now (approximate via start_time_before).
 			// Actual filtering happens client-side or via a future API param.
 		}
-		events, err := client.GetEventsFiltered(r.Context(), params)
+		events, err := client.GetEventsFiltered(r.Context(), filter.Values())
 		if err != nil {
 			http.Error(w, "could not load city events", http.StatusBadGateway)
 			return

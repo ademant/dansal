@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// metaDescMaxLen is the target length (in runes) for meta descriptions,
+// truncated to the last word boundary before the limit.
+const metaDescMaxLen = 155
+
 // Meta description helpers — truncate is shared by metaDesc and eventMetaDesc,
 // and eventMetaDesc reuses formatDateStr instead of reimplementing it (#1031).
 
@@ -55,7 +59,7 @@ var tagDisplayNames = map[string]string{
 // location, musicians/instructors) so that every page gets a distinct value.
 func eventMetaDesc(event Event, lang string) string {
 	if event.Description != "" {
-		return metaDesc(event.Description, 155)
+		return metaDesc(event.Description, metaDescMaxLen)
 	}
 
 	var parts []string
@@ -126,5 +130,5 @@ func eventMetaDesc(event Event, lang string) string {
 		desc += ". " + strings.Join(names, ", ") + suffix
 	}
 
-	return truncate(desc, 155)
+	return truncate(desc, metaDescMaxLen)
 }

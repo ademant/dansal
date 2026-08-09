@@ -71,6 +71,32 @@ func parseTime(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// parseISODate parses a "2006-01-02" calendar-date string (the ?from=/?to=
+// query-param format), reporting ok=false for empty or malformed input. Handlers
+// use it to validate date params instead of repeating time.Parse("2006-01-02", …).
+func parseISODate(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse("2006-01-02", s)
+	return t, err == nil
+}
+
+// splitUpcomingPast partitions events into upcoming (EndTime is now or later)
+// and past (EndTime strictly before now). Events with an unparseable EndTime
+// are treated as upcoming, matching the behaviour of the former hand-rolled
+// loops. Both slices preserve input order.
+func splitUpcomingPast(events []Event, now time.Time) (upcoming, past []Event) {
+	for _, e := range events {
+		if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil && t.Before(now) {
+			past = append(past, e)
+		} else {
+			upcoming = append(upcoming, e)
+		}
+	}
+	return upcoming, past
+}
+
 // fmtClock formats an hour/minute pair in 24h ("13:00") or 12h ("1:00 PM") notation.
 func fmtClock(timeFormat string, h, m int) string {
 	if timeFormat == "12h" {

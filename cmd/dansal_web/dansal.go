@@ -39,6 +39,10 @@ const (
 	// apiListLimit is the API's list pagination limit used whenever a caller
 	// wants the whole table (orgs, musicians, instructors, locations, events).
 	apiListLimit = 1000
+	// adminListPageSize is the default page size for admin event lists
+	// (offset pagination). Admin pages fetch the full apiListLimit instead
+	// whenever any filter is active, so in-memory filtering stays complete.
+	adminListPageSize = 100
 	// retryJitterMin/retryJitterMax bound the randomized delay (ms) between the
 	// two attempts of the GET retry loop, to avoid thundering-herd retries.
 	retryJitterMin = 50
@@ -878,6 +882,54 @@ func (c *DansalClient) BulkSetEventAttributes(ctx context.Context, payload map[s
 func (c *DansalClient) GetAllEvents(ctx context.Context) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &events)
+}
+
+// EventFilter is a typed builder for the /api/v1/events query string. Public
+// handlers set fields instead of hand-rolling url.Values with strconv.FormatInt
+// (#1038); zero-valued fields are omitted from the encoded query.
+type EventFilter struct {
+	IsPublished     bool
+	IncludePast     bool
+	EndTimeAfter    int64 // unix seconds — events that haven't already ended before this
+	StartTimeAfter  int64 // unix seconds
+	StartTimeBefore int64 // unix seconds
+	Limit           int
+	Offset          int
+	Town            string
+	Tag             string
+}
+
+// Values encodes the filter as API query parameters.
+func (f EventFilter) Values() url.Values {
+	q := url.Values{}
+	if f.IsPublished {
+		q.Set("is_published", "true")
+	}
+	if f.IncludePast {
+		q.Set("include_past", "true")
+	}
+	if f.EndTimeAfter != 0 {
+		q.Set("end_time_after", strconv.FormatInt(f.EndTimeAfter, 10))
+	}
+	if f.StartTimeAfter != 0 {
+		q.Set("start_time_after", strconv.FormatInt(f.StartTimeAfter, 10))
+	}
+	if f.StartTimeBefore != 0 {
+		q.Set("start_time_before", strconv.FormatInt(f.StartTimeBefore, 10))
+	}
+	if f.Limit > 0 {
+		q.Set("limit", strconv.Itoa(f.Limit))
+	}
+	if f.Offset > 0 {
+		q.Set("offset", strconv.Itoa(f.Offset))
+	}
+	if f.Town != "" {
+		q.Set("town", f.Town)
+	}
+	if f.Tag != "" {
+		q.Set("tag", f.Tag)
+	}
+	return q
 }
 
 // GetEventsFiltered fetches published events from /api/v1/events with arbitrary

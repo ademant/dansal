@@ -59,7 +59,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if p, _ := strconv.Atoi(q.Get("page")); p > 1 {
 			page = p
 		}
-		const pageSize = 100
+		const pageSize = adminListPageSize
 
 		params := url.Values{}
 		if includePast {
@@ -72,12 +72,12 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			}
 		}
 		if dateFrom != "" {
-			if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			if t, ok := parseISODate(dateFrom); ok {
 				params.Set("start_time_after", strconv.FormatInt(t.Unix()-1, 10))
 			}
 		}
 		if dateTo != "" {
-			if t, err := time.Parse("2006-01-02", dateTo); err == nil {
+			if t, ok := parseISODate(dateTo); ok {
 				params.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
 			}
 		}
@@ -85,7 +85,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			params.Set("location_id", strconv.Itoa(locationID))
 		}
 		if hasFilter {
-			params.Set("limit", "1000")
+			params.Set("limit", strconv.Itoa(apiListLimit))
 		} else {
 			params.Set("limit", strconv.Itoa(pageSize))
 			params.Set("offset", strconv.Itoa((page-1)*pageSize))

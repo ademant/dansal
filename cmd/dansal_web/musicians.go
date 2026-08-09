@@ -52,20 +52,10 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			return
 		}
 
-		now := time.Now()
-		var futureEvents []Event
-		hasPast := false
-		for _, e := range allEvents {
-			t, err := time.Parse(time.RFC3339, e.EndTime)
-			if err != nil || t.After(now) {
-				futureEvents = append(futureEvents, e)
-			} else {
-				hasPast = true
-			}
-		}
+		upcoming, past := splitUpcomingPast(allEvents, time.Now())
 
 		includePast := r.URL.Query().Get("include_past") == "1"
-		displayEvents := futureEvents
+		displayEvents := upcoming
 		if includePast {
 			displayEvents = allEvents
 		}
@@ -80,14 +70,14 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			Slug:        orgSlug(musician.Bandname),
 			Members:     members,
 			Albums:      albums,
-			HasPast:     hasPast,
+			HasPast:     len(past) > 0,
 			IncludePast: includePast,
 		})
 		desc := musician.Biography
 		if desc == "" {
 			desc = musician.Description
 		}
-		td.MetaDescription = metaDesc(desc, 155)
+		td.MetaDescription = metaDesc(desc, metaDescMaxLen)
 		if musician.ImageURL != "" {
 			td.OGImage = "https://" + cfg.Domain + musician.ImageURL
 		}

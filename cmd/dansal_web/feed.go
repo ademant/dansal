@@ -7,7 +7,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -203,7 +202,7 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.Ha
 		// cursor value, not a raw querystring — "?tag="+tag would have been
 		// glued onto start_time_after= instead of becoming its own &tag=
 		// param. GetEventsFiltered builds the query correctly (issue #949).
-		events, err := client.GetEventsFiltered(r.Context(), url.Values{"tag": {tag}, "is_published": {"true"}})
+		events, err := client.GetEventsFiltered(r.Context(), (EventFilter{IsPublished: true, Tag: tag}).Values())
 		if err != nil {
 			logHTTPError(w, r, "could not load feed events", http.StatusBadGateway)
 			return
@@ -521,7 +520,7 @@ func tagFeedEvents(ctx context.Context, client *DansalClient, slug string) (tag 
 	if !ok {
 		return Tag{}, nil, false, nil
 	}
-	events, err = client.GetEventsFiltered(ctx, url.Values{"tag": {slug}, "is_published": {"true"}})
+	events, err = client.GetEventsFiltered(ctx, (EventFilter{IsPublished: true, Tag: slug}).Values())
 	if err != nil {
 		return Tag{}, nil, false, err
 	}

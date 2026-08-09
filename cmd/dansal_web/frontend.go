@@ -771,7 +771,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		}
 		title := i18n.T(r, "events_title")
 		holidayDates := template.JS("[]")
-		if hc := getSiteSetting(db, "holiday_country"); hc != "" {
+		if hc := siteCfg.HolidayCountry(); hc != "" {
 			now := time.Now()
 			h := publicHolidays(hc, now.Year())
 			if now.Month() >= 10 {

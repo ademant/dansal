@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -22,6 +24,7 @@ type siteSettingsCache struct {
 	indexNowKey          string
 	holidayCountry       string
 	rescheduledBadgeDays int
+	defaultDanceIDs      []int
 	bannerAIGenerated    bool
 	logoAIGenerated      bool
 }
@@ -49,12 +52,27 @@ func (c *siteSettingsCache) load() {
 	}
 	bannerAIGenerated := getSiteSetting(c.db, "banner_ai_generated") == "1"
 	logoAIGenerated := getSiteSetting(c.db, "logo_ai_generated") == "1"
+	defaultDanceIDs := parseDanceIDs(getSiteSetting(c.db, "default_dance_ids"))
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
-		c.bannerAIGenerated, c.logoAIGenerated, c.at =
+		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
-		bannerAIGenerated, logoAIGenerated, time.Now()
+		defaultDanceIDs, bannerAIGenerated, logoAIGenerated, time.Now()
 	c.mu.Unlock()
+}
+
+// parseDanceIDs decodes the JSON array stored in the default_dance_ids site
+// setting, returning nil for a missing or unparseable value.
+func parseDanceIDs(raw string) []int {
+	if raw == "" {
+		return nil
+	}
+	var ids []int
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		log.Printf("could not parse default_dance_ids %q: %v", raw, err)
+		return nil
+	}
+	return ids
 }
 
 func (c *siteSettingsCache) ensure() {
@@ -92,6 +110,15 @@ func (c *siteSettingsCache) HolidayCountry() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.holidayCountry
+}
+
+// DefaultDanceIDs returns the admin-configured dance presets for the event
+// form, or nil when none are set.
+func (c *siteSettingsCache) DefaultDanceIDs() []int {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.defaultDanceIDs
 }
 
 // RescheduledBadgeDays returns how many days before an event's start_time the

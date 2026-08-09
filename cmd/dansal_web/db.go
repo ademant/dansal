@@ -671,9 +671,21 @@ func setGeocodeCache(db *sql.DB, query, resultsJSON string) error {
 	return err
 }
 
+// getSiteSetting returns the raw value for a site_settings key, or "" when
+// the key is missing or the query fails. Used for low-frequency reads such as
+// the siteSettingsCache load; a real DB error is logged rather than silently
+// swallowed so a broken settings store is visible in the logs.
 func getSiteSetting(db *sql.DB, key string) string {
 	var v string
-	db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
+	err := db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
+	if err != nil {
+		// Missing key is expected; missing table happens on a brand-new DB
+		// before createTables has run. Anything else is worth logging.
+		if err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
+			log.Printf("get site setting %s: %v", key, err)
+		}
+		return ""
+	}
 	return v
 }
 

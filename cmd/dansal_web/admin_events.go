@@ -1592,7 +1592,7 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			return
 		}
 		bundle := client.FetchRefBundle(r.Context())
-		defaultDanceIDs := loadDefaultDanceIDs(db)
+		defaultDanceIDs := loadDefaultDanceIDs()
 		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, bundle.Dances)
 
 		token := getSessionToken(r)
@@ -2566,17 +2566,13 @@ func locationQuality(loc *Location) int {
 	return q
 }
 
-func loadDefaultDanceIDs(db *sql.DB) []int {
-	raw := getSiteSetting(db, "default_dance_ids")
-	if raw == "" {
+// loadDefaultDanceIDs returns the admin-configured dance presets for the
+// event form, read via siteSettingsCache per the runtime-config rule.
+func loadDefaultDanceIDs() []int {
+	if siteCfg == nil {
 		return nil
 	}
-	var ids []int
-	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		log.Printf("could not parse default_dance_ids %q: %v", raw, err)
-		return nil
-	}
-	return ids
+	return siteCfg.DefaultDanceIDs()
 }
 
 func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {

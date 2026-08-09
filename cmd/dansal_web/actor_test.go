@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -208,6 +210,63 @@ func TestRelayActorURLEmptyWhenUnconfigured(t *testing.T) {
 	}
 }
 
+// TestAPImageURL verifies the AP image URL always points at the JPEG variant
+// (?format=jpeg) so the declared image/jpeg mediaType is honest (issue #1054).
+func TestAPImageURL(t *testing.T) {
+	cfg := &Config{Domain: "example.com"}
+	cases := []struct {
+		name  string
+		in    string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"relative", "/api/v1/images/5", "https://example.com/api/v1/images/5?format=jpeg"},
+		{"absolute no query", "https://example.com/api/v1/images/5", "https://example.com/api/v1/images/5?format=jpeg"},
+		{"absolute existing query", "https://cdn.example.com/x?size=large", "https://cdn.example.com/x?size=large&format=jpeg"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := apImageURL(cfg, tc.in); got != tc.want {
+				t.Errorf("apImageURL(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEventAttachmentDeclaresJpegVariant verifies both the Event object and the
+// Note attachment point at ?format=jpeg with mediaType image/jpeg (issue #1054).
+func TestEventAttachmentDeclaresJpegVariant(t *testing.T) {
+	cfg := &Config{Domain: "example.com"}
+	e := Event{ID: 5, Title: "Fest Noz", ImageURL: "/api/v1/images/5"}
+
+	apEvent := buildAPEvent(cfg, "myorg", e)
+	if len(apEvent.Attachment) != 1 {
+		t.Fatalf("APEvent.Attachment length = %d, want 1", len(apEvent.Attachment))
+	}
+	if got := apEvent.Attachment[0].MediaType; got != "image/jpeg" {
+		t.Errorf("APEvent mediaType = %q, want image/jpeg", got)
+	}
+	if got := apEvent.Attachment[0].URL; got != "https://example.com/api/v1/images/5?format=jpeg" {
+		t.Errorf("APEvent URL = %q, want jpeg variant", got)
+	}
+
+	note := buildNoteFromEvent(cfg, "myorg", e)
+	if len(note.Attachment) != 1 {
+		t.Fatalf("APNote.Attachment length = %d, want 1", len(note.Attachment))
+	}
+	if got := note.Attachment[0].MediaType; got != "image/jpeg" {
+		t.Errorf("APNote mediaType = %q, want image/jpeg", got)
+	}
+	if got := note.Attachment[0].URL; got != "https://example.com/api/v1/images/5?format=jpeg" {
+		t.Errorf("APNote URL = %q, want jpeg variant", got)
+	}
+
+	noImg := Event{ID: 6, Title: "No image"}
+	if got := buildNoteFromEvent(cfg, "myorg", noImg).Attachment; len(got) != 0 {
+		t.Errorf("attachment present without image: %+v", got)
+	}
+}
+
 // TestRelayActorBrowserRedirect verifies a browser visit to /org/{relay}
 // redirects to the homepage instead of 404ing, because the relay actor is
 // synthetic and has no backing org page (issue #1057).
@@ -327,5 +386,132 @@ func TestWebfingerOrgActorProfilePage(t *testing.T) {
 	}
 	if !sawProfilePage {
 		t.Errorf("missing profile-page link in %+v", wf.Links)
+	}
+}
+
+// TestOutboxPagination verifies the outbox reports the real totalItems and
+// pages through the full history via offset-based next links, instead of
+// truncating at the API's default limit of 100 (issue #1055).
+func TestOutboxPagination(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE actors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		org_id INTEGER UNIQUE NOT NULL,
+		org_slug TEXT UNIQUE NOT NULL,
+		public_key_pem TEXT NOT NULL,
+		private_key_pem TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (0, 'relay', 'pub', 'priv')`); err != nil {
+		t.Fatal(err)
+	}
+
+	const total = 250
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := 100
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		offset := 0
+		if v := r.URL.Query().Get("offset"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				offset = n
+			}
+		}
+		end := offset + limit
+		if end > total {
+			end = total
+		}
+		events := make([]Event, 0, end-offset)
+		for i := offset; i < end; i++ {
+			events = append(events, Event{ID: i + 1, Title: fmt.Sprintf("Event %d", i+1), IsPublished: true})
+		}
+		w.Header().Set("X-Total-Count", strconv.Itoa(total))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(events)
+	}))
+	defer srv.Close()
+
+	cfg := &Config{Domain: "example.test", RelayActorName: "relay"}
+	client := &DansalClient{BaseURL: srv.URL, HTTP: srv.Client()}
+	handler := outboxHandler(cfg, db, client)
+
+	// Root collection reports the real count, not the page size.
+	req := httptest.NewRequest(http.MethodGet, "/org/relay/outbox", nil)
+	req.SetPathValue("name", "relay")
+	req.Header.Set("Accept", "application/activity+json")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("collection status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var col OrderedCollection
+	if err := json.Unmarshal(rec.Body.Bytes(), &col); err != nil {
+		t.Fatalf("decode collection: %v", err)
+	}
+	if col.TotalItems != total {
+		t.Errorf("collection totalItems = %d, want %d", col.TotalItems, total)
+	}
+	wantFirst := "https://example.test/org/relay/outbox?page=true"
+	if col.First != wantFirst {
+		t.Errorf("collection first = %q, want %q", col.First, wantFirst)
+	}
+
+	// First page holds outboxPageSize items and links to the next offset.
+	req2 := httptest.NewRequest(http.MethodGet, "/org/relay/outbox?page=true", nil)
+	req2.SetPathValue("name", "relay")
+	req2.Header.Set("Accept", "application/activity+json")
+	rec2 := httptest.NewRecorder()
+	handler(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("page status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+	var page OrderedCollectionPage
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	if page.TotalItems != total {
+		t.Errorf("page totalItems = %d, want %d", page.TotalItems, total)
+	}
+	if len(page.OrderedItems) != outboxPageSize {
+		t.Errorf("first page has %d items, want %d", len(page.OrderedItems), outboxPageSize)
+	}
+	wantNext := "https://example.test/org/relay/outbox?page=true&offset=100"
+	if page.Next != wantNext {
+		t.Errorf("first page next = %q, want %q", page.Next, wantNext)
+	}
+	if page.Prev != "" {
+		t.Errorf("first page prev = %q, want empty", page.Prev)
+	}
+
+	// Last page: no next link, prev points back one page.
+	req3 := httptest.NewRequest(http.MethodGet, "/org/relay/outbox?page=true&offset=200", nil)
+	req3.SetPathValue("name", "relay")
+	req3.Header.Set("Accept", "application/activity+json")
+	rec3 := httptest.NewRecorder()
+	handler(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("last page status=%d body=%s", rec3.Code, rec3.Body.String())
+	}
+	var page3 OrderedCollectionPage
+	if err := json.Unmarshal(rec3.Body.Bytes(), &page3); err != nil {
+		t.Fatalf("decode last page: %v", err)
+	}
+	if len(page3.OrderedItems) != total-outboxPageSize*2 {
+		t.Errorf("last page has %d items, want %d", len(page3.OrderedItems), total-outboxPageSize*2)
+	}
+	if page3.Next != "" {
+		t.Errorf("last page next = %q, want empty", page3.Next)
+	}
+	if page3.Prev != "https://example.test/org/relay/outbox?page=true&offset=100" {
+		t.Errorf("last page prev = %q, want offset=100", page3.Prev)
 	}
 }

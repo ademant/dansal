@@ -162,6 +162,19 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 		if err := avif.Encode(f, img); err != nil {
 			return fmt.Errorf("encode avif: %w", err)
 		}
+		// Keep a JPEG sibling alongside the AVIF so ActivityPub consumers can
+		// request ?format=jpeg and receive an honestly-declared image/jpeg;
+		// declaring image/jpeg while serving the AVIF file breaks Mastodon
+		// previews (#1054).
+		jpegPath := filepath.Join(dir, fmt.Sprintf("%d.jpeg", id))
+		jf, err := os.Create(jpegPath)
+		if err != nil {
+			return fmt.Errorf("create jpeg sibling: %w", err)
+		}
+		defer jf.Close()
+		if err := jpeg.Encode(jf, img, &jpeg.Options{Quality: 85}); err != nil {
+			return fmt.Errorf("encode jpeg sibling: %w", err)
+		}
 	}
 	return nil
 }
@@ -310,6 +323,16 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// JPEG variant for ActivityPub consumers (#1054): many Fediverse clients
+	// cannot render AVIF, and the canonical URL's real Content-Type is
+	// image/avif, so note attachments point here (?format=jpeg) and declare
+	// image/jpeg honestly. New uploads get a JPEG sibling at save time;
+	// legacy files are converted on first request and cached on disk.
+	if r.URL.Query().Get("format") == "jpeg" {
+		serveJpegVariant(w, r, imgPath, eventID)
+		return
+	}
+
 	// Respect Save-Data by preferring a "small" variant if available
 	if saveDataOn(r) {
 		ext := filepath.Ext(imgPath)
@@ -333,6 +356,49 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeFile(w, r, imgPath)
+}
+
+// serveJpegVariant serves the JPEG form of an event image with Content-Type
+// image/jpeg. It prefers the sibling generated at upload time; for files that
+// predate the variant it decodes the stored image and writes the JPEG once,
+// so the conversion cost is paid only on the first request (#1054).
+func serveJpegVariant(w http.ResponseWriter, r *http.Request, imgPath, idStr string) {
+	jpegPath := imgPath
+	if filepath.Ext(imgPath) != ".jpeg" {
+		jpegPath = filepath.Join(filepath.Dir(imgPath), idStr+".jpeg")
+		if _, err := os.Stat(jpegPath); err != nil {
+			if err := generateJpegSibling(imgPath, jpegPath); err != nil {
+				log.Printf("image %s: jpeg variant: %v", idStr, err)
+				writeError(w, "Image conversion failed", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, jpegPath)
+}
+
+// generateJpegSibling decodes the stored image (AVIF or JPEG) and writes it as
+// a JPEG file so future ?format=jpeg requests are a plain file read.
+func generateJpegSibling(srcPath, jpegPath string) error {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return err
+	}
+	img, err := decodeImageSafely(data)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(jpegPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // fitImage scales img down to fit within maxW x maxH, preserving aspect ratio.

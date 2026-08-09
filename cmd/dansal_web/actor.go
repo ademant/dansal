@@ -452,6 +452,11 @@ func nodeinfoHandler(cfg *Config, client *DansalClient, schemaVersion string) ht
 	}
 }
 
+// outboxPageSize is the ActivityPub outbox page size. The underlying API is
+// asked for exactly one page at a time (via offset), so the outbox never has
+// to hold the full event history in memory (#1055).
+const outboxPageSize = 100
+
 func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("name")
@@ -467,37 +472,50 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 		base := actorURL(cfg, slug)
 		outboxURL := base + "/outbox"
 
-		var events []Event
-		if actor.OrgID == 0 {
-			events, err = client.GetEvents(r.Context(), "")
-			if err != nil {
-				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
-				return
-			}
-			published := events[:0]
-			for _, e := range events {
-				if e.IsPublished {
-					published = append(published, e)
-				}
-			}
-			events = published
-		} else {
-			events, err = client.GetEventsByOrg(r.Context(), actor.OrgID)
-			if err != nil {
-				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
-				return
-			}
+		// The outbox is the actor's full post history (all published events,
+		// past included) — new followers read it to back-fill. Without an
+		// explicit limit the API caps at 100, so without include_past=true it
+		// only held upcoming events: both truncated the history (#1055).
+		params := url.Values{}
+		params.Set("is_published", "true")
+		params.Set("include_past", "true")
+		if actor.OrgID != 0 {
+			params.Set("organization_id", strconv.Itoa(actor.OrgID))
 		}
 
 		if r.URL.Query().Get("page") != "true" {
+			// limit=1 is enough: X-Total-Count reflects the full count even
+			// when the page is truncated, so the collection root reports the
+			// real totalItems without downloading the history.
+			params.Set("limit", "1")
+			_, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
+			if err != nil {
+				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
+				return
+			}
 			col := OrderedCollection{
 				Context:    APContext,
 				Type:       "OrderedCollection",
 				ID:         outboxURL,
-				TotalItems: len(events),
+				TotalItems: total,
 				First:      outboxURL + "?page=true",
 			}
 			writeJSON(w, http.StatusOK, col)
+			return
+		}
+
+		offset := 0
+		if v := r.URL.Query().Get("offset"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				offset = n
+			}
+		}
+
+		params.Set("limit", strconv.Itoa(outboxPageSize))
+		params.Set("offset", strconv.Itoa(offset))
+		events, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
+		if err != nil {
+			logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
 			return
 		}
 
@@ -506,13 +524,23 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 			items = append(items, buildCreateActivity(cfg, actor.OrgSlug, e))
 		}
 
+		pageURL := outboxURL + "?page=true"
+		if offset > 0 {
+			pageURL += "&offset=" + strconv.Itoa(offset)
+		}
 		page := OrderedCollectionPage{
 			Context:      APContext,
 			Type:         "OrderedCollectionPage",
-			ID:           outboxURL + "?page=true",
+			ID:           pageURL,
 			PartOf:       outboxURL,
-			TotalItems:   len(items),
+			TotalItems:   total,
 			OrderedItems: items,
+		}
+		if offset+len(items) < total {
+			page.Next = outboxURL + "?page=true&offset=" + strconv.Itoa(offset+len(items))
+		}
+		if offset > 0 {
+			page.Prev = outboxURL + "?page=true&offset=" + strconv.Itoa(max(0, offset-outboxPageSize))
 		}
 		writeJSON(w, http.StatusOK, page)
 	}
@@ -1036,18 +1064,32 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 		})
 	}
 	if e.ImageURL != "" {
-		imgURL := e.ImageURL
-		if len(imgURL) > 0 && imgURL[0] == '/' {
-			imgURL = "https://" + cfg.Domain + imgURL
-		}
 		apEvent.Attachment = []APDocument{{
 			Type:      "Document",
-			MediaType: "image/jpeg",
-			URL:       imgURL,
+			MediaType: "image/jpeg", // honest: apImageURL points at ?format=jpeg (#1054)
+			URL:       apImageURL(cfg, e.ImageURL),
 			Name:      e.Title,
 		}}
 	}
 	return apEvent
+}
+
+// apImageURL returns the event image URL as an absolute https URL pointing at
+// the JPEG variant (?format=jpeg). The canonical /api/v1/images/{id} URL serves
+// Content-Type: image/avif, so declaring image/jpeg while linking there is both
+// a spec violation and breaks Mastodon previews; the format parameter returns a
+// genuine image/jpeg response (#1054).
+func apImageURL(cfg *Config, imageURL string) string {
+	if imageURL == "" {
+		return ""
+	}
+	if imageURL[0] == '/' {
+		imageURL = "https://" + cfg.Domain + imageURL
+	}
+	if strings.Contains(imageURL, "?") {
+		return imageURL + "&format=jpeg"
+	}
+	return imageURL + "?format=jpeg"
 }
 
 // buildNoteContent renders a human-readable HTML summary of an event for
@@ -1139,14 +1181,10 @@ func buildNoteFromEvent(cfg *Config, slug string, e Event) APNote {
 		})
 	}
 	if e.ImageURL != "" {
-		imgURL := e.ImageURL
-		if len(imgURL) > 0 && imgURL[0] == '/' {
-			imgURL = "https://" + cfg.Domain + imgURL
-		}
 		note.Attachment = []APDocument{{
 			Type:      "Document",
-			MediaType: "image/jpeg",
-			URL:       imgURL,
+			MediaType: "image/jpeg", // honest: apImageURL points at ?format=jpeg (#1054)
+			URL:       apImageURL(cfg, e.ImageURL),
 			Name:      e.Title,
 		}}
 	}

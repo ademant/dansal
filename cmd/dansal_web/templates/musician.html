@@ -136,7 +136,7 @@
   <li class="event-item">
     <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
     <div class="event-meta">
-      {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
+      {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat $.DateFormat .StartTime}}</span>{{end}}
       {{with .Location}}
         {{if .ShortName}} &mdash; {{.ShortName}}{{if .Address}}, {{.Address}}{{end}}{{if .Town}}, {{.Town}}{{end}}
         {{else if .Location}} &mdash; {{.Location}}{{else if .Town}} &mdash; {{.Town}}{{end}}

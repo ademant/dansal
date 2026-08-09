@@ -115,7 +115,7 @@
   <tbody>
   {{range .Events}}
   <tr>
-    <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
+    <td style="white-space:nowrap">{{formatDate $.LangCode $.DateFormat .StartTime}}</td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener" class="ext-link" title="{{.URL}}">↗</a>{{end}}</td>
     <td>{{if .Location}}{{if and .Location.ShortName .Location.Town}}{{.Location.ShortName}}, {{.Location.Town}}{{else if .Location.Location}}{{.Location.Location}}{{else}}{{.Location.Town}}{{end}}{{end}}</td>
     <td style="font-size:.85rem;color:#555">{{if .OrganizationID}}{{index $.Data.OrgMap (derefInt .OrganizationID)}}{{end}}</td>

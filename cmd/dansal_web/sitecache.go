@@ -27,6 +27,8 @@ type siteSettingsCache struct {
 	defaultDanceIDs      []int
 	bannerAIGenerated    bool
 	logoAIGenerated      bool
+	dateFormat           string // "de" → DD.MM.YYYY; "" → locale-based
+	timeFormatSite       string // "24h" or "12h" override (empty = use web.yaml)
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -53,11 +55,15 @@ func (c *siteSettingsCache) load() {
 	bannerAIGenerated := getSiteSetting(c.db, "banner_ai_generated") == "1"
 	logoAIGenerated := getSiteSetting(c.db, "logo_ai_generated") == "1"
 	defaultDanceIDs := parseDanceIDs(getSiteSetting(c.db, "default_dance_ids"))
+	dateFormat := getSiteSetting(c.db, "date_format")
+	timeFormatSite := getSiteSetting(c.db, "time_format")
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
-		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated, c.at =
+		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
+		c.dateFormat, c.timeFormatSite, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
-		defaultDanceIDs, bannerAIGenerated, logoAIGenerated, time.Now()
+		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
+		dateFormat, timeFormatSite, time.Now()
 	c.mu.Unlock()
 }
 
@@ -153,4 +159,22 @@ func (c *siteSettingsCache) LogoAIGenerated() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.logoAIGenerated
+}
+
+// DateFormat returns the site-wide date notation override.
+// "de" means DD.MM.YYYY (numeric); "" means locale-based (the default).
+func (c *siteSettingsCache) DateFormat() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.dateFormat
+}
+
+// TimeFormatSite returns the site-wide time notation override from the
+// database, or "" when none is set (falls back to web.yaml time_format).
+func (c *siteSettingsCache) TimeFormatSite() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.timeFormatSite
 }

@@ -20,7 +20,7 @@
       {{if .BeginYear}}<span class="chip">{{.BeginYear}}</span>{{end}}
       {{if .FutureEventCount}}<span class="chip mcard-chip-events">{{.FutureEventCount}} {{$.Strings.T "musician_future_events"}}</span>{{end}}
     </div>
-    {{if .NextEventAt}}<div class="mcard-next"><span class="mcard-next-label">{{$.Strings.T "cities_next_event"}}:</span> {{formatDate $.LangCode .NextEventAt}}</div>{{end}}
+    {{if .NextEventAt}}<div class="mcard-next"><span class="mcard-next-label">{{$.Strings.T "cities_next_event"}}:</span> {{formatDate $.LangCode $.DateFormat .NextEventAt}}</div>{{end}}
     {{if .Biography}}<div class="mcard-desc md-content">{{markdownHTML .Biography}}</div>{{else if .Description}}<div class="mcard-desc md-content">{{markdownHTML .Description}}</div>{{end}}
   </div>
 </a>

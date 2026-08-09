@@ -32,7 +32,7 @@
   <tbody>
   {{range $series.Events}}
   <tr data-start="{{.StartTime}}" {{if .IsCancelled}}style="opacity:.5"{{end}}>
-    <td style="white-space:nowrap">{{formatDate $.LangCode .StartTime}}</td>
+    <td style="white-space:nowrap">{{formatDate $.LangCode $.DateFormat .StartTime}}</td>
     <td style="white-space:nowrap">{{isoTime .StartTime}}–{{isoTime .EndTime}}</td>
     <td class="muted">{{.LocationName}}</td>
     <td>

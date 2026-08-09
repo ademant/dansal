@@ -41,7 +41,7 @@
     <div class="city-card-next">
       <span class="city-card-next-label">{{$.Strings.T "cities_next_event"}}</span>
       <span class="city-card-next-title">{{.NextEventTitle}}</span>
-      <span class="city-card-next-date">{{formatDate $.LangCode .NextEventStart}}</span>
+      <span class="city-card-next-date">{{formatDate $.LangCode $.DateFormat .NextEventStart}}</span>
     </div>
     {{end}}
   </a>

@@ -27,7 +27,7 @@
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
   {{- if .ImageURL}}, "image": "{{.ImageURL | js}}"{{else if gt $.BannerHeight 0}}, "image": "https://{{$.Domain | js}}/banner.avif"{{end}}
   {{- if .Description}}, "description": "{{.Description | js}}"
-  {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode . | js}}{{end}}"
+  {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
   {{- end}}
   {{- if or .Musicians .Instructors}}, "performer": [
     {{- $pfirst := true}}
@@ -84,7 +84,7 @@
   {{else}}
   <a href="/">{{.Strings.T "nav_events"}}</a>
   <span class="breadcrumb-sep" aria-hidden="true">/</span>
-  <span>{{.Data.Event.Title}}{{with formatDate .LangCode .Data.Event.StartTime}} · {{.}}{{end}}{{with .Data.Event.Location}}{{with .Town}} {{$.Strings.T "breadcrumb_in"}} {{.}}{{end}}{{end}}</span>
+  <span>{{.Data.Event.Title}}{{with formatDate .LangCode $.DateFormat .Data.Event.StartTime}} · {{.}}{{end}}{{with .Data.Event.Location}}{{with .Town}} {{$.Strings.T "breadcrumb_in"}} {{.}}{{end}}{{end}}</span>
   {{end}}
 </nav>
 {{end}}
@@ -115,10 +115,10 @@
 {{if or $.Data.PrevEvent $.Data.NextEvent}}
 <nav class="series-nav">
   {{if $.Data.PrevEvent}}
-  <a href="/events/{{$.Data.PrevEvent.ID}}" class="series-nav-prev" title="{{$.Data.PrevEvent.Title}}">← {{formatDate $.LangCode $.Data.PrevEvent.StartTime}}</a>
+  <a href="/events/{{$.Data.PrevEvent.ID}}" class="series-nav-prev" title="{{$.Data.PrevEvent.Title}}">← {{formatDate $.LangCode $.DateFormat $.Data.PrevEvent.StartTime}}</a>
   {{else}}<span></span>{{end}}
   {{if $.Data.NextEvent}}
-  <a href="/events/{{$.Data.NextEvent.ID}}" class="series-nav-next" title="{{$.Data.NextEvent.Title}}">{{formatDate $.LangCode $.Data.NextEvent.StartTime}} →</a>
+  <a href="/events/{{$.Data.NextEvent.ID}}" class="series-nav-next" title="{{$.Data.NextEvent.Title}}">{{formatDate $.LangCode $.DateFormat $.Data.NextEvent.StartTime}} →</a>
   {{else}}<span></span>{{end}}
 </nav>
 {{end}}
@@ -183,10 +183,10 @@
   <div class="evt-header-meta">
     {{if .StartTime}}
     <span class="evt-time">
-      {{formatTime $.LangCode $.TimeFormat .StartTime}}
+      {{formatTime $.LangCode $.TimeFormat $.DateFormat .StartTime}}
       {{if .EndTime}}
         {{if sameDate .StartTime .EndTime}} – {{formatHourMin $.TimeFormat .EndTime}}
-        {{else}} – {{formatTime $.LangCode $.TimeFormat .EndTime}}
+        {{else}} – {{formatTime $.LangCode $.TimeFormat $.DateFormat .EndTime}}
         {{end}}
       {{end}}
     </span>
@@ -242,7 +242,7 @@
       {{range $days}}
       {{$dayEntries := .Entries}}
       <div class="tt-day">
-      {{if $multiDay}}<h3 class="tt-day-heading">{{formatDate $.LangCode .Date}}</h3>{{end}}
+      {{if $multiDay}}<h3 class="tt-day-heading">{{formatDate $.LangCode $.DateFormat .Date}}</h3>{{end}}
       {{if not $dayEntries}}
       <p class="tt-day-empty">{{$.Strings.T "tt_day_empty"}}</p>
       {{else}}
@@ -469,7 +469,7 @@
     {{if .ChangedAt}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_last_update"}}</div>
-      <div class="sidebar-meta-text">{{formatTime $.LangCode $.TimeFormat .ChangedAt}}</div>
+      <div class="sidebar-meta-text">{{formatTime $.LangCode $.TimeFormat $.DateFormat .ChangedAt}}</div>
       {{if $.User}}
         {{if eq .ChangedBy "fetch"}}
           {{if .FetchSourceID}}

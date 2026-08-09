@@ -179,7 +179,7 @@ func eventPageTitle(event Event, lang string) string {
 	if event.Location != nil && event.Location.Town != "" {
 		suffix = append(suffix, event.Location.Town)
 	}
-	if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
+	if d := formatDateStr(lang, siteCfg.DateFormat(), event.StartTime); d != event.StartTime {
 		suffix = append(suffix, d)
 	}
 	if len(suffix) == 0 {

@@ -110,7 +110,7 @@
 <li class="event-item">
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
-    {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat .StartTime}}</span>{{end}}
+    {{if .StartTime}}<span>{{formatTime $.LangCode $.TimeFormat $.DateFormat .StartTime}}</span>{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     {{if or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
     {{if or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}

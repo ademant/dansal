@@ -83,7 +83,7 @@ func eventMetaDesc(event Event, lang string) string {
 	}
 
 	// Date.
-	if d := formatDateStr(lang, event.StartTime); d != event.StartTime {
+	if d := formatDateStr(lang, siteCfg.DateFormat(), event.StartTime); d != event.StartTime {
 		parts = append(parts, d)
 	}
 

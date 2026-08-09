@@ -16,7 +16,7 @@
   <div class="import-picker">
     {{range $i, $e := .PreviewEvents}}
     <div class="import-pick-row" data-pf="{{index $.Data.ImportAllPrefills $i}}">
-      <span class="import-pick-label">{{formatDate $.LangCode $e.StartTime}} — {{$e.Title}}</span>
+      <span class="import-pick-label">{{formatDate $.LangCode $.DateFormat $e.StartTime}} — {{$e.Title}}</span>
       <button type="button" class="btn-sm import-use-btn">{{$.Strings.T "suggest_import_use"}}</button>
     </div>
     {{end}}

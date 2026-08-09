@@ -40,6 +40,7 @@ type TemplateData struct {
 	LogoHeight             int
 	DarkMode               string // "auto", "light", or "dark"
 	TimeFormat             string // "24h" or "12h"
+	DateFormat             string // "de" for DD.MM.YYYY; "" for locale-based
 	AppVersion             string
 	AppBuildTime           string
 	SuggestAvailable       bool
@@ -173,20 +174,26 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 
 	return TemplateData{
-		Title:                  title,
-		Domain:                 cfg.Domain,
-		SiteName:               siteName,
-		User:                   getSessionUser(r),
-		Strings:                strs,
-		LangCode:               lang,
-		Languages:              i18n.Options(lang),
-		Contact:                contact,
-		ImpressumURL:           impressumURL,
-		Data:                   data,
-		BannerHeight:           bannerHeight,
-		LogoHeight:             logoHeight,
-		DarkMode:               cfg.DarkMode,
-		TimeFormat:             cfg.timeFormat(),
+		Title:        title,
+		Domain:       cfg.Domain,
+		SiteName:     siteName,
+		User:         getSessionUser(r),
+		Strings:      strs,
+		LangCode:     lang,
+		Languages:    i18n.Options(lang),
+		Contact:      contact,
+		ImpressumURL: impressumURL,
+		Data:         data,
+		BannerHeight: bannerHeight,
+		LogoHeight:   logoHeight,
+		DarkMode:     cfg.DarkMode,
+		TimeFormat: func() string {
+			if tf := siteCfg.TimeFormatSite(); tf != "" {
+				return tf
+			}
+			return cfg.timeFormat()
+		}(),
+		DateFormat:             siteCfg.DateFormat(),
 		AppVersion:             Version,
 		AppBuildTime:           BuildTime,
 		SuggestAvailable:       suggestAvailable(cfg),

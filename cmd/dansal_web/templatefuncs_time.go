@@ -50,10 +50,16 @@ func locWeekday(lang string, w time.Weekday) string {
 	return locWeekdays["en"][w]
 }
 
-func formatDateStr(lang, s string) string {
+// formatDateStr formats a date string.  dateFormat=="de" produces the numeric
+// European notation ("24.08.2026"); "" falls back to language-localised month
+// names ("24. August 2026" for de, "24 August 2026" for others).
+func formatDateStr(lang, dateFormat, s string) string {
 	t, ok := parseTime(s)
 	if !ok {
 		return s
+	}
+	if dateFormat == "de" {
+		return fmt.Sprintf("%02d.%02d.%d", t.Day(), int(t.Month()), t.Year())
 	}
 	mo := locMonth(lang, t.Month())
 	if lang == "de" {
@@ -289,21 +295,49 @@ func timetableGrid(entries []TimetableEntry) TimetableGrid {
 }
 
 var tmplFuncsTime = template.FuncMap{
-	"formatTime": func(lang, timeFormat, s string) string {
+	// formatTime accepts 3 or 4 string args:
+	//   3: lang, timeFormat, s             → locale-based date
+	//   4: lang, timeFormat, dateFormat, s → numeric date when dateFormat=="de"
+	// The 4-arg form is called from main templates via $.DateFormat; embed
+	// widget templates (using $.Lang) continue to use the 3-arg form.
+	"formatTime": func(args ...string) string {
+		var lang, timeFormat, dateFormat, s string
+		switch len(args) {
+		case 3:
+			lang, timeFormat, s = args[0], args[1], args[2]
+		case 4:
+			lang, timeFormat, dateFormat, s = args[0], args[1], args[2], args[3]
+		default:
+			return ""
+		}
 		t, ok := parseTime(s)
 		if !ok {
 			return s
 		}
 		wd := locWeekday(lang, t.Weekday())
-		mo := locMonth(lang, t.Month())
 		clock := fmtClock(timeFormat, t.Hour(), t.Minute())
+		if dateFormat == "de" {
+			return fmt.Sprintf("%s %02d.%02d.%d, %s", wd, t.Day(), int(t.Month()), t.Year(), clock)
+		}
+		mo := locMonth(lang, t.Month())
 		if lang == "de" {
 			return fmt.Sprintf("%s %02d. %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
 		}
 		return fmt.Sprintf("%s %02d %s %d, %s", wd, t.Day(), mo, t.Year(), clock)
 	},
-	"formatDate": func(lang, s string) string {
-		return formatDateStr(lang, s)
+	// formatDate accepts 2 or 3 string args:
+	//   2: lang, s             → locale-based date
+	//   3: lang, dateFormat, s → numeric date when dateFormat=="de"
+	// Embed widget templates use the 2-arg form and are not affected by the
+	// site-wide date_format setting (they render in the visitor's language only).
+	"formatDate": func(args ...string) string {
+		switch len(args) {
+		case 2:
+			return formatDateStr(args[0], "", args[1])
+		case 3:
+			return formatDateStr(args[0], args[1], args[2])
+		}
+		return ""
 	},
 	"isoDate": func(s string) string {
 		if t, ok := parseTime(s); ok {
@@ -355,7 +389,7 @@ var tmplFuncsTime = template.FuncMap{
 		}
 		return t1.Year() == t2.Year() && t1.Month() == t2.Month() && t1.Day() == t2.Day()
 	},
-	"timetableDays":  timetableDays,
+	"timetableDays": timetableDays,
 	"usedRoomIDs": func(entries []TimetableEntry) map[int]bool {
 		ids := map[int]bool{}
 		for _, e := range entries {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -109,6 +108,13 @@ func actorURL(cfg *Config, slug string) string {
 	return "https://" + cfg.Domain + "/org/" + slug
 }
 
+// actorKeyID returns the key id used to sign requests for an actor — the
+// actor's canonical URL plus the "#main-key" fragment referenced by its
+// publicKey document.
+func actorKeyID(cfg *Config, slug string) string {
+	return actorURL(cfg, slug) + "#main-key"
+}
+
 func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 	base := actorURL(cfg, actor.OrgSlug)
 	a := Actor{
@@ -130,7 +136,7 @@ func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 			Tags:        "https://" + cfg.Domain + "/tags",
 		},
 		PublicKey: PublicKey{
-			ID:           base + "#main-key",
+			ID:           actorKeyID(cfg, actor.OrgSlug),
 			Owner:        base,
 			PublicKeyPem: actor.PublicKeyPEM,
 		},
@@ -185,7 +191,7 @@ func relayActorFromRecord(cfg *Config, actor *ActorRecord) Actor {
 		Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
 		AlsoKnownAs:               cfg.RelayAlsoKnownAs,
 		PublicKey: PublicKey{
-			ID:           base + "#main-key",
+			ID:           actorKeyID(cfg, cfg.RelayActorName),
 			Owner:        base,
 			PublicKeyPem: actor.PublicKeyPEM,
 		},
@@ -420,26 +426,14 @@ func buildNodeInfo(cfg *Config, schemaVersion string, info DansalInfo) NodeInfo 
 	return ni
 }
 
-func nodeinfoHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func nodeinfoHandler(cfg *Config, client *DansalClient, schemaVersion string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		info, err := client.GetServiceInfo(r.Context())
 		if err != nil {
 			log.Printf("nodeinfo: could not load service info: %v", err)
 		}
-		ni := buildNodeInfo(cfg, "2.0", info)
-		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.0#"`)
-		json.NewEncoder(w).Encode(ni)
-	}
-}
-
-func nodeinfo21Handler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		info, err := client.GetServiceInfo(r.Context())
-		if err != nil {
-			log.Printf("nodeinfo: could not load service info: %v", err)
-		}
-		ni := buildNodeInfo(cfg, "2.1", info)
-		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"`)
+		ni := buildNodeInfo(cfg, schemaVersion, info)
+		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/`+schemaVersion+`#"`)
 		json.NewEncoder(w).Encode(ni)
 	}
 }
@@ -557,30 +551,18 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "read error")
+		raw, ok := readInboxActivity(w, r)
+		if !ok {
 			return
 		}
-		var raw map[string]any
-		if err := json.Unmarshal(body, &raw); err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid JSON")
-			return
-		}
-		processInboxActivity(w, r, cfg, db, client, actor, raw, body)
+		processInboxActivity(w, r, cfg, db, client, actor, raw)
 	}
 }
 
 func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "read error")
-			return
-		}
-		var raw map[string]any
-		if err := json.Unmarshal(body, &raw); err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid JSON")
+		raw, ok := readInboxActivity(w, r)
+		if !ok {
 			return
 		}
 		actor := resolveSharedInboxActor(cfg, db, raw)
@@ -588,8 +570,35 @@ func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Hand
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
-		processInboxActivity(w, r, cfg, db, client, actor, raw, body)
+		processInboxActivity(w, r, cfg, db, client, actor, raw)
 	}
+}
+
+// readInboxActivity reads and validates an inbox POST: it decodes the bounded
+// body, requires a non-empty actor field (#999), and verifies the HTTP
+// signature before any processing. On failure it writes the error response
+// and returns ok=false.
+func readInboxActivity(w http.ResponseWriter, r *http.Request) (raw map[string]any, ok bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "read error")
+		return nil, false
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid JSON")
+		return nil, false
+	}
+	actorField, _ := raw["actor"].(string)
+	if actorField == "" {
+		writeJSONError(w, r, http.StatusBadRequest, "missing actor")
+		return nil, false
+	}
+	if err := verifyInboxRequest(r.Context(), fedHTTPClient, r, body, actorField); err != nil {
+		log.Printf("inbox: verification failed for %s: %v", actorField, err)
+		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
+		return nil, false
+	}
+	return raw, true
 }
 
 // resolveSharedInboxActor determines the target local actor for an activity
@@ -605,12 +614,7 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]any) *Actor
 		targetURL, _ = raw["object"].(string)
 	case "Undo":
 		if obj, ok := raw["object"].(map[string]any); ok {
-			switch v := obj["object"].(type) {
-			case string:
-				targetURL = v
-			case map[string]any:
-				targetURL, _ = v["id"].(string)
-			}
+			targetURL = apObjectID(obj["object"])
 		}
 	}
 
@@ -629,82 +633,92 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]any) *Actor
 	return actor
 }
 
-func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]any, body []byte) {
-	activityType, _ := raw["type"].(string)
-	actorField, _ := raw["actor"].(string)
+// apObjectID extracts the id from an AP object field that may be either a
+// bare URI string or an object map.
+func apObjectID(v any) string {
+	switch obj := v.(type) {
+	case string:
+		return obj
+	case map[string]any:
+		id, _ := obj["id"].(string)
+		return id
+	}
+	return ""
+}
 
-	// Signature verification is mandatory for every inbox activity: an empty
-	// actor field must not be able to skip it (#999). Real ActivityPub
-	// servers always sign inbox POSTs. fedHTTPClient (not client.HTTP) is
-	// used to fetch the signer's public key so a hostile keyId can't SSRF
-	// through dansal-web's unrestricted API client (#998).
-	if actorField == "" {
+// handleFollowActivity processes an inbound Follow for an org or tag actor:
+// resolve the follower's inbox, persist the follow, then mail the signed
+// Accept in a goroutine so the HTTP handler returns immediately.
+// addFollower persists the relationship; sendAccept performs the actual POST.
+func handleFollowActivity(w http.ResponseWriter, r *http.Request, client *DansalClient, actorField string, addFollower func(inboxURL string) error, sendAccept func(inboxURL string)) {
+	inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
+	if err != nil {
+		log.Printf("inbox: resolve actor %s: %v", actorField, err)
+		inboxURL = ""
+	}
+	if inboxURL == "" {
+		writeJSONError(w, r, http.StatusBadRequest, "could not resolve actor inbox")
+		return
+	}
+	if err := addFollower(inboxURL); err != nil {
+		writeJSONError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	go sendAccept(inboxURL)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleUndoActivity processes an inbound Undo{Follow}, removing the follow
+// recorded by the undo's actor (falling back to the embedded Follow object's
+// actor field). Shared by org and tag inboxes.
+func handleUndoActivity(w http.ResponseWriter, r *http.Request, raw map[string]any, actorField string, removeFollower func(actorURI string) error) {
+	obj, _ := raw["object"].(map[string]any)
+	if obj == nil {
+		writeJSONError(w, r, http.StatusBadRequest, "missing object")
+		return
+	}
+	objType, _ := obj["type"].(string)
+	if objType != "Follow" {
+		writeJSONError(w, r, http.StatusBadRequest, "only Undo{Follow} supported")
+		return
+	}
+	undoActor := actorField
+	if undoActor == "" {
+		undoActor, _ = obj["actor"].(string)
+	}
+	if undoActor == "" {
 		writeJSONError(w, r, http.StatusBadRequest, "missing actor")
 		return
 	}
-	if err := verifyInboxRequest(r.Context(), fedHTTPClient, r, body, actorField); err != nil {
-		log.Printf("inbox: verification failed for %s: %v", actorField, err)
-		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
+	if err := removeFollower(undoActor); err != nil {
+		writeJSONError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]any) {
+	activityType, _ := raw["type"].(string)
+	actorField, _ := raw["actor"].(string)
+
+	// Signature verification happened in readInboxActivity, which also
+	// rejected empty actor fields (#999) before any processing.
 
 	switch activityType {
 	case "Follow":
-		if actorField == "" {
-			writeJSONError(w, r, http.StatusBadRequest, "missing actor")
-			return
-		}
-		inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
-		if err != nil {
-			log.Printf("inbox: resolve actor %s: %v", actorField, err)
-			inboxURL = ""
-		}
-		if inboxURL == "" {
-			writeJSONError(w, r, http.StatusBadRequest, "could not resolve actor inbox")
-			return
-		}
-		if err := addFollower(db, actor.OrgID, actorField, inboxURL); err != nil {
-			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-		go sendAccept(cfg, actor, raw, actorField, inboxURL)
-		w.WriteHeader(http.StatusAccepted)
+		handleFollowActivity(w, r, client, actorField,
+			func(inboxURL string) error { return addFollower(db, actor.OrgID, actorField, inboxURL) },
+			func(inboxURL string) { sendAccept(cfg, actor, raw, actorField, inboxURL) },
+		)
 
 	case "Undo":
-		obj, _ := raw["object"].(map[string]any)
-		if obj == nil {
-			writeJSONError(w, r, http.StatusBadRequest, "missing object")
-			return
-		}
-		objType, _ := obj["type"].(string)
-		if objType != "Follow" {
-			writeJSONError(w, r, http.StatusBadRequest, "only Undo{Follow} supported")
-			return
-		}
-		undoActor := actorField
-		if undoActor == "" {
-			undoActor, _ = obj["actor"].(string)
-		}
-		if undoActor == "" {
-			writeJSONError(w, r, http.StatusBadRequest, "missing actor")
-			return
-		}
-		if err := removeFollower(db, actor.OrgID, undoActor); err != nil {
-			writeJSONError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
+		handleUndoActivity(w, r, raw, actorField,
+			func(undoActor string) error { return removeFollower(db, actor.OrgID, undoActor) },
+		)
 
 	case "Accept":
 		// Accept{Follow}: update our outbound follow state to accepted.
-		var followActivityID string
-		switch v := raw["object"].(type) {
-		case string:
-			followActivityID = v
-		case map[string]any:
-			followActivityID, _ = v["id"].(string)
-		}
-		if followActivityID != "" {
+		if followActivityID := apObjectID(raw["object"]); followActivityID != "" {
 			if err := updateFollowStateByActivityID(db, followActivityID, "accepted"); err != nil {
 				log.Printf("inbox Accept: update follow state for %s: %v", followActivityID, err)
 			}
@@ -758,13 +772,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		w.WriteHeader(http.StatusAccepted)
 
 	case "Delete":
-		var apID string
-		switch v := raw["object"].(type) {
-		case string:
-			apID = v
-		case map[string]any:
-			apID, _ = v["id"].(string)
-		}
+		apID := apObjectID(raw["object"])
 		if apID != "" {
 			// Only allow deletion by the actor that created the event.
 			if storedActor, err := getFederatedEventActor(db, apID); err == nil {
@@ -943,25 +951,8 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]any, 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inboxURL, bytes.NewReader(body))
-	if err != nil {
-		log.Printf("sendAccept new request: %v", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/activity+json")
-	keyID := base + "#main-key"
-	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
-		log.Printf("sendAccept sign: %v", err)
-		return
-	}
-	resp, err := fedHTTPClient.Do(req)
-	if err != nil {
+	if err := postToInbox(ctx, inboxURL, actorKeyID(cfg, actor.OrgSlug), actor.PrivateKeyPEM, body); err != nil {
 		log.Printf("sendAccept post: %v", err)
-		return
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		log.Printf("sendAccept: remote returned %d for %s", resp.StatusCode, inboxURL)
 	}
 }
 
@@ -1287,22 +1278,8 @@ func sendFollowActivity(cfg *Config, actor *ActorRecord, followeeAPID, followeeI
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, followeeInbox, bytes.NewReader(body))
-	if err != nil {
+	if err := postToInbox(ctx, followeeInbox, actorKeyID(cfg, actor.OrgSlug), actor.PrivateKeyPEM, body); err != nil {
 		return "", err
-	}
-	req.Header.Set("Content-Type", "application/activity+json")
-	keyID := base + "#main-key"
-	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
-		return "", fmt.Errorf("sign: %w", err)
-	}
-	resp, err := fedHTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("remote returned %d", resp.StatusCode)
 	}
 	return followActivityID, nil
 }
@@ -1327,22 +1304,5 @@ func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, followeeInbox, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/activity+json")
-	keyID := base + "#main-key"
-	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
-		return fmt.Errorf("sign: %w", err)
-	}
-	resp, err := fedHTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("remote returned %d", resp.StatusCode)
-	}
-	return nil
+	return postToInbox(ctx, followeeInbox, actorKeyID(cfg, actor.OrgSlug), actor.PrivateKeyPEM, body)
 }

@@ -298,7 +298,7 @@ func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient
 					continue
 				}
 				activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, orgActor.OrgSlug, e)
-				if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
+				if err := deliverActivityToFollowers(cfg, db, relayActor, activity); err != nil {
 					log.Printf("relay redeliver event %d: %v", e.ID, err)
 				} else {
 					sent++

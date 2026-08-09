@@ -753,7 +753,7 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 					continue
 				}
 				activity := buildCreateActivity(cfg, actor.OrgSlug, e)
-				if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+				if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
 					log.Printf("redeliver org %d event %d: %v", id, e.ID, err)
 				} else {
 					sent++

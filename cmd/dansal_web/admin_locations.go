@@ -285,10 +285,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		// Form is multipart/form-data (shares the template with the edit page
-		// which supports site-plan image uploads). ParseForm alone skips the
-		// multipart body, leaving all fields empty and causing a spurious 400.
-		if err := parseAdminMultipart(r); err != nil {
+		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -424,9 +421,6 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		// A site-plan upload triggers a slow AVIF re-encode on the backend —
-		// extend the deadline for this request rather than raising it server-wide.
-		adminWriteDeadline(w)
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -438,7 +432,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := parseAdminMultipart(r); err != nil {
+		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -497,19 +491,6 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			return
 		}
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", id)})
-		if loc.ParentID == nil {
-			if r.FormValue("remove_site_plan") == "1" {
-				if err := client.DeleteLocationSitePlan(r.Context(), id, token); err != nil {
-					log.Printf("delete location site plan %d: %v", id, err)
-				}
-			} else if file, header, ferr := r.FormFile("site_plan"); ferr == nil {
-				data, _ := io.ReadAll(file)
-				file.Close()
-				if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
-					log.Printf("upload location site plan error: %v", uerr)
-				}
-			}
-		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit?saved=1", id), http.StatusSeeOther)
 	}
 }
@@ -851,6 +832,84 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 // POST /admin/locations/{room_id}/plan-position — saves a room's dragged
 // position on its building's site-plan image (#877). Called via fetch() from
 // the drag-and-drop JS on the building's edit page, not a full page submit.
+// adminLocationSitePlanUploadHandler is the AJAX proxy for site-plan image
+// uploads (#878). The browser POSTs multipart/form-data directly here on file
+// selection — decoupled from the main location form save so the slow AVIF
+// re-encode doesn't stall the whole page.
+//
+// POST /admin/locations/{id}/site-plan
+func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+			return
+		}
+		// Extend deadline: AVIF re-encode can take 20-40 s.
+		adminWriteDeadline(w)
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "invalid multipart")
+			return
+		}
+		file, header, ferr := r.FormFile("site_plan")
+		if ferr != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "missing site_plan field")
+			return
+		}
+		data, _ := io.ReadAll(file)
+		file.Close()
+		token := getSessionToken(r)
+		if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
+			log.Printf("upload location site plan %d: %v", id, uerr)
+			writeJSONError(w, r, http.StatusBadGateway, "upload failed")
+			return
+		}
+		// Return the new URL so the JS can update the preview immediately.
+		loc, lerr := client.GetLocation(r.Context(), id)
+		if lerr != nil {
+			w.Write([]byte(`{"ok":true}`))
+			return
+		}
+		type resp struct {
+			OK  bool   `json:"ok"`
+			URL string `json:"url"`
+		}
+		b, _ := json.Marshal(resp{OK: true, URL: loc.SitePlanURL})
+		w.Write(b)
+	}
+}
+
+// adminLocationSitePlanDeleteHandler is the AJAX proxy that removes a
+// location's site-plan image when the user clicks "Remove" (#878).
+//
+// POST /admin/locations/{id}/site-plan/delete
+func adminLocationSitePlanDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+			return
+		}
+		token := getSessionToken(r)
+		if derr := client.DeleteLocationSitePlan(r.Context(), id, token); derr != nil {
+			log.Printf("delete location site plan %d: %v", id, derr)
+			writeJSONError(w, r, http.StatusBadGateway, "delete failed")
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	}
+}
+
 func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

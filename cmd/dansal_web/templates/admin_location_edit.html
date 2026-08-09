@@ -55,7 +55,7 @@
 </div>
 {{end}}
 
-<form method="post" enctype="multipart/form-data" class="edit-form" id="loc-edit-form">
+<form method="post" class="edit-form" id="loc-edit-form">
   <input type="hidden" name="return" value="{{.ReturnURL}}">
   <input type="hidden" name="from" value="{{.From}}">
 
@@ -218,31 +218,107 @@
   <section class="form-section" id="sec-siteplan">
     <h2>{{$.Strings.T "loc_siteplan_section"}}</h2>
     <p class="field-hint">{{$.Strings.T "loc_siteplan_hint"}}</p>
-    <input type="file" name="site_plan" accept="image/*">
 
-    {{if .Location.SitePlanURL}}
-    <label class="check-label"><input type="checkbox" name="remove_site_plan" value="1"> {{$.Strings.T "loc_siteplan_remove"}}</label>
+    <!-- AJAX upload — fires on file selection, independent of the Save button -->
+    <div class="siteplan-upload-row">
+      <label class="btn-secondary siteplan-file-label" id="siteplan-file-label">
+        {{$.Strings.T "loc_siteplan_choose"}}
+        <input type="file" id="siteplan-file-input" accept="image/*" style="display:none">
+      </label>
+      <span id="siteplan-spinner" hidden aria-live="polite">⏳ {{$.Strings.T "loc_siteplan_uploading"}}</span>
+      <span id="siteplan-error" class="form-error" hidden></span>
+    </div>
 
-    <div id="siteplan-canvas" class="siteplan-canvas">
-      <img src="{{.Location.SitePlanURL}}" alt="" draggable="false">
-      {{range placedRooms .Location.Children}}
-      <div class="siteplan-marker" draggable="true" data-room-id="{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
-        <span class="siteplan-marker-label">{{.Location}}</span>
+    <div id="siteplan-preview" {{if not .Location.SitePlanURL}}hidden{{end}}>
+      {{if .Location.SitePlanURL}}
+      <label class="check-label" id="siteplan-remove-label">
+        <button type="button" class="btn-sm btn-del" id="siteplan-remove-btn">{{$.Strings.T "loc_siteplan_remove"}}</button>
+      </label>
+      {{end}}
+
+      <div id="siteplan-canvas" class="siteplan-canvas">
+        <img id="siteplan-img" src="{{.Location.SitePlanURL}}" alt="" draggable="false">
+        {{range placedRooms .Location.Children}}
+        <div class="siteplan-marker" draggable="true" data-room-id="{{.ID}}" style="left:{{pct .PlanX}}%;top:{{pct .PlanY}}%">
+          <span class="siteplan-marker-label">{{.Location}}</span>
+        </div>
+        {{end}}
       </div>
+
+      {{if unplacedRooms .Location.Children}}
+      <p class="field-hint">{{$.Strings.T "loc_siteplan_unplaced_hint"}}</p>
+      <ul id="siteplan-unplaced" class="siteplan-unplaced">
+        {{range unplacedRooms .Location.Children}}
+        <li draggable="true" data-room-id="{{.ID}}">{{.Location}}</li>
+        {{end}}
+      </ul>
       {{end}}
     </div>
 
-    {{if unplacedRooms .Location.Children}}
-    <p class="field-hint">{{$.Strings.T "loc_siteplan_unplaced_hint"}}</p>
-    <ul id="siteplan-unplaced" class="siteplan-unplaced">
-      {{range unplacedRooms .Location.Children}}
-      <li draggable="true" data-room-id="{{.ID}}">{{.Location}}</li>
-      {{end}}
-    </ul>
+    {{if and (not .Location.SitePlanURL) .Location.Children}}
+    <p class="field-hint" id="siteplan-upload-first-hint">{{$.Strings.T "loc_siteplan_upload_first_hint"}}</p>
     {{end}}
-    {{else if .Location.Children}}
-    <p class="field-hint">{{$.Strings.T "loc_siteplan_upload_first_hint"}}</p>
-    {{end}}
+
+    <script>
+    (function(){
+      var locID   = {{.Location.ID}};
+      var input   = document.getElementById('siteplan-file-input');
+      var spinner = document.getElementById('siteplan-spinner');
+      var errEl   = document.getElementById('siteplan-error');
+      var preview = document.getElementById('siteplan-preview');
+      var img     = document.getElementById('siteplan-img');
+      var rmBtn   = document.getElementById('siteplan-remove-btn');
+      var hint    = document.getElementById('siteplan-upload-first-hint');
+      var label   = document.getElementById('siteplan-file-label');
+
+      input.addEventListener('change', function(){
+        if (!input.files || !input.files[0]) return;
+        errEl.hidden = true;
+        spinner.hidden = false;
+        label.setAttribute('aria-disabled','true');
+        var fd = new FormData();
+        fd.append('site_plan', input.files[0]);
+        fetch('/admin/locations/' + locID + '/site-plan', {method:'POST', body:fd})
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            spinner.hidden = true;
+            label.removeAttribute('aria-disabled');
+            input.value = '';
+            if (!data.ok) { errEl.textContent = data.error || '{{$.Strings.T "loc_siteplan_save_error"}}'; errEl.hidden = false; return; }
+            if (img && data.url) { img.src = data.url + '?t=' + Date.now(); }
+            if (hint) hint.hidden = true;
+            preview.hidden = false;
+          })
+          .catch(function(){
+            spinner.hidden = true;
+            label.removeAttribute('aria-disabled');
+            input.value = '';
+            errEl.textContent = '{{$.Strings.T "loc_siteplan_save_error"}}';
+            errEl.hidden = false;
+          });
+      });
+
+      if (rmBtn) {
+        rmBtn.addEventListener('click', function(){
+          if (!confirm('{{$.Strings.T "loc_siteplan_remove_confirm"}}')) return;
+          rmBtn.disabled = true;
+          fetch('/admin/locations/' + locID + '/site-plan/delete', {method:'POST'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+              rmBtn.disabled = false;
+              if (!data.ok) { errEl.textContent = data.error || '{{$.Strings.T "loc_siteplan_save_error"}}'; errEl.hidden = false; return; }
+              preview.hidden = true;
+              if (hint) hint.hidden = false;
+            })
+            .catch(function(){
+              rmBtn.disabled = false;
+              errEl.textContent = '{{$.Strings.T "loc_siteplan_save_error"}}';
+              errEl.hidden = false;
+            });
+        });
+      }
+    })();
+    </script>
   </section>
   {{end}}
 

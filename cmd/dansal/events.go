@@ -1321,6 +1321,48 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 	return musicians, nil
 }
 
+// attachMusiciansToEvents batch-fetches musicians for all events in the slice
+// with a single SQL query and attaches them in place. Used by getEvents when
+// ?with_musicians=true is set — O(1) queries for an N-event list.
+func attachMusiciansToEvents(events []Event) {
+	if len(events) == 0 {
+		return
+	}
+	ids := make([]any, len(events))
+	idx := make(map[int]int, len(events)) // event ID → slice index
+	for i, e := range events {
+		ids[i] = e.ID
+		idx[e.ID] = i
+	}
+	placeholders := make([]byte, 0, len(ids)*2)
+	for i := range ids {
+		if i > 0 {
+			placeholders = append(placeholders, ',')
+		}
+		placeholders = append(placeholders, '?')
+	}
+	rows, err := db.Query(
+		`SELECT em.event_id, m.id, m.bandname, COALESCE(m.short_name,'')
+		 FROM musicians m JOIN event_musicians em ON m.id = em.musician_id
+		 WHERE em.event_id IN (`+string(placeholders)+`) ORDER BY em.event_id, m.bandname`,
+		ids...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var eventID int
+		var m Musician
+		if err := rows.Scan(&eventID, &m.ID, &m.Bandname, &m.ShortName); err != nil {
+			continue
+		}
+		if i, ok := idx[eventID]; ok {
+			events[i].Musicians = append(events[i].Musicians, m)
+		}
+	}
+}
+
 // syncEventTypeTags reconciles has_ball / has_workshop / has_festival with the
 // tags slice so that either source of truth (explicit booleans from importers,
 // or tag slugs from the web UI) produces consistent DB state.
@@ -1597,6 +1639,13 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	annotateEditable(events, userRole, callerID)
+
+	// Batch-attach musicians when the caller opts in (?with_musicians=true).
+	// A single query fetches all musicians for all events in the result set —
+	// O(1) extra query regardless of list length.
+	if r.URL.Query().Get("with_musicians") == "true" && len(events) > 0 {
+		attachMusiciansToEvents(events)
+	}
 
 	// Post-filter with haversine when a geo radius was requested.
 	if latStr, lonStr, radStr := r.URL.Query().Get("lat"), r.URL.Query().Get("lon"), r.URL.Query().Get("radius_km"); latStr != "" && lonStr != "" && radStr != "" {

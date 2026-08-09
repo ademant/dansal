@@ -950,7 +950,7 @@ func (c *DansalClient) GetEventsFilteredWithTotal(ctx context.Context, params ur
 
 func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) ([]Event, error) {
 	var events []Event
-	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d", locationID), &events)
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d&with_musicians=true", locationID), &events)
 }
 
 func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]Event, error) {
@@ -1587,7 +1587,7 @@ func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, 
 
 func (c *DansalClient) GetAllEventsByOrg(ctx context.Context, orgID int) ([]Event, error) {
 	var events []Event
-	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?is_published=true&include_past=true&organization_id=%d", orgID), &events)
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?is_published=true&include_past=true&organization_id=%d&with_musicians=true", orgID), &events)
 }
 
 func (c *DansalClient) GetMusiciansByOrg(ctx context.Context, orgID int) ([]Musician, error) {

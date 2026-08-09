@@ -32,7 +32,7 @@
   {{end}}
 
   <div id="tab-manual" class="tab-panel">
-  <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form"{{if $.Data.ManageToken}} enctype="multipart/form-data"{{end}}>
+  <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form"{{if or $.Data.ManageToken $.Data.CanUploadImageNow}} enctype="multipart/form-data"{{end}}>
     {{if not .ManageToken}}<input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">{{end}}
 
     <!-- Step 1: What? -->
@@ -94,7 +94,6 @@
     <!-- Step 2: When? -->
     <div class="wiz-step" data-step="2" hidden>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "evt_start"}} / {{$.Strings.T "evt_end"}} *</label>
         <div class="sg-date-time-row">
           <div class="dpr-wrap">
             <button type="button" id="sg-date-btn" class="dpr-btn"></button>
@@ -107,7 +106,24 @@
               <table class="dpr-cal-grid" id="sg-cal-grid"></table>
             </div>
           </div>
-          <input type="text" id="sg-time" class="sg-time-input" placeholder="20:00-23:00" autocomplete="off">
+          <div class="sg-time-col">
+            <label class="sg-time-col-label" for="sg-start-time">{{$.Strings.T "suggest_start_time"}} *</label>
+            <input type="time" id="sg-start-time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" class="sg-time-input" value="18:00">
+            <div class="sg-time-swipe" id="sg-start-time-swipe">
+              <div class="sg-ts-col" data-part="h"><span class="sg-ts-digits">18</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
+              <span class="sg-ts-sep">:</span>
+              <div class="sg-ts-col" data-part="m"><span class="sg-ts-digits">00</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
+            </div>
+          </div>
+          <div class="sg-time-col">
+            <label class="sg-time-col-label" for="sg-end-time">{{$.Strings.T "suggest_end_time"}} *</label>
+            <input type="time" id="sg-end-time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" class="sg-time-input" value="23:00">
+            <div class="sg-time-swipe" id="sg-end-time-swipe">
+              <div class="sg-ts-col" data-part="h"><span class="sg-ts-digits">23</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
+              <span class="sg-ts-sep">:</span>
+              <div class="sg-ts-col" data-part="m"><span class="sg-ts-digits">00</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
+            </div>
+          </div>
         </div>
         <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
       </div>
@@ -270,6 +286,16 @@
         <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {{end}}
+        {{if $.Data.CanUploadImageNow}}
+        <div class="form-row">
+          <label>{{$.Strings.T "suggest_manage_image_label"}}
+            <input type="file" name="image" accept="image/*">
+          </label>
+          <p class="hint">{{$.Strings.T "suggest_manage_image_hint"}}</p>
+        </div>
+        {{else if $.Data.HintSMTP}}
+        <p class="suggest-hint hint-review">{{$.Strings.T "suggest_wizard_image_after_verify_hint"}}</p>
+        {{end}}
       {{end}}
       {{if $.Data.ManageToken}}
       <div class="form-row">
@@ -327,7 +353,20 @@
 .form-row input[type=text],.form-row input[type=email],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-date-time-row{display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap}
 .sg-date-time-row .dpr-wrap{flex:0 0 auto}
-.sg-time-input{flex:1;min-width:9rem;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem}
+.sg-time-col{flex:1;min-width:9rem}
+.sg-time-col-label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.3rem}
+.sg-time-input{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.sg-time-swipe{display:none;align-items:flex-start;justify-content:center;gap:.5rem;background:#fff;border:1px solid #ccc;border-radius:6px;padding:.55rem .7rem}
+.sg-ts-col{display:flex;flex-direction:column;align-items:center;gap:.3rem;user-select:none;-webkit-user-select:none}
+.sg-ts-digits{font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums;min-width:1.7rem;text-align:center;line-height:1.4}
+.sg-ts-btns{display:flex;gap:.35rem}
+.sg-ts-btn{width:1.9rem;height:1.9rem;font-size:1.1rem;line-height:1;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;color:#333;cursor:pointer;touch-action:manipulation}
+.sg-ts-btn:hover{background:#e8e8e8}
+.sg-ts-sep{font-size:1.5rem;font-weight:600;color:#555;line-height:2rem;margin-top:.1rem}
+@media (max-width:767px){
+  .sg-time-input{display:none}
+  .sg-time-swipe{display:flex}
+}
 .form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .check-row{display:flex;gap:1rem;flex-wrap:wrap;margin:.3rem 0}
 .form-label-sm{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.25rem}
@@ -520,7 +559,7 @@ function sgGrowTTTable(el) {
   var btn  = document.getElementById('sg-date-btn');
   var popup = document.getElementById('sg-date-popup');
   if (!btn || !popup) return;
-  initDateRangePicker({
+  window.sgDatePickerSet = initDateRangePicker({
     btn: btn,
     popup: popup,
     grid: document.getElementById('sg-cal-grid'),
@@ -532,37 +571,92 @@ function sgGrowTTTable(el) {
     onSelect: function(f, t) {
       document.getElementById('sg-date-from').value = f;
       document.getElementById('sg-date-to').value   = t;
+      applyTimeDefaults(f, t || f);
     }
-  });
+  }).setRange;
   document.addEventListener('click', function(e) {
     if (!popup.hidden && !popup.contains(e.target) && e.target !== btn) popup.hidden = true;
   });
 })();
 
-// ── Time field: normalise "20" → "20:00", "20-23" → "20:00-23:00" ────────
+// ── Time helpers (shared by the desktop native inputs and the mobile
+// swipe picker; #1049) ────────────────────────────────────────────────────
+function setTimeInput(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (el.value === val) return;
+  el.value = val;
+  var ev = new Event('input', {bubbles: true});
+  el.dispatchEvent(ev);
+}
+// Apply the per-range defaults: start 18:00, end 23:00 for a single day and
+// 12:00 for a multi-day range. Only touches values that are still the default
+// (or empty) so a user-picked time is never overwritten.
+function applyTimeDefaults(dateFrom, dateTo) {
+  var startInp = document.getElementById('sg-start-time');
+  var endInp   = document.getElementById('sg-end-time');
+  if (startInp && !startInp.value) setTimeInput('sg-start-time', '18:00');
+  if (endInp) {
+    var defaultEnd = dateFrom === dateTo ? '23:00' : '12:00';
+    if (!endInp.value || endInp.value === '23:00' || endInp.value === '12:00') {
+      setTimeInput('sg-end-time', defaultEnd);
+    }
+  }
+}
+
+// ── Mobile time picker: two digit columns (hh / mm) with +/− buttons and a
+// horizontal swipe to step the active column. Mirrors the board persons
+// control in event.html. Hidden on desktop (native <input type="time">), shown
+// on mobile via CSS media query.
 (function(){
-  var inp = document.getElementById('sg-time');
-  if (!inp) return;
-  function normPart(p) {
-    p = (p || '').trim();
-    if (!p) return '';
-    if (/^\d{1,2}$/.test(p))  return p.padStart(2,'0') + ':00';
-    if (/^\d{3}$/.test(p))    return '0' + p[0] + ':' + p.slice(1);
-    if (/^\d{4}$/.test(p))    return p.slice(0,2) + ':' + p.slice(2);
-    return p;
+  var swipes = document.querySelectorAll('.sg-time-swipe');
+  if (!swipes.length) return;
+  function parse(v) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(v || '');
+    return m ? {h:+m[1], m:+m[2]} : {h:18, m:0};
   }
-  function normalize() {
-    var v = inp.value;
-    if (!v.trim()) return;
-    var dash = v.indexOf('-', 2);
-    var normed = dash < 0
-      ? normPart(v)
-      : normPart(v.slice(0, dash)) + '-' + normPart(v.slice(dash + 1));
-    if (normed !== v) inp.value = normed;
-  }
-  inp.addEventListener('blur', normalize);
-  inp.addEventListener('keyup', function(e) {
-    if (e.key === '-') normalize();
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  swipes.forEach(function(sw){
+    var inputId = sw.id.replace('-swipe', '');
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var digits = {h: sw.querySelector('[data-part="h"] .sg-ts-digits'), m: sw.querySelector('[data-part="m"] .sg-ts-digits')};
+    var activePart = null;
+    function refresh() {
+      var t = parse(input.value);
+      digits.h.textContent = pad(t.h);
+      digits.m.textContent = pad(t.m);
+    }
+    function step(dir) {
+      var t = parse(input.value);
+      if (activePart === 'h') { t.h = (t.h + dir + 24) % 24; }
+      else if (activePart === 'm') { t.m = (t.m + dir + 60) % 60; }
+      else { activePart = 'h'; step(dir); return; }
+      setTimeInput(inputId, pad(t.h) + ':' + pad(t.m));
+    }
+    input.addEventListener('input', refresh);
+    sw.querySelectorAll('.sg-ts-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        activePart = b.closest('.sg-ts-col').dataset.part;
+        step(parseInt(b.dataset.dir, 10));
+      });
+    });
+    sw.querySelectorAll('.sg-ts-col').forEach(function(col){
+      col.addEventListener('click', function(){ activePart = col.dataset.part; });
+    });
+    var touchStartX = null;
+    sw.addEventListener('touchstart', function(e){
+      if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
+    }, {passive: true});
+    sw.addEventListener('touchend', function(e){
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      touchStartX = null;
+      if (Math.abs(dx) < 30) return;
+      if (activePart === null) activePart = 'h';
+      step(dx < 0 ? 1 : -1);
+    }, {passive: true});
+    refresh();
   });
 })();
 
@@ -594,7 +688,8 @@ function sgGrowTTTable(el) {
     });
     var dateFrom = document.getElementById('sg-date-from').value;
     var dateTo   = document.getElementById('sg-date-to').value || dateFrom;
-    var timeVal  = (document.getElementById('sg-time').value || '').trim();
+    var startInp = document.getElementById('sg-start-time');
+    var endInp   = document.getElementById('sg-end-time');
     var errEl    = document.getElementById('sg-time-err');
     errEl.style.display = 'none';
 
@@ -605,14 +700,42 @@ function sgGrowTTTable(el) {
       return;
     }
 
-    var startTime = '', endTime = '';
-    if (timeVal) {
-      var dash = timeVal.indexOf('-', 2);
-      startTime = dash < 0 ? timeVal : timeVal.slice(0, dash).trim();
-      endTime   = dash < 0 ? timeVal : timeVal.slice(dash + 1).trim();
+    var startH = startInp ? startInp.value : '';
+    var endH   = endInp ? endInp.value : '';
+    if (!startH) { startH = '18:00'; if (startInp) startInp.value = startH; }
+    // An empty end time means "no end" (kept empty for prefilled events without
+    // one); the defaults live in the input values + applyTimeDefaults.
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function fmtDT(d) {
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
     }
-    document.getElementById('sg-start').value = startTime ? (dateFrom + 'T' + startTime) : (dateFrom + 'T00:00');
-    document.getElementById('sg-end').value   = endTime   ? (dateTo   + 'T' + endTime)   : '';
+
+    var startDT = new Date(dateFrom + 'T' + startH + ':00');
+    if (isNaN(startDT.getTime())) {
+      e.preventDefault();
+      errEl.textContent = '{{$.Strings.T "suggest_start_time"}}';
+      errEl.style.display = '';
+      return;
+    }
+    if (endH) {
+      var endDT = new Date(dateTo + 'T' + endH + ':00');
+      if (isNaN(endDT.getTime())) {
+        e.preventDefault();
+        errEl.textContent = '{{$.Strings.T "suggest_end_time"}}';
+        errEl.style.display = '';
+        return;
+      }
+      if (endDT <= startDT) {
+        e.preventDefault();
+        errEl.textContent = '{{$.Strings.T "suggest_error_end_before_start"}}';
+        errEl.style.display = '';
+        return;
+      }
+    }
+
+    document.getElementById('sg-start').value = fmtDT(startDT);
+    document.getElementById('sg-end').value   = endH ? fmtDT(new Date(dateTo + 'T' + endH + ':00')) : '';
   });
 })();
 // Nominatim location search
@@ -734,14 +857,15 @@ function applyWizardData(data) {
   setVal('sg-zipcode',  data.zipcode);
   if (data.start_time) {
     var dt = data.start_time.split('T');
-    document.getElementById('sg-date-from').value = dt[0] || '';
-    document.getElementById('sg-date-to').value   = dt[0] || '';
+    var fromD = dt[0] || '';
+    var toD   = (data.end_time && data.end_time.split('T')[0]) || fromD;
+    document.getElementById('sg-date-from').value = fromD;
+    document.getElementById('sg-date-to').value   = toD;
     var startH = dt[1] ? dt[1].slice(0,5) : '';
     var endH   = data.end_time && data.end_time.split('T')[1] ? data.end_time.split('T')[1].slice(0,5) : '';
-    var timeInp = document.getElementById('sg-time');
-    if (timeInp) timeInp.value = startH && endH ? (startH + '-' + endH) : startH;
-    var dateBtn = document.getElementById('sg-date-btn');
-    if (dateBtn) dateBtn.textContent = dt[0];
+    setTimeInput('sg-start-time', startH);
+    setTimeInput('sg-end-time', endH);
+    if (window.sgDatePickerSet) window.sgDatePickerSet(fromD, toD);
   }
   function makeChip(name, fieldName) {
     var chip = document.createElement('div'); chip.className = 'musician-chip';

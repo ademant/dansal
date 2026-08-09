@@ -29,6 +29,10 @@ type SuggestPageData struct {
 	ExistingImageURL  string          // current event image URL, shown as preview in manage mode
 	IsImportMode      bool            // true when returning from import: wizard is pre-filled
 	ImportAllPrefills []string        // each imported event as wizPrefill JSON (for picker)
+	// CanUploadImageNow is true when the submitter is logged in (#1050): the
+	// image can be attached on the initial submit via the standing manage token
+	// instead of only after email verification.
+	CanUploadImageNow bool
 }
 
 type SuggestDoneData struct {
@@ -36,6 +40,15 @@ type SuggestDoneData struct {
 }
 type SuggestVerifiedData struct {
 	Error string
+}
+
+// suggestCanUploadImage reports whether the current visitor may attach an image
+// on the initial suggest submit (#1050): only authenticated users, since the
+// anonymous flow has no verified identity to attribute the upload to. The image
+// itself is always uploaded through the standing manage token, which is only
+// returned in the API response the server can see.
+func suggestCanUploadImage(r *http.Request) bool {
+	return getSessionUser(r) != nil
 }
 
 func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -66,10 +79,11 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:       cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			CaptchaSiteKey: cfg.CaptchaSiteKey,
-			FormToken:      tok,
-			Dances:         dances,
+			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			CaptchaSiteKey:    cfg.CaptchaSiteKey,
+			FormToken:         tok,
+			Dances:            dances,
+			CanUploadImageNow: suggestCanUploadImage(r),
 		}))
 	}
 }
@@ -86,9 +100,10 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_rate_limit"),
-				FormToken: issueFormToken(ip),
+				HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+				CanUploadImageNow: suggestCanUploadImage(r),
+				Error:             i18n.T(r, "suggest_error_rate_limit"),
+				FormToken:         issueFormToken(ip),
 			}))
 			return
 		}
@@ -98,9 +113,10 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		if err != nil {
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-				Error:     i18n.T(r, "suggest_error_parse"),
-				FormToken: issueFormToken(ip),
+				HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+				CanUploadImageNow: suggestCanUploadImage(r),
+				Error:             i18n.T(r, "suggest_error_parse"),
+				FormToken:         issueFormToken(ip),
 			}))
 			return
 		}
@@ -160,6 +176,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			CanUploadImageNow: suggestCanUploadImage(r),
 			PreviewEvents:     events,
 			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         issueFormToken(ip),
@@ -189,9 +206,10 @@ func trimmedNonEmpty(vals []string) []string {
 func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, i18n *I18n, errMsg, ip string) {
 	title := i18n.T(r, "suggest_event_title")
 	renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-		HintSMTP:  cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-		Error:     errMsg,
-		FormToken: issueFormToken(ip),
+		HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+		CanUploadImageNow: suggestCanUploadImage(r),
+		Error:             errMsg,
+		FormToken:         issueFormToken(ip),
 	}))
 }
 
@@ -356,10 +374,25 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 
-		if err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r)); err != nil {
+		token, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
+		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
 			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
+		}
+
+		// #1050: an authenticated submitter attaches the image right away via
+		// the standing manage token returned by the suggest API. Errors are
+		// logged but never block the redirect.
+		if suggestCanUploadImage(r) && token != "" {
+			if file, header, ferr := r.FormFile("image"); ferr == nil {
+				defer file.Close()
+				if data, rerr := io.ReadAll(file); rerr == nil {
+					if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
+						log.Printf("suggest: upload image: %v", uerr)
+					}
+				}
+			}
 		}
 
 		http.Redirect(w, r, "/events/suggest/done", http.StatusSeeOther)
@@ -484,14 +517,15 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-			HintSMTP:         cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			FormToken:        issueFormToken(ip),
-			Dances:           dances,
-			ManageToken:      token,
-			PrefillJSON:      template.JS(b),
-			PrefillTags:      prefillTags,
-			PrefillDanceIDs:  prefillDanceIDs,
-			ExistingImageURL: ev.ImageURL,
+			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
+			CanUploadImageNow: suggestCanUploadImage(r),
+			FormToken:         issueFormToken(ip),
+			Dances:            dances,
+			ManageToken:       token,
+			PrefillJSON:       template.JS(b),
+			PrefillTags:       prefillTags,
+			PrefillDanceIDs:   prefillDanceIDs,
+			ExistingImageURL:  ev.ImageURL,
 		}))
 	}
 }

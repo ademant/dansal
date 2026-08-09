@@ -568,6 +568,14 @@ function initDateRangePicker(opts){
     if(!opts.popup.hidden&&!opts.popup.contains(e.target)&&e.target!==opts.btn)
       opts.popup.hidden=true;
   });
+  // Adopt a programmatically-set range (e.g. wizard prefill) so the button
+  // label, calendar default month and range highlight all stay in sync.
+  opts.setRange = function(f, t) {
+    from = f || '';
+    to = t || from;
+    updateBtn();
+  };
+  return opts;
 }
 </script>
 <main>

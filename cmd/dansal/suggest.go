@@ -259,13 +259,14 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var suggestionToken string
-	if smtpConfigured {
-		suggestionToken, err = generateToken(32)
-		if err != nil {
-			writeError(w, "internal error", http.StatusInternalServerError)
-			return
-		}
+	// Every suggestion gets a standing manage token (#1050): anonymous
+	// submitters receive it via the verification email when SMTP is configured,
+	// while an authenticated submitter uses the token returned in the response
+	// to attach an event image right away through the token-gated image endpoint.
+	suggestionToken, err := generateToken(32)
+	if err != nil {
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 
 	var tokenArg any
@@ -283,13 +284,11 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			boardSessionVerified = true
 		}
 	}
-	if suggestionToken != "" {
-		tokenArg = suggestionToken
-		// Token is a standing edit link valid until 3 days after the event ends.
-		// No 30-day cap: events scheduled far in advance keep a valid manage link
-		// throughout their run-up period.
-		tokenExpiryArg = time.Unix(endTime, 0).UTC().Add(3 * 24 * time.Hour).Unix()
-	}
+	tokenArg = suggestionToken
+	// Token is a standing edit link valid until 3 days after the event ends.
+	// No 30-day cap: events scheduled far in advance keep a valid manage link
+	// throughout their run-up period.
+	tokenExpiryArg = time.Unix(endTime, 0).UTC().Add(3 * 24 * time.Hour).Unix()
 
 	var pricingArg any
 	if req.Pricing != nil {
@@ -417,7 +416,12 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		go notifyAdminsSuggestion(req.Title, req.StartTime)
 	}
 
+	// Return the standing manage token so an authenticated submitter can
+	// attach an event image right away (#1050); the anonymous web flow ignores
+	// it and only receives the token via the verification email.
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"token": suggestionToken})
 }
 
 // GET /api/v1/events/suggest/verify/{token} — confirm an email-verified suggestion.

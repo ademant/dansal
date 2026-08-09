@@ -3006,11 +3006,11 @@ func (c *DansalClient) SuggestEventPreview(ctx context.Context, body io.Reader, 
 }
 
 // SuggestEvent calls POST /api/v1/events/suggest.
-func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL, bsToken string) error {
+func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL, bsToken string) (string, error) {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if baseURL != "" {
@@ -3022,13 +3022,23 @@ func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, ba
 	c.setInternalHeader(httpReq)
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
-		return apiErr(resp)
+		return "", apiErr(resp)
 	}
-	return nil
+	// The API returns the standing manage token for this suggestion (#1050) so
+	// an authenticated submitter can attach an event image right away. Older
+	// API versions send an empty body; a decode error is fine then.
+	token := ""
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err == nil {
+		token = out.Token
+	}
+	return token, nil
 }
 
 // VerifySuggestion calls GET /api/v1/events/suggest/verify/{token}.

@@ -56,7 +56,7 @@
         {{- if gt .Amount $high}}{{$high = .Amount}}{{end}}
       {{- end}}
     {{- end}}
-    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "url": "{{$offersURL | js}}"}{{end}}
+    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "url": "{{$offersURL | js}}"}{{end}}
   {{- end}}
   {{- end}}
 }

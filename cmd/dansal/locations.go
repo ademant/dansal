@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ademant/dansal/internal/strutil"
 )
 
 type Location struct {
@@ -1571,43 +1573,10 @@ type CityInfo struct {
 	NextEventStart string   `json:"next_event_start,omitempty"` // RFC3339
 }
 
-// townSlug converts a city name to a URL-safe slug with common European
-// character transliteration (Köln → koeln, München → munchen, etc.).
+// townSlug converts a city name to a URL-safe slug, shared with the web
+// frontend so /city/{slug} routes always match (strutil.TownSlug, #1035).
 func townSlug(town string) string {
-	// Common European character substitutions before ASCII-stripping.
-	replacer := strings.NewReplacer(
-		"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
-		"Ä", "ae", "Ö", "oe", "Ü", "ue",
-		"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "æ", "ae",
-		"è", "e", "é", "e", "ê", "e", "ë", "e",
-		"ì", "i", "í", "i", "î", "i", "ï", "i",
-		"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ø", "o",
-		"ù", "u", "ú", "u", "û", "u",
-		"ý", "y",
-		"ç", "c", "ć", "c", "č", "c",
-		"ñ", "n", "ń", "n",
-		"ž", "z", "ź", "z", "ż", "z",
-		"š", "s", "ś", "s",
-		"ł", "l", "ľ", "l",
-		"ď", "d", "đ", "d",
-		"ť", "t",
-		"ř", "r",
-	)
-	s := replacer.Replace(strings.ToLower(town))
-	var b strings.Builder
-	prevHyphen := false
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			prevHyphen = false
-		} else if !prevHyphen {
-			b.WriteRune('-')
-			prevHyphen = true
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	dedup := regexp.MustCompile(`-{2,}`)
-	return dedup.ReplaceAllString(slug, "-")
+	return strutil.TownSlug(town)
 }
 
 // GET /api/v1/locations/cities — lists all towns that have at least one

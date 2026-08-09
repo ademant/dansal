@@ -1,11 +1,10 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"time"
 
-	"github.com/ademant/dansal/internal/websession"
+	"github.com/ademant/dansal/internal/webcommon"
 )
 
 // authRefreshMiddleware transparently re-establishes a session when the
@@ -26,7 +25,7 @@ func authRefreshMiddleware(client *DansalClient) func(http.Handler) http.Handler
 							DisplayName: me.DisplayName,
 							Role:        me.Role,
 						}
-						sessionCookies.SetUser(w, su, parseSessionExpiry(me.TokenExpiresAt))
+						session.SetUser(w, su, parseSessionExpiry(me.TokenExpiresAt))
 						r = withSessionUser(r, su)
 					}
 				}
@@ -40,7 +39,37 @@ type sessionContextKey int
 
 const ctxSessionUser sessionContextKey = 1
 
-var sessionCookies = websession.New("dsw_token", "dsw_user")
+type SessionUser struct {
+	ID          int    `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,omitempty"`
+	Role        string `json:"role"`
+}
+
+// session is the web binary's shared session helper; the wrappers below keep
+// call sites short while delegating all cookie/context logic to webcommon so
+// it can't drift from webmin (#1035).
+var session = webcommon.NewSession[SessionUser]("dsw_token", "dsw_user", ctxSessionUser)
+
+func withSessionUser(r *http.Request, u *SessionUser) *http.Request {
+	return session.WithUser(r, u)
+}
+
+func getSessionUser(r *http.Request) *SessionUser {
+	return session.User(r)
+}
+
+func getSessionToken(r *http.Request) string {
+	return session.Token(r)
+}
+
+func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
+	session.Set(w, token, user, expiresAt)
+}
+
+func clearSession(w http.ResponseWriter) {
+	session.Clear(w)
+}
 
 // defaultSessionTTL is the fallback session lifetime when the API response
 // carries no parseable expires_at.
@@ -49,44 +78,18 @@ const defaultSessionTTL = 24 * time.Hour
 // parseSessionExpiry parses the API-provided session expiry (RFC3339),
 // defaulting to defaultSessionTTL when it is missing or malformed.
 func parseSessionExpiry(s string) time.Time {
-	expiresAt, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Now().Add(defaultSessionTTL)
-	}
-	return expiresAt
+	return webcommon.ParseExpiry(s, defaultSessionTTL)
 }
 
-type SessionUser struct {
-	ID          int    `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,omitempty"`
-	Role        string `json:"role"`
-}
-
-func withSessionUser(r *http.Request, u *SessionUser) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), ctxSessionUser, u))
-}
-
-func getSessionUser(r *http.Request) *SessionUser {
-	// Check request context first (set by cert-auth middleware)
-	if u, ok := r.Context().Value(ctxSessionUser).(*SessionUser); ok && u != nil {
-		return u
-	}
-	var u SessionUser
-	if !sessionCookies.GetUser(r, &u) {
-		return nil
-	}
-	return &u
-}
-
-func getSessionToken(r *http.Request) string {
-	return sessionCookies.GetToken(r)
-}
-
-func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
-	sessionCookies.Set(w, token, user, expiresAt)
-}
-
-func clearSession(w http.ResponseWriter) {
-	sessionCookies.Clear(w)
+// establishSession issues the session cookies for a successful login response.
+// The SessionUser↔LoginResponse mapping used to be copy-pasted at every login
+// entry point (password, magic link, invite, mTLS); all four now go through
+// here so the mapping can't drift (#1035).
+func establishSession(w http.ResponseWriter, lr *LoginResponse) {
+	setSession(w, lr.Token, SessionUser{
+		ID:          lr.User.ID,
+		Email:       lr.User.Email,
+		DisplayName: lr.User.DisplayName,
+		Role:        lr.User.Role,
+	}, parseSessionExpiry(lr.ExpiresAt))
 }

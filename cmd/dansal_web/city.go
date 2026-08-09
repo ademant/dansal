@@ -8,50 +8,16 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
-	"unicode"
+
+	"github.com/ademant/dansal/internal/strutil"
 )
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 
-// townSlug mirrors cmd/dansal/locations.go:townSlug — keep them in sync.
+// townSlug is shared with the API (strutil.TownSlug) so /city/{slug} routes
+// match the slugs the API serves in its /api/v1/locations/cities list (#1035).
 func townSlug(town string) string {
-	replacer := strings.NewReplacer(
-		"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
-		"Ä", "ae", "Ö", "oe", "Ü", "ue",
-		"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "æ", "ae",
-		"è", "e", "é", "e", "ê", "e", "ë", "e",
-		"ì", "i", "í", "i", "î", "i", "ï", "i",
-		"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ø", "o",
-		"ù", "u", "ú", "u", "û", "u",
-		"ý", "y",
-		"ç", "c", "ć", "c", "č", "c",
-		"ñ", "n", "ń", "n",
-		"ž", "z", "ź", "z", "ż", "z",
-		"š", "s", "ś", "s",
-		"ł", "l", "ľ", "l",
-		"ď", "d", "đ", "d",
-		"ť", "t",
-		"ř", "r",
-	)
-	s := replacer.Replace(strings.ToLower(town))
-	var b strings.Builder
-	prevHyphen := false
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			prevHyphen = false
-		} else if !prevHyphen && !unicode.IsSpace(r) || (!prevHyphen && unicode.IsSpace(r)) {
-			b.WriteRune('-')
-			prevHyphen = true
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	// Collapse double hyphens.
-	for strings.Contains(slug, "--") {
-		slug = strings.ReplaceAll(slug, "--", "-")
-	}
-	return slug
+	return strutil.TownSlug(town)
 }
 
 // ── Template data ─────────────────────────────────────────────────────────────

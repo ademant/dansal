@@ -14,6 +14,8 @@ import (
 	"time"
 
 	ics "github.com/arran4/golang-ical"
+
+	"github.com/ademant/dansal/internal/strutil"
 )
 
 // querier is satisfied by both *sql.DB and *sql.Tx, allowing helpers to
@@ -256,28 +258,16 @@ func resolveLocationID(q querier, locID *int, loc EventLocationRequest) (int64, 
 
 var berlinLoc *time.Location
 
-var timeFormats = []string{
-	time.RFC3339,
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04",
-	"2006-01-02 15:04:05",
-}
-
-// SELECT used by all event list / single-event queries.
-// Dance names are aggregated once via a derived table JOIN rather than a
-// correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
-
-// ── low-level helpers ──────────────────────────────────────────────────────
-
 func epochToLocal(epoch int64) string {
 	return time.Unix(epoch, 0).In(berlinLoc).Format(time.RFC3339)
 }
 
+// parseTimeToUnix converts a time string to a Unix epoch. RFC3339 strings
+// carry their own offset; naive layouts have no zone and are treated as local
+// (Berlin) time to match how events are displayed. The layouts come from
+// strutil.TimeLayouts (shared with the web frontend, #1035).
 func parseTimeToUnix(s string) (int64, error) {
-	for _, layout := range timeFormats {
-		// RFC3339 carries its own offset; naive layouts have no zone and must be
-		// treated as local (Berlin) time to match how events are displayed.
+	for _, layout := range strutil.TimeLayouts {
 		if layout == time.RFC3339 {
 			if t, err := time.Parse(layout, s); err == nil {
 				return t.Unix(), nil
@@ -290,6 +280,11 @@ func parseTimeToUnix(s string) (int64, error) {
 	}
 	return 0, fmt.Errorf("unrecognised time format: %q", s)
 }
+
+// SELECT used by all event list / single-event queries.
+// Dance names are aggregated once via a derived table JOIN rather than a
+// correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {

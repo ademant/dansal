@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ademant/dansal/internal/strutil"
 )
 
 // Time, date, and timetable template functions — one slice of the merged
@@ -60,15 +62,8 @@ func formatDateStr(lang, s string) string {
 	return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
 }
 
-var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"}
-
 func parseTime(s string) (time.Time, bool) {
-	for _, layout := range parseLayouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
-		}
-	}
-	return time.Time{}, false
+	return strutil.ParseTime(s)
 }
 
 // parseISODate parses a "2006-01-02" calendar-date string (the ?from=/?to=

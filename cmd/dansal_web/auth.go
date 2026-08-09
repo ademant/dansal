@@ -222,14 +222,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		throttle.reset(ip)
-		expiresAt := parseSessionExpiry(lr.ExpiresAt)
-
-		setSession(w, lr.Token, SessionUser{
-			ID:          lr.User.ID,
-			Email:       lr.User.Email,
-			DisplayName: lr.User.DisplayName,
-			Role:        lr.User.Role,
-		}, expiresAt)
+		establishSession(w, lr)
 
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
@@ -292,13 +285,7 @@ func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			return
 		}
 
-		expiresAt := parseSessionExpiry(lr.ExpiresAt)
-		setSession(w, lr.Token, SessionUser{
-			ID:          lr.User.ID,
-			Email:       lr.User.Email,
-			DisplayName: lr.User.DisplayName,
-			Role:        lr.User.Role,
-		}, expiresAt)
+		establishSession(w, lr)
 		next := "/dashboard"
 		if p := safeReturnPath(r.URL.Query().Get("next")); p != "" {
 			next = p

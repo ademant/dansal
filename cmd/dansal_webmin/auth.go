@@ -12,14 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ademant/dansal/internal/websession"
+	"github.com/ademant/dansal/internal/webcommon"
 )
 
 type contextKey int
 
 const ctxSessionUser contextKey = 1
 
-var sessionCookies = websession.New("dwm_token", "dwm_user")
+// session is webmin's shared session helper; the wrappers below keep call
+// sites short while delegating all cookie/context logic to webcommon so it
+// can't drift from dansal-web (#1035).
+var session = webcommon.NewSession[SessionUser]("dwm_token", "dwm_user", ctxSessionUser)
 
 // sessionTTL is how long a webmin session cookie lives.
 const sessionTTL = 24 * time.Hour
@@ -33,15 +36,7 @@ type SessionUser struct {
 }
 
 func getSessionUser(r *http.Request) *SessionUser {
-	// Check request context first (set by cert-auth middleware)
-	if u, ok := r.Context().Value(ctxSessionUser).(*SessionUser); ok && u != nil {
-		return u
-	}
-	var u SessionUser
-	if !sessionCookies.GetUser(r, &u) {
-		return nil
-	}
-	return &u
+	return session.User(r)
 }
 
 // extractCN parses the CN value from a DN string like "CN=alice,O=dansal"
@@ -91,7 +86,7 @@ func certAuthSession(cfg *Config, r *http.Request) *SessionUser {
 }
 
 func getSessionToken(r *http.Request) string {
-	return sessionCookies.GetToken(r)
+	return session.Token(r)
 }
 
 // isLoopback reports whether r's direct peer (r.RemoteAddr, not any
@@ -179,16 +174,12 @@ func refreshedSessionUser(cfg *Config, w http.ResponseWriter, r *http.Request) *
 		return nil
 	}
 	su := &SessionUser{ID: me.ID, Email: me.Email, DisplayName: me.DisplayName, Role: me.Role}
-	expiresAt, _ := time.Parse(time.RFC3339, me.TokenExpiresAt)
-	if expiresAt.IsZero() {
-		expiresAt = time.Now().Add(sessionTTL)
-	}
-	setSession(w, token, *su, expiresAt)
+	setSession(w, token, *su, webcommon.ParseExpiry(me.TokenExpiresAt, sessionTTL))
 	return su
 }
 
 func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
-	sessionCookies.Set(w, token, user, expiresAt)
+	session.Set(w, token, user, expiresAt)
 }
 
 // startCertSession issues a fresh sessionTTL cookie for a cert-authenticated
@@ -200,7 +191,7 @@ func startCertSession(w http.ResponseWriter, su *SessionUser) {
 }
 
 func clearSession(w http.ResponseWriter) {
-	sessionCookies.Clear(w)
+	session.Clear(w)
 }
 
 func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
@@ -214,7 +205,7 @@ func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 		if su := certAuthSession(cfg, r); su != nil {
 			// Refresh session cookie and inject user into context for this request
 			startCertSession(w, su)
-			next(w, r.WithContext(context.WithValue(r.Context(), ctxSessionUser, su)))
+			next(w, session.WithUser(r, su))
 			return
 		}
 
@@ -224,7 +215,7 @@ func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if su := refreshedSessionUser(cfg, w, r); su != nil {
-			next(w, r.WithContext(context.WithValue(r.Context(), ctxSessionUser, su)))
+			next(w, session.WithUser(r, su))
 			return
 		}
 
@@ -324,11 +315,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 			return
 		}
 
-		expiresAt, _ := time.Parse(time.RFC3339, lr.ExpiresAt)
-		if expiresAt.IsZero() {
-			expiresAt = time.Now().Add(sessionTTL)
-		}
-		setSession(w, lr.Token, lr.User, expiresAt)
+		setSession(w, lr.Token, lr.User, webcommon.ParseExpiry(lr.ExpiresAt, sessionTTL))
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 }

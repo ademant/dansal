@@ -63,13 +63,7 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if req.Email != "" && req.Password != "" {
 			ip := getClientIP(r)
 			if lr, err := client.Login(ctx, req.Email, req.Password, "", ip, r.UserAgent()); err == nil {
-				expAt := parseSessionExpiry(lr.ExpiresAt)
-				setSession(w, lr.Token, SessionUser{
-					ID:          lr.User.ID,
-					Email:       lr.User.Email,
-					DisplayName: lr.User.DisplayName,
-					Role:        lr.User.Role,
-				}, expAt)
+				establishSession(w, lr)
 				redirect = "/dashboard"
 			}
 		}

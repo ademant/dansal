@@ -41,15 +41,13 @@ func certAuthMiddleware(client *DansalClient) func(http.Handler) http.Handler {
 				return
 			}
 
-			expiresAt := parseSessionExpiry(lr.ExpiresAt)
-
 			su := &SessionUser{
 				ID:          lr.User.ID,
 				Email:       lr.User.Email,
 				DisplayName: lr.User.DisplayName,
 				Role:        lr.User.Role,
 			}
-			setSession(w, lr.Token, *su, expiresAt)
+			establishSession(w, lr)
 			next.ServeHTTP(w, withSessionUser(r, su))
 		})
 	}

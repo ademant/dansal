@@ -7,16 +7,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 )
 
 var reJSONLDBlocks = regexp.MustCompile(`(?s)<script type="application/ld\+json">\s*(.*?)\s*</script>`)
 
 // TestSmokeBreadcrumbJSONLD renders the event/location/org/musician/instructor
-// pages and checks that every application/ld+json block (including the new
-// BreadcrumbList) is syntactically valid JSON, that a BreadcrumbList block is
-// present, and that every top-level entity except Event (which identifies
-// itself via "url") carries a stable "@id" (#1064).
+// pages and checks that every application/ld+json block is syntactically valid
+// JSON, that a BreadcrumbList block is present, and that every top-level
+// entity (including each node of the event @graph) carries a stable "@id"
+// (#1064, #1061).
 func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -41,20 +42,25 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			if err := json.Unmarshal([]byte(m[1]), &v); err != nil {
 				t.Fatalf("invalid JSON in ld+json block: %v\nblock: %s", err, m[1])
 			}
+			if graph, ok := v["@graph"].([]any); ok {
+				for _, node := range graph {
+					n, _ := node.(map[string]any)
+					if id, _ := n["@id"].(string); id == "" {
+						t.Errorf("JSON-LD @graph node of type %v lacks @id", n["@type"])
+					}
+				}
+				continue
+			}
 			if v["@type"] == "BreadcrumbList" {
 				sawBreadcrumb = true
 				items, ok := v["itemListElement"].([]any)
 				if !ok || len(items) < 2 {
 					t.Fatalf("expected itemListElement with >=2 entries, got %v", v["itemListElement"])
 				}
+				continue
 			}
-			switch v["@type"] {
-			case "BreadcrumbList", "Event":
-			default:
-				id, _ := v["@id"].(string)
-				if id == "" {
-					t.Errorf("JSON-LD block of type %v lacks @id", v["@type"])
-				}
+			if id, _ := v["@id"].(string); id == "" {
+				t.Errorf("JSON-LD block of type %v lacks @id", v["@type"])
 			}
 		}
 		if wantBreadcrumb && !sawBreadcrumb {
@@ -62,27 +68,85 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		}
 	}
 
-	t.Run("event page", func(t *testing.T) {
+	renderEvent := func(ev Event, org *Organization, orgSlug string) string {
 		req := httptest.NewRequest(http.MethodGet, "/events/1", nil)
 		rec := httptest.NewRecorder()
-		orgSlug := "test-org"
-		td := tmplData(req, cfg, i18n, "test", EventData{
-			Event: Event{
-				ID:        1,
-				Title:     "Fest Noz",
-				StartTime: "2026-08-01T20:00:00Z",
-				EndTime:   "2026-08-02T01:00:00Z",
-				Location:  &Location{ID: 5, Location: "Salle des Fêtes"},
-			},
-			Org:     &Organization{ID: 2, Name: "Test Org"},
-			OrgSlug: orgSlug,
-		})
+		td := tmplData(req, cfg, i18n, "test", EventData{Event: ev, Org: org, OrgSlug: orgSlug})
 		renderTemplate(rec, tmpls.event, td)
 		body, _ := io.ReadAll(rec.Body)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, body)
 		}
-		checkBlocks(t, string(body), true)
+		return string(body)
+	}
+
+	t.Run("event page @graph", func(t *testing.T) {
+		body := renderEvent(Event{
+			ID:        1,
+			Title:     "Fest Noz",
+			StartTime: "2026-08-01T20:00:00Z",
+			EndTime:   "2026-08-02T01:00:00Z",
+			Location:  &Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Town: "Rennes"},
+			DanceNames: []string{"An Dro", "Hanter Dro"},
+			Tags:       []string{"bal-folk", "musician-workshop"},
+		}, &Organization{ID: 2, Name: "Test Org", ImageURL: "/api/v1/org-images/2"}, "test-org")
+		checkBlocks(t, body, true)
+		// #1061: single @graph block linking Event, Organization and Place by @id.
+		if !strings.Contains(body, `"@graph"`) {
+			t.Errorf("event JSON-LD should use @graph (#1061)")
+		}
+		for _, want := range []string{
+			`"@id": "https:\/\/example.test\/events\/1"`,
+			`"location": {"@id": "https://example.test/location/5"}`,
+			`"organizer": {"@id": "https://example.test/org/test-org"}`,
+			`"@id": "https://example.test/location/5"`,
+			`"@id": "https://example.test/org/test-org"`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("event @graph missing %s", want)
+			}
+		}
+		// #1063: keywords is a JSON array, audienceType from a deterministic tag check.
+		if !strings.Contains(body, `"keywords": ["An Dro", "Hanter Dro", "bal-folk", "musician-workshop"]`) {
+			t.Errorf("event keywords should be a JSON array (#1063)")
+		}
+		if !strings.Contains(body, `"audienceType": "dancers, musicians"`) {
+			t.Errorf("musician-workshop tag should yield audienceType \"dancers, musicians\" (#1063)")
+		}
+		// #1065: no event image -> org image fallback (js filter escapes "/").
+		if !strings.Contains(body, `"image": "\/api\/v1\/org-images\/2"`) {
+			t.Errorf("event without image should fall back to the org image (#1065)")
+		}
+	})
+
+	t.Run("event page own image", func(t *testing.T) {
+		body := renderEvent(Event{
+			ID:        2,
+			Title:     "Fest Noz Deux",
+			StartTime: "2026-08-03T20:00:00Z",
+			EndTime:   "2026-08-04T01:00:00Z",
+			ImageURL:  "/api/v1/images/2",
+		}, &Organization{ID: 2, Name: "Test Org", ImageURL: "/api/v1/org-images/2"}, "test-org")
+		checkBlocks(t, body, true)
+		if !strings.Contains(body, `"image": "\/api\/v1\/images\/2"`) {
+			t.Errorf("event image should win over the org image (#1065)")
+		}
+	})
+
+	t.Run("event page no images", func(t *testing.T) {
+		body := renderEvent(Event{
+			ID:        3,
+			Title:     "Fest Noz Trois",
+			StartTime: "2026-08-05T20:00:00Z",
+			EndTime:   "2026-08-06T01:00:00Z",
+		}, &Organization{ID: 2, Name: "Test Org"}, "test-org")
+		checkBlocks(t, body, true)
+		if strings.Contains(body, `"image"`) {
+			t.Errorf("event JSON-LD should omit image when neither event nor org has one (#1065)")
+		}
+		if !strings.Contains(body, `"audienceType": "dancers"`) {
+			t.Errorf("event without musician tags should keep audienceType \"dancers\" (#1063)")
+		}
 	})
 
 	t.Run("location page", func(t *testing.T) {

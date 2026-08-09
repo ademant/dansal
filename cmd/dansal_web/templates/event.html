@@ -6,7 +6,10 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "Event",
+  "@graph": [
+    {
+      "@id": "{{$.CanonicalURL | js}}",
+      "@type": "Event",
   "name": "{{.Title | js}}",
   "startDate": "{{.StartTime}}",
   "endDate": "{{.EndTime}}",
@@ -16,16 +19,19 @@
   {{- end}}
   "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
   "inLanguage": "{{$.LangCode | js}}"
-  {{- with .Location}},
-  "location": {
+  {{- with .Location}}
+  {{- if .ID}}, "location": {"@id": "https://{{$.Domain}}/location/{{.ID}}"}
+  {{- else}}, "location": {
     "@type": "Place",
     "name": "{{.Location | js}}"
     {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Country}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
     {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
-  }
+  }{{end}}
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
-  {{- if .ImageURL}}, "image": "{{.ImageURL | js}}"{{else if gt $.BannerHeight 0}}, "image": "https://{{$.Domain | js}}/banner.avif"{{end}}
+  {{- $img := .ImageURL}}
+  {{- if not $img}}{{with $.Data.Org}}{{with .ImageURL}}{{$img = .}}{{end}}{{end}}{{end}}
+  {{- if $img}}, "image": "{{$img | js}}"{{end}}
   {{- if .Description}}, "description": "{{.Description | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
   {{- end}}
@@ -34,11 +40,9 @@
     {{- range .Musicians}}{{if not $pfirst}}, {{end}}{"@type": "MusicGroup", "name": "{{.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{.ID}}"}{{$pfirst = false}}{{end}}
     {{- range .Instructors}}{{if not $pfirst}}, {{end}}{"@type": "Person", "name": "{{.Name | js}}"{{with .Website}}, "url": "{{. | js}}"{{end}}}{{$pfirst = false}}{{end}}
   ]{{end}}
-  {{- if $.Data.Org}}, "organizer": {"@type": "Organization", "name": "{{$.Data.Org.Name | js}}", "url": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
-  {{- if or .DanceNames .Tags}}, "keywords": "{{- $sep := ""}}{{- range .DanceNames}}{{$sep}}{{. | js}}{{$sep = ", "}}{{- end}}{{- range .Tags}}{{$sep}}{{. | js}}{{$sep = ", "}}{{- end}}"{{end}}
-  {{- $audType := "dancers"}}
-  {{- range .Tags}}{{if or (eq . "musician-workshop") (eq . "session") (eq . "music-course")}}{{$audType = "dancers, musicians"}}{{end}}{{end}}
-  , "audience": {"@type": "Audience", "audienceType": "{{$audType | js}}"}
+  {{- if $.Data.Org}}, "organizer": {"@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
+  {{- if or .DanceNames .Tags}}, "keywords": [{{- $first := true}}{{- range .DanceNames}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}{{- range .Tags}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}]{{end}}
+  , "audience": {"@type": "Audience", "audienceType": "{{eventAudienceType .Tags | js}}"}
   {{- $offersURL := $.CanonicalURL}}
   {{- if .URL}}{{$offersURL = .URL}}{{end}}
   {{- if .BookingURL}}{{$offersURL = .BookingURL}}{{end}}
@@ -60,6 +64,21 @@
     {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{end}}
   {{- end}}
   {{- end}}
+  }
+  {{- if and .Location .ID}}, {
+    "@id": "https://{{$.Domain}}/location/{{.Location.ID}}",
+    "@type": "Place",
+    "name": "{{.Location.Location | js}}"
+    {{- with .Location.Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Country}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    {{- if and .Location.Latitude .Location.Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Location.Latitude}}, "longitude": {{.Location.Longitude}}}{{end}}
+  }{{- end}}
+  {{- if $.Data.Org}}, {
+    "@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}",
+    "@type": "Organization",
+    "name": "{{$.Data.Org.Name | js}}"
+    {{- with $.Data.Org.Website}}, "url": "{{. | js}}"{{end}}
+  }{{- end}}
+  ]
 }
 </script>
 <script type="application/ld+json">

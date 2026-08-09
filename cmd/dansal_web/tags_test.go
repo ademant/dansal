@@ -189,3 +189,23 @@ func TestTagAtomAndJSONFeed(t *testing.T) {
 		}
 	})
 }
+
+// TestEventAudienceType covers the deterministic tag-to-audienceType mapping
+// used by the event JSON-LD (#1063).
+func TestEventAudienceType(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tags []string
+		want string
+	}{
+		{"no tags", nil, "dancers"},
+		{"plain tags", []string{"bal-folk", "festival"}, "dancers"},
+		{"musician-workshop", []string{"bal-folk", "musician-workshop"}, "dancers, musicians"},
+		{"session", []string{"session"}, "dancers, musicians"},
+		{"music-course", []string{"music-course"}, "dancers, musicians"},
+	} {
+		if got := eventAudienceType(tc.tags); got != tc.want {
+			t.Errorf("%s: eventAudienceType(%v) = %q, want %q", tc.name, tc.tags, got, tc.want)
+		}
+	}
+}

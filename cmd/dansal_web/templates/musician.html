@@ -4,6 +4,7 @@
 {
   "@context": "https://schema.org",
   "@type": "MusicGroup",
+  "@id": "https://{{$.Domain}}/musicians/{{.ID}}",
   "name": "{{.Bandname | js}}"
   {{- with .ImageURL}}, "image": "https://{{$.Domain}}{{. | js}}"{{end}}
   {{- with .Biography}}, "description": "{{. | js}}"{{else}}{{with .Description}}, "description": "{{. | js}}"{{end}}{{end}}

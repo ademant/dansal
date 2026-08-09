@@ -12,9 +12,11 @@ import (
 
 var reJSONLDBlocks = regexp.MustCompile(`(?s)<script type="application/ld\+json">\s*(.*?)\s*</script>`)
 
-// TestSmokeBreadcrumbJSONLD renders the event/location/org pages and checks
-// that every application/ld+json block (including the new BreadcrumbList) is
-// syntactically valid JSON, and that a BreadcrumbList block is present.
+// TestSmokeBreadcrumbJSONLD renders the event/location/org/musician/instructor
+// pages and checks that every application/ld+json block (including the new
+// BreadcrumbList) is syntactically valid JSON, that a BreadcrumbList block is
+// present, and that every top-level entity except Event (which identifies
+// itself via "url") carries a stable "@id" (#1064).
 func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -28,7 +30,7 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 	i18n := loadI18n("")
 	cfg := &Config{Domain: "example.test"}
 
-	checkBlocks := func(t *testing.T, body string) {
+	checkBlocks := func(t *testing.T, body string, wantBreadcrumb bool) {
 		matches := reJSONLDBlocks.FindAllStringSubmatch(body, -1)
 		if len(matches) == 0 {
 			t.Fatalf("no ld+json blocks found")
@@ -46,8 +48,16 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 					t.Fatalf("expected itemListElement with >=2 entries, got %v", v["itemListElement"])
 				}
 			}
+			switch v["@type"] {
+			case "BreadcrumbList", "Event":
+			default:
+				id, _ := v["@id"].(string)
+				if id == "" {
+					t.Errorf("JSON-LD block of type %v lacks @id", v["@type"])
+				}
+			}
 		}
-		if !sawBreadcrumb {
+		if wantBreadcrumb && !sawBreadcrumb {
 			t.Fatalf("no BreadcrumbList block found")
 		}
 	}
@@ -72,7 +82,7 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, body)
 		}
-		checkBlocks(t, string(body))
+		checkBlocks(t, string(body), true)
 	})
 
 	t.Run("location page", func(t *testing.T) {
@@ -86,7 +96,7 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, body)
 		}
-		checkBlocks(t, string(body))
+		checkBlocks(t, string(body), true)
 	})
 
 	t.Run("org page", func(t *testing.T) {
@@ -101,6 +111,34 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, body)
 		}
-		checkBlocks(t, string(body))
+		checkBlocks(t, string(body), true)
+	})
+
+	t.Run("musician page", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/musicians/7", nil)
+		rec := httptest.NewRecorder()
+		td := tmplData(req, cfg, i18n, "test", MusicianPageData{
+			Musician: Musician{ID: 7, Bandname: "Duo Trad"},
+		})
+		renderTemplate(rec, tmpls.musician, td)
+		body, _ := io.ReadAll(rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, body)
+		}
+		checkBlocks(t, string(body), false)
+	})
+
+	t.Run("instructor page", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/instructors/9", nil)
+		rec := httptest.NewRecorder()
+		td := tmplData(req, cfg, i18n, "test", InstructorPageData{
+			Instructor: Instructor{ID: 9, Name: "Yann Durand"},
+		})
+		renderTemplate(rec, tmpls.instructor, td)
+		body, _ := io.ReadAll(rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, body)
+		}
+		checkBlocks(t, string(body), false)
 	})
 }

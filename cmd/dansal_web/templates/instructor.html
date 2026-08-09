@@ -4,6 +4,7 @@
 {
   "@context": "https://schema.org",
   "@type": "Person",
+  "@id": "https://{{$.Domain}}/instructors/{{.ID}}",
   "name": "{{.Name | js}}"
   {{- with .Bio}}, "description": "{{. | js}}"{{end}}
   {{- if or .Website .Mastodon .Instagram .Facebook}}, "sameAs": [

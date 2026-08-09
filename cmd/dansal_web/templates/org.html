@@ -6,6 +6,7 @@
 {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": "https://{{$.Domain}}/org/{{$.Data.Slug | js}}",
   "name": "{{.Name | js}}"
   {{- with .Website}}, "url": "{{. | js}}"{{end}}
   {{- with .ImageURL}}, "logo": "{{. | js}}"{{end}}

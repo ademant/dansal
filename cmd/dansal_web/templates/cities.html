@@ -21,7 +21,9 @@
 {{with .Data}}
 {{if .Cities}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 
 <div id="cities-map-wrap">
   <div id="cities-map"></div>
@@ -56,6 +58,8 @@
 
   var map = L.map('cities-map');
   attachTileLayer(map);
+  var cluster = L.markerClusterGroup({maxClusterRadius:40});
+  map.addLayer(cluster);
 
   // Bucket relative to the busiest city among those shown, so a given color
   // always means the same thing regardless of how many cities are listed —
@@ -77,18 +81,18 @@
     return L.divIcon({html:svg,className:'',iconSize:[24,34],iconAnchor:[12,34],popupAnchor:[0,-36]});
   }
 
-  var bounds = [];
+  // Nearby pins merge into a numbered cluster that expands as you zoom in,
+  // same plugin and radius as the homepage map (#1051).
   pins.forEach(function(p){
     var ll = [p.lat, p.lng];
-    bounds.push(ll);
     var popup = '<b><a href="/city/'+escHtml(p.slug)+'">'+escHtml(p.town)+'</a></b><br><small>'+p.count+'</small>';
-    L.marker(ll, {icon: pinIcon(heatClass(p.count))}).bindPopup(popup).addTo(map);
+    cluster.addLayer(L.marker(ll, {icon: pinIcon(heatClass(p.count))}).bindPopup(popup));
   });
 
-  if(bounds.length === 1){
-    map.setView(bounds[0], 11);
+  if(pins.length === 1){
+    map.setView([pins[0].lat, pins[0].lng], 11);
   } else {
-    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:9}); } catch(_){}
+    try { map.fitBounds(cluster.getBounds(), {padding:[30,30], maxZoom:9}); } catch(_){}
   }
 
   function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

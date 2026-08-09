@@ -207,3 +207,125 @@ func TestRelayActorURLEmptyWhenUnconfigured(t *testing.T) {
 		t.Errorf("RelayActorURL = %q, want empty when RelayActorName is unset", td.RelayActorURL)
 	}
 }
+
+// TestRelayActorBrowserRedirect verifies a browser visit to /org/{relay}
+// redirects to the homepage instead of 404ing, because the relay actor is
+// synthetic and has no backing org page (issue #1057).
+func TestRelayActorBrowserRedirect(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.com", RelayActorName: "relay"}
+	handler := orgFrontendHandler(cfg, tmpls, db, nil, i18n)
+
+	req := httptest.NewRequest(http.MethodGet, "/org/relay", nil)
+	req.SetPathValue("name", "relay")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d, want 302 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); loc != "https://example.com/" {
+		t.Errorf("Location = %q, want https://example.com/", loc)
+	}
+}
+
+// TestActorCacheControlHeader verifies AP actor documents set a short
+// Cache-Control hint so proxies and Mastodon don't refetch every request
+// (issue #1058).
+func TestActorCacheControlHeader(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE actors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		org_id INTEGER UNIQUE NOT NULL,
+		org_slug TEXT UNIQUE NOT NULL,
+		public_key_pem TEXT NOT NULL,
+		private_key_pem TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (0, 'relay', 'pub', 'priv')`); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &Config{Domain: "example.com", RelayActorName: "relay"}
+	handler := apActorHandler(cfg, db, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/org/relay", nil)
+	req.Header.Set("Accept", "application/activity+json")
+	req.SetPathValue("name", "relay")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=300" {
+		t.Errorf("Cache-Control = %q, want public, max-age=300", cc)
+	}
+}
+
+// TestWebfingerOrgActorProfilePage verifies org actor WebFinger responses
+// advertise the profile-page rel so Mastodon can show an "Open original"
+// button on org actor profiles (issue #1056).
+func TestWebfingerOrgActorProfilePage(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE actors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		org_id INTEGER UNIQUE NOT NULL,
+		org_slug TEXT UNIQUE NOT NULL,
+		public_key_pem TEXT NOT NULL,
+		private_key_pem TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO actors (org_id, org_slug, public_key_pem, private_key_pem) VALUES (1, 'myorg', 'pub', 'priv')`); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &Config{Domain: "example.com"}
+	handler := webfingerHandler(cfg, db, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:myorg@example.com", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var wf WebFinger
+	if err := json.Unmarshal(rec.Body.Bytes(), &wf); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	sawSelf := false
+	sawProfilePage := false
+	for _, l := range wf.Links {
+		if l.Rel == "self" && l.Type == "application/activity+json" {
+			sawSelf = true
+		}
+		if l.Rel == "http://webfinger.net/rel/profile-page" && l.Type == "text/html" && l.Href == "https://example.com/org/myorg" {
+			sawProfilePage = true
+		}
+	}
+	if !sawSelf {
+		t.Errorf("missing self link in %+v", wf.Links)
+	}
+	if !sawProfilePage {
+		t.Errorf("missing profile-page link in %+v", wf.Links)
+	}
+}

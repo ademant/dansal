@@ -205,6 +205,15 @@ func relayActorFromRecord(cfg *Config, actor *ActorRecord) Actor {
 	return a
 }
 
+// isAPRequest reports whether the request negotiates an ActivityPub JSON
+// representation. application/activity+json is the canonical AP type;
+// application/ld+json is also accepted because some fediverse clients send it
+// when following AP actors. Note the dual use of this media type: the same
+// string labels the SEO JSON-LD blocks embedded in HTML pages, which are only
+// ever served inside text/html and never standalone. Keep this function
+// AP-only — if standalone machine-readable JSON-LD endpoints are ever added,
+// give them their own path/media-type handling rather than widening this
+// branch (issue #1062).
 func isAPRequest(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
 	return strings.Contains(accept, "application/activity+json") ||
@@ -353,7 +362,12 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 			aliases = append(aliases, base)
 		} else {
 			aliases = []string{base}
-			links = []WebFingerLink{{Rel: "self", Type: "application/activity+json", Href: base}}
+			links = []WebFingerLink{
+				{Rel: "self", Type: "application/activity+json", Href: base},
+				// Advertise the HTML org page (same URL) so clients can show an
+				// "Open original" button on org actor profiles (issue #1056).
+				{Rel: "http://webfinger.net/rel/profile-page", Type: "text/html", Href: base},
+			}
 		}
 		wf := WebFinger{
 			Subject: "acct:" + actor.OrgSlug + "@" + cfg.Domain,
@@ -1174,7 +1188,7 @@ func buildDeleteActivity(cfg *Config, slug string, eventID int) Activity {
 		Type:   "Delete",
 		ID:     apEventID + "/activities/delete",
 		Actor:  base,
-		Object: apEventID,
+		Object: APTombstone{Type: "Tombstone", ID: apEventID},
 		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:     []string{base + "/followers"},
 	}

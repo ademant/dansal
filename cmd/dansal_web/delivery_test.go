@@ -132,12 +132,17 @@ func TestBuildDeleteActivity_CanonicalEventID(t *testing.T) {
 		t.Errorf("Type = %q, want Delete", act.Type)
 	}
 	wantEventID := "https://example.com/events/42"
-	obj, ok := act.Object.(string)
+	// Delete must wrap the object as a Tombstone, not a bare URI string,
+	// for Misskey/Pleroma compatibility (issue #1059).
+	obj, ok := act.Object.(APTombstone)
 	if !ok {
-		t.Fatalf("Delete Object is not a string, got %T", act.Object)
+		t.Fatalf("Delete Object is not an APTombstone, got %T", act.Object)
 	}
-	if obj != wantEventID {
-		t.Errorf("Delete Object = %q, want %q", obj, wantEventID)
+	if obj.Type != "Tombstone" {
+		t.Errorf("Tombstone Type = %q, want Tombstone", obj.Type)
+	}
+	if obj.ID != wantEventID {
+		t.Errorf("Tombstone ID = %q, want %q", obj.ID, wantEventID)
 	}
 }
 

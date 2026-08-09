@@ -91,6 +91,15 @@ type APDocument struct {
 	Name      string `json:"name,omitempty"`
 }
 
+// APTombstone is the ActivityStreams replacement object for a Delete
+// activity. The spec and most AP implementations (Misskey, Pleroma) require
+// the deleted object to be wrapped this way rather than sent as a bare URI
+// string (issue #1059).
+type APTombstone struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+}
+
 type APEvent struct {
 	Context      any          `json:"@context,omitempty"`
 	Type         string       `json:"type"`

@@ -930,6 +930,13 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("name")
 
+		// The relay actor is synthetic and has no backing org page; send
+		// browsers to the homepage instead of a 404 (issue #1057).
+		if cfg.RelayActorName != "" && slug == cfg.RelayActorName {
+			http.Redirect(w, r, "https://"+cfg.Domain+"/", http.StatusFound)
+			return
+		}
+
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			orgs, oErr := client.GetOrganizations(r.Context())
@@ -1168,6 +1175,10 @@ func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 
 func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Actor documents are cacheable for a short TTL (5 min matches the
+		// Mastodon recommendation) — but only on the AP JSON path, never the
+		// HTML org page (issue #1058).
+		w.Header().Set("Cache-Control", "public, max-age=300")
 		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {

@@ -377,6 +377,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		token, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
+			log.Printf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
 		}
@@ -650,6 +651,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 
 		needsReview, err := client.PatchSuggestManageEvent(r.Context(), token, req)
 		if err != nil {
+			log.Printf("dansal-web: suggest manage patch failed ip_hash=%s err=%v", hashIP(getClientIP(r)), err)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				Error:       i18n.T(r, "suggest_error_submit"),

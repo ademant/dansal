@@ -150,16 +150,6 @@ func (e *errorIDWriter) flush() {
 
 	errorID := newErrorID()
 
-	// Log anonymised context (no IP, no username; user_id only when present).
-	userID, _ := strconv.Atoi(e.req.Header.Get("X-User-ID"))
-	if userID > 0 {
-		log.Printf("error_id=%s status=%d method=%s path=%s user_id=%d",
-			errorID, e.code, e.req.Method, e.req.URL.Path, userID)
-	} else {
-		log.Printf("error_id=%s status=%d method=%s path=%s",
-			errorID, e.code, e.req.Method, e.req.URL.Path)
-	}
-
 	// Inject error_id into JSON body when possible; fall back to original body.
 	body := e.buf.Bytes()
 	var v map[string]any
@@ -168,6 +158,19 @@ func (e *errorIDWriter) flush() {
 		if modified, err := json.Marshal(v); err == nil {
 			body = append(modified, '\n')
 		}
+	}
+
+	// Log anonymised context (no IP, no username; user_id only when present).
+	// msg mirrors what the client saw, so a user-reported error_id maps to the
+	// exact error message.
+	msg, _ := v["error"].(string)
+	userID, _ := strconv.Atoi(e.req.Header.Get("X-User-ID"))
+	if userID > 0 {
+		log.Printf("error_id=%s status=%d method=%s path=%s user_id=%d msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, userID, msg)
+	} else {
+		log.Printf("error_id=%s status=%d method=%s path=%s msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, msg)
 	}
 
 	e.ResponseWriter.WriteHeader(e.code)

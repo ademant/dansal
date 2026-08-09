@@ -193,6 +193,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		result, err := client.Register(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent())
+			log.Printf("dansal-web: register submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			errKey := "register_error_other"
 			switch classifyAPIError(err) {
 			case errConflict:
@@ -200,7 +201,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			case errRateLimited:
 				errKey = "register_error_rate"
 			default:
-				if strings.Contains(err.Error(), "org_id") {
+				if strings.Contains(apiErrUserMessage(err), "org_id") {
 					errKey = "register_error_no_org"
 				}
 			}

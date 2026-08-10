@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-// eventsMoreResponse is the payload for GET /api/events-more.
+// eventsMoreResponse is the payload for GET /events-more.
 type eventsMoreResponse struct {
 	RowsHTML string     `json:"rows_html"`
 	Geo      []geoEvent `json:"geo"`

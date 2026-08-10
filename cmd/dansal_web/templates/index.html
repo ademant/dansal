@@ -1089,7 +1089,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
         return Promise.resolve();
       }
       var afterUnix = Math.floor(maxLoadedStartMs()/1000);
-      return fetch('/api/events-more?after='+afterUnix, {credentials:'same-origin'})
+      return fetch('/events-more?after='+afterUnix, {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
         .then(function(data){
           mergeMoreEvents(data);

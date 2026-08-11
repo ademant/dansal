@@ -47,9 +47,11 @@
 </form>
 
 {{if .Posts}}
+{{$geoPosts := boardPostsGeoJSON .Posts}}
+<div id="board-map" class="board-map" hidden></div>
 <div class="board-global-list" id="board-list">
   {{range .Posts}}
-  <div class="board-global-card">
+  <div class="board-global-card" id="board-post-{{.ID}}">
     <div class="bgc-header">
       <span class="bgc-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
       <span class="bgc-type">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
@@ -87,6 +89,7 @@
   </div>
   {{end}}
 </div>
+<script>window._boardMapPosts = {{$geoPosts}};</script>
 {{else}}
 <p class="board-empty">{{$.Strings.T "board_global_empty"}}</p>
 {{end}}
@@ -123,6 +126,49 @@
     </form>
   </div>
 </details>
+{{$hasGeoPosts := false}}
+{{range .Posts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
+{{if $hasGeoPosts}}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var el=document.getElementById('board-map');
+  if(!el) return;
+  var posts=window._boardMapPosts||[];
+  if(!posts.length) return;
+  el.hidden=false;
+  var map=L.map(el,{scrollWheelZoom:false});
+  attachTileLayer(map);
+  var bounds=[];
+  function esc(s){
+    return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  var typeMeta={
+    ride_offer:{icon:'🚗',color:'#2e7d32'},
+    ride_request:{icon:'🚗',color:'#a5d6a7'},
+    sleep_offer:{icon:'🏠',color:'#1565c0'},
+    sleep_request:{icon:'🏠',color:'#90caf9'}
+  };
+  posts.forEach(function(p){
+    var meta=typeMeta[p.type]||{icon:'📌',color:'#888'};
+    var icon=L.divIcon({className:'board-map-marker',html:'<span style="background:'+meta.color+'">'+meta.icon+'</span>',iconSize:[28,28]});
+    var mk=L.marker([p.lat,p.lon],{icon:icon}).addTo(map);
+    var popupHtml='<b>'+esc(p.city)+'</b>'+(p.event_title?'<br>'+esc(p.event_title):'')+
+      '<br><a href="#board-post-'+p.id+'" class="board-map-goto" data-post-id="'+p.id+'">'+esc(window._boardMapViewLabel)+'</a>';
+    mk.bindPopup(popupHtml);
+    bounds.push([p.lat,p.lon]);
+  });
+  if(bounds.length===1){ map.setView(bounds[0],12); }
+  else if(bounds.length>1){ map.fitBounds(bounds,{padding:[30,30]}); }
+  map.on('popupopen',function(e){
+    var pel=e.popup.getElement();
+    var link=pel&&pel.querySelector('.board-map-goto');
+    if(link) link.addEventListener('click',function(ev){ ev.preventDefault(); goToBoardPost(link.dataset.postId); });
+  });
+})();
+</script>
+{{end}}
 {{end}}
 
 <style>
@@ -134,8 +180,11 @@
 .btog-active{background:var(--heading);color:#fff;border-color:var(--heading)}
 .board-filter-town,.board-filter-q{padding:.3rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
 .board-filter-q{min-width:160px}
+.board-map{height:260px;border-radius:6px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--border-mid)}
+.board-map-marker span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);font-size:1rem}
 .board-global-list{display:flex;flex-direction:column;gap:.75rem}
-.board-global-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:.9rem 1rem}
+.board-global-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:.9rem 1rem;transition:background-color .3s,box-shadow .3s}
+.board-item-highlight{background-color:var(--bg-hover);box-shadow:0 0 0 2px var(--heading)}
 .bgc-header{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;margin-bottom:.3rem}
 .bgc-icon{font-size:1.1rem}
 .bgc-type{font-weight:600;color:var(--heading);font-size:.92rem}
@@ -161,6 +210,22 @@
 </style>
 
 <script>
+window._boardMapViewLabel = {{.Strings.T "board_map_view_post" | jsStr}};
+// goToBoardPost (#1078) scrolls the global board list to a post and briefly
+// highlights it — used by board-map marker popup links, and by a
+// #board-post-N hash in the URL (e.g. shared link, or navigation back from
+// an event page).
+function goToBoardPost(id) {
+  var el = document.getElementById('board-post-' + id);
+  if (!el) return;
+  el.scrollIntoView({behavior: 'smooth', block: 'center'});
+  el.classList.add('board-item-highlight');
+  setTimeout(function(){ el.classList.remove('board-item-highlight'); }, 2000);
+}
+(function(){
+  var m = /^#board-post-(\d+)$/.exec(location.hash);
+  if (m) goToBoardPost(m[1]);
+})();
 function syncBoardFilter(){
   ['rides','sleep','tickets','lostfound'].forEach(function(k){
     var cb = document.querySelector('[name="_ui_'+k+'"]');

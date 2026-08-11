@@ -27,6 +27,115 @@ func TestContactPostsOsmIDMigration(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("contact_posts.osm_id column missing after migrateDB (n=%d)", n)
 	}
+
+	for _, col := range []string{"lat", "lon"} {
+		if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('contact_posts') WHERE name=?", col).Scan(&n); err != nil {
+			t.Fatalf("pragma_table_info(%s): %v", col, err)
+		}
+		if n != 1 {
+			t.Fatalf("contact_posts.%s column missing after migrateDB (n=%d)", col, n)
+		}
+	}
+}
+
+// TestCreateContactPostStoresLatLon asserts the lat/lon captured alongside
+// osm_id from the Nominatim city search (#1077) is persisted and returned by
+// GET /api/v1/events/{id}/contact-posts, so ride/accommodation posts can be
+// plotted on a map.
+func TestCreateContactPostStoresLatLon(t *testing.T) {
+	setupDedupTestDB(t)
+	oldConfig := config
+	config = &Config{}
+	config.Server.MaxOpenTokensPerAddress = 5
+	t.Cleanup(func() { config = oldConfig })
+
+	eventID, _, _, err := insertEvent(db, EventInput{Title: "Test Event", StartTime: 2000000000, EndTime: 2000003600, IsPublished: true})
+	if err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	res, err := db.Exec("INSERT INTO users (email, display_name, role) VALUES ('poster2@example.com','Poster2','user')")
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	userID, _ := res.LastInsertId()
+
+	body, _ := json.Marshal(map[string]any{
+		"type": "ride_offer", "city": "Köln", "osm_id": 42, "lat": 50.9375, "lon": 6.9603,
+		"persons": 1, "nickname": "Tester",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/events/"+strconv.Itoa(eventID)+"/contact-posts", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
+	req.Header.Set("X-User-Role", "user")
+	req.SetPathValue("id", strconv.Itoa(eventID))
+	w := httptest.NewRecorder()
+	createContactPost(w, req)
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201 (body=%s)", w.Code, w.Body.String())
+	}
+
+	listReq := httptest.NewRequest("GET", "/api/v1/events/"+strconv.Itoa(eventID)+"/contact-posts", nil)
+	listReq.SetPathValue("id", strconv.Itoa(eventID))
+	listW := httptest.NewRecorder()
+	listContactPosts(listW, listReq)
+	var posts []ContactPost
+	if err := json.Unmarshal(listW.Body.Bytes(), &posts); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("got %d posts, want 1", len(posts))
+	}
+	p := posts[0]
+	if p.OsmID == nil || *p.OsmID != 42 {
+		t.Fatalf("OsmID = %v, want 42", p.OsmID)
+	}
+	if p.Lat == nil || p.Lon == nil || *p.Lat != 50.9375 || *p.Lon != 6.9603 {
+		t.Fatalf("Lat/Lon = %v/%v, want 50.9375/6.9603", p.Lat, p.Lon)
+	}
+}
+
+// TestCreateContactPostClearsLatLonForNonGeoTypes asserts osm_id/lat/lon are
+// cleared for post types that have no departure/stay city (#1077), same as
+// the existing city-clearing behavior.
+func TestCreateContactPostClearsLatLonForNonGeoTypes(t *testing.T) {
+	setupDedupTestDB(t)
+	oldConfig := config
+	config = &Config{}
+	config.Server.MaxOpenTokensPerAddress = 5
+	t.Cleanup(func() { config = oldConfig })
+
+	eventID, _, _, err := insertEvent(db, EventInput{Title: "Test Event", StartTime: 2000000000, EndTime: 2000003600, IsPublished: true})
+	if err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	res, err := db.Exec("INSERT INTO users (email, display_name, role) VALUES ('poster3@example.com','Poster3','user')")
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	userID, _ := res.LastInsertId()
+
+	body, _ := json.Marshal(map[string]any{
+		"type": "lost_item", "osm_id": 42, "lat": 50.9375, "lon": 6.9603, "nickname": "Tester",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/events/"+strconv.Itoa(eventID)+"/contact-posts", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
+	req.Header.Set("X-User-Role", "user")
+	req.SetPathValue("id", strconv.Itoa(eventID))
+	w := httptest.NewRecorder()
+	createContactPost(w, req)
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201 (body=%s)", w.Code, w.Body.String())
+	}
+
+	var osmID sql.NullInt64
+	var lat, lon sql.NullFloat64
+	if err := db.QueryRow("SELECT osm_id, lat, lon FROM contact_posts WHERE event_id=?", eventID).Scan(&osmID, &lat, &lon); err != nil {
+		t.Fatalf("query inserted post: %v", err)
+	}
+	if osmID.Valid || lat.Valid || lon.Valid {
+		t.Fatalf("expected osm_id/lat/lon cleared for lost_item, got osm_id=%v lat=%v lon=%v", osmID, lat, lon)
+	}
 }
 
 // TestCreateContactPostStoresOsmID asserts a logged-in caller's board post

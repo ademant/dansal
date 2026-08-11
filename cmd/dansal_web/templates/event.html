@@ -599,6 +599,8 @@
   {{end}}
 
   {{if .ContactPosts}}
+  {{$geoPosts := boardPostsGeoJSON .ContactPosts}}
+  <div id="board-map" class="board-map" hidden></div>
   <div class="board-filter-bar" id="board-filter-bar">
     <button type="button" class="board-filter-btn active" data-filter="ride" title="{{$.Strings.T "board_ride_offer"}} / {{$.Strings.T "board_ride_request"}}">🚗</button>
     <button type="button" class="board-filter-btn active" data-filter="sleep" title="{{$.Strings.T "board_sleep_offer"}} / {{$.Strings.T "board_sleep_request"}}">🏠</button>
@@ -608,7 +610,7 @@
   </div>
   <div class="board-list">
     {{range .ContactPosts}}
-    <div class="board-item" data-type="{{.Type}}">
+    <div class="board-item" data-type="{{.Type}}" id="board-post-{{.ID}}">
       <div class="board-item-header">
         <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
         <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
@@ -654,6 +656,12 @@
     </div>
     {{end}}
   </div>
+  <script>
+  window._boardMapPosts = {{$geoPosts}};
+  window._boardMapVenue = {{if and .Event.Location .Event.Location.Latitude}}[{{floatVal .Event.Location.Latitude}},{{floatVal .Event.Location.Longitude}}]{{else}}null{{end}};
+  window._boardMapVenueLabel = {{$.Strings.T "board_map_venue" | jsStr}};
+  window._boardMapViewLabel = {{$.Strings.T "board_map_view_post" | jsStr}};
+  </script>
   {{else}}
   <p class="board-empty">{{$.Strings.T "board_empty"}}</p>
   {{end}}
@@ -685,6 +693,8 @@
         <ul id="board-city-results" hidden></ul>
         <input type="text" name="city" id="board-city-input" required placeholder="{{$.Strings.T "board_city_placeholder"}}">
         <input type="hidden" name="osm_id" id="board-osm-id">
+        <input type="hidden" name="lat" id="board-lat">
+        <input type="hidden" name="lon" id="board-lon">
       </div>
       <div class="board-form-row" id="board-persons-row">
         <label id="board-persons-label">{{$.Strings.T "board_persons_label"}}</label>
@@ -864,8 +874,12 @@
 .btn-booking-submit:hover{background:#0d4a80}
 .board-section{margin-top:2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem}
 .board-section h2{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.9rem}
+.board-map{height:220px;border-radius:6px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--border)}
+.board-map-marker span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);font-size:1rem}
+.board-map-venue-icon{font-size:1.4rem;line-height:1;text-align:center}
 .board-list{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem}
-.board-item{border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem}
+.board-item{border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;transition:background-color .3s,box-shadow .3s}
+.board-item-highlight{background-color:var(--bg-hover);box-shadow:0 0 0 2px var(--heading)}
 .board-item-header{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-size:.92rem}
 .board-type-icon{font-size:1rem}
 .board-type-label{font-weight:600;color:var(--heading)}
@@ -1082,12 +1096,16 @@ document.querySelectorAll('.board-persons-control').forEach(function(ctrl){
   var ul = document.getElementById('board-city-results');
   var cityInput = document.getElementById('board-city-input');
   var osmInput = document.getElementById('board-osm-id');
+  var latInput = document.getElementById('board-lat');
+  var lonInput = document.getElementById('board-lon');
   var noResultsMsg = {{$.Strings.T "suggest_location_no_results" | jsStr}};
   function search() {
     var query = q.value.trim();
     if (!query) return;
     btn.disabled = true;
     osmInput.value = '';
+    latInput.value = '';
+    lonInput.value = '';
     var lang = document.documentElement.lang || 'en';
     var fetchP = fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5&addressdetails=1', {
       headers: {'Accept-Language': lang}
@@ -1109,6 +1127,8 @@ document.querySelectorAll('.board-persons-control').forEach(function(ctrl){
           var district = a.suburb || a.city_district || a.neighbourhood || '';
           cityInput.value = (city && district && district !== city) ? (city + ' - ' + district) : (city || res.display_name);
           osmInput.value = res.osm_id || '';
+          latInput.value = res.lat || '';
+          lonInput.value = res.lon || '';
           ul.hidden = true;
         });
         ul.appendChild(li);
@@ -1130,6 +1150,21 @@ function boardContainsLink(s) {
   var l = s.toLowerCase();
   return l.indexOf('http://') !== -1 || l.indexOf('https://') !== -1 || l.indexOf('mailto:') !== -1;
 }
+// goToBoardPost (#1077, #1078) scrolls the board list to a post and briefly
+// highlights it — used by board-map marker popup links, and by the
+// #board-post-N hash left by the aggregate /board map (#1078) when it links
+// through to a specific event.
+function goToBoardPost(id) {
+  var el = document.getElementById('board-post-' + id);
+  if (!el) return;
+  el.scrollIntoView({behavior: 'smooth', block: 'center'});
+  el.classList.add('board-item-highlight');
+  setTimeout(function(){ el.classList.remove('board-item-highlight'); }, 2000);
+}
+(function(){
+  var m = /^#board-post-(\d+)$/.exec(location.hash);
+  if (m) goToBoardPost(m[1]);
+})();
 function boardContactValidate(form) {
   var msg = form.querySelector('textarea[name="message"]');
   if (msg && boardContainsLink(msg.value)) { alert('{{$.Strings.T "board_no_links_error"}}'); return false; }
@@ -1175,10 +1210,14 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 })();
 </script>
 
-{{with .Data}}{{if and .Event.Location .Event.Location.Latitude}}
+{{with .Data}}
+{{$hasGeoPosts := false}}
+{{range .ContactPosts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
+{{if or (and .Event.Location .Event.Location.Latitude) $hasGeoPosts}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script>
+{{if and .Event.Location .Event.Location.Latitude}}
 (function(){
   var el=document.getElementById('evt-map');
   if(!el) return;
@@ -1205,7 +1244,52 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
   el.addEventListener('click',function(){window.open('https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=16/'+lat+'/'+lng,'_blank');});
   el.style.cursor='pointer';
 })();
+{{end}}
+{{if $hasGeoPosts}}
+(function(){
+  var el=document.getElementById('board-map');
+  if(!el) return;
+  var posts=window._boardMapPosts||[];
+  if(!posts.length) return;
+  el.hidden=false;
+  var map=L.map(el,{scrollWheelZoom:false});
+  attachTileLayer(map);
+  var bounds=[];
+  function esc(s){
+    return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  var venue=window._boardMapVenue;
+  if(venue){
+    var vIcon=L.divIcon({className:'board-map-venue-icon',html:'📍',iconSize:[26,26]});
+    L.marker(venue,{icon:vIcon}).addTo(map).bindPopup('<b>'+esc(window._boardMapVenueLabel)+'</b>');
+    bounds.push(venue);
+  }
+  var typeMeta={
+    ride_offer:{icon:'🚗',color:'#2e7d32'},
+    ride_request:{icon:'🚗',color:'#a5d6a7'},
+    sleep_offer:{icon:'🏠',color:'#1565c0'},
+    sleep_request:{icon:'🏠',color:'#90caf9'}
+  };
+  posts.forEach(function(p){
+    var meta=typeMeta[p.type]||{icon:'📌',color:'#888'};
+    var icon=L.divIcon({className:'board-map-marker',html:'<span style="background:'+meta.color+'">'+meta.icon+'</span>',iconSize:[28,28]});
+    var mk=L.marker([p.lat,p.lon],{icon:icon}).addTo(map);
+    var popupHtml='<b>'+esc(p.city)+'</b><br>'+esc(p.nickname)+
+      '<br><a href="#board-post-'+p.id+'" class="board-map-goto" data-post-id="'+p.id+'">'+esc(window._boardMapViewLabel)+'</a>';
+    mk.bindPopup(popupHtml);
+    bounds.push([p.lat,p.lon]);
+  });
+  if(bounds.length===1){ map.setView(bounds[0],14); }
+  else if(bounds.length>1){ map.fitBounds(bounds,{padding:[30,30]}); }
+  map.on('popupopen',function(e){
+    var pel=e.popup.getElement();
+    var link=pel&&pel.querySelector('.board-map-goto');
+    if(link) link.addEventListener('click',function(ev){ ev.preventDefault(); goToBoardPost(link.dataset.postId); });
+  });
+})();
+{{end}}
 </script>
-{{end}}{{end}}
+{{end}}
+{{end}}
 
 {{end}}

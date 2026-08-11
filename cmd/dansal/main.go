@@ -2232,6 +2232,21 @@ func migrateDB() {
 			db.Exec("ALTER TABLE contact_posts ADD COLUMN osm_id INTEGER")
 		}
 	}
+
+	// #1077: contact_posts gain lat/lon, captured from the same Nominatim
+	// search result that already supplies osm_id, so ride/accommodation posts
+	// can be plotted on a map instead of just showing a city name.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('contact_posts') WHERE name='lat'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE contact_posts ADD COLUMN lat REAL")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('contact_posts') WHERE name='lon'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE contact_posts ADD COLUMN lon REAL")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3378,6 +3393,8 @@ func createTables() error {
 		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request','ticket_offer','ticket_request','lost_item','found_item')),
 		city TEXT NOT NULL,
 		osm_id INTEGER,
+		lat REAL,
+		lon REAL,
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		nickname TEXT NOT NULL,

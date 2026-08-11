@@ -91,10 +91,17 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			"email":    r.FormValue("email"),
 			"telegram": r.FormValue("telegram"),
 		}
-		// osm_id (#1041) is display-only for now — populated by the Nominatim
-		// city search, left unset if the visitor typed the city freehand.
+		// osm_id/lat/lon (#1041, #1077) are populated by the Nominatim city
+		// search, left unset if the visitor typed the city freehand — lat/lon
+		// let ride/accommodation posts be plotted on a map (#1077, #1078).
 		if osmID, err := strconv.ParseInt(r.FormValue("osm_id"), 10, 64); err == nil {
 			post["osm_id"] = osmID
+		}
+		if lat, err := strconv.ParseFloat(r.FormValue("lat"), 64); err == nil {
+			post["lat"] = lat
+		}
+		if lon, err := strconv.ParseFloat(r.FormValue("lon"), 64); err == nil {
+			post["lon"] = lon
 		}
 
 		publicThrottle.record(ip + "|" + r.UserAgent())

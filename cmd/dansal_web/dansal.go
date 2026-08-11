@@ -2101,6 +2101,9 @@ type ContactPost struct {
 	EventID          int               `json:"event_id"`
 	Type             string            `json:"type"`
 	City             string            `json:"city"`
+	OsmID            *int64            `json:"osm_id,omitempty"`
+	Lat              *float64          `json:"lat,omitempty"`
+	Lon              *float64          `json:"lon,omitempty"`
 	Persons          int               `json:"persons"`
 	Message          string            `json:"message,omitempty"`
 	Nickname         string            `json:"nickname"`

@@ -87,6 +87,41 @@ var tmplFuncsMisc = template.FuncMap{
 		b, _ := json.Marshal(geo)
 		return template.JS(b)
 	},
+	// boardPostsGeoJSON (#1077, #1078) flattens geocoded ride/accommodation
+	// board posts (Lat/Lon set) into a compact JSON blob for the board map —
+	// posts without coordinates are silently excluded, so callers just check
+	// len() to decide whether to render a map at all. EventTitle is included
+	// for the aggregate /board map (#1078); empty on the per-event map since
+	// the event is already given by context there.
+	"boardPostsGeoJSON": func(posts []ContactPost) template.JS {
+		type geoPost struct {
+			ID         int     `json:"id"`
+			EventID    int     `json:"event_id"`
+			Type       string  `json:"type"`
+			City       string  `json:"city"`
+			Lat        float64 `json:"lat"`
+			Lon        float64 `json:"lon"`
+			Persons    int     `json:"persons"`
+			Nickname   string  `json:"nickname"`
+			EventTitle string  `json:"event_title,omitempty"`
+		}
+		out := []geoPost{}
+		for _, p := range posts {
+			if p.Lat == nil || p.Lon == nil {
+				continue
+			}
+			gp := geoPost{
+				ID: p.ID, EventID: p.EventID, Type: p.Type, City: p.City,
+				Lat: *p.Lat, Lon: *p.Lon, Persons: p.Persons, Nickname: p.Nickname,
+			}
+			if p.Event != nil {
+				gp.EventTitle = p.Event.Title
+			}
+			out = append(out, gp)
+		}
+		b, _ := json.Marshal(out)
+		return template.JS(b)
+	},
 	"orgsMapJSON": func(pins []OrgMapPin) template.JS {
 		if len(pins) == 0 {
 			return template.JS("[]")
@@ -191,8 +226,8 @@ var tmplFuncsMisc = template.FuncMap{
 		}
 		return out
 	},
-	"hasPrefix":     strings.HasPrefix,
-	"lower":         strings.ToLower,
+	"hasPrefix": strings.HasPrefix,
+	"lower":     strings.ToLower,
 	"fmtBytes": func(b int64) string {
 		const unit = 1024
 		if b < unit {

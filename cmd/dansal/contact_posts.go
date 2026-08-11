@@ -16,6 +16,9 @@ type ContactPost struct {
 	EventID          int               `json:"event_id"`
 	Type             string            `json:"type"`
 	City             string            `json:"city"`
+	OsmID            *int64            `json:"osm_id,omitempty"`
+	Lat              *float64          `json:"lat,omitempty"`
+	Lon              *float64          `json:"lon,omitempty"`
 	Persons          int               `json:"persons"`
 	Message          string            `json:"message,omitempty"`
 	Nickname         string            `json:"nickname"`
@@ -212,14 +215,16 @@ func capExceededMsg(postType string) string {
 
 // ContactPostCreateRequest is the body accepted by POST /api/v1/events/{id}/contact-posts.
 type ContactPostCreateRequest struct {
-	Type     string `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
-	City     string `json:"city"`
-	OsmID    *int64 `json:"osm_id"`
-	Persons  int    `json:"persons"`
-	Message  string `json:"message"`
-	Nickname string `json:"nickname"`
-	Email    string `json:"email"`
-	Telegram string `json:"telegram"`
+	Type     string   `json:"type" enum:"ride_offer,ride_request,sleep_offer,sleep_request,ticket_offer,ticket_request,lost_item,found_item"`
+	City     string   `json:"city"`
+	OsmID    *int64   `json:"osm_id"`
+	Lat      *float64 `json:"lat"`
+	Lon      *float64 `json:"lon"`
+	Persons  int      `json:"persons"`
+	Message  string   `json:"message"`
+	Nickname string   `json:"nickname"`
+	Email    string   `json:"email"`
+	Telegram string   `json:"telegram"`
 }
 
 // ContactPostWriteRequest is the body accepted by PUT /api/v1/contact-posts/{id}
@@ -261,7 +266,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(
-		`SELECT id, event_id, type, city, persons, COALESCE(message,''), nickname, COALESCE(telegram_username,''), email_verified, created_at
+		`SELECT id, event_id, type, city, osm_id, lat, lon, persons, COALESCE(message,''), nickname, COALESCE(telegram_username,''), email_verified, created_at
 		 FROM contact_posts
 		 WHERE event_id=? AND email_verified=1 AND expires_at > ?
 		 ORDER BY created_at ASC`,
@@ -277,11 +282,20 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p ContactPost
 		var ev int
-		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt); err != nil {
+		var osmID sql.NullInt64
+		var lat, lon sql.NullFloat64
+		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &osmID, &lat, &lon, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt); err != nil {
 			writeInternalError(w, err)
 			return
 		}
 		p.EmailVerified = ev == 1
+		if osmID.Valid {
+			p.OsmID = &osmID.Int64
+		}
+		if lat.Valid && lon.Valid {
+			p.Lat = &lat.Float64
+			p.Lon = &lon.Float64
+		}
 		posts = append(posts, p)
 	}
 	attachContactPostImages(posts)
@@ -330,10 +344,12 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "city is required for this post type", http.StatusBadRequest)
 		return
 	}
-	// ticket_*, lost_item, found_item: ignore osm_id and clear city
+	// ticket_*, lost_item, found_item: ignore osm_id/lat/lon and clear city
 	if !cityRequiredTypes[req.Type] {
 		req.City = ""
 		req.OsmID = nil
+		req.Lat = nil
+		req.Lon = nil
 	}
 	if containsLink(req.Message) {
 		writeError(w, "message must not contain links", http.StatusBadRequest)
@@ -430,17 +446,23 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		userIDArg = callerID
 	}
 
-	var osmIDArg any
+	var osmIDArg, latArg, lonArg any
 	if req.OsmID != nil {
 		osmIDArg = *req.OsmID
+	}
+	if req.Lat != nil {
+		latArg = *req.Lat
+	}
+	if req.Lon != nil {
+		lonArg = *req.Lon
 	}
 
 	if callerID > 0 {
 		// Logged-in: immediately verified, no email.
 		result, err := db.Exec(
-			`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, user_id, expires_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-			eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+			`INSERT INTO contact_posts (event_id, type, city, osm_id, lat, lon, persons, message, nickname, email, telegram_username, manage_token, email_verified, user_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			eventID, req.Type, req.City, osmIDArg, latArg, lonArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 			manageToken, userIDArg, expiresAt.Unix(),
 		)
 		if err != nil {
@@ -467,9 +489,9 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 			bsIDArg = bsID
 		}
 		result, err := db.Exec(
-			`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, board_session_id, expires_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-			eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+			`INSERT INTO contact_posts (event_id, type, city, osm_id, lat, lon, persons, message, nickname, email, telegram_username, manage_token, email_verified, board_session_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			eventID, req.Type, req.City, osmIDArg, latArg, lonArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 			manageToken, bsIDArg, expiresAt.Unix(),
 		)
 		if err != nil {
@@ -498,9 +520,9 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		`INSERT INTO contact_posts (event_id, type, city, osm_id, persons, message, nickname, email, telegram_username, manage_token, email_verified, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		eventID, req.Type, req.City, osmIDArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
+		`INSERT INTO contact_posts (event_id, type, city, osm_id, lat, lon, persons, message, nickname, email, telegram_username, manage_token, email_verified, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		eventID, req.Type, req.City, osmIDArg, latArg, lonArg, req.Persons, req.Message, req.Nickname, req.Email, req.Telegram,
 		manageToken, initialVerified, expiresAt.Unix(),
 	)
 	if err != nil {
@@ -1127,7 +1149,7 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Unix()
-	query := `SELECT cp.id, cp.event_id, cp.type, cp.city, cp.persons,
+	query := `SELECT cp.id, cp.event_id, cp.type, cp.city, cp.osm_id, cp.lat, cp.lon, cp.persons,
 	                 COALESCE(cp.message,''), cp.nickname, COALESCE(cp.telegram_username,''),
 	                 cp.email_verified, cp.created_at,
 	                 e.title, e.start_time, COALESCE(l.town,''), COALESCE(l.country,'')
@@ -1175,10 +1197,12 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var cp ContactPost
 		var ev int
+		var osmID sql.NullInt64
+		var lat, lon sql.NullFloat64
 		var startEpoch int64
 		var evTitle, evTown, evCountry string
 		if err := rows.Scan(
-			&cp.ID, &cp.EventID, &cp.Type, &cp.City, &cp.Persons,
+			&cp.ID, &cp.EventID, &cp.Type, &cp.City, &osmID, &lat, &lon, &cp.Persons,
 			&cp.Message, &cp.Nickname, &cp.TelegramUsername,
 			&ev, &cp.CreatedAt,
 			&evTitle, &startEpoch, &evTown, &evCountry,
@@ -1187,6 +1211,13 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cp.EmailVerified = ev == 1
+		if osmID.Valid {
+			cp.OsmID = &osmID.Int64
+		}
+		if lat.Valid && lon.Valid {
+			cp.Lat = &lat.Float64
+			cp.Lon = &lon.Float64
+		}
 		cp.Event = &ContactPostEvent{
 			ID:        cp.EventID,
 			Title:     evTitle,

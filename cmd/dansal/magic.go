@@ -93,6 +93,43 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// POST /api/v1/users/me/magic-link — authenticated user generates a one-time
+// login link for their own account, e.g. to scan on a second device and set
+// up a passkey there. Respects the same last_magic_sent_at rate limit as the
+// public magic-link request flow.
+func generateSelfMagicLink(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	callerID, _ := callerFromRequest(r)
+
+	// Rate limit: same cooldown as the public magic-link request endpoint.
+	rateSecs := config.Server.MagicLoginRateSecs
+	var lastMagicSentAt string
+	db.QueryRow("SELECT COALESCE(last_magic_sent_at,'') FROM users WHERE id=?", callerID).Scan(&lastMagicSentAt)
+	if lastMagicSentAt != "" {
+		if last, err := parseTokenExpiration(lastMagicSentAt); err == nil {
+			retryAfter := int(time.Until(last.Add(time.Duration(rateSecs) * time.Second)).Seconds())
+			if retryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+				writeError(w, "Too many magic link requests", http.StatusTooManyRequests)
+				return
+			}
+		}
+	}
+
+	token, expiresAt, err := createMagicToken(callerID)
+	if err != nil {
+		writeError(w, "Failed to create token", http.StatusInternalServerError)
+		return
+	}
+	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", time.Now().UTC().Unix(), callerID)
+
+	log.Printf("magic: user %d generated self magic link", callerID)
+	json.NewEncoder(w).Encode(map[string]string{
+		"url":        buildBaseURL(r) + "/login/magic/" + token,
+		"expires_at": expiresAt.Format(time.RFC3339),
+	})
+}
+
 // POST /api/v1/login/magic — request a magic login link.
 // Body: {"email":"..."}, optional "channel":"email"|"telegram".
 // Always returns 204 to prevent user enumeration.

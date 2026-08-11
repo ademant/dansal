@@ -182,6 +182,16 @@
     {{end}}
     <button type="button" id="btn-add-passkey" class="btn-secondary" style="margin-top:.5rem" onclick="addPasskey()">{{$.Strings.T "settings_passkeys_add"}}</button>
     <div id="passkey-msg" hidden class="msg msg-error" style="margin-top:.5rem"></div>
+    <p class="hint" style="margin-top:.75rem">{{$.Strings.T "settings_magic_link_hint"}}</p>
+    <button type="button" class="btn-secondary" style="margin-top:.25rem" onclick="generateSelfMagicLink()">{{$.Strings.T "settings_magic_link_device"}}</button>
+    <div id="self-magic-result" hidden style="margin-top:.75rem;text-align:center">
+      <div id="self-magic-qr" style="display:inline-block;max-width:100%"></div>
+      <p id="self-magic-cd" style="font-size:.85rem;color:#888;margin:.4rem 0 0"></p>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem">
+        <button class="btn-sm" id="self-magic-share" onclick="shareInviteURL(selfMagicURL)">{{$.Strings.T "admin_invite_share"}}</button>
+        <button class="btn-sm" onclick="copyText(selfMagicURL)">{{$.Strings.T "admin_invite_copy"}}</button>
+      </div>
+    </div>
   </div>
 
   <div class="settings-card">
@@ -389,6 +399,37 @@
     }
   };
 })();
+</script>
+<script>
+var selfMagicURL = '';
+function copyText(t) { if (navigator.clipboard) navigator.clipboard.writeText(t); }
+function shareInviteURL(url) {
+  if (navigator.share) { navigator.share({url: url}).catch(function(){}); } else { copyText(url); }
+}
+async function generateSelfMagicLink() {
+  var res = document.getElementById('self-magic-result');
+  var qrEl = document.getElementById('self-magic-qr');
+  var cd = document.getElementById('self-magic-cd');
+  qrEl.innerHTML = '';
+  res.hidden = false;
+  cd.textContent = '…';
+  try {
+    var r = await fetch('/settings/magic-link', {method:'POST', headers:{Accept:'application/json'}});
+    var d = await r.json();
+    if (!r.ok) { cd.textContent = d.error || r.statusText; return; }
+    selfMagicURL = d.url;
+    if (typeof QRCode !== 'undefined') {
+      var qrSize = Math.min(280, window.innerWidth - 96);
+      new QRCode(qrEl, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
+    }
+    var exp = new Date(d.expires_at);
+    (function tick(){
+      var s = Math.max(0, Math.round((exp - Date.now()) / 1000));
+      cd.textContent = '{{.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
+      if (s > 0) setTimeout(tick, 1000);
+    })();
+  } catch(e) { cd.textContent = e.message; }
+}
 </script>
 {{if gt .SessionIdleTimeoutMins 0}}
 <div id="idle-warning"></div>

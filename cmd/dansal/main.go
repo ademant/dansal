@@ -3928,6 +3928,7 @@ func main() {
 	smux.Handle("POST /api/v1/user/password", auth(changeOwnPassword))
 	smux.Handle("POST /api/v1/users/{id}/verify", auth(sendVerification))
 	smux.Handle("POST /api/v1/users/{id}/magic-link", auth(generateAdminMagicLink))
+	smux.Handle("POST /api/v1/users/me/magic-link", auth(generateSelfMagicLink))
 	smux.Handle("POST /api/v1/users/{id}/telegram/message", auth(sendTelegramMessageToUser))
 
 	// Contact board — protected delete

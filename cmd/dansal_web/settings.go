@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -246,6 +247,26 @@ func settingsDeleteAPIKeyHandler(cfg *Config, client *DansalClient) http.Handler
 		}
 		_ = client.DeleteAPIKey(r.Context(), token, id)
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	}
+}
+
+// POST /settings/magic-link — generate a self-service magic login link for
+// the current user (e.g. to scan on a second device and add a passkey there).
+// Proxies POST /api/v1/users/me/magic-link and forwards the JSON response.
+func settingsMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		var result map[string]string
+		w.Header().Set("Content-Type", "application/json")
+		if err := client.do(r.Context(), "POST", "/api/v1/users/me/magic-link", token, nil, &result, http.StatusOK); err != nil {
+			http.Error(w, `{"error":"failed to generate link"}`, http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(result)
 	}
 }
 

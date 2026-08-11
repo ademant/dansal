@@ -291,6 +291,7 @@ func main() {
 		r.HandleFunc("POST /settings/apikeys/new", settingsCreateAPIKeyHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /settings/apikeys/{id}/delete", settingsDeleteAPIKeyHandler(cfg, client))
 		r.HandleFunc("POST /settings/password", settingsChangePasswordHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /settings/magic-link", settingsMagicLinkHandler(cfg, client))
 		r.HandleFunc("POST /settings/passkeys/register/begin", settingsPasskeyRegisterBeginHandler(cfg, client))
 		r.HandleFunc("POST /settings/passkeys/register/finish", settingsPasskeyRegisterFinishHandler(cfg, client))
 		r.HandleFunc("POST /settings/passkeys/{id}/delete", settingsPasskeyDeleteHandler(cfg, client))

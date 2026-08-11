@@ -15,8 +15,9 @@ cmd/dansal_web/dansal_web
 # Database
 *.db
 
-# Images directory
+# Images directory (uploaded event images — not wiki screenshots)
 images/
+!wiki/images/
 
 # Environment / config overrides
 *.env

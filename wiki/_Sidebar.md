@@ -6,6 +6,7 @@
 **Benutzer**
 - [Benutzer](Benutzer)
 - [Benutzer-Konto](Benutzer-Konto)
+- [Benutzer-Registrierung](Benutzer-Registrierung)
 - [Benutzer-Veranstaltungen](Benutzer-Veranstaltungen)
 - [Benutzer-Veranstaltungsorte](Benutzer-Veranstaltungsorte)
 - [Benutzer-Organisationen](Benutzer-Organisationen)

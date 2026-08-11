@@ -47,23 +47,26 @@ func loadValidInvite(token string) (inviteRecord, error) {
 	if exp, err2 := parseTokenExpiration(invite.ExpiresAt); err2 != nil || time.Now().After(exp) {
 		return inviteRecord{}, errInviteExpired
 	}
-	// The token itself is a signed JWT (see invite_jwt.go); verify its
-	// signature and claims as an authenticity check on top of the DB lookup
-	// above, which remains the source of truth for one-time-use/expiry.
-	claims, err := verifyInviteJWT(token, inviteTokenType(invite.Role))
-	if err != nil {
-		return inviteRecord{}, errInviteBadToken
-	}
-	wantOrgID := 0
-	if invite.OrgID.Valid {
-		wantOrgID = int(invite.OrgID.Int64)
-	}
-	gotOrgID := 0
-	if claims.OrgID != nil {
-		gotOrgID = *claims.OrgID
-	}
-	if wantOrgID != gotOrgID {
-		return inviteRecord{}, errInviteBadToken
+	// Link and publisher invite tokens are JWTs (two dots); verify signature
+	// and claims as an additional authenticity check. QR invites use short
+	// opaque tokens (no dots) validated solely by the DB lookup above — they
+	// need no JWT verification and don't carry org_id in the token itself.
+	if strings.Count(token, ".") == 2 {
+		claims, err := verifyInviteJWT(token, inviteTokenType(invite.Role))
+		if err != nil {
+			return inviteRecord{}, errInviteBadToken
+		}
+		wantOrgID := 0
+		if invite.OrgID.Valid {
+			wantOrgID = int(invite.OrgID.Int64)
+		}
+		gotOrgID := 0
+		if claims.OrgID != nil {
+			gotOrgID = *claims.OrgID
+		}
+		if wantOrgID != gotOrgID {
+			return inviteRecord{}, errInviteBadToken
+		}
 	}
 	return invite, nil
 }
@@ -179,7 +182,21 @@ func createInviteRecord(creatorID int, role, inviteType string, orgID *int) (Inv
 		expiresAt = time.Now().UTC().Add(time.Duration(config.Server.InviteExpiryHours) * time.Hour)
 	}
 
-	token, err := signInviteJWT(role, orgID, inviteTokenType(role), expiresAt)
+	// QR invites use a short opaque token (16 random bytes, base64url-encoded,
+	// 22 chars) so the resulting URL fits in a small QR code that can be
+	// scanned reliably from a phone screen. The DB stores all state needed for
+	// validation (role, org_id, expires_at, used_at), so stateless JWT
+	// verification is not required. Link and publisher invites keep JWTs for
+	// WordPress plugin off-server validation (see issue #769).
+	var (
+		token string
+		err   error
+	)
+	if inviteType == "qr" {
+		token, err = generateOpaqueToken()
+	} else {
+		token, err = signInviteJWT(role, orgID, inviteTokenType(role), expiresAt)
+	}
 	if err != nil {
 		return InviteLink{}, err
 	}

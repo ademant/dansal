@@ -210,9 +210,11 @@
       <p class="muted">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}} · {{$.Strings.T "admin_invite_expires"}}: {{.ExpiresAt}}</p>
       <div class="popup-actions">
         <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
+        {{if eq .InviteType "qr"}}<button type="button" class="btn-sm" onclick="showInviteQR(this,'{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_qr_show"}}</button>{{end}}
         <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
       </div>
+      <div class="invite-qr-container" style="display:none;text-align:center;margin-top:.75rem"></div>
     </template>
     {{end}}
     </tbody>
@@ -511,7 +513,7 @@ async function createInvite(type) {
       })();
       if (typeof QRCode !== 'undefined') {
         var qrSize = Math.min(320, window.innerWidth - 96);
-        new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.H});
+        new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
       }
     } else {
       res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
@@ -587,6 +589,17 @@ function toggleDisable(id, disabled) {
   f.method = 'post'; f.action = '/admin/users/' + id + '/disable';
   var d = document.createElement('input'); d.name = 'disabled'; d.value = disabled ? '1' : '0'; f.appendChild(d);
   document.body.appendChild(f); f.submit();
+}
+function showInviteQR(btn, url) {
+  var container = btn.closest('.popup-card, [id^="generic-modal"]').querySelector('.invite-qr-container');
+  if (!container) return;
+  if (container.style.display !== 'none') { container.style.display = 'none'; return; }
+  container.innerHTML = '';
+  container.style.display = 'block';
+  if (typeof QRCode !== 'undefined') {
+    var qrSize = Math.min(280, window.innerWidth - 96);
+    new QRCode(container, {text: url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
+  }
 }
 function toggleQR(containerId, sourceId) {
   var el = document.getElementById(containerId);

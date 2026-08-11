@@ -10,6 +10,18 @@ import (
 	"errors"
 )
 
+// generateOpaqueToken returns 16 random bytes encoded as base64url (22 chars,
+// no padding). Used for QR invite tokens where a short URL is essential for
+// reliable phone-to-phone QR scanning — JWTs are ~420 chars and produce
+// version 27+ QR codes that are too dense to scan from a phone screen.
+func generateOpaqueToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
 // errInvalidClientPubkey is returned by encryptAPIKeyForClient when the
 // caller-supplied client_pubkey (see #770) is malformed, the wrong type, or
 // too small to be trusted.

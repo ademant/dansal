@@ -268,8 +268,7 @@
       </select>
     </div>
     <div class="popup-actions">
-      <button type="button" class="btn-sm" onclick="createInvite('qr')" title="{{.Strings.T "admin_invite_qr_hint"}}">{{.Strings.T "admin_invite_create_qr"}}</button>
-      <button type="button" class="btn-sm" onclick="createInvite('link')" title="{{.Strings.T "admin_invite_link_hint"}}">{{.Strings.T "admin_invite_create_link"}}</button>
+      <button type="button" class="btn-sm" onclick="createInvite()">{{.Strings.T "admin_invite_create"}}</button>
       <button type="button" class="btn-sm" onclick="closeCreateInviteModal()">{{.Strings.T "admin_magic_link_close"}}</button>
     </div>
     <div id="invite-result" hidden style="margin-top:.75rem"></div>
@@ -480,7 +479,7 @@ async function publisherConnectLink(id, orgID, resultId) {
     if (!resultId) closePopup();
   } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
 }
-async function createInvite(type) {
+async function createInvite() {
   var orgEl = document.getElementById('invite-org-id');
   var orgVal = orgEl ? orgEl.value : '';
   var res = document.getElementById('invite-result');
@@ -489,42 +488,36 @@ async function createInvite(type) {
     res.innerHTML = '<span style="color:#c06000">{{.Strings.T "admin_invite_org_required"}}</span>';
     return;
   }
-  var body = {type: type, org_id: parseInt(orgVal)};
   res.hidden = false;
   res.innerHTML = '…';
   try {
     var r = await fetch('/admin/invites/new', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'qr', org_id: parseInt(orgVal)})
     });
     var d = await r.json();
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
-    if (type === 'qr') {
-      res.innerHTML = '';
-      var cnt = document.createElement('div');
-      cnt.className = 'popup-qr';
-      res.appendChild(cnt);
-      var exp = new Date(d.expires_at);
-      var cd = document.createElement('p');
-      cd.style.cssText = 'margin:.4rem 0 0;font-size:.85rem;color:var(--fg-muted);text-align:center';
-      res.appendChild(cd);
-      (function tick(){
-        var s = Math.max(0, Math.round((exp - Date.now()) / 1000));
-        cd.textContent = '{{.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
-        if (s > 0) setTimeout(tick, 1000);
-      })();
-      if (typeof QRCode !== 'undefined') {
-        var qrSize = Math.min(320, window.innerWidth - 96);
-        new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
-      }
-      var acts = document.createElement('div');
-      acts.style.cssText = 'display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.6rem';
-      acts.innerHTML = '<button class="btn-sm" onclick="shareInviteURL(\'' + d.url + '\')">{{.Strings.T "admin_invite_share"}}</button>' +
-        '<button class="btn-sm" onclick="copyText(\'' + d.url + '\')">{{.Strings.T "admin_invite_copy"}}</button>';
-      res.appendChild(acts);
-    } else {
-      res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
-        ' <button class="btn-sm" onclick="copyText(\'' + d.url + '\')" style="margin-left:.4rem">{{.Strings.T "admin_invite_copy"}}</button>';
+    res.innerHTML = '';
+    var cnt = document.createElement('div');
+    cnt.className = 'popup-qr';
+    res.appendChild(cnt);
+    var exp = new Date(d.expires_at);
+    var cd = document.createElement('p');
+    cd.style.cssText = 'margin:.4rem 0 0;font-size:.85rem;color:var(--fg-muted);text-align:center';
+    res.appendChild(cd);
+    (function tick(){
+      var s = Math.max(0, Math.round((exp - Date.now()) / 1000));
+      cd.textContent = '{{.Strings.T "admin_invite_qr_expires_in"}}: ' + s + 's';
+      if (s > 0) setTimeout(tick, 1000);
+    })();
+    if (typeof QRCode !== 'undefined') {
+      var qrSize = Math.min(320, window.innerWidth - 96);
+      new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
     }
+    var acts = document.createElement('div');
+    acts.style.cssText = 'display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.6rem';
+    acts.innerHTML = '<button class="btn-sm" onclick="shareInviteURL(\'' + d.url + '\')">{{.Strings.T "admin_invite_share"}}</button>' +
+      '<button class="btn-sm" onclick="copyText(\'' + d.url + '\')">{{.Strings.T "admin_invite_copy"}}</button>';
+    res.appendChild(acts);
   } catch(e) {
     res.innerHTML = '<span style="color:red">' + e.message + '</span>';
   }

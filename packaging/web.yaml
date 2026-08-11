@@ -97,7 +97,7 @@ nodeinfo_maintainer_email: ""
 images_dir: /var/lib/dansal-web
 
 # Disk cache for proxied OSM/CARTO map tiles (see /tiles/... in main.go).
-# Defaults to a "tiles" subdirectory of images_dir when unset.
+# Defaults to a "tiles" subdirectory next to db_path when unset.
 # tile_cache_dir: /var/lib/dansal-web/tiles
 
 # Banner height in pixels on the main page (0 = hidden).

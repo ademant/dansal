@@ -78,7 +78,7 @@ func tileProxyHandler(cfg *Config) http.HandlerFunc {
 
 		cacheDir := cfg.TileCacheDir
 		if cacheDir == "" {
-			cacheDir = filepath.Join(cfg.ImagesDir, "tiles")
+			cacheDir = defaultTileCacheDir(cfg)
 		}
 		cachePath := filepath.Join(cacheDir, scheme, strconv.Itoa(z), strconv.Itoa(x), strconv.Itoa(y)+retina+".png")
 

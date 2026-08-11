@@ -117,17 +117,25 @@ func TestTileProxyRejectsOutOfRangeCoordinates(t *testing.T) {
 	}
 }
 
-// TestTileProxyEmptyCacheDirDefaultsToImagesDirSubdir asserts an empty
-// TileCacheDir falls back to <ImagesDir>/tiles rather than erroring.
-func TestTileProxyEmptyCacheDirDefaultsToImagesDirSubdir(t *testing.T) {
+// TestTileProxyEmptyCacheDirDefaultsToDBPathSubdir asserts an empty
+// TileCacheDir falls back to a "tiles" subdir next to DBPath (not ImagesDir
+// — see the TileCacheDir field comment for why: under systemd's
+// ProtectSystem=strict + StateDirectory=dansal-web/%i hardening, only
+// /var/lib/dansal-web/<instance> — where DBPath lives — is writable;
+// ImagesDir commonly defaults to the non-instance-namespaced, read-only
+// /var/lib/dansal-web).
+func TestTileProxyEmptyCacheDirDefaultsToDBPathSubdir(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("x"))
 	}))
 	defer ts.Close()
 	scheme := withTestTileUpstream(t, ts)
 
-	imagesDir := t.TempDir()
-	cfg := &Config{ImagesDir: imagesDir} // TileCacheDir intentionally left empty
+	stateDir := t.TempDir()
+	cfg := &Config{
+		DBPath:    filepath.Join(stateDir, "web.db"),
+		ImagesDir: "/var/lib/dansal-web", // deliberately NOT writable in this test to prove it's unused
+	}
 	h := tileProxyHandler(cfg)
 	req := httptest.NewRequest("GET", fmt.Sprintf("/tiles/%s/1/0/0.png", scheme), nil)
 	req.SetPathValue("scheme", scheme)
@@ -137,9 +145,9 @@ func TestTileProxyEmptyCacheDirDefaultsToImagesDirSubdir(t *testing.T) {
 	w := httptest.NewRecorder()
 	h(w, req)
 	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
+		t.Fatalf("status = %d, want 200 (body=%s)", w.Code, w.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(imagesDir, "tiles", scheme, "1", "0", "0.png")); err != nil {
-		t.Fatalf("expected cache file under <ImagesDir>/tiles: %v", err)
+	if _, err := os.Stat(filepath.Join(stateDir, "tiles", scheme, "1", "0", "0.png")); err != nil {
+		t.Fatalf("expected cache file under <dir of DBPath>/tiles: %v", err)
 	}
 }

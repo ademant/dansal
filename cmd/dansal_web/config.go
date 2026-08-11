@@ -53,7 +53,11 @@ type Config struct {
 
 	// TileCacheDir is a disk cache for /tiles/... proxy responses (#1079),
 	// avoiding repeat upstream fetches from OSM/CARTO. Defaults to a "tiles"
-	// subdirectory of ImagesDir if unset.
+	// subdirectory next to DBPath if unset — not ImagesDir, since ImagesDir
+	// commonly defaults to the shared, non-instance-namespaced
+	// /var/lib/dansal-web, which systemd's ProtectSystem=strict +
+	// StateDirectory=dansal-web/%i hardening makes read-only; only
+	// /var/lib/dansal-web/<instance> (where DBPath lives) is writable.
 	TileCacheDir string `yaml:"tile_cache_dir"`
 
 	// Layout
@@ -141,6 +145,17 @@ type Config struct {
 
 var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
 
+// defaultTileCacheDir derives the default tile cache location from DBPath's
+// directory rather than ImagesDir — see the TileCacheDir field comment.
+// Falls back to a relative "tiles" dir if DBPath is also unset (e.g. a
+// hand-built Config in tests).
+func defaultTileCacheDir(cfg *Config) string {
+	if cfg.DBPath == "" {
+		return "tiles"
+	}
+	return filepath.Join(filepath.Dir(cfg.DBPath), "tiles")
+}
+
 // publicBaseURL returns the canonical public URL of the web app.
 func (cfg *Config) publicBaseURL() string {
 	if cfg.BaseURL != "" {
@@ -215,7 +230,7 @@ func loadConfig() *Config {
 		log.Fatal("dansal_url is required (set via config file or DANSAL_WEB_DANSAL_URL / DANSAL_URL env var)")
 	}
 	if cfg.TileCacheDir == "" {
-		cfg.TileCacheDir = filepath.Join(cfg.ImagesDir, "tiles")
+		cfg.TileCacheDir = defaultTileCacheDir(cfg)
 	}
 
 	cfg.configPath = configPath
@@ -313,7 +328,7 @@ func reloadConfig(path string) *Config {
 		return nil
 	}
 	if cfg.TileCacheDir == "" {
-		cfg.TileCacheDir = filepath.Join(cfg.ImagesDir, "tiles")
+		cfg.TileCacheDir = defaultTileCacheDir(cfg)
 	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	cfg.configPath = path

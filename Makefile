@@ -129,6 +129,7 @@ install-doc: build-dansal_doc
 	@[ "$(shell id -u)" = "0" ] || { echo "install-doc requires root"; exit 1; }
 	install -d -m 755 /usr/share/dansal/wiki
 	install -m 644 wiki/*.md /usr/share/dansal/wiki/
+	cp -r wiki/images /usr/share/dansal/wiki/
 	@if [ ! -f $(SYSCONFDIR)/doc.yaml ]; then \
 		install -m 640 -o root -g $(SERVICE) packaging/doc.yaml $(SYSCONFDIR)/doc.yaml; \
 		echo "Installed $(SYSCONFDIR)/doc.yaml — edit domain before starting"; \
@@ -202,6 +203,7 @@ ifndef INSTANCE
 endif
 	install -d -m 755 /usr/share/dansal/wiki
 	install -m 644 wiki/*.md /usr/share/dansal/wiki/
+	cp -r wiki/images /usr/share/dansal/wiki/
 	install -m 755 packaging/dansal_preflight /usr/lib/dansal/dansal_preflight
 	scripts/deploy-instance deploy $(INSTANCE) $(VERSION) $(CURDIR)
 
@@ -250,6 +252,7 @@ endif
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web/$(INSTANCE)
 	install -d -m 755 /usr/share/dansal/wiki
 	install -m 644 wiki/*.md /usr/share/dansal/wiki/
+	cp -r wiki/images /usr/share/dansal/wiki/
 	# Template configs — installed only if not already present (or empty from a failed prior run)
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
 		sed \
@@ -342,6 +345,7 @@ deb: build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-
 	install -m 755 dansal_webmin                         $$DEB_DIR/usr/bin/dansal-webmin; \
 	install -m 755 dansal_doc                            $$DEB_DIR/usr/bin/dansal-doc; \
 	install -m 644 wiki/*.md                             $$DEB_DIR/usr/share/dansal/wiki/; \
+	cp -r wiki/images                                    $$DEB_DIR/usr/share/dansal/wiki/; \
 	install -m 644 systemd/dansal.service                $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
 	install -m 644 systemd/dansal-web.service            $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
 	install -m 644 systemd/dansal-webmin.service         $$DEB_DIR/$(SYSTEMDDIR)/dansal-webmin.service; \

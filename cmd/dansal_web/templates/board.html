@@ -48,7 +48,7 @@
 
 {{if .Posts}}
 {{$geoPosts := boardPostsGeoJSON .Posts}}
-<div id="board-map" class="board-map" hidden></div>
+<div id="board-map" class="board-map" style="height:260px" hidden></div>
 <div class="board-global-list" id="board-list">
   {{range .Posts}}
   <div class="board-global-card" id="board-post-{{.ID}}">
@@ -126,6 +126,45 @@
     </form>
   </div>
 </details>
+
+<style>
+.board-filter-form{margin-bottom:1.2rem}
+.board-filter-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.board-type-toggles{display:flex;flex-wrap:wrap;gap:.35rem}
+.btog{display:inline-flex;align-items:center;gap:.25rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:20px;cursor:pointer;font-size:.87rem;color:var(--fg-2);background:var(--btn-bg);user-select:none}
+.btog input{display:none}
+.btog-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+.board-filter-town,.board-filter-q{padding:.3rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
+.board-filter-q{min-width:160px}
+.board-map{height:260px;border-radius:6px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--border-mid)}
+.board-map-marker span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);font-size:1rem}
+.board-global-list{display:flex;flex-direction:column;gap:.75rem}
+.board-global-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:.9rem 1rem;transition:background-color .3s,box-shadow .3s}
+.board-item-highlight{background-color:var(--bg-hover);box-shadow:0 0 0 2px var(--heading)}
+.bgc-header{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;margin-bottom:.3rem}
+.bgc-icon{font-size:1.1rem}
+.bgc-type{font-weight:600;color:var(--heading);font-size:.92rem}
+.bgc-sep{color:var(--fg-3)}
+.bgc-persons,.bgc-nick{font-size:.88rem;color:var(--fg-2)}
+.bgc-message{margin:.3rem 0 .4rem;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
+.board-item-imgs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.board-item-img{width:80px;height:80px;object-fit:cover;border-radius:5px;border:1px solid var(--border-light)}
+.bgc-event{font-size:.85rem;color:var(--fg-2);margin-top:.35rem}
+.bgc-event-link{color:var(--link);font-weight:500}
+.bgc-meta{color:var(--fg-3)}
+.bgc-actions{margin-top:.5rem}
+.board-resend-ok{background:var(--success-bg,#d4edda);color:var(--success-fg,#155724);border:1px solid var(--success-border,#c3e6cb);padding:.7rem 1rem;border-radius:5px;margin:.8rem 0 1rem}
+.board-resend-panel{margin-top:2rem;border-top:1px solid var(--border-light);padding-top:.8rem}
+.board-resend-summary{cursor:pointer;color:var(--fg-3);font-size:.88rem;list-style:none;padding:.2rem 0}
+.board-resend-summary::-webkit-details-marker{display:none}
+.board-resend-body{margin-top:.8rem}
+.board-resend-title{font-size:.88rem;color:var(--fg-2);margin-bottom:.5rem}
+.board-resend-form{max-width:420px}
+.board-resend-label{display:block;font-size:.85rem;color:var(--fg-2);margin-bottom:.3rem}
+.board-resend-row{display:flex;gap:.4rem}
+.board-resend-input{flex:1;padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
+</style>
+
 {{$hasGeoPosts := false}}
 {{range .Posts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
 {{if $hasGeoPosts}}
@@ -170,44 +209,6 @@
 </script>
 {{end}}
 {{end}}
-
-<style>
-.board-filter-form{margin-bottom:1.2rem}
-.board-filter-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
-.board-type-toggles{display:flex;flex-wrap:wrap;gap:.35rem}
-.btog{display:inline-flex;align-items:center;gap:.25rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:20px;cursor:pointer;font-size:.87rem;color:var(--fg-2);background:var(--btn-bg);user-select:none}
-.btog input{display:none}
-.btog-active{background:var(--heading);color:#fff;border-color:var(--heading)}
-.board-filter-town,.board-filter-q{padding:.3rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
-.board-filter-q{min-width:160px}
-.board-map{height:260px;border-radius:6px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--border-mid)}
-.board-map-marker span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);font-size:1rem}
-.board-global-list{display:flex;flex-direction:column;gap:.75rem}
-.board-global-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:.9rem 1rem;transition:background-color .3s,box-shadow .3s}
-.board-item-highlight{background-color:var(--bg-hover);box-shadow:0 0 0 2px var(--heading)}
-.bgc-header{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;margin-bottom:.3rem}
-.bgc-icon{font-size:1.1rem}
-.bgc-type{font-weight:600;color:var(--heading);font-size:.92rem}
-.bgc-sep{color:var(--fg-3)}
-.bgc-persons,.bgc-nick{font-size:.88rem;color:var(--fg-2)}
-.bgc-message{margin:.3rem 0 .4rem;font-size:.94rem;white-space:pre-wrap;word-break:break-word}
-.board-item-imgs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
-.board-item-img{width:80px;height:80px;object-fit:cover;border-radius:5px;border:1px solid var(--border-light)}
-.bgc-event{font-size:.85rem;color:var(--fg-2);margin-top:.35rem}
-.bgc-event-link{color:var(--link);font-weight:500}
-.bgc-meta{color:var(--fg-3)}
-.bgc-actions{margin-top:.5rem}
-.board-resend-ok{background:var(--success-bg,#d4edda);color:var(--success-fg,#155724);border:1px solid var(--success-border,#c3e6cb);padding:.7rem 1rem;border-radius:5px;margin:.8rem 0 1rem}
-.board-resend-panel{margin-top:2rem;border-top:1px solid var(--border-light);padding-top:.8rem}
-.board-resend-summary{cursor:pointer;color:var(--fg-3);font-size:.88rem;list-style:none;padding:.2rem 0}
-.board-resend-summary::-webkit-details-marker{display:none}
-.board-resend-body{margin-top:.8rem}
-.board-resend-title{font-size:.88rem;color:var(--fg-2);margin-bottom:.5rem}
-.board-resend-form{max-width:420px}
-.board-resend-label{display:block;font-size:.85rem;color:var(--fg-2);margin-bottom:.3rem}
-.board-resend-row{display:flex;gap:.4rem}
-.board-resend-input{flex:1;padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
-</style>
 
 <script>
 window._boardMapViewLabel = {{.Strings.T "board_map_view_post" | jsStr}};

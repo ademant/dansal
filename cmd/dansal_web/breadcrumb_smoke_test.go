@@ -82,11 +82,11 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 
 	t.Run("event page @graph", func(t *testing.T) {
 		body := renderEvent(Event{
-			ID:        1,
-			Title:     "Fest Noz",
-			StartTime: "2026-08-01T20:00:00Z",
-			EndTime:   "2026-08-02T01:00:00Z",
-			Location:  &Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Town: "Rennes"},
+			ID:         1,
+			Title:      "Fest Noz",
+			StartTime:  "2026-08-01T20:00:00Z",
+			EndTime:    "2026-08-02T01:00:00Z",
+			Location:   &Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Town: "Rennes"},
 			DanceNames: []string{"An Dro", "Hanter Dro"},
 			Tags:       []string{"bal-folk", "musician-workshop"},
 		}, &Organization{ID: 2, Name: "Test Org", ImageURL: "/api/v1/org-images/2"}, "test-org")
@@ -141,8 +141,11 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			EndTime:   "2026-08-06T01:00:00Z",
 		}, &Organization{ID: 2, Name: "Test Org"}, "test-org")
 		checkBlocks(t, body, true)
-		if strings.Contains(body, `"image"`) {
-			t.Errorf("event JSON-LD should omit image when neither event nor org has one (#1065)")
+		// #1072: JSON-LD always emits an image, falling back to the website banner
+		// when neither event, series, nor org has one. The js filter escapes
+		// forward slashes, hence the \/\/ in the expected string.
+		if !strings.Contains(body, `"image": "https:\/\/example.test\/banner.avif"`) {
+			t.Errorf("event JSON-LD should fall back to website banner image when no other image exists (#1072)")
 		}
 		if !strings.Contains(body, `"audienceType": "dancers"`) {
 			t.Errorf("event without musician tags should keep audienceType \"dancers\" (#1063)")

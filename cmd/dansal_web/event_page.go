@@ -14,14 +14,15 @@ import (
 // eventPageData bundles the per-event data fetched concurrently to render the
 // event page.
 type eventPageData struct {
-	org       *Organization
-	slug      string
-	posts     []ContactPost
-	members   []OrgMember
-	tagMap    map[string]Tag
-	userOrgs  []Organization
-	prevEvent *Event
-	nextEvent *Event
+	org            *Organization
+	slug           string
+	posts          []ContactPost
+	members        []OrgMember
+	tagMap         map[string]Tag
+	userOrgs       []Organization
+	prevEvent      *Event
+	nextEvent      *Event
+	seriesImageURL string // populated from event.SeriesImageURL (already in event response)
 }
 
 // fetchEventWithFallback fetches event id, preferring the authed endpoint when
@@ -46,6 +47,8 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 	needMembers := su != nil && su.Role != "admin" && event.OrganizationID != nil
 
 	var data eventPageData
+	// series_image_url is already included in the event API response — no extra call needed.
+	data.seriesImageURL = event.SeriesImageURL
 	var errs []string
 	var mu sync.Mutex
 	addErr := func(fn string, err error) {

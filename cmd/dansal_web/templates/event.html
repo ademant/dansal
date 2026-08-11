@@ -30,7 +30,9 @@
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
   {{- $img := .ImageURL}}
+  {{- if not $img}}{{with $.Data.SeriesImageURL}}{{$img = .}}{{end}}{{end}}
   {{- if not $img}}{{with $.Data.Org}}{{with .ImageURL}}{{$img = .}}{{end}}{{end}}{{end}}
+  {{- if not $img}}{{$img = $.OGImage}}{{end}}
   {{- if $img}}, "image": "{{$img | js}}"{{end}}
   {{- if .Description}}, "description": "{{.Description | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"

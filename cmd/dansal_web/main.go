@@ -397,6 +397,8 @@ func main() {
 		r.HandleFunc("POST /admin/series/{id}/add-date", adminRateLimit(adminSeriesAddDateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/series/{id}/token/regenerate", adminRateLimit(adminSeriesRegenerateTokenHandler(cfg, client)))
 		r.HandleFunc("POST /admin/series/{id}/token/revoke", adminRateLimit(adminSeriesRevokeTokenHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/image", adminRateLimit(adminSeriesImageUploadHandler(cfg, client)))
+		r.HandleFunc("POST /admin/series/{id}/image/delete", adminRateLimit(adminSeriesImageDeleteHandler(cfg, client)))
 		r.HandleFunc("GET /series_token/{token}", seriesTokenPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /series_token/{token}/events/{eventID}/description", seriesTokenSaveDescriptionHandler(cfg, client))
 

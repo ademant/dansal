@@ -18,6 +18,7 @@ type EventSeries struct {
 	Slug              string          `json:"slug"`
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
+	ImageURL          string          `json:"image_url,omitempty"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
 	MusicianID        *int            `json:"musician_id,omitempty"`
 	InstructorID      *int            `json:"instructor_id,omitempty"`
@@ -196,6 +197,7 @@ func scanSeries(row interface{ Scan(...any) error }, extra ...any) (EventSeries,
 		s.InviteToken = inviteToken.String
 	}
 	s.TemplateData = json.RawMessage(templateData)
+	s.ImageURL = seriesImageURL(s.ID)
 	return s, nil
 }
 

@@ -366,6 +366,7 @@ type Event struct {
 	Deletable              bool             `json:"deletable,omitempty"`
 	CreatedByID            *int             `json:"created_by_id,omitempty"`
 	SeriesID               *int             `json:"series_id,omitempty"`
+	SeriesImageURL         string           `json:"series_image_url,omitempty"`
 	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
 	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
@@ -1836,6 +1837,14 @@ func (c *DansalClient) DeleteMusicianImage(ctx context.Context, id int, token st
 
 func (c *DansalClient) DeleteOrgImage(ctx context.Context, id int, token string) error {
 	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/org-images/%d", id), token)
+}
+
+func (c *DansalClient) UploadSeriesImage(ctx context.Context, id int, data []byte, filename, token string) error {
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/series-images/%d", id), data, filename, token)
+}
+
+func (c *DansalClient) DeleteSeriesImage(ctx context.Context, id int, token string) error {
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/series-images/%d", id), token)
 }
 
 // multipartForm builds a single-file multipart body with the form field
@@ -3343,6 +3352,7 @@ type EventSeries struct {
 	Slug              string          `json:"slug"`
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
+	ImageURL          string          `json:"image_url,omitempty"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
 	MusicianID        *int            `json:"musician_id,omitempty"`
 	InstructorID      *int            `json:"instructor_id,omitempty"`

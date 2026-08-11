@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -598,6 +599,57 @@ func adminSeriesRevokeTokenHandler(cfg *Config, client *DansalClient) http.Handl
 		token := getSessionToken(r)
 		if err := client.RevokeSeriesToken(r.Context(), id, token); err != nil {
 			log.Printf("revoke token for series %d: %v", id, err)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
+	}
+}
+
+// ── Series image upload/delete ────────────────────────────────────────────────
+
+// adminSeriesImageUploadHandler handles POST /admin/series/{id}/image —
+// uploads a banner image for the series.
+func adminSeriesImageUploadHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			http.Error(w, "bad form", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadSeriesImage(r.Context(), id, data, header.Filename, token); uerr != nil {
+				log.Printf("upload series image %d: %v", id, uerr)
+			}
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
+	}
+}
+
+// adminSeriesImageDeleteHandler handles POST /admin/series/{id}/image/delete —
+// removes the series banner image.
+func adminSeriesImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := client.DeleteSeriesImage(r.Context(), id, getSessionToken(r)); err != nil {
+			log.Printf("delete series image %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}

@@ -73,6 +73,7 @@ type Event struct {
 	ChangedBy              string           `json:"changed_by,omitempty"`
 	FetchSourceID          int              `json:"fetch_source_id,omitempty"`
 	SeriesID               *int             `json:"series_id,omitempty"`
+	SeriesImageURL         string           `json:"series_image_url,omitempty"`
 	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
 	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
@@ -397,6 +398,9 @@ func scanEventRow(s scanner) (Event, error) {
 		json.Unmarshal([]byte(evtAttrsJSON), &event.Attributes)
 	}
 	event.ImageURL = eventImageURL(event.ID)
+	if event.SeriesID != nil {
+		event.SeriesImageURL = seriesImageURL(*event.SeriesID)
+	}
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		event.OrganizationID = &v

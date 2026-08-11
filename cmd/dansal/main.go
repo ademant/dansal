@@ -3657,6 +3657,7 @@ func main() {
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
 	initLocationImageCache(config.Server.ImagesDir + "/locations")
+	initSeriesImageCache(config.Server.ImagesDir + "/series")
 	initAvatarCaches(config.Server.ImagesDir)
 	initMetrics()
 	startTokenCleanup()
@@ -3939,6 +3940,11 @@ func main() {
 	smux.Handle("GET /api/v1/series/{id}/events", auth(http.HandlerFunc(getSeriesEvents)))
 	smux.Handle("PUT /api/v1/series/{id}/events/{event_id}", auth(http.HandlerFunc(addSeriesEvent)))
 	smux.Handle("DELETE /api/v1/series/{id}/events/{event_id}", auth(http.HandlerFunc(removeSeriesEvent)))
+
+	// Series image endpoints
+	smux.HandleFunc("GET /api/v1/series-images/{id}", getSeriesImage)
+	smux.Handle("POST /api/v1/series-images/{id}", auth(uploadSeriesImage))
+	smux.Handle("DELETE /api/v1/series-images/{id}", auth(http.HandlerFunc(deleteSeriesImage)))
 
 	// Organization writes (protected)
 	smux.Handle("POST /api/v1/organizations", auth(accountMutationLimit(createOrganization)))

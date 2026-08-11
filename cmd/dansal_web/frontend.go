@@ -251,6 +251,9 @@ type EventData struct {
 	// Board session prefill (#1047): populated from dsw_board cookie when valid.
 	BoardSessionEmail    string
 	BoardSessionNickname string
+	// SeriesImageURL is the series banner URL, used as OGImage and JSON-LD image
+	// fallback when the event has no own image (#1072).
+	SeriesImageURL string
 }
 
 type OrgData struct {
@@ -875,8 +878,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			NextEvent:            epd.nextEvent,
 			BoardSessionEmail:    bsEmail,
 			BoardSessionNickname: bsNickname,
+			SeriesImageURL:       epd.seriesImageURL,
 		})
-		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), event.ImageURL)
+		// OGImage fallback: event → series → org (#1072).
+		ogImg := event.ImageURL
+		if ogImg == "" {
+			ogImg = epd.seriesImageURL
+		}
+		if ogImg == "" && epd.org != nil {
+			ogImg = epd.org.ImageURL
+		}
+		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), ogImg)
 	}
 }
 

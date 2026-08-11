@@ -14,6 +14,25 @@
   </form>
 </div>
 
+<!-- Series banner image (separate multipart form) -->
+<form method="post" action="/admin/series/{{.Series.ID}}/image" enctype="multipart/form-data" class="evt-form" style="margin-bottom:0">
+  <fieldset class="image-fieldset">
+    <legend>{{$.Strings.T "org_image"}}</legend>
+    {{with .Series.ImageURL}}<img src="{{.}}" alt="" id="existing-series-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem"
+      onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))postTo('/admin/series/{{$.Data.Series.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>
+    {{end}}
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <input type="file" id="series-image" name="image" accept="image/*" style="display:none"
+        onchange="(function(f,p){if(f&&f.type.startsWith('image/')){var r=new FileReader();r.onload=function(e){p.src=e.target.result;p.style.display='block'};r.readAsDataURL(f)}})(this.files[0],document.getElementById('series-image-preview'))">
+      <span>{{$.Strings.T "evt_image_hint"}}</span>
+      <button type="button" onclick="document.getElementById('series-image').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      <button type="submit" class="btn-sm-secondary">{{$.Strings.T "admin_save"}}</button>
+    </div>
+    <img id="series-image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+  </fieldset>
+</form>
+
 <!-- Header form -->
 <form id="series-header-form" method="post" action="/admin/series/{{.Series.ID}}/edit" class="evt-form" style="margin-bottom:0">
   <section class="form-section">

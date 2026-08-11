@@ -233,6 +233,45 @@ func TestAPImageURL(t *testing.T) {
 	}
 }
 
+// TestBuildNoteContentMarkdown verifies the event description is rendered as
+// HTML (goldmark) rather than leaking raw Markdown into Mastodon's Note.content
+// (issue #1053).
+func TestBuildNoteContentMarkdown(t *testing.T) {
+	cfg := &Config{Domain: "example.com"}
+	cases := []struct {
+		name string
+		desc string
+		want string
+	}{
+		{
+			name: "emphasis",
+			desc: "Tanz mit *unserem* Orchester",
+			want: "<p>Tanz mit <em>unserem</em> Orchester</p>",
+		},
+		{
+			name: "heading",
+			desc: "## Zielgruppe\n\nalle",
+			want: "<h2>Zielgruppe</h2>\n<p>alle</p>",
+		},
+		{
+			name: "empty",
+			desc: "",
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := buildNoteContent(cfg, Event{ID: 1, Title: "T", Description: tc.desc})
+			if !strings.Contains(content, tc.want) {
+				t.Errorf("buildNoteContent description = %q, want it to contain %q", content, tc.want)
+			}
+			if tc.desc != "" && strings.Contains(content, "*") && strings.Contains(content, "##") {
+				t.Errorf("buildNoteContent leaked raw markdown: %q", content)
+			}
+		})
+	}
+}
+
 // TestEventAttachmentDeclaresJpegVariant verifies both the Event object and the
 // Note attachment point at ?format=jpeg with mediaType image/jpeg (issue #1054).
 func TestEventAttachmentDeclaresJpegVariant(t *testing.T) {

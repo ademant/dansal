@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -16,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/yuin/goldmark"
 )
 
 // safeFedDial resolves the target host and rejects any address that resolves
@@ -1130,7 +1133,12 @@ func buildNoteContent(cfg *Config, e Event) string {
 		}
 	}
 	if e.Description != "" {
-		b.WriteString(e.Description)
+		var md bytes.Buffer
+		if err := goldmark.Convert([]byte(e.Description), &md); err == nil {
+			b.WriteString(sanitizeMarkdownHTML(md.String()))
+		} else {
+			b.WriteString(html.EscapeString(e.Description))
+		}
 	}
 	if len(e.Tags) > 0 {
 		b.WriteString("<p>")

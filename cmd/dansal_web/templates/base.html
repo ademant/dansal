@@ -441,12 +441,16 @@ function isDarkMode(){
   return h.classList.contains('dark')||(
     !h.classList.contains('light')&&window.matchMedia('(prefers-color-scheme:dark)').matches);
 }
+// Tiles are proxied and disk-cached through dansal_web itself (#1079) rather
+// than fetched by the browser directly from OSM/CARTO — both a tile usage
+// policy requirement (OSM forbids heavy direct use by distributed apps) and
+// a privacy win (visitor IPs never reach a third-party tile server).
 function makeTileLayer(){
   return isDarkMode()
-    ?L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    ?L.tileLayer('/tiles/dark/{z}/{x}/{y}{r}.png',{
         attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom:19})
-    :L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    :L.tileLayer('/tiles/osm/{z}/{x}/{y}.png',{
         attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom:18});
 }

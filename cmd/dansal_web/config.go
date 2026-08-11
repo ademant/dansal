@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -49,6 +50,11 @@ type Config struct {
 	// that some Fediverse clients try by convention to the actor slug that
 	// should actually answer them, e.g. {"admin": "relay"} (issue #947).
 	WebfingerAliases map[string]string `yaml:"webfinger_aliases"`
+
+	// TileCacheDir is a disk cache for /tiles/... proxy responses (#1079),
+	// avoiding repeat upstream fetches from OSM/CARTO. Defaults to a "tiles"
+	// subdirectory of ImagesDir if unset.
+	TileCacheDir string `yaml:"tile_cache_dir"`
 
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg
@@ -208,6 +214,9 @@ func loadConfig() *Config {
 	if cfg.DansalURL == "" {
 		log.Fatal("dansal_url is required (set via config file or DANSAL_WEB_DANSAL_URL / DANSAL_URL env var)")
 	}
+	if cfg.TileCacheDir == "" {
+		cfg.TileCacheDir = filepath.Join(cfg.ImagesDir, "tiles")
+	}
 
 	cfg.configPath = configPath
 	return cfg
@@ -302,6 +311,9 @@ func reloadConfig(path string) *Config {
 	if cfg.Domain == "" || cfg.DansalURL == "" {
 		log.Print("reload: domain and dansal_url are required; keeping current config")
 		return nil
+	}
+	if cfg.TileCacheDir == "" {
+		cfg.TileCacheDir = filepath.Join(cfg.ImagesDir, "tiles")
 	}
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	cfg.configPath = path

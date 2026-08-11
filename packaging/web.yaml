@@ -96,6 +96,10 @@ nodeinfo_maintainer_email: ""
 # Directory for uploaded site assets (logo, banner, favicon).
 images_dir: /var/lib/dansal-web
 
+# Disk cache for proxied OSM/CARTO map tiles (see /tiles/... in main.go).
+# Defaults to a "tiles" subdirectory of images_dir when unset.
+# tile_cache_dir: /var/lib/dansal-web/tiles
+
 # Banner height in pixels on the main page (0 = hidden).
 banner_height_main: 200
 

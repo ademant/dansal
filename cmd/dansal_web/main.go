@@ -185,6 +185,7 @@ func main() {
 		r.HandleFunc("POST /admin/registrations/{id}/reject", adminRateLimit(adminRegistrationRejectHandler(cfg, client)))
 		r.HandleFunc("POST /admin/registrations/{id}/resend-invite", adminRateLimit(adminRegistrationResendInviteHandler(cfg, client)))
 
+		r.HandleFunc("GET /tiles/{scheme}/{z}/{x}/{yfile}", tileProxyHandler(cfg))
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
 		r.HandleFunc("GET /banner.avif", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerAVIF))

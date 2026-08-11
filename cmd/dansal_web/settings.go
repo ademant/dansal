@@ -19,6 +19,7 @@ type SettingsData struct {
 	User             UserInfo
 	ErrorKey         string
 	Saved            bool
+	TOTPNudge        bool   // true after first-time password set — prompts TOTP setup
 	VerifySent       string // channel name: "email", "telegram", "matrix"
 	VerifiedChannel  string // channel name after token consumption
 	TelegramDeepLink string
@@ -61,6 +62,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
 			Saved:           r.URL.Query().Get("saved") == "1",
+			TOTPNudge:       r.URL.Query().Get("totp_nudge") == "1",
 			VerifySent:      r.URL.Query().Get("verify_sent"),
 			VerifiedChannel: r.URL.Query().Get("verified"),
 			APIKeys:         keys,
@@ -376,6 +378,7 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 		token := getSessionToken(r)
 		oldPw := r.FormValue("old_password")
 		newPw := r.FormValue("new_password")
+		firstPassword := oldPw == "" // no old password field means first-time set
 		if err := client.ChangePassword(r.Context(), oldPw, newPw, token); err != nil {
 			u, _ := client.GetUser(r.Context(), su.ID, token)
 			keys, _ := client.ListAPIKeys(r.Context(), token)
@@ -391,7 +394,11 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 			}))
 			return
 		}
-		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+		dest := "/settings?saved=1"
+		if firstPassword {
+			dest += "&totp_nudge=1"
+		}
+		http.Redirect(w, r, dest, http.StatusSeeOther)
 	}
 }
 
@@ -442,13 +449,18 @@ func settingsTOTPSetupHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			return
 		}
 		token := getSessionToken(r)
+		u, _ := client.GetUser(r.Context(), su.ID, token)
+		if !u.HasPassword {
+			// TOTP only protects password logins; redirect silently when no password is set.
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
 		info, err := client.TOTPSetup(r.Context(), token)
 		if err != nil {
 			log.Printf("totp setup: %v", err)
 			http.Redirect(w, r, "/settings?error=totp_setup_failed", http.StatusSeeOther)
 			return
 		}
-		u, _ := client.GetUser(r.Context(), su.ID, token)
 		keys, _ := client.ListAPIKeys(r.Context(), token)
 		sessions, _ := client.GetSessions(r.Context(), token)
 		passkeys, _ := client.ListPasskeys(r.Context(), token)

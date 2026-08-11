@@ -396,7 +396,7 @@ function updateNavButtons() {
 function loadLocation(id) {
   lovStatus.textContent = 'Loading…';
   lovStatus.className = 'lov-status';
-  fetch('/api/v1/locations/' + id)
+  fetch('/admin/locations/' + id + '/json')
     .then(function(r){ return r.json(); })
     .then(function(loc){
       setField('location',   loc.location   || '');

@@ -573,8 +573,8 @@ function sgGrowTTTable(el) {
       if (!e.target.closest('#' + acID) && e.target !== input) acList.hidden = true;
     });
   }
-  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/api/v1/musicians', 'dansal_musicians');
-  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/api/v1/instructors', 'dansal_instructors');
+  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/search/musicians', 'dansal_musicians');
+  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/search/instructors', 'dansal_instructors');
 })();
 
 // ── Date range picker ─────────────────────────────────────────────────────

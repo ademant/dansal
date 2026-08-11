@@ -164,6 +164,34 @@ func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dans
 	}
 }
 
+// adminLocationJSONHandler serves GET /admin/locations/{id}/json — a thin
+// proxy over the API's GET /api/v1/locations/{id} so the maintenance page JS
+// doesn't call the API directly (#1068).
+func adminLocationJSONHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			forbidden(w, r)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+			return
+		}
+		loc, err := client.GetLocation(r.Context(), id)
+		if err != nil {
+			writeJSONError(w, r, http.StatusNotFound, "not found")
+			return
+		}
+		json.NewEncoder(w).Encode(loc)
+	}
+}
+
 func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

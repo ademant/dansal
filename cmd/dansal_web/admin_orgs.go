@@ -20,18 +20,19 @@ import (
 
 func orgFromForm(r *http.Request) Organization {
 	return Organization{
-		Name:         strings.TrimSpace(r.FormValue("name")),
-		Description:  strings.TrimSpace(r.FormValue("description")),
-		ActorName:    strings.TrimSpace(r.FormValue("actor_name")),
-		Website:      strings.TrimSpace(r.FormValue("website")),
-		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
-		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
-		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
-		ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
-		ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
-		WikidataID:   strings.TrimSpace(r.FormValue("wikidata_id")),
-		NotesMd:      strings.TrimSpace(r.FormValue("notes_md")),
-		ChatLinks:    chatLinksFromForm(r),
+		Name:             strings.TrimSpace(r.FormValue("name")),
+		Description:      strings.TrimSpace(r.FormValue("description")),
+		ActorName:        strings.TrimSpace(r.FormValue("actor_name")),
+		Website:          strings.TrimSpace(r.FormValue("website")),
+		Instagram:        strings.TrimSpace(r.FormValue("instagram")),
+		Mastodon:         strings.TrimSpace(r.FormValue("mastodon")),
+		Facebook:         strings.TrimSpace(r.FormValue("facebook")),
+		ContactEmail:     strings.TrimSpace(r.FormValue("contact_email")),
+		ContactName:      strings.TrimSpace(r.FormValue("contact_name")),
+		WikidataID:       strings.TrimSpace(r.FormValue("wikidata_id")),
+		NotesMd:          strings.TrimSpace(r.FormValue("notes_md")),
+		ChatLinks:        chatLinksFromForm(r),
+		ImageAIGenerated: r.FormValue("image_ai_generated") == "1",
 	}
 }
 

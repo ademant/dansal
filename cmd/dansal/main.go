@@ -1779,6 +1779,28 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
 		}
 	}
+	if !applied(27) {
+		db.Exec("ALTER TABLE organizations ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE musicians ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		mark(27)
+	}
+	// Safety net: ensure image_ai_generated exists on organizations and musicians
+	// even if v27 was pre-marked (createTables pre-marks all versions on fresh
+	// installs, so existing DBs without the column would otherwise be skipped).
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('organizations') WHERE name='image_ai_generated'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE organizations ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		}
+	}
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('musicians') WHERE name='image_ai_generated'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE musicians ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -3150,6 +3172,7 @@ func createTables() error {
 		deezer TEXT,
 		genre TEXT,
 		email TEXT,
+		image_ai_generated INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT '',
@@ -3218,6 +3241,7 @@ func createTables() error {
 		notes_md TEXT,
 		wikidata_id TEXT,
 		chat_links TEXT,
+		image_ai_generated INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''

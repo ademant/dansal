@@ -11,26 +11,27 @@ import (
 )
 
 type Organization struct {
-	ID             int        `json:"id"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	ActorName      string     `json:"actor_name,omitempty"`
-	Website        string     `json:"website,omitempty"`
-	Instagram      string     `json:"instagram,omitempty"`
-	Mastodon       string     `json:"mastodon,omitempty"`
-	Facebook       string     `json:"facebook,omitempty"`
-	ContactEmail   string     `json:"contact_email,omitempty"`
-	ContactName    string     `json:"contact_name,omitempty"`
-	WikidataID     string     `json:"wikidata_id,omitempty"`
-	CreatedAt      string     `json:"created_at"`
-	UpdatedAt      int64      `json:"updated_at,omitempty"`
-	UpdatedBy      string     `json:"updated_by,omitempty"`
-	ImageURL       string     `json:"image_url,omitempty"`
-	ImageMediaType string     `json:"image_media_type,omitempty"`
-	AvatarURL      string     `json:"avatar_url,omitempty"`
-	NotesMd        string     `json:"notes_md,omitempty"`
-	FetchSourceID  *int       `json:"fetch_source_id,omitempty"`
-	ChatLinks      []ChatLink `json:"chat_links,omitempty"`
+	ID               int        `json:"id"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	ActorName        string     `json:"actor_name,omitempty"`
+	Website          string     `json:"website,omitempty"`
+	Instagram        string     `json:"instagram,omitempty"`
+	Mastodon         string     `json:"mastodon,omitempty"`
+	Facebook         string     `json:"facebook,omitempty"`
+	ContactEmail     string     `json:"contact_email,omitempty"`
+	ContactName      string     `json:"contact_name,omitempty"`
+	WikidataID       string     `json:"wikidata_id,omitempty"`
+	CreatedAt        string     `json:"created_at"`
+	UpdatedAt        int64      `json:"updated_at,omitempty"`
+	UpdatedBy        string     `json:"updated_by,omitempty"`
+	ImageURL         string     `json:"image_url,omitempty"`
+	ImageMediaType   string     `json:"image_media_type,omitempty"`
+	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
+	AvatarURL        string     `json:"avatar_url,omitempty"`
+	NotesMd          string     `json:"notes_md,omitempty"`
+	FetchSourceID    *int       `json:"fetch_source_id,omitempty"`
+	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
 
 	FutureEventCount int      `json:"future_event_count,omitempty"`
 	PastEventCount   int      `json:"past_event_count,omitempty"`
@@ -48,18 +49,19 @@ type OrganizationMember struct {
 }
 
 type CreateOrganizationRequest struct {
-	Name         string     `json:"name"`
-	Description  string     `json:"description"`
-	ActorName    string     `json:"actor_name"`
-	Website      string     `json:"website"`
-	Instagram    string     `json:"instagram"`
-	Mastodon     string     `json:"mastodon"`
-	Facebook     string     `json:"facebook"`
-	ContactEmail string     `json:"contact_email"`
-	ContactName  string     `json:"contact_name"`
-	WikidataID   string     `json:"wikidata_id"`
-	NotesMd      string     `json:"notes_md"`
-	ChatLinks    []ChatLink `json:"chat_links"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	ActorName        string     `json:"actor_name"`
+	Website          string     `json:"website"`
+	Instagram        string     `json:"instagram"`
+	Mastodon         string     `json:"mastodon"`
+	Facebook         string     `json:"facebook"`
+	ContactEmail     string     `json:"contact_email"`
+	ContactName      string     `json:"contact_name"`
+	WikidataID       string     `json:"wikidata_id"`
+	NotesMd          string     `json:"notes_md"`
+	ChatLinks        []ChatLink `json:"chat_links"`
+	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
 }
 
 type AddMemberRequest struct {
@@ -147,14 +149,14 @@ func isOrgMember(userID, orgID int) bool {
 	return n > 0
 }
 
-const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,''), COALESCE(updated_by,''), COALESCE(chat_links,'')`
+const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), COALESCE(contact_name,''), COALESCE(wikidata_id,''), created_at, COALESCE(updated_at,0), COALESCE(notes_md,''), COALESCE(updated_by,''), COALESCE(chat_links,''), COALESCE(image_ai_generated,0)`
 
 // scanOrg scans an orgSelectCols row into an Organization. Extra destination
 // pointers (e.g. for appended event-count/location columns) can be passed via extra.
 func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, error) {
 	var o Organization
 	var chatLinksJSON string
-	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd, &o.UpdatedBy, &chatLinksJSON}
+	dest := []any{&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.ContactName, &o.WikidataID, &o.CreatedAt, &o.UpdatedAt, &o.NotesMd, &o.UpdatedBy, &chatLinksJSON, &o.ImageAIGenerated}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return o, err
 	}
@@ -428,8 +430,8 @@ func checkActorNameAvailable(w http.ResponseWriter, actorName, excludeID string)
 func writeOrganizationFields(id string, o Organization, updatedBy string) error {
 	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
 	_, err := db.Exec(
-		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), updatedBy, id,
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, image_ai_generated=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, o.ContactName, o.WikidataID, o.NotesMd, string(chatLinksJSON), o.ImageAIGenerated, updatedBy, id,
 	)
 	return err
 }
@@ -486,6 +488,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	o.WikidataID = req.WikidataID
 	o.NotesMd = req.NotesMd
 	o.ChatLinks = filterChatLinks(req.ChatLinks)
+	o.ImageAIGenerated = req.ImageAIGenerated
 	if err := writeOrganizationFields(id, o, resolveDisplayName(callerID)); err != nil {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return

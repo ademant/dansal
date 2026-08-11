@@ -16,7 +16,11 @@
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
     {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">
-    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/organizations/{{$.Data.Org.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/organizations/{{$.Data.Org.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>
+    <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;font-weight:normal;font-size:.9rem">
+      <input type="checkbox" name="image_ai_generated" value="1"{{if $.Data.Org.ImageAIGenerated}} checked{{end}}>
+      {{$.Strings.T "evt_image_ai_label"}}
+    </label>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">

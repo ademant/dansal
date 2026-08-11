@@ -689,7 +689,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
           if(crossedWeek) updateMapMarkers(true);
         } else {
           weekOffset+=dx<0?1:-1;
-          pushWeekState(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
+          pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
         }
       }
     },{passive:true});

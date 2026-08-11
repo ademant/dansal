@@ -470,26 +470,27 @@ type Instructor struct {
 }
 
 type Organization struct {
-	ID             int        `json:"id"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	ActorName      string     `json:"actor_name,omitempty"`
-	Website        string     `json:"website,omitempty"`
-	Instagram      string     `json:"instagram,omitempty"`
-	Mastodon       string     `json:"mastodon,omitempty"`
-	Facebook       string     `json:"facebook,omitempty"`
-	ContactEmail   string     `json:"contact_email,omitempty"`
-	ContactName    string     `json:"contact_name,omitempty"`
-	WikidataID     string     `json:"wikidata_id,omitempty"`
-	CreatedAt      string     `json:"created_at"`
-	UpdatedAt      int64      `json:"updated_at,omitempty"`
-	UpdatedBy      string     `json:"updated_by,omitempty"`
-	ImageURL       string     `json:"image_url,omitempty"`
-	ImageMediaType string     `json:"image_media_type,omitempty"`
-	AvatarURL      string     `json:"avatar_url,omitempty"`
-	NotesMd        string     `json:"notes_md,omitempty"`
-	FetchSourceID  *int       `json:"fetch_source_id,omitempty"`
-	ChatLinks      []ChatLink `json:"chat_links,omitempty"`
+	ID               int        `json:"id"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	ActorName        string     `json:"actor_name,omitempty"`
+	Website          string     `json:"website,omitempty"`
+	Instagram        string     `json:"instagram,omitempty"`
+	Mastodon         string     `json:"mastodon,omitempty"`
+	Facebook         string     `json:"facebook,omitempty"`
+	ContactEmail     string     `json:"contact_email,omitempty"`
+	ContactName      string     `json:"contact_name,omitempty"`
+	WikidataID       string     `json:"wikidata_id,omitempty"`
+	CreatedAt        string     `json:"created_at"`
+	UpdatedAt        int64      `json:"updated_at,omitempty"`
+	UpdatedBy        string     `json:"updated_by,omitempty"`
+	ImageURL         string     `json:"image_url,omitempty"`
+	ImageMediaType   string     `json:"image_media_type,omitempty"`
+	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
+	AvatarURL        string     `json:"avatar_url,omitempty"`
+	NotesMd          string     `json:"notes_md,omitempty"`
+	FetchSourceID    *int       `json:"fetch_source_id,omitempty"`
+	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
 }
 
 // ChatLink is one entry in an organization's chat_links: a community
@@ -534,32 +535,33 @@ type Price struct {
 }
 
 type Musician struct {
-	ID           int    `json:"id"`
-	Bandname     string `json:"bandname"`
-	ShortName    string `json:"short_name,omitempty"`
-	Internetsite string `json:"internetsite,omitempty"`
-	Description  string `json:"description,omitempty"`
-	MBID         string `json:"mbid,omitempty"`
-	WikidataID   string `json:"wikidata_id,omitempty"`
-	DiscogsID    string `json:"discogs_id,omitempty"`
-	Country      string `json:"country,omitempty"`
-	BeginYear    int    `json:"begin_year,omitempty"`
-	Biography    string `json:"biography,omitempty"`
-	MembersJSON  string `json:"members_json,omitempty"`
-	AlbumsJSON   string `json:"albums_json,omitempty"`
-	Mastodon     string `json:"mastodon,omitempty"`
-	Instagram    string `json:"instagram,omitempty"`
-	Facebook     string `json:"facebook,omitempty"`
-	Soundcloud   string `json:"soundcloud,omitempty"`
-	Spotify      string `json:"spotify,omitempty"`
-	Deezer       string `json:"deezer,omitempty"`
-	Genre        string `json:"genre,omitempty"`
-	Email        string `json:"email,omitempty"`
-	ImageURL     string `json:"image_url,omitempty"`
-	AvatarURL    string `json:"avatar_url,omitempty"`
-	CreatedAt    string `json:"created_at,omitempty"`
-	UpdatedAt    int64  `json:"updated_at,omitempty"`
-	UpdatedBy    string `json:"updated_by,omitempty"`
+	ID               int    `json:"id"`
+	Bandname         string `json:"bandname"`
+	ShortName        string `json:"short_name,omitempty"`
+	Internetsite     string `json:"internetsite,omitempty"`
+	Description      string `json:"description,omitempty"`
+	MBID             string `json:"mbid,omitempty"`
+	WikidataID       string `json:"wikidata_id,omitempty"`
+	DiscogsID        string `json:"discogs_id,omitempty"`
+	Country          string `json:"country,omitempty"`
+	BeginYear        int    `json:"begin_year,omitempty"`
+	Biography        string `json:"biography,omitempty"`
+	MembersJSON      string `json:"members_json,omitempty"`
+	AlbumsJSON       string `json:"albums_json,omitempty"`
+	Mastodon         string `json:"mastodon,omitempty"`
+	Instagram        string `json:"instagram,omitempty"`
+	Facebook         string `json:"facebook,omitempty"`
+	Soundcloud       string `json:"soundcloud,omitempty"`
+	Spotify          string `json:"spotify,omitempty"`
+	Deezer           string `json:"deezer,omitempty"`
+	Genre            string `json:"genre,omitempty"`
+	Email            string `json:"email,omitempty"`
+	ImageURL         string `json:"image_url,omitempty"`
+	ImageAIGenerated bool   `json:"image_ai_generated,omitempty"`
+	AvatarURL        string `json:"avatar_url,omitempty"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	UpdatedAt        int64  `json:"updated_at,omitempty"`
+	UpdatedBy        string `json:"updated_by,omitempty"`
 
 	FutureEventCount int    `json:"future_event_count,omitempty"`
 	PastEventCount   int    `json:"past_event_count,omitempty"`

@@ -34,7 +34,10 @@
 {{with .Data}}
 <div class="musician-header">
   {{if .Musician.ImageURL}}
-  <img src="{{.Musician.ImageURL}}" class="musician-photo" alt="{{.Musician.Bandname}}">
+  <div style="position:relative;display:inline-block">
+    <img src="{{.Musician.ImageURL}}" class="musician-photo" alt="{{.Musician.Bandname}}{{if .Musician.ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}">
+    {{if .Musician.ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
+  </div>
   {{end}}
   <div>
     <div class="musician-title-row">

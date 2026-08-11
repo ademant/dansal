@@ -18,7 +18,7 @@
 <form method="post" action="/admin/series/{{.Series.ID}}/image" enctype="multipart/form-data" class="evt-form" style="margin-bottom:0">
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
-    {{with .Series.ImageURL}}<img src="{{.}}" alt="" id="existing-series-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">
+    {{with .Series.ImageURL}}<div style="position:relative;display:inline-block;width:100%"><img src="{{.}}" alt="" id="existing-series-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">{{if $.Data.Series.ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}</div>
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem"
       onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))postTo('/admin/series/{{$.Data.Series.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>
     {{end}}
@@ -43,6 +43,14 @@
     <label>{{$.Strings.T "series_description"}}</label>
     <textarea name="description" rows="3" style="width:100%">{{.Series.Description}}</textarea>
   </section>
+  {{with .Series.ImageURL}}
+  <section class="form-section">
+    <label style="display:flex;align-items:center;gap:.4rem;font-weight:normal;font-size:.9rem">
+      <input type="checkbox" name="image_ai_generated" value="1"{{if $.Data.Series.ImageAIGenerated}} checked{{end}}>
+      {{$.Strings.T "evt_image_ai_label"}}
+    </label>
+  </section>
+  {{end}}
   <details class="series-seg">
   <summary>{{$.Strings.T "series_seg_org_location"}}</summary>
   {{if .IsAdmin}}

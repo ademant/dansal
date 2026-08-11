@@ -466,6 +466,7 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			}
 		}
 		body["template_data"] = json.RawMessage(seriesDefaultsFromForm(r, parseSeriesDefaults(existing.TemplateData).Timetable))
+		body["image_ai_generated"] = r.FormValue("image_ai_generated") == "1"
 		if err := client.UpdateSeries(r.Context(), id, body, token); err != nil {
 			http.Error(w, "failed to save: "+err.Error(), http.StatusBadGateway)
 			return

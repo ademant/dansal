@@ -251,9 +251,10 @@ type EventData struct {
 	// Board session prefill (#1047): populated from dsw_board cookie when valid.
 	BoardSessionEmail    string
 	BoardSessionNickname string
-	// SeriesImageURL is the series banner URL, used as OGImage and JSON-LD image
-	// fallback when the event has no own image (#1072).
-	SeriesImageURL string
+	// SeriesImageURL and SeriesImageAIGenerated carry the series banner for OGImage,
+	// JSON-LD fallback, and hero display when the event has no own image (#1072).
+	SeriesImageURL         string
+	SeriesImageAIGenerated bool
 }
 
 type OrgData struct {
@@ -854,31 +855,32 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		td := tmplData(r, cfg, i18n, pageTitle, EventData{
-			Event:                event,
-			Org:                  epd.org,
-			OrgSlug:              epd.slug,
-			TagMap:               epd.tagMap,
-			ContactPosts:         epd.posts,
-			CanManageBoard:       canManage,
-			BoardPosted:          flash.BoardPosted,
-			BoardTelegramURL:     flash.BoardTelegramURL,
-			BoardContacted:       flash.BoardContacted,
-			BoardContactTgURL:    flash.BoardContactTgURL,
-			BoardError:           flash.BoardError,
-			BoardErrorMsg:        flash.BoardErrorMsg,
-			BoardErrorID:         flash.BoardErrorID,
-			BookingOK:            flash.BookingOK,
-			BookingError:         flash.BookingError,
-			BookingErrorMsg:      flash.BookingErrorMsg,
-			BookingErrorID:       flash.BookingErrorID,
-			UserOrgs:             epd.userOrgs,
-			BookFormToken:        issueFormToken(clientIP),
-			BoardFormToken:       issueFormToken(clientIP),
-			PrevEvent:            epd.prevEvent,
-			NextEvent:            epd.nextEvent,
-			BoardSessionEmail:    bsEmail,
-			BoardSessionNickname: bsNickname,
-			SeriesImageURL:       epd.seriesImageURL,
+			Event:                  event,
+			Org:                    epd.org,
+			OrgSlug:                epd.slug,
+			TagMap:                 epd.tagMap,
+			ContactPosts:           epd.posts,
+			CanManageBoard:         canManage,
+			BoardPosted:            flash.BoardPosted,
+			BoardTelegramURL:       flash.BoardTelegramURL,
+			BoardContacted:         flash.BoardContacted,
+			BoardContactTgURL:      flash.BoardContactTgURL,
+			BoardError:             flash.BoardError,
+			BoardErrorMsg:          flash.BoardErrorMsg,
+			BoardErrorID:           flash.BoardErrorID,
+			BookingOK:              flash.BookingOK,
+			BookingError:           flash.BookingError,
+			BookingErrorMsg:        flash.BookingErrorMsg,
+			BookingErrorID:         flash.BookingErrorID,
+			UserOrgs:               epd.userOrgs,
+			BookFormToken:          issueFormToken(clientIP),
+			BoardFormToken:         issueFormToken(clientIP),
+			PrevEvent:              epd.prevEvent,
+			NextEvent:              epd.nextEvent,
+			BoardSessionEmail:      bsEmail,
+			BoardSessionNickname:   bsNickname,
+			SeriesImageURL:         epd.seriesImageURL,
+			SeriesImageAIGenerated: epd.seriesImageAIGenerated,
 		})
 		// OGImage fallback: event → series → org (#1072).
 		ogImg := event.ImageURL

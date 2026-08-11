@@ -19,6 +19,7 @@ type EventSeries struct {
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
 	ImageURL          string          `json:"image_url,omitempty"`
+	ImageAIGenerated  bool            `json:"image_ai_generated,omitempty"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
 	MusicianID        *int            `json:"musician_id,omitempty"`
 	InstructorID      *int            `json:"instructor_id,omitempty"`
@@ -168,15 +169,18 @@ func scanSeries(row interface{ Scan(...any) error }, extra ...any) (EventSeries,
 	var orgID, musicianID, instructorID, locID sql.NullInt64
 	var inviteToken sql.NullString
 	var templateData string
+	var imageAIGeneratedInt int
 	dest := []any{
 		&s.ID, &s.Slug, &s.Title, &s.Description,
 		&orgID, &musicianID, &instructorID, &locID,
 		&s.DefaultStartTime, &s.DefaultEndTime,
 		&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
+		&imageAIGeneratedInt,
 	}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return s, err
 	}
+	s.ImageAIGenerated = imageAIGeneratedInt == 1
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		s.OrganizationID = &v
@@ -204,7 +208,8 @@ func scanSeries(row interface{ Scan(...any) error }, extra ...any) (EventSeries,
 const seriesSelectCols = `id, slug, title, COALESCE(description,''),
 	organization_id, musician_id, instructor_id, default_location_id,
 	COALESCE(default_start_time,''), COALESCE(default_end_time,''),
-	invite_token, created_at, COALESCE(updated_at,0), COALESCE(template_data,'{}')`
+	invite_token, created_at, COALESCE(updated_at,0), COALESCE(template_data,'{}'),
+	COALESCE(image_ai_generated,0)`
 
 // loadSeriesEvents loads all events belonging to a series, ordered by start_time.
 func loadSeriesEvents(seriesID int) ([]SeriesEvent, error) {
@@ -627,6 +632,7 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 		MusicianID        *int            `json:"musician_id"`
 		InstructorID      *int            `json:"instructor_id"`
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
+		ImageAIGenerated  bool            `json:"image_ai_generated"`
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
@@ -673,13 +679,15 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,
-		    organization_id=?, musician_id=?, instructor_id=?, updated_at=?, updated_by=?, template_data=?
+		    organization_id=?, musician_id=?, instructor_id=?, updated_at=?, updated_by=?, template_data=?,
+		    image_ai_generated=?
 		WHERE id=?`,
 		req.Title, req.Description,
 		optionalInt(req.DefaultLocationID),
 		req.DefaultStartTime, req.DefaultEndTime,
 		optionalInt(orgID), optionalInt(musicianID), optionalInt(instructorID),
 		time.Now().Unix(), resolveDisplayName(callerID), templateDataStr,
+		req.ImageAIGenerated,
 		series.ID,
 	)
 	if err != nil {

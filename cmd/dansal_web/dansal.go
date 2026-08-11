@@ -367,6 +367,7 @@ type Event struct {
 	CreatedByID            *int             `json:"created_by_id,omitempty"`
 	SeriesID               *int             `json:"series_id,omitempty"`
 	SeriesImageURL         string           `json:"series_image_url,omitempty"`
+	SeriesImageAIGenerated bool             `json:"series_image_ai_generated,omitempty"`
 	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
 	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
@@ -3353,6 +3354,7 @@ type EventSeries struct {
 	Title             string          `json:"title"`
 	Description       string          `json:"description"`
 	ImageURL          string          `json:"image_url,omitempty"`
+	ImageAIGenerated  bool            `json:"image_ai_generated,omitempty"`
 	OrganizationID    *int            `json:"organization_id,omitempty"`
 	MusicianID        *int            `json:"musician_id,omitempty"`
 	InstructorID      *int            `json:"instructor_id,omitempty"`

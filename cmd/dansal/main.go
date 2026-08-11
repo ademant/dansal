@@ -1801,6 +1801,19 @@ func migrateDB() {
 			db.Exec("ALTER TABLE musicians ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
 		}
 	}
+	// v28: image_ai_generated flag for event series banners.
+	if !applied(28) {
+		db.Exec("ALTER TABLE event_series ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		mark(28)
+	}
+	// Safety net: ensure event_series.image_ai_generated exists even if v28 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_series') WHERE name='image_ai_generated'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE event_series ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -3093,7 +3106,8 @@ func createTables() error {
 		updated_at INTEGER DEFAULT 0,
 		created_by_id INTEGER REFERENCES users(id),
 		updated_by TEXT DEFAULT '',
-		template_data TEXT NOT NULL DEFAULT '{}'
+		template_data TEXT NOT NULL DEFAULT '{}',
+		image_ai_generated INTEGER DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

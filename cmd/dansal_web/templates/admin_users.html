@@ -209,6 +209,7 @@
       <p class="muted" style="word-break:break-all">{{$.Data.BaseURL}}/invites/{{.Token}}</p>
       <p class="muted">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}} · {{$.Strings.T "admin_invite_expires"}}: {{.ExpiresAt}}</p>
       <div class="popup-actions">
+        <button type="button" class="btn-sm" onclick="shareInviteURL('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_share"}}</button>
         <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
         {{if eq .InviteType "qr"}}<button type="button" class="btn-sm" onclick="showInviteQR(this,'{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_qr_show"}}</button>{{end}}
         <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
@@ -515,6 +516,11 @@ async function createInvite(type) {
         var qrSize = Math.min(320, window.innerWidth - 96);
         new QRCode(cnt, {text: d.url, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M});
       }
+      var acts = document.createElement('div');
+      acts.style.cssText = 'display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.6rem';
+      acts.innerHTML = '<button class="btn-sm" onclick="shareInviteURL(\'' + d.url + '\')">{{.Strings.T "admin_invite_share"}}</button>' +
+        '<button class="btn-sm" onclick="copyText(\'' + d.url + '\')">{{.Strings.T "admin_invite_copy"}}</button>';
+      res.appendChild(acts);
     } else {
       res.innerHTML = '<code id="new-invite-url" style="word-break:break-all;font-size:.85rem">' + d.url + '</code>' +
         ' <button class="btn-sm" onclick="copyText(\'' + d.url + '\')" style="margin-left:.4rem">{{.Strings.T "admin_invite_copy"}}</button>';
@@ -525,6 +531,13 @@ async function createInvite(type) {
 }
 function copyText(t) {
   if (navigator.clipboard) navigator.clipboard.writeText(t);
+}
+function shareInviteURL(url) {
+  if (navigator.share) {
+    navigator.share({url: url}).catch(function(){});
+  } else {
+    copyText(url);
+  }
 }
 function genMagicLink(uid) {
   fetch('/admin/users/' + uid + '/magic-link', {method:'POST'})

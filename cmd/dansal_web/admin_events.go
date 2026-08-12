@@ -150,7 +150,10 @@ type AdminEventFormData struct {
 	Prefill            *EventPrefill // new-event only: clone/suggestion prefill metadata for JS
 	CanDelete          bool          // whether the current user is allowed to hard-delete this event
 	TimetableError     string        // raw message when the timetable failed to save (see #808 follow-up)
-	IsTemplateMode     bool          // rendering /admin/templates/new: hide event-only fields, save as a template instead of an event
+	IsTemplateMode     bool          // rendering /admin/templates/new or /admin/templates/{id}/edit: hide event-only fields, save as a template instead of an event
+	TplID              int           // #1086: non-zero when editing an existing template (vs. /admin/templates/new)
+	TplName            string        // #1086: prefills the template name field when editing
+	TplOrgID           *int          // #1086: prefills the template's owning-org field when editing
 }
 
 // eventFromPrefill synthesizes an Event from prefill data so the unified
@@ -1756,22 +1759,7 @@ func adminTemplateNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			return
 		}
 		bundle := client.FetchRefBundle(r.Context())
-		token := getSessionToken(r)
-
-		var userOrgs []Organization
-		if su.Role == "admin" {
-			userOrgs = bundle.Orgs
-		} else {
-			orgIDSet := make(map[int]bool)
-			for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
-				orgIDSet[oid] = true
-			}
-			for _, o := range bundle.Orgs {
-				if orgIDSet[o.ID] {
-					userOrgs = append(userOrgs, o)
-				}
-			}
-		}
+		userOrgs := userOrgsFor(r, client, su, bundle)
 
 		var prefill *EventPrefill
 		oid, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
@@ -1797,6 +1785,160 @@ func adminTemplateNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 	}
 }
 
+// templateFormResult is what parseTemplateForm extracts from a submitted
+// evt-form (in IsTemplateMode) — shared by both the create and edit
+// handlers so the two can never drift on which fields a template captures.
+type templateFormResult struct {
+	Name     string
+	OrgID    *int
+	DataJSON string
+	ErrorKey string // "" on success
+}
+
+// parseTemplateForm reads tpl_name/tpl_org_id plus every regular event-form
+// field submitted in template mode into a templateEventData blob ready to
+// hand to saveTemplate/updateTemplate. r must already have had
+// ParseMultipartForm called (evt-form is multipart, for the image upload
+// field outside template mode).
+func parseTemplateForm(r *http.Request, client *DansalClient, bundle RefBundle) templateFormResult {
+	name := strings.TrimSpace(r.FormValue("tpl_name"))
+	if name == "" {
+		return templateFormResult{ErrorKey: "admin_template_name_required"}
+	}
+
+	var tplOrgID *int
+	if v := strings.TrimSpace(r.FormValue("tpl_org_id")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			tplOrgID = &n
+		}
+	}
+
+	var orgID int
+	if orgPtr, err := parseOrgChoice(r, client); err != nil {
+		return templateFormResult{ErrorKey: "admin_save_error"}
+	} else if orgPtr != nil {
+		orgID = *orgPtr
+	}
+
+	var locID int
+	if r.FormValue("loc_choice") == "existing" {
+		if v := r.FormValue("loc_id"); v != "" {
+			locID, _ = strconv.Atoi(v)
+		}
+	}
+
+	pricing := parsePricing(r)
+
+	tags := r.Form["tags"]
+	danceIDs, _, _ := parseEventIDs(r)
+
+	ttEntries := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
+
+	td := templateEventData{
+		URL:                strings.TrimSpace(r.FormValue("url")),
+		BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
+		StartTime:          templateTimeString(r.FormValue("start_time")),
+		EndTime:            templateTimeString(r.FormValue("end_time")),
+		HasBall:            sliceContains(tags, "bal-folk"),
+		HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+		HasFestival:        sliceContains(tags, "festival"),
+		WorkshopDifficulty: r.FormValue("workshop_difficulty"),
+		OrgID:              orgID,
+		LocID:              locID,
+		Tags:               tags,
+		DanceIDs:           danceIDs,
+		Food:               r.FormValue("food"),
+		Drink:              r.FormValue("drink"),
+		FloorCondition:     r.FormValue("floor_condition"),
+		Attributes:         eventAttrsFromForm(r),
+		ContactName:        strings.TrimSpace(r.FormValue("contact_name")),
+		ContactEmail:       strings.TrimSpace(r.FormValue("contact_email")),
+		BookingEnabled:     r.FormValue("booking_enabled") != "",
+		Timetable:          ttEntries,
+	}
+	if pricing != nil {
+		td.PricingType = pricing.Type
+		td.PricingAmount = pricing.Amount
+		td.PricingCurrency = pricing.Currency
+		td.PricingLines = pricing.Prices
+	}
+	if n, err := strconv.Atoi(r.FormValue("tickets_total")); err == nil {
+		td.TicketsTotal = n
+	}
+
+	data, err := json.Marshal(td)
+	if err != nil {
+		return templateFormResult{ErrorKey: "admin_save_error"}
+	}
+	return templateFormResult{Name: name, OrgID: tplOrgID, DataJSON: string(data)}
+}
+
+// templateDataToEvent is the reverse of templateDataFromEvent: it rebuilds
+// an Event from a template's stored JSON so /admin/templates/{id}/edit can
+// prefill the same unified form used to create it (#1086). locByID backs
+// the location picker/topLocationID (a template's location may be a room,
+// which needs its parent resolved the same way a real event's does).
+func templateDataToEvent(td templateEventData, locByID map[int]Location) Event {
+	ev := Event{
+		URL:                td.URL,
+		BookingURL:         td.BookingURL,
+		HasBall:            td.HasBall,
+		HasWorkshop:        td.HasWorkshop,
+		HasFestival:        td.HasFestival,
+		WorkshopDifficulty: td.WorkshopDifficulty,
+		Tags:               td.Tags,
+		Food:               td.Food,
+		Drink:              td.Drink,
+		FloorCondition:     td.FloorCondition,
+		Attributes:         td.Attributes,
+		ContactName:        td.ContactName,
+		ContactEmail:       td.ContactEmail,
+		TicketsTotal:       td.TicketsTotal,
+		BookingEnabled:     td.BookingEnabled,
+		Timetable:          td.Timetable,
+	}
+	if td.OrgID > 0 {
+		orgID := td.OrgID
+		ev.OrganizationID = &orgID
+	}
+	if td.LocID > 0 {
+		locID := td.LocID
+		ev.LocationID = &locID
+		if loc, ok := locByID[td.LocID]; ok {
+			ev.Location = &loc
+		}
+	}
+	if td.PricingType != "" {
+		ev.Pricing = &Pricing{
+			Type:     td.PricingType,
+			Amount:   td.PricingAmount,
+			Currency: td.PricingCurrency,
+			Prices:   td.PricingLines,
+		}
+	}
+	return ev
+}
+
+// userOrgsFor resolves the org list a template create/edit form should offer
+// as the template's owner: every org for an admin, else only the caller's
+// own memberships. Shared by the new/edit page and save handlers.
+func userOrgsFor(r *http.Request, client *DansalClient, su *SessionUser, bundle RefBundle) []Organization {
+	if su.Role == "admin" {
+		return bundle.Orgs
+	}
+	orgIDSet := make(map[int]bool)
+	for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r)) {
+		orgIDSet[oid] = true
+	}
+	var userOrgs []Organization
+	for _, o := range bundle.Orgs {
+		if orgIDSet[o.ID] {
+			userOrgs = append(userOrgs, o)
+		}
+	}
+	return userOrgs
+}
+
 func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -1812,22 +1954,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			return
 		}
 		bundle := client.FetchRefBundle(r.Context())
-		token := getSessionToken(r)
-
-		var userOrgs []Organization
-		if su.Role == "admin" {
-			userOrgs = bundle.Orgs
-		} else {
-			orgIDSet := make(map[int]bool)
-			for _, oid := range getUserOrgIDs(r.Context(), client, su.ID, token) {
-				orgIDSet[oid] = true
-			}
-			for _, o := range bundle.Orgs {
-				if orgIDSet[o.ID] {
-					userOrgs = append(userOrgs, o)
-				}
-			}
-		}
+		userOrgs := userOrgsFor(r, client, su, bundle)
 
 		renderErr := func(errKey string) {
 			title := i18n.T(r, "admin_template_new_title")
@@ -1842,80 +1969,132 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			}))
 		}
 
-		name := strings.TrimSpace(r.FormValue("tpl_name"))
-		if name == "" {
-			renderErr("admin_template_name_required")
+		res := parseTemplateForm(r, client, bundle)
+		if res.ErrorKey != "" {
+			renderErr(res.ErrorKey)
 			return
 		}
-
-		var tplOrgID *int
-		if v := strings.TrimSpace(r.FormValue("tpl_org_id")); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				tplOrgID = &n
-			}
-		}
-
-		var orgID int
-		if orgPtr, err := parseOrgChoice(r, client); err != nil {
-			renderErr("admin_save_error")
-			return
-		} else if orgPtr != nil {
-			orgID = *orgPtr
-		}
-
-		var locID int
-		if r.FormValue("loc_choice") == "existing" {
-			if v := r.FormValue("loc_id"); v != "" {
-				locID, _ = strconv.Atoi(v)
-			}
-		}
-
-		pricing := parsePricing(r)
-
-		tags := r.Form["tags"]
-		danceIDs, _, _ := parseEventIDs(r)
-
-		ttEntries := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
-
-		td := templateEventData{
-			URL:                strings.TrimSpace(r.FormValue("url")),
-			BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
-			StartTime:          templateTimeString(r.FormValue("start_time")),
-			EndTime:            templateTimeString(r.FormValue("end_time")),
-			HasBall:            sliceContains(tags, "bal-folk"),
-			HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival:        sliceContains(tags, "festival"),
-			WorkshopDifficulty: r.FormValue("workshop_difficulty"),
-			OrgID:              orgID,
-			LocID:              locID,
-			Tags:               tags,
-			DanceIDs:           danceIDs,
-			Food:               r.FormValue("food"),
-			Drink:              r.FormValue("drink"),
-			FloorCondition:     r.FormValue("floor_condition"),
-			Attributes:         eventAttrsFromForm(r),
-			ContactName:        strings.TrimSpace(r.FormValue("contact_name")),
-			ContactEmail:       strings.TrimSpace(r.FormValue("contact_email")),
-			BookingEnabled:     r.FormValue("booking_enabled") != "",
-			Timetable:          ttEntries,
-		}
-		if pricing != nil {
-			td.PricingType = pricing.Type
-			td.PricingAmount = pricing.Amount
-			td.PricingCurrency = pricing.Currency
-			td.PricingLines = pricing.Prices
-		}
-		if n, err := strconv.Atoi(r.FormValue("tickets_total")); err == nil {
-			td.TicketsTotal = n
-		}
-
-		data, err := json.Marshal(td)
-		if err != nil {
-			renderErr("admin_save_error")
-			return
-		}
-		if _, err := saveTemplate(db, su.ID, tplOrgID, nil, nil, name, string(data)); err != nil {
+		if _, err := saveTemplate(db, su.ID, res.OrgID, nil, nil, res.Name, res.DataJSON); err != nil {
 			log.Printf("save template error: %v", err)
+			renderErr("admin_save_error")
+			return
+		}
+		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
+	}
+}
+
+// adminTemplateEditPageHandler serves GET /admin/templates/{id}/edit,
+// reusing admin_event_form.html the same way /admin/templates/new does
+// (IsTemplateMode:true, IsNew:true — a template never has a real underlying
+// Event, so every .IsNew-gated "existing event" feature in the shared form,
+// e.g. the timetable editor link or additional-venues management, stays
+// correctly hidden exactly as it already does for a brand new template),
+// but prefills every field from the template's stored JSON (#1086).
+func adminTemplateEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		tpl, err := getTemplate(db, id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if su.Role != "admin" && tpl.UserID != su.ID {
+			http.NotFound(w, r)
+			return
+		}
+
+		var td templateEventData
+		if err := json.Unmarshal([]byte(tpl.Data), &td); err != nil {
+			log.Printf("admin template edit: bad stored data for template %d: %v", id, err)
+		}
+
+		bundle := client.FetchRefBundle(r.Context())
+		userOrgs := userOrgsFor(r, client, su, bundle)
+
+		locByID := make(map[int]Location, len(bundle.Locations))
+		for _, l := range bundle.Locations {
+			locByID[l.ID] = l
+		}
+		event := templateDataToEvent(td, locByID)
+		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+
+		title := i18n.T(r, "admin_template_edit_title")
+		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+			IsNew:              true,
+			IsTemplateMode:     true,
+			Event:              event,
+			Organizations:      bundle.Orgs,
+			Locations:          topLevelLocations(bundle.Locations),
+			LocOrgFirst:        locOrgFirst,
+			LocOthers:          locOthers,
+			Dances:             bundle.Dances,
+			SelectedDanceNames: buildSelectedDanceNamesFromIDs(td.DanceIDs, bundle.Dances),
+			UserOrgs:           userOrgs,
+			TplID:              id,
+			TplName:            tpl.Name,
+			TplOrgID:           tpl.OrgID,
+		}))
+	}
+}
+
+// adminTemplateEditSaveHandler serves POST /admin/templates/{id}/edit.
+func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		tpl, err := getTemplate(db, id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if su.Role != "admin" && tpl.UserID != su.ID {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		bundle := client.FetchRefBundle(r.Context())
+		userOrgs := userOrgsFor(r, client, su, bundle)
+
+		renderErr := func(errKey string) {
+			title := i18n.T(r, "admin_template_edit_title")
+			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+				IsNew:          true,
+				IsTemplateMode: true,
+				Organizations:  bundle.Orgs,
+				Locations:      topLevelLocations(bundle.Locations),
+				Dances:         bundle.Dances,
+				UserOrgs:       userOrgs,
+				ErrorKey:       errKey,
+				TplID:          id,
+				TplName:        r.FormValue("tpl_name"),
+			}))
+		}
+
+		res := parseTemplateForm(r, client, bundle)
+		if res.ErrorKey != "" {
+			renderErr(res.ErrorKey)
+			return
+		}
+		if err := updateTemplate(db, id, su.ID, su.Role == "admin", res.OrgID, res.Name, res.DataJSON); err != nil {
+			log.Printf("update template error: %v", err)
 			renderErr("admin_save_error")
 			return
 		}

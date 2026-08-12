@@ -366,6 +366,8 @@ func main() {
 		r.HandleFunc("GET /admin/templates", adminTemplatesHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /admin/templates/new", adminTemplateNewPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/templates/new", adminRateLimit(adminTemplateCreateHandler(cfg, tmpls, db, client, i18n)))
+		r.HandleFunc("GET /admin/templates/{id}/edit", adminTemplateEditPageHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("POST /admin/templates/{id}/edit", adminRateLimit(adminTemplateEditSaveHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/templates/{id}/delete", adminRateLimit(adminTemplateDeleteHandler(db)))
 		r.HandleFunc("GET /admin/templates/{id}/data", adminTemplateDataHandler(db, client))
 		r.HandleFunc("POST /admin/templates/{id}/pin", adminRateLimit(adminTemplatePinHandler(db)))

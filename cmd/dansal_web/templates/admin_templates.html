@@ -32,6 +32,7 @@
       </td>
       <td class="tpl-actions">
         <button type="button" class="btn-preview" onclick="togglePreview({{.ID}})">&#9656; {{$.Strings.T "admin_template_preview"}}</button>
+        <a href="/admin/templates/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
         <form method="post" action="/admin/templates/{{.ID}}/delete" style="display:inline">
           <button type="submit" class="btn-icon btn-del-small" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirm('{{$.Strings.T "admin_template_confirm_delete"}}')">🗑️</button>
         </form>

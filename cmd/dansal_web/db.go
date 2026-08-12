@@ -867,6 +867,28 @@ func saveTemplate(db *sql.DB, userID int, orgID, musicianID, instructorID *int, 
 	return res.LastInsertId()
 }
 
+// updateTemplate saves an already-existing template's org/name/data over the
+// same row (#1086), mirroring deleteTemplate's owner-or-admin scoping: a
+// non-admin update is scoped to user_id in the WHERE clause, so it silently
+// affects zero rows (reported as sql.ErrNoRows) rather than editing a
+// template owned by someone else.
+func updateTemplate(db *sql.DB, id, userID int, isAdmin bool, orgID *int, name, data string) error {
+	var res sql.Result
+	var err error
+	if isAdmin {
+		res, err = db.Exec("UPDATE event_templates SET org_id = ?, name = ?, data = ? WHERE id = ?", orgID, name, data, id)
+	} else {
+		res, err = db.Exec("UPDATE event_templates SET org_id = ?, name = ?, data = ? WHERE id = ? AND user_id = ?", orgID, name, data, id, userID)
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func deleteTemplate(db *sql.DB, id, userID int, isAdmin bool) error {
 	var err error
 	if isAdmin {

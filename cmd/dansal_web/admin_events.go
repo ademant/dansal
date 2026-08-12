@@ -1803,7 +1803,11 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+		// evt-form is enctype="multipart/form-data" (it doubles as the image
+		// upload form outside template mode); a plain r.ParseForm() never
+		// reads a multipart body, so every field including tpl_name always
+		// arrived empty here regardless of what was typed.
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}

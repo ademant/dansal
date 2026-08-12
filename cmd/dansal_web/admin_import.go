@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"log"
@@ -21,15 +22,17 @@ type FeedLocation struct {
 }
 
 type AdminImportEventsData struct {
-	PreviewEvents  []PreviewEvent
-	PreviewJSON    []string
-	Error          string
-	FeedURL        string
-	FeedType       string
-	Orgs           []Organization
-	Locations      []Location
-	UniqueFeedLocs []FeedLocation
-	SelectedOrgID  int
+	PreviewEvents      []PreviewEvent
+	PreviewJSON        []string
+	Error              string
+	FeedURL            string
+	FeedType           string
+	Orgs               []Organization
+	Locations          []Location
+	UniqueFeedLocs     []FeedLocation
+	SelectedOrgID      int
+	Templates          []EventTemplate
+	SelectedTemplateID int
 }
 
 // ── Import events ─────────────────────────────────────────────────────────────
@@ -48,7 +51,7 @@ func adminImportEventsPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) htt
 	}
 }
 
-func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
 		if !ok {
@@ -177,6 +180,16 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
+		// Template picker (#1084): the choice made here isn't applied to the
+		// previewed events themselves, only carried through to pre-select the
+		// same template on the "create fetchurl" step below, since that's the
+		// only place a template on a URL-based import currently means anything
+		// (a template stored on a recurring fetch source, applied to every
+		// future fetch — see fetchurl.go's TemplateID/TemplateMode).
+		templates, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
+		if err != nil {
+			log.Printf("admin import: could not load templates: %v", err)
+		}
 
 		// Build a name→location map so we can auto-match feed locations to
 		// existing DB locations without the admin having to pick them manually.
@@ -237,6 +250,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Locations:      locs,
 			UniqueFeedLocs: uniqLocs,
 			SelectedOrgID:  selectedOrgID,
+			Templates:      templates,
 		}))
 	}
 }
@@ -379,6 +393,12 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			}
 			if orgID > 0 {
 				q.Set("org_id", strconv.Itoa(orgID))
+			}
+			// #1084: carry the template picked on the import preview page
+			// through so it's pre-selected on the "create fetchurl" step,
+			// where it's actually stored (on the new fetch source).
+			if tplID, err := strconv.Atoi(r.FormValue("template_id")); err == nil && tplID > 0 {
+				q.Set("template_id", strconv.Itoa(tplID))
 			}
 			q.Set("created_after", createdAt)
 			http.Redirect(w, r, "/admin/fetchurls/new?"+q.Encode(), http.StatusSeeOther)

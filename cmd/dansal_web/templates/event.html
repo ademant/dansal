@@ -472,6 +472,15 @@
     </div>
     {{end}}
 
+    {{/* Dance styles (#1085) — searchable/filterable elsewhere (search.html's
+         dance dropdown), but never shown on the event's own page until now. */}}
+    {{if .DanceNames}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_dance_styles"}}</div>
+      <div>{{range .DanceNames}}<span class="tag">{{.}}</span>{{end}}</div>
+    </div>
+    {{end}}
+
     {{/* Tags */}}
     {{if .Tags}}
     <div class="sidebar-block">

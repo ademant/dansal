@@ -345,7 +345,7 @@ func main() {
 		r.HandleFunc("GET /admin/events/maintenance", adminEventsMaintenanceHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/events", adminEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/events/import", adminImportEventsPageHandler(cfg, tmpls, i18n))
-		r.HandleFunc("POST /admin/events/import", adminRateLimit(adminImportEventsHandler(cfg, tmpls, client, i18n)))
+		r.HandleFunc("POST /admin/events/import", adminRateLimit(adminImportEventsHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/events/import/confirm", adminRateLimit(adminImportConfirmHandler(cfg, client)))
 		r.HandleFunc("GET /admin/events/new", adminEventNewPageHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("POST /admin/events/new", adminRateLimit(adminEventCreateHandler(cfg, tmpls, db, client, i18n)))

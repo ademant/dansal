@@ -141,6 +141,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			orgs = filtered
 		}
 		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
+		templateID, _ := strconv.Atoi(r.URL.Query().Get("template_id"))
 		orgIDs := orgIDsForTemplates(r, client, su)
 		templates, err := listTemplates(db, su.ID, orgIDs)
 		if err != nil {
@@ -153,6 +154,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 			URL:          r.URL.Query().Get("url"),
 			Type:         r.URL.Query().Get("type"),
 			OrgID:        orgID,
+			TemplateID:   templateID,
 			FromImport:   r.URL.Query().Get("from_import") != "" || r.URL.Query().Get("created_after") != "",
 			CreatedAfter: r.URL.Query().Get("created_after"),
 		}))

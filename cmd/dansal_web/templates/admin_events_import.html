@@ -24,6 +24,17 @@
   </div>
   {{end}}
 
+  {{if $.Data.Templates}}
+  <div class="assign-section">
+    <label class="assign-label" for="template_id">{{$.Strings.T "admin_import_template_label"}}</label>
+    <select id="template_id" name="template_id" class="assign-select">
+      <option value="">{{$.Strings.T "admin_import_template_none"}}</option>
+      {{range $.Data.Templates}}<option value="{{.ID}}"{{if eq .ID $.Data.SelectedTemplateID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    <p style="font-size:.8rem;color:#777;margin:.3rem 0 0">{{$.Strings.T "admin_import_template_hint"}}</p>
+  </div>
+  {{end}}
+
   {{if $.Data.UniqueFeedLocs}}
   <div class="assign-section">
     <div class="assign-label">{{$.Strings.T "admin_import_loc_mapping_title"}}</div>

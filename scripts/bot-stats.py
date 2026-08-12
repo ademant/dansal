@@ -378,7 +378,7 @@ def main():
 
 def store_to_sqlite(db_path: str, report: dict) -> None:
     con = sqlite3.connect(db_path)
-    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA journal_mode=DELETE")
     con.executescript("""
         CREATE TABLE IF NOT EXISTS bot_stats_daily (
             date      TEXT NOT NULL,

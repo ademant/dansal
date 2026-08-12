@@ -310,7 +310,7 @@ CREATE TABLE IF NOT EXISTS fedi_source_instances (
 
 def store_to_sqlite(db_path: str, target: date, nginx: dict, webdb: dict) -> None:
     con = sqlite3.connect(db_path)
-    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA journal_mode=DELETE")
     con.executescript(SCHEMA)
 
     d = str(target)

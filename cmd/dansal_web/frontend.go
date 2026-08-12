@@ -882,13 +882,13 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			SeriesImageURL:         epd.seriesImageURL,
 			SeriesImageAIGenerated: epd.seriesImageAIGenerated,
 		})
-		// OGImage fallback: event → series → org (#1072).
+		// OGImage fallback: event → generated series/org banner overlay
+		// (#1072, #1082, #1083). The generated banner is used whenever a
+		// series or org banner would otherwise apply, since it carries a
+		// per-event date/title signal a plain reused banner doesn't.
 		ogImg := event.ImageURL
-		if ogImg == "" {
-			ogImg = epd.seriesImageURL
-		}
-		if ogImg == "" && epd.org != nil {
-			ogImg = epd.org.ImageURL
+		if ogImg == "" && (epd.seriesImageURL != "" || (epd.org != nil && epd.org.ImageURL != "")) {
+			ogImg = fmt.Sprintf("/api/v1/event-banner/%d", event.ID)
 		}
 		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), ogImg)
 	}

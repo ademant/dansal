@@ -3806,6 +3806,7 @@ func main() {
 	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
 	smux.HandleFunc("GET /api/v1/musician-images/{id}", getMusicianImage)
 	smux.HandleFunc("GET /api/v1/org-images/{id}", getOrgImage)
+	smux.HandleFunc("GET /api/v1/event-banner/{event_id}", getEventBannerImage)
 
 	// Anonymous suggestion endpoints
 	smux.HandleFunc("POST /api/v1/events/suggest-preview", suggestPreviewHandler)

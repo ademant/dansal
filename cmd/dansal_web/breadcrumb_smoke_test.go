@@ -113,9 +113,12 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		if !strings.Contains(body, `"audienceType": "dancers, musicians"`) {
 			t.Errorf("musician-workshop tag should yield audienceType \"dancers, musicians\" (#1063)")
 		}
-		// #1065: no event image -> org image fallback (js filter escapes "/").
-		if !strings.Contains(body, `"image": "\/api\/v1\/org-images\/2"`) {
-			t.Errorf("event without image should fall back to the org image (#1065)")
+		// #1065: no event image -> org banner fallback; #1083 replaces the raw
+		// org image with the generated title/date/location overlay, and the
+		// URL is now made absolute like every other JSON-LD image (js filter
+		// escapes "/").
+		if !strings.Contains(body, `"image": "https:\/\/example.test\/api\/v1\/event-banner\/1"`) {
+			t.Errorf("event without image should fall back to the generated org banner overlay (#1065, #1083)")
 		}
 	})
 
@@ -128,7 +131,8 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			ImageURL:  "/api/v1/images/2",
 		}, &Organization{ID: 2, Name: "Test Org", ImageURL: "/api/v1/org-images/2"}, "test-org")
 		checkBlocks(t, body, true)
-		if !strings.Contains(body, `"image": "\/api\/v1\/images\/2"`) {
+		// Relative image URLs are now made absolute in JSON-LD, same as og:image.
+		if !strings.Contains(body, `"image": "https:\/\/example.test\/api\/v1\/images\/2"`) {
 			t.Errorf("event image should win over the org image (#1065)")
 		}
 	})

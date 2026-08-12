@@ -694,9 +694,39 @@ func adminPruneImages() adminResponse {
 		FreedBytes int64 `json:"freed_bytes"`
 	}
 	var result pruneResult
+	remove := func(path string) {
+		info, _ := os.Stat(path)
+		if removeErr := os.Remove(path); removeErr == nil {
+			if info != nil {
+				result.FreedBytes += info.Size()
+			}
+			result.Removed++
+			log.Printf("prune-images: removed %s", path)
+		}
+	}
 	err := filepath.WalkDir(imagesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		// Generated per-event banner overlays (#1082, #1083): "still needed"
+		// depends on the event's current series/org-banner fallback tier, not
+		// a simple row-exists check, so these are handled separately from the
+		// generic .avif path below.
+		if name := d.Name(); strings.HasSuffix(name, ".jpg") && strings.HasPrefix(name, "banner-") {
+			tier := "series"
+			idStr := strings.TrimPrefix(name, "banner-")
+			if strings.HasPrefix(idStr, "org-") {
+				tier = "org"
+				idStr = strings.TrimPrefix(idStr, "org-")
+			}
+			id, convErr := strconv.Atoi(strings.TrimSuffix(idStr, ".jpg"))
+			if convErr != nil {
+				return nil
+			}
+			if !eventBannerFileStillValid(id, tier) {
+				remove(path)
+			}
+			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".avif") {
 			return nil
@@ -722,14 +752,7 @@ func adminPruneImages() adminResponse {
 		if exists > 0 {
 			return nil
 		}
-		info, _ := os.Stat(path)
-		if removeErr := os.Remove(path); removeErr == nil {
-			if info != nil {
-				result.FreedBytes += info.Size()
-			}
-			result.Removed++
-			log.Printf("prune-images: removed %s", path)
-		}
+		remove(path)
 		return nil
 	})
 	if err != nil {

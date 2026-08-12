@@ -30,9 +30,9 @@
   {{- end}}
   {{- with .URL}}, "url": "{{. | js}}"{{end}}
   {{- $img := .ImageURL}}
-  {{- if not $img}}{{with $.Data.SeriesImageURL}}{{$img = .}}{{end}}{{end}}
-  {{- if not $img}}{{with $.Data.Org}}{{with .ImageURL}}{{$img = .}}{{end}}{{end}}{{end}}
+  {{- if not $img}}{{if or $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}{{$img = printf "/api/v1/event-banner/%d" .ID}}{{end}}{{end}}
   {{- if not $img}}{{$img = $.OGImage}}{{end}}
+  {{- if and $img (hasPrefix $img "/")}}{{$img = printf "https://%s%s" $.Domain $img}}{{end}}
   {{- if $img}}, "image": "{{$img | js}}"{{end}}
   {{- if .Description}}, "description": "{{.Description | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
@@ -127,14 +127,17 @@
 {{with .Data}}
 {{with .Event}}
 
-{{if or .ImageURL $.Data.SeriesImageURL}}
+{{if or .ImageURL $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}
 <div class="evt-hero" style="position:relative;display:inline-block;width:100%">
   {{if .ImageURL}}
   <img src="{{.ImageURL}}" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
   {{if .ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{else}}
-  <img src="{{$.Data.SeriesImageURL}}" alt="{{.Title}}{{if $.Data.SeriesImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
-  {{if $.Data.SeriesImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
+  {{/* No own image: a series-banner+date or org-banner+title overlay is generated server-side (#1082, #1083) rather than showing the plain, identical-across-every-event banner. */}}
+  {{$bannerAI := $.Data.SeriesImageAIGenerated}}
+  {{if and (not $.Data.SeriesImageURL) $.Data.Org}}{{$bannerAI = $.Data.Org.ImageAIGenerated}}{{end}}
+  <img src="/api/v1/event-banner/{{.ID}}" alt="{{.Title}}{{if $bannerAI}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  {{if $bannerAI}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{end}}
 </div>
 {{end}}

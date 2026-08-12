@@ -70,6 +70,10 @@ SEARCH_ENGINES = {
     "startpage.com": "Startpage",
     "brave.com":     "Brave Search",
     "kagi.com":      "Kagi",
+    "metager.org":   "MetaGer",
+    "swisscows.com": "Swisscows",
+    "search.ch":     "search.ch",
+    "lilo.org":      "Lilo",
 }
 
 # ---------------------------------------------------------------------------
@@ -245,7 +249,7 @@ def analyse(target: date) -> dict:
 
 def store_to_sqlite(db_path: str, report: dict) -> None:
     con = sqlite3.connect(db_path)
-    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA journal_mode=DELETE")
     con.executescript("""
         CREATE TABLE IF NOT EXISTS user_stats_meta (
             date                 TEXT PRIMARY KEY,

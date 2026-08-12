@@ -55,6 +55,12 @@ type userStatDay struct {
 	ScannerSlip    int
 }
 
+// searchEngineTotal holds the aggregated referral count for one search engine.
+type searchEngineTotal struct {
+	Engine string
+	Count  int
+}
+
 // fediStatDay holds one day's fediverse activity from fedi_stats_daily.
 type fediStatDay struct {
 	Date                   string
@@ -104,6 +110,10 @@ type BotStatsPageData struct {
 	HasData       bool
 	DBMissing     bool
 
+	// Search engine referral breakdown (all-time sum from user_stats_referrers).
+	SearchEngines    []searchEngineTotal
+	TotalSearchCount int
+
 	// Fediverse
 	FediDays         []fediStatDay
 	FediTopInstances []fediSourceInstance // aggregated over loaded fedi days
@@ -119,10 +129,10 @@ func openReadonlyDB(path string) (*sql.DB, error) {
 	return sql.Open("sqlite3", "file:"+path+"?mode=ro&_busy_timeout=5000")
 }
 
-func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
+func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, []searchEngineTotal, error) {
 	db, err := openReadonlyDB(dbPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer db.Close()
 
@@ -130,7 +140,7 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 	rows, err := db.Query(`SELECT date, total_requests, human_count, bot_count, inbox_failures
 		FROM bot_stats_meta ORDER BY date`)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer rows.Close()
 
@@ -147,7 +157,7 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 	// --- bot categories ---
 	crows, err := db.Query(`SELECT date, category, count FROM bot_stats_daily ORDER BY date`)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer crows.Close()
 	for crows.Next() {
@@ -164,7 +174,7 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 		external_count, internal_count, clicks_per_entry, scanner_slipthrough
 		FROM user_stats_meta ORDER BY date`)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer urows.Close()
 
@@ -176,11 +186,29 @@ func loadBotStatsDB(dbPath string) ([]botStatDay, []userStatDay, error) {
 		userDays = append(userDays, d)
 	}
 
+	// --- search engine breakdown (all-time sum; table may not exist yet) ---
+	var engines []searchEngineTotal
+	erows, eErr := db.Query(`
+		SELECT REPLACE(source, 'search:', '') AS engine, SUM(count) AS total
+		FROM user_stats_referrers
+		WHERE source LIKE 'search:%'
+		GROUP BY source
+		ORDER BY total DESC`)
+	if eErr == nil {
+		defer erows.Close()
+		for erows.Next() {
+			var e searchEngineTotal
+			erows.Scan(&e.Engine, &e.Count)
+			engines = append(engines, e)
+		}
+	}
+	// Silently ignore error if user_stats_referrers doesn't exist yet.
+
 	result := make([]botStatDay, len(botDays))
 	for i, d := range botDays {
 		result[i] = *d
 	}
-	return result, userDays, nil
+	return result, userDays, engines, nil
 }
 
 // loadFediStatsDB reads fediverse daily stats and per-instance request counts
@@ -440,7 +468,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		if cfg.BotStatsDBPath == "" {
 			data.DBMissing = true
 		} else {
-			botDays, userDays, err := loadBotStatsDB(cfg.BotStatsDBPath)
+			botDays, userDays, engines, err := loadBotStatsDB(cfg.BotStatsDBPath)
 			if err != nil {
 				log.Printf("bot-stats db: %v", err)
 				data.DBMissing = true
@@ -461,6 +489,10 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 					for i := range userDays {
 						data.UserDayMap[userDays[i].Date] = &userDays[i]
 					}
+				}
+				data.SearchEngines = engines
+				for _, e := range engines {
+					data.TotalSearchCount += e.Count
 				}
 
 				// Fediverse historical data from the same bot-stats DB.

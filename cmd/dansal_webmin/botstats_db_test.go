@@ -36,7 +36,7 @@ func TestLoadBotStatsDB(t *testing.T) {
 		`INSERT INTO bot_stats_daily VALUES('2026-08-01','ai_crawler',10)`,
 		`INSERT INTO user_stats_meta VALUES('2026-08-01', 90, 30, 20, 10, 5, 2.5, 1)`,
 	)
-	botDays, userDays, err := loadBotStatsDB(path)
+	botDays, userDays, engines, err := loadBotStatsDB(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +51,39 @@ func TestLoadBotStatsDB(t *testing.T) {
 	}
 	if len(userDays) != 1 || userDays[0].DirectCount != 30 || userDays[0].ClicksPerEntry != 2.5 {
 		t.Fatalf("user days = %+v, want one row with direct=30 clicks=2.5", userDays)
+	}
+	// user_stats_referrers table not created in this fixture → engines should be nil (graceful).
+	if engines != nil {
+		t.Fatalf("engines = %+v, want nil when table is absent", engines)
+	}
+}
+
+func TestLoadBotStatsDBSearchEngines(t *testing.T) {
+	path := writeBotStatsDB(t,
+		`CREATE TABLE bot_stats_meta(date TEXT, total_requests INTEGER, human_count INTEGER, bot_count INTEGER, inbox_failures INTEGER)`,
+		`CREATE TABLE bot_stats_daily(date TEXT, category TEXT, count INTEGER)`,
+		`CREATE TABLE user_stats_meta(date TEXT, total_requests INTEGER, direct_count INTEGER, search_count INTEGER, external_count INTEGER, internal_count INTEGER, clicks_per_entry REAL, scanner_slipthrough INTEGER)`,
+		`CREATE TABLE user_stats_referrers(date TEXT, source TEXT, count INTEGER, PRIMARY KEY(date,source))`,
+		`INSERT INTO user_stats_referrers VALUES('2026-08-01','search:Google',614)`,
+		`INSERT INTO user_stats_referrers VALUES('2026-08-01','search:DuckDuckGo',71)`,
+		`INSERT INTO user_stats_referrers VALUES('2026-08-01','search:Bing',55)`,
+		`INSERT INTO user_stats_referrers VALUES('2026-08-01','direct',120)`,
+	)
+	_, _, engines, err := loadBotStatsDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(engines) != 3 {
+		t.Fatalf("engines = %+v, want 3 search: entries (direct excluded)", engines)
+	}
+	if engines[0].Engine != "Google" || engines[0].Count != 614 {
+		t.Fatalf("engines[0] = %+v, want Google/614", engines[0])
+	}
+	if engines[1].Engine != "DuckDuckGo" || engines[1].Count != 71 {
+		t.Fatalf("engines[1] = %+v, want DuckDuckGo/71", engines[1])
+	}
+	if engines[2].Engine != "Bing" || engines[2].Count != 55 {
+		t.Fatalf("engines[2] = %+v, want Bing/55", engines[2])
 	}
 }
 

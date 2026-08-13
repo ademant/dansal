@@ -278,7 +278,10 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	}
 	result, err := q.Exec(
 		"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Eventsite, loc.OsmID, loc.OsmType, gh,
+		// nullIfEmpty(gh): the partial UNIQUE index on geohash only excludes
+		// NULL, so an empty string would collide across every geo-less
+		// location after the first (#1087).
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.CountryCode, loc.Region, loc.Latitude, loc.Longitude, loc.Eventsite, loc.OsmID, loc.OsmType, nullIfEmpty(gh),
 	)
 	if err != nil {
 		return 0, err

@@ -2247,6 +2247,13 @@ func migrateDB() {
 			db.Exec("ALTER TABLE contact_posts ADD COLUMN lon REAL")
 		}
 	}
+
+	// #1087: locations without coordinates used to get geohash='' instead of
+	// NULL, but the partial UNIQUE index on geohash only excludes NULL — so
+	// only the first geo-less top-level location ever inserted could keep
+	// that value; every subsequent one collided. Clear the empty-string rows
+	// left behind by the bug (safe to rerun: no-op once none remain).
+	db.Exec("UPDATE locations SET geohash = NULL WHERE geohash = ''")
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE

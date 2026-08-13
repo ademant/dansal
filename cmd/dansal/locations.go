@@ -623,7 +623,10 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		}
 		result, err := db.Exec(
 			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, capacity, size_sqm, plan_x, plan_y, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, insertGH, req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, req.PlanX, req.PlanY,
+			// nullIfEmpty(insertGH): the partial UNIQUE index on geohash only
+			// excludes NULL, so an empty string would collide across every
+			// geo-less location after the first (#1087).
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.CountryCode, req.Region, req.Latitude, req.Longitude, req.Internetsite, req.OsmID, req.OsmType, nullIfEmpty(insertGH), req.WikidataID, req.MBPlaceID, req.NotesMd, attrsJSON(req.Attributes), req.Parking, req.FloorCondition, req.NoStreetShoes, req.ParentID, req.Capacity, req.SizeSqm, req.PlanX, req.PlanY,
 		)
 		if err != nil {
 			writeError(w, "Failed to create location", http.StatusInternalServerError)
@@ -883,10 +886,20 @@ type locationUpdateFields struct {
 	PlanX, PlanY                                                              *float64
 }
 
+// nullIfEmpty converts an empty string to a SQL NULL. Used for geohash: the
+// partial UNIQUE index on locations.geohash only excludes NULL, so writing
+// "" there would collide across every geo-less location after the first (#1087).
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func writeLocationFields(id string, f locationUpdateFields, updatedBy string) error {
 	_, err := db.Exec(
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		f.Location, f.ShortName, f.Address, f.Zipcode, f.Town, f.Country, f.CountryCode, f.Region, f.Latitude, f.Longitude, f.Internetsite, f.OsmID, f.OsmType, f.Geohash, f.WikidataID, f.MBPlaceID, f.NotesMd, attrsJSON(f.Attributes), f.Parking, f.FloorCondition, f.NoStreetShoes, f.ParentID, f.Capacity, f.SizeSqm, f.PlanX, f.PlanY, updatedBy, id,
+		f.Location, f.ShortName, f.Address, f.Zipcode, f.Town, f.Country, f.CountryCode, f.Region, f.Latitude, f.Longitude, f.Internetsite, f.OsmID, f.OsmType, nullIfEmpty(f.Geohash), f.WikidataID, f.MBPlaceID, f.NotesMd, attrsJSON(f.Attributes), f.Parking, f.FloorCondition, f.NoStreetShoes, f.ParentID, f.Capacity, f.SizeSqm, f.PlanX, f.PlanY, updatedBy, id,
 	)
 	return err
 }

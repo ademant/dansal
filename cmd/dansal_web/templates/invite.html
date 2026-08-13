@@ -12,6 +12,17 @@
 
   <p class="invite-intro">{{$.Strings.T "invite_intro"}}</p>
 
+  {{if .OIDCError}}<p class="invite-msg invite-err">{{$.Strings.T "login_oidc_error"}}</p>{{end}}
+
+  {{if .OIDCProviders}}
+  <div class="oidc-btns">
+    {{range .OIDCProviders}}
+    <a class="track-btn" href="/oidc/{{.ID}}/start?invite={{$.Data.Token}}">{{$.Strings.TF "login_oidc_continue" .DisplayName}}</a>
+    {{end}}
+  </div>
+  <div class="invite-or"><span>{{$.Strings.T "login_or"}}</span></div>
+  {{end}}
+
   <!-- Track selector -->
   <div class="invite-tracks">
     <button type="button" id="btn-passkey" class="track-btn track-active" onclick="showTrack('passkey')">
@@ -219,6 +230,10 @@
 .invite-msg{padding:.55rem .75rem;border-radius:4px;font-size:.9rem;margin-top:.25rem}
 .invite-ok{background:#d1fae5;color:#065f46}
 .invite-err{background:#fee2e2;color:#991b1b}
+.oidc-btns{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1rem}
+.oidc-btns .track-btn{text-decoration:none;text-align:center;display:block}
+.invite-or{display:flex;align-items:center;gap:.5rem;color:var(--fg-hint);font-size:.8rem;margin-bottom:1.25rem}
+.invite-or::before,.invite-or::after{content:'';flex:1;border-top:1px solid var(--border)}
 </style>
 {{end}}
 {{end}}

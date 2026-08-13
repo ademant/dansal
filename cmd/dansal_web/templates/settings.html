@@ -21,6 +21,10 @@
   <div class="settings-card">
     <h2>{{$.Strings.T "settings_account"}}</h2>
     <div class="settings-row">
+      <span class="settings-label">{{$.Strings.T "settings_user_id"}}</span>
+      <span>#{{.User.ID}}</span>
+    </div>
+    <div class="settings-row">
       <span class="settings-label">{{$.Strings.T "settings_email"}}</span>
       <span>{{.User.Email}}</span>
     </div>

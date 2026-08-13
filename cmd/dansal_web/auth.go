@@ -12,13 +12,15 @@ import (
 )
 
 type LoginPageData struct {
-	ErrorKey     string
-	Email        string
-	MagicSent    string // "email" or "telegram" when a link was just sent
-	Next         string
-	FormToken    string
-	TotpRequired bool
-	PendingToken string // opaque server-side handle replacing the password hidden field
+	ErrorKey      string
+	Email         string
+	MagicSent     string // "email" or "telegram" when a link was just sent
+	Next          string
+	FormToken     string
+	TotpRequired  bool
+	PendingToken  string // opaque server-side handle replacing the password hidden field
+	OIDCProviders []OIDCProvider
+	OIDCError     bool
 }
 
 // pendingTOTPAuth holds credentials across the TOTP second step so the
@@ -100,7 +102,7 @@ func stdFormMaxAge(cfg *Config) time.Duration {
 	return time.Duration(cfg.FormTokenMaxAgeMins) * time.Minute
 }
 
-func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+func loginPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if getSessionUser(r) != nil {
 			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
@@ -122,11 +124,17 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 			return
 		}
 		tokenThrottle.record(ip)
+		providers, err := client.GetOIDCProviders(r.Context(), nil)
+		if err != nil {
+			log.Printf("login page: could not load OIDC providers: %v", err)
+		}
 		title := i18n.T(r, "login_title")
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-			MagicSent: r.URL.Query().Get("magic_sent"),
-			Next:      r.URL.Query().Get("next"),
-			FormToken: tok,
+			MagicSent:     r.URL.Query().Get("magic_sent"),
+			Next:          r.URL.Query().Get("next"),
+			FormToken:     tok,
+			OIDCProviders: providers,
+			OIDCError:     r.URL.Query().Get("error") == "oidc",
 		}))
 	}
 }

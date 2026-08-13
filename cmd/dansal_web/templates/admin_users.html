@@ -42,7 +42,7 @@
   {{if not $canManage}}{{range $userOrgs}}{{if index $.Data.MyOrgIDs .}}{{$canManage = true}}{{end}}{{end}}{{end}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}} data-user-row data-user-id="{{$uid}}">
     {{if $.Data.IsAdmin}}<td class="col-cb cell-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
-    <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">user #{{$uid}}</span>{{end}}{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
+    <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">{{$.Strings.T "admin_user_no_name"}}</span>{{end}} <span class="muted user-id-tag">#{{$uid}}</span>{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     <td class="cell-role" data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
       <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)" onclick="event.stopPropagation()">
@@ -80,7 +80,7 @@
     {{end}}
   </tr>
   <template id="user-tmpl-{{$uid}}">
-    <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}user #{{$uid}}{{end}}
+    <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}{{$.Strings.T "admin_user_no_name"}}{{end}} <span class="muted user-id-tag">#{{$uid}}</span>
       {{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}
       <span class="muted">— {{.Role}}</span>
     </h3>
@@ -145,7 +145,7 @@
       {{- if $cn}}{{$clientLabel = $cn}}{{else if $cu}}{{$clientLabel = $cu}}{{end -}}
     {{- end -}}
     <tr data-pub-row data-pub-id="{{$uid}}">
-      <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else}}<span class="muted">publisher#{{.ID}}</span>{{end}}</td>
+      <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{end}} <span class="muted user-id-tag">#{{.ID}}</span></td>
       <td class="cell-org">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
       <td class="muted cell-client" style="font-size:.85rem">
         {{if $clientURL}}<a href="{{$clientURL}}" target="_blank" rel="noopener">{{$clientLabel}}</a>{{else}}{{$clientLabel}}{{end}}
@@ -157,7 +157,7 @@
       </td>
     </tr>
     <template id="pub-tmpl-{{$uid}}">
-      <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{else}}publisher#{{.ID}}{{end}}</h3>
+      <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{end}} <span class="muted user-id-tag">#{{.ID}}</span></h3>
       <p class="muted">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}{{if $clientLabel}} · {{$clientLabel}}{{end}}</p>
       <div class="popup-actions">
         <button type="button" class="btn-sm" onclick="publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
@@ -292,6 +292,7 @@
 </div>
 
 <style>
+.user-id-tag{font-size:.8rem;font-family:monospace}
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
 .table-wrap{overflow-x:auto}

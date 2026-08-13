@@ -25,6 +25,7 @@
   <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
   {{if $isAdmin}}
   <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
+  <a href="/admin/oidc-providers" class="mgmt-tab">{{.Strings.T "admin_oidc_providers_title"}}</a>
   {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>{{end}}
   {{else}}
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_dances"}}</span>

@@ -5,6 +5,7 @@
 <div class="login-wrap">
   {{with .Data}}
   {{if .ErrorKey}}<p class="login-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+  {{if .OIDCError}}<p class="login-error" role="alert">{{$.Strings.T "login_oidc_error"}}</p>{{end}}
   {{if .MagicSent}}<p class="login-info" role="status">
     {{if eq .MagicSent "telegram"}}{{$.Strings.T "login_magic_sent_telegram"}}
     {{else if eq .MagicSent "matrix"}}{{$.Strings.T "login_magic_sent_matrix"}}
@@ -12,6 +13,15 @@
   </p>{{end}}
 
   <div class="login-form">
+    {{if .OIDCProviders}}
+    <div class="oidc-btns">
+      {{range .OIDCProviders}}
+      <a class="btn-alt btn-oidc" href="/oidc/{{.ID}}/start">{{$.Strings.TF "login_oidc_continue" .DisplayName}}</a>
+      {{end}}
+    </div>
+    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
+    {{end}}
+
     <button type="button" id="btn-passkey-instant" onclick="passkeyLoginDiscoverable()" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
 
     <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
@@ -205,6 +215,8 @@
 .btn-telegram:hover{background:#bde4f5!important}
 .btn-matrix{background:#d6f5ee!important;color:#0a7a5c!important;border-color:#a8e5d4!important}
 .btn-matrix:hover{background:#baeee1!important}
+.oidc-btns{display:flex;flex-direction:column;gap:.4rem}
+.btn-oidc{display:block;text-align:center;text-decoration:none;padding:.5rem!important;font-size:.9rem!important}
 .hp-field{display:none!important}
 </style>
 {{end}}

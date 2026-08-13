@@ -344,6 +344,7 @@ func startTokenCleanup() {
 			) AND id NOT IN (SELECT user_id FROM webauthn_credentials)
 			  AND id NOT IN (SELECT user_id FROM organization_members)`, now)
 			db.Exec("DELETE FROM webauthn_sessions WHERE expires_at < ?", now)
+			db.Exec("DELETE FROM oidc_flows WHERE expires_at < ?", now)
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -2301,6 +2302,45 @@ func migrateDB() {
 	// the display name moves to the style-agnostic "Ball" ahead of dansal
 	// opening to other dance styles.
 	db.Exec("UPDATE tags SET name = 'Ball' WHERE slug = 'bal-folk' AND name != 'Ball'")
+
+	// #1095: OIDC/SSO login (client). oidc_providers holds the registry of
+	// trusted external identity providers (instance-wide when org_id is
+	// NULL, or scoped to a single organization's own IdP, e.g. their
+	// WordPress site). user_identities links a local account to an external
+	// (issuer, subject) pair — deliberately no email/name columns, since
+	// invite-based OIDC redemption is designed to collect neither (see
+	// useInvite's existing "email, display_name, and password are all
+	// optional" passkey-only precedent). oidc_flows is transient PKCE/state
+	// storage for the redirect round-trip, same shape as webauthn_sessions.
+	db.Exec(`CREATE TABLE IF NOT EXISTS oidc_providers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+		issuer_url TEXT NOT NULL,
+		client_id TEXT NOT NULL,
+		client_secret TEXT NOT NULL,
+		display_name TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_oidc_providers_org_id ON oidc_providers(org_id)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_identities (
+		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		issuer_url TEXT NOT NULL,
+		subject    TEXT NOT NULL,
+		linked_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (issuer_url, subject)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS oidc_flows (
+		id            TEXT PRIMARY KEY,
+		provider_id   INTEGER NOT NULL,
+		state         TEXT NOT NULL,
+		nonce         TEXT NOT NULL,
+		pkce_verifier TEXT NOT NULL,
+		redirect_uri  TEXT NOT NULL,
+		invite_token  TEXT,
+		expires_at    INTEGER NOT NULL
+	)`)
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3099,6 +3139,35 @@ func createTables() error {
 		user_metadata TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS oidc_providers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+		issuer_url TEXT NOT NULL,
+		client_id TEXT NOT NULL,
+		client_secret TEXT NOT NULL,
+		display_name TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_oidc_providers_org_id ON oidc_providers(org_id);
+	CREATE TABLE IF NOT EXISTS user_identities (
+		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		issuer_url TEXT NOT NULL,
+		subject    TEXT NOT NULL,
+		linked_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (issuer_url, subject)
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id);
+	CREATE TABLE IF NOT EXISTS oidc_flows (
+		id            TEXT PRIMARY KEY,
+		provider_id   INTEGER NOT NULL,
+		state         TEXT NOT NULL,
+		nonce         TEXT NOT NULL,
+		pkce_verifier TEXT NOT NULL,
+		redirect_uri  TEXT NOT NULL,
+		invite_token  TEXT,
+		expires_at    INTEGER NOT NULL
+	);
 	CREATE TABLE IF NOT EXISTS events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uid TEXT UNIQUE,
@@ -3802,6 +3871,15 @@ func main() {
 	smux.HandleFunc("POST /api/v1/invites/{token}/publisher", redeemPublisherInvite)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/begin", webauthnInviteBegin)
 	smux.HandleFunc("POST /api/v1/invites/{token}/webauthn/finish", webauthnInviteFinish)
+
+	// OIDC/SSO (#1095): providers list is public read; start/callback are
+	// unauthenticated (pre-login) but rate-limited inside the handlers;
+	// provider management is admin-only (checked inside the handlers).
+	smux.Handle("GET /api/v1/oidc/providers", optAuth(http.HandlerFunc(getOIDCProviders)))
+	smux.Handle("POST /api/v1/oidc/providers", auth(createOIDCProvider))
+	smux.Handle("DELETE /api/v1/oidc/providers/{id}", auth(deleteOIDCProvider))
+	smux.HandleFunc("POST /api/v1/oidc/start", oidcStart)
+	smux.HandleFunc("POST /api/v1/oidc/callback", oidcCallback)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnLoginFinish)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/totp-challenge", webauthnTOTPChallenge)

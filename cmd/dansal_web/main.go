@@ -279,7 +279,7 @@ func main() {
 		r.HandleFunc("GET /terms", legalPageHandler(cfg, tmpls, i18n, "terms", "nav_terms"))
 		r.HandleFunc("GET /help", helpHandler(cfg, tmpls, i18n, help))
 
-		r.HandleFunc("GET /login", loginPageHandler(cfg, tmpls, i18n))
+		r.HandleFunc("GET /login", loginPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /login", loginHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /logout", logoutHandler(cfg, client))
 		r.HandleFunc("GET /lang", langHandler(i18n))
@@ -413,6 +413,13 @@ func main() {
 		r.HandleFunc("GET /admin/category-mappings", adminCategoryMappingsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/category-mappings", adminRateLimit(adminCategoryMappingCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/category-mappings/delete", adminRateLimit(adminCategoryMappingDeleteHandler(cfg, client)))
+
+		r.HandleFunc("GET /admin/oidc-providers", adminOIDCProvidersHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/oidc-providers", adminRateLimit(adminOIDCProviderCreateHandler(cfg, client)))
+		r.HandleFunc("POST /admin/oidc-providers/delete", adminRateLimit(adminOIDCProviderDeleteHandler(cfg, client)))
+
+		r.HandleFunc("GET /oidc/{id}/start", oidcStartHandler(cfg, client))
+		r.HandleFunc("GET /oidc/{id}/callback", oidcCallbackHandler(cfg, client))
 
 		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /admin/recent-changes", adminRecentChangesHandler(cfg, tmpls, client, i18n))

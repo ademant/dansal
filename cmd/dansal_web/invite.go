@@ -8,15 +8,17 @@ import (
 )
 
 type InvitePageData struct {
-	Token       string
-	PresetEmail string
-	Expired     bool // true when invite is already used or expired
+	Token         string
+	PresetEmail   string
+	Expired       bool // true when invite is already used or expired
+	OIDCProviders []OIDCProvider
+	OIDCError     bool
 }
 
 func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		data := InvitePageData{Token: token}
+		data := InvitePageData{Token: token, OIDCError: r.URL.Query().Get("error") == "oidc"}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
@@ -26,6 +28,14 @@ func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		} else {
 			// Token not found or API error — treat as invalid.
 			data.Expired = true
+		}
+		// Only instance-wide providers are offered here — the invite doesn't
+		// expose which org it targets pre-redemption, so org-scoped IdPs
+		// aren't selectable on this page yet (#1095).
+		if !data.Expired {
+			if providers, err := client.GetOIDCProviders(ctx, nil); err == nil {
+				data.OIDCProviders = providers
+			}
 		}
 
 		title := i18n.T(r, "invite_page_title")

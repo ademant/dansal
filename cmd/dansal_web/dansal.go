@@ -2716,6 +2716,105 @@ func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteL
 	return links, c.do(ctx, http.MethodGet, "/api/v1/invites", token, nil, &links)
 }
 
+// OIDCProvider mirrors the JSON returned by GET /api/v1/oidc/providers — a
+// registered external identity provider (#1095). Never carries the
+// client_secret, which stays server-side on the dansal API.
+type OIDCProvider struct {
+	ID          int    `json:"id"`
+	OrgID       *int   `json:"org_id,omitempty"`
+	IssuerURL   string `json:"issuer_url"`
+	ClientID    string `json:"client_id"`
+	DisplayName string `json:"display_name"`
+	Enabled     bool   `json:"enabled"`
+}
+
+// GetOIDCProviders lists enabled providers. orgID nil returns instance-wide
+// providers only; a non-nil orgID also includes that org's own providers.
+func (c *DansalClient) GetOIDCProviders(ctx context.Context, orgID *int) ([]OIDCProvider, error) {
+	path := "/api/v1/oidc/providers"
+	if orgID != nil {
+		path += "?org_id=" + strconv.Itoa(*orgID)
+	}
+	var providers []OIDCProvider
+	return providers, c.get(ctx, path, &providers)
+}
+
+// GetOIDCProvidersAuthed is GetOIDCProviders with a Bearer token — an admin
+// caller gets every provider (including disabled and org-scoped ones), for
+// the /admin/oidc-providers management page. A non-admin token is treated
+// the same as GetOIDCProviders(nil) server-side.
+func (c *DansalClient) GetOIDCProvidersAuthed(ctx context.Context, token string) ([]OIDCProvider, error) {
+	var providers []OIDCProvider
+	return providers, c.getWithHeader(ctx, "/api/v1/oidc/providers", token, nil, &providers)
+}
+
+// CreateOIDCProvider registers a new external identity provider. Admin-only.
+func (c *DansalClient) CreateOIDCProvider(ctx context.Context, orgID *int, issuerURL, clientID, clientSecret, displayName string, token string) (OIDCProvider, error) {
+	payload := map[string]any{
+		"issuer_url":    issuerURL,
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+		"display_name":  displayName,
+	}
+	if orgID != nil {
+		payload["org_id"] = *orgID
+	}
+	body, _ := json.Marshal(payload)
+	var p OIDCProvider
+	return p, c.do(ctx, http.MethodPost, "/api/v1/oidc/providers", token, body, &p, http.StatusCreated)
+}
+
+// DeleteOIDCProvider removes a provider. Admin-only.
+func (c *DansalClient) DeleteOIDCProvider(ctx context.Context, id int, token string) error {
+	return c.do(ctx, http.MethodDelete, "/api/v1/oidc/providers/"+strconv.Itoa(id), token, nil, nil, http.StatusNoContent)
+}
+
+// OIDCSessionResponse is the flat session shape shared by every non-password
+// login path (WebAuthn, OIDC) — see issueSessionResponse in cmd/dansal.
+type OIDCSessionResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+	UserID    int    `json:"user_id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+}
+
+// OIDCStart begins an authorization-code+PKCE flow for providerID and
+// returns a flow_id (to round-trip via OIDCCallback) plus the URL to
+// redirect the browser to. inviteToken is empty for a plain returning-user
+// login.
+func (c *DansalClient) OIDCStart(ctx context.Context, providerID int, redirectURI, inviteToken string) (flowID, authorizeURL string, err error) {
+	body, _ := json.Marshal(struct {
+		ProviderID  int    `json:"provider_id"`
+		RedirectURI string `json:"redirect_uri"`
+		InviteToken string `json:"invite_token,omitempty"`
+	}{providerID, redirectURI, inviteToken})
+	var out struct {
+		FlowID       string `json:"flow_id"`
+		AuthorizeURL string `json:"authorize_url"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/v1/oidc/start", "", body, &out); err != nil {
+		return "", "", err
+	}
+	return out.FlowID, out.AuthorizeURL, nil
+}
+
+// OIDCCallback completes the flow: exchanges the code, verifies the ID
+// token, and either redeems the flow's invite or logs in an existing linked
+// account.
+func (c *DansalClient) OIDCCallback(ctx context.Context, flowID, code, state string) (*OIDCSessionResponse, error) {
+	body, _ := json.Marshal(struct {
+		FlowID string `json:"flow_id"`
+		Code   string `json:"code"`
+		State  string `json:"state"`
+	}{flowID, code, state})
+	var out OIDCSessionResponse
+	if err := c.do(ctx, http.MethodPost, "/api/v1/oidc/callback", "", body, &out, http.StatusOK, http.StatusCreated); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DansalClient) CreateInvite(ctx context.Context, inviteType string, orgID *int, token string) (InviteLink, error) {
 	payload := map[string]any{"type": inviteType}
 	if orgID != nil {

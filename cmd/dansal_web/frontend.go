@@ -558,6 +558,7 @@ type Templates struct {
 	adminTemplateAssign       *template.Template
 	adminDances               *template.Template
 	adminCategoryMappings     *template.Template
+	adminOIDCProviders        *template.Template
 	adminInfo                 *template.Template
 	adminStats                *template.Template
 	impressum                 *template.Template
@@ -657,6 +658,7 @@ func loadTemplates() *Templates {
 		adminTemplateAssign:       load("admin_template_assign"),
 		adminDances:               load("admin_dances"),
 		adminCategoryMappings:     load("admin_category_mappings"),
+		adminOIDCProviders:        load("admin_oidc_providers"),
 		adminInfo:                 load("admin_info"),
 		adminStats:                load("admin_stats"),
 		impressum:                 load("impressum"),

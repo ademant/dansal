@@ -1,0 +1,96 @@
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+)
+
+// oidcFlowCookie carries the flow_id issued by dansal's POST /api/v1/oidc/start
+// across the redirect to the provider and back — short-lived, httpOnly, and
+// scoped to the /oidc path so it's never sent anywhere else.
+const oidcFlowCookie = "dsw_oidc_flow"
+
+// oidcStartHandler begins an OIDC login or invite-redemption flow. All
+// protocol state and secrets live on the dansal API (see cmd/dansal/oidc.go)
+// — dansal-web only exists on this path because it's the only side a
+// redirecting browser can ever reach (dansal_url is loopback-only).
+// GET /oidc/{id}/start?invite=<token>
+func oidcStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		providerID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		invite := r.URL.Query().Get("invite")
+		redirectURI := cfg.publicBaseURL() + "/oidc/" + strconv.Itoa(providerID) + "/callback"
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		flowID, authorizeURL, err := client.OIDCStart(ctx, providerID, redirectURI, invite)
+		if err != nil {
+			log.Printf("oidc start: %v", err)
+			http.Redirect(w, r, oidcErrorRedirect(invite), http.StatusSeeOther)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     oidcFlowCookie,
+			Value:    flowID,
+			Path:     "/oidc",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   600,
+		})
+		http.Redirect(w, r, authorizeURL, http.StatusSeeOther)
+	}
+}
+
+// oidcCallbackHandler receives the provider's redirect back to dansal (the
+// standard OAuth2 "code"+"state" query params), forwards them to the dansal
+// API for the actual exchange and ID-token verification, and establishes a
+// session on success.
+// GET /oidc/{id}/callback
+func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		state := r.URL.Query().Get("state")
+		cookie, cookieErr := r.Cookie(oidcFlowCookie)
+		// Clear the flow cookie unconditionally — it's one-shot either way.
+		http.SetCookie(w, &http.Cookie{Name: oidcFlowCookie, Value: "", Path: "/oidc", MaxAge: -1})
+
+		if cookieErr != nil || code == "" || state == "" {
+			http.Redirect(w, r, "/login?error=oidc", http.StatusSeeOther)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		sess, err := client.OIDCCallback(ctx, cookie.Value, code, state)
+		if err != nil {
+			log.Printf("oidc callback: %v", err)
+			http.Redirect(w, r, "/login?error=oidc", http.StatusSeeOther)
+			return
+		}
+		setSession(w, sess.Token, SessionUser{
+			ID:    sess.UserID,
+			Email: sess.Email,
+			Role:  sess.Role,
+		}, parseSessionExpiry(sess.ExpiresAt))
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	}
+}
+
+// oidcErrorRedirect sends the user back to wherever they started (the
+// invite page if this was an invite redemption, otherwise /login) with an
+// error flag, rather than stranding them on a bare error page.
+func oidcErrorRedirect(inviteToken string) string {
+	if inviteToken != "" {
+		return "/invites/" + url.PathEscape(inviteToken) + "?error=oidc"
+	}
+	return "/login?error=oidc"
+}

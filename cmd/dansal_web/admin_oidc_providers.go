@@ -12,12 +12,14 @@ import (
 //
 // Registered external identity providers (#1095) — instance-wide (org left
 // blank) or scoped to a single organization's own IdP (e.g. their
-// WordPress site). Admin-only, same pattern as /admin/dances and
-// /admin/category-mappings.
+// WordPress site). admin: full instance-wide access. user: limited to
+// providers scoped to an org they belong to (never instance-wide ones).
+// publisher: no access at all (#1099).
 
 type AdminOIDCProvidersData struct {
 	Providers []OIDCProvider
 	Orgs      []Organization
+	IsAdmin   bool
 	ErrorMsg  string
 }
 
@@ -27,12 +29,33 @@ func adminOIDCProvidersHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
+		if user.Role == "publisher" {
 			forbidden(w, r)
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
-		providers, err := client.GetOIDCProvidersAuthed(r.Context(), getSessionToken(r))
+		isAdmin := user.Role == "admin"
+		token := getSessionToken(r)
+
+		allOrgs, _ := client.GetOrganizations(r.Context())
+		var orgs []Organization
+		var providers []OIDCProvider
+		var err error
+		if isAdmin {
+			orgs = allOrgs
+			providers, err = client.GetOIDCProvidersAuthed(r.Context(), token)
+		} else {
+			myOrgIDs := getUserOrgIDs(r.Context(), client, user.ID, token)
+			memberOf := make(map[int]bool, len(myOrgIDs))
+			for _, id := range myOrgIDs {
+				memberOf[id] = true
+			}
+			for _, o := range allOrgs {
+				if memberOf[o.ID] {
+					orgs = append(orgs, o)
+				}
+			}
+			providers, err = client.GetOIDCProvidersMine(r.Context(), token)
+		}
 		if err != nil {
 			log.Printf("admin oidc providers: %v", err)
 		}
@@ -41,6 +64,7 @@ func adminOIDCProvidersHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		renderTemplate(w, tmpls.adminOIDCProviders, tmplData(r, cfg, i18n, title, AdminOIDCProvidersData{
 			Providers: providers,
 			Orgs:      orgs,
+			IsAdmin:   isAdmin,
 			ErrorMsg:  r.URL.Query().Get("err"),
 		}))
 	}
@@ -52,7 +76,7 @@ func adminOIDCProviderCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
+		if user.Role == "publisher" {
 			forbidden(w, r)
 			return
 		}
@@ -100,7 +124,7 @@ func adminOIDCProviderDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
+		if user.Role == "publisher" {
 			forbidden(w, r)
 			return
 		}

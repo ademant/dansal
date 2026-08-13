@@ -17,18 +17,19 @@
 {{$isAdmin := eq .User.Role "admin"}}
 <nav class="mgmt-tabs" aria-label="Management">
   <a href="/admin/fetchurls" class="mgmt-tab">{{.Strings.T "nav_admin_fetchurls"}}</a>
-  {{if ne .User.Role "publisher"}}<a href="/admin/category-mappings" class="mgmt-tab">{{.Strings.T "admin_category_mappings_title"}}</a>{{end}}
   <a href="/admin/series" class="mgmt-tab">{{.Strings.T "nav_admin_series"}}</a>
   <a href="/admin/users" class="mgmt-tab">{{.Strings.T "nav_admin_users"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>
   <a href="/admin/recent-changes" class="mgmt-tab">{{.Strings.T "recent_changes_title"}}</a>
   <a href="/board" class="mgmt-tab">{{.Strings.T "nav_board"}}</a>
   <a href="/admin/templates" class="mgmt-tab">{{.Strings.T "nav_admin_templates"}}</a>
+  {{if ne .User.Role "publisher"}}<a href="/admin/oidc-providers" class="mgmt-tab">{{.Strings.T "admin_oidc_providers_title"}}</a>{{end}}
   {{if $isAdmin}}
   <a href="/admin/dances" class="mgmt-tab">{{.Strings.T "nav_admin_dances"}}</a>
-  <a href="/admin/oidc-providers" class="mgmt-tab">{{.Strings.T "admin_oidc_providers_title"}}</a>
+  <a href="/admin/category-mappings" class="mgmt-tab">{{.Strings.T "admin_category_mappings_title"}}</a>
   {{if .RegistrationEnabled}}<a href="/admin/registrations" class="mgmt-tab">{{.Strings.T "nav_admin_registrations"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>{{end}}
   {{else}}
   <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_dances"}}</span>
+  <span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "admin_category_mappings_title"}}</span>
   {{if .RegistrationEnabled}}<span class="mgmt-tab mgmt-tab--off" title="{{.Strings.T "admin_management_admin_only"}}">{{.Strings.T "nav_admin_registrations"}}</span>{{end}}
   {{end}}
 </nav>

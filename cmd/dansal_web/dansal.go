@@ -2752,7 +2752,16 @@ func (c *DansalClient) GetOIDCProvidersAuthed(ctx context.Context, token string)
 	return providers, c.getWithHeader(ctx, "/api/v1/oidc/providers", token, nil, &providers)
 }
 
-// CreateOIDCProvider registers a new external identity provider. Admin-only.
+// GetOIDCProvidersMine is GetOIDCProvidersAuthed for a user-role caller
+// managing their own org's providers on /admin/oidc-providers — every row
+// (enabled or not) for orgs the caller belongs to, never instance-wide ones.
+func (c *DansalClient) GetOIDCProvidersMine(ctx context.Context, token string) ([]OIDCProvider, error) {
+	var providers []OIDCProvider
+	return providers, c.getWithHeader(ctx, "/api/v1/oidc/providers?scope=mine", token, nil, &providers)
+}
+
+// CreateOIDCProvider registers a new external identity provider. Admin: any
+// org (or instance-wide). User: only an org they belong to.
 func (c *DansalClient) CreateOIDCProvider(ctx context.Context, orgID *int, kind, issuerURL, clientID, clientSecret, displayName string, token string) (OIDCProvider, error) {
 	payload := map[string]any{
 		"kind":          kind,
@@ -2769,7 +2778,8 @@ func (c *DansalClient) CreateOIDCProvider(ctx context.Context, orgID *int, kind,
 	return p, c.do(ctx, http.MethodPost, "/api/v1/oidc/providers", token, body, &p, http.StatusCreated)
 }
 
-// DeleteOIDCProvider removes a provider. Admin-only.
+// DeleteOIDCProvider removes a provider. Admin: any provider. User: only one
+// belonging to an org they're a member of.
 func (c *DansalClient) DeleteOIDCProvider(ctx context.Context, id int, token string) error {
 	return c.do(ctx, http.MethodDelete, "/api/v1/oidc/providers/"+strconv.Itoa(id), token, nil, nil, http.StatusNoContent)
 }

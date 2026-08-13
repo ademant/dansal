@@ -200,15 +200,24 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	// Admins managing the provider registry (/admin/oidc-providers) need to
 	// see disabled and org-scoped rows too; everyone else only ever gets the
-	// enabled, applicable set used to render "Continue with X" buttons.
-	_, role := callerFromRequest(r)
+	// enabled, applicable set used to render "Continue with X" buttons. A
+	// user-role caller managing their own org's providers (scope=mine) is a
+	// third case: every row (enabled or not) for orgs they belong to, but
+	// never instance-wide (org_id NULL) rows — those are admin-only.
+	callerID, role := callerFromRequest(r)
 	isAdmin := role == RoleAdmin
+	mine := role == RoleUser && r.URL.Query().Get("scope") == "mine"
 
 	var rows *sql.Rows
 	var err error
 	switch {
 	case isAdmin:
 		rows, err = db.Query("SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers ORDER BY display_name")
+	case mine:
+		rows, err = db.Query(
+			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers WHERE org_id IN (SELECT organization_id FROM organization_members WHERE user_id=?) ORDER BY display_name",
+			callerID,
+		)
 	case orgID != nil:
 		rows, err = db.Query(
 			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers WHERE enabled=1 AND (org_id IS NULL OR org_id=?) ORDER BY display_name",
@@ -244,12 +253,15 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(providers)
 }
 
-// POST /api/v1/oidc/providers — admin-only.
+// POST /api/v1/oidc/providers — admin: any provider, instance-wide or
+// org-scoped. user: only an org-scoped provider for an org they belong to
+// (never instance-wide, org_id must be set and match their membership).
+// publisher: no access.
 func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, role := callerFromRequest(r)
-	if role != RoleAdmin {
-		writeError(w, "Forbidden: only admins may manage OIDC providers", http.StatusForbidden)
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden: only admins and org members may manage OIDC providers", http.StatusForbidden)
 		return
 	}
 	var req struct {
@@ -263,6 +275,12 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	if role != RoleAdmin {
+		if req.OrgID == nil || !isOrgMember(callerID, *req.OrgID) {
+			writeError(w, "Forbidden: you may only create OIDC providers for your own organization", http.StatusForbidden)
+			return
+		}
 	}
 	if req.Kind == "" {
 		req.Kind = oidcProviderKindOIDC
@@ -429,17 +447,34 @@ func mastodonRegisterApp(ctx context.Context, issuerURL, clientName string, redi
 	return out.ClientID, out.ClientSecret, nil
 }
 
-// DELETE /api/v1/oidc/providers/{id} — admin-only.
+// DELETE /api/v1/oidc/providers/{id} — admin: any provider. user: only an
+// org-scoped provider belonging to an org they're a member of. publisher: no
+// access.
 func deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
-	if role != RoleAdmin {
-		writeError(w, "Forbidden: only admins may manage OIDC providers", http.StatusForbidden)
+	callerID, role := callerFromRequest(r)
+	if role != RoleAdmin && role != RoleUser {
+		writeError(w, "Forbidden: only admins and org members may manage OIDC providers", http.StatusForbidden)
 		return
 	}
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
+	}
+	if role != RoleAdmin {
+		var orgID sql.NullInt64
+		if err := db.QueryRow("SELECT org_id FROM oidc_providers WHERE id=?", id).Scan(&orgID); err != nil {
+			if err == sql.ErrNoRows {
+				writeError(w, "not found", http.StatusNotFound)
+				return
+			}
+			writeInternalError(w, err)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			writeError(w, "Forbidden: you may only delete OIDC providers for your own organization", http.StatusForbidden)
+			return
+		}
 	}
 	if _, err := db.Exec("DELETE FROM oidc_providers WHERE id=?", id); err != nil {
 		writeInternalError(w, err)

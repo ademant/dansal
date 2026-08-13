@@ -13,9 +13,10 @@ import (
 // slugs verbatim (e.g. "Bal Folk Termine" -> bal-folk) still get auto-tagged
 // on every future fetch. Most mappings are created inline on the
 // /admin/events/import preview page; this page is for reviewing/editing the
-// full list without re-running an import. Same access as fetch source
-// creation: admins and regular users, not publishers (see fetchURL() in
-// cmd/dansal/fetchurl.go).
+// full list without re-running an import. This standalone page is
+// admin-only; the underlying API (categoryAliasWriteAllowed in
+// cmd/dansal/events.go) stays open to admins and regular users so inline
+// creation during fetchurl/import keeps working (#1099).
 
 type AdminCategoryMappingsData struct {
 	Aliases []CategoryAlias
@@ -28,7 +29,7 @@ func adminCategoryMappingsHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		if user.Role == "publisher" {
+		if user.Role != "admin" {
 			forbidden(w, r)
 			return
 		}
@@ -54,7 +55,7 @@ func adminCategoryMappingCreateHandler(cfg *Config, client *DansalClient) http.H
 		if !ok {
 			return
 		}
-		if user.Role == "publisher" {
+		if user.Role != "admin" {
 			forbidden(w, r)
 			return
 		}
@@ -79,7 +80,7 @@ func adminCategoryMappingDeleteHandler(cfg *Config, client *DansalClient) http.H
 		if !ok {
 			return
 		}
-		if user.Role == "publisher" {
+		if user.Role != "admin" {
 			forbidden(w, r)
 			return
 		}

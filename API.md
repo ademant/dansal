@@ -19,6 +19,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [Dashboard](#dashboard)
 - [Registration](#registration)
 - [WebAuthn Credentials](#webauthn-credentials)
+- [OIDC / SSO](#oidc--sso)
 - [TOTP](#totp)
 - [API Keys](#api-keys)
 - [Organizations](#organizations)
@@ -60,6 +61,7 @@ Tokens are issued by:
 - `POST /api/v1/login` (email + password)
 - `GET /api/v1/login/magic/{token}` (magic link)
 - WebAuthn login (`POST /api/v1/auth/webauthn/login/finish`)
+- OIDC/SSO login or invite redemption (`POST /api/v1/oidc/callback`) — see [OIDC / SSO](#oidc--sso)
 - `POST /api/v1/cert-login` (mTLS client certificate)
 
 **API keys:** Begin with `ak_`. Created via `POST /api/v1/apikeys`. Optional expiration via `expires_at`; no scopes.
@@ -243,7 +245,7 @@ PUT    /api/v1/users/{id}         # admin or self (see restrictions below)
 DELETE /api/v1/users/me           # self-deletion (not available to admin accounts)
 GET    /api/v1/users/{id}/organizations   # admin or self
 GET    /api/v1/me/stats           # own event-authorship counts
-POST   /api/v1/user/password      # change own password
+POST   /api/v1/user/password      # change own password (empty new_password removes it; see OIDC / SSO)
 POST   /api/v1/users/{id}/verify  # admin: send verification email
 POST   /api/v1/users/{id}/magic-link   # admin: generate magic link for user
 POST   /api/v1/users/{id}/telegram/message  # admin: send Telegram message to user
@@ -450,6 +452,90 @@ POST /api/v1/auth/webauthn/totp-challenge
 ```
 
 On success returns the same session token response as a normal login. The `pending_token` is single-use, expires after 5 minutes, and is invalid outside this endpoint.
+
+## OIDC / SSO
+
+```
+GET    /api/v1/oidc/providers            # public: list enabled providers (?org_id=N)
+POST   /api/v1/oidc/providers            # admin only: register a provider
+DELETE /api/v1/oidc/providers/{id}       # admin only
+
+POST   /api/v1/oidc/start                # begin login/invite-redemption flow
+POST   /api/v1/oidc/callback             # complete the flow
+
+POST   /api/v1/oidc/link-start                  # auth required: link a provider to the current account
+GET    /api/v1/user/oidc-identities             # auth required: list caller's linked identities
+DELETE /api/v1/user/oidc-identities/{id}        # auth required: unlink one
+```
+
+External SSO login and account-linking (#1095, #1096, #1097). Two provider `kind`s share the same registry:
+- `oidc` (default) — spec-compliant OpenID Connect: discovery document + JWKS-verified ID token. Works with any real OIDC IdP (Google, Microsoft/Entra ID, GitLab, Discord's `openid` scope, self-hosted Keycloak, etc.).
+- `mastodon` — Mastodon's plain OAuth2 API, chosen for its frictionless self-service client registration (`POST /api/v1/apps` on the instance — instant, no admin review). No discovery document or ID token; identity is instead resolved by calling `GET /api/v1/accounts/verify_credentials` on the instance with the access token.
+
+Both kinds ultimately produce a stable `(issuer, subject)` pair stored in `user_identities` — everything downstream (invite redemption, login, linking, unlinking, the self-lockout guard) is identical regardless of which protocol produced it. For `oidc`, `issuer`/`subject` are the ID token's `iss`/`sub` claims; for `mastodon`, `issuer` is the instance base URL and `subject` is the account's stable numeric ID (never the `@username`, which can change).
+
+**Zero-PII by design:** dansal only ever requests the minimal `openid`/`read:accounts` scope — no email or display name is collected from the provider, even when redeeming an invite through it. An account created via invite+SSO has `email=NULL`, `display_name=NULL`, and `password_hash=''`, the same shape already used for zero-PII passkey invite redemption.
+
+### Provider registry
+
+**`GET /api/v1/oidc/providers?org_id=N`** — public; returns enabled providers only (never `client_secret`). With no `org_id`, only instance-wide (`org_id: null`) providers; with `org_id`, instance-wide plus that org's own providers. A caller authenticated as admin gets every row instead, including disabled and org-scoped ones — used to populate `/admin/oidc-providers`.
+
+**`POST /api/v1/oidc/providers`** — admin only.
+```json
+{
+  "kind": "oidc",
+  "issuer_url": "https://accounts.example.com",
+  "client_id": "...",
+  "client_secret": "...",
+  "display_name": "Example SSO",
+  "org_id": 7,
+  "enabled": true
+}
+```
+`kind` is `"oidc"` (default) or `"mastodon"`. `org_id` omitted/null makes the provider instance-wide. On create, dansal validates the provider is reachable before accepting it: for `oidc` it runs OIDC discovery against `issuer_url`; for `mastodon` it calls `GET {issuer_url}/api/v1/instance`. A bad or unreachable URL returns `400` immediately rather than accepting a provider that would fail on every login attempt.
+
+**`DELETE /api/v1/oidc/providers/{id}`** — admin only.
+
+### Login / invite redemption flow
+
+A two-step authorization-code+PKCE flow, mirroring the shape of the WebAuthn ceremony endpoints above.
+
+**`POST /api/v1/oidc/start`**
+```json
+{
+  "provider_id": 3,
+  "redirect_uri": "https://your-app.example.com/oidc/3/callback",
+  "invite_token": "..."
+}
+```
+`invite_token` is optional — omit it for a plain returning-user login (the identity must already be linked, via a prior invite redemption or `link-start` below). Returns:
+```json
+{ "flow_id": "...", "authorize_url": "https://accounts.example.com/authorize?..." }
+```
+Redirect the browser to `authorize_url`. `flow_id` must be round-tripped to `callback` — store it, e.g., in a short-lived cookie scoped to the callback path.
+
+**`POST /api/v1/oidc/callback`**
+```json
+{ "flow_id": "...", "code": "...", "state": "..." }
+```
+`code`/`state` come from the provider's redirect back to your `redirect_uri`. On success:
+- If the flow carried an `invite_token`: creates a new zero-PII account and returns `201` with a session token (`{"token":...,"expires_at":...,"user_id":...,"email":"","role":"user"}` — the same flat shape as WebAuthn login).
+- Otherwise: looks up the already-linked `(issuer, subject)` and returns `200` with a session token, or `404` if no account is linked to this identity yet.
+
+Both endpoints are public but rate-limited per client IP, same limiter as password login.
+
+### Linking/unlinking SSO on an existing account
+
+**`POST /api/v1/oidc/link-start`** — authenticated. Same request/response shape as `POST /api/v1/oidc/start` (returns `{flow_id, authorize_url}`), but for a user who already has a password or passkey account and wants to add SSO as an additional login method — the flow is bound to the caller's own `user_id` instead of an invite token. Complete it the same way, via `POST /api/v1/oidc/callback` with the returned `flow_id`; on success it attaches the identity to the caller's account and returns `201` with `{"status":"linked"}` — no new session is issued, since the caller is already logged in. Returns `409` if that `(issuer, subject)` is already linked to a *different* account — one external identity links to exactly one dansal account.
+
+**`GET /api/v1/user/oidc-identities`** — authenticated. Lists the caller's own linked identities:
+```json
+[{ "id": 12, "issuer_url": "https://accounts.example.com", "display_name": "Example SSO", "linked_at": "2026-08-13 10:00:00" }]
+```
+
+**`DELETE /api/v1/user/oidc-identities/{id}`** — authenticated. Unlinks one. `{id}` is the value from the list response above, not a provider ID. Rejected with `409` if it's the caller's last login method — the same self-lockout guard also applies to deleting a passkey (`DELETE /api/v1/user/webauthn/credentials/{id}`) and to clearing a password (below): all three require at least one other login method (password, passkey, or a linked identity) to remain.
+
+**Removing a password:** `POST /api/v1/user/password` (see [Users](#users)) accepts an empty `new_password` to mean "remove my password entirely" — allowed only when a passkey or linked identity remains, guarded the same way.
 
 ## TOTP
 

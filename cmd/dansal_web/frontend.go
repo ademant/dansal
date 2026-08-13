@@ -53,7 +53,8 @@ type TemplateData struct {
 	PendingEditCount       int    // published events with a pending suggester edit awaiting review
 	NotVerifiedEventCount  int    // events with email_verified=0, invisible everywhere until verified/backfilled
 	Path                   string // current request path, for building "return to this page" links
-	CanonicalURL           string // absolute canonical URL for this page
+	CanonicalURL           string // absolute canonical URL for this page (may include ?lang=XX)
+	HreflangBaseURL        string // same as CanonicalURL but never includes ?lang= — used as the base for hreflang hrefs so bots don't accumulate ?lang=X?lang=Y chains (#1089)
 	Hreflang               bool   // emit <link rel="alternate" hreflang> tags for this page (only where content is 100% i18n-driven, not organizer-entered)
 	MetaDescription        string // page-specific meta description (falls back to i18n string in template)
 	OGImage                string // absolute URL of the primary image for OG/Twitter card
@@ -161,10 +162,14 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 	strs := i18n.Strings(lang)
 
-	canonical := "https://" + cfg.Domain + r.URL.Path
+	hreflangBase := "https://" + cfg.Domain + r.URL.Path // never has ?lang=
+	canonical := hreflangBase
 	// When a ?lang= override is in the URL, include it in the canonical so the
 	// hreflang self-reference is consistent and Google Search Console does not
 	// flag the page as "Alternate page with proper canonical tag" (#966).
+	// HreflangBaseURL intentionally omits ?lang= so hreflang hrefs in the
+	// template are always "basepath?lang=XX" — never "basepath?lang=YY?lang=XX"
+	// which bots would accumulate into infinite URL chains (#1089).
 	if l := r.URL.Query().Get("lang"); l != "" {
 		canonical += "?lang=" + l
 	}
@@ -207,6 +212,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		NotVerifiedEventCount:  dashAttention(r).NotVerifiedEventCount,
 		Path:                   r.URL.Path,
 		CanonicalURL:           canonical,
+		HreflangBaseURL:        hreflangBase,
 		GoogleSiteVerification: cfg.GoogleSiteVerification,
 		BingSiteVerification:   cfg.BingSiteVerification,
 		OGImage:                "https://" + cfg.Domain + "/banner.avif",

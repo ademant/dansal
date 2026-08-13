@@ -21,9 +21,9 @@
 {{- end}}
 {{- if .Hreflang}}
 {{- range .Languages}}
-<link rel="alternate" hreflang="{{.Code}}" href="{{$.CanonicalURL}}?lang={{.Code}}">
+<link rel="alternate" hreflang="{{.Code}}" href="{{$.HreflangBaseURL}}?lang={{.Code}}">
 {{- end}}
-<link rel="alternate" hreflang="x-default" href="{{.CanonicalURL}}">
+<link rel="alternate" hreflang="x-default" href="{{.HreflangBaseURL}}">
 {{- end}}
 <meta property="og:site_name" content="{{.SiteName}}">
 <meta property="og:title" content="{{.Title}}">

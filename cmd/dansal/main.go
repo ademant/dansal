@@ -196,6 +196,20 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// MalformedQueryMiddleware rejects requests whose raw query string contains a
+// literal '?' character. A second '?' can only appear through a bot following
+// malformed hreflang links (e.g. /events?lang=uk?lang=de). No legitimate
+// browser or API client ever generates such a URL.
+func MalformedQueryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.RawQuery, "?") {
+			writeError(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isInternalCaller(r) {
@@ -4041,9 +4055,10 @@ func main() {
 		CORSMiddleware,
 		SecurityHeadersMiddleware,
 		GzipMiddleware,
-		ErrorIDMiddleware,       // inside Gzip so it sees uncompressed JSON
-		PanicRecoveryMiddleware, // inside ErrorID so a recovered panic still gets an error_id (#991)
+		ErrorIDMiddleware,          // inside Gzip so it sees uncompressed JSON
+		PanicRecoveryMiddleware,    // inside ErrorID so a recovered panic still gets an error_id (#991)
 		MaxBodyMiddleware,
+		MalformedQueryMiddleware,   // reject ?foo=bar?baz=qux before rate-limit accounting
 		ConnLimitMiddleware,
 		RateLimitMiddleware,
 	))

@@ -515,7 +515,7 @@ func main() {
 		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           panicRecoveryMiddleware(securityHeadersMiddleware(&live)),
+		Handler:           malformedQueryMiddleware(panicRecoveryMiddleware(securityHeadersMiddleware(&live))),
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutSecs) * time.Second,
 		ReadTimeout:       time.Duration(cfg.ReadTimeoutSecs) * time.Second,
 		WriteTimeout:      time.Duration(cfg.WriteTimeoutSecs) * time.Second,
@@ -553,6 +553,20 @@ const baselineCSP = "default-src 'self'; " +
 	"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
 	"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
 	"object-src 'none'; base-uri 'self'; "
+
+// malformedQueryMiddleware rejects requests whose raw query string contains a
+// literal '?' character. A second '?' can only appear through a bot following
+// malformed hreflang links (e.g. /organizations?lang=uk?lang=de). No
+// legitimate browser ever generates such a URL (#1091).
+func malformedQueryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.RawQuery, "?") {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // panicRecoveryMiddleware recovers from a panic anywhere downstream, logs the
 // stack trace with the request method/path, and writes a generic 500 instead

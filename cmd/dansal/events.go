@@ -3177,6 +3177,156 @@ func filterKnownTags(tags []string) []string {
 	return out
 }
 
+// categoryAliasMap returns the admin-configured mapping of raw feed category
+// strings (e.g. "Bal Folk Termine") to known tag slugs (e.g. "bal-folk"),
+// set up via the import preview UI or the /admin/category-mappings page (#1093).
+func categoryAliasMap() (map[string]string, error) {
+	rows, err := db.Query("SELECT category, tag_slug FROM category_aliases")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]string)
+	for rows.Next() {
+		var category, slug string
+		if err := rows.Scan(&category, &slug); err != nil {
+			return nil, err
+		}
+		m[category] = slug
+	}
+	return m, rows.Err()
+}
+
+// resolveFeedTags maps raw feed category strings through category_aliases to
+// known tag slugs, then applies the same known-slug filter as filterKnownTags.
+// This lets an admin map a feed's own taxonomy onto dansal's tags once (#1093)
+// instead of every future fetch of that source importing untagged.
+func resolveFeedTags(tags []string) []string {
+	if len(tags) == 0 {
+		return tags
+	}
+	known, err := knownTagSlugs()
+	if err != nil {
+		return filterKnownTags(tags)
+	}
+	aliases, err := categoryAliasMap()
+	if err != nil {
+		aliases = nil
+	}
+	seen := make(map[string]bool, len(tags))
+	out := make([]string, 0, len(tags))
+	add := func(t string) {
+		if t != "" && known[t] && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	for _, t := range tags {
+		if known[t] {
+			add(t)
+			continue
+		}
+		if slug, ok := aliases[t]; ok {
+			add(slug)
+		}
+	}
+	return out
+}
+
+// CategoryAlias maps a raw feed category string to a known tag slug (#1093).
+type CategoryAlias struct {
+	Category string `json:"category"`
+	TagSlug  string `json:"tag_slug"`
+}
+
+// GET /api/v1/category-aliases
+func getCategoryAliases(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	rows, err := db.Query("SELECT category, tag_slug FROM category_aliases ORDER BY category")
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer rows.Close()
+	aliases := []CategoryAlias{}
+	for rows.Next() {
+		var a CategoryAlias
+		if err := rows.Scan(&a.Category, &a.TagSlug); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		aliases = append(aliases, a)
+	}
+	json.NewEncoder(w).Encode(aliases)
+}
+
+// categoryAliasWriteAllowed matches the fetchURL() create-source policy:
+// admins and regular users may manage category mappings, publishers may not.
+func categoryAliasWriteAllowed(w http.ResponseWriter, callerRole string) bool {
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not manage category mappings", http.StatusForbidden)
+		return false
+	}
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// POST /api/v1/category-aliases
+func createCategoryAlias(w http.ResponseWriter, r *http.Request) {
+	_, callerRole := callerFromRequest(r)
+	if !categoryAliasWriteAllowed(w, callerRole) {
+		return
+	}
+	var req CategoryAlias
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	req.Category = strings.TrimSpace(req.Category)
+	req.TagSlug = strings.TrimSpace(req.TagSlug)
+	if req.Category == "" || req.TagSlug == "" {
+		writeError(w, "category and tag_slug are required", http.StatusBadRequest)
+		return
+	}
+	known, err := knownTagSlugs()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if !known[req.TagSlug] {
+		writeError(w, fmt.Sprintf("unknown tag %q", req.TagSlug), http.StatusBadRequest)
+		return
+	}
+	if _, err := db.Exec(
+		"INSERT INTO category_aliases (category, tag_slug) VALUES (?, ?) ON CONFLICT(category) DO UPDATE SET tag_slug=excluded.tag_slug",
+		req.Category, req.TagSlug,
+	); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/category-aliases?category=...
+func deleteCategoryAlias(w http.ResponseWriter, r *http.Request) {
+	_, callerRole := callerFromRequest(r)
+	if !categoryAliasWriteAllowed(w, callerRole) {
+		return
+	}
+	category := r.URL.Query().Get("category")
+	if category == "" {
+		writeError(w, "category is required", http.StatusBadRequest)
+		return
+	}
+	if _, err := db.Exec("DELETE FROM category_aliases WHERE category = ?", category); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func validateTags(tags []string) error {
 	if len(tags) == 0 {
 		return nil

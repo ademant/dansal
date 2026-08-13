@@ -1,0 +1,65 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "admin_category_mappings_title"}}</h1>
+</div>
+<p style="color:#666;font-size:.9rem;margin-top:-.25rem">{{.Strings.T "admin_category_mappings_hint"}}</p>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th data-sort="str">{{$.Strings.T "admin_import_col_feed_cat"}}</th>
+      <th data-sort="str">{{$.Strings.T "admin_import_col_tag"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Aliases}}
+  <tr>
+    <td>{{.Category}}</td>
+    <td>{{.TagSlug}}</td>
+    <td class="col-actions">
+      <form method="post" action="/admin/category-mappings/delete" onsubmit="return confirm({{$.Strings.T "admin_dance_confirm_delete"}})">
+        <input type="hidden" name="category" value="{{.Category}}">
+        <button type="submit" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}">🗑️</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="add-section">
+  <h2>{{$.Strings.T "admin_category_mappings_add_title"}}</h2>
+  <form method="post" action="/admin/category-mappings" class="add-form">
+    <input type="text" name="category" placeholder="{{$.Strings.T "admin_import_col_feed_cat"}}" required>
+    <select name="tag_slug" required>
+      <option value="">{{$.Strings.T "admin_import_col_tag"}}</option>
+      {{range .Tags}}<option value="{{.Slug}}">{{.Name}}</option>{{end}}
+    </select>
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_dance_add_btn"}}</button>
+  </form>
+</div>
+{{end}}
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.col-actions{white-space:nowrap}
+.col-actions form{display:inline;margin:0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+.add-section{margin-top:2rem}
+.add-section h2{font-size:1.1rem;margin-bottom:.75rem}
+.add-form{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.add-form input,.add-form select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;min-width:220px}
+.btn-primary{padding:.4rem 1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+</style>
+<script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+</script>
+{{end}}

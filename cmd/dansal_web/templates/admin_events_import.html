@@ -71,6 +71,41 @@
   </div>
   {{end}}
 
+  {{if $.Data.UniqueFeedCategories}}
+  <div class="assign-section">
+    <div class="assign-label">{{$.Strings.T "admin_import_cat_mapping_title"}}</div>
+    <table class="loc-map-table">
+      <thead><tr>
+        <th>{{$.Strings.T "admin_import_col_feed_cat"}}</th>
+        <th></th>
+        <th>{{$.Strings.T "admin_import_col_tag"}}</th>
+      </tr></thead>
+      <tbody>
+      {{range $.Data.UniqueFeedCategories}}
+      <tr>
+        <td class="feed-loc-name">{{.Name}}</td>
+        <td style="padding:0 .5rem;color:#999">→</td>
+        <td>
+          <input type="hidden" name="cat_feed_{{.Idx}}" value="{{.Name}}">
+          {{if .MatchedTagSlug}}
+            <input type="hidden" name="cat_map_{{.Idx}}" value="{{.MatchedTagSlug}}">
+            <span class="loc-auto-matched">✓ {{.MatchedTagName}}</span>
+          {{else if $.Data.Tags}}
+            <select name="cat_map_{{.Idx}}" class="assign-select">
+              <option value="">{{$.Strings.T "admin_import_cat_ignore"}}</option>
+              {{range $.Data.Tags}}<option value="{{.Slug}}">{{.Name}}</option>{{end}}
+            </select>
+          {{else}}
+            <span style="color:#999;font-size:.85rem">—</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
   <div style="margin-bottom:.75rem">
     <label class="check-label">
       <input type="checkbox" id="sel-all" onchange="toggleAll(this)"> {{$.Strings.T "admin_import_select_all"}}

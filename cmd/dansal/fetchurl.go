@@ -942,7 +942,7 @@ func importSingleEvent(tx querier, req EventCreateRequest, td *templateImportDat
 	if td != nil {
 		applyTemplateToRequest(&req, *td, mode)
 	}
-	req.Tags = filterKnownTags(req.Tags)
+	req.Tags = resolveFeedTags(req.Tags)
 	locationID, err := resolveTemplateLocation(tx, req.Location, td)
 	if err != nil {
 		return nil, err

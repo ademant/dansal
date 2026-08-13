@@ -2283,6 +2283,16 @@ func migrateDB() {
 	              WHERE z.duplicate_of_id = events.id
 	                AND z.needs_duplicate_review = 1
 	            )`)
+
+	// #1093: category_aliases maps a raw feed category string (e.g. iCal
+	// CATEGORIES, RSS/Atom <category>) to a known tag slug, so feeds whose
+	// taxonomy doesn't already match dansal's slugs verbatim can still be
+	// auto-tagged once an admin maps them once via the import preview UI.
+	db.Exec(`CREATE TABLE IF NOT EXISTS category_aliases (
+		category   TEXT PRIMARY KEY,
+		tag_slug   TEXT NOT NULL REFERENCES tags(slug) ON DELETE CASCADE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3548,6 +3558,11 @@ func createTables() error {
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT ''
 	);
+	CREATE TABLE IF NOT EXISTS category_aliases (
+		category   TEXT PRIMARY KEY,
+		tag_slug   TEXT NOT NULL REFERENCES tags(slug) ON DELETE CASCADE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	CREATE TABLE IF NOT EXISTS webauthn_credentials (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -3838,6 +3853,9 @@ func main() {
 	smux.Handle("GET /api/v1/instructors/{id}", optAuth(http.HandlerFunc(getInstructor)))
 	smux.Handle("GET /api/v1/events/{id}/instructors", optAuth(http.HandlerFunc(getEventInstructors)))
 	smux.Handle("GET /api/v1/tags", optAuth(http.HandlerFunc(getTags)))
+	smux.Handle("GET /api/v1/category-aliases", optAuth(http.HandlerFunc(getCategoryAliases)))
+	smux.Handle("POST /api/v1/category-aliases", auth(createCategoryAlias))
+	smux.Handle("DELETE /api/v1/category-aliases", auth(deleteCategoryAlias))
 	smux.Handle("GET /api/v1/dances", optAuth(http.HandlerFunc(getDances)))
 	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
 	smux.HandleFunc("GET /api/v1/musician-images/{id}", getMusicianImage)
@@ -4070,10 +4088,10 @@ func main() {
 		CORSMiddleware,
 		SecurityHeadersMiddleware,
 		GzipMiddleware,
-		ErrorIDMiddleware,          // inside Gzip so it sees uncompressed JSON
-		PanicRecoveryMiddleware,    // inside ErrorID so a recovered panic still gets an error_id (#991)
+		ErrorIDMiddleware,       // inside Gzip so it sees uncompressed JSON
+		PanicRecoveryMiddleware, // inside ErrorID so a recovered panic still gets an error_id (#991)
 		MaxBodyMiddleware,
-		MalformedQueryMiddleware,   // reject ?foo=bar?baz=qux before rate-limit accounting
+		MalformedQueryMiddleware, // reject ?foo=bar?baz=qux before rate-limit accounting
 		ConnLimitMiddleware,
 		RateLimitMiddleware,
 	))

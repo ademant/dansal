@@ -17,6 +17,7 @@
 {{$isAdmin := eq .User.Role "admin"}}
 <nav class="mgmt-tabs" aria-label="Management">
   <a href="/admin/fetchurls" class="mgmt-tab">{{.Strings.T "nav_admin_fetchurls"}}</a>
+  {{if ne .User.Role "publisher"}}<a href="/admin/category-mappings" class="mgmt-tab">{{.Strings.T "admin_category_mappings_title"}}</a>{{end}}
   <a href="/admin/series" class="mgmt-tab">{{.Strings.T "nav_admin_series"}}</a>
   <a href="/admin/users" class="mgmt-tab">{{.Strings.T "nav_admin_users"}}{{if .PendingRegCount}}<span class="pending-badge">{{.PendingRegCount}}</span>{{end}}</a>
   <a href="/admin/recent-changes" class="mgmt-tab">{{.Strings.T "recent_changes_title"}}</a>

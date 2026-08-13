@@ -21,18 +21,31 @@ type FeedLocation struct {
 	MatchedDBLocName string // display name of the matched DB location
 }
 
+// FeedCategory is one unique raw feed category string (e.g. iCal CATEGORIES,
+// RSS/Atom <category>) found across the previewed events, with the tag it
+// already resolves to (if any) so the import UI can offer a mapping picker
+// for the rest — mirrors FeedLocation (#1093).
+type FeedCategory struct {
+	Idx            int
+	Name           string // raw feed category string
+	MatchedTagSlug string // non-empty when it's already a known slug or has an alias
+	MatchedTagName string // display name of the matched tag
+}
+
 type AdminImportEventsData struct {
-	PreviewEvents      []PreviewEvent
-	PreviewJSON        []string
-	Error              string
-	FeedURL            string
-	FeedType           string
-	Orgs               []Organization
-	Locations          []Location
-	UniqueFeedLocs     []FeedLocation
-	SelectedOrgID      int
-	Templates          []EventTemplate
-	SelectedTemplateID int
+	PreviewEvents        []PreviewEvent
+	PreviewJSON          []string
+	Error                string
+	FeedURL              string
+	FeedType             string
+	Orgs                 []Organization
+	Locations            []Location
+	UniqueFeedLocs       []FeedLocation
+	Tags                 []Tag
+	UniqueFeedCategories []FeedCategory
+	SelectedOrgID        int
+	Templates            []EventTemplate
+	SelectedTemplateID   int
 }
 
 // ── Import events ─────────────────────────────────────────────────────────────
@@ -240,17 +253,61 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		// Build the category mapping table (#1093): one row per unique raw
+		// feed category, auto-matched when it's already a known tag slug or
+		// has an admin-configured alias, otherwise offered a picker.
+		tags, err := client.GetTags(r.Context())
+		if err != nil {
+			log.Printf("admin import: could not load tags: %v", err)
+		}
+		catAliases, err := client.GetCategoryAliases(r.Context())
+		if err != nil {
+			log.Printf("admin import: could not load category aliases: %v", err)
+		}
+		tagBySlug := make(map[string]Tag, len(tags))
+		for _, t := range tags {
+			tagBySlug[t.Slug] = t
+		}
+		aliasByCategory := make(map[string]string, len(catAliases))
+		for _, a := range catAliases {
+			aliasByCategory[a.Category] = a.TagSlug
+		}
+
+		seenCat := map[string]bool{}
+		var uniqCats []FeedCategory
+		for _, e := range events {
+			for _, cat := range e.Tags {
+				if cat == "" || seenCat[cat] {
+					continue
+				}
+				seenCat[cat] = true
+				fc := FeedCategory{Idx: len(uniqCats), Name: cat}
+				if t, ok := tagBySlug[cat]; ok {
+					fc.MatchedTagSlug = cat
+					fc.MatchedTagName = t.Name
+				} else if slug, ok := aliasByCategory[cat]; ok {
+					fc.MatchedTagSlug = slug
+					if t, ok := tagBySlug[slug]; ok {
+						fc.MatchedTagName = t.Name
+					}
+				}
+				uniqCats = append(uniqCats, fc)
+			}
+		}
+
 		title := i18n.T(r, "admin_import_title")
 		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
-			PreviewEvents:  events,
-			PreviewJSON:    previewJSON,
-			FeedURL:        feedURL,
-			FeedType:       feedType,
-			Orgs:           orgs,
-			Locations:      locs,
-			UniqueFeedLocs: uniqLocs,
-			SelectedOrgID:  selectedOrgID,
-			Templates:      templates,
+			PreviewEvents:        events,
+			PreviewJSON:          previewJSON,
+			FeedURL:              feedURL,
+			FeedType:             feedType,
+			Orgs:                 orgs,
+			Locations:            locs,
+			UniqueFeedLocs:       uniqLocs,
+			Tags:                 tags,
+			UniqueFeedCategories: uniqCats,
+			SelectedOrgID:        selectedOrgID,
+			Templates:            templates,
 		}))
 	}
 }
@@ -291,6 +348,23 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			}
 		}
 
+		// Build category mapping override: raw feed category → tag slug (#1093).
+		// Every unique category shown on the preview page submits a
+		// cat_feed_N/cat_map_N pair — already-resolved ones (exact slug match
+		// or existing alias) carry their resolved slug as a hidden field, so
+		// this map covers all of them, not just newly-picked ones.
+		catOverride := map[string]string{}
+		for i := 0; ; i++ {
+			feedCat := r.FormValue("cat_feed_" + strconv.Itoa(i))
+			if feedCat == "" {
+				break
+			}
+			slug := r.FormValue("cat_map_" + strconv.Itoa(i))
+			if slug != "" {
+				catOverride[feedCat] = slug
+			}
+		}
+
 		// Parse org override.
 		orgID, _ := strconv.Atoi(r.FormValue("org_id"))
 
@@ -318,6 +392,16 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			client.UpdateLocation(r.Context(), dbLoc.ID, patched, token)
 		}
 
+		// For each newly-picked category mapping, persist it as a
+		// category_alias so future imports of this (or any) feed using the
+		// same raw category text auto-resolve without manual intervention.
+		for feedCat, slug := range catOverride {
+			if feedCat == slug {
+				continue
+			}
+			client.CreateCategoryAlias(r.Context(), feedCat, slug, token)
+		}
+
 		createdAt := time.Now().UTC().Format(time.RFC3339)
 
 		var selected []json.RawMessage
@@ -330,11 +414,30 @@ func adminImportConfirmHandler(cfg *Config, client *DansalClient) http.HandlerFu
 				continue
 			}
 			raw := vals[0]
-			if orgID > 0 || len(feedLocOverride) > 0 {
+			if orgID > 0 || len(feedLocOverride) > 0 || len(catOverride) > 0 {
 				var ev map[string]any
 				if err := json.Unmarshal([]byte(raw), &ev); err == nil {
 					if orgID > 0 {
 						ev["organization_id"] = orgID
+					}
+					if len(catOverride) > 0 {
+						if tagsField, ok := ev["tags"].([]any); ok {
+							newTags := make([]any, 0, len(tagsField))
+							seenSlug := map[string]bool{}
+							for _, tv := range tagsField {
+								t, _ := tv.(string)
+								slug, mapped := catOverride[t]
+								// Unmapped feed categories (admin left the picker on
+								// "ignore") are dropped, mirroring resolveFeedTags'
+								// behaviour for feed taxonomy with no known match (#923).
+								if !mapped || slug == "" || seenSlug[slug] {
+									continue
+								}
+								seenSlug[slug] = true
+								newTags = append(newTags, slug)
+							}
+							ev["tags"] = newTags
+						}
 					}
 					if len(feedLocOverride) > 0 {
 						if locField, ok := ev["location"].(map[string]any); ok {

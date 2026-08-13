@@ -410,6 +410,10 @@ func main() {
 		r.HandleFunc("POST /admin/dances", adminRateLimit(adminDanceCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/dances/{id}/delete", adminRateLimit(adminDanceDeleteHandler(cfg, client)))
 
+		r.HandleFunc("GET /admin/category-mappings", adminCategoryMappingsHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/category-mappings", adminRateLimit(adminCategoryMappingCreateHandler(cfg, client)))
+		r.HandleFunc("POST /admin/category-mappings/delete", adminRateLimit(adminCategoryMappingDeleteHandler(cfg, client)))
+
 		r.HandleFunc("GET /admin/management", adminManagementHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /admin/recent-changes", adminRecentChangesHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/info", adminInfoHandler(cfg, tmpls, client, i18n))

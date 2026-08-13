@@ -2670,6 +2670,29 @@ func (c *DansalClient) GetTagMap(ctx context.Context) (map[string]Tag, error) {
 	return m, nil
 }
 
+// CategoryAlias mirrors the JSON returned by /api/v1/category-aliases: a
+// mapping from a raw feed category string (e.g. "Bal Folk Termine") to a
+// known tag slug (e.g. "bal-folk"), set up via the import preview UI or the
+// /admin/category-mappings page (#1093).
+type CategoryAlias struct {
+	Category string `json:"category"`
+	TagSlug  string `json:"tag_slug"`
+}
+
+func (c *DansalClient) GetCategoryAliases(ctx context.Context) ([]CategoryAlias, error) {
+	var aliases []CategoryAlias
+	return aliases, c.get(ctx, "/api/v1/category-aliases", &aliases)
+}
+
+func (c *DansalClient) CreateCategoryAlias(ctx context.Context, category, tagSlug, token string) error {
+	body, _ := json.Marshal(CategoryAlias{Category: category, TagSlug: tagSlug})
+	return c.do(ctx, http.MethodPost, "/api/v1/category-aliases", token, body, nil, http.StatusNoContent)
+}
+
+func (c *DansalClient) DeleteCategoryAlias(ctx context.Context, category, token string) error {
+	return c.do(ctx, http.MethodDelete, "/api/v1/category-aliases?category="+url.QueryEscape(category), token, nil, nil, http.StatusNoContent)
+}
+
 func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dance, error) {
 	body, _ := json.Marshal(map[string]string{"name": name})
 	var d Dance

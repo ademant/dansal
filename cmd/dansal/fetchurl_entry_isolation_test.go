@@ -41,6 +41,41 @@ func TestFilterKnownTags(t *testing.T) {
 	}
 }
 
+func TestResolveFeedTags(t *testing.T) {
+	old := db
+	defer func() { db = old }()
+
+	conn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	db = conn
+
+	if err := createTables(); err != nil {
+		t.Fatalf("createTables: %v", err)
+	}
+	migrateDB()
+
+	if _, err := db.Exec("INSERT INTO category_aliases (category, tag_slug) VALUES ('Bal Folk Termine', 'bal-folk')"); err != nil {
+		t.Fatal(err)
+	}
+
+	// "bal-folk" already matches a known slug; "Bal Folk Termine" only
+	// resolves via the category_aliases mapping just inserted; "Aktuelles"
+	// has no mapping and no known-slug match, so it's dropped (#923).
+	got := resolveFeedTags([]string{"bal-folk", "Bal Folk Termine", "Aktuelles"})
+	want := []string{"bal-folk"}
+	if len(got) != len(want) {
+		t.Fatalf("resolveFeedTags() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("resolveFeedTags() = %v, want %v", got, want)
+		}
+	}
+}
+
 // TestWithEntrySavepointIsolatesFailure verifies that an error from one
 // entry's closure rolls back only that entry's writes via SAVEPOINT, while
 // the surrounding transaction remains usable for subsequent entries and

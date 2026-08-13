@@ -456,9 +456,9 @@ On success returns the same session token response as a normal login. The `pendi
 ## OIDC / SSO
 
 ```
-GET    /api/v1/oidc/providers            # public: list enabled providers (?org_id=N)
-POST   /api/v1/oidc/providers            # admin only: register a provider
-DELETE /api/v1/oidc/providers/{id}       # admin only
+GET    /api/v1/oidc/providers            # public: list enabled providers (?org_id=N); admin/user: management view
+POST   /api/v1/oidc/providers            # admin: any provider; user: org-scoped only; publisher: none
+DELETE /api/v1/oidc/providers/{id}       # admin: any provider; user: org-scoped only; publisher: none
 
 POST   /api/v1/oidc/start                # begin login/invite-redemption flow
 POST   /api/v1/oidc/callback             # complete the flow
@@ -478,9 +478,9 @@ Both kinds ultimately produce a stable `(issuer, subject)` pair stored in `user_
 
 ### Provider registry
 
-**`GET /api/v1/oidc/providers?org_id=N`** — public; returns enabled providers only (never `client_secret`). With no `org_id`, only instance-wide (`org_id: null`) providers; with `org_id`, instance-wide plus that org's own providers. A caller authenticated as admin gets every row instead, including disabled and org-scoped ones — used to populate `/admin/oidc-providers`.
+**`GET /api/v1/oidc/providers?org_id=N`** — public; returns enabled providers only (never `client_secret`). With no `org_id`, only instance-wide (`org_id: null`) providers; with `org_id`, instance-wide plus that org's own providers. A caller authenticated as admin gets every row instead, including disabled and org-scoped ones — used to populate `/admin/oidc-providers`. A caller authenticated as `user` and passing `?scope=mine` gets every row (enabled or not) for orgs they belong to, but never instance-wide rows — same page, org-scoped management view (#1099).
 
-**`POST /api/v1/oidc/providers`** — admin only.
+**`POST /api/v1/oidc/providers`** — admin: any provider, instance-wide or org-scoped. `user`: only an org-scoped provider (`org_id` required) for an org they're a member of — a missing `org_id` or an org they don't belong to returns `403`. `publisher`: `403`.
 ```json
 {
   "kind": "oidc",
@@ -492,11 +492,11 @@ Both kinds ultimately produce a stable `(issuer, subject)` pair stored in `user_
   "enabled": true
 }
 ```
-`kind` is `"oidc"` (default) or `"mastodon"`. `org_id` omitted/null makes the provider instance-wide. On create, dansal validates the provider is reachable before accepting it: for `oidc` it runs OIDC discovery against `issuer_url`; for `mastodon` it calls `GET {issuer_url}/api/v1/instance`. A bad or unreachable URL returns `400` immediately rather than accepting a provider that would fail on every login attempt.
+`kind` is `"oidc"` (default) or `"mastodon"`. `org_id` omitted/null makes the provider instance-wide (admin only). On create, dansal validates the provider is reachable before accepting it: for `oidc` it runs OIDC discovery against `issuer_url`; for `mastodon` it calls `GET {issuer_url}/api/v1/instance`. A bad or unreachable URL returns `400` immediately rather than accepting a provider that would fail on every login attempt.
 
 **Mastodon self-service app auto-registration (#1098):** for `kind: "mastodon"`, `client_id`/`client_secret` may both be omitted — dansal then registers a real OAuth app on the instance itself via `POST {issuer_url}/api/v1/apps` (no login/admin approval needed on Mastodon's side) and fills in the returned credentials automatically. It tries registering both the login/invite and account-linking callback URLs together first; if the instance rejects multiple `redirect_uris`, it retries with just the login/invite one and returns the provider with `"link_enabled": false` — `/settings`'s "Link" button is hidden for that provider rather than sending users into a redirect the instance will reject. If self-service registration fails entirely, the request returns `400` and the caller should retry with `client_id`/`client_secret` supplied manually (obtained however the admin prefers).
 
-**`DELETE /api/v1/oidc/providers/{id}`** — admin only.
+**`DELETE /api/v1/oidc/providers/{id}`** — admin: any provider. `user`: only a provider whose `org_id` is an org they're a member of (instance-wide or another org's provider returns `403`). `publisher`: `403`.
 
 ### Login / invite redemption flow
 

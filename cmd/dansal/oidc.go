@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +36,12 @@ type OIDCProvider struct {
 	ClientID    string `json:"client_id"`
 	DisplayName string `json:"display_name"`
 	Enabled     bool   `json:"enabled"`
+	// LinkEnabled is false only for a self-registered Mastodon provider
+	// (#1098) whose instance rejected the account-linking redirect URI —
+	// the /settings "Link" button is hidden for it rather than sending
+	// users into a redirect the instance will reject. Always true for
+	// providers with manually-supplied credentials.
+	LinkEnabled bool `json:"link_enabled"`
 }
 
 // Provider kinds (#1097). "oidc" is the default, spec-compliant path
@@ -200,15 +208,15 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch {
 	case isAdmin:
-		rows, err = db.Query("SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers ORDER BY display_name")
+		rows, err = db.Query("SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers ORDER BY display_name")
 	case orgID != nil:
 		rows, err = db.Query(
-			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND (org_id IS NULL OR org_id=?) ORDER BY display_name",
+			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers WHERE enabled=1 AND (org_id IS NULL OR org_id=?) ORDER BY display_name",
 			*orgID,
 		)
 	default:
 		rows, err = db.Query(
-			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND org_id IS NULL ORDER BY display_name",
+			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled, link_enabled FROM oidc_providers WHERE enabled=1 AND org_id IS NULL ORDER BY display_name",
 		)
 	}
 	if err != nil {
@@ -220,8 +228,8 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p OIDCProvider
 		var oid sql.NullInt64
-		var enabledInt int
-		if err := rows.Scan(&p.ID, &oid, &p.Kind, &p.IssuerURL, &p.ClientID, &p.DisplayName, &enabledInt); err != nil {
+		var enabledInt, linkEnabledInt int
+		if err := rows.Scan(&p.ID, &oid, &p.Kind, &p.IssuerURL, &p.ClientID, &p.DisplayName, &enabledInt, &linkEnabledInt); err != nil {
 			writeInternalError(w, err)
 			return
 		}
@@ -230,6 +238,7 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 			p.OrgID = &v
 		}
 		p.Enabled = enabledInt != 0
+		p.LinkEnabled = linkEnabledInt != 0
 		providers = append(providers, p)
 	}
 	json.NewEncoder(w).Encode(providers)
@@ -262,16 +271,42 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "kind must be 'oidc' or 'mastodon'", http.StatusBadRequest)
 		return
 	}
-	if req.IssuerURL == "" || req.ClientID == "" || req.ClientSecret == "" || req.DisplayName == "" {
-		writeError(w, "issuer_url, client_id, client_secret, and display_name are required", http.StatusBadRequest)
+	// Mastodon, uniquely, can supply its own client_id/client_secret via
+	// self-service app registration (#1098) — leaving both blank on a
+	// mastodon-kind request requests that instead of treating it as a
+	// validation error. Real OIDC has no equivalent (client registration
+	// isn't standardized enough across IdPs to automate).
+	autoRegister := req.Kind == oidcProviderKindMastodon && req.ClientID == "" && req.ClientSecret == ""
+	if req.IssuerURL == "" || req.DisplayName == "" || (!autoRegister && (req.ClientID == "" || req.ClientSecret == "")) {
+		writeError(w, "issuer_url, display_name, and (unless requesting Mastodon self-service registration) client_id/client_secret are required", http.StatusBadRequest)
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	var orgVal any
+	if req.OrgID != nil {
+		orgVal = *req.OrgID
+	}
+
+	if autoRegister {
+		provider, err := createMastodonProviderAutoRegistered(ctx, orgVal, req.IssuerURL, req.DisplayName, enabled)
+		if err != nil {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(provider)
+		return
+	}
+
 	// Fail fast on a bad issuer rather than accepting a provider that will
 	// error on every login attempt: real OIDC discovers its endpoints;
 	// Mastodon has no discovery document, so just check the instance API
 	// answers at all.
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 	if req.Kind == oidcProviderKindMastodon {
 		if err := mastodonCheckReachable(ctx, req.IssuerURL); err != nil {
 			writeError(w, fmt.Sprintf("could not reach Mastodon instance: %v", err), http.StatusBadRequest)
@@ -281,16 +316,8 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Sprintf("could not discover OIDC issuer: %v", err), http.StatusBadRequest)
 		return
 	}
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
-	var orgVal any
-	if req.OrgID != nil {
-		orgVal = *req.OrgID
-	}
 	result, err := db.Exec(
-		"INSERT INTO oidc_providers (org_id, kind, issuer_url, client_id, client_secret, display_name, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO oidc_providers (org_id, kind, issuer_url, client_id, client_secret, display_name, enabled, link_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
 		orgVal, req.Kind, req.IssuerURL, req.ClientID, req.ClientSecret, req.DisplayName, enabled,
 	)
 	if err != nil {
@@ -301,8 +328,105 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(OIDCProvider{
 		ID: int(id), OrgID: req.OrgID, Kind: req.Kind, IssuerURL: req.IssuerURL, ClientID: req.ClientID,
-		DisplayName: req.DisplayName, Enabled: enabled,
+		DisplayName: req.DisplayName, Enabled: enabled, LinkEnabled: true,
 	})
+}
+
+// createMastodonProviderAutoRegistered implements the #1098 self-service
+// flow: reserve the provider row first (so its id — and therefore the
+// callback URLs Mastodon needs registered — never has to change again),
+// then register a real OAuth app on the instance itself and fill in the
+// row's credentials. Tries both the login/invite and account-linking
+// redirect URIs together first; if the instance rejects that (some
+// Mastodon-API-compatible servers only support one), retries with just the
+// login/invite URI and marks link_enabled=0 so /settings hides the "Link"
+// button for this provider rather than sending users into a redirect the
+// instance will reject. On total failure the reserved row is deleted, and
+// the caller falls back to entering client_id/client_secret manually.
+func createMastodonProviderAutoRegistered(ctx context.Context, orgVal any, issuerURL, displayName string, enabled bool) (OIDCProvider, error) {
+	if err := mastodonCheckReachable(ctx, issuerURL); err != nil {
+		return OIDCProvider{}, fmt.Errorf("could not reach Mastodon instance: %w", err)
+	}
+
+	result, err := db.Exec(
+		"INSERT INTO oidc_providers (org_id, kind, issuer_url, client_id, client_secret, display_name, enabled, link_enabled) VALUES (?, 'mastodon', ?, '', '', ?, ?, 1)",
+		orgVal, issuerURL, displayName, enabled,
+	)
+	if err != nil {
+		return OIDCProvider{}, err
+	}
+	id, _ := result.LastInsertId()
+
+	base := publicBaseURL()
+	loginCallback := base + "/oidc/" + strconv.FormatInt(id, 10) + "/callback"
+	linkCallback := base + "/settings/oidc/" + strconv.FormatInt(id, 10) + "/link-callback"
+	clientName := "dansal @ " + base
+
+	clientID, clientSecret, err := mastodonRegisterApp(ctx, issuerURL, clientName, []string{loginCallback, linkCallback})
+	linkEnabled := true
+	if err != nil {
+		clientID, clientSecret, err = mastodonRegisterApp(ctx, issuerURL, clientName, []string{loginCallback})
+		linkEnabled = false
+	}
+	if err != nil {
+		db.Exec("DELETE FROM oidc_providers WHERE id=?", id)
+		return OIDCProvider{}, fmt.Errorf("Mastodon self-service app registration failed: %w — enter client_id/client_secret manually instead", err)
+	}
+
+	if _, err := db.Exec(
+		"UPDATE oidc_providers SET client_id=?, client_secret=?, link_enabled=? WHERE id=?",
+		clientID, clientSecret, linkEnabled, id,
+	); err != nil {
+		db.Exec("DELETE FROM oidc_providers WHERE id=?", id)
+		return OIDCProvider{}, err
+	}
+
+	var orgID *int
+	if v, ok := orgVal.(int); ok {
+		orgID = &v
+	}
+	return OIDCProvider{
+		ID: int(id), OrgID: orgID, Kind: oidcProviderKindMastodon, IssuerURL: issuerURL, ClientID: clientID,
+		DisplayName: displayName, Enabled: enabled, LinkEnabled: linkEnabled,
+	}, nil
+}
+
+// mastodonRegisterApp calls Mastodon's self-service app registration
+// endpoint (#1097, #1098) — no login or admin approval needed on the
+// instance side. redirectURIs are joined with a newline, matching Mastodon
+// 4.3's documented multi-URI format; older/other Mastodon-API-compatible
+// servers may only honor (or accept) the first one.
+func mastodonRegisterApp(ctx context.Context, issuerURL, clientName string, redirectURIs []string) (clientID, clientSecret string, err error) {
+	base := strings.TrimRight(issuerURL, "/")
+	form := url.Values{}
+	form.Set("client_name", clientName)
+	form.Set("redirect_uris", strings.Join(redirectURIs, "\n"))
+	form.Set("scopes", "read:accounts")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/apps", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", "", fmt.Errorf("POST /api/v1/apps returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", "", err
+	}
+	if out.ClientID == "" || out.ClientSecret == "" {
+		return "", "", fmt.Errorf("POST /api/v1/apps did not return client_id/client_secret")
+	}
+	return out.ClientID, out.ClientSecret, nil
 }
 
 // DELETE /api/v1/oidc/providers/{id} — admin-only.

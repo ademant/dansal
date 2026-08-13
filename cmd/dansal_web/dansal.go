@@ -2727,6 +2727,9 @@ type OIDCProvider struct {
 	ClientID    string `json:"client_id"`
 	DisplayName string `json:"display_name"`
 	Enabled     bool   `json:"enabled"`
+	// LinkEnabled is false only for a self-registered Mastodon provider
+	// (#1098) whose instance rejected the account-linking redirect URI.
+	LinkEnabled bool `json:"link_enabled"`
 }
 
 // GetOIDCProviders lists enabled providers. orgID nil returns instance-wide

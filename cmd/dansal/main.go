@@ -2321,9 +2321,24 @@ func migrateDB() {
 		client_secret TEXT NOT NULL,
 		display_name TEXT NOT NULL,
 		enabled INTEGER NOT NULL DEFAULT 1,
+		link_enabled INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_oidc_providers_org_id ON oidc_providers(org_id)")
+	// Safety net: link_enabled (#1097 follow-up, Mastodon self-service app
+	// auto-registration) tracks whether the account-linking redirect URI was
+	// successfully registered with the provider — a self-registered provider
+	// that only managed to register the login/invite callback (some
+	// Mastodon-API-compatible servers reject multiple redirect_uris) must hide
+	// its "Link" button rather than send users into a redirect Mastodon will
+	// reject.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('oidc_providers') WHERE name='link_enabled'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE oidc_providers ADD COLUMN link_enabled INTEGER NOT NULL DEFAULT 1")
+		}
+	}
 	// Safety net: kind (#1097, Mastodon-style plain-OAuth2 providers alongside
 	// real OIDC) was added after oidc_providers first shipped.
 	{
@@ -3169,6 +3184,7 @@ func createTables() error {
 		client_secret TEXT NOT NULL,
 		display_name TEXT NOT NULL,
 		enabled INTEGER NOT NULL DEFAULT 1,
+		link_enabled INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_oidc_providers_org_id ON oidc_providers(org_id);

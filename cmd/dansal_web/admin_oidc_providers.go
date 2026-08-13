@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -17,6 +18,7 @@ import (
 type AdminOIDCProvidersData struct {
 	Providers []OIDCProvider
 	Orgs      []Organization
+	ErrorMsg  string
 }
 
 func adminOIDCProvidersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -39,6 +41,7 @@ func adminOIDCProvidersHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		renderTemplate(w, tmpls.adminOIDCProviders, tmplData(r, cfg, i18n, title, AdminOIDCProvidersData{
 			Providers: providers,
 			Orgs:      orgs,
+			ErrorMsg:  r.URL.Query().Get("err"),
 		}))
 	}
 }
@@ -71,9 +74,20 @@ func adminOIDCProviderCreateHandler(cfg *Config, client *DansalClient) http.Hand
 				orgID = &v
 			}
 		}
-		if issuerURL != "" && clientID != "" && clientSecret != "" && displayName != "" {
+		// Leaving client_id/client_secret both blank on a Mastodon-kind
+		// provider requests self-service app auto-registration (#1098)
+		// instead of manual entry — only real OIDC still requires both.
+		autoRegister := kind == "mastodon" && clientID == "" && clientSecret == ""
+		credentialsOK := autoRegister || (clientID != "" && clientSecret != "")
+		if issuerURL != "" && displayName != "" && credentialsOK {
 			if _, err := client.CreateOIDCProvider(r.Context(), orgID, kind, issuerURL, clientID, clientSecret, displayName, getSessionToken(r)); err != nil {
 				log.Printf("create oidc provider %q: %v", issuerURL, err)
+				msg := apiErrUserMessage(err)
+				if msg == "" {
+					msg = err.Error()
+				}
+				http.Redirect(w, r, "/admin/oidc-providers?err="+url.QueryEscape(msg), http.StatusSeeOther)
+				return
 			}
 		}
 		http.Redirect(w, r, "/admin/oidc-providers", http.StatusSeeOther)

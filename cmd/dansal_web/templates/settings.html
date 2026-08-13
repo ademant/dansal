@@ -225,7 +225,9 @@
     {{if .OIDCProviders}}
     <div class="oidc-link-btns">
       {{range .OIDCProviders}}
+      {{if .LinkEnabled}}
       <a class="btn-secondary" href="/settings/oidc/{{.ID}}/link-start">{{$.Strings.TF "settings_oidc_link_btn" .DisplayName}}</a>
+      {{end}}
       {{end}}
     </div>
     {{end}}

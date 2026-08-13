@@ -548,6 +548,12 @@ type fakeMastodonInstance struct {
 	srv     *httptest.Server
 	baseURL string
 	acctID  string
+	// appsMode controls how POST /api/v1/apps (#1098 self-service
+	// auto-registration) responds: "" (default)/"multi" always succeeds
+	// regardless of how many redirect_uris are sent; "single" rejects a
+	// request carrying more than one; "fail" always rejects. Read at
+	// request time, so it can be changed after the server starts.
+	appsMode string
 }
 
 func newFakeMastodonInstance(t *testing.T, clientID string) *fakeMastodonInstance {
@@ -558,6 +564,25 @@ func newFakeMastodonInstance(t *testing.T, clientID string) *fakeMastodonInstanc
 	mux.HandleFunc("/api/v1/instance", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"uri": f.baseURL})
+	})
+	mux.HandleFunc("/api/v1/apps", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		redirectURIs := r.FormValue("redirect_uris")
+		switch f.appsMode {
+		case "fail":
+			http.Error(w, "registration disabled", http.StatusForbidden)
+			return
+		case "single":
+			if strings.Contains(redirectURIs, "\n") {
+				http.Error(w, "only one redirect_uri supported", http.StatusUnprocessableEntity)
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"client_id":     "auto-client-id",
+			"client_secret": "auto-client-secret",
+		})
 	})
 	mux.HandleFunc("/oauth/authorize", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -695,5 +720,120 @@ func TestMastodonOAuth2LoginAndLink(t *testing.T) {
 	}
 	if cbResp2.UserID != cbResp.UserID {
 		t.Fatalf("returning login resolved to user_id=%d, want %d", cbResp2.UserID, cbResp.UserID)
+	}
+}
+
+// TestMastodonAutoRegisterSuccess drives the #1098 self-service flow when
+// the instance accepts both redirect_uris in one call: the provider is
+// created with real credentials and link_enabled stays true.
+func TestMastodonAutoRegisterSuccess(t *testing.T) {
+	setupOIDCTestDB(t)
+	instance := newFakeMastodonInstance(t, "")
+	defer instance.Close()
+
+	res, err := db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('admin2@example.com','Admin2','x','admin')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, _ := res.LastInsertId()
+
+	body, _ := json.Marshal(map[string]any{
+		"kind":         "mastodon",
+		"issuer_url":   instance.baseURL,
+		"display_name": "Auto Mastodon",
+	})
+	w := httptest.NewRecorder()
+	createOIDCProvider(w, authedRequest(t, http.MethodPost, "/api/v1/oidc/providers", body, int(adminID), RoleAdmin))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("createOIDCProvider status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var p OIDCProvider
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.ClientID != "auto-client-id" {
+		t.Fatalf("ClientID = %q, want auto-client-id", p.ClientID)
+	}
+	if !p.LinkEnabled {
+		t.Fatal("expected LinkEnabled=true when both redirect_uris are accepted")
+	}
+	var storedSecret string
+	if err := db.QueryRow("SELECT client_secret FROM oidc_providers WHERE id=?", p.ID).Scan(&storedSecret); err != nil {
+		t.Fatal(err)
+	}
+	if storedSecret != "auto-client-secret" {
+		t.Fatalf("stored client_secret = %q, want auto-client-secret", storedSecret)
+	}
+}
+
+// TestMastodonAutoRegisterSingleURIFallback drives the case where the
+// instance rejects multiple redirect_uris: dansal retries with just the
+// login/invite URL and marks the provider link_enabled=false.
+func TestMastodonAutoRegisterSingleURIFallback(t *testing.T) {
+	setupOIDCTestDB(t)
+	instance := newFakeMastodonInstance(t, "")
+	instance.appsMode = "single"
+	defer instance.Close()
+
+	res, err := db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('admin3@example.com','Admin3','x','admin')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, _ := res.LastInsertId()
+
+	body, _ := json.Marshal(map[string]any{
+		"kind":         "mastodon",
+		"issuer_url":   instance.baseURL,
+		"display_name": "Single URI Mastodon",
+	})
+	w := httptest.NewRecorder()
+	createOIDCProvider(w, authedRequest(t, http.MethodPost, "/api/v1/oidc/providers", body, int(adminID), RoleAdmin))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("createOIDCProvider status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var p OIDCProvider
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.LinkEnabled {
+		t.Fatal("expected LinkEnabled=false after single-URI fallback")
+	}
+	if p.ClientID != "auto-client-id" {
+		t.Fatalf("ClientID = %q, want auto-client-id", p.ClientID)
+	}
+}
+
+// TestMastodonAutoRegisterTotalFailure drives the case where the instance
+// refuses self-service registration outright: the reserved provider row is
+// rolled back so retrying (or falling back to manual credentials) doesn't
+// leave orphaned rows with incrementing ids behind.
+func TestMastodonAutoRegisterTotalFailure(t *testing.T) {
+	setupOIDCTestDB(t)
+	instance := newFakeMastodonInstance(t, "")
+	instance.appsMode = "fail"
+	defer instance.Close()
+
+	res, err := db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('admin4@example.com','Admin4','x','admin')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, _ := res.LastInsertId()
+
+	body, _ := json.Marshal(map[string]any{
+		"kind":         "mastodon",
+		"issuer_url":   instance.baseURL,
+		"display_name": "Failing Mastodon",
+	})
+	w := httptest.NewRecorder()
+	createOIDCProvider(w, authedRequest(t, http.MethodPost, "/api/v1/oidc/providers", body, int(adminID), RoleAdmin))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("createOIDCProvider status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM oidc_providers WHERE display_name='Failing Mastodon'").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("expected reserved row to be rolled back, found %d rows", count)
 	}
 }

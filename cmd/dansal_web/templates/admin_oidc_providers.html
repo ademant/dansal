@@ -6,6 +6,7 @@
 <p style="color:#666;font-size:.9rem;margin-top:-.25rem">{{.Strings.T "admin_oidc_providers_hint"}}</p>
 
 {{with .Data}}
+{{if .ErrorMsg}}<p class="msg msg-error" style="padding:.6rem .9rem;border-radius:4px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb">{{.ErrorMsg}}</p>{{end}}
 <div class="table-wrap">
 <table class="event-table" data-sortable>
   <thead>
@@ -15,6 +16,7 @@
       <th data-sort="str">{{$.Strings.T "admin_oidc_col_issuer"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="str">{{$.Strings.T "admin_oidc_col_status"}}</th>
+      <th data-sort="str">{{$.Strings.T "admin_oidc_col_link"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -26,6 +28,7 @@
     <td class="muted" style="font-size:.85rem">{{.IssuerURL}}</td>
     <td>{{if .OrgID}}{{$oid := derefInt .OrgID}}{{range $.Data.Orgs}}{{if eq .ID $oid}}{{.Name}}{{end}}{{end}}{{else}}<span class="muted">{{$.Strings.T "admin_import_org_none"}}</span>{{end}}</td>
     <td>{{if .Enabled}}<span class="badge status-new">{{$.Strings.T "admin_oidc_enabled"}}</span>{{else}}<span class="badge status-exists">{{$.Strings.T "admin_oidc_disabled"}}</span>{{end}}</td>
+    <td>{{if eq .Kind "mastodon"}}{{if .LinkEnabled}}<span class="badge status-new">{{$.Strings.T "admin_oidc_link_yes"}}</span>{{else}}<span class="badge status-exists" title="{{$.Strings.T "admin_oidc_link_no_hint"}}">{{$.Strings.T "admin_oidc_link_no"}}</span>{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
     <td class="col-actions">
       <form method="post" action="/admin/oidc-providers/delete" onsubmit="return confirm({{$.Strings.T "admin_dance_confirm_delete"}})">
         <input type="hidden" name="id" value="{{.ID}}">
@@ -45,7 +48,7 @@
       <input type="text" name="display_name" required>
     </label>
     <label>{{$.Strings.T "admin_oidc_col_kind"}}
-      <select name="kind">
+      <select name="kind" id="oidc-kind-select" onchange="oidcToggleAutoRegister()">
         <option value="oidc">{{$.Strings.T "admin_oidc_kind_oidc"}}</option>
         <option value="mastodon">{{$.Strings.T "admin_oidc_kind_mastodon"}}</option>
       </select>
@@ -53,11 +56,12 @@
     <label>{{$.Strings.T "admin_oidc_col_issuer"}}
       <input type="url" name="issuer_url" placeholder="https://example.com" required>
     </label>
+    <p id="oidc-auto-hint" class="field-hint" hidden>{{$.Strings.T "admin_oidc_mastodon_auto_hint"}}</p>
     <label>{{$.Strings.T "admin_oidc_client_id"}}
-      <input type="text" name="client_id" required>
+      <input type="text" name="client_id" id="oidc-client-id" required>
     </label>
     <label>{{$.Strings.T "admin_oidc_client_secret"}}
-      <input type="password" name="client_secret" required autocomplete="off">
+      <input type="password" name="client_secret" id="oidc-client-secret" required autocomplete="off">
     </label>
     <label>{{$.Strings.T "fetch_org"}}
       <select name="org_id">
@@ -69,6 +73,21 @@
     <button type="submit" class="btn-primary" style="align-self:flex-start">{{$.Strings.T "admin_dance_add_btn"}}</button>
   </form>
 </div>
+<script>
+function oidcToggleAutoRegister(){
+  var isMastodon = document.getElementById('oidc-kind-select').value === 'mastodon';
+  var idField = document.getElementById('oidc-client-id');
+  var secretField = document.getElementById('oidc-client-secret');
+  document.getElementById('oidc-auto-hint').hidden = !isMastodon;
+  idField.required = !isMastodon;
+  secretField.required = !isMastodon;
+  if (isMastodon) {
+    idField.placeholder = secretField.placeholder = {{$.Strings.T "admin_oidc_leave_blank"}};
+  } else {
+    idField.placeholder = secretField.placeholder = '';
+  }
+}
+</script>
 {{end}}
 
 <style>

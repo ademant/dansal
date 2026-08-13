@@ -494,6 +494,8 @@ Both kinds ultimately produce a stable `(issuer, subject)` pair stored in `user_
 ```
 `kind` is `"oidc"` (default) or `"mastodon"`. `org_id` omitted/null makes the provider instance-wide. On create, dansal validates the provider is reachable before accepting it: for `oidc` it runs OIDC discovery against `issuer_url`; for `mastodon` it calls `GET {issuer_url}/api/v1/instance`. A bad or unreachable URL returns `400` immediately rather than accepting a provider that would fail on every login attempt.
 
+**Mastodon self-service app auto-registration (#1098):** for `kind: "mastodon"`, `client_id`/`client_secret` may both be omitted — dansal then registers a real OAuth app on the instance itself via `POST {issuer_url}/api/v1/apps` (no login/admin approval needed on Mastodon's side) and fills in the returned credentials automatically. It tries registering both the login/invite and account-linking callback URLs together first; if the instance rejects multiple `redirect_uris`, it retries with just the login/invite one and returns the provider with `"link_enabled": false` — `/settings`'s "Link" button is hidden for that provider rather than sending users into a redirect the instance will reject. If self-service registration fails entirely, the request returns `400` and the caller should retry with `client_id`/`client_secret` supplied manually (obtained however the admin prefers).
+
 **`DELETE /api/v1/oidc/providers/{id}`** — admin only.
 
 ### Login / invite redemption flow

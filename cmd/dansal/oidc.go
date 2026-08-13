@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,11 +29,22 @@ const oidcFlowTTL = 10 * time.Minute
 type OIDCProvider struct {
 	ID          int    `json:"id"`
 	OrgID       *int   `json:"org_id,omitempty"`
+	Kind        string `json:"kind"`
 	IssuerURL   string `json:"issuer_url"`
 	ClientID    string `json:"client_id"`
 	DisplayName string `json:"display_name"`
 	Enabled     bool   `json:"enabled"`
 }
+
+// Provider kinds (#1097). "oidc" is the default, spec-compliant path
+// (discovery + JWKS-verified ID token). "mastodon" is Mastodon's plain
+// OAuth2 API (frictionless self-service client registration, but no
+// discovery document or ID token) — identity is instead resolved by calling
+// verify_credentials with the access token.
+const (
+	oidcProviderKindOIDC     = "oidc"
+	oidcProviderKindMastodon = "mastodon"
+)
 
 // oidcDiscoveryCache memoizes *oidc.Provider by issuer URL for the process
 // lifetime — discovery is an HTTP round-trip to the issuer's
@@ -66,8 +78,8 @@ func loadOIDCProvider(id int) (OIDCProvider, string, error) {
 	var secret string
 	var enabledInt int
 	err := db.QueryRow(
-		"SELECT id, org_id, issuer_url, client_id, client_secret, display_name, enabled FROM oidc_providers WHERE id=?", id,
-	).Scan(&p.ID, &orgID, &p.IssuerURL, &p.ClientID, &secret, &p.DisplayName, &enabledInt)
+		"SELECT id, org_id, kind, issuer_url, client_id, client_secret, display_name, enabled FROM oidc_providers WHERE id=?", id,
+	).Scan(&p.ID, &orgID, &p.Kind, &p.IssuerURL, &p.ClientID, &secret, &p.DisplayName, &enabledInt)
 	if err != nil {
 		return OIDCProvider{}, "", err
 	}
@@ -87,6 +99,83 @@ func oidcOAuth2Config(p OIDCProvider, secret string, provider *oidc.Provider, re
 		RedirectURL:  redirectURI,
 		Scopes:       []string{oidc.ScopeOpenID},
 	}
+}
+
+// mastodonOAuth2Config builds an oauth2.Config for a Mastodon-style plain
+// OAuth2 instance (#1097) — no discovery document, fixed well-known
+// endpoint paths on the instance itself, and "read:accounts" instead of the
+// openid scope (Mastodon doesn't know what that means).
+func mastodonOAuth2Config(p OIDCProvider, secret, redirectURI string) *oauth2.Config {
+	base := strings.TrimRight(p.IssuerURL, "/")
+	return &oauth2.Config{
+		ClientID:     p.ClientID,
+		ClientSecret: secret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  base + "/oauth/authorize",
+			TokenURL: base + "/oauth/token",
+		},
+		RedirectURL: redirectURI,
+		Scopes:      []string{"read:accounts"},
+	}
+}
+
+// mastodonCheckReachable is createOIDCProvider's fail-fast check for a
+// Mastodon-kind provider: there's no discovery document to fetch, so this
+// just confirms the instance API answers at the given base URL before
+// accepting it, catching typos immediately rather than on first login.
+func mastodonCheckReachable(ctx context.Context, issuerURL string) error {
+	base := strings.TrimRight(issuerURL, "/")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/instance", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("instance API returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// mastodonExchangeAndIdentify completes a Mastodon-style plain OAuth2 code
+// exchange (#1097) and resolves the caller's identity via the accounts API
+// — there is no ID token to verify, so verify_credentials is the source of
+// truth. issuer mirrors an OIDC issuer (the instance base URL); subject is
+// the account's stable numeric id (never the @username, which can change).
+func mastodonExchangeAndIdentify(ctx context.Context, p OIDCProvider, secret, redirectURI, code, verifier string) (issuer, subject string, err error) {
+	cfg := mastodonOAuth2Config(p, secret, redirectURI)
+	token, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
+	if err != nil {
+		return "", "", fmt.Errorf("token exchange: %w", err)
+	}
+
+	base := strings.TrimRight(p.IssuerURL, "/")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/accounts/verify_credentials", nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("verify_credentials returned status %d", resp.StatusCode)
+	}
+	var account struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+		return "", "", err
+	}
+	if account.ID == "" {
+		return "", "", fmt.Errorf("verify_credentials returned no account id")
+	}
+	return base, account.ID, nil
 }
 
 // GET /api/v1/oidc/providers?org_id=N — public list of enabled providers for
@@ -111,15 +200,15 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch {
 	case isAdmin:
-		rows, err = db.Query("SELECT id, org_id, issuer_url, client_id, display_name, enabled FROM oidc_providers ORDER BY display_name")
+		rows, err = db.Query("SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers ORDER BY display_name")
 	case orgID != nil:
 		rows, err = db.Query(
-			"SELECT id, org_id, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND (org_id IS NULL OR org_id=?) ORDER BY display_name",
+			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND (org_id IS NULL OR org_id=?) ORDER BY display_name",
 			*orgID,
 		)
 	default:
 		rows, err = db.Query(
-			"SELECT id, org_id, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND org_id IS NULL ORDER BY display_name",
+			"SELECT id, org_id, kind, issuer_url, client_id, display_name, enabled FROM oidc_providers WHERE enabled=1 AND org_id IS NULL ORDER BY display_name",
 		)
 	}
 	if err != nil {
@@ -132,7 +221,7 @@ func getOIDCProviders(w http.ResponseWriter, r *http.Request) {
 		var p OIDCProvider
 		var oid sql.NullInt64
 		var enabledInt int
-		if err := rows.Scan(&p.ID, &oid, &p.IssuerURL, &p.ClientID, &p.DisplayName, &enabledInt); err != nil {
+		if err := rows.Scan(&p.ID, &oid, &p.Kind, &p.IssuerURL, &p.ClientID, &p.DisplayName, &enabledInt); err != nil {
 			writeInternalError(w, err)
 			return
 		}
@@ -156,6 +245,7 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		OrgID        *int   `json:"org_id"`
+		Kind         string `json:"kind"`
 		IssuerURL    string `json:"issuer_url"`
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
@@ -165,15 +255,29 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if req.Kind == "" {
+		req.Kind = oidcProviderKindOIDC
+	}
+	if req.Kind != oidcProviderKindOIDC && req.Kind != oidcProviderKindMastodon {
+		writeError(w, "kind must be 'oidc' or 'mastodon'", http.StatusBadRequest)
+		return
+	}
 	if req.IssuerURL == "" || req.ClientID == "" || req.ClientSecret == "" || req.DisplayName == "" {
 		writeError(w, "issuer_url, client_id, client_secret, and display_name are required", http.StatusBadRequest)
 		return
 	}
 	// Fail fast on a bad issuer rather than accepting a provider that will
-	// error on every login attempt.
+	// error on every login attempt: real OIDC discovers its endpoints;
+	// Mastodon has no discovery document, so just check the instance API
+	// answers at all.
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	if _, err := oidcDiscover(ctx, req.IssuerURL); err != nil {
+	if req.Kind == oidcProviderKindMastodon {
+		if err := mastodonCheckReachable(ctx, req.IssuerURL); err != nil {
+			writeError(w, fmt.Sprintf("could not reach Mastodon instance: %v", err), http.StatusBadRequest)
+			return
+		}
+	} else if _, err := oidcDiscover(ctx, req.IssuerURL); err != nil {
 		writeError(w, fmt.Sprintf("could not discover OIDC issuer: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -186,8 +290,8 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		orgVal = *req.OrgID
 	}
 	result, err := db.Exec(
-		"INSERT INTO oidc_providers (org_id, issuer_url, client_id, client_secret, display_name, enabled) VALUES (?, ?, ?, ?, ?, ?)",
-		orgVal, req.IssuerURL, req.ClientID, req.ClientSecret, req.DisplayName, enabled,
+		"INSERT INTO oidc_providers (org_id, kind, issuer_url, client_id, client_secret, display_name, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		orgVal, req.Kind, req.IssuerURL, req.ClientID, req.ClientSecret, req.DisplayName, enabled,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -196,7 +300,7 @@ func createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(OIDCProvider{
-		ID: int(id), OrgID: req.OrgID, IssuerURL: req.IssuerURL, ClientID: req.ClientID,
+		ID: int(id), OrgID: req.OrgID, Kind: req.Kind, IssuerURL: req.IssuerURL, ClientID: req.ClientID,
 		DisplayName: req.DisplayName, Enabled: enabled,
 	})
 }
@@ -269,20 +373,16 @@ func oidcStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	discovered, err := oidcDiscover(r.Context(), p.IssuerURL)
-	if err != nil {
-		writeError(w, "Could not reach OIDC provider", http.StatusBadGateway)
-		return
-	}
-	oauth2Cfg := oidcOAuth2Config(p, secret, discovered, req.RedirectURI)
-
 	flowID, state, nonce, verifier, err := oidcNewFlow(p.ID, req.RedirectURI, req.InviteToken, 0)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
-
-	authURL := oauth2Cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce))
+	authURL, err := buildAuthorizeURL(r.Context(), p, secret, req.RedirectURI, state, nonce, verifier)
+	if err != nil {
+		writeError(w, "Could not reach identity provider", http.StatusBadGateway)
+		return
+	}
 	json.NewEncoder(w).Encode(map[string]string{"flow_id": flowID, "authorize_url": authURL})
 }
 
@@ -328,21 +428,34 @@ func oidcLinkStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	discovered, err := oidcDiscover(r.Context(), p.IssuerURL)
-	if err != nil {
-		writeError(w, "Could not reach OIDC provider", http.StatusBadGateway)
-		return
-	}
-	oauth2Cfg := oidcOAuth2Config(p, secret, discovered, req.RedirectURI)
-
 	flowID, state, nonce, verifier, err := oidcNewFlow(p.ID, req.RedirectURI, "", callerID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
-
-	authURL := oauth2Cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce))
+	authURL, err := buildAuthorizeURL(r.Context(), p, secret, req.RedirectURI, state, nonce, verifier)
+	if err != nil {
+		writeError(w, "Could not reach identity provider", http.StatusBadGateway)
+		return
+	}
 	json.NewEncoder(w).Encode(map[string]string{"flow_id": flowID, "authorize_url": authURL})
+}
+
+// buildAuthorizeURL constructs the provider's authorization URL for either
+// flavor of provider (#1097) — real OIDC (discovery + nonce) or Mastodon's
+// plain OAuth2 (fixed endpoints, no nonce/ID token) — shared by oidcStart
+// and oidcLinkStart so the two never drift.
+func buildAuthorizeURL(ctx context.Context, p OIDCProvider, secret, redirectURI, state, nonce, verifier string) (string, error) {
+	if p.Kind == oidcProviderKindMastodon {
+		cfg := mastodonOAuth2Config(p, secret, redirectURI)
+		return cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier)), nil
+	}
+	discovered, err := oidcDiscover(ctx, p.IssuerURL)
+	if err != nil {
+		return "", err
+	}
+	cfg := oidcOAuth2Config(p, secret, discovered, redirectURI)
+	return cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce)), nil
 }
 
 // oidcNewFlow generates state/nonce/PKCE and inserts the oidc_flows row —
@@ -463,37 +576,46 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	discovered, err := oidcDiscover(r.Context(), p.IssuerURL)
-	if err != nil {
-		writeError(w, "Could not reach OIDC provider", http.StatusBadGateway)
-		return
-	}
-	oauth2Cfg := oidcOAuth2Config(p, secret, discovered, flow.RedirectURI)
+	var issuer, subject string
+	if p.Kind == oidcProviderKindMastodon {
+		issuer, subject, err = mastodonExchangeAndIdentify(r.Context(), p, secret, flow.RedirectURI, req.Code, flow.PKCEVerifier)
+		if err != nil {
+			log.Printf("oidc callback from %s: mastodon exchange failed: %v", clientIP, err)
+			writeError(w, "Could not complete login with provider", http.StatusBadGateway)
+			return
+		}
+	} else {
+		discovered, err2 := oidcDiscover(r.Context(), p.IssuerURL)
+		if err2 != nil {
+			writeError(w, "Could not reach OIDC provider", http.StatusBadGateway)
+			return
+		}
+		oauth2Cfg := oidcOAuth2Config(p, secret, discovered, flow.RedirectURI)
 
-	token, err := oauth2Cfg.Exchange(r.Context(), req.Code, oauth2.VerifierOption(flow.PKCEVerifier))
-	if err != nil {
-		log.Printf("oidc callback from %s: code exchange failed: %v", clientIP, err)
-		writeError(w, "Could not complete login with provider", http.StatusBadGateway)
-		return
+		token, err2 := oauth2Cfg.Exchange(r.Context(), req.Code, oauth2.VerifierOption(flow.PKCEVerifier))
+		if err2 != nil {
+			log.Printf("oidc callback from %s: code exchange failed: %v", clientIP, err2)
+			writeError(w, "Could not complete login with provider", http.StatusBadGateway)
+			return
+		}
+		rawIDToken, ok := token.Extra("id_token").(string)
+		if !ok || rawIDToken == "" {
+			writeError(w, "Provider did not return an ID token", http.StatusBadGateway)
+			return
+		}
+		idToken, err2 := discovered.Verifier(&oidc.Config{ClientID: p.ClientID}).Verify(r.Context(), rawIDToken)
+		if err2 != nil {
+			log.Printf("oidc callback from %s: id_token verification failed: %v", clientIP, err2)
+			writeError(w, "Invalid ID token", http.StatusBadGateway)
+			return
+		}
+		if idToken.Nonce != flow.Nonce {
+			writeError(w, "Nonce mismatch", http.StatusBadRequest)
+			return
+		}
+		issuer = idToken.Issuer
+		subject = idToken.Subject
 	}
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok || rawIDToken == "" {
-		writeError(w, "Provider did not return an ID token", http.StatusBadGateway)
-		return
-	}
-	idToken, err := discovered.Verifier(&oidc.Config{ClientID: p.ClientID}).Verify(r.Context(), rawIDToken)
-	if err != nil {
-		log.Printf("oidc callback from %s: id_token verification failed: %v", clientIP, err)
-		writeError(w, "Invalid ID token", http.StatusBadGateway)
-		return
-	}
-	if idToken.Nonce != flow.Nonce {
-		writeError(w, "Nonce mismatch", http.StatusBadRequest)
-		return
-	}
-
-	issuer := idToken.Issuer
-	subject := idToken.Subject
 	if subject == "" {
 		writeError(w, "Provider did not return a subject", http.StatusBadGateway)
 		return

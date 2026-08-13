@@ -2315,6 +2315,7 @@ func migrateDB() {
 	db.Exec(`CREATE TABLE IF NOT EXISTS oidc_providers (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL DEFAULT 'oidc',
 		issuer_url TEXT NOT NULL,
 		client_id TEXT NOT NULL,
 		client_secret TEXT NOT NULL,
@@ -2323,6 +2324,15 @@ func migrateDB() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_oidc_providers_org_id ON oidc_providers(org_id)")
+	// Safety net: kind (#1097, Mastodon-style plain-OAuth2 providers alongside
+	// real OIDC) was added after oidc_providers first shipped.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('oidc_providers') WHERE name='kind'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE oidc_providers ADD COLUMN kind TEXT NOT NULL DEFAULT 'oidc'")
+		}
+	}
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_identities (
 		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		issuer_url TEXT NOT NULL,
@@ -3153,6 +3163,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS oidc_providers (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL DEFAULT 'oidc',
 		issuer_url TEXT NOT NULL,
 		client_id TEXT NOT NULL,
 		client_secret TEXT NOT NULL,

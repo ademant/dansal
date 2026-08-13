@@ -538,3 +538,162 @@ func TestChangeOwnPasswordRemoval(t *testing.T) {
 		t.Fatalf("password_hash = %q, want empty after removal", hash)
 	}
 }
+
+// fakeMastodonInstance is a minimal stand-in for a Mastodon instance's
+// plain-OAuth2 API (#1097): /api/v1/instance for the reachability check,
+// /oauth/authorize + /oauth/token for the code exchange, and
+// /api/v1/accounts/verify_credentials for identity resolution — deliberately
+// with no discovery document or ID token, unlike fakeOIDCProvider.
+type fakeMastodonInstance struct {
+	srv     *httptest.Server
+	baseURL string
+	acctID  string
+}
+
+func newFakeMastodonInstance(t *testing.T, clientID string) *fakeMastodonInstance {
+	t.Helper()
+	f := &fakeMastodonInstance{acctID: "mastodon-acct-99"}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/instance", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"uri": f.baseURL})
+	})
+	mux.HandleFunc("/oauth/authorize", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("client_id") != clientID {
+			http.Error(w, "unknown client", http.StatusBadRequest)
+			return
+		}
+		dest, _ := url.Parse(q.Get("redirect_uri"))
+		v := dest.Query()
+		v.Set("code", "test-mastodon-code")
+		v.Set("state", q.Get("state"))
+		dest.RawQuery = v.Encode()
+		http.Redirect(w, r, dest.String(), http.StatusFound)
+	})
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "test-mastodon-access-token",
+			"token_type":   "Bearer",
+		})
+	})
+	mux.HandleFunc("/api/v1/accounts/verify_credentials", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer test-mastodon-access-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"id": f.acctID, "username": "testuser"})
+	})
+
+	f.srv = httptest.NewServer(mux)
+	f.baseURL = f.srv.URL
+	return f
+}
+
+func (f *fakeMastodonInstance) Close() { f.srv.Close() }
+
+// TestMastodonOAuth2LoginAndLink drives the Mastodon-kind provider (#1097)
+// through the same three paths its OIDC counterpart already covers: invite
+// redemption, returning login, and linking to an existing account — proving
+// oidcCallback's kind branch produces the same (issuer, subject) contract
+// downstream regardless of which protocol produced it.
+func TestMastodonOAuth2LoginAndLink(t *testing.T) {
+	inviteToken := setupOIDCTestDB(t)
+
+	const clientID = "dansal-mastodon-client"
+	instance := newFakeMastodonInstance(t, clientID)
+	defer instance.Close()
+
+	res, err := db.Exec(
+		"INSERT INTO oidc_providers (kind, issuer_url, client_id, client_secret, display_name, enabled) VALUES ('mastodon', ?, ?, 'secret', 'Test Mastodon', 1)",
+		instance.baseURL, clientID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerID, _ := res.LastInsertId()
+
+	httpClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	runFlow := func(t *testing.T, r *http.Request) *httptest.ResponseRecorder {
+		t.Helper()
+		w := httptest.NewRecorder()
+		oidcStart(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("oidcStart status = %d, body = %s", w.Code, w.Body.String())
+		}
+		var startResp struct {
+			FlowID       string `json:"flow_id"`
+			AuthorizeURL string `json:"authorize_url"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &startResp); err != nil {
+			t.Fatal(err)
+		}
+		authResp, err := httpClient.Get(startResp.AuthorizeURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer authResp.Body.Close()
+		loc, err := url.Parse(authResp.Header.Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cbBody, _ := json.Marshal(oidcCallbackRequest{
+			FlowID: startResp.FlowID,
+			Code:   loc.Query().Get("code"),
+			State:  loc.Query().Get("state"),
+		})
+		return doHandler(t, oidcCallback, http.MethodPost, "/api/v1/oidc/callback", cbBody, nil)
+	}
+
+	// 1. Invite redemption creates a zero-PII account linked via Mastodon.
+	startBody, _ := json.Marshal(oidcStartRequest{
+		ProviderID:  int(providerID),
+		RedirectURI: "https://dansal.example/oidc/callback",
+		InviteToken: inviteToken,
+	})
+	w := runFlow(t, httptest.NewRequest(http.MethodPost, "/api/v1/oidc/start", strings.NewReader(string(startBody))))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("mastodon invite redemption status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var cbResp struct {
+		UserID int    `json:"user_id"`
+		Email  string `json:"email"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &cbResp); err != nil {
+		t.Fatal(err)
+	}
+	if cbResp.Email != "" {
+		t.Fatalf("expected zero-PII account, got email %q", cbResp.Email)
+	}
+	var linkedUserID int
+	if err := db.QueryRow("SELECT user_id FROM user_identities WHERE issuer_url=? AND subject=?", instance.baseURL, instance.acctID).Scan(&linkedUserID); err != nil {
+		t.Fatal(err)
+	}
+	if linkedUserID != cbResp.UserID {
+		t.Fatalf("linked user_id = %d, want %d", linkedUserID, cbResp.UserID)
+	}
+
+	// 2. Returning login resolves to the same account, no invite needed.
+	startBody2, _ := json.Marshal(oidcStartRequest{
+		ProviderID:  int(providerID),
+		RedirectURI: "https://dansal.example/oidc/callback",
+	})
+	w = runFlow(t, httptest.NewRequest(http.MethodPost, "/api/v1/oidc/start", strings.NewReader(string(startBody2))))
+	if w.Code != http.StatusOK {
+		t.Fatalf("mastodon returning login status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var cbResp2 struct {
+		UserID int `json:"user_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &cbResp2); err != nil {
+		t.Fatal(err)
+	}
+	if cbResp2.UserID != cbResp.UserID {
+		t.Fatalf("returning login resolved to user_id=%d, want %d", cbResp2.UserID, cbResp.UserID)
+	}
+}

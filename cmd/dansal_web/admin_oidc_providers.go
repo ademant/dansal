@@ -57,6 +57,10 @@ func adminOIDCProviderCreateHandler(cfg *Config, client *DansalClient) http.Hand
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		kind := strings.TrimSpace(r.FormValue("kind"))
+		if kind == "" {
+			kind = "oidc"
+		}
 		issuerURL := strings.TrimSpace(r.FormValue("issuer_url"))
 		clientID := strings.TrimSpace(r.FormValue("client_id"))
 		clientSecret := strings.TrimSpace(r.FormValue("client_secret"))
@@ -68,7 +72,7 @@ func adminOIDCProviderCreateHandler(cfg *Config, client *DansalClient) http.Hand
 			}
 		}
 		if issuerURL != "" && clientID != "" && clientSecret != "" && displayName != "" {
-			if _, err := client.CreateOIDCProvider(r.Context(), orgID, issuerURL, clientID, clientSecret, displayName, getSessionToken(r)); err != nil {
+			if _, err := client.CreateOIDCProvider(r.Context(), orgID, kind, issuerURL, clientID, clientSecret, displayName, getSessionToken(r)); err != nil {
 				log.Printf("create oidc provider %q: %v", issuerURL, err)
 			}
 		}

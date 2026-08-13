@@ -2722,6 +2722,7 @@ func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteL
 type OIDCProvider struct {
 	ID          int    `json:"id"`
 	OrgID       *int   `json:"org_id,omitempty"`
+	Kind        string `json:"kind"` // "oidc" (default) or "mastodon" (#1097)
 	IssuerURL   string `json:"issuer_url"`
 	ClientID    string `json:"client_id"`
 	DisplayName string `json:"display_name"`
@@ -2749,8 +2750,9 @@ func (c *DansalClient) GetOIDCProvidersAuthed(ctx context.Context, token string)
 }
 
 // CreateOIDCProvider registers a new external identity provider. Admin-only.
-func (c *DansalClient) CreateOIDCProvider(ctx context.Context, orgID *int, issuerURL, clientID, clientSecret, displayName string, token string) (OIDCProvider, error) {
+func (c *DansalClient) CreateOIDCProvider(ctx context.Context, orgID *int, kind, issuerURL, clientID, clientSecret, displayName string, token string) (OIDCProvider, error) {
 	payload := map[string]any{
+		"kind":          kind,
 		"issuer_url":    issuerURL,
 		"client_id":     clientID,
 		"client_secret": clientSecret,

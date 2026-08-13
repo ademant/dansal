@@ -11,6 +11,7 @@
   <thead>
     <tr>
       <th data-sort="str">{{$.Strings.T "admin_oidc_col_name"}}</th>
+      <th data-sort="str">{{$.Strings.T "admin_oidc_col_kind"}}</th>
       <th data-sort="str">{{$.Strings.T "admin_oidc_col_issuer"}}</th>
       <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th data-sort="str">{{$.Strings.T "admin_oidc_col_status"}}</th>
@@ -21,6 +22,7 @@
   {{range .Providers}}
   <tr>
     <td>{{.DisplayName}}</td>
+    <td>{{if eq .Kind "mastodon"}}{{$.Strings.T "admin_oidc_kind_mastodon"}}{{else}}{{$.Strings.T "admin_oidc_kind_oidc"}}{{end}}</td>
     <td class="muted" style="font-size:.85rem">{{.IssuerURL}}</td>
     <td>{{if .OrgID}}{{$oid := derefInt .OrgID}}{{range $.Data.Orgs}}{{if eq .ID $oid}}{{.Name}}{{end}}{{end}}{{else}}<span class="muted">{{$.Strings.T "admin_import_org_none"}}</span>{{end}}</td>
     <td>{{if .Enabled}}<span class="badge status-new">{{$.Strings.T "admin_oidc_enabled"}}</span>{{else}}<span class="badge status-exists">{{$.Strings.T "admin_oidc_disabled"}}</span>{{end}}</td>
@@ -41,6 +43,12 @@
   <form method="post" action="/admin/oidc-providers" class="add-form" style="flex-direction:column;align-items:stretch;max-width:32rem">
     <label>{{$.Strings.T "admin_oidc_col_name"}}
       <input type="text" name="display_name" required>
+    </label>
+    <label>{{$.Strings.T "admin_oidc_col_kind"}}
+      <select name="kind">
+        <option value="oidc">{{$.Strings.T "admin_oidc_kind_oidc"}}</option>
+        <option value="mastodon">{{$.Strings.T "admin_oidc_kind_mastodon"}}</option>
+      </select>
     </label>
     <label>{{$.Strings.T "admin_oidc_col_issuer"}}
       <input type="url" name="issuer_url" placeholder="https://example.com" required>

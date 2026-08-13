@@ -715,7 +715,7 @@ document.addEventListener('keydown',function(e){
     {{if hasTag .Tags "festival"}}<span class="badge festival">🎪 {{$.Strings.T "filter_type_festival"}}</span>{{end}}
     {{if hasTag .Tags "session"}}<span class="badge session">🎶 {{$.Strings.T "tag_session"}}</span>{{end}}
     {{if hasTag .Tags "concert"}}<span class="badge concert">🎸 {{$.Strings.T "tag_concert"}}</span>{{end}}
-    {{range limitTags .Tags}}<a href="/tags/{{.}}" class="tag">{{tagName $.TagMap .}}</a>{{end}}
+    {{range limitTags .Tags}}<a href="/tags/{{.}}" class="tag">{{tagLabel $.Strings $.TagMap .}}</a>{{end}}
     {{$hidden := hiddenTagCount .Tags}}{{if gt $hidden 0}}<span class="tag tag-more">+{{$hidden}}</span>{{end}}
   </td>
   <td class="col-attr">

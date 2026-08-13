@@ -27,7 +27,7 @@
     {{range .Tags}}
     <li>
       <a href="/tags/{{.Slug}}" class="chip chip-tag">
-        {{.Name}}{{if .EventCount}}<span class="tag-count">{{.EventCount}}</span>{{end}}
+        {{tagLabelOf $.Strings .}}{{if .EventCount}}<span class="tag-count">{{.EventCount}}</span>{{end}}
       </a>
     </li>
     {{end}}

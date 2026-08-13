@@ -76,6 +76,48 @@ func TestResolveFeedTags(t *testing.T) {
 	}
 }
 
+// TestBalFolkTagRenamedToBall verifies the bal-folk tag's display name is
+// "Ball" both on a fresh install (createTables' seed insert) and after
+// migrateDB runs against a pre-existing DB still holding the old "Bal Folk"
+// name (#1094). The slug itself is untouched — only tags.name changes.
+func TestBalFolkTagRenamedToBall(t *testing.T) {
+	old := db
+	defer func() { db = old }()
+
+	conn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	db = conn
+
+	if err := createTables(); err != nil {
+		t.Fatalf("createTables: %v", err)
+	}
+	migrateDB()
+
+	var name string
+	if err := db.QueryRow("SELECT name FROM tags WHERE slug = 'bal-folk'").Scan(&name); err != nil {
+		t.Fatalf("query tags: %v", err)
+	}
+	if name != "Ball" {
+		t.Fatalf("bal-folk tag name = %q, want %q", name, "Ball")
+	}
+
+	// Simulate a pre-existing DB that still has the old name; migrateDB
+	// should rename it in place without touching the slug.
+	if _, err := db.Exec("UPDATE tags SET name = 'Bal Folk' WHERE slug = 'bal-folk'"); err != nil {
+		t.Fatal(err)
+	}
+	migrateDB()
+	if err := db.QueryRow("SELECT name FROM tags WHERE slug = 'bal-folk'").Scan(&name); err != nil {
+		t.Fatalf("query tags: %v", err)
+	}
+	if name != "Ball" {
+		t.Fatalf("bal-folk tag name after re-migration = %q, want %q", name, "Ball")
+	}
+}
+
 // TestWithEntrySavepointIsolatesFailure verifies that an error from one
 // entry's closure rolls back only that entry's writes via SAVEPOINT, while
 // the surrounding transaction remains usable for subsequent entries and

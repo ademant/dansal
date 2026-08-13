@@ -28,6 +28,32 @@ func tagDisplayLimit(tags []string) int {
 	return limit
 }
 
+// tagI18nKeys maps a controlled-vocabulary tag slug to its i18n translation
+// key, for tags whose public display name should be localized rather than
+// the tag's static English tags.name in the DB (#1094). bal-folk is the only
+// entry today: the slug means "the Balfolk dance style" for matching
+// purposes, but publicly it should read as the style-agnostic "Ball" — the
+// generic term for a partnered social-dance event, as dansal opens to other
+// dance styles. Slugs not listed here fall back to the DB name.
+var tagI18nKeys = map[string]string{
+	"bal-folk": "tag_ball",
+}
+
+// tagLabel resolves a tag's public display name: the i18n translation for
+// slug if one is registered in tagI18nKeys, else dbName (the DB's
+// tags.name), else the bare slug as a last resort.
+func tagLabel(strs I18nStrings, slug, dbName string) string {
+	if key, ok := tagI18nKeys[slug]; ok {
+		if s := strs.T(key); s != key {
+			return s
+		}
+	}
+	if dbName != "" {
+		return dbName
+	}
+	return slug
+}
+
 var tmplFuncsTags = template.FuncMap{
 	"limitTags": func(tags []string) []string {
 		if limit := tagDisplayLimit(tags); len(tags) > limit {
@@ -46,6 +72,16 @@ var tmplFuncsTags = template.FuncMap{
 			return t.Name
 		}
 		return slug
+	},
+	// tagLabel is tagName plus the i18n override from tagI18nKeys (#1094) —
+	// use this instead of tagName wherever a tag is shown to end users.
+	"tagLabel": func(strs I18nStrings, tagMap map[string]Tag, slug string) string {
+		return tagLabel(strs, slug, tagMap[slug].Name)
+	},
+	// tagLabelOf is tagLabel for a Tag struct already in hand (no TagMap
+	// lookup needed), e.g. the current tag on its own /tags/{slug} page.
+	"tagLabelOf": func(strs I18nStrings, tag Tag) string {
+		return tagLabel(strs, tag.Slug, tag.Name)
 	},
 	"tagKey": func(slug string) string {
 		return "tag_" + strings.ReplaceAll(slug, "-", "_")

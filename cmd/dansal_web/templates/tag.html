@@ -1,15 +1,15 @@
 {{template "base" .}}
 {{define "head_extra"}}{{with .Data.Tag}}
 <link rel="alternate" type="application/activity+json" href="https://{{$.Domain}}/tags/{{.Slug}}">
-<link rel="alternate" type="application/atom+xml" title="{{.Name}}" href="https://{{$.Domain}}/tags/{{.Slug}}.atom">
-<link rel="alternate" type="application/feed+json" title="{{.Name}}" href="https://{{$.Domain}}/tags/{{.Slug}}.jsonfeed">
+<link rel="alternate" type="application/atom+xml" title="{{tagLabelOf $.Strings .}}" href="https://{{$.Domain}}/tags/{{.Slug}}.atom">
+<link rel="alternate" type="application/feed+json" title="{{tagLabelOf $.Strings .}}" href="https://{{$.Domain}}/tags/{{.Slug}}.jsonfeed">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
     {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"},
-    {"@type": "ListItem", "position": 2, "name": "{{.Name | js}}", "item": "{{$.CanonicalURL | js}}"}
+    {"@type": "ListItem", "position": 2, "name": "{{tagLabelOf $.Strings . | js}}", "item": "{{$.CanonicalURL | js}}"}
   ]
 }
 </script>
@@ -17,7 +17,7 @@
 {{define "content"}}
 {{with .Data}}
 <div class="tag-header">
-  <h1>#{{.Tag.Name}}</h1>
+  <h1>#{{tagLabelOf $.Strings .Tag}}</h1>
 </div>
 
 <div class="page-section">
@@ -47,7 +47,7 @@
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </div>
     <div class="event-attr-row">{{template "event-attr-icons" (dict "Event" . "Strings" $.Strings)}}</div>
-    {{if .Tags}}<div>{{range .Tags}}<a href="/tags/{{.}}" class="tag">#{{.}}</a>{{end}}</div>{{end}}
+    {{if .Tags}}<div>{{range .Tags}}<a href="/tags/{{.}}" class="tag">#{{tagLabel $.Strings $.Data.TagMap .}}</a>{{end}}</div>{{end}}
     {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
   </li>
   {{end}}

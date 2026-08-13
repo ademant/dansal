@@ -63,6 +63,10 @@ func tagsIndexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 type TagPageData struct {
 	Tag    Tag
 	Events []Event
+	// TagMap resolves each listed event's other tags to their display names
+	// (#1094) — without it, tag.html's per-event badges fall back to the
+	// bare slug.
+	TagMap map[string]Tag
 }
 
 // tagHandler serves GET /tags/{slug} — content-negotiated like /org/{name}
@@ -100,11 +104,9 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 			return
 		}
 
-		title := tag.Name
-		if title == "" {
-			title = slug
-		}
-		td := tmplData(r, cfg, i18n, title, TagPageData{Tag: tag, Events: events})
+		strs := i18n.Strings(i18n.detectLang(r))
+		title := tagLabel(strs, slug, tag.Name)
+		td := tmplData(r, cfg, i18n, title, TagPageData{Tag: tag, Events: events, TagMap: tagMap})
 		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.tag, td)
 	}

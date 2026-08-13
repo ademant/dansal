@@ -1158,7 +1158,7 @@ func migrateDB() {
 		name     TEXT NOT NULL,
 		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
 	)`)
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Bal Folk',      'format')")
+		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Ball',          'format')")
 		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',     'Fest Noz',      'format')")
 		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',      'Session',       'format')")
 		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',      'Concert',       'format')")
@@ -1886,7 +1886,7 @@ func migrateDB() {
 		var n int
 		db.QueryRow("SELECT COUNT(*) FROM tags").Scan(&n)
 		if n == 0 {
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',          'Bal Folk',          'format')")
+			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',          'Ball',              'format')")
 			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',          'Fest Noz',          'format')")
 			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',           'Session',           'format')")
 			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',           'Concert',           'format')")
@@ -2293,6 +2293,14 @@ func migrateDB() {
 		tag_slug   TEXT NOT NULL REFERENCES tags(slug) ON DELETE CASCADE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
+
+	// #1094: the bal-folk tag means "this is a partnered social-dance event"
+	// (as opposed to workshop/concert/festival) as much as it means "the
+	// Balfolk dance style" — the slug stays bal-folk (URLs, has_ball
+	// derivation, event_tags rows, feed subscriptions all depend on it), but
+	// the display name moves to the style-agnostic "Ball" ahead of dansal
+	// opening to other dance styles.
+	db.Exec("UPDATE tags SET name = 'Ball' WHERE slug = 'bal-folk' AND name != 'Ball'")
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE

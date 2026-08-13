@@ -2667,6 +2667,22 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear duplicate-review flags on partners of this event, but only when
+	// the partner has no OTHER flagged event still pointing to it.  If three
+	// events are mutually flagged and one is deleted, the remaining two may
+	// still be duplicates of each other and must keep their flags.
+	// The FK ON DELETE SET NULL handles duplicate_of_id itself;
+	// needs_duplicate_review must be cleared explicitly.
+	db.Exec(`UPDATE events
+	          SET needs_duplicate_review=0, duplicate_of_id=NULL
+	          WHERE duplicate_of_id=?
+	            AND NOT EXISTS (
+	              SELECT 1 FROM events z
+	              WHERE z.duplicate_of_id = events.id
+	                AND z.id != ?
+	                AND z.needs_duplicate_review = 1
+	            )`, id, id)
+
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
 		writeInternalError(w, err)

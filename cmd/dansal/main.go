@@ -2268,6 +2268,21 @@ func migrateDB() {
 	// that value; every subsequent one collided. Clear the empty-string rows
 	// left behind by the bug (safe to rerun: no-op once none remain).
 	db.Exec("UPDATE locations SET geohash = NULL WHERE geohash = ''")
+
+	// #1092: when a duplicate-pair partner was deleted, the FK ON DELETE SET NULL
+	// cleared duplicate_of_id on the surviving event but left needs_duplicate_review=1.
+	// One-time clean-up: clear the flag on any event whose partner is gone AND
+	// which no other flagged event still references (so three-way duplicate groups
+	// are only partially cleared — the surviving pair keeps its flags).
+	db.Exec(`UPDATE events SET needs_duplicate_review=0
+	          WHERE needs_duplicate_review=1
+	            AND (duplicate_of_id IS NULL
+	              OR NOT EXISTS (SELECT 1 FROM events p WHERE p.id=events.duplicate_of_id))
+	            AND NOT EXISTS (
+	              SELECT 1 FROM events z
+	              WHERE z.duplicate_of_id = events.id
+	                AND z.needs_duplicate_review = 1
+	            )`)
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE

@@ -2815,6 +2815,58 @@ func (c *DansalClient) OIDCCallback(ctx context.Context, flowID, code, state str
 	return &out, nil
 }
 
+// UserIdentity mirrors the JSON returned by GET /api/v1/user/oidc-identities
+// — a linked external identity shown on /settings (#1096).
+type UserIdentity struct {
+	ID          int64  `json:"id"`
+	IssuerURL   string `json:"issuer_url"`
+	DisplayName string `json:"display_name,omitempty"`
+	LinkedAt    string `json:"linked_at"`
+}
+
+// ListOIDCIdentities lists the caller's own linked OIDC identities.
+func (c *DansalClient) ListOIDCIdentities(ctx context.Context, token string) ([]UserIdentity, error) {
+	var items []UserIdentity
+	return items, c.do(ctx, http.MethodGet, "/api/v1/user/oidc-identities", token, nil, &items)
+}
+
+// DeleteOIDCIdentity unlinks an identity. Fails with a conflict if it's the
+// caller's last login method.
+func (c *DansalClient) DeleteOIDCIdentity(ctx context.Context, id int64, token string) error {
+	return c.do(ctx, http.MethodDelete, "/api/v1/user/oidc-identities/"+strconv.FormatInt(id, 10), token, nil, nil, http.StatusNoContent)
+}
+
+// OIDCLinkStart begins an authorization-code+PKCE flow for an
+// already-authenticated user who wants to link providerID to their existing
+// account, mirroring OIDCStart's shape but authenticated and without an
+// invite token.
+func (c *DansalClient) OIDCLinkStart(ctx context.Context, providerID int, redirectURI, token string) (flowID, authorizeURL string, err error) {
+	body, _ := json.Marshal(struct {
+		ProviderID  int    `json:"provider_id"`
+		RedirectURI string `json:"redirect_uri"`
+	}{providerID, redirectURI})
+	var out struct {
+		FlowID       string `json:"flow_id"`
+		AuthorizeURL string `json:"authorize_url"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/v1/oidc/link-start", token, body, &out); err != nil {
+		return "", "", err
+	}
+	return out.FlowID, out.AuthorizeURL, nil
+}
+
+// OIDCLinkCallback completes a link flow started via OIDCLinkStart. Unlike
+// OIDCCallback, no session is issued — the caller is already logged in —
+// so this just reports success or failure of attaching the identity.
+func (c *DansalClient) OIDCLinkCallback(ctx context.Context, flowID, code, state string) error {
+	body, _ := json.Marshal(struct {
+		FlowID string `json:"flow_id"`
+		Code   string `json:"code"`
+		State  string `json:"state"`
+	}{flowID, code, state})
+	return c.do(ctx, http.MethodPost, "/api/v1/oidc/callback", "", body, nil, http.StatusOK, http.StatusCreated)
+}
+
 func (c *DansalClient) CreateInvite(ctx context.Context, inviteType string, orgID *int, token string) (InviteLink, error) {
 	payload := map[string]any{"type": inviteType}
 	if orgID != nil {

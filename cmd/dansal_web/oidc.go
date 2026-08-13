@@ -94,3 +94,75 @@ func oidcErrorRedirect(inviteToken string) string {
 	}
 	return "/login?error=oidc"
 }
+
+// oidcLinkFlowCookie carries the flow_id issued by dansal's
+// POST /api/v1/oidc/link-start (#1096) — separate from oidcFlowCookie/path
+// so a login flow and a link flow started in two tabs can never collide.
+const oidcLinkFlowCookie = "dsw_oidc_link_flow"
+
+// oidcLinkStartHandler begins a link flow for an already-authenticated user
+// who wants to attach providerID to their existing account — reached from
+// the "Link" button on /settings. GET /settings/oidc/{id}/link-start
+func oidcLinkStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
+		providerID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		redirectURI := cfg.publicBaseURL() + "/settings/oidc/" + strconv.Itoa(providerID) + "/link-callback"
+		token := getSessionToken(r)
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		flowID, authorizeURL, err := client.OIDCLinkStart(ctx, providerID, redirectURI, token)
+		if err != nil {
+			log.Printf("oidc link start: %v", err)
+			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     oidcLinkFlowCookie,
+			Value:    flowID,
+			Path:     "/settings/oidc",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   600,
+		})
+		http.Redirect(w, r, authorizeURL, http.StatusSeeOther)
+	}
+}
+
+// oidcLinkCallbackHandler receives the provider's redirect back for a link
+// flow and reports success/failure back to /settings. No session is
+// re-issued — the caller was already logged in throughout.
+// GET /settings/oidc/{id}/link-callback
+func oidcLinkCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
+		code := r.URL.Query().Get("code")
+		state := r.URL.Query().Get("state")
+		cookie, cookieErr := r.Cookie(oidcLinkFlowCookie)
+		http.SetCookie(w, &http.Cookie{Name: oidcLinkFlowCookie, Value: "", Path: "/settings/oidc", MaxAge: -1})
+
+		if cookieErr != nil || code == "" || state == "" {
+			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		if err := client.OIDCLinkCallback(ctx, cookie.Value, code, state); err != nil {
+			log.Printf("oidc link callback: %v", err)
+			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?linked=1", http.StatusSeeOther)
+	}
+}

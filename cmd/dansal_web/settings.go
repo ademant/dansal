@@ -27,8 +27,13 @@ type SettingsData struct {
 	NewAPIKey        *APIKey
 	Sessions         []SessionInfo
 	Passkeys         []PasskeyInfo
-	TOTPSetupURI     string // non-empty during setup flow
-	TOTPSetupSecret  string // shown as manual-entry fallback during setup
+	TOTPSetupURI     string         // non-empty during setup flow
+	TOTPSetupSecret  string         // shown as manual-entry fallback during setup
+	OIDCProviders    []OIDCProvider // instance-wide providers offered as "Link" buttons (#1096)
+	OIDCIdentities   []UserIdentity // already-linked identities
+	Linked           bool           // true right after a successful link
+	LinkError        bool
+	UnlinkError      bool
 }
 
 // settingsThrottleCheck redirects to /settings when the client's IP is
@@ -58,6 +63,8 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		keys, _ := client.ListAPIKeys(r.Context(), token)
 		sessions, _ := client.GetSessions(r.Context(), token)
 		passkeys, _ := client.ListPasskeys(r.Context(), token)
+		oidcProviders, _ := client.GetOIDCProviders(r.Context(), nil)
+		oidcIdentities, _ := client.ListOIDCIdentities(r.Context(), token)
 		title := i18n.T(r, "settings_title")
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
@@ -68,6 +75,11 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			APIKeys:         keys,
 			Sessions:        sessions,
 			Passkeys:        passkeys,
+			OIDCProviders:   oidcProviders,
+			OIDCIdentities:  oidcIdentities,
+			Linked:          r.URL.Query().Get("linked") == "1",
+			LinkError:       r.URL.Query().Get("linkerr") == "1",
+			UnlinkError:     r.URL.Query().Get("unlinkerr") == "1",
 		}))
 	}
 }
@@ -436,6 +448,33 @@ func settingsPasskeyDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
+		}
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	}
+}
+
+// settingsOIDCIdentityDeleteHandler unlinks an OIDC identity (#1096). The
+// API's self-lockout guard (hasOtherLoginMethod) rejects it with 409 when
+// it's the caller's last login method — surfaced back to /settings as
+// unlinkerr=1 rather than silently dropped.
+func settingsOIDCIdentityDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("id")
+		token := getSessionToken(r)
+		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/user/oidc-identities/"+id, token, nil)
+		if err != nil {
+			http.Redirect(w, r, "/settings?unlinkerr=1", http.StatusSeeOther)
+			return
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			http.Redirect(w, r, "/settings?unlinkerr=1", http.StatusSeeOther)
+			return
 		}
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}

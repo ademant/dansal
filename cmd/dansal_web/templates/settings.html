@@ -6,7 +6,7 @@
   {{with .Data}}
   {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
-  {{if and (not .User.Email) (not .User.Telegram) (not .User.Matrix) (not .User.HasPassword) (lt (len .Passkeys) 2)}}<p class="msg msg-warn" role="alert">{{$.Strings.T "settings_no_backup_warn"}}</p>{{end}}
+  {{if and (not .User.Email) (not .User.Telegram) (not .User.Matrix) (not .User.HasPassword) (not .OIDCIdentities) (lt (len .Passkeys) 2)}}<p class="msg msg-warn" role="alert">{{$.Strings.T "settings_no_backup_warn"}}</p>{{end}}
   {{if .VerifySent}}<p class="msg msg-ok" role="status">
     {{if eq .VerifySent "telegram"}}{{$.Strings.T "settings_verify_sent_telegram"}}
     {{else if eq .VerifySent "matrix"}}{{$.Strings.T "settings_verify_sent_matrix"}}
@@ -17,6 +17,9 @@
     {{else if eq .VerifiedChannel "matrix"}}{{$.Strings.T "settings_matrix_verified_ok"}}
     {{else}}{{$.Strings.T "settings_email_verified_ok"}}{{end}}
   </p>{{end}}
+  {{if .Linked}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_oidc_linked_ok"}}</p>{{end}}
+  {{if .LinkError}}<p class="msg msg-error" role="alert">{{$.Strings.T "settings_oidc_link_error"}}</p>{{end}}
+  {{if .UnlinkError}}<p class="msg msg-error" role="alert">{{$.Strings.T "settings_oidc_unlink_error"}}</p>{{end}}
 
   <div class="settings-card">
     <h2>{{$.Strings.T "settings_account"}}</h2>
@@ -199,6 +202,36 @@
   </div>
 
   <div class="settings-card">
+    <h2>{{$.Strings.T "settings_oidc_title"}}</h2>
+    {{if .OIDCIdentities}}
+    <table class="apikey-table">
+      <tbody>
+      {{range .OIDCIdentities}}
+      <tr>
+        <td>{{if .DisplayName}}{{.DisplayName}}{{else}}{{.IssuerURL}}{{end}}</td>
+        <td style="font-size:.82rem;color:#888">{{.LinkedAt}}</td>
+        <td>
+          <form method="post" action="/settings/oidc/{{.ID}}/unlink" style="display:inline">
+            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_oidc_confirm_unlink"}}')">{{$.Strings.T "settings_oidc_unlink"}}</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="hint">{{$.Strings.T "settings_oidc_none"}}</p>
+    {{end}}
+    {{if .OIDCProviders}}
+    <div class="oidc-link-btns">
+      {{range .OIDCProviders}}
+      <a class="btn-secondary" href="/settings/oidc/{{.ID}}/link-start">{{$.Strings.TF "settings_oidc_link_btn" .DisplayName}}</a>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+
+  <div class="settings-card">
     <h2>{{$.Strings.T "settings_password_title"}}</h2>
     <form method="post" action="/settings/password" class="settings-form">
       {{if .User.HasPassword}}
@@ -206,8 +239,15 @@
       <input id="old_password" type="password" name="old_password" required autocomplete="current-password">
       {{end}}
       <label for="new_password">{{$.Strings.T "settings_password_new"}}</label>
+      {{if .User.HasPassword}}
+      <input id="new_password" type="password" name="new_password" autocomplete="new-password" minlength="8">
+        {{if or .Passkeys .OIDCIdentities}}
+        <p class="hint">{{$.Strings.T "settings_password_remove_hint"}}</p>
+        {{end}}
+      {{else}}
       <input id="new_password" type="password" name="new_password" required autocomplete="new-password" minlength="8">
-      {{if not .User.HasPassword}}<p class="hint">{{$.Strings.T "settings_password_set_hint"}}</p>{{end}}
+      <p class="hint">{{$.Strings.T "settings_password_set_hint"}}</p>
+      {{end}}
       <div class="form-actions">
         <button type="submit">{{$.Strings.T "settings_password_save_btn"}}</button>
       </div>
@@ -360,6 +400,8 @@
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;cursor:pointer;background:#fff;color:#333;text-decoration:none}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.oidc-link-btns{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.oidc-link-btns .btn-secondary{text-decoration:none;display:inline-block}
 .session-current td{background:#f0f4ff}
 .session-ip{display:block;color:#888;font-size:.78rem}
 #idle-warning{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:.6rem 1.2rem;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:999;display:none}

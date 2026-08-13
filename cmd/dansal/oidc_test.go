@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -336,5 +337,204 @@ func TestOIDCInviteRedemptionEndToEnd(t *testing.T) {
 	}
 	if cbResp2.UserID != cbResp.UserID {
 		t.Fatalf("returning login resolved to user_id=%d, want %d", cbResp2.UserID, cbResp.UserID)
+	}
+}
+
+// authedRequest builds a request carrying the X-User-ID/X-User-Role headers
+// TokenMiddleware would normally set, for calling authenticated handlers
+// directly in tests (mirrors doHandler but with caller identity attached).
+func authedRequest(t *testing.T, method, target string, body []byte, userID int, role string) *http.Request {
+	t.Helper()
+	var r *http.Request
+	if body != nil {
+		r = httptest.NewRequest(method, target, strings.NewReader(string(body)))
+		r.Header.Set("Content-Type", "application/json")
+	} else {
+		r = httptest.NewRequest(method, target, nil)
+	}
+	r.Header.Set("X-User-ID", strconv.Itoa(userID))
+	r.Header.Set("X-User-Role", role)
+	return r
+}
+
+// TestOIDCLinkExistingAccount drives the link flow (#1096) for an
+// already-authenticated user, and the unlink + self-lockout guards that go
+// with it.
+func TestOIDCLinkExistingAccount(t *testing.T) {
+	setupOIDCTestDB(t)
+
+	const clientID = "dansal-link-client"
+	idp := newFakeOIDCProvider(t, clientID)
+	defer idp.Close()
+
+	res, err := db.Exec(
+		"INSERT INTO oidc_providers (issuer_url, client_id, client_secret, display_name, enabled) VALUES (?, ?, 'secret', 'Link IdP', 1)",
+		idp.issuer, clientID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerID, _ := res.LastInsertId()
+
+	// A password-holding user wants to add SSO as a second login method.
+	res, err = db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('existing@example.com','Existing','somehash','user')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	userIDVal, _ := res.LastInsertId()
+	userID := int(userIDVal)
+
+	httpClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+
+	runLinkFlow := func(t *testing.T, forUserID int) *httptest.ResponseRecorder {
+		startBody, _ := json.Marshal(oidcLinkStartRequest{
+			ProviderID:  int(providerID),
+			RedirectURI: "https://dansal.example/settings/oidc/callback",
+		})
+		var startResp struct {
+			FlowID       string `json:"flow_id"`
+			AuthorizeURL string `json:"authorize_url"`
+		}
+		w := httptest.NewRecorder()
+		oidcLinkStart(w, authedRequest(t, http.MethodPost, "/api/v1/oidc/link-start", startBody, forUserID, RoleUser))
+		if w.Code != http.StatusOK {
+			t.Fatalf("oidcLinkStart status = %d, body = %s", w.Code, w.Body.String())
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &startResp); err != nil {
+			t.Fatal(err)
+		}
+
+		authResp, err := httpClient.Get(startResp.AuthorizeURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer authResp.Body.Close()
+		loc, err := url.Parse(authResp.Header.Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cbBody, _ := json.Marshal(oidcCallbackRequest{
+			FlowID: startResp.FlowID,
+			Code:   loc.Query().Get("code"),
+			State:  loc.Query().Get("state"),
+		})
+		return doHandler(t, oidcCallback, http.MethodPost, "/api/v1/oidc/callback", cbBody, nil)
+	}
+
+	// 1. Link succeeds and the identity is attached to the caller's own account.
+	w := runLinkFlow(t, userID)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("link callback status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var linkedUserID int
+	if err := db.QueryRow("SELECT user_id FROM user_identities WHERE issuer_url=? AND subject=?", idp.issuer, "test-subject-42").Scan(&linkedUserID); err != nil {
+		t.Fatal(err)
+	}
+	if linkedUserID != userID {
+		t.Fatalf("linked to user_id=%d, want %d", linkedUserID, userID)
+	}
+
+	// 2. Listing shows the identity.
+	w = httptest.NewRecorder()
+	listUserOIDCIdentities(w, authedRequest(t, http.MethodGet, "/api/v1/user/oidc-identities", nil, userID, RoleUser))
+	var identities []UserIdentityInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &identities); err != nil {
+		t.Fatal(err)
+	}
+	if len(identities) != 1 {
+		t.Fatalf("expected 1 linked identity, got %d", len(identities))
+	}
+
+	// 3. A second account cannot link the very same (issuer, subject).
+	res, err = db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('other@example.com','Other','otherhash','user')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherUserIDVal, _ := res.LastInsertId()
+	w = runLinkFlow(t, int(otherUserIDVal))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 linking an already-linked identity to a different account, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 4. Unlink succeeds: the user still has a password afterwards.
+	w = httptest.NewRecorder()
+	r := authedRequest(t, http.MethodDelete, "/api/v1/user/oidc-identities/"+strconv.Itoa(int(identities[0].ID)), nil, userID, RoleUser)
+	r.SetPathValue("id", strconv.Itoa(int(identities[0].ID)))
+	deleteUserOIDCIdentity(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("unlink status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	// 5. Self-lockout guard: link again, then strip the password so the
+	// identity is the account's only login method — unlink must now be
+	// refused.
+	w = runLinkFlow(t, userID)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("re-link status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if _, err := db.Exec("UPDATE users SET password_hash='' WHERE id=?", userID); err != nil {
+		t.Fatal(err)
+	}
+	var rowID int64
+	if err := db.QueryRow("SELECT rowid FROM user_identities WHERE user_id=?", userID).Scan(&rowID); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	r = authedRequest(t, http.MethodDelete, "/api/v1/user/oidc-identities/"+strconv.Itoa(int(rowID)), nil, userID, RoleUser)
+	r.SetPathValue("id", strconv.Itoa(int(rowID)))
+	deleteUserOIDCIdentity(w, r)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 unlinking last login method, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestChangeOwnPasswordRemoval covers the "clear my password" path (#1096):
+// allowed once another login method exists, refused when it would leave the
+// account with none.
+func TestChangeOwnPasswordRemoval(t *testing.T) {
+	setupOIDCTestDB(t)
+
+	pwHash, err := hashPassword("correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := db.Exec("INSERT INTO users (email, display_name, password_hash, role) VALUES ('pw@example.com','PW','" + pwHash + "','user')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	userIDVal, _ := res.LastInsertId()
+	userID := int(userIDVal)
+
+	// No other login method yet — clearing the password must be refused.
+	body, _ := json.Marshal(map[string]string{"old_password": "correct horse battery staple", "new_password": ""})
+	w := httptest.NewRecorder()
+	changeOwnPassword(w, authedRequest(t, http.MethodPost, "/api/v1/user/password", body, userID, RoleUser))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 clearing password with no other login method, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Add a passkey credential directly (register ceremony is out of scope
+	// here — only its presence matters for the guard).
+	if _, err := db.Exec(
+		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, 'cred1', X'00', 0, X'00', 0)",
+		userID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	w = httptest.NewRecorder()
+	changeOwnPassword(w, authedRequest(t, http.MethodPost, "/api/v1/user/password", body, userID, RoleUser))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 clearing password with a passkey present, got %d: %s", w.Code, w.Body.String())
+	}
+	var hash string
+	if err := db.QueryRow("SELECT password_hash FROM users WHERE id=?", userID).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	if hash != "" {
+		t.Fatalf("password_hash = %q, want empty after removal", hash)
 	}
 }

@@ -664,15 +664,6 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	if len(req.NewPassword) < 8 {
-		writeError(w, "Password must be at least 8 characters", http.StatusBadRequest)
-		return
-	}
-	if isPasswordPwned(r.Context(), req.NewPassword) {
-		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusBadRequest)
-		return
-	}
-
 	var existingHash string
 	db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", userID).Scan(&existingHash)
 
@@ -686,6 +677,36 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Current password is incorrect", http.StatusUnauthorized)
 			return
 		}
+	}
+
+	// An empty new_password means "remove my password entirely" (#1096) —
+	// allowed only when a passkey or linked OIDC identity remains, so the
+	// account is never left with zero login methods. Deliberately not
+	// hasOtherLoginMethod here: that helper counts the *current* password as
+	// a login method, which is exactly the one about to be cleared.
+	if req.NewPassword == "" {
+		var credCount, identCount int
+		db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=?", userID).Scan(&credCount)
+		db.QueryRow("SELECT COUNT(*) FROM user_identities WHERE user_id=?", userID).Scan(&identCount)
+		if credCount+identCount == 0 {
+			writeError(w, "Cannot remove your password without another login method (passkey or SSO) configured", http.StatusConflict)
+			return
+		}
+		if _, err := db.Exec("UPDATE users SET password_hash='' WHERE id=?", userID); err != nil {
+			writeError(w, "Failed to update password", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		writeError(w, "Password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+	if isPasswordPwned(r.Context(), req.NewPassword) {
+		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusBadRequest)
+		return
 	}
 
 	newHash, err := hashPassword(req.NewPassword)

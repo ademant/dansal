@@ -2339,8 +2339,19 @@ func migrateDB() {
 		pkce_verifier TEXT NOT NULL,
 		redirect_uri  TEXT NOT NULL,
 		invite_token  TEXT,
+		link_user_id  INTEGER,
 		expires_at    INTEGER NOT NULL
 	)`)
+	// Safety net: link_user_id (#1096, "link OIDC to an existing account")
+	// was added after oidc_flows first shipped — ensure it exists even on a
+	// DB that already had the table from an earlier oidc_flows CREATE.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('oidc_flows') WHERE name='link_user_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE oidc_flows ADD COLUMN link_user_id INTEGER")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3166,6 +3177,7 @@ func createTables() error {
 		pkce_verifier TEXT NOT NULL,
 		redirect_uri  TEXT NOT NULL,
 		invite_token  TEXT,
+		link_user_id  INTEGER,
 		expires_at    INTEGER NOT NULL
 	);
 	CREATE TABLE IF NOT EXISTS events (
@@ -3880,6 +3892,10 @@ func main() {
 	smux.Handle("DELETE /api/v1/oidc/providers/{id}", auth(deleteOIDCProvider))
 	smux.HandleFunc("POST /api/v1/oidc/start", oidcStart)
 	smux.HandleFunc("POST /api/v1/oidc/callback", oidcCallback)
+	// #1096: link/unlink an OIDC identity on an already-existing account.
+	smux.Handle("POST /api/v1/oidc/link-start", auth(oidcLinkStart))
+	smux.Handle("GET /api/v1/user/oidc-identities", auth(listUserOIDCIdentities))
+	smux.Handle("DELETE /api/v1/user/oidc-identities/{id}", auth(deleteUserOIDCIdentity))
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/begin", webauthnLoginBegin)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/login/finish", webauthnLoginFinish)
 	smux.HandleFunc("POST /api/v1/auth/webauthn/totp-challenge", webauthnTOTPChallenge)

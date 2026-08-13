@@ -276,37 +276,103 @@ func oidcStart(w http.ResponseWriter, r *http.Request) {
 	}
 	oauth2Cfg := oidcOAuth2Config(p, secret, discovered, req.RedirectURI)
 
-	state, err := generateToken(24)
+	flowID, state, nonce, verifier, err := oidcNewFlow(p.ID, req.RedirectURI, req.InviteToken, 0)
 	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	nonce, err := generateToken(24)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	verifier := oauth2.GenerateVerifier()
-	flowID, err := generateToken(24)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-
-	var inviteVal any
-	if req.InviteToken != "" {
-		inviteVal = req.InviteToken
-	}
-	if _, err := db.Exec(
-		"INSERT INTO oidc_flows (id, provider_id, state, nonce, pkce_verifier, redirect_uri, invite_token, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		flowID, p.ID, state, nonce, verifier, req.RedirectURI, inviteVal, time.Now().Add(oidcFlowTTL).Unix(),
-	); err != nil {
 		writeInternalError(w, err)
 		return
 	}
 
 	authURL := oauth2Cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce))
 	json.NewEncoder(w).Encode(map[string]string{"flow_id": flowID, "authorize_url": authURL})
+}
+
+// oidcLinkStartRequest is the body of POST /api/v1/oidc/link-start.
+type oidcLinkStartRequest struct {
+	ProviderID  int    `json:"provider_id"`
+	RedirectURI string `json:"redirect_uri"`
+}
+
+// POST /api/v1/oidc/link-start — authenticated. Begins the same
+// authorization-code+PKCE flow as oidcStart, but for an already-logged-in
+// user who wants to attach an external identity to their *existing*
+// account (#1096) rather than create a new one or log into one already
+// linked. The flow row carries the caller's user id instead of an invite
+// token; oidcCallback branches on which of the two is set.
+func oidcLinkStart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	callerID, _ := callerFromRequest(r)
+	clientIP := getClientIP(r)
+	if !loginRateLimiter.Allow(clientIP) {
+		writeError(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+	var req oidcLinkStartRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.RedirectURI == "" {
+		writeError(w, "redirect_uri is required", http.StatusBadRequest)
+		return
+	}
+	p, secret, err := loadOIDCProvider(req.ProviderID)
+	if err == sql.ErrNoRows {
+		writeError(w, "Unknown OIDC provider", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if !p.Enabled {
+		writeError(w, "OIDC provider is disabled", http.StatusForbidden)
+		return
+	}
+
+	discovered, err := oidcDiscover(r.Context(), p.IssuerURL)
+	if err != nil {
+		writeError(w, "Could not reach OIDC provider", http.StatusBadGateway)
+		return
+	}
+	oauth2Cfg := oidcOAuth2Config(p, secret, discovered, req.RedirectURI)
+
+	flowID, state, nonce, verifier, err := oidcNewFlow(p.ID, req.RedirectURI, "", callerID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	authURL := oauth2Cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce))
+	json.NewEncoder(w).Encode(map[string]string{"flow_id": flowID, "authorize_url": authURL})
+}
+
+// oidcNewFlow generates state/nonce/PKCE and inserts the oidc_flows row —
+// shared by oidcStart and oidcLinkStart so the two insert statements never
+// drift. Exactly one of inviteToken/linkUserID should be set (or neither,
+// for a plain returning-user login).
+func oidcNewFlow(providerID int, redirectURI, inviteToken string, linkUserID int) (flowID, state, nonce, verifier string, err error) {
+	if state, err = generateToken(24); err != nil {
+		return
+	}
+	if nonce, err = generateToken(24); err != nil {
+		return
+	}
+	verifier = oauth2.GenerateVerifier()
+	if flowID, err = generateToken(24); err != nil {
+		return
+	}
+
+	var inviteVal, linkVal any
+	if inviteToken != "" {
+		inviteVal = inviteToken
+	}
+	if linkUserID != 0 {
+		linkVal = linkUserID
+	}
+	_, err = db.Exec(
+		"INSERT INTO oidc_flows (id, provider_id, state, nonce, pkce_verifier, redirect_uri, invite_token, link_user_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		flowID, providerID, state, nonce, verifier, redirectURI, inviteVal, linkVal, time.Now().Add(oidcFlowTTL).Unix(),
+	)
+	return
 }
 
 type oidcFlow struct {
@@ -316,6 +382,7 @@ type oidcFlow struct {
 	PKCEVerifier string
 	RedirectURI  string
 	InviteToken  string
+	LinkUserID   int
 	ExpiresAt    int64
 }
 
@@ -324,9 +391,10 @@ type oidcFlow struct {
 func loadAndConsumeOIDCFlow(flowID string) (oidcFlow, error) {
 	var f oidcFlow
 	var inviteToken sql.NullString
+	var linkUserID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT provider_id, state, nonce, pkce_verifier, redirect_uri, invite_token, expires_at FROM oidc_flows WHERE id=?", flowID,
-	).Scan(&f.ProviderID, &f.State, &f.Nonce, &f.PKCEVerifier, &f.RedirectURI, &inviteToken, &f.ExpiresAt)
+		"SELECT provider_id, state, nonce, pkce_verifier, redirect_uri, invite_token, link_user_id, expires_at FROM oidc_flows WHERE id=?", flowID,
+	).Scan(&f.ProviderID, &f.State, &f.Nonce, &f.PKCEVerifier, &f.RedirectURI, &inviteToken, &linkUserID, &f.ExpiresAt)
 	if err == sql.ErrNoRows {
 		return oidcFlow{}, fmt.Errorf("flow not found")
 	}
@@ -336,6 +404,9 @@ func loadAndConsumeOIDCFlow(flowID string) (oidcFlow, error) {
 	db.Exec("DELETE FROM oidc_flows WHERE id=?", flowID)
 	if inviteToken.Valid {
 		f.InviteToken = inviteToken.String
+	}
+	if linkUserID.Valid {
+		f.LinkUserID = int(linkUserID.Int64)
 	}
 	if time.Now().Unix() > f.ExpiresAt {
 		return oidcFlow{}, fmt.Errorf("flow expired")
@@ -428,11 +499,14 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if flow.InviteToken != "" {
+	switch {
+	case flow.InviteToken != "":
 		oidcRedeemInvite(w, r, flow.InviteToken, issuer, subject)
-		return
+	case flow.LinkUserID != 0:
+		oidcLinkIdentity(w, r, flow.LinkUserID, issuer, subject)
+	default:
+		oidcLoginExisting(w, r, issuer, subject)
 	}
-	oidcLoginExisting(w, r, issuer, subject)
 }
 
 // oidcLoginExisting looks up an already-linked (issuer, subject) and issues
@@ -532,4 +606,121 @@ func oidcRedeemInvite(w http.ResponseWriter, r *http.Request, inviteToken, issue
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"status": "created"})
 	})
+}
+
+// oidcLinkIdentity attaches an external (issuer, subject) identity to an
+// already-authenticated user's existing account (#1096) — the counterpart
+// to oidcRedeemInvite for people who already have a dansal account and want
+// SSO as an additional login method, reached from /settings rather than an
+// invite link. No new session is issued; the caller is already logged in.
+func oidcLinkIdentity(w http.ResponseWriter, r *http.Request, userID int, issuer, subject string) {
+	// One identity links to exactly one dansal account.
+	var existingUserID int
+	err := db.QueryRow("SELECT user_id FROM user_identities WHERE issuer_url=? AND subject=?", issuer, subject).Scan(&existingUserID)
+	if err != nil && err != sql.ErrNoRows {
+		writeInternalError(w, err)
+		return
+	}
+	if err == nil {
+		if existingUserID == userID {
+			json.NewEncoder(w).Encode(map[string]string{"status": "already linked"})
+			return
+		}
+		writeError(w, "This identity is already linked to a different dansal account", http.StatusConflict)
+		return
+	}
+	if _, err := db.Exec(
+		"INSERT INTO user_identities (user_id, issuer_url, subject) VALUES (?, ?, ?)",
+		userID, issuer, subject,
+	); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	log.Printf("oidc: user %d linked identity issuer=%s", userID, issuer)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"status": "linked"})
+}
+
+// hasOtherLoginMethod reports whether userID has any login method besides
+// the one being removed — a password, a passkey (other than
+// excludeCredentialID, pass 0 when not removing a passkey), or a linked
+// OIDC identity (other than excludeIdentityRowID, pass 0 when not removing
+// an identity). Shared self-lockout guard for passkey deletion, identity
+// unlinking, and clearing the account password.
+func hasOtherLoginMethod(userID int, excludeCredentialID int, excludeIdentityRowID int64) bool {
+	var passwordHash string
+	db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", userID).Scan(&passwordHash)
+	if passwordHash != "" {
+		return true
+	}
+	var credCount int
+	db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=? AND id!=?", userID, excludeCredentialID).Scan(&credCount)
+	if credCount > 0 {
+		return true
+	}
+	var identCount int
+	db.QueryRow("SELECT COUNT(*) FROM user_identities WHERE user_id=? AND rowid!=?", userID, excludeIdentityRowID).Scan(&identCount)
+	return identCount > 0
+}
+
+// UserIdentityInfo is a linked OIDC identity as shown on /settings.
+type UserIdentityInfo struct {
+	ID          int64  `json:"id"`
+	IssuerURL   string `json:"issuer_url"`
+	DisplayName string `json:"display_name,omitempty"`
+	LinkedAt    string `json:"linked_at"`
+}
+
+// GET /api/v1/user/oidc-identities — authenticated. Lists the caller's own
+// linked identities (never another user's).
+func listUserOIDCIdentities(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	callerID, _ := callerFromRequest(r)
+	rows, err := db.Query(
+		`SELECT i.rowid, i.issuer_url, i.linked_at,
+		        COALESCE((SELECT p.display_name FROM oidc_providers p WHERE p.issuer_url = i.issuer_url ORDER BY p.id LIMIT 1), '')
+		 FROM user_identities i WHERE i.user_id=? ORDER BY i.linked_at`, callerID,
+	)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer rows.Close()
+	items := []UserIdentityInfo{}
+	for rows.Next() {
+		var it UserIdentityInfo
+		if err := rows.Scan(&it.ID, &it.IssuerURL, &it.LinkedAt, &it.DisplayName); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		items = append(items, it)
+	}
+	json.NewEncoder(w).Encode(items)
+}
+
+// DELETE /api/v1/user/oidc-identities/{id} — authenticated. {id} is the
+// user_identities rowid (the table's real primary key, (issuer_url,
+// subject), isn't a convenient single path value). Blocked by the
+// self-lockout guard when it's the caller's last login method.
+func deleteUserOIDCIdentity(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := callerFromRequest(r)
+	rowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if !hasOtherLoginMethod(callerID, 0, rowID) {
+		writeError(w, "Cannot unlink your last login method", http.StatusConflict)
+		return
+	}
+	res, err := db.Exec("DELETE FROM user_identities WHERE rowid=? AND user_id=?", rowID, callerID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, "Not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

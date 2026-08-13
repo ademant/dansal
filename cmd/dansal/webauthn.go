@@ -749,16 +749,11 @@ func webauthnUserCredentialDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	// Prevent locking out a user who has no password and this is their last passkey.
-	var count int
-	db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=?", callerID).Scan(&count)
-	if count <= 1 {
-		var passwordHash string
-		db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", callerID).Scan(&passwordHash)
-		if passwordHash == "" {
-			writeError(w, "Cannot delete last passkey when no password is set", http.StatusConflict)
-			return
-		}
+	// Prevent locking out a user who has no other login method (password or
+	// linked OIDC identity) and this is their last passkey (#1096).
+	if !hasOtherLoginMethod(callerID, credID, 0) {
+		writeError(w, "Cannot delete last passkey when no other login method is set", http.StatusConflict)
+		return
 	}
 	res, err := db.Exec("DELETE FROM webauthn_credentials WHERE id=? AND user_id=?", credID, callerID)
 	if err != nil {

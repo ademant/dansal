@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -812,7 +813,11 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		event, err := fetchEventWithFallback(r, client, id)
 		if err != nil {
-			http.NotFound(w, r)
+			if errors.Is(err, errNotFound) {
+				http.NotFound(w, r)
+			} else {
+				logHTTPError(w, r, "could not load event", http.StatusBadGateway)
+			}
 			return
 		}
 

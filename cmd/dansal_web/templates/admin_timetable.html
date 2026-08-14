@@ -41,7 +41,7 @@
 .tt-panel{position:absolute;left:2px;right:2px;border-radius:5px;padding:.2rem .35rem;overflow:hidden;cursor:grab;box-sizing:border-box;font-size:.78rem;line-height:1.2;user-select:none;touch-action:none;border:1px solid rgba(0,0,0,.2);transition:box-shadow .1s}
 .tt-panel:active{cursor:grabbing}
 .tt-panel:hover{box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:10}
-.tt-panel.bal{background:rgba(74,127,203,.78);color:#fff}
+.tt-panel.bal,.tt-panel.concert,.tt-panel.talk{background:rgba(74,127,203,.78);color:#fff}
 .tt-panel.workshop,.tt-panel.dance-workshop{background:rgba(201,80,10,.78);color:#fff}
 .tt-panel.break{background:rgba(102,102,102,.78);color:#fff}
 .tt-panel.session{background:rgba(42,138,74,.78);color:#fff}
@@ -136,12 +136,20 @@
   <div class="tt-popup-row">
     <div class="tt-popup-field"><label>Type</label>
       <select id="pp-type" onchange="ppDirty()">
-        <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
-        <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
-        <option value="break">{{$.Strings.T "tt_type_break"}}</option>
-        <option value="session">{{$.Strings.T "tt_type_session"}}</option>
-        <option value="dance-workshop">{{$.Strings.T "tt_type_dance_workshop"}}</option>
-        <option value="musician-workshop">{{$.Strings.T "tt_type_musician_workshop"}}</option>
+        <optgroup label="{{$.Strings.T "tt_group_main"}}">
+          <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
+          <option value="concert">{{$.Strings.T "tt_type_concert"}}</option>
+          <option value="talk">{{$.Strings.T "tt_type_talk"}}</option>
+        </optgroup>
+        <optgroup label="{{$.Strings.T "tt_group_workshop"}}">
+          <option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option>
+          <option value="dance-workshop">{{$.Strings.T "tt_type_dance_workshop"}}</option>
+          <option value="musician-workshop">{{$.Strings.T "tt_type_musician_workshop"}}</option>
+        </optgroup>
+        <optgroup label="{{$.Strings.T "tt_group_other"}}">
+          <option value="break">{{$.Strings.T "tt_type_break"}}</option>
+          <option value="session">{{$.Strings.T "tt_type_session"}}</option>
+        </optgroup>
       </select>
     </div>
     <div class="tt-popup-field"><label>Room</label>
@@ -465,6 +473,52 @@ function changePage(d){
   renderPageNav(); renderGrid();
 }
 
+// ─── lane assignment (overlapping entries → fractional width) ─────────────────
+// Assigns _lane and _totalLanes to each entry in the array so that overlapping
+// entries within the same room column are rendered side-by-side at equal widths.
+function assignLanes(entries) {
+  entries.forEach(function(e){ e._lane=0; e._totalLanes=1; e._absStart=0; e._absEnd=0; });
+  if(entries.length <= 1) return;
+
+  // absolute minutes helper (handles midnight-crossing)
+  function abs(e){
+    var s=parseHHMM(e.start_time||'00:00');
+    var en=parseHHMM(e.end_time||'01:00');
+    if(en<=s) en+=1440;
+    return {s:s,e:en};
+  }
+
+  // sort by start time for deterministic greedy assignment
+  var sorted=entries.slice().sort(function(a,b){
+    return parseHHMM(a.start_time||'00:00')-parseHHMM(b.start_time||'00:00');
+  });
+
+  // greedy lane assignment: place each entry in the first lane whose last
+  // occupant ends before this entry starts.
+  var laneEnds=[]; // absolute end time of the last entry assigned to each lane
+  sorted.forEach(function(e){
+    var t=abs(e);
+    e._absStart=t.s; e._absEnd=t.e;
+    var lane=-1;
+    for(var i=0;i<laneEnds.length;i++){
+      if(laneEnds[i]<=t.s){ lane=i; laneEnds[i]=t.e; break; }
+    }
+    if(lane===-1){ lane=laneEnds.length; laneEnds.push(t.e); }
+    e._lane=lane;
+  });
+
+  // for each entry, count concurrent lanes = max _lane of any overlapping peer + 1
+  sorted.forEach(function(e){
+    var maxLane=0;
+    sorted.forEach(function(o){
+      if(o._absStart<e._absEnd && o._absEnd>e._absStart){
+        if(o._lane>maxLane) maxLane=o._lane;
+      }
+    });
+    e._totalLanes=maxLane+1;
+  });
+}
+
 // ─── grid render ─────────────────────────────────────────────────────────────
 function renderGrid(){
   var gridH = (_gridMax - _gridMin) * PX_PER_MIN;
@@ -529,8 +583,16 @@ function renderGrid(){
         return !e.location_id && e.room===r.label;
       });
 
+      assignLanes(colEntries);
       colEntries.forEach(function(e){
-        var tile = makeTile(e); body.appendChild(tile);
+        var tile = makeTile(e);
+        if(e._totalLanes > 1){
+          var pct = 100 / e._totalLanes;
+          tile.style.left  = 'calc('+( e._lane    * pct)+'% + 2px)';
+          tile.style.width = 'calc('+(              pct)+'% - 4px)';
+          tile.style.right = 'auto';
+        }
+        body.appendChild(tile);
       });
 
       // drag-to-create new entry

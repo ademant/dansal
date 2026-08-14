@@ -191,7 +191,7 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 	}
 	entryType := req.EntryType
 	switch entryType {
-	case "bal", "workshop", "break", "session", "dance-workshop", "musician-workshop":
+	case "bal", "concert", "talk", "workshop", "dance-workshop", "musician-workshop", "break", "session":
 	default:
 		entryType = "bal"
 	}

@@ -210,6 +210,13 @@ func timetableColumnKey(e TimetableEntry) (key, label string, isOther bool) {
 	}
 }
 
+// timetableParsedEntry is one timetable entry with its clock times resolved
+// to minutes-since-midnight (crossing-midnight entries have endMin >= 1440).
+type timetableParsedEntry struct {
+	entry            TimetableEntry
+	startMin, endMin int
+}
+
 func timetableGrid(entries []TimetableEntry) TimetableGrid {
 	const minPxPerMin = 1.4
 	const maxPxPerMin = 4.0
@@ -217,10 +224,7 @@ func timetableGrid(entries []TimetableEntry) TimetableGrid {
 
 	rangeMin, rangeMax := 0, 0
 	haveRange := false
-	type parsed struct {
-		entry            TimetableEntry
-		startMin, endMin int
-	}
+	type parsed = timetableParsedEntry
 	var parsedEntries []parsed
 	for _, e := range entries {
 		start, ok1 := parseTimetableClock(e.StartTime)
@@ -277,21 +281,92 @@ func timetableGrid(entries []TimetableEntry) TimetableGrid {
 	}
 
 	colIdx := map[string]int{}
+	var colEntries [][]parsed
 	for _, p := range parsedEntries {
 		key, label, isOther := timetableColumnKey(p.entry)
 		i, ok := colIdx[key]
 		if !ok {
 			grid.Columns = append(grid.Columns, TimetableGridColumn{Label: label, IsOther: isOther})
+			colEntries = append(colEntries, nil)
 			i = len(grid.Columns) - 1
 			colIdx[key] = i
 		}
-		grid.Columns[i].Panels = append(grid.Columns[i].Panels, TimetablePanel{
-			Entry:    p.entry,
-			TopPx:    float64(p.startMin-rangeMin) * pxPerMin,
-			HeightPx: float64(p.endMin-p.startMin) * pxPerMin,
-		})
+		colEntries[i] = append(colEntries[i], p)
+	}
+	for i, col := range colEntries {
+		lane, totalLanes := assignTimetableLanes(col)
+		for j, p := range col {
+			panel := TimetablePanel{
+				Entry:      p.entry,
+				TopPx:      float64(p.startMin-rangeMin) * pxPerMin,
+				HeightPx:   float64(p.endMin-p.startMin) * pxPerMin,
+				Lane:       lane[j],
+				TotalLanes: totalLanes[j],
+			}
+			if panel.TotalLanes > 1 {
+				pct := 100.0 / float64(panel.TotalLanes)
+				panel.LeftPct = float64(panel.Lane) * pct
+				panel.WidthPct = pct
+			}
+			grid.Columns[i].Panels = append(grid.Columns[i].Panels, panel)
+		}
 	}
 	return grid
+}
+
+// assignTimetableLanes lays overlapping entries within one room column
+// side-by-side instead of stacked (#888). Greedy lane assignment: sort by
+// start time, place each entry in the first lane whose last occupant ends
+// before this entry starts; TotalLanes per entry is the max lane index of
+// any peer it overlaps, +1. Mirrors admin_timetable.html's assignLanes() JS.
+// Returned slices are indexed the same as col (not the sorted order).
+func assignTimetableLanes(col []timetableParsedEntry) (lane, totalLanes []int) {
+	n := len(col)
+	lane = make([]int, n)
+	totalLanes = make([]int, n)
+	for i := range totalLanes {
+		totalLanes[i] = 1
+	}
+	if n <= 1 {
+		return lane, totalLanes
+	}
+
+	order := make([]int, n)
+	for i := range order {
+		order[i] = i
+	}
+	sort.Slice(order, func(a, b int) bool {
+		return col[order[a]].startMin < col[order[b]].startMin
+	})
+
+	var laneEnds []int // end time of the last entry assigned to each lane
+	for _, idx := range order {
+		e := col[idx]
+		assigned := -1
+		for l, end := range laneEnds {
+			if end <= e.startMin {
+				assigned = l
+				laneEnds[l] = e.endMin
+				break
+			}
+		}
+		if assigned == -1 {
+			assigned = len(laneEnds)
+			laneEnds = append(laneEnds, e.endMin)
+		}
+		lane[idx] = assigned
+	}
+
+	for i, e := range col {
+		maxLane := lane[i]
+		for j, o := range col {
+			if o.startMin < e.endMin && o.endMin > e.startMin && lane[j] > maxLane {
+				maxLane = lane[j]
+			}
+		}
+		totalLanes[i] = maxLane + 1
+	}
+	return lane, totalLanes
 }
 
 var tmplFuncsTime = template.FuncMap{

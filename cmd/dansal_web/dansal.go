@@ -421,11 +421,19 @@ type TimetableEntry struct {
 }
 
 // TimetablePanel is one timetable entry positioned within a TimetableGrid
-// column, in pixels relative to the grid's shared time axis (#887).
+// column, in pixels relative to the grid's shared time axis (#887). Lane/
+// TotalLanes side-by-side overlapping entries within the column, mirroring
+// admin_timetable.html's assignLanes() JS (#888).
 type TimetablePanel struct {
-	Entry    TimetableEntry
-	TopPx    float64
-	HeightPx float64
+	Entry      TimetableEntry
+	TopPx      float64
+	HeightPx   float64
+	Lane       int
+	TotalLanes int
+	// LeftPct/WidthPct (0-100) subdivide the column when TotalLanes > 1;
+	// meaningless (and ignored by the template) when TotalLanes == 1.
+	LeftPct  float64
+	WidthPct float64
 }
 
 // TimetableGridColumn is one room's positioned entries, for the multi-room

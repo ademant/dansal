@@ -47,6 +47,7 @@
   </div>
   <hr class="evt-nav-sep">
   <div class="evt-nav-group">
+    <button type="button" class="evt-nav-item" data-target="sec-venue-overrides"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_venue_overrides"}}</button>
     {{if not .IsTemplateMode}}<button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_image"}}</button>{{end}}
     <button type="button" class="evt-nav-item" data-target="sec-pricing"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_admission"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-tickets"><span class="evt-nav-dot"></span>{{$.Strings.T "evt_tickets_section"}}</button>
@@ -351,7 +352,7 @@
   </section>
 
   <!-- Venue attribute overrides -->
-  <section class="form-section">
+  <section class="form-section optional-section" id="sec-venue-overrides">
     <h2>{{$.Strings.T "evt_venue_overrides"}}</h2>
     <p class="field-hint">{{$.Strings.T "evt_venue_overrides_hint"}}</p>
     <div class="attr-override-grid">
@@ -2299,6 +2300,9 @@ function safeGoBack(){
         if(title && title.value.trim()!=='') return true;
       }
       return false;
+    },
+    'sec-venue-overrides':function(){
+      return document.querySelectorAll('#sec-venue-overrides input[type="radio"]:checked[value]:not([value=""])').length>0;
     },
     'sec-musicians':function(){ return document.querySelectorAll('#selected-musicians .musician-chip').length>0; },
     'sec-instructors':function(){ return document.querySelectorAll('#selected-instructors .musician-chip').length>0; },

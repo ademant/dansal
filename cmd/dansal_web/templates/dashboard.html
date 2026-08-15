@@ -60,10 +60,12 @@
 </details>
 {{end}}
 
-{{if or .PinnedTemplates .UnpinnedTemplates}}
 <details class="dash-orgs" open>
   <summary>{{$.Strings.T "dashboard_your_presets"}} ({{len .PinnedTemplates}})</summary>
   <div class="dash-orgs-list">
+    <div class="dash-section-actions">
+      <a href="/admin/templates/new" class="btn-sm">+ {{$.Strings.T "admin_template_new_title"}}</a>
+    </div>
     {{range .PinnedTemplates}}
     {{$scope := index $.Data.TemplateOrgMap (derefInt .OrgID)}}
     <div class="dash-org-row">
@@ -97,7 +99,27 @@
     {{end}}
   </div>
 </details>
-{{end}}
+
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "dashboard_your_series"}} ({{len .Series}})</summary>
+  <div class="dash-orgs-list">
+    <div class="dash-section-actions">
+      <a href="/admin/series/new" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+    </div>
+    {{range .Series}}
+    {{$scope := index $.Data.TemplateOrgMap (derefInt .OrganizationID)}}
+    <div class="dash-org-row">
+      <a href="/admin/series/{{.ID}}" class="dash-org-name">{{.Title}}{{if $scope}} <span class="muted">({{$scope}})</span>{{end}}</a>
+      <div class="dash-org-mini-stats">
+        <span title="{{$.Strings.T "admin_events_count"}}">📅 {{.EventCount}}</span>
+      </div>
+      <div class="dash-org-actions">
+        <a href="/admin/series/{{.ID}}" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
 
 {{if .Events}}
 <div class="table-wrap" style="margin-top:1.5rem">
@@ -156,6 +178,7 @@
 .dash-org-actions{display:flex;gap:.5rem;flex-shrink:0}
 @media(max-width:480px){.dash-org-row{flex-direction:column;align-items:flex-start}}
 .muted{color:var(--fg-2,#888);font-weight:400}
+.dash-section-actions{padding:.2rem 0 .6rem}
 .dash-preset-add-row{display:flex;gap:.5rem;align-items:center;padding:.6rem 0 .2rem}
 .dash-preset-add-row select{flex:1;max-width:320px;padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px}
 </style>

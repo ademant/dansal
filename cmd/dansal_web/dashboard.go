@@ -20,6 +20,7 @@ type DashboardData struct {
 	PinnedTemplates   []EventTemplate
 	UnpinnedTemplates []EventTemplate
 	TemplateOrgMap    map[int]string
+	Series            []EventSeries
 }
 
 func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -36,6 +37,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			allOrgs    []Organization
 			stats      MeStats
 			orgStats   map[int]OrgStatRecord
+			series     []EventSeries
 		)
 
 		fetchParallel(
@@ -68,6 +70,14 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				orgStats, err = client.GetOrgStats(ctx)
 				if err != nil {
 					log.Printf("dashboard: could not load org stats: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
+				series, err = client.GetSeriesList(ctx, token)
+				if err != nil {
+					log.Printf("dashboard: could not load series: %v", err)
 				}
 				return nil
 			},
@@ -150,6 +160,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			PinnedTemplates:   pinnedTemplates,
 			UnpinnedTemplates: unpinnedTemplates,
 			TemplateOrgMap:    templateOrgMap,
+			Series:            series,
 		}))
 	}
 }

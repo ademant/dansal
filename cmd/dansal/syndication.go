@@ -110,7 +110,7 @@ func saveEventSync(eventID int, s *ExternalSync) error {
 
 // GET /api/v1/organizations/{id}/syndication
 func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
+	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
@@ -118,6 +118,10 @@ func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMember(callerID, id) {
+		writeError(w, "forbidden: not a member of this organization", http.StatusForbidden)
 		return
 	}
 	cfg, err := loadSyndicationConfig(id)
@@ -160,7 +164,7 @@ func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/v1/organizations/{id}/syndication
 func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
+	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
@@ -168,6 +172,10 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMember(callerID, id) {
+		writeError(w, "forbidden: not a member of this organization", http.StatusForbidden)
 		return
 	}
 	var incoming SyndicationConfig
@@ -214,7 +222,7 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}/syndication
 func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
+	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser && role != RolePublisher {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
@@ -222,6 +230,10 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+		writeError(w, "forbidden: not a member of this event's organization", http.StatusForbidden)
 		return
 	}
 	s, err := loadEventSync(id)
@@ -235,7 +247,7 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/events/{id}/syndicate/eventbrite
 func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
+	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser && role != RolePublisher {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
@@ -243,6 +255,10 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+		writeError(w, "forbidden: not a member of this event's organization", http.StatusForbidden)
 		return
 	}
 
@@ -280,7 +296,7 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/events/{id}/syndicate/social-dance-today
 func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
-	_, role := callerFromRequest(r)
+	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser && role != RolePublisher {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
@@ -288,6 +304,10 @@ func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
 	id, err := intPathValue(r, "id")
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
+		writeError(w, "forbidden: not a member of this event's organization", http.StatusForbidden)
 		return
 	}
 

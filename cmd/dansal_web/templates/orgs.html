@@ -1,6 +1,9 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "orgs_title"}}</h1>
+<div class="page-header">
+  <h1>{{.Strings.T "orgs_title"}}</h1>
+  {{if .User}}<a href="/admin/organizations" class="btn-icon" title="{{.Strings.T "admin_dashboard"}}" aria-label="{{.Strings.T "admin_dashboard"}}">📋</a>{{end}}
+</div>
 
 {{with .Data}}
 
@@ -30,6 +33,8 @@
 {{end}}
 
 <style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
 .orgs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:.5rem}
 .org-card{display:flex;flex-direction:column;gap:.35rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem 1.1rem;text-decoration:none;color:var(--heading);transition:box-shadow .15s,border-color .15s}
 .org-card:hover{border-color:var(--link);box-shadow:0 2px 8px rgba(26,110,181,.12)}

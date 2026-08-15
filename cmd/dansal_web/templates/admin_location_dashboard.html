@@ -1,4 +1,11 @@
 {{template "base" .}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/admin/locations">{{.Strings.T "admin_locations_title"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  {{with .Data.Location}}<span>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</span>{{end}}
+</nav>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 {{with .Location}}

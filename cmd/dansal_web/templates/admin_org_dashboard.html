@@ -1,4 +1,11 @@
 {{template "base" .}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/admin/organizations">{{.Strings.T "admin_orgs_title"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span>{{.Data.Org.Name}}</span>
+</nav>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 

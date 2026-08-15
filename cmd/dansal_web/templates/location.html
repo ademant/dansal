@@ -21,6 +21,13 @@
 }
 </script>
 {{end}}{{end}}
+{{define "breadcrumb"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{if .User}}<a href="/admin/locations">{{.Strings.T "admin_locations_title"}}</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>{{end}}
+  {{with .Data.Location}}<span>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</span>{{end}}
+</nav>
+{{end}}
 {{define "content"}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 {{with .Data}}

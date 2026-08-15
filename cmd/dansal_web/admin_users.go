@@ -376,12 +376,33 @@ func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 
 func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
+		token := getSessionToken(r)
 		invToken := r.PathValue("token")
-		if err := client.RevokeInvite(r.Context(), invToken, getSessionToken(r)); err != nil {
+		// Same org check as adminInviteCreateHandler/adminInviteResendHandler
+		// applied to the invite being revoked (#1110).
+		if su.Role != "admin" {
+			invites, err := client.ListInvites(r.Context(), token)
+			if err != nil {
+				writeJSONError(w, r, http.StatusBadGateway, err.Error())
+				return
+			}
+			var target *InviteLink
+			for i := range invites {
+				if invites[i].Token == invToken {
+					target = &invites[i]
+					break
+				}
+			}
+			if target == nil || target.OrgID == nil || !memberOrgSet(r, client, su)[*target.OrgID] {
+				forbidden(w, r)
+				return
+			}
+		}
+		if err := client.RevokeInvite(r.Context(), invToken, token); err != nil {
 			log.Printf("revoke invite %s: %v", invToken, err)
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -473,9 +494,28 @@ func adminPublisherCreateHandler(cfg *Config, client *DansalClient) http.Handler
 	}
 }
 
+// publisherInCallerOrgs reports whether publisherID (a user ID) shares an org
+// with the caller — used by non-admins acting on a publisher (#1110).
+func publisherInCallerOrgs(r *http.Request, client *DansalClient, su *SessionUser, publisherID int, token string) bool {
+	if su.Role == "admin" {
+		return true
+	}
+	pubOrgIDs, err := client.GetUserOrganizationIDs(r.Context(), publisherID, token)
+	if err != nil {
+		return false
+	}
+	memberSet := memberOrgSet(r, client, su)
+	for _, oid := range pubOrgIDs {
+		if memberSet[oid] {
+			return true
+		}
+	}
+	return false
+}
+
 func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -484,7 +524,12 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
-		newKey, keyID, err := client.RegeneratePublisherKey(r.Context(), id, getSessionToken(r))
+		token := getSessionToken(r)
+		if !publisherInCallerOrgs(r, client, su, id, token) {
+			forbidden(w, r)
+			return
+		}
+		newKey, keyID, err := client.RegeneratePublisherKey(r.Context(), id, token)
 		if err != nil {
 			log.Printf("regenerate publisher key %d: %v", id, err)
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
@@ -530,7 +575,7 @@ func adminPublisherInviteHandler(cfg *Config, client *DansalClient) http.Handler
 
 func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -539,7 +584,12 @@ func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
 			return
 		}
-		if err := client.DeletePublisher(r.Context(), id, getSessionToken(r)); err != nil {
+		token := getSessionToken(r)
+		if !publisherInCallerOrgs(r, client, su, id, token) {
+			forbidden(w, r)
+			return
+		}
+		if err := client.DeletePublisher(r.Context(), id, token); err != nil {
 			log.Printf("delete publisher %d: %v", id, err)
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return

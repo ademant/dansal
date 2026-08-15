@@ -144,6 +144,8 @@
       {{- if $cu}}{{$clientURL = $cu}}{{end -}}
       {{- if $cn}}{{$clientLabel = $cn}}{{else if $cu}}{{$clientLabel = $cu}}{{end -}}
     {{- end -}}
+    {{$canManagePub := $.Data.IsAdmin}}
+    {{if not $canManagePub}}{{range index $.Data.UserOrgs .ID}}{{if index $.Data.MyOrgIDs .}}{{$canManagePub = true}}{{end}}{{end}}{{end}}
     <tr data-pub-row data-pub-id="{{$uid}}">
       <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{end}} <span class="muted user-id-tag">#{{.ID}}</span></td>
       <td class="cell-org">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}</td>
@@ -152,8 +154,10 @@
       </td>
       <td class="col-actions cell-actions" style="white-space:nowrap">
         <button type="button" class="btn-sm" onclick="event.stopPropagation();publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
+        {{if $canManagePub}}
         <button type="button" class="btn-sm" onclick="event.stopPropagation();regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="event.stopPropagation();deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
+        {{end}}
       </td>
     </tr>
     <template id="pub-tmpl-{{$uid}}">
@@ -161,8 +165,10 @@
       <p class="muted">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}{{if $clientLabel}} · {{$clientLabel}}{{end}}</p>
       <div class="popup-actions">
         <button type="button" class="btn-sm" onclick="publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
+        {{if $canManagePub}}
         <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
+        {{end}}
       </div>
     </template>
     {{end}}{{end}}
@@ -190,6 +196,8 @@
     <tbody>
     {{range .Invites}}
     {{$orgName := $.Strings.T "admin_invite_no_org"}}{{if .OrgID}}{{$o := index $.Data.OrgMap (derefInt .OrgID)}}{{$orgName = $o.Name}}{{end}}
+    {{$canManageInv := $.Data.IsAdmin}}
+    {{if and (not $canManageInv) .OrgID}}{{if index $.Data.MyOrgIDs (derefInt .OrgID)}}{{$canManageInv = true}}{{end}}{{end}}
     <tr data-invite-row data-invite-token="{{.Token}}">
       <td class="invite-link-cell cell-link">
         <code title="{{$.Data.BaseURL}}/invites/{{.Token}}">{{$.Data.BaseURL}}/invites/{{.Token}}</code>
@@ -199,9 +207,11 @@
       <td class="cell-org">{{$orgName}}</td>
       <td class="muted cell-expires">{{.ExpiresAt}}</td>
       <td class="cell-actions">
+        {{if $canManageInv}}
         <button type="button" class="btn-sm" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
         <button type="button" class="btn-sm btn-del"
                 onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+        {{end}}
       </td>
     </tr>
     <template id="invite-tmpl-{{.Token}}">
@@ -212,8 +222,10 @@
         <button type="button" class="btn-sm" onclick="shareInviteURL('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_share"}}</button>
         <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
         {{if eq .InviteType "qr"}}<button type="button" class="btn-sm" onclick="showInviteQR(this,'{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_qr_show"}}</button>{{end}}
+        {{if $canManageInv}}
         <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
         <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+        {{end}}
       </div>
       <div class="invite-qr-container" style="display:none;text-align:center;margin-top:.75rem"></div>
     </template>

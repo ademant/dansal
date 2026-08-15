@@ -75,9 +75,36 @@ func adminBookingsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 }
 
 // POST /admin/bookings/{id}/approve
+// bookingMutationAuth resolves and re-verifies the event a booking mutation
+// claims to act on: the caller must be able to manage that event, and
+// bookingID must actually belong to it (the event_id form value is otherwise
+// just an unverified redirect target). Applies userCanManageEvent, which
+// previously only guarded the GET list handler in this file — see #1109.
+func bookingMutationAuth(r *http.Request, su *SessionUser, bookingID int, client *DansalClient, token string) (eventIDStr string, ok bool) {
+	eventIDStr = r.FormValue("event_id")
+	eventID, err := strconv.Atoi(eventIDStr)
+	if err != nil {
+		return eventIDStr, false
+	}
+	event, err := client.GetEvent(r.Context(), eventID)
+	if err != nil || !userCanManageEvent(r, su, event, client, token) {
+		return eventIDStr, false
+	}
+	bookings, err := client.GetBookings(r.Context(), eventID, token)
+	if err != nil {
+		return eventIDStr, false
+	}
+	for _, b := range bookings {
+		if b.ID == bookingID {
+			return eventIDStr, true
+		}
+	}
+	return eventIDStr, false
+}
+
 func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -87,10 +114,14 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		token := getSessionToken(r)
+		eventID, authOK := bookingMutationAuth(r, su, bookingID, client, token)
+		if !authOK {
+			forbidden(w, r)
+			return
+		}
 		if err := client.UpdateBookingStatus(r.Context(), bookingID, "approved", token); err != nil {
 			log.Printf("approve booking %d: %v", bookingID, err)
 		}
-		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
 }
@@ -98,7 +129,7 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 // POST /admin/bookings/{id}/cancel
 func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -108,10 +139,14 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		token := getSessionToken(r)
+		eventID, authOK := bookingMutationAuth(r, su, bookingID, client, token)
+		if !authOK {
+			forbidden(w, r)
+			return
+		}
 		if err := client.UpdateBookingStatus(r.Context(), bookingID, "cancelled", token); err != nil {
 			log.Printf("cancel booking %d: %v", bookingID, err)
 		}
-		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
 }
@@ -119,7 +154,7 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 // POST /admin/bookings/{id}/delete
 func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -129,10 +164,14 @@ func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		token := getSessionToken(r)
+		eventID, authOK := bookingMutationAuth(r, su, bookingID, client, token)
+		if !authOK {
+			forbidden(w, r)
+			return
+		}
 		if err := client.DeleteBooking(r.Context(), bookingID, token); err != nil {
 			log.Printf("delete booking %d: %v", bookingID, err)
 		}
-		eventID := r.FormValue("event_id")
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
 }

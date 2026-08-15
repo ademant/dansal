@@ -678,13 +678,19 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		user, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
+			return
+		}
+		// Matches adminOrgEditPageHandler's/adminOrgRedeliverHandler's access
+		// rule: admins and members of this org only (#1108).
+		if !canManageOrg(user, id, memberOrgSet(r, client, user)) {
+			forbidden(w, r)
 			return
 		}
 		token := getSessionToken(r)

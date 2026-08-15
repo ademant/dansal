@@ -410,9 +410,30 @@ func adminFetchurlDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 	}
 }
 
+// filterFetchSourceIDsByOrg narrows ids to those belonging to an org in
+// memberSet — used by non-admin callers of bulk fetch-source actions so a
+// caller can't act on sources outside orgs they belong to (#1108).
+func filterFetchSourceIDsByOrg(r *http.Request, client *DansalClient, memberSet map[int]bool, ids []int, token string) []int {
+	idSet := make(map[int]bool, len(ids))
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	sources, err := client.GetFetchSources(r.Context(), token)
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, src := range sources {
+		if idSet[src.ID] && src.OrganizationID != nil && memberSet[*src.OrganizationID] {
+			out = append(out, src.ID)
+		}
+	}
+	return out
+}
+
 func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, ok := requireLogin(w, r)
+		su, ok := requireLogin(w, r)
 		if !ok {
 			return
 		}
@@ -421,7 +442,15 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.NotFound(w, r)
 			return
 		}
-		result, runErr := client.RunFetchSource(r.Context(), id, getSessionToken(r))
+		token := getSessionToken(r)
+		if su.Role != "admin" {
+			src, ferr := client.GetFetchSource(r.Context(), id, token)
+			if ferr != nil || src.OrganizationID == nil || !memberOrgSet(r, client, su)[*src.OrganizationID] {
+				forbidden(w, r)
+				return
+			}
+		}
+		result, runErr := client.RunFetchSource(r.Context(), id, token)
 		if r.Header.Get("Accept") == "application/json" {
 			w.Header().Set("Content-Type", "application/json")
 			if runErr != nil {
@@ -467,7 +496,11 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				log.Printf("bulk delete fetch sources: %v", err)
 			}
 		case "run":
-			if err := client.BulkRunFetchSources(r.Context(), ids, token); err != nil {
+			runIDs := ids
+			if user.Role != "admin" {
+				runIDs = filterFetchSourceIDsByOrg(r, client, memberOrgSet(r, client, user), ids, token)
+			}
+			if err := client.BulkRunFetchSources(r.Context(), runIDs, token); err != nil {
 				log.Printf("bulk run fetch sources: %v", err)
 			}
 		case "assign-org":
@@ -485,10 +518,17 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				for _, id := range ids {
 					idSet[id] = true
 				}
+				var memberSet map[int]bool
+				if user.Role != "admin" {
+					memberSet = memberOrgSet(r, client, user)
+				}
 				sources, err := client.GetFetchSources(r.Context(), token)
 				if err == nil {
 					for _, src := range sources {
 						if !idSet[src.ID] {
+							continue
+						}
+						if user.Role != "admin" && (src.OrganizationID == nil || !memberSet[*src.OrganizationID]) {
 							continue
 						}
 						hasTag := false

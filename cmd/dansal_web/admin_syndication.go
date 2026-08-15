@@ -12,9 +12,17 @@ import (
 // GET /admin/orgs/{id}/syndication — fetch current syndication config.
 func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if !canManageOrg(su, id, memberOrgSet(r, client, su)) {
+			forbidden(w, r)
 			return
 		}
 		token := getSessionToken(r)
@@ -31,9 +39,17 @@ func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerF
 // POST /admin/orgs/{id}/syndication — save syndication config.
 func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if !canManageOrg(su, id, memberOrgSet(r, client, su)) {
+			forbidden(w, r)
 			return
 		}
 		token := getSessionToken(r)
@@ -54,6 +70,10 @@ func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.Handler
 // POST /admin/events/{id}/syndicate/{platform} — trigger sync for one platform.
 func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
@@ -61,6 +81,15 @@ func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.Handl
 		}
 		platform := r.PathValue("platform")
 		token := getSessionToken(r)
+		event, err := client.GetEvent(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if !userCanManageEvent(r, su, event, client, token) {
+			forbidden(w, r)
+			return
+		}
 		if err := client.SyndicateTo(r.Context(), id, platform, token); err != nil {
 			http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
 			return
@@ -73,12 +102,25 @@ func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.Handl
 // GET /admin/events/{id}/syndication — fetch current sync status.
 func adminGetSyncStatusHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
 		token := getSessionToken(r)
+		event, err := client.GetEvent(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if !userCanManageEvent(r, su, event, client, token) {
+			forbidden(w, r)
+			return
+		}
 		s, err := client.GetEventSyncStatus(r.Context(), id, token)
 		if err != nil {
 			http.Error(w, "upstream error", http.StatusBadGateway)

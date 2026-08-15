@@ -56,6 +56,15 @@ func memberOrgIDs(r *http.Request, client *DansalClient, su *SessionUser) []int 
 	return getUserOrgIDs(r.Context(), client, su.ID, getSessionToken(r))
 }
 
+// canManageOrg reports whether su may manage orgID: admins always can,
+// otherwise su must be a member per memberSet (as returned by
+// memberOrgSet). Centralizes the "role != admin && !memberSet[id]" check
+// that was previously hand-copied per handler (and, at several call sites,
+// forgotten entirely) — see #1111.
+func canManageOrg(su *SessionUser, orgID int, memberSet map[int]bool) bool {
+	return su.Role == "admin" || memberSet[orgID]
+}
+
 // filterByUserOrgs returns the subset of items whose org assignment overlaps
 // the user's orgs. memberSet == nil (admin) passes everything through.
 func filterByUserOrgs[T any](items []T, orgIDsOf func(T) []int, memberSet map[int]bool) []T {

@@ -48,7 +48,7 @@
 <style>
 :root{
   --bg:#fafafa;--bg-card:#fff;--bg-subtle:#f4f6fb;--bg-hover:#f0f4ff;
-  --fg:#222;--fg-2:#333;--fg-dim:#555;--fg-muted:#666;--fg-faint:#888;--fg-hint:#999;
+  --fg:#222;--fg-2:#333;--fg-dim:#555;--fg-muted:#666;--fg-faint:#6e6e6e;--fg-hint:#737373;
   --border:#ddd;--border-lite:#eee;--border-mid:#ccc;
   --heading:#1a1a2e;--link:#1a6eb5;--link-h:#0d4a80;
   --tag-bg:#e8f0fe;--musician-bg:#f0f4ff;--musician-border:#c8d4f5;
@@ -146,7 +146,9 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
   .footer-left,.footer-right{text-align:center}
 }
 main{max-width:960px;margin:0 auto;padding-bottom:1.5rem;flex:1;width:100%}
-.breadcrumb{display:block;position:static;z-index:auto;font-size:.83rem;color:var(--fg-dim);margin-bottom:.6rem}
+.breadcrumb{display:block;position:static;z-index:auto;font-size:.83rem;color:var(--fg-dim);
+  /* Reset properties inherited from the global nav{} rule (background, padding, margin-inline) */
+  background:transparent;padding:.3rem 0;margin:0 0 .6rem}
 .breadcrumb a{color:var(--fg-dim);text-decoration:none}
 .breadcrumb a:hover{color:var(--fg);text-decoration:underline}
 .breadcrumb-sep{margin:0 .3rem;opacity:.45;user-select:none}

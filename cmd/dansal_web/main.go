@@ -121,8 +121,15 @@ func main() {
 		log.Printf("warning: internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
 	}
 	client := &DansalClient{
-		BaseURL:        cfg.DansalURL,
-		HTTP:           &http.Client{Timeout: 180 * time.Second},
+		BaseURL: cfg.DansalURL,
+		// DisableCompression: this client only ever talks to dansal over
+		// loopback (see BaseURL), where bandwidth is effectively unlimited
+		// and latency is sub-millisecond. Without it, Go's default Transport
+		// silently advertises Accept-Encoding: gzip on every request, and
+		// dansal's GzipMiddleware compresses every response accordingly --
+		// a compress+decompress cycle on every backend call for a transfer
+		// that would've been free either way (see #1122).
+		HTTP:           &http.Client{Timeout: 180 * time.Second, Transport: &http.Transport{DisableCompression: true}},
 		InternalSecret: cfg.InternalSharedSecret,
 	}
 

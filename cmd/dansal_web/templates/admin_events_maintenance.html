@@ -14,6 +14,10 @@
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
   </label>
+  <label class="filter-check">
+    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "admin_filter_has_source"}}
+  </label>
 
   <div class="dpr-wrap">
     <button type="button" id="em-date-btn" class="dpr-btn"></button>
@@ -134,6 +138,8 @@
             onclick="return confirm('{{$.Strings.T "admin_event_confirm_publish"}}')">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk" id="em-btn-cancel"
             onclick="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+    <button type="submit" formaction="/admin/events/bulk-recheck-source" class="btn-sm btn-assign" id="em-btn-recheck-source"
+            title="{{$.Strings.T "admin_filter_has_source"}}">{{$.Strings.T "evt_bulk_recheck_source_btn"}}</button>
   </div>
 </div>
 {{/* end em-bulk-bar */}}

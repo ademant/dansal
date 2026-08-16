@@ -4026,6 +4026,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
+	smux.Handle("POST /api/v1/events/{id}/recheck-source", auth(recheckEventSource))
 	smux.Handle("POST /api/v1/events/{id}/assign-org", auth(assignEventOrg))
 	smux.Handle("POST /api/v1/events/{id}/pending-edit/approve", auth(approvePendingEdit))
 	smux.Handle("POST /api/v1/events/{id}/pending-edit/reject", auth(rejectPendingEdit))

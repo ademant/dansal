@@ -1075,6 +1075,17 @@ func (c *DansalClient) CancelEvent(ctx context.Context, id int, token string) er
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/cancel", id), token, nil, nil, http.StatusNoContent)
 }
 
+// RecheckEventSource re-fetches the URL an event was originally imported
+// from and merges any changes (#1112). Returns the merge outcome
+// ("new"/"updated"/"unchanged") reported by the API.
+func (c *DansalClient) RecheckEventSource(ctx context.Context, id int, token string) (string, error) {
+	var res struct {
+		Outcome string `json:"outcome"`
+	}
+	err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/recheck-source", id), token, nil, &res, http.StatusOK)
+	return res.Outcome, err
+}
+
 func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token string) error {
 	body, _ := json.Marshal(map[string]int{"org_id": orgID})
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/assign-org", id), token, body, nil, http.StatusNoContent)

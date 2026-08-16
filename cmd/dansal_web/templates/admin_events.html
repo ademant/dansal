@@ -34,6 +34,8 @@
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled
           onclick="return confirm('{{.Strings.T "evt_bulk_confirm_cancel"}}')">{{.Strings.T "evt_bulk_cancel_btn"}}</button>
+  <button type="submit" formaction="/admin/events/bulk-recheck-source" class="btn-sm btn-assign bulk-action-btn" disabled
+          title="{{.Strings.T "admin_filter_has_source"}}">{{.Strings.T "evt_bulk_recheck_source_btn"}}</button>
   {{if eq .User.Role "admin"}}
   <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del bulk-action-btn" disabled
           onclick="return confirm('{{.Strings.T "evt_bulk_confirm_delete"}}')">{{.Strings.T "evt_bulk_delete_btn"}}</button>
@@ -89,6 +91,10 @@
   <label class="filter-check">
     <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
     {{$.Strings.T "filter_include_past"}}
+  </label>
+  <label class="filter-check">
+    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "admin_filter_has_source"}}
   </label>
   <div class="af-field" id="org-filter-wrap">
     <input type="text" id="org-filter-input" class="af-input" placeholder="{{$.Strings.T "filter_all_orgs"}}" autocomplete="off" value="{{.FilterOrgName}}">

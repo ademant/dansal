@@ -58,6 +58,7 @@ type AdminEventsData struct {
 	FilterNotVerified      bool
 	FilterFlagged          bool
 	FilterEmailNotVerified bool
+	FilterHasSource        bool
 	TotalCount             int
 	PrevURL                string
 	NextURL                string
@@ -342,6 +343,34 @@ func adminEventBulkCancelHandler(cfg *Config, client *DansalClient) http.Handler
 			}
 		}
 		go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), cancelledIDs)
+		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
+	}
+}
+
+// adminEventBulkRecheckSourceHandler re-fetches each selected event's
+// import source URL and merges any changes (#1112). Best-effort: failures
+// (dead link, no source, ambiguous match) are logged and skipped rather
+// than aborting the whole batch.
+func adminEventBulkRecheckSourceHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		for _, s := range r.Form["event_ids"] {
+			id, err := strconv.Atoi(s)
+			if err != nil {
+				continue
+			}
+			if _, err := client.RecheckEventSource(r.Context(), id, token); err != nil {
+				log.Printf("recheck source for event %d: %v", id, err)
+			}
+		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
 }
@@ -912,7 +941,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		filterKeys := []string{
 			"include_past", "org_id", "city", "location_id", "musician_id",
 			"type", "dance", "date_from", "date_to", "source",
-			"unpublished", "flagged", "created_after",
+			"unpublished", "flagged", "created_after", "has_source",
 		}
 		q := url.Values{}
 		for _, k := range filterKeys {
@@ -1313,6 +1342,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		filterNotVerified := q.Get("not_verified") == "1"
 		filterFlagged := q.Get("flagged") == "1"
 		filterEmailNotVerified := q.Get("email_not_verified") == "1"
+		filterHasSource := q.Get("has_source") == "1"
 
 		params := url.Values{}
 		if includePast {
@@ -1353,6 +1383,9 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		if filterFlagged && !includePast {
 			params.Set("include_past", "true")
 		}
+		if filterHasSource && !includePast {
+			params.Set("include_past", "true")
+		}
 		if filterEmailNotVerified {
 			// email_verified=0 events can predate today (stuck since a feed
 			// import before the next server restart's backfill caught up), so
@@ -1368,7 +1401,8 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		hasFilter := includePast || orgID != 0 || locationID != 0 || musicianID != 0 ||
 			dateFrom != "" || dateTo != "" || filterType != "" || filterDance != "" ||
 			filterCity != "" || createdAfter != "" || filterSource != "" ||
-			filterUnpublished || filterNotVerified || filterFlagged || filterEmailNotVerified
+			filterUnpublished || filterNotVerified || filterFlagged || filterEmailNotVerified ||
+			filterHasSource
 		limit := adminListPageSize
 		if hasFilter {
 			limit = apiListLimit
@@ -1379,7 +1413,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		// no matching query params for them), which decouples the API's `total`
 		// from what's actually displayed. Offset-based pagination is therefore
 		// only offered when none of those are active, so Prev/Next stay accurate.
-		clientFilterActive := orgID != 0 || filterType != "" || filterDance != "" || filterCity != "" || filterFlagged
+		clientFilterActive := orgID != 0 || filterType != "" || filterDance != "" || filterCity != "" || filterFlagged || filterHasSource
 		offset := 0
 		if !clientFilterActive {
 			if o, err := strconv.Atoi(q.Get("offset")); err == nil && o > 0 {
@@ -1467,6 +1501,15 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			filtered := events[:0]
 			for _, e := range events {
 				if e.NeedsDuplicateReview {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
+		if filterHasSource {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.Source != "" {
 					filtered = append(filtered, e)
 				}
 			}
@@ -1579,6 +1622,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			FilterNotVerified:      filterNotVerified || filterUnpublished,
 			FilterFlagged:          filterFlagged,
 			FilterEmailNotVerified: filterEmailNotVerified,
+			FilterHasSource:        filterHasSource,
 			TotalCount:             total,
 			PrevURL:                prevURL,
 			NextURL:                nextURL,

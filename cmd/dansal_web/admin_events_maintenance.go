@@ -28,6 +28,7 @@ type AdminEventsMaintenanceData struct {
 	FilterDateFrom     string
 	FilterDateTo       string
 	FilterUnpublished  bool
+	FilterHasSource    bool
 	ReturnURL          string
 	// paging
 	TotalCount   int
@@ -52,8 +53,9 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		filterCity := q.Get("city")
 		dateFrom := q.Get("date_from")
 		dateTo := q.Get("date_to")
+		filterHasSource := q.Get("has_source") == "1"
 
-		hasFilter := includePast || filterUnpublished || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != ""
+		hasFilter := includePast || filterUnpublished || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != "" || filterHasSource
 
 		page := 1
 		if p, _ := strconv.Atoi(q.Get("page")); p > 1 {
@@ -70,6 +72,9 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			if !includePast {
 				params.Set("include_past", "true")
 			}
+		}
+		if filterHasSource && !includePast {
+			params.Set("include_past", "true")
 		}
 		if dateFrom != "" {
 			if t, ok := parseISODate(dateFrom); ok {
@@ -155,6 +160,15 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			}
 			events = filtered
 		}
+		if filterHasSource {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.Source != "" {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
@@ -230,6 +244,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			FilterDateFrom:     dateFrom,
 			FilterDateTo:       dateTo,
 			FilterUnpublished:  filterUnpublished,
+			FilterHasSource:    filterHasSource,
 			ReturnURL:          r.URL.RequestURI(),
 			TotalCount:         total,
 			Page:               page,

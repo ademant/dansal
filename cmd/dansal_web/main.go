@@ -339,6 +339,7 @@ func main() {
 		r.HandleFunc("POST /admin/events/bulk-set-time", adminRateLimit(adminEventBulkSetTimeHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-set-attributes", adminRateLimit(adminEventBulkSetAttributesHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-assign-series", adminRateLimit(adminEventBulkAssignSeriesHandler(cfg, tmpls, client, i18n)))
+		r.HandleFunc("POST /admin/events/bulk-recheck-source", adminRateLimit(adminEventBulkRecheckSourceHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/{id}/image/delete", adminRateLimit(adminEventImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/musicians/{id}/image/delete", adminRateLimit(adminMusicianImageDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/musicians/{id}/avatar/delete", adminRateLimit(adminMusicianAvatarDeleteHandler(cfg, client)))

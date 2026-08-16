@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -639,6 +640,18 @@ func readInboxActivity(w http.ResponseWriter, r *http.Request) (raw map[string]a
 		return nil, false
 	}
 	if err := verifyInboxRequest(r.Context(), fedHTTPClient, r, body, actorField); err != nil {
+		// Special case per SWICG/Mastodon guidance: when the actor's key
+		// endpoint returns 410 Gone and the activity is a self-directed
+		// Delete{actor}, treat this as confirmed deletion rather than an auth
+		// failure. The 410 is itself the signal that the actor is gone, so
+		// full signature verification is intentionally skipped here.
+		if errors.As(err, new(errActorGone)) {
+			actType, _ := raw["type"].(string)
+			if actType == "Delete" && apObjectID(raw["object"]) == actorField {
+				log.Printf("inbox: accepting self-Delete from gone actor %s", actorField)
+				return raw, true
+			}
+		}
 		log.Printf("inbox: verification failed for %s: %v", actorField, err)
 		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
 		return nil, false

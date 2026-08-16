@@ -23,13 +23,24 @@ type pubKeyEntry struct {
 	pem       string
 	owner     string
 	fetchedAt time.Time
+	gone      bool // true when the remote returned 404 or 410 (negative cache entry)
 }
 
 var (
 	pubKeyCache    = map[string]pubKeyEntry{}
 	pubKeyCacheMu  sync.Mutex
 	pubKeyCacheTTL = 10 * time.Minute
+	negCacheTTL    = 5 * time.Minute // how long to suppress re-fetches for dead actors
 )
+
+// errActorGone is returned by fetchActorPublicKey when the remote key endpoint
+// responds with 410 Gone, indicating the actor has been permanently deleted.
+// Callers can use errors.As to distinguish this from other fetch errors.
+type errActorGone struct{ keyID string }
+
+func (e errActorGone) Error() string {
+	return fmt.Sprintf("actor key %q returned 410 Gone", e.keyID)
+}
 
 // fetchActorPublicKey fetches the public key PEM and owner URL for the given
 // keyID. keyID may include a fragment (e.g. "https://host/actor#main-key");
@@ -44,9 +55,15 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 	}
 
 	pubKeyCacheMu.Lock()
-	if e, ok := pubKeyCache[keyID]; ok && time.Since(e.fetchedAt) < pubKeyCacheTTL {
-		pubKeyCacheMu.Unlock()
-		return e.pem, e.owner, nil
+	if e, ok := pubKeyCache[keyID]; ok {
+		if e.gone && time.Since(e.fetchedAt) < negCacheTTL {
+			pubKeyCacheMu.Unlock()
+			return "", "", errActorGone{keyID: keyID}
+		}
+		if !e.gone && time.Since(e.fetchedAt) < pubKeyCacheTTL {
+			pubKeyCacheMu.Unlock()
+			return e.pem, e.owner, nil
+		}
 	}
 	pubKeyCacheMu.Unlock()
 
@@ -62,6 +79,17 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 		return "", "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound {
+		// Negatively cache 404/410 so repeat inbox deliveries for the same
+		// dead actor short-circuit without a new outbound HTTP fetch.
+		pubKeyCacheMu.Lock()
+		pubKeyCache[keyID] = pubKeyEntry{gone: true, fetchedAt: time.Now()}
+		pubKeyCacheMu.Unlock()
+		if resp.StatusCode == http.StatusGone {
+			return "", "", errActorGone{keyID: keyID}
+		}
+		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
 	}

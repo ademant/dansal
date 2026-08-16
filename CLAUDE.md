@@ -243,3 +243,28 @@ Runtime config that must not require a service restart lives in the `site_settin
 - `has_festival` → `sliceContains(e.Tags, "festival")`
 
 Full removal of `has_*` from the API and DB is tracked in issue #871 (Layer 1: `dansal_web` display) and a future Layer 2 issue (API + DB + wp-dansal).
+
+## ActivityPub HTTP signatures (httpsig.go)
+
+`cmd/dansal_web/httpsig.go` implements two signature schemes side-by-side:
+
+- **draft-cavage** (current, widely deployed): `Signature:` header, `keyId` param, pseudo-headers `(request-target)` / `host` / `date` / `digest`
+- **RFC 9421** (tracked in issue #1115, not yet implemented): `Signature-Input:` + `Signature:` headers, derived components `@method` / `@target-uri` / `@authority`, body digest via `Content-Digest: sha-256=:<base64>:`, `created` timestamp in signature params
+
+**Rules for any future change to httpsig.go:**
+
+1. **Detect scheme by header, not content.** RFC 9421 requests carry a `Signature-Input` header; draft-cavage requests do not. Route to the correct verification path on that basis — never try to parse both formats with the same code.
+
+2. **Keep `verifyInboxRequest` and `verifyGETRequest` as the single entry points.** When RFC 9421 is added, add the detection + dispatch inside those two functions. Do not add a third top-level verify function — callers (`readInboxActivity`, `requireAPSignature`, `requireAPSignatureErr`) must not need to change.
+
+3. **`fetchActorPublicKey` is scheme-agnostic.** Both schemes use the same `keyId`/key-URL lookup and the same `pubKeyCache`. Do not fork key fetching per scheme.
+
+4. **Negative cache (`errActorGone`, `negCacheTTL`) applies to both schemes.** A gone actor is gone regardless of which signature scheme the remote used.
+
+5. **`VerifyRequest` is draft-cavage only.** When RFC 9421 is implemented, add a separate `VerifyRequestRFC9421(r, pubKeyPEM, sigInput, sigBytes string) error` rather than extending `VerifyRequest`. The signing-base construction is fundamentally different (`\n`-joined `"name": value` lines, not a joining of header values).
+
+6. **`Content-Digest` vs `Digest`.** RFC 9421 uses `Content-Digest: sha-256=:<base64>:` (note the colons around the base64, and a different header name). Draft-cavage uses `Digest: SHA-256=<base64>`. Do not conflate them — check each only on its own path.
+
+7. **Authorized fetch (`requireAPSignature`) covers both schemes.** When RFC 9421 verification is added to `verifyGETRequest`, authorized fetch enforcement is automatically correct — no change needed at the call sites.
+
+The trigger for implementing #1115 is a specific remote sender failing inbox verification whose request carries `Signature-Input` but no legacy `Signature` header. Until then, Mastodon sends both schemes simultaneously and dansal verifies the draft-cavage one, so interoperability is complete with all current major implementations.

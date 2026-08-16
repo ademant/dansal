@@ -384,6 +384,9 @@ endif
 	echo "Deploying nginx for instance '$(INSTANCE)': $$DOMAIN (api=$$API_PORT web=$$WEB_PORT)"
 	install -d -m 755 /etc/nginx/conf.d
 	rm -f /etc/nginx/conf.d/dansal.conf
+	# Shared log_format definitions, installed once (idempotent copy) ahead of
+	# any dansal-<instance>.conf that references them by name -- see #1117.
+	install -m 644 deploy/nginx/dansal-log-formats.conf /etc/nginx/conf.d/00-dansal-log-formats.conf
 	sed \
 	    -e "s/events\.example\.com/$$DOMAIN/g" \
 	    -e "s/127\.0\.0\.1:8000/127.0.0.1:$$API_PORT/g" \

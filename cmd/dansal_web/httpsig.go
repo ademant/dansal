@@ -336,6 +336,85 @@ func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Re
 	return VerifyRequest(r, pubKeyPEM)
 }
 
+// verifyGETRequest verifies the HTTP Signature on an inbound AP GET request.
+// GET requests have no body, so Digest is not required or checked. The
+// signed headers must cover (request-target), host, and date at minimum.
+func verifyGETRequest(ctx context.Context, httpClient *http.Client, r *http.Request) error {
+	sigHeader := r.Header.Get("Signature")
+	if sigHeader == "" {
+		return fmt.Errorf("missing Signature header")
+	}
+	params := parseSignatureHeader(sigHeader)
+
+	keyID := params["keyId"]
+	if keyID == "" {
+		return fmt.Errorf("missing keyId in Signature header")
+	}
+
+	headersParam := params["headers"]
+	for _, required := range []string{"(request-target)", "host", "date"} {
+		found := false
+		for _, h := range strings.Fields(headersParam) {
+			if h == required {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("required header %q not covered by GET signature", required)
+		}
+	}
+
+	// Enforce Date freshness.
+	dateHdr := r.Header.Get("Date")
+	if dateHdr == "" {
+		return fmt.Errorf("missing Date header")
+	}
+	t, err := http.ParseTime(dateHdr)
+	if err != nil {
+		return fmt.Errorf("invalid Date header: %w", err)
+	}
+	if age := time.Since(t); age < -inboxDateTolerance || age > inboxDateTolerance {
+		return fmt.Errorf("Date header outside ±12 h window: %v", t)
+	}
+
+	pubKeyPEM, _, err := fetchActorPublicKey(ctx, httpClient, keyID)
+	if err != nil {
+		return fmt.Errorf("fetch public key %q: %w", keyID, err)
+	}
+
+	return VerifyRequest(r, pubKeyPEM)
+}
+
+// requireAPSignatureErr checks the HTTP Signature on an AP GET when
+// cfg.AuthorizedFetch is true. Returns nil when the feature is disabled or
+// verification succeeds. Use this inside dual-path handlers (AP+HTML) that
+// cannot be wrapped as a whole; use requireAPSignature for pure-AP endpoints.
+func requireAPSignatureErr(cfg *Config, r *http.Request) error {
+	if !cfg.AuthorizedFetch {
+		return nil
+	}
+	return verifyGETRequest(r.Context(), fedHTTPClient, r)
+}
+
+// requireAPSignature returns middleware that enforces authorized fetch: every
+// AP GET request must carry a valid HTTP Signature. When cfg.AuthorizedFetch
+// is false the middleware is a transparent pass-through. Discovery endpoints
+// (WebFinger, nodeinfo) must never be wrapped with this — they must stay open
+// so remote servers can bootstrap a follow before they can sign anything.
+func requireAPSignature(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
+	if !cfg.AuthorizedFetch {
+		return next
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := verifyGETRequest(r.Context(), fedHTTPClient, r); err != nil {
+			writeJSONError(w, r, http.StatusUnauthorized, "authorized fetch required: "+err.Error())
+			return
+		}
+		next(w, r)
+	}
+}
+
 func parseSignatureHeader(header string) map[string]string {
 	result := make(map[string]string)
 	for _, part := range strings.Split(header, ",") {

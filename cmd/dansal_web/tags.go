@@ -100,6 +100,10 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 		}
 
 		if isAPRequest(r) {
+			if err := requireAPSignatureErr(cfg, r); err != nil {
+				writeJSONError(w, r, http.StatusUnauthorized, "authorized fetch required: "+err.Error())
+				return
+			}
 			serveTagCollection(w, r, cfg, client, slug, tag, events)
 			return
 		}

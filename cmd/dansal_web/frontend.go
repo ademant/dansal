@@ -1192,7 +1192,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 
 func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	frontendH := orgFrontendHandler(cfg, tmpls, db, client, i18n)
-	apH := apActorHandler(cfg, db, client)
+	apH := requireAPSignature(cfg, apActorHandler(cfg, db, client))
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isAPRequest(r) {
 			apH(w, r)

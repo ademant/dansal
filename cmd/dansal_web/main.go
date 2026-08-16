@@ -131,7 +131,7 @@ func main() {
 		r := http.NewServeMux()
 		help := newHelpSystem(cfg.HelpDir)
 
-		r.HandleFunc("GET /actors", actorsListHandler(cfg, db))
+		r.HandleFunc("GET /actors", requireAPSignature(cfg, actorsListHandler(cfg, db)))
 		r.HandleFunc("GET /.well-known/webfinger", webfingerHandler(cfg, db, client))
 		r.HandleFunc("GET /.well-known/nodeinfo", nodeinfoIndexHandler(cfg))
 		r.HandleFunc("GET /nodeinfo/2.0", nodeinfoHandler(cfg, client, "2.0"))
@@ -151,8 +151,8 @@ func main() {
 
 		r.HandleFunc("GET /location/{id}", locationPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n))
-		r.HandleFunc("GET /org/{name}/outbox", outboxHandler(cfg, db, client))
-		r.HandleFunc("GET /org/{name}/followers", followersHandler(cfg, db))
+		r.HandleFunc("GET /org/{name}/outbox", requireAPSignature(cfg, outboxHandler(cfg, db, client)))
+		r.HandleFunc("GET /org/{name}/followers", requireAPSignature(cfg, followersHandler(cfg, db)))
 		r.HandleFunc("POST /org/{name}/inbox", inboxHandler(cfg, db, client))
 		r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
 		r.HandleFunc("POST /telegram/webhook", telegramWebhookProxyHandler(cfg))
@@ -261,7 +261,7 @@ func main() {
 		r.HandleFunc("GET /board/renew-session/{token}", boardRenewUseHandler(client))
 		r.HandleFunc("GET /tags", tagsIndexHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /tags/{slug}", tagHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("GET /tags/{slug}/followers", tagFollowersHandler(cfg, db, client))
+		r.HandleFunc("GET /tags/{slug}/followers", requireAPSignature(cfg, tagFollowersHandler(cfg, db, client)))
 		r.HandleFunc("POST /tags/{slug}/inbox", tagInboxHandler(cfg, db, client))
 		r.HandleFunc("GET /api/v1/tags/search", tagSearchHandler(client))
 		r.HandleFunc("GET /cities", citiesHandler(cfg, tmpls, client, i18n))

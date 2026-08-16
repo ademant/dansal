@@ -39,7 +39,12 @@ type Config struct {
 	SecurityPolicy  string `yaml:"security_policy"`  // optional URL to security policy page
 
 	// Federation
-	RelayActorName      string   `yaml:"relay_actor_name"`
+	// AuthorizedFetch requires a valid HTTP Signature on all AP GET requests
+	// (actor objects, outbox, followers). Discovery endpoints (WebFinger,
+	// nodeinfo, host-meta) are never gated — remote servers need them to
+	// bootstrap a follow before they can sign anything. Default: false.
+	AuthorizedFetch bool   `yaml:"authorized_fetch"`
+	RelayActorName  string `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
 	ShowFederatedEvents bool     `yaml:"show_federated_events"`
 	RelayDisplayName    string   `yaml:"relay_display_name"` // fediverse display name for the relay actor

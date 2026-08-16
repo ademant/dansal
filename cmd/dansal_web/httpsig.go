@@ -227,7 +227,7 @@ func VerifyRequest(r *http.Request, pubKeyPEM string) error {
 	return rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hashed, sig)
 }
 
-const inboxDateTolerance = 5 * time.Minute
+const inboxDateTolerance = 12 * time.Hour
 
 // verifyInboxRequest performs full HTTP Signature verification for an inbound
 // ActivityPub POST: required-header enforcement, Digest validation, Date
@@ -280,7 +280,7 @@ func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Re
 		return fmt.Errorf("invalid Date header: %w", err)
 	}
 	if age := time.Since(t); age < -inboxDateTolerance || age > inboxDateTolerance {
-		return fmt.Errorf("Date header outside ±5 min window: %v", t)
+		return fmt.Errorf("Date header outside ±12 h window: %v", t)
 	}
 
 	// Fetch key PEM and owner via the keyId from the Signature header.

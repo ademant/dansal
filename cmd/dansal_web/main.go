@@ -117,6 +117,9 @@ func main() {
 	db := initDB(cfg.DBPath)
 	migrateActorKeyEncryption(db)
 	siteCfg = newSiteSettingsCache(db)
+	if cfg.InternalSharedSecret == "" {
+		log.Printf("warning: internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
+	}
 	client := &DansalClient{
 		BaseURL:        cfg.DansalURL,
 		HTTP:           &http.Client{Timeout: 180 * time.Second},

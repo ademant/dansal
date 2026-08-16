@@ -269,54 +269,84 @@ func classifyAPIError(err error) error {
 // 200 OK), and decodes the JSON body into out when out != nil. This collapses
 // the ~90 identical authed → status-check → decode blocks that previously made
 // up most of the client.
+// do is the shared request+auth+status-check+decode helper nearly every
+// backend call goes through. GET requests get a couple of bounded retries
+// (same jitter as getWithHeader) on a transient 429/503 from dansal's own
+// rate/connection limiter -- e.g. a saturated or momentarily misconfigured
+// internal_shared_secret exemption (#1118) -- instead of failing the page
+// render on the very first hit (#1119). Never retried for non-GET: POST/PUT
+// /PATCH/DELETE aren't safe to resend blindly.
 func (c *DansalClient) do(ctx context.Context, method, path, token string, body []byte, out any, okStatus ...int) error {
 	var bodyReader io.Reader = http.NoBody
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
-	if err != nil {
-		return err
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 	if len(okStatus) == 0 {
 		okStatus = []int{http.StatusOK}
 	}
-	ok := false
-	for _, s := range okStatus {
-		if resp.StatusCode == s {
-			ok = true
-			break
-		}
+	attempts := 1
+	if method == http.MethodGet {
+		attempts = 2
 	}
-	if !ok {
-		switch resp.StatusCode {
-		case http.StatusNotFound:
-			return errNotFound
-		case http.StatusForbidden:
-			return errForbidden
-		case http.StatusGone:
-			return errExpired
+
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			jitter := time.Duration(retryJitterMin+rand.Intn(retryJitterMax-retryJitterMin)) * time.Millisecond
+			select {
+			case <-time.After(jitter):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
-		return apiErr(resp)
-	}
-	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
+		if err != nil {
 			return err
 		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		c.setInternalHeader(req)
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			return err
+		}
+		ok := false
+		for _, s := range okStatus {
+			if resp.StatusCode == s {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			if attempt+1 < attempts && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
+				lastErr = apiErr(resp)
+				resp.Body.Close()
+				continue
+			}
+			defer resp.Body.Close()
+			switch resp.StatusCode {
+			case http.StatusNotFound:
+				return errNotFound
+			case http.StatusForbidden:
+				return errForbidden
+			case http.StatusGone:
+				return errExpired
+			}
+			return apiErr(resp)
+		}
+		defer resp.Body.Close()
+		if out != nil {
+			if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return nil
+	return lastErr
 }
 
 type Event struct {

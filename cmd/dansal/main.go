@@ -3822,6 +3822,10 @@ func main() {
 	}
 	applyDefaults(config)
 
+	if config.Server.InternalSharedSecret == "" {
+		log.Printf("warning: server.internal_shared_secret is unset — dansal-web's loopback API calls are NOT exempt from RateLimitMiddleware/ConnLimitMiddleware and share the same per-IP budget as all public traffic (rate_limit=%d/min, max_conns_per_ip=%d); set it to match dansal-web's internal_shared_secret (see #1118)", config.Server.RateLimit, config.Server.MaxConnsPerIP)
+	}
+
 	if len(config.Server.AllowedOrigins) == 0 {
 		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
 			log.Printf("info: server.allowed_origins is unset — CORS restricted to base_url origin (%s://%s)", u.Scheme, u.Host)

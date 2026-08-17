@@ -1227,12 +1227,17 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 {{range .ContactPosts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
 {{if or (and .Event.Location .Event.Location.Latitude) $hasGeoPosts}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<!-- defer (#1130): this and the inline script below are the last elements
-     on the page, so deferring doesn't change execution order — it just lets
-     the browser finish parsing the rest of the document instead of blocking
-     on the Leaflet download/parse here. -->
+<!-- defer (#1130): deferring the external tag below doesn't change execution
+     order (it's the last element on the page) — it just lets the browser
+     finish parsing the rest of the document instead of blocking on the
+     Leaflet download here. `defer` has NO effect on an inline script without
+     `src` (it always runs synchronously at its parse position regardless of
+     the attribute) — so the map-init script below is wrapped in a
+     DOMContentLoaded listener instead, which is what actually delays it
+     until after the deferred external script has run and L is defined. -->
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script defer>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
 {{if and .Event.Location .Event.Location.Latitude}}
 (function(){
   var el=document.getElementById('evt-map');
@@ -1304,6 +1309,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
   });
 })();
 {{end}}
+});
 </script>
 {{end}}
 {{end}}

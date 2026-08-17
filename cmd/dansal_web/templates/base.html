@@ -460,6 +460,35 @@ function makeTileLayer(){
         attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom:18});
 }
+// Nominatim address results are re-fetched in the venue's own country's
+// language, so a German venue always gets "München"/"Bayern" etc. regardless
+// of the admin's own UI language or the browser's locale (#1126). Keyed on
+// ISO 3166-1 alpha-2 country code; falls back to English for anything not
+// listed rather than guessing a language.
+var NOMINATIM_REGION_LANG = {
+  DE:'de', AT:'de', CH:'de,fr,it', LI:'de',
+  FR:'fr', BE:'nl,fr', LU:'fr,de', MC:'fr',
+  NL:'nl', ES:'es', PT:'pt', AD:'ca',
+  IT:'it', SM:'it', VA:'it',
+  DK:'da', SE:'sv', NO:'no', FI:'fi,sv',
+  PL:'pl', CZ:'cs', SK:'sk', HU:'hu', RO:'ro'
+};
+function nominatimLang(countryCode){
+  return NOMINATIM_REGION_LANG[(countryCode||'').toUpperCase()] || 'en';
+}
+// Re-fetches Nominatim's reverse endpoint for (lat, lon) in the country's own
+// language and hands the resulting `address` object to cb (null on failure).
+// Callers use this as a second pass once an initial search/reverse call (in
+// whatever language) has revealed the country_code, so town/country/region
+// end up in the local language instead of whatever language the first,
+// necessarily-blind call happened to use.
+function nominatimRefine(lat, lon, countryCode, cb){
+  fetch('https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' + lat + '&lon=' + lon, {
+    headers: {'Accept-Language': nominatimLang(countryCode)}
+  }).then(function(r){ return r.json(); }).then(function(item){
+    cb((item && item.address) || null);
+  }).catch(function(){ cb(null); });
+}
 function attachTileLayer(map){
   var tl=makeTileLayer().addTo(map);
   new MutationObserver(function(){map.removeLayer(tl);tl=makeTileLayer().addTo(map);})

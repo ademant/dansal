@@ -691,22 +691,30 @@
   window._geoSelect = function(idx) {
     var item = _geoItems[idx];
     if (!item) return;
-    placeSelected(parseFloat(item.lat), parseFloat(item.lon));
+    var lat = parseFloat(item.lat), lon = parseFloat(item.lon);
+    placeSelected(lat, lon);
     var a = item.address || {};
     var road = [a.house_number, a.road].filter(Boolean).join(' ');
     if (road)                                    document.getElementById('address').value = road;
     if (a.postcode)                              document.getElementById('zipcode').value = a.postcode;
-    var city = a.city||a.town||a.village||a.hamlet||a.municipality||'';
-    if (city)                                    document.getElementById('town').value = city;
-    if (a.country)                               document.getElementById('country').value = a.country;
     if (a.country_code)                          document.getElementById('country_code').value = a.country_code.toUpperCase();
-    var region = a.state || a.county || '';
-    if (region)                                  document.getElementById('region').value = region;
     var snInp = document.getElementById('short_name');
     if (!snInp.value) {
       var sn = item.name || a.amenity || '';
       if (sn) snInp.value = sn;
     }
+    // town/country/region are language-dependent — the initial search/reverse
+    // call used the admin's own UI language, not the venue's country, so
+    // re-fetch once in the venue's own language and let that response win
+    // (falling back to the first response if the refined fetch fails) (#1126).
+    nominatimRefine(lat, lon, a.country_code, function(a2){
+      a2 = a2 || a;
+      var city = a2.city||a2.town||a2.village||a2.hamlet||a2.municipality||'';
+      if (city)              document.getElementById('town').value = city;
+      if (a2.country)        document.getElementById('country').value = a2.country;
+      var region = a2.state || a2.county || '';
+      if (region)            document.getElementById('region').value = region;
+    });
     document.getElementById('osm_id').value   = item.osm_id   || '';
     document.getElementById('osm_type').value = item.osm_type || '';
     clearResultMarkers();

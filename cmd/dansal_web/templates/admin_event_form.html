@@ -1602,15 +1602,21 @@ function geocodeLocation(){
         var road=[a.house_number,a.road].filter(Boolean).join(' ');
         if(road) document.getElementById('new_loc_address').value=road;
         if(a.postcode) document.getElementById('new_loc_zip').value=a.postcode;
-        var city=a.city||a.town||a.village||a.hamlet||a.municipality||'';
-        if(city) document.getElementById('new_loc_town').value=city;
-        if(a.country) document.getElementById('new_loc_country').value=a.country;
-        document.getElementById('new_loc_region').value=a.state||a.county||'';
         document.getElementById('new_loc_country_code').value=(a.country_code||'').toUpperCase();
         var snInp=document.getElementById('new_loc_short_name');
         if(!snInp.value){var sn=r.name||a.amenity||'';if(sn)snInp.value=sn;}
         status.textContent='✓ '+r.display_name;
         showGeoMap(lat,lon);
+        // town/country/region are language-dependent — the search above had
+        // no Accept-Language at all (browser default), not the venue's
+        // country, so re-fetch once in the venue's own language (#1126).
+        nominatimRefine(lat, lon, a.country_code, function(a2){
+          a2 = a2 || a;
+          var city=a2.city||a2.town||a2.village||a2.hamlet||a2.municipality||'';
+          if(city) document.getElementById('new_loc_town').value=city;
+          if(a2.country) document.getElementById('new_loc_country').value=a2.country;
+          document.getElementById('new_loc_region').value=a2.state||a2.county||'';
+        });
       } else {
         status.textContent='Not found';
       }

@@ -1048,6 +1048,15 @@ func (c *DansalClient) EventsTotal() int {
 	return c.eventsTotal
 }
 
+// EventsETag returns the conditional-GET ETag backing the last GetEvents(ctx,
+// "") call, for reuse as the index page's own ETag (#1129). Call GetEvents
+// first to populate it.
+func (c *DansalClient) EventsETag() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.eventsCache.etag
+}
+
 // RefreshEventsTotal re-syncs the shared events total with the server. It goes
 // through GetEvents(ctx, "")'s cached conditional-GET path, so it is free
 // (in-memory) while the events cache is fresh and costs at most one 304

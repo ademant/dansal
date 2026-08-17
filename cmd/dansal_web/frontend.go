@@ -747,6 +747,16 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
+		// Populate/refresh the events cache first so its conditional-GET
+		// ETag (already fingerprinted by the API's checkPublicCacheHeaders)
+		// is known before doing any other work. A crawler revisiting an
+		// unchanged event list gets a 304 without the orgs/dances/tags
+		// fetches or a template render (#1129).
+		if _, err := client.GetEvents(r.Context(), ""); err == nil {
+			if checkETag(w, r, client.EventsETag()) {
+				return
+			}
+		}
 		var events []Event
 		var orgs []Organization
 		var dances []Dance
@@ -846,6 +856,20 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		su := getSessionUser(r)
+
+		// Conditional GET (#1129): anonymous visitors and crawlers all see
+		// the same public page, so a 304 is safe there. Logged-in sessions
+		// see personalized controls (canManage, board-session prefill) that
+		// don't move with ChangedAt, so skip it for them — mirrors the
+		// admin-skips-cache-headers convention in getEvents (cmd/dansal).
+		if su == nil {
+			if changedAt := parseChangedAt(event.ChangedAt); changedAt > 0 {
+				if checkLastModified(w, r, time.Unix(changedAt, 0)) {
+					return
+				}
+			}
+		}
+
 		epd := loadEventPageData(r, client, event, su)
 		canManage := eventCanManage(su, event, epd.members)
 
@@ -1076,6 +1100,24 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if len(loc.Children) > 0 {
 			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
 		}
+
+		// Conditional GET (#1129): freshness must cover both the location
+		// row itself and every event shown on the page (a new/changed event
+		// at this location doesn't touch loc.UpdatedAt), so take the max of
+		// both. Public page — no session-user personalization to worry about
+		// here, unlike eventHandler.
+		if getSessionUser(r) == nil {
+			latest := loc.UpdatedAt
+			for _, ev := range events {
+				if ca := parseChangedAt(ev.ChangedAt); ca > latest {
+					latest = ca
+				}
+			}
+			if latest > 0 && checkLastModified(w, r, time.Unix(latest, 0)) {
+				return
+			}
+		}
+
 		title := loc.ShortName
 		if title == "" {
 			title = loc.Location

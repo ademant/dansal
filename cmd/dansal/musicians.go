@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -313,6 +314,9 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 		musicians = append(musicians, m)
 	}
 
+	if len(musicians) == 1 {
+		w.Header().Set("Location", fmt.Sprintf("/api/v1/musicians/%d", musicians[0].ID))
+	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(musicians)
 }

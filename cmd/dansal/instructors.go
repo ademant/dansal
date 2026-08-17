@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -175,6 +176,7 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	w.Header().Set("Location", fmt.Sprintf("/api/v1/instructors/%d", inst.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(inst)
 }

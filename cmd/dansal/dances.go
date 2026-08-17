@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -50,6 +51,7 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/v1/dances/%d", d.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(d)
 }

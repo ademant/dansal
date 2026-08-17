@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -376,6 +377,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)", o.ID, callerID)
+	w.Header().Set("Location", fmt.Sprintf("/api/v1/organizations/%d", o.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(o)
 }
@@ -396,6 +398,8 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 	if db.QueryRow("SELECT id FROM fetch_sources WHERE organization_id = ? LIMIT 1", o.ID).Scan(&fsID) == nil {
 		o.FetchSourceID = &fsID
 	}
+	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
+
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/atom+xml") {
 		writeOrgsAtom(w, r, []Organization{o})
@@ -465,6 +469,9 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	if checkIfMatchConflict(w, r, o.UpdatedAt) {
+		return
+	}
 	var req CreateOrganizationRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
@@ -493,6 +500,9 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
+	// writeOrganizationFields bumped updated_at server-side (#1128).
+	db.QueryRow("SELECT COALESCE(updated_at,0) FROM organizations WHERE id=?", o.ID).Scan(&o.UpdatedAt)
+	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
 	json.NewEncoder(w).Encode(o)
 }
 
@@ -527,6 +537,9 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeInternalError(w, err)
+		return
+	}
+	if checkIfMatchConflict(w, r, o.UpdatedAt) {
 		return
 	}
 	var req OrganizationMergePatchRequest
@@ -578,6 +591,9 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
+	// writeOrganizationFields bumped updated_at server-side (#1128).
+	db.QueryRow("SELECT COALESCE(updated_at,0) FROM organizations WHERE id=?", o.ID).Scan(&o.UpdatedAt)
+	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
 	json.NewEncoder(w).Encode(o)
 }
 

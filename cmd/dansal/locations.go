@@ -664,6 +664,9 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
 
+	if len(results) == 1 {
+		w.Header().Set("Location", fmt.Sprintf("/api/v1/locations/%d", results[0].Location.ID))
+	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(results)
 }
@@ -731,6 +734,8 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		}
 		childRows.Close()
 	}
+
+	w.Header().Set("ETag", weakEtag(location.UpdatedAt))
 
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/geo+json") {
@@ -941,9 +946,16 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var existing int
-	if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&existing); err != nil || existing == 0 {
+	var existingUpdatedAt int64
+	var existingUpdatedAtNull sql.NullInt64
+	if err := db.QueryRow("SELECT updated_at FROM locations WHERE id=?", id).Scan(&existingUpdatedAtNull); err != nil {
 		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if existingUpdatedAtNull.Valid {
+		existingUpdatedAt = existingUpdatedAtNull.Int64
+	}
+	if checkIfMatchConflict(w, r, existingUpdatedAt) {
 		return
 	}
 	idInt, _ := strconv.Atoi(id)
@@ -980,6 +992,7 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	w.Header().Set("ETag", weakEtag(loc.UpdatedAt))
 	json.NewEncoder(w).Encode(loc)
 }
 
@@ -1031,6 +1044,9 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeInternalError(w, err)
+		return
+	}
+	if checkIfMatchConflict(w, r, loc.UpdatedAt) {
 		return
 	}
 
@@ -1146,6 +1162,11 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		syncLocationAliases(loc.ID, loc.Aliases)
 	}
 
+	// writeLocationFields bumped updated_at server-side; reflect the new
+	// value in the response ETag rather than the stale one read before the
+	// write (#1128).
+	db.QueryRow("SELECT COALESCE(updated_at,0) FROM locations WHERE id=?", loc.ID).Scan(&loc.UpdatedAt)
+	w.Header().Set("ETag", weakEtag(loc.UpdatedAt))
 	json.NewEncoder(w).Encode(loc)
 }
 

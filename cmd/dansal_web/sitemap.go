@@ -39,9 +39,16 @@ func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		smCache.mu.Lock()
 		if time.Since(smCache.fetchedAt) < sitemapTTL && len(smCache.data) > 0 {
 			data := smCache.data
+			fetchedAt := smCache.fetchedAt
 			smCache.mu.Unlock()
 			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 			w.Header().Set("Cache-Control", "public, max-age=1800")
+			// #1129: fetchedAt bounds freshness to sitemapTTL already, so it's
+			// a safe Last-Modified value even though it's a build time, not a
+			// content-change time.
+			if checkLastModified(w, r, fetchedAt) {
+				return
+			}
 			w.Write(data)
 			return
 		}
@@ -53,13 +60,17 @@ func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 
+		fetchedAt := time.Now()
 		smCache.mu.Lock()
 		smCache.data = data
-		smCache.fetchedAt = time.Now()
+		smCache.fetchedAt = fetchedAt
 		smCache.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=1800")
+		if checkLastModified(w, r, fetchedAt) {
+			return
+		}
 		w.Write(data)
 	}
 }

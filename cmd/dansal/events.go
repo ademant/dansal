@@ -1926,6 +1926,9 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if totalCounts.AllNew() {
+		if len(allCreatedEvents) == 1 {
+			w.Header().Set("Location", fmt.Sprintf("/api/v1/events/%d", allCreatedEvents[0].ID))
+		}
 		w.WriteHeader(http.StatusCreated)
 	} else {
 		w.WriteHeader(http.StatusOK)
@@ -1993,6 +1996,10 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	if len(instructors) > 0 {
 		event.Instructors = instructors
 	}
+
+	var changedAtEpoch int64
+	db.QueryRow("SELECT COALESCE(changed_at,0) FROM events WHERE id=?", event.ID).Scan(&changedAtEpoch)
+	w.Header().Set("ETag", weakEtag(changedAtEpoch))
 
 	if strings.Contains(accept, "text/calendar") {
 		cal := ics.NewCalendar()
@@ -2093,10 +2100,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	var existingOrgID sql.NullInt64
 	var existingCreatedBy sql.NullInt64
-	var existingStartTime int64
+	var existingStartTime, existingChangedAt int64
 	var existingIsPublished, existingIsCancelled bool
-	if err := db.QueryRow("SELECT organization_id, created_by_id, start_time, is_published, is_cancelled FROM events WHERE id = ?", id).Scan(
-		&existingOrgID, &existingCreatedBy, &existingStartTime, &existingIsPublished, &existingIsCancelled,
+	if err := db.QueryRow("SELECT organization_id, created_by_id, start_time, is_published, is_cancelled, COALESCE(changed_at,0) FROM events WHERE id = ?", id).Scan(
+		&existingOrgID, &existingCreatedBy, &existingStartTime, &existingIsPublished, &existingIsCancelled, &existingChangedAt,
 	); err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
@@ -2105,6 +2112,9 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !requireEventOrg(w, userRole, callerID, existingOrgID, req.OrganizationID, userRole != RolePublisher) {
+		return
+	}
+	if checkIfMatchConflict(w, r, existingChangedAt) {
 		return
 	}
 
@@ -2285,18 +2295,19 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		existingOrgID, existingLocationID                                     sql.NullInt64
 		existingCreatedBy                                                     sql.NullInt64
 		pricingRaw                                                            sql.NullString
+		existingChangedAt                                                     int64
 	)
 	err = db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
 		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), json(pricing),
 		COALESCE(workshop_difficulty,''), COALESCE(booking_url,''), COALESCE(availability,''), tickets_total, booking_enabled,
 		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(json(attributes),'{}'),
-		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id
+		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id, COALESCE(changed_at,0)
 		FROM events WHERE id=?`, id).Scan(
 		&title, &description, &startUnix, &endUnix, &existingLocationID, &existingOrgID,
 		&hasBall, &hasWorkshop, &hasFestival, &isCancelled, &isPublished, &url, &pricingRaw,
 		&workshopDifficulty, &bookingURL, &availability, &ticketsTotal, &bookingEnabled,
 		&food, &drink, &floorCondition, &attrsRaw,
-		&contactName, &contactEmail, &existingCreatedBy,
+		&contactName, &contactEmail, &existingCreatedBy, &existingChangedAt,
 	)
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
@@ -2323,6 +2334,9 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	// when the event has no org at all — already caught by
 	// requireExistingOrgMember before the target check runs.
 	if !requireEventOrg(w, userRole, callerID, existingOrgID, newOrgIDArg, true) {
+		return
+	}
+	if checkIfMatchConflict(w, r, existingChangedAt) {
 		return
 	}
 

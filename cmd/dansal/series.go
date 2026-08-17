@@ -594,6 +594,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	s.EventCount = len(dates)
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/v1/series/%d", s.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(s)
 }

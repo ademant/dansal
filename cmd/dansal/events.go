@@ -2568,7 +2568,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 		// suggester_email has served its purpose (rate-limiting + the
 		// verification/manage-link email) once the event is published, and the
 		// privacy notice promises minimal retention — clear it here (#944).
-		result, err := db.Exec("UPDATE events SET is_published=1, suggester_email='' WHERE id=?", id)
+		result, err := db.Exec("UPDATE events SET is_published=1, email_verified=1, suggester_email='' WHERE id=?", id)
 		if err != nil {
 			writeInternalError(w, err)
 			return
@@ -2594,7 +2594,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
-		db.Exec("UPDATE events SET is_published=1, suggester_email='' WHERE id=?", id)
+		db.Exec("UPDATE events SET is_published=1, email_verified=1, suggester_email='' WHERE id=?", id)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

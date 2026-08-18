@@ -242,6 +242,9 @@ func logoutHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			_ = client.Logout(r.Context(), token)
 		}
 		clearSession(w)
+		// Instruct the browser to purge cookies and storage on logout so
+		// stale session state does not linger in other open tabs (#1135).
+		w.Header().Set("Clear-Site-Data", `"cookies", "storage"`)
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 	}
 }

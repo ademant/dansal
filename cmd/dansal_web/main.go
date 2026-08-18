@@ -540,7 +540,7 @@ func main() {
 		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           malformedQueryMiddleware(panicRecoveryMiddleware(securityHeadersMiddleware(&live))),
+		Handler:           malformedQueryMiddleware(panicRecoveryMiddleware(securityHeadersMiddleware(fetchMetadataMiddleware(&live)))),
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutSecs) * time.Second,
 		ReadTimeout:       time.Duration(cfg.ReadTimeoutSecs) * time.Second,
 		WriteTimeout:      time.Duration(cfg.WriteTimeoutSecs) * time.Second,
@@ -622,6 +622,32 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		} else {
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 			w.Header().Set("Content-Security-Policy", baselineCSP+"frame-ancestors 'self'")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// fetchMetadataMiddleware rejects state-changing requests that carry a
+// Sec-Fetch-Site header indicating a cross-site origin (#1138).
+//
+// Modern browsers attach Sec-Fetch-Site on every request. When the header is
+// present and the value is "cross-site", the request did not originate from
+// this site and must not mutate state — it is an attempted CSRF. Requests
+// without the header (older browsers, curl, server-to-server) pass through
+// unchanged so the existing form-token defence remains the primary guard.
+//
+// "same-site" is also allowed: the admin uses the same registrable domain and
+// sub-paths such as the webmin UI may POST to the main site from a sibling
+// subdomain. "none" covers top-level navigations (e.g. a form POST from a
+// bookmark) which are legitimate.
+func fetchMetadataMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

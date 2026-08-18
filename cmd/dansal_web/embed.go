@@ -468,6 +468,20 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"nl": "nl", "uk": "uk", "ca": "cat", "pt": "pt",
 			"pl": "pl", "cs": "cs", "br": "fr",
 		}
+		// SRI hashes for flatpickr@4.6.13 locale files (#1137).
+		// Update these together with the version pin whenever flatpickr is upgraded.
+		fpLocaleSRI := map[string]string{
+			"de":  "sha384-yD6dlpesNBZIZV0gfeLiuO80i+vOIxc912ljzvZhRljuVNYEaCoKHCFzbOX0ALBT",
+			"fr":  "sha384-G+W4MJlWkqyxrTEDGqlYx0mcjIOCc60/SvgTHEM8GSs85gMIzcJ2FERdERxhEJ88",
+			"es":  "sha384-j/aEP2b+3OKmGqank2qCSosSrlrF9jpIpdgApXq2ryJYBpLSbEi63/PDdL+rKmcQ",
+			"it":  "sha384-XmcRqh+m1SV0CoktEURItyTPYrm018EIiFIZnaIFP1lRvHRna9DduiTvO+TQzcTJ",
+			"nl":  "sha384-ruYBxJ4AlQrbf1c8gA96utojLvk8H61pctWDJc4SJJCi3+lNqUWavTdsjxOqbYia",
+			"uk":  "sha384-HG+M/dqt+UQSFlJ+nBWGfRQV14nMLazc9UDtv6FbGVgyS4K1DwWWXAv3qWyzPSWw",
+			"cat": "sha384-8Fe9m7D4+L4roPeejCYlOncyDiIk+BMg8zvekta4JDHz+EiwmxZwJsoiE2id19kO",
+			"pt":  "sha384-agbVpcY312cNMSL1b3CUo060bj9FmbwUX8HUCNSE17+jOU/en4yz3w9ro9IWVusF",
+			"pl":  "sha384-W0DNcxEk6/n5JfjgytuutdTkGD5dFcAQOqDuhxNIi3obt6P07XYspdjhAFJAA5f9",
+			"cs":  "sha384-rsvgCXx5KcRfHrOUqhmibXx4UzLNVP5u2NnC5okek2xKU0hZogozwq94N7ExVUKq",
+		}
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedCalendar, map[string]any{
@@ -480,6 +494,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"To":          to.Format("2006-01-02"),
 			"SelectedTag": q.Get("tag"),
 			"FPLocale":    fpLocales[lang],
+			"FPLocaleSRI": fpLocaleSRI[fpLocales[lang]],
 			"Strings":     strs,
 			"BaseURL":     cfg.BaseURL,
 			"SiteName":    embedSiteName(cfg),

@@ -25,8 +25,16 @@ else
 ROLLBACK_VERSION :=
 endif
 
+# build compiles all 5 binaries in a single `go build` invocation rather than
+# `make -j5 build-<name>`: 5 independent go build processes each spin up their
+# own GOMAXPROCS-sized compiler worker pool, so `-j5` on a 4-core box means up
+# to ~20-way oversubscription — on a memory-constrained machine that's enough
+# to thrash into swap and turn a few-second build into minutes. One `go build`
+# with all 5 packages listed shares a single build graph (and worker pool)
+# across them instead, which is both lighter and faster (it also dedupes
+# compiling the packages they share, instead of doing that work 5 times).
 build:
-	$(MAKE) -j5 build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc
+	go build $(LDFLAGS) $(BUILDFLAGS) -o ./ ./cmd/dansal ./cmd/dansal_web ./cmd/dansal_admin ./cmd/dansal_webmin ./cmd/dansal_doc
 
 build-dansal:
 	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal ./cmd/dansal

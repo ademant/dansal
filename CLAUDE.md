@@ -46,7 +46,7 @@ Do not downgrade `go.mod`. If a new language or stdlib feature from 1.24+ is ava
 Always rebuild and redeploy **all** binaries together, regardless of which files changed. A selective deploy risks shipping stale binaries (see issue #147).
 
 ```bash
-# Build all four binaries in parallel (as regular user)
+# Build all 5 binaries in one shared `go build` invocation (as regular user)
 make build
 
 # Install binaries and restart a specific instance (requires sudo, no build step)

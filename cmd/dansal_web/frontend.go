@@ -63,6 +63,7 @@ type TemplateData struct {
 	BannerAIGenerated      bool
 	LogoAIGenerated        bool
 	RelayActorURL          string // absolute ActivityPub actor URL of the relay actor, for a site-wide discovery link (#951)
+	Nonce                  string // per-request CSP nonce; every inline <script> must carry nonce="{{$.Nonce}}" (#1141)
 }
 
 // attentionCache serves the scoped "needs attention" counts from a short-TTL
@@ -219,6 +220,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		BannerAIGenerated:      siteCfg.BannerAIGenerated(),
 		LogoAIGenerated:        siteCfg.LogoAIGenerated(),
 		RelayActorURL:          relayActorURL,
+		Nonce:                  nonceFromRequest(r),
 	}
 }
 

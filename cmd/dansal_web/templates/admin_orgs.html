@@ -87,7 +87,7 @@
     </div>
   </div>
 </div>
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delOrg(id){var f=document.createElement('form');f.method='post';f.action='/admin/organizations/'+id+'/delete';document.body.appendChild(f);f.submit();}
 var _ctdCb=null,_ctdExpected='';

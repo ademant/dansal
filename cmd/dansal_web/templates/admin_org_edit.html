@@ -443,7 +443,7 @@
 .md-br{margin:.2rem 0!important;height:0!important}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function filterLocs(q){
   q=q.toLowerCase();
   document.querySelectorAll('#loc-list tbody tr').forEach(function(row){
@@ -451,7 +451,7 @@ function filterLocs(q){
   });
 }
 </script>
-<script>
+<script nonce="{{$.Nonce}}">
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
   var inp=document.getElementById('actor_name');

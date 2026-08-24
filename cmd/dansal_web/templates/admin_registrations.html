@@ -115,7 +115,7 @@
 .reg-desc{max-width:220px;font-size:.85rem;color:var(--fg-2);white-space:pre-wrap;word-break:break-word}
 .badge-no-contact{display:inline-block;background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404);border-radius:3px;padding:.1rem .4rem;font-size:.8rem;font-weight:600}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 var _rejectID = 0, _rejectVerified = false;
 function approveReg(id, role, noContact) {
   if (noContact && !confirm({{$.Strings.T "admin_reg_confirm_approve_no_contact" | jsStr}})) return;

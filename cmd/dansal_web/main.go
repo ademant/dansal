@@ -3,6 +3,8 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -568,17 +570,61 @@ func main() {
 	log.Println("web server stopped")
 }
 
-// baselineCSP allows 'unsafe-inline' scripts/styles (most templates rely on
-// inline onclick=/<style>/<script>) plus https://unpkg.com, which serves
-// Leaflet (maps) and its plugins. img-src allows https: for map tiles
-// (OpenStreetMap/CARTO) and data: for inline SVG/icons.
-const baselineCSP = "default-src 'self'; " +
-	"img-src 'self' data: https:; " +
-	"font-src 'self' data:; " +
-	"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-	"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
-	"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
-	"object-src 'none'; base-uri 'self'; "
+// baselineCSP builds the per-request CSP header. Every inline <script> block
+// in the templates already carries nonce="{{$.Nonce}}" (#1141 step 1), but
+// script-src still lists 'unsafe-inline' as well: ~50 templates (329
+// occurrences) still use onclick=/onchange=/onsubmit= attributes, which a
+// nonce cannot cover — once a nonce is present in script-src, CSP-compliant
+// browsers ignore 'unsafe-inline' entirely (it's kept only for pre-CSP2
+// browsers that don't understand nonces), so those attributes would silently
+// stop firing the moment 'nonce-<value>' is added here. Do not add it until
+// every onclick=/onchange=/onsubmit= attribute across cmd/dansal_web/templates
+// has been converted to addEventListener (#1141 step 2) — see that issue for
+// why this can't be done as a safe partial/mechanical batch conversion (Go
+// template string literals nest inside the JS attribute value, e.g.
+// onclick="if(confirm('{{$.Strings.T "x"}}'))fn({{.ID}})", so each occurrence
+// needs to be read, not regex-substituted). style-src keeps 'unsafe-inline'
+// regardless (inline style= attributes are lower risk and out of scope for
+// #1141) plus https://unpkg.com, which serves Leaflet (maps) and its plugins.
+// img-src allows https: for map tiles (OpenStreetMap/CARTO) and data: for
+// inline SVG/icons.
+func baselineCSP(nonce string) string {
+	return "default-src 'self'; " +
+		"img-src 'self' data: https:; " +
+		"font-src 'self' data:; " +
+		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
+		"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
+		"object-src 'none'; base-uri 'self'; "
+}
+
+// cspNonceKey is the context key securityHeadersMiddleware stores the
+// per-request CSP nonce under; nonceFromRequest reads it back so tmplData and
+// the embed handlers can put the same value the header advertises into the
+// template's nonce="" attributes.
+type cspNonceKey struct{}
+
+// newCSPNonce returns a fresh base64-encoded 128-bit random nonce, suitable
+// for both the Content-Security-Policy header and a matching nonce="" attribute.
+func newCSPNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failing is effectively unrecoverable; a predictable
+		// fallback would silently defeat the nonce's purpose, so panic loudly
+		// instead (caught by panicRecoveryMiddleware as a 500).
+		panic("csp nonce: crypto/rand: " + err.Error())
+	}
+	return base64.RawStdEncoding.EncodeToString(b)
+}
+
+// nonceFromRequest returns the CSP nonce securityHeadersMiddleware generated
+// for this request, or "" if called outside that middleware (e.g. in a test).
+func nonceFromRequest(r *http.Request) string {
+	if v, ok := r.Context().Value(cspNonceKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
 
 // malformedQueryMiddleware rejects requests whose raw query string contains a
 // literal '?' character. A second '?' can only appear through a bot following
@@ -612,17 +658,20 @@ func panicRecoveryMiddleware(next http.Handler) http.Handler {
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonce := newCSPNonce()
+		r = r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		// HSTS is set by nginx; setting it here too produces a duplicate header.
 		w.Header().Set("Permissions-Policy", "geolocation=(self), camera=(), microphone=(), usb=()")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		csp := baselineCSP(nonce)
 		// Embed pages must be iframeable by any origin; all other pages restrict to same-origin.
 		if strings.HasPrefix(r.URL.Path, "/embed/") {
-			w.Header().Set("Content-Security-Policy", baselineCSP+"frame-ancestors *")
+			w.Header().Set("Content-Security-Policy", csp+"frame-ancestors *")
 		} else {
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-			w.Header().Set("Content-Security-Policy", baselineCSP+"frame-ancestors 'self'")
+			w.Header().Set("Content-Security-Policy", csp+"frame-ancestors 'self'")
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -130,7 +130,7 @@
 </div><!-- /wizard -->
 </div><!-- /overlay -->
 
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
 var PROVIDERS = [
   {id:'gmail',     label:'Gmail',      host:'smtp.gmail.com',        port:587, tls:'starttls', note:'Use an App Password, not your Google account password.'},
@@ -513,7 +513,7 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
 </div>
 </div>
 
-<script>
+<script nonce="{{$.Nonce}}">
 // ── Telegram wizard ───────────────────────────────────────────────────────────
 (function(){
 var step = 1;

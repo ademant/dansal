@@ -33,7 +33,7 @@ li:last-child{border-bottom:none}
 {{else}}
 <span class="empty">—</span>
 {{end}}
-<script>
+<script nonce="{{$.Nonce}}">
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
   window.addEventListener('load',reportHeight);
   new ResizeObserver(reportHeight).observe(document.body);

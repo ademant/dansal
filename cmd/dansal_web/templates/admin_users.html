@@ -373,7 +373,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function rmOrg(userID, orgID) {
   var f = document.createElement('form');

@@ -95,7 +95,7 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
 {{block "content" .}}{{end}}
 </main>
 <footer>Powered by <a href="https://github.com/ademant/dansal" style="color:inherit">dansal</a> · webmin {{.Version}}</footer>
-<script>
+<script nonce="{{$.Nonce}}">
 function toggleNav(){
   var nav=document.getElementById('main-nav');
   var open=nav.classList.toggle('nav-open');

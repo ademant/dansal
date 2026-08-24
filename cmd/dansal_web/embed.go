@@ -139,6 +139,7 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedEvents, map[string]any{
 			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
 			"Mode":     mode,
 			"Events":   events,
 			"OrgNames": orgNames,
@@ -174,6 +175,7 @@ func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedEvent, map[string]any{
 			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
 			"Event":    event,
 			"OrgName":  orgName,
 			"Strings":  strs,
@@ -227,6 +229,7 @@ func embedOrgHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedOrg, map[string]any{
 			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
 			"Org":      org,
 			"Events":   events,
 			"Strings":  strs,
@@ -287,6 +290,7 @@ func embedNextHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedNext, map[string]any{
 			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
 			"Events":   events,
 			"Strings":  strs,
 			"BaseURL":  cfg.BaseURL,
@@ -355,6 +359,7 @@ func embedLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedLocations, map[string]any{
 			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
 			"LocData":  template.JS(locJSON),
 			"Strings":  strs,
 			"BaseURL":  cfg.BaseURL,
@@ -486,6 +491,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedCalendar, map[string]any{
 			"Lang":        lang,
+			"Nonce":       nonceFromRequest(r),
 			"Events":      events,
 			"CalData":     template.JS(calJSON),
 			"Tags":        allTags,

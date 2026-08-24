@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// TestSmokeLoadTemplates catches Go-template syntax errors (malformed {{}},
+// a missing struct field referenced via {{$.Nonce}} etc.) across every
+// webmin template at parse time, mirroring dansal_web's equivalent smoke test.
+func TestSmokeLoadTemplates(t *testing.T) { loadTemplates() }
+
 func TestTmplDataNavNormalization(t *testing.T) {
 	cfg := &Config{SiteName: "test"}
 	cases := []struct {

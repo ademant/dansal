@@ -400,7 +400,7 @@
   body.actions-open .filter-overlay-backdrop{display:block;position:fixed;inset:0;z-index:215;background:rgba(0,0,0,.35)}
 }
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 var _afOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
 var _afLocs = {{locationsJSON $.Data.Locations}};

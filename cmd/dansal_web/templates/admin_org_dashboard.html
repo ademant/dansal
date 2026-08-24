@@ -375,7 +375,7 @@
 .ba-ts-label{font-size:.82rem;color:var(--fg-muted);min-width:7rem}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 var _afLocs = {{locationsJSON .Data.Locations}};
 (function(){
   function setupSuggest(opts){

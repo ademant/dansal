@@ -619,7 +619,7 @@
 </style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var btn     = document.getElementById('geo-btn');
   var input   = document.getElementById('geo-search');
@@ -931,7 +931,7 @@
   document.querySelector('.loc-main').addEventListener('change',refreshDots);
 })();
 </script>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var canvas = document.getElementById('siteplan-canvas');
   if (!canvas) return; // no site plan uploaded yet, or this is a room's edit page
@@ -999,7 +999,7 @@
   });
 })();
 </script>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var input = document.getElementById('org-ac-input');
   var list  = document.getElementById('org-ac-list');

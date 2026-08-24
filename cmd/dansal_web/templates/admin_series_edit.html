@@ -433,7 +433,7 @@ input[type=text],input[type=time],input[type=date],select,textarea{
   body.series-ms-active .event-table .cell-cb{display:block}
 }
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function copyInviteLink(btn){
   var url=document.getElementById('invite-link').href;
   navigator.clipboard.writeText(url).then(function(){

@@ -292,7 +292,7 @@ main:has(.em-table-wrap){max-width:none}
 }
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 
 var _emOrgs = [{{range $.Data.Organizations}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];

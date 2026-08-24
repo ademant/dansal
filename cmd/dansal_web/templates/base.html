@@ -1,7 +1,7 @@
 {{define "base"}}<!DOCTYPE html>
 <html lang="{{.LangCode}}"{{if eq .DarkMode "dark"}} class="dark"{{else if eq .DarkMode "light"}} class="light"{{end}}>
 <head>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var s=localStorage.getItem('colorScheme');
   var h=document.documentElement;
@@ -363,7 +363,7 @@ th.sortable-th{cursor:pointer;user-select:none}
 th.sortable-th:hover{background:#e8eef7}
 .sort-ind{font-size:.75em;opacity:.6}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}",cancel:"{{.Strings.T "js_cancel"}}",select:"{{.Strings.T "js_select"}}",prevWeek:"{{.Strings.T "js_prev_week"}}",nextWeek:"{{.Strings.T "js_next_week"}}",tableModeWeek:"{{.Strings.T "table_mode_week"}}",tableModeAll:"{{.Strings.T "table_mode_all"}}"};
 
 // --- New menu toggle functions ---
@@ -665,7 +665,7 @@ function initDateRangePicker(opts){
     <div class="hm-footer"><a href="/help">Full help &#8594;</a></div>
   </div>
 </div>
-<script>
+<script nonce="{{$.Nonce}}">
 function openHelpModal(){document.getElementById('hm-backdrop').hidden=false;}
 function closeHelpModal(){document.getElementById('hm-backdrop').hidden=true;}
 document.addEventListener('keydown',function(e){

@@ -114,7 +114,7 @@
 .toast-ok{background:#1e7e34;color:#fff}
 .toast-err{background:#b00020;color:#fff}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 var toastTimer;
 function showToast(msg, ok) {
   var t = document.getElementById('toast');

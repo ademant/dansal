@@ -193,7 +193,7 @@
 .badge.status-exists{background:#e2e3e5;color:#383d41;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-updated{background:#fff3cd;color:#856404;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function toggleAll(cb) {
   document.querySelectorAll('.row-cb').forEach(function(c){ c.checked = cb.checked; });
   updateBtn();

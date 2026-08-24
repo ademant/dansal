@@ -73,7 +73,7 @@
     <button type="submit" class="btn-primary" style="align-self:flex-start">{{$.Strings.T "admin_dance_add_btn"}}</button>
   </form>
 </div>
-<script>
+<script nonce="{{$.Nonce}}">
 function oidcToggleAutoRegister(){
   var isMastodon = document.getElementById('oidc-kind-select').value === 'mastodon';
   var idField = document.getElementById('oidc-client-id');
@@ -107,7 +107,7 @@ function oidcToggleAutoRegister(){
 .badge.status-new{background:#d4edda;color:#155724;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 .badge.status-exists{background:#e2e3e5;color:#383d41;padding:.1rem .35rem;border-radius:3px;font-size:.78rem}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 </script>
 {{end}}

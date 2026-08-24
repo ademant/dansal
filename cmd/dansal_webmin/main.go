@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -129,25 +131,62 @@ func main() {
 	log.Println("dansal-webmin stopped")
 }
 
-// webminCSP allows 'unsafe-inline' scripts/styles (templates use inline
-// onclick=/<style>/<script>) plus https://unpkg.com, which serves the QR
-// code library used on the users page.
-const webminCSP = "default-src 'self'; " +
-	"img-src 'self' data:; " +
-	"font-src 'self' data:; " +
-	"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-	"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
-	"object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+// webminCSP builds the per-request CSP header. Every inline <script> block
+// already carries nonce="{{$.Nonce}}" (#1141 step 1), but script-src still
+// lists 'unsafe-inline' as well: several templates still use onclick=/
+// onchange=/onsubmit= attributes, which a nonce cannot cover — once a nonce
+// is present in script-src, CSP-compliant browsers ignore 'unsafe-inline'
+// entirely, so those attributes would silently stop firing the moment
+// 'nonce-<value>' is added here. Do not add it until every onclick=/
+// onchange=/onsubmit= attribute across cmd/dansal_webmin/templates has been
+// converted to addEventListener (#1141 step 2 — see cmd/dansal_web/main.go's
+// baselineCSP for why this can't be a safe mechanical batch conversion).
+// style-src keeps 'unsafe-inline' regardless (out of scope for #1141) plus
+// https://unpkg.com, which serves the QR code library used on the users page.
+func webminCSP(nonce string) string {
+	return "default-src 'self'; " +
+		"img-src 'self' data:; " +
+		"font-src 'self' data:; " +
+		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+}
+
+// cspNonceKey is the context key securityHeadersMiddleware stores the
+// per-request CSP nonce under; nonceFromRequest reads it back so tmplData can
+// put the same value the header advertises into the template's nonce="" attributes.
+type cspNonceKey struct{}
+
+// newCSPNonce returns a fresh base64-encoded 128-bit random nonce, suitable
+// for both the Content-Security-Policy header and a matching nonce="" attribute.
+func newCSPNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic("csp nonce: crypto/rand: " + err.Error())
+	}
+	return base64.RawStdEncoding.EncodeToString(b)
+}
+
+// nonceFromRequest returns the CSP nonce securityHeadersMiddleware generated
+// for this request, or "" if called outside that middleware (e.g. in a test).
+func nonceFromRequest(r *http.Request) string {
+	if v, ok := r.Context().Value(cspNonceKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonce := newCSPNonce()
+		r = r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", webminCSP)
+		w.Header().Set("Content-Security-Policy", webminCSP(nonce))
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})

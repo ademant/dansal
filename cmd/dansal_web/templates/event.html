@@ -965,7 +965,7 @@
 .tpl-msg.err{color:#991b1b}
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 function saveTpl(id, btn) {
   var nameEl = document.getElementById('evt-tpl-name-'+id);
   var orgEl  = document.getElementById('evt-tpl-org-'+id);
@@ -1236,7 +1236,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
      DOMContentLoaded listener instead, which is what actually delays it
      until after the deferred external script has run and L is defined. -->
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script>
+<script nonce="{{$.Nonce}}">
 document.addEventListener('DOMContentLoaded', function(){
 {{if and .Event.Location .Event.Location.Latitude}}
 (function(){

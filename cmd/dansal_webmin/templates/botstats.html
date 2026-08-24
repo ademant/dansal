@@ -253,7 +253,7 @@
 
 {{end}}{{/* with .Data */}}
 
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var botJSON = {{.Data.BotChartJSON}};
   var userJSON = {{.Data.UserChartJSON}};

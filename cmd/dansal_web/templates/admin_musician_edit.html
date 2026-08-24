@@ -294,7 +294,7 @@
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
   var searchInput = document.getElementById('mb-search');

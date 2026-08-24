@@ -57,7 +57,7 @@
 </div>
 
 <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous"></script>
-<script>
+<script nonce="{{$.Nonce}}">
 function showLinkModal(title, blurb, fetchURL) {
   document.getElementById('ml-title').textContent = title;
   document.getElementById('ml-blurb').textContent = blurb;

@@ -90,7 +90,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/flatpickr@4.6.13/dist/flatpickr.min.js" integrity="sha384-5JqMv4L/Xa0hfvtF06qboNdhvuYXUku9ZrhZh3bSk8VXF0A/RuSLHpLsSV9Zqhl6" crossorigin="anonymous"></script>
 {{if .FPLocale}}<script src="https://unpkg.com/flatpickr@4.6.13/dist/l10n/{{.FPLocale}}.js" integrity="{{.FPLocaleSRI}}" crossorigin="anonymous"></script>{{end}}
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var calData = JSON.parse(document.getElementById('cal-data').textContent);
   var map, markerLayer, markersById = {};

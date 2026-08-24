@@ -84,7 +84,7 @@
   {{end}}
 </div>
 
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   function b64url(buf){
     return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)))

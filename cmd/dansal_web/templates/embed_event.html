@@ -33,7 +33,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     <a class="btn" href="{{.BaseURL}}/events/{{.Event.ID}}" target="_blank" rel="noopener">{{.Strings.T "event_more_info"}}</a>
   </div>
 </div>
-<script>
+<script nonce="{{$.Nonce}}">
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
   window.addEventListener('load',reportHeight);
   new ResizeObserver(reportHeight).observe(document.body);

@@ -116,7 +116,7 @@ textarea{resize:vertical}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 function toggleSec(btn) {
   var body = btn.closest('.sec-head').nextElementSibling;
   body.hidden = !body.hidden;

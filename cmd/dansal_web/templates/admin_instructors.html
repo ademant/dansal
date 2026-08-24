@@ -34,7 +34,7 @@
 </div>
 {{end}}
 
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delInstructor(id) {
   var f = document.createElement('form');

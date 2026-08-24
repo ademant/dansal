@@ -100,7 +100,7 @@
 <div id="org-map" style="height:280px;border-radius:6px;margin:1.25rem 0;border:1px solid #ddd"></div>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var geo = {{$geo}};
   if (!geo.length) return;
@@ -225,7 +225,7 @@
 .musician-chips li a{display:inline-block;padding:.25rem .7rem;background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:20px;font-size:.85rem;color:var(--link);text-decoration:none}
 .musician-chips li a:hover{background:var(--bg-hover);border-color:var(--link)}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function orgFetchNow(id) {
   var btn = document.getElementById('btn-fetch-now');
   btn.disabled = true;

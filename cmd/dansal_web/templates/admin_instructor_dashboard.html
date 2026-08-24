@@ -179,7 +179,7 @@
 .col-cb{width:2rem;text-align:center}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function delEvent(id){var f=document.createElement('form');f.method='post';f.action='/admin/events/'+id+'/delete';document.body.appendChild(f);f.submit();}
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 (function(){

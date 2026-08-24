@@ -38,7 +38,7 @@
 </div>
 {{end}}
 
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delMusician(id) {
   var f = document.createElement('form');

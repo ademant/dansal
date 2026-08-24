@@ -408,7 +408,7 @@
 .session-ip{display:block;color:#888;font-size:.78rem}
 #idle-warning{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:.6rem 1.2rem;font-size:.9rem;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:999;display:none}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   function b64url(buf){
     return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)))
@@ -453,7 +453,7 @@
 })();
 </script>
 <script src="/static/qrcode.min.js"></script>
-<script>
+<script nonce="{{$.Nonce}}">
 var selfMagicURL = '';
 function copyText(t) { if (navigator.clipboard) navigator.clipboard.writeText(t); }
 function shareInviteURL(url) {
@@ -486,7 +486,7 @@ async function generateSelfMagicLink() {
 </script>
 {{if gt .SessionIdleTimeoutMins 0}}
 <div id="idle-warning"></div>
-<script>
+<script nonce="{{$.Nonce}}">
 (function(){
   var idleMs = {{.SessionIdleTimeoutMins}} * 60 * 1000;
   var warnMs = Math.max(idleMs - 60000, idleMs * 0.9);

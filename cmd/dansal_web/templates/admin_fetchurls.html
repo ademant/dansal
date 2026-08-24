@@ -70,7 +70,7 @@
 </form>
 {{end}}
 
-<script>
+<script nonce="{{$.Nonce}}">
 var toastTimer;
 function showToast(msg, ok) {
   var t = document.getElementById('toast');

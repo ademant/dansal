@@ -83,7 +83,7 @@
   .event-table .mobile-hide{display:none}
 }
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 (function(){
   var tbody=document.querySelector('#series-table tbody');

@@ -440,7 +440,7 @@
 .import-back-link:hover{text-decoration:underline}
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 function switchTab(btn, id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');

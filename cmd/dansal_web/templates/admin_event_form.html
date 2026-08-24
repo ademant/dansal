@@ -1069,7 +1069,7 @@
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
 
-<script>
+<script nonce="{{$.Nonce}}">
 function _bindMdPaste(taId,hintId){
   var ta=document.getElementById(taId),hint=document.getElementById(hintId);
   if(!ta||!hint) return;

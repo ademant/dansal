@@ -135,7 +135,7 @@ input[type=text],input[type=time],input[type=date],input[type=number],select,tex
 .btn-del-row{background:none;border:none;color:#999;cursor:pointer;font-size:1.1rem;padding:0 .3rem;line-height:1}
 .btn-del-row:hover{color:#c00}
 </style>
-<script>
+<script nonce="{{$.Nonce}}">
 function filterLocOptions(q){
   var sel=document.getElementById('loc-select');
   if(!sel)return;

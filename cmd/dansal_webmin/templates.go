@@ -62,6 +62,7 @@ type TemplateData struct {
 	Data     any
 	Version  string
 	NavPath  string // top-level path for active nav highlighting
+	Nonce    string // per-request CSP nonce; every inline <script> must carry nonce="{{$.Nonce}}" (#1141)
 }
 
 func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData {
@@ -78,6 +79,7 @@ func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData
 		Data:     data,
 		Version:  Version,
 		NavPath:  nav,
+		Nonce:    nonceFromRequest(r),
 	}
 }
 

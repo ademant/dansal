@@ -87,6 +87,23 @@ var tmplFuncsMisc = template.FuncMap{
 		b, _ := json.Marshal(geo)
 		return template.JS(b)
 	},
+	// festivalCalendarJSON (#1144) feeds the /festivals year-calendar grid:
+	// just id/title/date-range/href, built client-side with Intl month/weekday
+	// names the same way the search-page date picker does.
+	"festivalCalendarJSON": func(events []Event) template.JS {
+		type calEvt struct {
+			ID    int    `json:"id"`
+			Title string `json:"t"`
+			Start string `json:"s"`
+			End   string `json:"e,omitempty"`
+		}
+		out := make([]calEvt, 0, len(events))
+		for _, e := range events {
+			out = append(out, calEvt{ID: e.ID, Title: e.Title, Start: e.StartTime, End: e.EndTime})
+		}
+		b, _ := json.Marshal(out)
+		return template.JS(b)
+	},
 	// boardPostsGeoJSON (#1077, #1078) flattens geocoded ride/accommodation
 	// board posts (Lat/Lon set) into a compact JSON blob for the board map —
 	// posts without coordinates are silently excluded, so callers just check

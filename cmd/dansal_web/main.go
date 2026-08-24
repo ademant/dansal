@@ -284,6 +284,7 @@ func main() {
 		r.HandleFunc("GET /instructors", instructorsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /instructors/{id}", instructorHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /organizations", orgsHandler(cfg, tmpls, db, client, i18n))
+		r.HandleFunc("GET /festivals", festivalsPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /impressum", impressumHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /privacy", legalPageHandler(cfg, tmpls, i18n, "privacy", "nav_privacy"))
 		r.HandleFunc("GET /terms", legalPageHandler(cfg, tmpls, i18n, "terms", "nav_terms"))

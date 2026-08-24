@@ -84,6 +84,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		{Loc: base + "/musicians", ChangeFreq: "weekly", Priority: "0.6"},
 		{Loc: base + "/instructors", ChangeFreq: "weekly", Priority: "0.6"},
 		{Loc: base + "/organizations", ChangeFreq: "weekly", Priority: "0.6"},
+		{Loc: base + "/festivals", ChangeFreq: "weekly", Priority: "0.6"},
 	}
 
 	// Static/legal pages

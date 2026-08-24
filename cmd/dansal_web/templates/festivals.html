@@ -1,0 +1,181 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "festivals_title"}}</h1>
+<p class="festivals-intro">{{.Strings.T "festivals_intro"}}</p>
+
+{{with .Data}}
+{{$orgMap := .OrgMap}}
+
+<div class="fest-year-nav">
+  <a href="/festivals?year={{.PrevYear}}" class="fest-year-btn">&#8592; {{.PrevYear}}</a>
+  <span class="fest-year-current">{{.Year}}</span>
+  <a href="/festivals?year={{.NextYear}}" class="fest-year-btn">{{.NextYear}} &#8594;</a>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+
+<div id="map-container"></div>
+
+<div id="fest-calendar" class="fest-calendar"></div>
+
+{{if .YearEvents}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th class="col-type">{{$.Strings.T "col_type"}}</th>
+      <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .YearEvents}}
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty-state">{{$.Strings.TF "festivals_empty" .Year}}</p>
+{{end}}
+
+{{if .FoldedEvents}}
+<h2 class="fest-folded-heading">{{$.Strings.TF "festivals_not_yet_scheduled" .Year}}</h2>
+<div class="table-wrap">
+<table class="event-table fest-folded">
+  <thead>
+    <tr>
+      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th class="col-type">{{$.Strings.T "col_type"}}</th>
+      <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .FoldedEvents}}
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<script type="application/json" id="fest-map-geo">{{eventsGeoJSON .MapEvents}}</script>
+<script type="application/json" id="fest-cal-events">{{festivalCalendarJSON .YearEvents}}</script>
+<script>window.__festYear = {{.Year}};</script>
+{{end}}
+
+<style>
+.festivals-intro{color:var(--fg-muted);margin:-.25rem 0 1rem;max-width:60ch}
+.fest-year-nav{display:flex;align-items:center;justify-content:center;gap:1.25rem;margin-bottom:1rem}
+.fest-year-btn{padding:.35rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);text-decoration:none;font-size:.9rem;white-space:nowrap}
+.fest-year-btn:hover{background:var(--bg-hover)}
+.fest-year-current{font-size:1.3rem;font-weight:700}
+#map-container{height:360px;border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:1.25rem}
+.fest-calendar{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem}
+.fest-month{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem}
+.fest-month-title{font-weight:600;font-size:.9rem;margin-bottom:.4rem;text-align:center;text-transform:capitalize}
+.fest-month-grid{width:100%;border-collapse:collapse;font-size:.78rem}
+.fest-month-grid th{color:var(--fg-muted);font-weight:400;padding:.15rem;text-align:center}
+.fest-month-grid td{text-align:center;padding:.2rem 0;color:var(--fg-2)}
+.fest-month-grid td.fest-other{color:var(--fg-faint)}
+.fest-month-grid td.fest-day{cursor:pointer;background:var(--heading);color:#fff;border-radius:3px;font-weight:600}
+.fest-month-grid td.fest-day:hover{opacity:.85}
+.fest-folded-heading{margin-top:1.5rem;color:var(--fg-2);font-size:1.05rem}
+table.fest-folded{opacity:.75}
+.empty-state{color:var(--fg-muted);padding:1rem;text-align:center}
+</style>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var geoEl = document.getElementById('fest-map-geo');
+  var calEl = document.getElementById('fest-cal-events');
+  if (!geoEl || !calEl) return;
+  var geo = JSON.parse(geoEl.textContent || '[]');
+  var calEvents = JSON.parse(calEl.textContent || '[]');
+  var year = window.__festYear;
+
+  // ── Map ──────────────────────────────────────────────────────────────────
+  if (geo.length) {
+    var map = L.map('map-container');
+    attachTileLayer(map);
+    var bounds = [];
+    geo.forEach(function(e){
+      var m = L.marker([e.lat, e.lng]).addTo(map);
+      var start = (e.s||'').slice(0,10);
+      var end = e.e || '';
+      var when = end && end !== start ? (start+' – '+end) : start;
+      m.bindPopup('<a href="/events/'+e.id+'" style="font-weight:bold;color:inherit;text-decoration:none">'+
+        e.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</a><div style="font-size:.82rem;margin-top:.2rem">'+when+'</div>');
+      bounds.push([e.lat, e.lng]);
+    });
+    try { map.fitBounds(bounds, {padding:[30,30], maxZoom:9}); } catch(_) { map.setView([50,10],5); }
+  } else {
+    var mc = document.getElementById('map-container');
+    if (mc) mc.hidden = true;
+  }
+
+  // ── Calendar ─────────────────────────────────────────────────────────────
+  if (calEvents.length) {
+    var lang = document.documentElement.lang || 'de';
+    var fmtMonth = new Intl.DateTimeFormat(lang, {month:'long'});
+    var fmtWd = new Intl.DateTimeFormat(lang, {weekday:'narrow'});
+    var cal = document.getElementById('fest-calendar');
+
+    function dayKey(d){ return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+    // Map every day covered by a festival (start..end, clipped to the year)
+    // to the event that should be shown there.
+    var dayMap = {};
+    calEvents.forEach(function(ev){
+      var start = new Date(ev.s);
+      var end = ev.e ? new Date(ev.e) : start;
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      var last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      while (d <= last) {
+        if (d.getFullYear() === year) dayMap[dayKey(d)] = ev;
+        d.setDate(d.getDate()+1);
+      }
+    });
+
+    var html = '';
+    for (var month = 0; month < 12; month++) {
+      var monthDate = new Date(year, month, 1);
+      html += '<div class="fest-month"><div class="fest-month-title">'+fmtMonth.format(monthDate)+'</div>';
+      html += '<table class="fest-month-grid"><thead><tr>';
+      var wd0 = new Date(year, month, 1);
+      var dow0 = wd0.getDay();
+      wd0.setDate(wd0.getDate() - (dow0===0?6:dow0-1));
+      for (var i=0;i<7;i++){ var hd=new Date(wd0); hd.setDate(hd.getDate()+i); html+='<th>'+fmtWd.format(hd)+'</th>'; }
+      html += '</tr></thead><tbody>';
+
+      var cur = new Date(wd0);
+      for (var row=0; row<6; row++) {
+        html += '<tr>';
+        for (var col=0; col<7; col++) {
+          var inMonth = cur.getMonth() === month;
+          var key = dayKey(cur);
+          var ev = dayMap[key];
+          if (ev) {
+            html += '<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
+          } else {
+            html += '<td class="'+(inMonth?'':'fest-other')+'">'+cur.getDate()+'</td>';
+          }
+          cur.setDate(cur.getDate()+1);
+        }
+        html += '</tr>';
+        if (row>=3 && cur.getMonth()!==month) break;
+      }
+      html += '</tbody></table></div>';
+    }
+    cal.innerHTML = html;
+    cal.querySelectorAll('td.fest-day').forEach(function(td){
+      td.addEventListener('click', function(){ window.location.href = this.dataset.href; });
+    });
+  }
+})();
+</script>
+{{end}}

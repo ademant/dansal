@@ -656,15 +656,22 @@ func panicRecoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// securityHeadersMiddleware sets X-Frame-Options and Content-Security-Policy
+// only. X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS,
+// and Cross-Origin-Opener-Policy are deliberately NOT set here: nginx
+// (deploy/nginx/dansal.conf) already applies them unconditionally to every
+// response in this server block, including ones proxied to the API and ones
+// nginx itself generates (errors, rate limits) that never reach this
+// middleware at all — setting them here too produced duplicate, and for
+// Permissions-Policy actually conflicting, header lines (#1142). X-Frame-
+// Options and CSP stay app-side because they're path-dependent (/embed/*
+// needs different framing rules than everything else) — nginx no longer
+// sets X-Frame-Options at all, precisely so this per-path value is the only
+// one that reaches the client.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce := newCSPNonce()
 		r = r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		// HSTS is set by nginx; setting it here too produces a duplicate header.
-		w.Header().Set("Permissions-Policy", "geolocation=(self), camera=(), microphone=(), usb=()")
-		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		csp := baselineCSP(nonce)
 		// Embed pages must be iframeable by any origin; all other pages restrict to same-origin.
 		if strings.HasPrefix(r.URL.Path, "/embed/") {

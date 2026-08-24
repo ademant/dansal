@@ -176,18 +176,21 @@ func nonceFromRequest(r *http.Request) string {
 	return ""
 }
 
+// securityHeadersMiddleware sets X-Frame-Options and Content-Security-Policy
+// (plus the nonce plumbing) only. X-Content-Type-Options, Referrer-Policy,
+// Permissions-Policy, HSTS, Cross-Origin-Opener-Policy, and Cache-Control are
+// deliberately NOT set here: nginx (deploy/nginx/dansal-webmin.conf) already
+// applies them unconditionally to every response, including ones nginx
+// itself generates that never reach this middleware — setting them here too
+// produced duplicate, and for Permissions-Policy/HSTS actually conflicting
+// (different max-age/usb= values), header lines (#1142). X-Frame-Options and
+// CSP stay app-side as the single source of truth for those.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce := newCSPNonce()
 		r = r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
-		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
-		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", webminCSP(nonce))
-		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }

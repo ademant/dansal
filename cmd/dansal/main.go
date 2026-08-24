@@ -294,11 +294,18 @@ func CORSMiddleware(next http.Handler) http.Handler {
 }
 
 // SecurityHeadersMiddleware adds defensive HTTP headers to every response.
+// X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS, and
+// Cross-Origin-Opener-Policy are intentionally NOT set here: /api/* is
+// proxied through the same nginx server block as dansal-web (deploy/nginx/
+// dansal.conf), which already sets those unconditionally for every response
+// in that block — setting them here too produced duplicate/conflicting
+// header lines (#1142). X-Frame-Options and Content-Security-Policy stay
+// here since they're app-specific (nginx no longer sets X-Frame-Options at
+// all, precisely so each backend's own value — DENY here, since a JSON API
+// has no reason to ever be framed — is the only one that reaches the client).
 func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'")
 		next.ServeHTTP(w, r)
 	})

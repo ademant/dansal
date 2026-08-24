@@ -339,11 +339,16 @@ func rewriteMarkdownLinks(html string) string {
 	return html
 }
 
+// securityHeaders sets X-Frame-Options and Content-Security-Policy only.
+// X-Content-Type-Options and Referrer-Policy are deliberately NOT set here:
+// nginx (deploy/nginx/dansal-doc.conf) already applies them unconditionally
+// to every response, including ones nginx itself generates that never reach
+// this middleware — setting them here too produced duplicate header lines
+// (#1142). X-Frame-Options and CSP stay app-side as the single source of
+// truth for those.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})

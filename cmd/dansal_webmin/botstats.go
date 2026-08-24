@@ -100,7 +100,10 @@ type fediOrgFollowers struct {
 }
 
 type BotStatsPageData struct {
-	BotDays       []botStatDay
+	BotDays []botStatDay
+	// BotDaysDesc mirrors BotDays newest-first, for the daily-summary table
+	// (charts still read BotDays, which must stay oldest-first left-to-right).
+	BotDaysDesc   []botStatDay
 	UserDays      []userStatDay
 	UserDayMap    map[string]*userStatDay
 	BotChartJSON  string
@@ -115,7 +118,10 @@ type BotStatsPageData struct {
 	TotalSearchCount int
 
 	// Fediverse
-	FediDays         []fediStatDay
+	FediDays []fediStatDay
+	// FediDaysDesc mirrors FediDays newest-first, for the daily-summary table
+	// (the chart still reads FediDays, which must stay oldest-first).
+	FediDaysDesc     []fediStatDay
 	FediTopInstances []fediSourceInstance // aggregated over loaded fedi days
 	FediLive         *fediLiveSnapshot
 	FediChartJSON    string // inbox success/fail + actor fetches stacked bar
@@ -428,6 +434,26 @@ func buildFediFollowChartJSON(days []fediStatDay) string {
 	return buildChartJSON(dates, cats, series)
 }
 
+// reverseBotDays returns a newest-first copy of days, leaving the input
+// (oldest-first, used by the chart) untouched.
+func reverseBotDays(days []botStatDay) []botStatDay {
+	out := make([]botStatDay, len(days))
+	for i, d := range days {
+		out[len(days)-1-i] = d
+	}
+	return out
+}
+
+// reverseFediDays returns a newest-first copy of days, leaving the input
+// (oldest-first, used by the chart) untouched.
+func reverseFediDays(days []fediStatDay) []fediStatDay {
+	out := make([]fediStatDay, len(days))
+	for i, d := range days {
+		out[len(days)-1-i] = d
+	}
+	return out
+}
+
 func buildBotChartJSON(days []botStatDay) string {
 	dates := make([]string, len(days))
 	series := map[string][]int{}
@@ -474,6 +500,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 				data.DBMissing = true
 			} else {
 				data.BotDays = botDays
+				data.BotDaysDesc = reverseBotDays(botDays)
 				data.UserDays = userDays
 				data.HasData = len(botDays) > 0
 				if data.HasData {
@@ -501,6 +528,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 					log.Printf("fedi-stats db: %v", fErr)
 				} else {
 					data.FediDays = fediDays
+					data.FediDaysDesc = reverseFediDays(fediDays)
 					data.FediTopInstances = fediInst
 					data.FediHasData = len(fediDays) > 0
 					if data.FediHasData {

@@ -95,27 +95,27 @@
 </div>
 {{end}}
 
-{{/* ── Daily summary table ── */}}
+{{/* ── Daily summary table (newest first, 10 rows tall, scrollable) ── */}}
 <div class="card">
   <div class="card-title">Daily summary</div>
-  <div style="overflow-x:auto">
+  <div style="overflow:auto;max-height:24rem">
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Total</th>
-        <th>Humans</th>
-        <th>Bots</th>
-        <th>SEO scanner</th>
-        <th>Scanner/Attack</th>
-        <th>AI crawler</th>
-        <th>ActivityPub</th>
-        <th>Inbox fail</th>
-        <th>Clicks/entry</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Date</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Total</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Humans</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Bots</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">SEO scanner</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Scanner/Attack</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">AI crawler</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">ActivityPub</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Inbox fail</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Clicks/entry</th>
       </tr>
     </thead>
     <tbody>
-    {{range .BotDays}}
+    {{range .BotDaysDesc}}
     {{$d := .Date}}
     {{$u := index $.Data.UserDayMap $d}}
     <tr>
@@ -211,26 +211,26 @@
 </div>
 {{end}}
 
-{{/* ── Daily fediverse summary table ── */}}
+{{/* ── Daily fediverse summary table (newest first, 10 rows tall, scrollable) ── */}}
 <div class="card">
   <div class="card-title">Daily fediverse summary</div>
-  <div style="overflow-x:auto">
+  <div style="overflow:auto;max-height:24rem">
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>New followers</th>
-        <th>Delivered</th>
-        <th>Inbox (total)</th>
-        <th>Inbox OK</th>
-        <th>Inbox 4xx</th>
-        <th>Actor fetches</th>
-        <th>WebFinger</th>
-        <th>Outbox</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Date</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">New followers</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Delivered</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Inbox (total)</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Inbox OK</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Inbox 4xx</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Actor fetches</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">WebFinger</th>
+        <th style="position:sticky;top:0;background:var(--bg-subtle)">Outbox</th>
       </tr>
     </thead>
     <tbody>
-    {{range .FediDays}}
+    {{range .FediDaysDesc}}
     <tr>
       <td>{{.Date}}</td>
       <td>{{if gt .FollowersGained 0}}<strong style="color:#4caf50">+{{.FollowersGained}}</strong>{{else}}—{{end}}</td>

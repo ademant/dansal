@@ -106,8 +106,10 @@ document.getElementById('template_id') && document.getElementById('template_id')
 filterTemplates(document.getElementById('organization_id').value);
 
 document.getElementById('url').addEventListener('blur', function() {
-  // Normalise webcal:// → https:// so it's accepted by the server.
-  if (/^webcal:\/\//i.test(this.value)) {
+  // Normalise webcal:// / webcals:// → https:// so it's accepted by the server.
+  if (/^webcals:\/\//i.test(this.value)) {
+    this.value = 'https://' + this.value.slice('webcals://'.length);
+  } else if (/^webcal:\/\//i.test(this.value)) {
     this.value = 'https://' + this.value.slice('webcal://'.length);
   }
   var u = this.value.toLowerCase();

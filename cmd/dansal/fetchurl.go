@@ -1381,8 +1381,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	if !strings.Contains(req.URL, "://") {
 		req.URL = "https://" + req.URL
 	}
-	// webcal:// is an iCal subscription alias; treat it as https.
-	if strings.HasPrefix(strings.ToLower(req.URL), "webcal://") {
+	// webcal:// and webcals:// are iCal subscription aliases (the latter the
+	// secure variant, analogous to http/https); treat both as https.
+	lowerURL := strings.ToLower(req.URL)
+	if strings.HasPrefix(lowerURL, "webcals://") {
+		req.URL = "https://" + req.URL[len("webcals://"):]
+	} else if strings.HasPrefix(lowerURL, "webcal://") {
 		req.URL = "https://" + req.URL[len("webcal://"):]
 	}
 	parsed, err := url.Parse(req.URL)

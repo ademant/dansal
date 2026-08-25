@@ -17,7 +17,7 @@
       <input type="text" name="output" placeholder="/var/lib/dansal/dansal-backup.tar.gz">
     </div>
     <button type="submit" class="btn"
-      onclick="return confirm('Create a full backup now?')">Run backup</button>
+      data-confirm="Create a full backup now?">Run backup</button>
   </form>
 </div>
 
@@ -28,7 +28,7 @@
   </p>
   <form method="POST" action="/maintenance/vacuum">
     <button type="submit" class="btn"
-      onclick="return confirm('Run VACUUM on the database? This may take a moment.')">Run vacuum</button>
+      data-confirm="Run VACUUM on the database? This may take a moment.">Run vacuum</button>
   </form>
 </div>
 
@@ -39,7 +39,7 @@
   </p>
   <form method="POST" action="/maintenance/fetch-all">
     <button type="submit" class="btn"
-      onclick="return confirm('Fetch all feed sources now?')">Fetch all feeds</button>
+      data-confirm="Fetch all feed sources now?">Fetch all feeds</button>
   </form>
 </div>
 
@@ -50,7 +50,7 @@
   </p>
   <form method="POST" action="/maintenance/prune-images">
     <button type="submit" class="btn btn-secondary"
-      onclick="return confirm('Remove orphaned images? This will permanently delete files.')">Prune images</button>
+      data-confirm="Remove orphaned images? This will permanently delete files.">Prune images</button>
   </form>
 </div>
 
@@ -71,7 +71,7 @@
       </select>
     </div>
     <button type="submit" class="btn btn-danger"
-      onclick="return confirm('Restore from this backup? This will overwrite the live database and config.')">Restore</button>
+      data-confirm="Restore from this backup? This will overwrite the live database and config.">Restore</button>
   </form>
   {{else}}
   <p style="color:var(--fg-muted);font-size:.9rem">No backups found in the backup directory.</p>

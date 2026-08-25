@@ -68,7 +68,7 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
     <div class="card-title" style="margin:0">Events ({{len .Events}})</div>
     {{if .PastCount}}
-    <button id="btn-show-past" onclick="togglePast()" style="font-size:.82rem;padding:.2rem .6rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--fg-muted)">Show {{.PastCount}} past</button>
+    <button id="btn-show-past" data-fn="togglePast" data-args="[]" style="font-size:.82rem;padding:.2rem .6rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--fg-muted)">Show {{.PastCount}} past</button>
     {{end}}
   </div>
   <div style="overflow-x:auto">

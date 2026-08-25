@@ -15,7 +15,7 @@
       {{if .SMTP}}{{if .SMTP.Sendmail}}sendmail · {{.SMTP.From}}{{else if .SMTP.Host}}{{.SMTP.Host}}{{if .SMTP.From}} · {{.SMTP.From}}{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="smtpWizard.open()">Configure</button>
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" data-fn="smtpWizard.open" data-args="[]">Configure</button>
 </div>
 
 <!-- SMTP wizard modal -->
@@ -25,7 +25,7 @@
   <!-- Header -->
   <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
     <strong style="font-size:1rem">SMTP configuration</strong>
-    <button onclick="smtpWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+    <button data-fn="smtpWizard.close" data-args="[]" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
   </div>
 
   <!-- Step indicator -->
@@ -63,7 +63,7 @@
           </div>
           <div class="form-group">
             <label>TLS</label>
-            <select id="wz-tls" onchange="smtpWizard.onTLSChange(this)">
+            <select id="wz-tls" data-on="change" data-fn="smtpWizard.onTLSChange" data-args='["@this"]'>
               <option value="starttls">starttls</option>
               <option value="tls">tls (port 465)</option>
               <option value="none">none</option>
@@ -87,7 +87,7 @@
       <div id="wz-smtp-account-fields">
         <div class="form-group">
           <label>Username (login email)</label>
-          <input id="wz-username" type="text" autocomplete="off" oninput="smtpWizard.suggestFrom()">
+          <input id="wz-username" type="text" autocomplete="off" data-on="input" data-fn="smtpWizard.suggestFrom" data-args="[]">
         </div>
         <div class="form-group">
           <label>Password{{if .SMTP}}{{if .SMTP.HasPassword}} <span class="hint">(currently set — leave blank to keep)</span>{{end}}{{end}}</label>
@@ -115,15 +115,15 @@
       <table class="wz-review" id="wz-review"></table>
       <div id="wz-test-result" style="display:none;margin:.9rem 0;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
-        <button class="btn" onclick="smtpWizard.test()" id="wz-test-btn">Test connection</button>
-        <button class="btn btn-secondary" onclick="smtpWizard.save(false)" id="wz-save-btn">Save without testing</button>
+        <button class="btn" data-fn="smtpWizard.test" data-args="[]" id="wz-test-btn">Test connection</button>
+        <button class="btn btn-secondary" data-fn="smtpWizard.save" data-args="[false]" id="wz-save-btn">Save without testing</button>
       </div>
     </div>
 
     <!-- Navigation -->
     <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
-      <button class="btn btn-secondary" id="wz-back" onclick="smtpWizard.back()" style="visibility:hidden">← Back</button>
-      <button class="btn" id="wz-next" onclick="smtpWizard.next()">Next →</button>
+      <button class="btn btn-secondary" id="wz-back" data-fn="smtpWizard.back" data-args="[]" style="visibility:hidden">← Back</button>
+      <button class="btn" id="wz-next" data-fn="smtpWizard.next" data-args="[]">Next →</button>
     </div>
 
   </div><!-- /padding -->
@@ -386,14 +386,14 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
       {{if .Telegram}}{{if .Telegram.BotName}}{{.Telegram.BotName}}{{else if .Telegram.BotToken}}Token set, bot name missing{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="tgWizard.open()">Configure</button>
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" data-fn="tgWizard.open" data-args="[]">Configure</button>
 </div>
 
 <div id="tg-wizard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem">
 <div style="background:var(--bg-card,#fff);border-radius:10px;width:100%;max-width:480px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
   <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
     <strong style="font-size:1rem">Telegram bot configuration</strong>
-    <button onclick="tgWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+    <button data-fn="tgWizard.close" data-args="[]" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
   </div>
   <div style="display:flex;padding:.75rem 1.25rem;gap:.5rem;border-bottom:1px solid var(--border,#e5e7eb)">
     <div class="wz-step" id="tg-ind-1">1 Create bot</div>
@@ -427,13 +427,13 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
       <p style="font-size:.88rem;color:#555;margin:0 0 .75rem">Save the settings and verify the bot token is valid.</p>
       <div id="tg-test-result" style="display:none;margin-bottom:.75rem;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        <button class="btn" id="tg-test-btn" onclick="tgWizard.test()">Verify &amp; Save</button>
-        <button class="btn btn-secondary" id="tg-save-btn" onclick="tgWizard.save()">Save without testing</button>
+        <button class="btn" id="tg-test-btn" data-fn="tgWizard.test" data-args="[]">Verify &amp; Save</button>
+        <button class="btn btn-secondary" id="tg-save-btn" data-fn="tgWizard.save" data-args="[]">Save without testing</button>
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
-      <button class="btn btn-secondary" id="tg-back" onclick="tgWizard.back()" style="visibility:hidden">← Back</button>
-      <button class="btn" id="tg-next" onclick="tgWizard.next()">Next →</button>
+      <button class="btn btn-secondary" id="tg-back" data-fn="tgWizard.back" data-args="[]" style="visibility:hidden">← Back</button>
+      <button class="btn" id="tg-next" data-fn="tgWizard.next" data-args="[]">Next →</button>
     </div>
   </div>
 </div>
@@ -448,14 +448,14 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
       {{if .Matrix}}{{if .Matrix.Homeserver}}{{.Matrix.Homeserver}}{{if .Matrix.HasToken}} · token set{{else}} · no token{{end}}{{else}}Not configured{{end}}{{else}}Not configured{{end}}
     </span>
   </div>
-  <button type="button" class="btn btn-secondary" style="font-size:.85rem" onclick="mxWizard.open()">Configure</button>
+  <button type="button" class="btn btn-secondary" style="font-size:.85rem" data-fn="mxWizard.open" data-args="[]">Configure</button>
 </div>
 
 <div id="mx-wizard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem">
 <div style="background:var(--bg-card,#fff);border-radius:10px;width:100%;max-width:480px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
   <div style="background:var(--bg-subtle,#f8f9fa);border-bottom:1px solid var(--border,#e5e7eb);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
     <strong style="font-size:1rem">Matrix configuration</strong>
-    <button onclick="mxWizard.close()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
+    <button data-fn="mxWizard.close" data-args="[]" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#666;line-height:1">×</button>
   </div>
   <div style="display:flex;padding:.75rem 1.25rem;gap:.5rem;border-bottom:1px solid var(--border,#e5e7eb)">
     <div class="wz-step" id="mx-ind-1">1 Homeserver</div>
@@ -474,8 +474,8 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
     </div>
     <div id="mx-step-2" hidden>
       <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
-        <button type="button" class="btn btn-secondary" id="mx-tab-login" onclick="mxWizard.setTab('login')" style="font-size:.83rem">Login with credentials</button>
-        <button type="button" class="btn btn-secondary" id="mx-tab-token" onclick="mxWizard.setTab('token')" style="font-size:.83rem">Paste access token</button>
+        <button type="button" class="btn btn-secondary" id="mx-tab-login" data-fn="mxWizard.setTab" data-args='["login"]' style="font-size:.83rem">Login with credentials</button>
+        <button type="button" class="btn btn-secondary" id="mx-tab-token" data-fn="mxWizard.setTab" data-args='["token"]' style="font-size:.83rem">Paste access token</button>
       </div>
       <div id="mx-login-section">
         <p style="font-size:.83rem;color:#555;margin:0 0 .6rem">The wizard will exchange your credentials for an access token automatically.</p>
@@ -501,13 +501,13 @@ document.getElementById('smtp-wizard-overlay').addEventListener('click', functio
       <p style="font-size:.88rem;color:#555;margin:0 0 .75rem">Verify the access token works against the homeserver.</p>
       <div id="mx-test-result" style="display:none;margin-bottom:.75rem;padding:.6rem .85rem;border-radius:5px;font-size:.88rem"></div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        <button class="btn" id="mx-test-btn" onclick="mxWizard.test()">Test connection</button>
-        <button class="btn btn-secondary" id="mx-save-btn" onclick="mxWizard.save()">Save without testing</button>
+        <button class="btn" id="mx-test-btn" data-fn="mxWizard.test" data-args="[]">Test connection</button>
+        <button class="btn btn-secondary" id="mx-save-btn" data-fn="mxWizard.save" data-args="[]">Save without testing</button>
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;margin-top:1.1rem;padding-top:.85rem;border-top:1px solid var(--border,#e5e7eb)">
-      <button class="btn btn-secondary" id="mx-back" onclick="mxWizard.back()" style="visibility:hidden">← Back</button>
-      <button class="btn" id="mx-next" onclick="mxWizard.next()">Next →</button>
+      <button class="btn btn-secondary" id="mx-back" data-fn="mxWizard.back" data-args="[]" style="visibility:hidden">← Back</button>
+      <button class="btn" id="mx-next" data-fn="mxWizard.next" data-args="[]">Next →</button>
     </div>
   </div>
 </div>

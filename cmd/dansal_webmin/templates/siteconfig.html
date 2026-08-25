@@ -122,7 +122,7 @@
     <label>API key</label>
     <div style="display:flex;gap:.5rem;align-items:center">
       <input type="text" name="indexnow_key" id="indexnow_key" value="{{.IndexNowKey}}" placeholder="Leave blank to disable" style="flex:1;font-family:monospace">
-      <button type="button" class="btn btn-sm" onclick="document.getElementById('indexnow_key').value=crypto.randomUUID()">Generate</button>
+      <button type="button" class="btn btn-sm" data-fn="generateIndexNowKey" data-args="[]">Generate</button>
     </div>
     <div class="hint">
       When set, dansal-web serves <code>/{key}.txt</code> for ownership verification and notifies IndexNow after events are published, updated, or cancelled.
@@ -186,13 +186,16 @@
     </div>
     <form method="POST" action="/site-config/relay/redeliver">
       <button type="submit" class="btn btn-secondary"
-        onclick="return confirm('Re-deliver all published events to relay followers? This may take a moment.')">
+        data-confirm="Re-deliver all published events to relay followers? This may take a moment.">
         Re-deliver to relay followers
       </button>
     </form>
   </div>
 </div>
 </div>
+<script nonce="{{$.Nonce}}">
+function generateIndexNowKey() { document.getElementById('indexnow_key').value = crypto.randomUUID(); }
+</script>
 {{end}}
 {{end}}
 {{end}}

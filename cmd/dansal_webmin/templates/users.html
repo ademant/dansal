@@ -27,9 +27,9 @@
       <td style="white-space:nowrap">
         <a href="/users/{{$emailEsc}}/sessions" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem">Sessions</a>
         <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
-          onclick="showMagicLink('{{.Email}}')">Magic Link</button>
+          data-fn="showMagicLink" data-args="{{dargs .Email}}">Magic Link</button>
         <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:.25rem .6rem"
-          onclick="showInviteAdmin('{{.Email}}')">Invite Admin</button>
+          data-fn="showInviteAdmin" data-args="{{dargs .Email}}">Invite Admin</button>
       </td>
     </tr>
     {{end}}
@@ -48,11 +48,11 @@
     <p id="ml-blurb" style="font-size:.85rem;color:#666;margin-bottom:.5rem">One-time login link for this admin. Share it securely — it expires after first use.</p>
     <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
       <input id="ml-url" type="text" readonly style="flex:1;font-family:monospace;font-size:.8rem;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px">
-      <button class="btn" onclick="copyML()">Copy</button>
+      <button class="btn" data-fn="copyML" data-args="[]">Copy</button>
     </div>
     <p id="ml-copied" style="display:none;font-size:.82rem;color:green;margin-bottom:.5rem">Copied!</p>
     <div id="ml-qr" style="text-align:center;margin-bottom:.75rem"></div>
-    <button class="btn btn-secondary" onclick="closeMagicModal()">Close</button>
+    <button class="btn btn-secondary" data-fn="closeMagicModal" data-args="[]">Close</button>
   </div>
 </div>
 

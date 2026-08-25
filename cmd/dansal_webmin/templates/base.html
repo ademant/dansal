@@ -80,7 +80,7 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
     </form>
     {{end}}
   </div>
-  <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu" aria-expanded="false" aria-controls="main-nav">&#9776;</button>
+  <button class="nav-hamburger" data-fn="toggleNav" data-args="[]" aria-label="Menu" aria-expanded="false" aria-controls="main-nav">&#9776;</button>
   <div class="nav-links">
     <a href="/"{{if eq .NavPath "/"}} class="active"{{end}}>Dashboard</a>
     <a href="/users"{{if eq .NavPath "/users"}} class="active"{{end}}>Users</a>

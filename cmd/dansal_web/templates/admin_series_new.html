@@ -59,7 +59,7 @@
   <section class="form-section">
     <h2>{{$.Strings.T "series_default_location"}}</h2>
     <div class="loc-filter-wrap">
-      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" oninput="filterLocOptions(this.value)" onfocus="filterLocOptions(this.value)">
+      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" data-on="input,focus" data-fn="filterLocOptions" data-args='["@value"]'>
       <select name="default_location_id" id="loc-select" size="1" style="width:100%">
         <option value="">— {{$.Strings.T "filter_all_locations"}} —</option>
         {{range .Locations}}
@@ -97,17 +97,17 @@
       <tbody id="sd-body">
         {{range .PrefillDates}}
         <tr class="sd-row">
-          <td><input type="date" name="series_date" value="{{.Date}}" oninput="growSDTable(this)"></td>
+          <td><input type="date" name="series_date" value="{{.Date}}" data-on="input" data-fn="growSDTable" data-args='["@this"]'></td>
           <td><input type="time" name="series_start" value="{{.Start}}" placeholder="{{$.Strings.T "series_time_default"}}"></td>
           <td><input type="time" name="series_end" value="{{.End}}" placeholder="{{$.Strings.T "series_time_default"}}"></td>
-          <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
+          <td><button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button></td>
         </tr>
         {{end}}
         <tr class="sd-row">
-          <td><input type="date" name="series_date" oninput="growSDTable(this)"></td>
+          <td><input type="date" name="series_date" data-on="input" data-fn="growSDTable" data-args='["@this"]'></td>
           <td><input type="time" name="series_start" placeholder="{{$.Strings.T "series_time_default"}}"></td>
           <td><input type="time" name="series_end" placeholder="{{$.Strings.T "series_time_default"}}"></td>
-          <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
+          <td><button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button></td>
         </tr>
       </tbody>
     </table>

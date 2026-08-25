@@ -449,6 +449,10 @@ function clickElement(id) { document.getElementById(id).click(); }
 function hideParentElement(el) { el.parentElement.hidden = true; }
 // closeBulkAttrsDialog: shared by the admin events/locations/org bulk-attrs modal.
 function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
+// toggleKuferFields: shared by the fetchurl new/edit forms' "type" select.
+function toggleKuferFields(val) {
+  document.getElementById('kufer-fields').style.display = val === 'kufer' ? '' : 'none';
+}
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){

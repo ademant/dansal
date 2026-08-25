@@ -36,15 +36,15 @@
     <td style="white-space:nowrap">
       {{$id := .ID}}
       {{if eq .RegType "new_org"}}
-      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},'user',{{if $noContact}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_approve"}}</button>
+      <button type="button" class="btn-sm btn-ok" data-fn="approveReg" data-args="{{dargs $id "user" $noContact}}">{{$.Strings.T "admin_reg_approve"}}</button>
       {{else}}
       <select id="role-{{$id}}" style="font-size:.85rem;padding:.15rem .3rem;margin-right:.3rem">
         <option value="user">user</option>
         <option value="publisher">publisher</option>
       </select>
-      <button type="button" class="btn-sm btn-ok" onclick="approveReg({{$id}},document.getElementById('role-{{$id}}').value,{{if $noContact}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_approve"}}</button>
+      <button type="button" class="btn-sm btn-ok" data-fn="approveRegWithRole" data-args="{{dargs $id $noContact}}">{{$.Strings.T "admin_reg_approve"}}</button>
       {{end}}
-      <button type="button" class="btn-sm btn-danger" onclick="rejectReg({{$id}},{{if .Verified}}true{{else}}false{{end}})">{{$.Strings.T "admin_reg_reject"}}</button>
+      <button type="button" class="btn-sm btn-danger" data-fn="rejectReg" data-args="{{dargs $id .Verified}}">{{$.Strings.T "admin_reg_reject"}}</button>
     </td>
   </tr>
   {{end}}
@@ -94,8 +94,8 @@
     <label for="reject-reason" style="font-size:.9rem;font-weight:600;display:block;margin-bottom:.4rem">{{$.Strings.T "admin_reg_reject_reason_label"}}</label>
     <textarea id="reject-reason" rows="3" style="width:100%;padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.9rem;box-sizing:border-box;resize:vertical" placeholder="{{$.Strings.T "admin_reg_reject_reason_hint"}}"></textarea>
     <div style="display:flex;gap:.5rem;margin-top:.9rem">
-      <button type="button" class="btn-sm btn-danger" onclick="confirmReject()">{{$.Strings.T "admin_reg_reject"}}</button>
-      <button type="button" class="btn-sm" onclick="document.getElementById('reject-modal').hidden=true">{{$.Strings.T "admin_magic_link_close"}}</button>
+      <button type="button" class="btn-sm btn-danger" data-fn="confirmReject" data-args="[]">{{$.Strings.T "admin_reg_reject"}}</button>
+      <button type="button" class="btn-sm" data-fn="closeRejectModal" data-args="[]">{{$.Strings.T "admin_magic_link_close"}}</button>
     </div>
   </div>
 </div>
@@ -124,6 +124,11 @@ function approveReg(id, role, noContact) {
   var r = document.createElement('input'); r.type = 'hidden'; r.name = 'role'; r.value = role; f.appendChild(r);
   document.body.appendChild(f); f.submit();
 }
+function approveRegWithRole(id, noContact) {
+  var roleEl = document.getElementById('role-' + id);
+  approveReg(id, roleEl ? roleEl.value : 'user', noContact);
+}
+function closeRejectModal() { document.getElementById('reject-modal').hidden = true; }
 function rejectReg(id, verified) {
   if (!verified) {
     if (!confirm({{$.Strings.T "admin_reg_confirm_reject" | jsStr}})) return;

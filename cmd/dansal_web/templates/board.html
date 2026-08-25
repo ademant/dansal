@@ -16,19 +16,19 @@
   <div class="board-filter-bar">
     <div class="board-type-toggles">
       <label class="btog{{if .ShowRides}} btog-active{{end}}">
-        <input type="checkbox" name="_ui_rides" {{if .ShowRides}}checked{{end}} onchange="syncBoardFilter()">
+        <input type="checkbox" name="_ui_rides" {{if .ShowRides}}checked{{end}} data-on="change" data-fn="syncBoardFilter" data-args="[]">
         🚗 {{$.Strings.T "board_type_group_rides"}}
       </label>
       <label class="btog{{if .ShowSleep}} btog-active{{end}}">
-        <input type="checkbox" name="_ui_sleep" {{if .ShowSleep}}checked{{end}} onchange="syncBoardFilter()">
+        <input type="checkbox" name="_ui_sleep" {{if .ShowSleep}}checked{{end}} data-on="change" data-fn="syncBoardFilter" data-args="[]">
         🏠 {{$.Strings.T "board_type_group_accommodation"}}
       </label>
       <label class="btog{{if .ShowTickets}} btog-active{{end}}">
-        <input type="checkbox" name="_ui_tickets" {{if .ShowTickets}}checked{{end}} onchange="syncBoardFilter()">
+        <input type="checkbox" name="_ui_tickets" {{if .ShowTickets}}checked{{end}} data-on="change" data-fn="syncBoardFilter" data-args="[]">
         🎟️ {{$.Strings.T "board_type_group_tickets"}}
       </label>
       <label class="btog{{if .ShowLostFound}} btog-active{{end}}">
-        <input type="checkbox" name="_ui_lostfound" {{if .ShowLostFound}}checked{{end}} onchange="syncBoardFilter()">
+        <input type="checkbox" name="_ui_lostfound" {{if .ShowLostFound}}checked{{end}} data-on="change" data-fn="syncBoardFilter" data-args="[]">
         🔍 {{$.Strings.T "board_type_group_lost_found"}}
       </label>
     </div>
@@ -76,8 +76,8 @@
     <form id="bgc-cf-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{.EventID}}/board/{{.ID}}/contact">
       <input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">
       <div class="board-contact-method">
-        <label><input type="radio" name="contact_method" value="email" checked onchange="bgcToggle('{{.ID}}','email')"> Email</label>
-        <label><input type="radio" name="contact_method" value="telegram" onchange="bgcToggle('{{.ID}}','telegram')"> Telegram</label>
+        <label><input type="radio" name="contact_method" value="email" checked data-on="change" data-fn="bgcToggle" data-args="{{dargs .ID "email"}}"> Email</label>
+        <label><input type="radio" name="contact_method" value="telegram" data-on="change" data-fn="bgcToggle" data-args="{{dargs .ID "telegram"}}"> Telegram</label>
       </div>
       <div id="bgc-em-{{.ID}}"><input type="email" name="email" placeholder="{{$.Strings.T "board_email_placeholder"}}"></div>
       <div id="bgc-tg-{{.ID}}" style="display:none"><input type="text" name="telegram" placeholder="{{$.Strings.T "board_telegram_placeholder"}}"></div>

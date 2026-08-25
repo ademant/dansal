@@ -9,9 +9,9 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <div class="fetch-action-bar">
-  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" id="save-btn" class="btn-primary" form="fetch-edit-form">{{$.Strings.T "admin_save"}}</button>
-  <button type="button" id="test-btn" class="btn-secondary" onclick="testFeed()">{{$.Strings.T "fetch_test"}}</button>
+  <button type="button" id="test-btn" class="btn-secondary" data-fn="testFeed" data-args="[]">{{$.Strings.T "fetch_test"}}</button>
   {{if .Source.ID}}<button type="button" id="run-btn" class="btn-secondary" data-run-url="/admin/fetchurls/{{.Source.ID}}/run">{{$.Strings.T "fetch_run"}}</button>{{end}}
 </div>
 
@@ -25,11 +25,11 @@
   <label>{{$.Strings.T "fetch_url"}}</label>
   <div class="url-row">
     <input type="text" id="fetch-url-input" value="{{.Source.URL}}" disabled class="input-disabled">
-    <button type="button" id="copy-url-btn" class="btn-copy" onclick="copyFetchURL(this)" title="{{$.Strings.T "admin_invite_copy"}}" aria-label="{{$.Strings.T "admin_invite_copy"}}">⧉</button>
+    <button type="button" id="copy-url-btn" class="btn-copy" data-fn="copyFetchURL" data-args='["@this"]' title="{{$.Strings.T "admin_invite_copy"}}" aria-label="{{$.Strings.T "admin_invite_copy"}}">⧉</button>
   </div>
 
   <label for="type">{{$.Strings.T "fetch_type"}}</label>
-  <select id="type" name="type" onchange="document.getElementById('kufer-fields').style.display=(this.value==='kufer')?'':'none'">
+  <select id="type" name="type" data-on="change" data-fn="toggleKuferFields" data-args='["@value"]'>
     <option value="ical"{{if eq .Source.Type "ical"}} selected{{end}}>iCal</option>
     <option value="rss"{{if eq .Source.Type "rss"}} selected{{end}}>RSS</option>
     <option value="json"{{if or (eq .Source.Type "json") (eq .Source.Type "folkdance-json") (eq .Source.Type "gancio-json")}} selected{{end}}>JSON (auto-detect)</option>

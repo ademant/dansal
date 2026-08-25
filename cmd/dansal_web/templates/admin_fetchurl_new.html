@@ -17,7 +17,7 @@
   </div>
   <div class="form-row">
     <label for="type">{{$.Strings.T "fetch_type"}}</label>
-    <select id="type" name="type" onchange="document.getElementById('kufer-fields').style.display=(this.value==='kufer')?'':'none'">
+    <select id="type" name="type" data-on="change" data-fn="toggleKuferFields" data-args='["@value"]'>
       <option value="" {{if eq .Type ""}}selected{{end}}>{{$.Strings.T "fetch_type_auto"}}</option>
       <option value="ical" {{if eq .Type "ical"}}selected{{end}}>iCal</option>
       <option value="rss" {{if eq .Type "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
@@ -39,7 +39,7 @@
   </div>
   <div class="form-row">
     <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
-    <select id="organization_id" name="organization_id" onchange="filterTemplates(this.value)">
+    <select id="organization_id" name="organization_id" data-on="change" data-fn="filterTemplates" data-args='["@value"]'>
       <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
       {{range .Orgs}}<option value="{{.ID}}"{{if eq .ID $.Data.OrgID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>

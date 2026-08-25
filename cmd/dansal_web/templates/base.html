@@ -445,6 +445,8 @@ function submitParentForm(el) { el.form.submit(); }
 function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
 // clickElement: data-fn helper for onclick="document.getElementById(id).click()".
 function clickElement(id) { document.getElementById(id).click(); }
+// hideParentElement: data-fn helper for onclick="this.parentElement.hidden=true".
+function hideParentElement(el) { el.parentElement.hidden = true; }
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){

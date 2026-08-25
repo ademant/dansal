@@ -1138,7 +1138,6 @@ function onStartDateChangeAndShift(v){
   checkTimetableShift(v);
 }
 function clearDataAuto(el){ el.removeAttribute('data-auto'); }
-function hideParentElement(el){ el.parentElement.hidden = true; }
 function checkTimetableShift(newDate){
   if(typeof _origStartDate==='undefined'||!newDate||!_origStartDate) return;
   var datedEntries=(_ttEntries||[]).filter(function(e){return e.entry_date;});

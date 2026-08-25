@@ -16,7 +16,7 @@
   <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
   {{if .Org.FetchSourceID}}
   <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
-  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" onclick="orgFetchNow({{.Org.FetchSourceID}})">🔄</button>
+  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .Org.FetchSourceID}}">🔄</button>
   {{end}}
 </div>
 
@@ -151,7 +151,7 @@
 <div class="bulk-edit-layout">
 <aside class="bulk-side" id="event-bulk-side">
   <span class="event-bulk-count"></span>
-  <button type="submit" class="btn-sm btn-merge bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+  <button type="submit" class="btn-sm btn-merge bulk-action-btn" disabled data-confirm="{{$.Strings.T "evt_merge_confirm"}}">{{$.Strings.T "evt_merge_btn"}}</button>
   <button type="button" class="btn-sm event-bulk-tpl-btn bulk-action-btn" disabled>{{$.Strings.T "evt_apply_template_btn"}}</button>
   <span class="bulk-sep"></span>
   <div class="bq-group">
@@ -169,13 +169,13 @@
       {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
     </select>
   </div>
-  <button type="button" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply" onclick="applyBulkQuick()">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
+  <button type="button" class="btn-sm btn-assign bq-apply bulk-action-btn" disabled id="bq-apply" data-fn="applyBulkQuick" data-args="[]">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
   <span class="bulk-sep"></span>
-  <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled onclick="openBulkAttrsModal()">{{$.Strings.T "evt_bulk_attrs_more"}}</button>
+  <button type="button" class="btn-sm btn-attrs bulk-action-btn" disabled data-fn="openBulkAttrsModal" data-args="[]">{{$.Strings.T "evt_bulk_attrs_more"}}</button>
   <span class="bulk-sep"></span>
-  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+  <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled data-confirm="{{$.Strings.T "evt_bulk_confirm_cancel"}}">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
   {{if eq $.User.Role "admin"}}
-  <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del bulk-action-btn" disabled onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_delete"}}')">{{$.Strings.T "evt_bulk_delete_btn"}}</button>
+  <button type="submit" formaction="/admin/events/bulk-delete" class="btn-sm btn-del bulk-action-btn" disabled data-confirm="{{$.Strings.T "evt_bulk_confirm_delete"}}">{{$.Strings.T "evt_bulk_delete_btn"}}</button>
   {{end}}
 </aside>
 <div class="bulk-main">
@@ -208,7 +208,7 @@
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
       {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
-      {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
+      {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" data-confirm="{{$.Strings.T "admin_event_confirm_delete"}}" data-fn="delEvent" data-args="{{dargs .ID}}">🗑️</button>{{end}}
     </td>
   </tr>
   {{end}}
@@ -281,7 +281,7 @@
       </div>
     </div>
     <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem">
-      <button type="button" onclick="document.getElementById('bulk-attrs-dialog').close()" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>
+      <button type="button" data-fn="closeBulkAttrsDialog" data-args="[]" style="padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer">{{$.Strings.T "filter_clear"}}</button>
       <button type="submit" style="padding:.35rem .8rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer">{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
     </div>
   </form>
@@ -376,6 +376,7 @@
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
 <script nonce="{{$.Nonce}}">
+function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
 var _afLocs = {{locationsJSON .Data.Locations}};
 (function(){
   function setupSuggest(opts){

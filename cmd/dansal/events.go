@@ -493,6 +493,19 @@ func addEventToCalendar(cal *ics.Calendar, event Event) {
 	}
 }
 
+// buildEventsCalendar assembles an ics.Calendar from events, shared by the
+// text/calendar and application/calendar+json (jCal, #1153) GET response
+// branches — the jCal branch just transcodes the same serialized text via
+// icalTextToJCal instead of writing it out directly.
+func buildEventsCalendar(events []Event) *ics.Calendar {
+	cal := ics.NewCalendar()
+	cal.SetMethod(ics.MethodPublish)
+	for _, event := range events {
+		addEventToCalendar(cal, event)
+	}
+	return cal
+}
+
 // ── query-building helpers ─────────────────────────────────────────────────
 
 func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
@@ -1671,14 +1684,25 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.Contains(accept, "text/calendar") {
-		cal := ics.NewCalendar()
-		cal.SetMethod(ics.MethodPublish)
-		for _, event := range events {
-			addEventToCalendar(cal, event)
+	if r.URL.Query().Get("format") == "openactive" {
+		out := make([]map[string]any, len(events))
+		base := "https://" + r.Host
+		for i, e := range events {
+			out[i] = buildOpenActiveEvent(e, base)
 		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(out)
+	} else if strings.Contains(accept, "text/calendar") {
 		w.Header().Set("Content-Type", "text/calendar")
-		w.Write([]byte(cal.Serialize()))
+		w.Write([]byte(buildEventsCalendar(events).Serialize()))
+	} else if strings.Contains(accept, "application/calendar+json") {
+		jcal, err := icalTextToJCal(buildEventsCalendar(events).Serialize())
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/calendar+json")
+		w.Write(jcal)
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeEventsAtom(w, r, events)
 	} else {
@@ -1719,6 +1743,123 @@ func writeEventsAtom(w http.ResponseWriter, r *http.Request, events []Event) {
 	})
 }
 
+// eventRequestsFromICalText parses RFC 5545 calendar text into
+// EventCreateRequests, writing badFormatMsg as a 400 on a parse failure or
+// "No events found in iCal file" when parsing succeeds but yields nothing.
+// Shared by the text/calendar and application/calendar+json (jCal, #1153)
+// POST branches — the jCal branch transcodes to iCal text via
+// jcalToICalText first, so both end up going through the identical
+// extraction below rather than two parallel implementations.
+func eventRequestsFromICalText(w http.ResponseWriter, r *http.Request, icsText, badFormatMsg string) ([]EventCreateRequest, []*ics.VEvent, bool) {
+	cal, err := ics.ParseCalendar(strings.NewReader(icsText))
+	if err != nil {
+		writeError(w, badFormatMsg, http.StatusBadRequest)
+		return nil, nil, false
+	}
+	var icalOrgID *int
+	if s := r.URL.Query().Get("organization_id"); s != "" {
+		if v, err2 := strconv.Atoi(s); err2 == nil {
+			icalOrgID = &v
+		}
+	}
+	requests, vevents := veventsToEventRequests(cal.Events(), icalOrgID)
+	if len(requests) == 0 {
+		writeError(w, "No events found in iCal file", http.StatusBadRequest)
+		return nil, nil, false
+	}
+	return requests, vevents, true
+}
+
+// veventsToEventRequests converts parsed VEVENTs into EventCreateRequests,
+// expanding RRULE occurrences and falling back to icalOrgID when a VEVENT
+// has no ORGANIZER dansal recognizes.
+func veventsToEventRequests(events []*ics.VEvent, icalOrgID *int) ([]EventCreateRequest, []*ics.VEvent) {
+	var requests []EventCreateRequest
+	var vevents []*ics.VEvent
+	for _, event := range events {
+		startT, err := event.GetStartAt()
+		if err != nil {
+			continue
+		}
+		endT := startT
+		if et, err := event.GetEndAt(); err == nil {
+			endT = et
+		} else if p := event.GetProperty(ics.ComponentPropertyDuration); p != nil {
+			if d, err := parseICalDuration(p.Value); err == nil {
+				endT = startT.Add(d)
+			}
+		}
+		if p := event.GetProperty(ics.ComponentPropertySummary); p == nil || p.Value == "" {
+			continue
+		}
+
+		orgID := icalOrgID
+		if orgID == nil {
+			orgID = ensureOrgFromOrganizer(event)
+		}
+		var isCancelled bool
+		if p := event.GetProperty(ics.ComponentPropertyStatus); p != nil {
+			isCancelled = p.Value == "CANCELLED"
+		}
+		baseUID := event.GetProperty(ics.ComponentPropertyUniqueId)
+		var baseUIDStr string
+		if baseUID != nil {
+			baseUIDStr = baseUID.Value
+		}
+
+		occs, _ := expandRRuleOccurrences(event, startT, endT)
+		if occs == nil {
+			occs = [][2]time.Time{{startT, endT}}
+		}
+
+		for _, occ := range occs {
+			uid := baseUIDStr
+			if len(occs) > 1 && !occ[0].Equal(startT) {
+				uid = fmt.Sprintf("%s_%d", baseUIDStr, occ[0].UTC().Unix())
+			}
+			requests = append(requests, EventCreateRequest{
+				UID: uid,
+				EventWriteRequest: EventWriteRequest{
+					Title:          event.GetProperty(ics.ComponentPropertySummary).Value,
+					Description:    event.GetProperty(ics.ComponentPropertyDescription).Value,
+					StartTime:      occ[0].UTC().Format(time.RFC3339),
+					EndTime:        occ[1].UTC().Format(time.RFC3339),
+					IsCancelled:    isCancelled,
+					Tags:           parseICalCategories(event),
+					URL:            attachURL(event),
+					OrganizationID: orgID,
+					Location: func() EventLocationRequest {
+						if apple := parseAppleStructuredLocation(event); apple != nil {
+							if apple.Location == "" {
+								if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
+									apple.Location = p.Value
+								}
+							}
+							if apple.Latitude == nil {
+								if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
+									apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
+								}
+							}
+							return *apple
+						}
+						var loc string
+						var lat, lon *float64
+						if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
+							loc = p.Value
+						}
+						if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
+							lat, lon = parseICalGeo(p.Value)
+						}
+						return EventLocationRequest{Location: loc, Latitude: lat, Longitude: lon}
+					}(),
+				},
+			})
+			vevents = append(vevents, event)
+		}
+	}
+	return requests, vevents
+}
+
 // POST /api/v1/events
 func createEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -1751,104 +1892,28 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))
+		reqs, ves, ok2 := eventRequestsFromICalText(w, r, string(body), "Invalid iCal format")
+		if !ok2 {
+			return
+		}
+		requests, vevents = reqs, ves
+	} else if contentType == "application/calendar+json" {
+		body, ok := readBodyOrError(w, r)
+		if !ok {
+			return
+		}
+		icsText, err := jcalToICalText(body)
 		if err != nil {
-			writeError(w, "Invalid iCal format", http.StatusBadRequest)
+			writeError(w, "Invalid jCal format: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		var icalOrgID *int
-		if s := r.URL.Query().Get("organization_id"); s != "" {
-			if v, err2 := strconv.Atoi(s); err2 == nil {
-				icalOrgID = &v
-			}
-		}
-		for _, event := range cal.Events() {
-			startT, err := event.GetStartAt()
-			if err != nil {
-				continue
-			}
-			endT := startT
-			if et, err := event.GetEndAt(); err == nil {
-				endT = et
-			} else if p := event.GetProperty(ics.ComponentPropertyDuration); p != nil {
-				if d, err := parseICalDuration(p.Value); err == nil {
-					endT = startT.Add(d)
-				}
-			}
-			if p := event.GetProperty(ics.ComponentPropertySummary); p == nil || p.Value == "" {
-				continue
-			}
-
-			orgID := icalOrgID
-			if orgID == nil {
-				orgID = ensureOrgFromOrganizer(event)
-			}
-			var isCancelled bool
-			if p := event.GetProperty(ics.ComponentPropertyStatus); p != nil {
-				isCancelled = p.Value == "CANCELLED"
-			}
-			baseUID := event.GetProperty(ics.ComponentPropertyUniqueId)
-			var baseUIDStr string
-			if baseUID != nil {
-				baseUIDStr = baseUID.Value
-			}
-
-			occs, _ := expandRRuleOccurrences(event, startT, endT)
-			if occs == nil {
-				occs = [][2]time.Time{{startT, endT}}
-			}
-
-			for _, occ := range occs {
-				uid := baseUIDStr
-				if len(occs) > 1 && !occ[0].Equal(startT) {
-					uid = fmt.Sprintf("%s_%d", baseUIDStr, occ[0].UTC().Unix())
-				}
-				requests = append(requests, EventCreateRequest{
-					UID: uid,
-					EventWriteRequest: EventWriteRequest{
-						Title:          event.GetProperty(ics.ComponentPropertySummary).Value,
-						Description:    event.GetProperty(ics.ComponentPropertyDescription).Value,
-						StartTime:      occ[0].UTC().Format(time.RFC3339),
-						EndTime:        occ[1].UTC().Format(time.RFC3339),
-						IsCancelled:    isCancelled,
-						Tags:           parseICalCategories(event),
-						URL:            attachURL(event),
-						OrganizationID: orgID,
-						Location: func() EventLocationRequest {
-							if apple := parseAppleStructuredLocation(event); apple != nil {
-								if apple.Location == "" {
-									if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-										apple.Location = p.Value
-									}
-								}
-								if apple.Latitude == nil {
-									if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-										apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
-									}
-								}
-								return *apple
-							}
-							var loc string
-							var lat, lon *float64
-							if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-								loc = p.Value
-							}
-							if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-								lat, lon = parseICalGeo(p.Value)
-							}
-							return EventLocationRequest{Location: loc, Latitude: lat, Longitude: lon}
-						}(),
-					},
-				})
-				vevents = append(vevents, event)
-			}
-		}
-		if len(requests) == 0 {
-			writeError(w, "No events found in iCal file", http.StatusBadRequest)
+		reqs, ves, ok2 := eventRequestsFromICalText(w, r, icsText, "Invalid jCal format")
+		if !ok2 {
 			return
 		}
+		requests, vevents = reqs, ves
 	} else {
-		writeError(w, "Content-Type must be application/json or text/calendar", http.StatusUnsupportedMediaType)
+		writeError(w, "Content-Type must be application/json, text/calendar, or application/calendar+json", http.StatusUnsupportedMediaType)
 		return
 	}
 
@@ -2001,12 +2066,20 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT COALESCE(changed_at,0) FROM events WHERE id=?", event.ID).Scan(&changedAtEpoch)
 	w.Header().Set("ETag", weakEtag(changedAtEpoch))
 
-	if strings.Contains(accept, "text/calendar") {
-		cal := ics.NewCalendar()
-		cal.SetMethod(ics.MethodPublish)
-		addEventToCalendar(cal, event)
+	if r.URL.Query().Get("format") == "openactive" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(buildOpenActiveEvent(event, "https://"+r.Host))
+	} else if strings.Contains(accept, "text/calendar") {
 		w.Header().Set("Content-Type", "text/calendar")
-		w.Write([]byte(cal.Serialize()))
+		w.Write([]byte(buildEventsCalendar([]Event{event}).Serialize()))
+	} else if strings.Contains(accept, "application/calendar+json") {
+		jcal, err := icalTextToJCal(buildEventsCalendar([]Event{event}).Serialize())
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/calendar+json")
+		w.Write(jcal)
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeEventsAtom(w, r, []Event{event})
 	} else {

@@ -318,7 +318,7 @@
         <button type="button" class="tt-detail-close" data-fn="closeTTDetailDialog" data-args="[]" aria-label="Close">×</button>
         <div id="tt-detail-body"></div>
       </dialog>
-      <script>
+      <script nonce="{{$.Nonce}}">
       function openTTDetail(el,hasTime){
         var dlg=document.getElementById('tt-detail-dialog');
         var body=document.getElementById('tt-detail-body');
@@ -668,7 +668,7 @@
     </div>
     {{end}}
   </div>
-  <script>
+  <script nonce="{{$.Nonce}}">
   window._boardMapPosts = {{$geoPosts}};
   window._boardMapVenue = {{if and .Event.Location .Event.Location.Latitude}}[{{floatVal .Event.Location.Latitude}},{{floatVal .Event.Location.Longitude}}]{{else}}null{{end}};
   window._boardMapVenueLabel = {{$.Strings.T "board_map_venue" | jsStr}};
@@ -1240,7 +1240,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
      the attribute) — so the map-init script below is wrapped in a
      DOMContentLoaded listener instead, which is what actually delays it
      until after the deferred external script has run and L is defined. -->
-<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
 document.addEventListener('DOMContentLoaded', function(){
 {{if and .Event.Location .Event.Location.Latitude}}

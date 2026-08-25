@@ -65,7 +65,7 @@
 
 <script type="application/json" id="fest-map-geo">{{eventsGeoJSON .MapEvents}}</script>
 <script type="application/json" id="fest-cal-events">{{festivalCalendarJSON .YearEvents}}</script>
-<script>window.__festYear = {{.Year}};</script>
+<script nonce="{{$.Nonce}}">window.__festYear = {{.Year}};</script>
 {{end}}
 
 <style>
@@ -89,7 +89,7 @@ table.fest-folded{opacity:.75}
 .empty-state{color:var(--fg-muted);padding:1rem;text-align:center}
 </style>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
 (function(){
   var geoEl = document.getElementById('fest-map-geo');

@@ -570,30 +570,31 @@ func main() {
 	log.Println("web server stopped")
 }
 
-// baselineCSP builds the per-request CSP header. Every inline <script> block
-// in the templates already carries nonce="{{$.Nonce}}" (#1141 step 1), but
-// script-src still lists 'unsafe-inline' as well: ~50 templates (329
-// occurrences) still use onclick=/onchange=/onsubmit= attributes, which a
-// nonce cannot cover — once a nonce is present in script-src, CSP-compliant
-// browsers ignore 'unsafe-inline' entirely (it's kept only for pre-CSP2
-// browsers that don't understand nonces), so those attributes would silently
-// stop firing the moment 'nonce-<value>' is added here. Do not add it until
-// every onclick=/onchange=/onsubmit= attribute across cmd/dansal_web/templates
-// has been converted to addEventListener (#1141 step 2) — see that issue for
-// why this can't be done as a safe partial/mechanical batch conversion (Go
-// template string literals nest inside the JS attribute value, e.g.
-// onclick="if(confirm('{{$.Strings.T "x"}}'))fn({{.ID}})", so each occurrence
-// needs to be read, not regex-substituted). style-src keeps 'unsafe-inline'
-// regardless (inline style= attributes are lower risk and out of scope for
-// #1141) plus https://unpkg.com, which serves Leaflet (maps) and its plugins.
-// img-src allows https: for map tiles (OpenStreetMap/CARTO) and data: for
-// inline SVG/icons.
+// baselineCSP builds the per-request CSP header. #1141/#1147: every <script>
+// element in the templates now carries nonce="{{$.Nonce}}" — inline blocks
+// (step 1) and, since #1149 converted every onclick=/onchange=/onsubmit=/
+// oninput=/onkeydown=/onfocus=/onload= attribute to the delegated data-fn
+// dispatcher, every remaining external <script src> tag too (Leaflet,
+// flatpickr, Turnstile). script-src therefore drops 'unsafe-inline' in favor
+// of 'nonce-<value>' 'strict-dynamic': a nonce'd script is trusted, and any
+// script IT creates dynamically (e.g. admin_event_form.html's deferred
+// Leaflet loader) inherits that trust automatically, without needing its own
+// nonce or a host allowlist entry. The https://unpkg.com/https://challenges.
+// cloudflare.com host expressions are kept only as a fallback for browsers
+// that understand 'nonce-' (CSP2+) but not 'strict-dynamic' (CSP3) — such
+// browsers ignore 'strict-dynamic' as an unrecognized token and fall back to
+// the nonce plus this host list; CSP3 browsers ignore the host list entirely
+// per 'strict-dynamic' semantics, which is fine since every remaining script
+// tag now carries a nonce. style-src keeps 'unsafe-inline' regardless
+// (inline style= attributes are lower risk and out of scope for #1141) plus
+// https://unpkg.com, which serves Leaflet's CSS. img-src allows https: for
+// map tiles (OpenStreetMap/CARTO) and data: for inline SVG/icons.
 func baselineCSP(nonce string) string {
 	return "default-src 'self'; " +
 		"img-src 'self' data: https:; " +
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-		"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
+		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com https://challenges.cloudflare.com; " +
 		"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
 		"object-src 'none'; base-uri 'self'; form-action 'self'; "
 }

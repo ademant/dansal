@@ -131,24 +131,23 @@ func main() {
 	log.Println("dansal-webmin stopped")
 }
 
-// webminCSP builds the per-request CSP header. Every inline <script> block
-// already carries nonce="{{$.Nonce}}" (#1141 step 1), but script-src still
-// lists 'unsafe-inline' as well: several templates still use onclick=/
-// onchange=/onsubmit= attributes, which a nonce cannot cover — once a nonce
-// is present in script-src, CSP-compliant browsers ignore 'unsafe-inline'
-// entirely, so those attributes would silently stop firing the moment
-// 'nonce-<value>' is added here. Do not add it until every onclick=/
-// onchange=/onsubmit= attribute across cmd/dansal_webmin/templates has been
-// converted to addEventListener (#1141 step 2 — see cmd/dansal_web/main.go's
-// baselineCSP for why this can't be a safe mechanical batch conversion).
-// style-src keeps 'unsafe-inline' regardless (out of scope for #1141) plus
-// https://unpkg.com, which serves the QR code library used on the users page.
+// webminCSP builds the per-request CSP header. #1141/#1147: every <script>
+// element now carries nonce="{{$.Nonce}}" — inline blocks (step 1) and,
+// since #1149 converted every onclick=/onchange=/onsubmit=/oninput=/
+// onkeydown=/onfocus=/onload= attribute to the delegated data-fn dispatcher,
+// the one remaining external <script src> tag (users.html's QR code
+// library) too. script-src therefore drops 'unsafe-inline' in favor of
+// 'nonce-<value>' 'strict-dynamic' (see cmd/dansal_web/main.go's baselineCSP
+// for the full rationale, identical here). https://unpkg.com is kept only as
+// a fallback for CSP2-but-not-CSP3 browsers, which ignore the unrecognized
+// 'strict-dynamic' token and fall back to the nonce plus this host list.
+// style-src keeps 'unsafe-inline' regardless (out of scope for #1141).
 func webminCSP(nonce string) string {
 	return "default-src 'self'; " +
 		"img-src 'self' data:; " +
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-		"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com; " +
 		"object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 }
 

@@ -689,5 +689,5 @@ function closeCreateInviteModal() {
   document.getElementById('create-invite-modal').hidden = true;
 }
 </script>
-<script src="/static/qrcode.min.js"></script>
+<script nonce="{{$.Nonce}}" src="/static/qrcode.min.js"></script>
 {{end}}

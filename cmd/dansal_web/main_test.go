@@ -14,6 +14,37 @@ func TestBaselineCSPFormAction(t *testing.T) {
 	}
 }
 
+// scriptSrcDirective extracts the script-src directive (up to the next ';')
+// out of a full CSP header value.
+func scriptSrcDirective(csp string) string {
+	i := strings.Index(csp, "script-src ")
+	if i == -1 {
+		return ""
+	}
+	rest := csp[i:]
+	if j := strings.Index(rest, ";"); j != -1 {
+		return rest[:j]
+	}
+	return rest
+}
+
+// TestBaselineCSPScriptSrc guards against #1141/#1147 regressing:
+// script-src must carry the per-request nonce and 'strict-dynamic', and must
+// no longer allow 'unsafe-inline' now that every <script> element (inline
+// and external) carries a nonce (#1149 cleared the inline-handler blocker).
+func TestBaselineCSPScriptSrc(t *testing.T) {
+	scriptSrc := scriptSrcDirective(baselineCSP("abc123"))
+	if !strings.Contains(scriptSrc, "'nonce-abc123'") {
+		t.Errorf("baselineCSP() script-src missing the per-request nonce: %q", scriptSrc)
+	}
+	if !strings.Contains(scriptSrc, "'strict-dynamic'") {
+		t.Errorf("baselineCSP() script-src missing 'strict-dynamic': %q", scriptSrc)
+	}
+	if strings.Contains(scriptSrc, "'unsafe-inline'") {
+		t.Errorf("baselineCSP() script-src must not contain 'unsafe-inline': %q", scriptSrc)
+	}
+}
+
 // TestCorpForPath locks in the route-aware Cross-Origin-Resource-Policy
 // values from #1148: static assets meant to be hotlinked get 'cross-origin',
 // private/admin areas get 'same-origin', and everything else (ordinary

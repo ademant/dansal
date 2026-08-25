@@ -259,7 +259,7 @@
     <p class="field-hint" id="siteplan-upload-first-hint">{{$.Strings.T "loc_siteplan_upload_first_hint"}}</p>
     {{end}}
 
-    <script>
+    <script nonce="{{$.Nonce}}">
     (function(){
       var locID   = {{.Location.ID}};
       var input   = document.getElementById('siteplan-file-input');
@@ -618,7 +618,7 @@
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
 (function(){
   var btn     = document.getElementById('geo-btn');

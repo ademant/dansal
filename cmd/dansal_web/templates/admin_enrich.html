@@ -98,7 +98,7 @@
     </div>
   </form>
 
-  <script>
+  <script nonce="{{$.Nonce}}">
   document.getElementById('sel-all').addEventListener('change', function() {
     document.querySelectorAll('input[name="include"]').forEach(function(cb) { cb.checked = this.checked; }, this);
   });

@@ -182,7 +182,7 @@
       <button type="submit" class="btn-primary">Save syndication settings</button>
     </div>
   </form>
-  <script>
+  <script nonce="{{$.Nonce}}">
   (function(){
     var orgID = {{$orgID}};
     var form  = document.getElementById('syn-form');

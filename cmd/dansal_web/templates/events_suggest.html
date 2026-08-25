@@ -293,7 +293,7 @@
         {{end}}
         {{if .CaptchaSiteKey}}
         <div class="cf-turnstile" data-sitekey="{{.CaptchaSiteKey}}"></div>
-        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+        <script nonce="{{$.Nonce}}" src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {{end}}
         {{if $.Data.CanUploadImageNow}}
         <div class="form-row">

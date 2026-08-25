@@ -550,7 +550,7 @@
       <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" data-on="input" data-fn="searchMusicians" data-args='["@value"]'>
       <div id="ac-list" class="ac-list" hidden></div>
     </div>
-    <script>
+    <script nonce="{{$.Nonce}}">
     var allMusicians = [{{range .Musicians}}{id:{{.ID}},name:{{jsStr .Bandname}}},{{end}}];
     function _musNorm(s){
       return s.toLowerCase().trim().replace(/&/g,' and ').replace(/\s+/g,' ')
@@ -645,7 +645,7 @@
       <input id="instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off" data-on="input" data-fn="searchInstructors" data-args='["@value"]'>
       <div id="ac-instr-list" class="ac-list" hidden></div>
     </div>
-    <script>
+    <script nonce="{{$.Nonce}}">
     var allInstructors = [{{range .Instructors}}{id:{{.ID}},name:{{jsStr .Name}}},{{end}}];
     function selectedInstrIDs(){
       return Array.from(document.querySelectorAll('#selected-instructors input[name=instructor_ids]')).map(function(i){return parseInt(i.value,10);});
@@ -779,7 +779,7 @@
     </div>
     <div id="syn-details" style="font-size:.8rem;margin-top:.5rem"></div>
   </section>
-  <script>
+  <script nonce="{{$.Nonce}}">
   (function(){
     var eventID = {{.Event.ID}};
     var ebBtn  = document.getElementById('syn-eb-btn');

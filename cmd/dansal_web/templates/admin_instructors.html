@@ -25,7 +25,7 @@
     <td class="cell-actions col-actions">
       <a href="/admin/instructors/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm('{{$.Strings.T "instructor_confirm_delete"}}'))delInstructor({{.ID}})">🗑️</button>
+              data-confirm="{{$.Strings.T "instructor_confirm_delete"}}" data-fn="delInstructor" data-args="{{dargs .ID}}">🗑️</button>
     </td>
   </tr>
   {{end}}

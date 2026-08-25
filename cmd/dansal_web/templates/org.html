@@ -48,7 +48,7 @@
   <a href="/admin/organizations/{{.Org.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
   {{if .Org.FetchSourceID}}
   <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
-  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" onclick="orgFetchNow({{.Org.FetchSourceID}})">🔄</button>
+  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .Org.FetchSourceID}}">🔄</button>
   {{end}}
   {{end}}
 </div>
@@ -126,7 +126,7 @@
   <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
   {{if .PastEvents}}
   <button type="button" class="btn-toggle" id="past-toggle"
-          onclick="var l=document.getElementById('past-list');l.hidden=!l.hidden;this.classList.toggle('btn-toggle-active')">
+          data-fn="togglePastList" data-args="{{dargs "@this"}}">
     {{$.Strings.T "org_show_past"}} ({{len .PastEvents}})
   </button>
   {{end}}
@@ -226,6 +226,11 @@
 .musician-chips li a:hover{background:var(--bg-hover);border-color:var(--link)}
 </style>
 <script nonce="{{$.Nonce}}">
+function togglePastList(btn) {
+  var l = document.getElementById('past-list');
+  l.hidden = !l.hidden;
+  btn.classList.toggle('btn-toggle-active');
+}
 function orgFetchNow(id) {
   var btn = document.getElementById('btn-fetch-now');
   btn.disabled = true;

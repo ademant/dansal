@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -32,6 +33,19 @@ var tmplFuncs = template.FuncMap{
 	},
 	"add":   func(a, b int) int { return a + b },
 	"bytes": fmtBytes,
+	// dargs JSON-encodes its arguments as an array, for use in a
+	// data-args="{{dargs ...}}" attribute consumed by the delegated event
+	// dispatcher in base.html (#1149). Returning a plain string (not
+	// template.JS) is deliberate: data-args isn't a recognized JS-attribute
+	// context to html/template, so the value is HTML-attribute-escaped
+	// either way — using string keeps that unambiguous.
+	"dargs": func(vals ...any) (string, error) {
+		b, err := json.Marshal(vals)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	},
 }
 
 func loadTemplates() *Templates {

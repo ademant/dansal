@@ -96,6 +96,53 @@ footer{text-align:center;color:var(--fg-muted);font-size:.8rem;padding:1rem;bord
 </main>
 <footer>Powered by <a href="https://github.com/ademant/dansal" style="color:inherit">dansal</a> · webmin {{.Version}}</footer>
 <script nonce="{{$.Nonce}}">
+// --- Delegated event-handler dispatcher (#1149) ---
+// See cmd/dansal_web/templates/base.html for the full attribute-convention
+// comment; duplicated here since each cmd/ package is independent.
+function csp1149DispatchOne(el, evt, kind, suf) {
+  var onAttr = el.getAttribute('data-on' + suf);
+  var on = onAttr || (suf === '' ? 'click' : null);
+  if (!on || on.split(',').indexOf(kind) === -1) return;
+  if (el.hasAttribute('data-self-only') && evt.target !== el) return;
+  if (el.hasAttribute('data-if-value') && !el.value) return;
+  var confirmMsg = el.getAttribute('data-confirm' + suf);
+  if (confirmMsg !== null && !confirm(confirmMsg)) {
+    evt.preventDefault();
+    return;
+  }
+  var fnName = el.getAttribute('data-fn' + suf);
+  if (!fnName) return;
+  var fn = fnName.split('.').reduce(function (o, k) { return o ? o[k] : undefined; }, window);
+  if (typeof fn !== 'function') { console.error('csp1149Dispatch: unknown function', fnName); return; }
+  var args = [];
+  var raw = el.getAttribute('data-args' + suf);
+  try { args = raw ? JSON.parse(raw) : []; } catch (err) { args = []; }
+  args = args.map(function (a) {
+    if (a === '@this') return el;
+    if (a === '@value') return el.value;
+    if (a === '@event') return evt;
+    return a;
+  });
+  var result = fn.apply(el, args);
+  if (kind === 'submit' && result === false) evt.preventDefault();
+}
+// A single element can carry up to three independent dispatch rules
+// (data-fn/data-args/data-on, then data-fn2/data-args2/data-on2, then
+// .../3) for the rare case where different event kinds on the same element
+// need different functions or arguments (e.g. oninput vs onfocus vs
+// onkeydown on one autocomplete box). data-stop/data-self-only/data-if-value
+// are shared guards, not per-rule.
+function csp1149Dispatch(el, evt, kind) {
+  if (el.hasAttribute('data-stop')) evt.stopPropagation();
+  ['', '2', '3'].forEach(function (suf) { csp1149DispatchOne(el, evt, kind, suf); });
+}
+['click', 'change', 'submit', 'input', 'keydown', 'focus', 'load'].forEach(function (kind) {
+  document.addEventListener(kind, function (e) {
+    var el = e.target.closest('[data-fn],[data-stop],[data-confirm]');
+    if (el) csp1149Dispatch(el, e, kind);
+  }, true);
+});
+
 function toggleNav(){
   var nav=document.getElementById('main-nav');
   var open=nav.classList.toggle('nav-open');

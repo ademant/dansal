@@ -11,11 +11,11 @@
 {{/* ── Filters (GET form) ────────────────────────────────────── */}}
 <form method="get" action="/admin/events/maintenance" class="em-filters" id="em-filter-form">
   <label class="filter-check">
-    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "filter_include_past"}}
   </label>
   <label class="filter-check">
-    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "admin_filter_has_source"}}
   </label>
 

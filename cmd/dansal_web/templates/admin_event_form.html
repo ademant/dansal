@@ -27,11 +27,11 @@
 {{end}}{{end}}
 
 <div class="evt-action-bar">
-  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   {{if not .IsTemplateMode}}
   <button type="submit" id="save-btn" class="btn-primary" form="evt-form" disabled>{{$.Strings.T "admin_save"}}</button>
   <button type="submit" name="intent" value="clone" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_clone"}}</button>
-  {{if and (not .IsNew) .CanDelete}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_delete"}}')">
+  {{if and (not .IsNew) .CanDelete}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_delete"}}">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
   {{end}}
@@ -86,7 +86,7 @@
       {{if not .IsTemplateMode}}
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)" onchange="onStartDateChange(this.value);checkTimetableShift(this.value)">
+        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" data-on="input" data-fn="onStartDateChange" data-args='["@value"]' data-on2="change" data-fn2="onStartDateChangeAndShift" data-args2='["@value"]'>
       </div>
       {{end}}
       <div>
@@ -100,7 +100,7 @@
       {{if not .IsTemplateMode}}
       <div>
         <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
-        <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}" onchange="this.removeAttribute('data-auto')">
+        <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}" data-on="change" data-fn="clearDataAuto" data-args="{{dargs "@this"}}">
       </div>
       <div class="dpr-wrap" style="align-self:flex-end;padding-bottom:.05rem">
         <button type="button" id="ef-date-btn" class="dpr-btn" title="Pick date range">📅</button>
@@ -118,8 +118,8 @@
 
     <div class="check-row">
       <label class="check-label"><input type="checkbox" name="tags" value="bal-folk"{{if hasTag .Event.Tags "bal-folk"}} checked{{end}}> {{$.Strings.T "tag_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop"{{if hasTag .Event.Tags "dance-workshop"}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_dance_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop"{{if hasTag .Event.Tags "musician-workshop"}} checked{{end}} onchange="toggleDifficulty()"> {{$.Strings.T "tag_musician_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="dance-workshop" id="tag-dance-workshop"{{if hasTag .Event.Tags "dance-workshop"}} checked{{end}} data-on="change" data-fn="toggleDifficulty" data-args="[]"> {{$.Strings.T "tag_dance_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="tags" value="musician-workshop" id="tag-musician-workshop"{{if hasTag .Event.Tags "musician-workshop"}} checked{{end}} data-on="change" data-fn="toggleDifficulty" data-args="[]"> {{$.Strings.T "tag_musician_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="festival"{{if hasTag .Event.Tags "festival"}} checked{{end}}> {{$.Strings.T "tag_festival"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="open-air"{{if hasTag .Event.Tags "open-air"}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
       <label class="check-label"><input type="checkbox" name="tags" value="session"{{if hasTag .Event.Tags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
@@ -171,7 +171,7 @@
     </details>
     <div id="md-paste-hint" class="md-paste-hint" hidden>
       <span>📋 {{$.Strings.T "paste_md_converted"}}</span>
-      <button type="button" onclick="this.parentElement.hidden=true" aria-label="×">×</button>
+      <button type="button" data-fn="hideParentElement" data-args='["@this"]' aria-label="×">×</button>
     </div>
     {{end}}
 
@@ -191,13 +191,13 @@
 
     <div id="org-assigned-chip" class="assign-chip"{{if not .Event.OrganizationID}} hidden{{end}}>
       <span class="assign-chip-name" id="org-assigned-name">{{range .Organizations}}{{if and $.Data.Event.OrganizationID (eq .ID (derefInt $.Data.Event.OrganizationID))}}{{.Name}}{{end}}{{end}}</span>
-      <button type="button" class="btn-sm btn-del" onclick="removeOrgAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
+      <button type="button" class="btn-sm btn-del" data-fn="removeOrgAssignment" data-args="[]">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
-    <button type="button" id="org-add-btn" class="btn-secondary btn-sm-secondary"{{if .Event.OrganizationID}} hidden{{end}} onclick="openOrgPicker()">{{$.Strings.T "evt_org_add_btn"}}</button>
+    <button type="button" id="org-add-btn" class="btn-secondary btn-sm-secondary"{{if .Event.OrganizationID}} hidden{{end}} data-fn="openOrgPicker" data-args="[]">{{$.Strings.T "evt_org_add_btn"}}</button>
 
     <div id="org-picker-panel" class="assign-picker-panel" hidden>
-      <input type="text" class="assign-picker-filter" id="org-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('org-picker-table', this.value)">
+      <input type="text" class="assign-picker-filter" id="org-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" data-on="input" data-fn="filterAssignTable" data-args='["org-picker-table","@value"]'>
       <div class="assign-picker-list">
         <table class="assign-table" id="org-picker-table" data-sortable>
           <thead><tr><th data-sort="str">{{$.Strings.T "org_name"}}</th><th></th></tr></thead>
@@ -205,22 +205,22 @@
           {{range .Organizations}}
           <tr>
             <td>{{.Name}}</td>
-            <td><button type="button" class="btn-primary-sm" onclick="assignOrg({{.ID}}, {{.Name | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
+            <td><button type="button" class="btn-primary-sm" data-fn="assignOrg" data-args="{{dargs .ID .Name}}">{{$.Strings.T "loc_assign_btn"}}</button></td>
           </tr>
           {{end}}
           </tbody>
         </table>
       </div>
       <div class="assign-picker-actions">
-        <button type="button" class="btn-sm-secondary" onclick="closeOrgPicker()">{{$.Strings.T "admin_cancel"}}</button>
-        <button type="button" class="btn-sm-secondary" onclick="openOrgCreateNew()">{{$.Strings.T "evt_org_new"}}</button>
+        <button type="button" class="btn-sm-secondary" data-fn="closeOrgPicker" data-args="[]">{{$.Strings.T "admin_cancel"}}</button>
+        <button type="button" class="btn-sm-secondary" data-fn="openOrgCreateNew" data-args="[]">{{$.Strings.T "evt_org_new"}}</button>
       </div>
     </div>
 
     <div id="org-new" hidden>
       <label for="new_org_name">{{$.Strings.T "org_name"}}</label>
       <input id="new_org_name" type="text" name="new_org_name" placeholder="{{$.Strings.T "org_name"}}">
-      <button type="button" class="btn-sm-secondary" style="margin-top:.4rem" onclick="cancelOrgCreateNew()">{{$.Strings.T "admin_cancel"}}</button>
+      <button type="button" class="btn-sm-secondary" style="margin-top:.4rem" data-fn="cancelOrgCreateNew" data-args="[]">{{$.Strings.T "admin_cancel"}}</button>
     </div>
   </section>
 
@@ -241,13 +241,13 @@
 
     <div id="loc-assigned-chip" class="assign-chip"{{if not .Event.LocationID}} hidden{{end}}>
       <span class="assign-chip-name" id="loc-assigned-name">{{range .LocOrgFirst}}{{if eq .ID (topLocationID $.Data.Event)}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}{{range .LocOthers}}{{if eq .ID (topLocationID $.Data.Event)}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}{{end}}{{end}}</span>
-      <button type="button" class="btn-sm btn-del" onclick="removeLocAssignment()">{{$.Strings.T "assign_remove_btn"}}</button>
+      <button type="button" class="btn-sm btn-del" data-fn="removeLocAssignment" data-args="[]">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
-    <button type="button" id="loc-add-btn" class="btn-secondary btn-sm-secondary"{{if or .Event.LocationID .Event.Location}} hidden{{end}} onclick="openLocPicker()">{{$.Strings.T "evt_loc_add_btn"}}</button>
+    <button type="button" id="loc-add-btn" class="btn-secondary btn-sm-secondary"{{if or .Event.LocationID .Event.Location}} hidden{{end}} data-fn="openLocPicker" data-args="[]">{{$.Strings.T "evt_loc_add_btn"}}</button>
 
     <div id="loc-picker-panel" class="assign-picker-panel" hidden>
-      <input type="text" class="assign-picker-filter" id="loc-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" oninput="filterAssignTable('loc-picker-table', this.value)">
+      <input type="text" class="assign-picker-filter" id="loc-picker-filter" placeholder="{{$.Strings.T "assign_filter_placeholder"}}" data-on="input" data-fn="filterAssignTable" data-args='["loc-picker-table","@value"]'>
       <div class="assign-picker-list">
         <table class="assign-table" id="loc-picker-table" data-sortable data-sep-text="{{$.Strings.T "loc_sep_no_org"}}">
           <thead><tr><th data-sort="str">{{$.Strings.T "loc_name"}}</th><th data-sort="str">{{$.Strings.T "loc_town"}}</th><th></th></tr></thead>
@@ -256,7 +256,7 @@
           <tr data-group="org" data-orgs="{{joinInts .OrganizationIDs}}">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
-            <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
+            <td><button type="button" class="btn-primary-sm" data-fn="assignLoc" data-args="{{dargs .ID (or .ShortName .Location) .Town}}">{{$.Strings.T "loc_assign_btn"}}</button></td>
           </tr>
           {{end}}
           {{if and .LocOrgFirst .LocOthers}}
@@ -266,20 +266,20 @@
           <tr data-group="other" data-orgs="{{joinInts .OrganizationIDs}}">
             <td>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</td>
             <td>{{.Town}}</td>
-            <td><button type="button" class="btn-primary-sm" onclick="assignLoc({{.ID}}, {{(or .ShortName .Location) | jsStr}}, {{.Town | jsStr}})">{{$.Strings.T "loc_assign_btn"}}</button></td>
+            <td><button type="button" class="btn-primary-sm" data-fn="assignLoc" data-args="{{dargs .ID (or .ShortName .Location) .Town}}">{{$.Strings.T "loc_assign_btn"}}</button></td>
           </tr>
           {{end}}
           </tbody>
         </table>
       </div>
       <div class="assign-picker-actions">
-        <button type="button" class="btn-sm-secondary" onclick="closeLocPicker()">{{$.Strings.T "admin_cancel"}}</button>
-        <button type="button" class="btn-sm-secondary" onclick="openLocCreateNew()">{{$.Strings.T "evt_loc_new"}}</button>
+        <button type="button" class="btn-sm-secondary" data-fn="closeLocPicker" data-args="[]">{{$.Strings.T "admin_cancel"}}</button>
+        <button type="button" class="btn-sm-secondary" data-fn="openLocCreateNew" data-args="[]">{{$.Strings.T "evt_loc_new"}}</button>
       </div>
     </div>
 
     <div id="loc-new" style="{{if and .Event.Location (not .Event.LocationID)}}{{else}}display:none;{{end}}" class="loc-new-fields">
-      <button type="button" class="btn-sm-secondary" style="align-self:flex-start" onclick="cancelLocCreateNew()">{{$.Strings.T "admin_cancel"}}</button>
+      <button type="button" class="btn-sm-secondary" style="align-self:flex-start" data-fn="cancelLocCreateNew" data-args="[]">{{$.Strings.T "admin_cancel"}}</button>
       <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
       <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}" value="{{with .Event.Location}}{{.Location}}{{end}}">
       <label for="new_loc_short_name">{{$.Strings.T "loc_short_name"}}</label>
@@ -312,7 +312,7 @@
           <input id="new_loc_lng" type="text" name="new_loc_lng" placeholder="0.1278">
         </div>
       </div>
-      <button type="button" class="btn-secondary btn-sm-secondary" onclick="geocodeLocation()" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
+      <button type="button" class="btn-secondary btn-sm-secondary" data-fn="geocodeLocation" data-args="[]" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
       <span id="geo-status" style="font-size:.82rem;color:#888;margin-left:.5rem"></span>
       <div id="geo-map" style="display:none;height:200px;margin-top:.75rem;border-radius:4px;border:1px solid #ddd"></div>
     </div>
@@ -321,7 +321,7 @@
       <label for="room-search" style="font-weight:600;font-size:.9rem;color:#444">{{$.Strings.T "loc_rooms_title"}}</label>
       <input type="hidden" id="room_id" name="room_id">
       <div class="ac-wrap">
-        <input id="room-search" type="text" placeholder="{{$.Strings.T "loc_rooms_title"}}" autocomplete="off" oninput="searchRooms(this.value)" onfocus="searchRooms('')">
+        <input id="room-search" type="text" placeholder="{{$.Strings.T "loc_rooms_title"}}" autocomplete="off" data-on="input" data-fn="searchRooms" data-args='["@value"]' data-on2="focus" data-fn2="searchRooms" data-args2='[""]'>
         <div id="room-ac-list" class="ac-list" hidden></div>
       </div>
     </div>
@@ -337,14 +337,14 @@
         {{range .Event.Locations}}{{if ne .ID $primaryID}}
         <span class="assign-chip" data-loc-id="{{.ID}}">
           <span class="assign-chip-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</span>
-          <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" onclick="extraLocSetPrimary({{.ID}})">⭐</button>
-          <button type="button" class="btn-sm btn-del" onclick="extraLocRemove({{.ID}}, this)">×</button>
+          <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" data-fn="extraLocSetPrimary" data-args="{{dargs .ID}}">⭐</button>
+          <button type="button" class="btn-sm btn-del" data-fn="extraLocRemove" data-args="{{dargs .ID "@this"}}">×</button>
         </span>
         {{end}}{{end}}
       </div>
       <div style="position:relative;display:inline-block">
         <input type="text" id="extra-loc-input" class="tt-room-add-input" placeholder="+ Add venue…" autocomplete="off" style="width:16rem"
-          oninput="extraLocInput(this)" onkeydown="extraLocKeydown(event,this)" onfocus="extraLocInput(this)">
+          data-on="input,focus" data-fn="extraLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="extraLocKeydown" data-args2='["@event","@this"]'>
         <ul id="extra-loc-suggest" class="tt-room-suggest" hidden></ul>
       </div>
     </div>
@@ -401,12 +401,12 @@
   <section class="form-section optional-section" id="sec-image">
     <h2>{{$.Strings.T "evt_image"}}</h2>
     {{with .Event.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
-    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/events/{{$.Data.Event.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/events/%d/image/delete" $.Data.Event.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
         <span>{{$.Strings.T "evt_image_hint"}}</span>
-        <button type="button" onclick="document.getElementById('image').click()" class="btn-secondary btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+        <button type="button" data-fn="clickElement" data-args='["image"]' class="btn-secondary btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
       </div>
       <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
     </div>
@@ -421,7 +421,7 @@
   <section class="form-section optional-section" id="sec-pricing">
     <h2>{{$.Strings.T "evt_admission"}}</h2>
     <label for="pricing_type">{{$.Strings.T "evt_pricing_type"}}</label>
-    <select id="pricing_type" name="pricing_type" onchange="togglePricing()">
+    <select id="pricing_type" name="pricing_type" data-on="change" data-fn="togglePricing" data-args="[]">
       <option value="none"{{if not .Event.Pricing}} selected{{end}}>— {{$.Strings.T "evt_none"}} —</option>
       <option value="free"{{if and .Event.Pricing (eq .Event.Pricing.Type "free")}} selected{{end}}>{{$.Strings.T "evt_free"}}</option>
       <option value="donation"{{if and .Event.Pricing (eq .Event.Pricing.Type "donation")}} selected{{end}}>{{$.Strings.T "evt_donation"}}</option>
@@ -446,12 +446,12 @@
         <tbody id="pricing-body">
           {{with .Event.Pricing}}{{if eq .Type "multiple"}}{{range .Prices}}
           <tr>
-            <td><input type="text" name="pl_label" value="{{.Label}}" oninput="growPricingTable(this)"></td>
+            <td><input type="text" name="pl_label" value="{{.Label}}" data-on="input" data-fn="growPricingTable" data-args='["@this"]'></td>
             <td><input type="number" name="pl_amount" min="0" step="0.01" value="{{.Amount}}"></td>
           </tr>
           {{end}}{{end}}{{end}}
           <tr>
-            <td><input type="text" name="pl_label" placeholder="Standard" oninput="growPricingTable(this)"></td>
+            <td><input type="text" name="pl_label" placeholder="Standard" data-on="input" data-fn="growPricingTable" data-args='["@this"]'></td>
             <td><input type="number" name="pl_amount" min="0" step="0.01" placeholder="10.00"></td>
           </tr>
         </tbody>
@@ -495,36 +495,36 @@
       {{range .Event.Timetable}}{{$entry := .}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}" onchange="_ttMarkEdited()"></select></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" value="{{.StartTime}}"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
-          <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
+          <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" value="{{.Room}}" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
           <select name="tt_type" class="tt-type-sel"><option value="bal"{{if or (eq .EntryType "") (eq .EntryType "bal")}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option><option value="break"{{if eq .EntryType "break"}} selected{{end}}>{{$.Strings.T "tt_type_break"}}</option></select>
-          <button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button>
+          <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
-        <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
+        <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
         <div class="tt-line3">
-          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
-          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
+          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" data-on="input" data-fn="_ttMusInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttMusOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttMusKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
+          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" data-on="input" data-fn="_ttInsInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttInsOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttInsKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
         <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}">{{.Description}}</textarea></div>
       </div>
       {{end}}
       <div class="tt-entry">
         <div class="tt-line1">
-          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="" onchange="_ttMarkEdited()"></select></span>
+          <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start"></span>
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
-          <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)"><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
+          <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
           <select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option><option value="break">{{$.Strings.T "tt_type_break"}}</option></select>
-          <button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button>
+          <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
-        <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></div>
+        <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
         <div class="tt-line3">
-          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)"><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
-          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)"><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
+          <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" data-on="input" data-fn="_ttMusInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttMusOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttMusKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
+          <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" data-on="input" data-fn="_ttInsInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttInsOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttInsKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
         <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></textarea></div>
       </div>
@@ -541,13 +541,13 @@
       {{range .Event.Musicians}}
       <div class="musician-chip" data-id="{{.ID}}">
         <span>{{.Bandname}}</span>
-        <button type="button" class="btn-chip-del" onclick="removeMusician(this)" title="Remove">×</button>
+        <button type="button" class="btn-chip-del" data-fn="removeMusician" data-args='["@this"]' title="Remove">×</button>
         <input type="hidden" name="musician_ids" value="{{.ID}}">
       </div>
       {{end}}
     </div>
     <div class="ac-wrap">
-      <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" oninput="searchMusicians(this.value)">
+      <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" data-on="input" data-fn="searchMusicians" data-args='["@value"]'>
       <div id="ac-list" class="ac-list" hidden></div>
     </div>
     <script>
@@ -636,13 +636,13 @@
       {{range .Event.Instructors}}
       <div class="musician-chip" data-id="{{.ID}}">
         <span>{{.Name}}</span>
-        <button type="button" class="btn-chip-del" onclick="removeInstructor(this)" title="Remove">×</button>
+        <button type="button" class="btn-chip-del" data-fn="removeInstructor" data-args='["@this"]' title="Remove">×</button>
         <input type="hidden" name="instructor_ids" value="{{.ID}}">
       </div>
       {{end}}
     </div>
     <div class="ac-wrap">
-      <input id="instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off" oninput="searchInstructors(this.value)">
+      <input id="instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off" data-on="input" data-fn="searchInstructors" data-args='["@value"]'>
       <div id="ac-instr-list" class="ac-list" hidden></div>
     </div>
     <script>
@@ -831,7 +831,7 @@
   <div style="font-weight:600;font-size:.9rem;color:#1a6eb5;margin-bottom:.6rem">{{$.Strings.T "evt_series_section"}}</div>
   {{if .CurrentSeries}}
   <p style="margin:0 0 .5rem;font-size:.9rem">{{$.Strings.T "evt_series_current"}}: <a href="/admin/series/{{.CurrentSeries.ID}}" style="font-weight:600">{{.CurrentSeries.Title}}</a></p>
-  <button type="submit" name="intent" value="remove-series" form="evt-form" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "evt_series_remove_confirm"}}')">{{$.Strings.T "evt_series_remove_btn"}}</button>
+  <button type="submit" name="intent" value="remove-series" form="evt-form" class="btn-sm btn-del" data-confirm="{{$.Strings.T "evt_series_remove_confirm"}}">{{$.Strings.T "evt_series_remove_btn"}}</button>
   {{else}}
   {{if not .IsNew}}
   <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
@@ -1133,6 +1133,13 @@ function onStartDateChange(v){
     ed.setAttribute('data-auto','1');
   }
 }
+function onStartDateChangeAndShift(v){
+  onStartDateChange(v);
+  checkTimetableShift(v);
+}
+function clearDataAuto(el){ el.removeAttribute('data-auto'); }
+function hideParentElement(el){ el.parentElement.hidden = true; }
+function clickElement(id){ document.getElementById(id).click(); }
 function checkTimetableShift(newDate){
   if(typeof _origStartDate==='undefined'||!newDate||!_origStartDate) return;
   var datedEntries=(_ttEntries||[]).filter(function(e){return e.entry_date;});
@@ -1330,8 +1337,8 @@ function extraLocAdd(id, label){
       var chip=document.createElement('span');
       chip.className='assign-chip'; chip.dataset.locId=String(id);
       chip.innerHTML='<span class="assign-chip-name">'+label+'</span>'
-        +' <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" onclick="extraLocSetPrimary('+id+')">⭐</button>'
-        +' <button type="button" class="btn-sm btn-del" onclick="extraLocRemove('+id+',this)">×</button>';
+        +' <button type="button" class="btn-sm" style="background:var(--badge-ok-bg,#d4edda);color:var(--badge-ok-fg,#155724);border:none;cursor:pointer;padding:.1rem .3rem;border-radius:10px;font-size:.8rem" title="Make primary venue" data-fn="extraLocSetPrimary" data-args="'+JSON.stringify([id]).replace(/"/g,'&quot;')+'">⭐</button>'
+        +' <button type="button" class="btn-sm btn-del" data-fn="extraLocRemove" data-args="'+JSON.stringify([id,'@this']).replace(/"/g,'&quot;')+'">×</button>';
       document.getElementById('extra-loc-chips').appendChild(chip);
     })
     .catch(function(err){extraLocWarn('Could not add venue: '+err.message);});
@@ -1716,7 +1723,7 @@ function _ttUpdateMultiDay(){
 })();
 function _buildTTMusWidget(){
   return '<div class="tt-mus-wrap">'+
-    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' oninput="_ttMusInput(this)" onfocus="_ttMusOpen(this)" onkeydown="_ttMusKeydown(event,this)">'+
+    '<input type="text" class="tt-mus-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_musician" | jsStr}}+' data-on=\'input\' data-fn=\'_ttMusInput\' data-args=\'["@this"]\' data-on2=\'focus\' data-fn2=\'_ttMusOpen\' data-args2=\'["@this"]\' data-on3=\'keydown\' data-fn3=\'_ttMusKeydown\' data-args3=\'["@event","@this"]\'>'+
     '<input type="hidden" name="tt_musician_id" value="">'+
     '<input type="hidden" name="tt_musician_name" value="">'+
     '<ul class="tt-mus-suggest" hidden></ul></div>';
@@ -1849,7 +1856,7 @@ function _ttMusCreate(inp,name){
 }
 function _buildTTInsWidget(){
   return '<div class="tt-ins-wrap">'+
-    '<input type="text" class="tt-ins-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_instructor" | jsStr}}+' oninput="_ttInsInput(this)" onfocus="_ttInsOpen(this)" onkeydown="_ttInsKeydown(event,this)">'+
+    '<input type="text" class="tt-ins-input" autocomplete="off" placeholder='+{{$.Strings.T "tt_instructor" | jsStr}}+' data-on=\'input\' data-fn=\'_ttInsInput\' data-args=\'["@this"]\' data-on2=\'focus\' data-fn2=\'_ttInsOpen\' data-args2=\'["@this"]\' data-on3=\'keydown\' data-fn3=\'_ttInsKeydown\' data-args3=\'["@event","@this"]\'>'+
     '<input type="hidden" name="tt_instructor_id" value="">'+
     '<input type="hidden" name="tt_instructor_name" value="">'+
     '<ul class="tt-ins-suggest" hidden></ul></div>';
@@ -1969,7 +1976,7 @@ function _buildTTLocWidget(){
     if(m)label=m.label;
   }
   return '<div class="tt-loc-wrap">'+
-    '<input type="text" class="tt-loc-input" autocomplete="off" value="'+label.replace(/"/g,'&quot;')+'" placeholder='+{{$.Strings.T "tt_location" | jsStr}}+' oninput="_ttLocInput(this)" onkeydown="_ttLocKeydown(event,this)">'+
+    '<input type="text" class="tt-loc-input" autocomplete="off" value="'+label.replace(/"/g,'&quot;')+'" placeholder='+{{$.Strings.T "tt_location" | jsStr}}+' data-on=\'input\' data-fn=\'_ttLocInput\' data-args=\'["@this"]\' data-on2=\'keydown\' data-fn2=\'_ttLocKeydown\' data-args2=\'["@event","@this"]\'>'+
     '<input type="hidden" name="tt_loc_id" value="'+(_ttDefaultLocID||'')+'">'+
     '<ul class="tt-loc-suggest" hidden></ul></div>';
 }
@@ -2040,15 +2047,15 @@ function addTTRow(){
   var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option><option value="break">'+{{$.Strings.T "tt_type_break" | jsStr}}+'</option>';
   entry.innerHTML=
     '<div class="tt-line1">'+
-      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" onchange="_ttMarkEdited()"></select></span>'+
+      '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_start" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_start"></span>'+
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end"></span>'+
       _buildTTLocWidget()+
       '<input type="text" name="tt_room" class="tt-room-input" placeholder='+{{$.Strings.T "tt_room_placeholder" | jsStr}}+'>'+
       '<select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select>'+
-      '<button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button>'+
+      '<button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>'+
     '</div>'+
-    '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' oninput="growTTTable(this)"></div>'+
+    '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>'+
     '<div class="tt-line3">'+_buildTTMusWidget()+_buildTTInsWidget()+'</div>'+
     '<div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></textarea></div>';
   tbody.appendChild(entry);
@@ -2158,7 +2165,7 @@ function growPricingTable(el){
   var last=rows[rows.length-1];
   if(el.closest('tr')===last && el.value.trim()!==''){
     var row=document.createElement('tr');
-    row.innerHTML='<td><input type="text" name="pl_label" oninput="growPricingTable(this)"></td>'+
+    row.innerHTML='<td><input type="text" name="pl_label" data-on="input" data-fn="growPricingTable" data-args='["@this"]'></td>'+
       '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
     tbody.appendChild(row);
   }

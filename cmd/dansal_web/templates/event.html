@@ -164,7 +164,7 @@
   {{if $hasWorkshop}}<span class="btn-icon btn-icon-static" title="{{$.Strings.T "filter_type_workshop"}}{{if .WorkshopDifficulty}} ({{$.Strings.T (print "workshop_difficulty_" .WorkshopDifficulty)}}){{end}}" aria-label="{{$.Strings.T "filter_type_workshop"}}">🎓</span>{{end}}
   {{if $hasFestival}}<span class="btn-icon btn-icon-static" title="{{$.Strings.T "filter_type_festival"}}" aria-label="{{$.Strings.T "filter_type_festival"}}">🎪</span>{{end}}
   {{if and $.User .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
-  {{if and $.User .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon btn-cancel-event" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+  {{if and $.User .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}"><button type="submit" class="btn-icon btn-cancel-event" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
   {{if $.User}}<a href="/admin/events/new?clone_from={{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_clone"}}" aria-label="{{$.Strings.T "admin_clone"}}">📋</a>{{end}}
   {{if and $.User .Editable (not .SeriesID)}}<a href="/admin/series/new?ids={{.ID}}&prefill_event_id={{.ID}}" class="btn-icon" title="{{$.Strings.T "series_new"}}" aria-label="{{$.Strings.T "series_new"}}">🔁</a>{{end}}
   {{if $.User}}<details class="evt-tpl-details" id="evt-tpl-details-{{.ID}}">
@@ -639,12 +639,12 @@
       <div class="board-actions">
         {{if not .TelegramUsername}}<button class="btn-contact-toggle" data-target="contact-form-{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>{{end}}
         {{if $.Data.CanManageBoard}}
-        <form method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('{{$.Strings.T "board_delete_confirm"}}')">
+        <form method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/delete" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "board_delete_confirm"}}">
           <button type="submit" class="btn-board-del">{{$.Strings.T "board_delete_btn"}}</button>
         </form>
         {{end}}
       </div>
-      <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact" onsubmit="return boardContactValidate(this)">
+      <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact" data-on="submit" data-fn="boardContactValidate" data-args="{{dargs "@this"}}">
         <input type="hidden" name="_form_token" value="{{$.Data.BoardFormToken}}">
         <div class="board-contact-method board-contact-method-icons">
           <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">

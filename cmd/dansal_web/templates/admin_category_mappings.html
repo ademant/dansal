@@ -21,7 +21,7 @@
     <td>{{.Category}}</td>
     <td>{{.TagSlug}}</td>
     <td class="col-actions">
-      <form method="post" action="/admin/category-mappings/delete" onsubmit="return confirm({{$.Strings.T "admin_dance_confirm_delete"}})">
+      <form method="post" action="/admin/category-mappings/delete" data-on="submit" data-confirm="{{$.Strings.T "admin_dance_confirm_delete"}}">
         <input type="hidden" name="category" value="{{.Category}}">
         <button type="submit" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}">🗑️</button>
       </form>

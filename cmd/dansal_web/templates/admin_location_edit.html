@@ -9,7 +9,7 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 {{if .ConflictID}}<div class="form-error" role="alert">
   <p>{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
-  {{if .Location.ID}}<form method="post" action="/admin/locations/merge" style="margin-top:.5rem" onsubmit="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">
+  {{if .Location.ID}}<form method="post" action="/admin/locations/merge" style="margin-top:.5rem" data-on="submit" data-confirm="{{$.Strings.T "loc_merge_confirm"}}">
     <input type="hidden" name="loc_ids" value="{{.Location.ID}}">
     <input type="hidden" name="loc_ids" value="{{.ConflictID}}">
     <button type="submit" class="btn-merge">{{$.Strings.T "loc_conflict_merge"}}</button>
@@ -27,7 +27,7 @@
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   {{if not .ReadOnly}}<button type="submit" id="save-btn" class="btn-primary" form="loc-edit-form">{{$.Strings.T "admin_save"}}</button>{{end}}
   {{if .Location.ID}}
-  <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" onsubmit="return confirm('Delete this location?')">
+  <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" data-on="submit" data-confirm="Delete this location?">
     <input type="hidden" name="return" value="{{.ReturnURL}}">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>
@@ -399,7 +399,7 @@
       </td>
       <td>
         <form method="post" action="/admin/locations/{{$.Data.Location.ID}}/rooms/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('{{printf ($.Strings.T "loc_room_delete_confirm") .Location}}')">
+              data-on="submit" data-confirm="{{printf ($.Strings.T "loc_room_delete_confirm") .Location}}">
           <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
         </form>
       </td>

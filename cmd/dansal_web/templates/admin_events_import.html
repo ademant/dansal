@@ -108,7 +108,7 @@
 
   <div style="margin-bottom:.75rem">
     <label class="check-label">
-      <input type="checkbox" id="sel-all" onchange="toggleAll(this)"> {{$.Strings.T "admin_import_select_all"}}
+      <input type="checkbox" id="sel-all" data-on="change" data-fn="toggleAll" data-args="{{dargs "@this"}}"> {{$.Strings.T "admin_import_select_all"}}
     </label>
   </div>
   <div class="table-wrap">

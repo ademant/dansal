@@ -918,7 +918,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var isMobile=window.matchMedia('(max-width:640px)').matches;
     var outerStyle='min-width:200px;max-width:280px';
     var outerClick='';
-    if(isMobile){ outerStyle+=';cursor:pointer'; outerClick=' onclick="window.location=\''+detailUrl+'\'"'; }
+    if(isMobile){ outerStyle+=';cursor:pointer'; outerClick=' data-fn="navigateTo" data-args=\'["'+detailUrl.replace(/"/g,'\\"')+'"]\''; }
     return '<div style="'+outerStyle+'"'+outerClick+'>'+
       '<a href="'+detailUrl+'" style="font-size:.95rem;display:block;margin-bottom:.25rem;font-weight:bold;color:inherit;text-decoration:none">'+escHtml(e.t)+'</a>'+
       (time?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+

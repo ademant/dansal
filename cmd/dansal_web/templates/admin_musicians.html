@@ -29,7 +29,7 @@
       {{if .Internetsite}}<a href="{{.Internetsite}}" target="_blank" rel="noopener" class="btn-sm">{{$.Strings.T "musician_website"}} ↗</a>{{end}}
       {{if .MBID}}<a href="https://musicbrainz.org/artist/{{.MBID}}" target="_blank" rel="noopener" title="{{.MBID}}" class="btn-sm">MB ↗</a>{{end}}
       <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm('{{$.Strings.T "musician_confirm_delete"}}'))delMusician({{.ID}})">🗑️</button>
+              data-confirm="{{$.Strings.T "musician_confirm_delete"}}" data-fn="delMusician" data-args="{{dargs .ID}}">🗑️</button>
     </td>
   </tr>
   {{end}}

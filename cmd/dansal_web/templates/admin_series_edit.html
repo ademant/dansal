@@ -9,7 +9,7 @@
   <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
   <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
-        onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?')">
+        data-on="submit" data-confirm="{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?">
     <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>
 </div>
@@ -235,7 +235,7 @@
     <button class="btn-sm">{{$.Strings.T "series_regenerate_token"}}</button>
   </form>
   <form method="post" action="/admin/series/{{.Series.ID}}/token/revoke" style="display:inline;margin-left:.5rem"
-        onsubmit="return confirm('{{$.Strings.T "series_revoke_token"}}?')">
+        data-on="submit" data-confirm="{{$.Strings.T "series_revoke_token"}}?">
     <button class="btn-sm btn-del">{{$.Strings.T "series_revoke_token"}}</button>
   </form>
   {{else}}

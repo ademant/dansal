@@ -36,7 +36,7 @@
     <input type="hidden" name="sleep"     id="f-sleep"     value="{{if .ShowSleep}}1{{else}}0{{end}}">
     <input type="hidden" name="tickets"   id="f-tickets"   value="{{if .ShowTickets}}1{{else}}0{{end}}">
     <input type="hidden" name="lostfound" id="f-lostfound" value="{{if .ShowLostFound}}1{{else}}0{{end}}">
-    <select name="town" class="board-filter-town" onchange="this.form.submit()">
+    <select name="town" class="board-filter-town" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
       <option value="">{{$.Strings.T "filter_all_towns"}}</option>
       {{range .Towns}}<option value="{{.}}"{{if eq . $.Data.TownFilter}} selected{{end}}>{{.}}</option>{{end}}
     </select>

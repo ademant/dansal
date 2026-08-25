@@ -85,7 +85,7 @@
     {{if lt (len .Post.Images) 5}}
     <form method="post" action="/contact-posts/manage/{{$.Data.Token}}/images" enctype="multipart/form-data" class="manage-img-add-form">
       <label class="manage-img-add-label">
-        <input type="file" name="image" accept="image/*" capture="environment" required onchange="this.form.submit()">
+        <input type="file" name="image" accept="image/*" capture="environment" required data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
         <span class="manage-img-add-btn">+ {{$.Strings.T "board_images_add"}}</span>
       </label>
     </form>
@@ -116,7 +116,7 @@
   {{end}}
 
   <form class="manage-delete-form" method="post" action="/contact-posts/manage/{{.Token}}"
-        onsubmit="return confirm('{{$.Strings.T "board_manage_delete_confirm"}}')">
+        data-on="submit" data-confirm="{{$.Strings.T "board_manage_delete_confirm"}}">
     <input type="hidden" name="_form_token" value="{{.FormToken}}">
     <input type="hidden" name="_action" value="delete">
     <button type="submit" class="btn-danger">{{$.Strings.T "board_manage_delete"}}</button>

@@ -35,7 +35,7 @@
     <td class="col-actions cell-actions" style="white-space:nowrap">
       <a href="/admin/series/{{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       <form method="post" action="/admin/series/{{.ID}}/delete" class="mobile-hide" style="display:inline"
-            onsubmit="return confirm('{{$.Strings.T "admin_delete"}} «{{.Title}}»?')">
+            data-on="submit" data-confirm="{{$.Strings.T "admin_delete"}} «{{.Title}}»?">
         <button type="submit" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}">🗑️</button>
       </form>
     </td>

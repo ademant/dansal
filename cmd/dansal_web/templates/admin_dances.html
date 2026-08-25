@@ -19,7 +19,7 @@
     <td>{{.Name}}</td>
     <td class="col-actions">
       <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm({{$.Strings.T "admin_dance_confirm_delete"}}))deleteDance({{.ID}})">🗑️</button>
+              data-confirm="{{$.Strings.T "admin_dance_confirm_delete"}}" data-fn="deleteDance" data-args="{{dargs .ID}}">🗑️</button>
     </td>
   </tr>
   {{end}}

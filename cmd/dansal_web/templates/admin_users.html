@@ -13,13 +13,13 @@
     <option value="">{{$.Strings.T "loc_no_org"}}</option>
     {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
-  <button type="button" class="btn-sm" onclick="bulkAssignOrg()">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <button type="button" class="btn-sm" data-fn="bulkAssignOrg" data-args="[]">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
   <select id="bulk-role" class="bulk-role-select">
     <option value="user">user</option>
     <option value="publisher">publisher</option>
     <option value="admin">admin</option>
   </select>
-  <button type="button" class="btn-sm" onclick="bulkChangeRole()">{{$.Strings.T "users_bulk_change_role"}}</button>
+  <button type="button" class="btn-sm" data-fn="bulkChangeRole" data-args="[]">{{$.Strings.T "users_bulk_change_role"}}</button>
 </div>
 {{end}}
 
@@ -45,7 +45,7 @@
     <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">{{$.Strings.T "admin_user_no_name"}}</span>{{end}} <span class="muted user-id-tag">#{{$uid}}</span>{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     <td class="cell-role" data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
-      <select name="role" class="inline-select" onchange="changeUserRole({{$uid}},this.value)" onclick="event.stopPropagation()">
+      <select name="role" class="inline-select" data-stop data-on="change" data-fn="changeUserRole" data-args="{{dargs $uid "@value"}}">
         <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
         <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
         <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
@@ -57,11 +57,11 @@
         {{$oid := .}}
         {{$org := index $.Data.OrgMap $oid}}
         <span class="org-tag">{{$org.Name}}
-          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" onclick="event.stopPropagation();rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
+          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" data-stop data-fn="rmOrg" data-args="{{dargs $uid $oid}}" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
         </span>
       {{end}}
       {{if $canManage}}
-      <select class="inline-select" onclick="event.stopPropagation()" onchange="if(this.value)addOrg({{$uid}},this.value)">
+      <select class="inline-select" data-stop data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
         <option value="">+</option>
         {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
       </select>
@@ -70,12 +70,12 @@
     {{if $.Data.IsAdmin}}
     <td class="col-actions cell-actions">
       {{if .Disabled}}
-      <button type="button" class="btn-sm btn-warn" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
+      <button type="button" class="btn-sm btn-warn" data-stop data-confirm="{{$.Strings.T "admin_user_confirm_enable"}}" data-fn="toggleDisable" data-args="{{dargs $uid false}}">{{$.Strings.T "admin_user_enable"}}</button>
       {{else}}
-      <button type="button" class="btn-sm" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
+      <button type="button" class="btn-sm" data-stop data-confirm="{{$.Strings.T "admin_user_confirm_disable"}}" data-fn="toggleDisable" data-args="{{dargs $uid true}}">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
-      <button type="button" class="btn-sm" onclick="event.stopPropagation();genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
-      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="event.stopPropagation();sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
+      <button type="button" class="btn-sm" data-stop data-fn="genMagicLink" data-args="{{dargs $uid}}">{{$.Strings.T "admin_magic_link"}}</button>
+      {{if .TelegramVerified}}<button type="button" class="btn-sm" data-stop data-fn="sendTelegramMsg" data-args="{{dargs $uid}}">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
     </td>
     {{end}}
   </tr>
@@ -90,11 +90,11 @@
         {{$oid := .}}
         {{$org := index $.Data.OrgMap $oid}}
         <span class="org-tag">{{$org.Name}}
-          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
+          {{if or $.Data.IsAdmin (index $.Data.MyOrgIDs $oid)}}<button type="button" class="rm-org-btn" data-fn="rmOrg" data-args="{{dargs $uid $oid}}" title="{{$.Strings.T "admin_rm_org_title"}}">×</button>{{end}}
         </span>
       {{end}}
       {{if $canManage}}
-      <select class="inline-select" onchange="if(this.value)addOrg({{$uid}},this.value)">
+      <select class="inline-select" data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
         <option value="">+</option>
         {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
       </select>
@@ -102,12 +102,12 @@
     </div>
     {{if $.Data.IsAdmin}}
     <div class="popup-actions">
-      <button type="button" class="btn-sm" onclick="closePopup();genMagicLink({{$uid}})">{{$.Strings.T "admin_magic_link"}}</button>
-      {{if .TelegramVerified}}<button type="button" class="btn-sm" onclick="sendTelegramMsg({{$uid}})">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
+      <button type="button" class="btn-sm" data-fn="closeAndGenMagicLink" data-args="{{dargs $uid}}">{{$.Strings.T "admin_magic_link"}}</button>
+      {{if .TelegramVerified}}<button type="button" class="btn-sm" data-fn="sendTelegramMsg" data-args="{{dargs $uid}}">{{$.Strings.T "admin_telegram_msg_btn"}}</button>{{end}}
       {{if .Disabled}}
-      <button type="button" class="btn-sm btn-warn" onclick="if(confirm('{{$.Strings.T "admin_user_confirm_enable"}}'))toggleDisable({{$uid}},false)">{{$.Strings.T "admin_user_enable"}}</button>
+      <button type="button" class="btn-sm btn-warn" data-confirm="{{$.Strings.T "admin_user_confirm_enable"}}" data-fn="toggleDisable" data-args="{{dargs $uid false}}">{{$.Strings.T "admin_user_enable"}}</button>
       {{else}}
-      <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_user_confirm_disable"}}'))toggleDisable({{$uid}},true)">{{$.Strings.T "admin_user_disable"}}</button>
+      <button type="button" class="btn-sm" data-confirm="{{$.Strings.T "admin_user_confirm_disable"}}" data-fn="toggleDisable" data-args="{{dargs $uid true}}">{{$.Strings.T "admin_user_disable"}}</button>
       {{end}}
     </div>
     {{end}}
@@ -119,7 +119,7 @@
 
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_publisher_section"}}</h2>
-  <button type="button" class="btn-primary-sm" onclick="openCreatePublisherModal()">+ {{$.Strings.T "admin_publisher_create"}}</button>
+  <button type="button" class="btn-primary-sm" data-fn="openCreatePublisherModal" data-args="[]">+ {{$.Strings.T "admin_publisher_create"}}</button>
 
   {{$hasPublishers := false}}
   {{range .Users}}{{if eq .Role "publisher"}}{{$hasPublishers = true}}{{end}}{{end}}
@@ -153,10 +153,10 @@
         {{if $clientURL}}<a href="{{$clientURL}}" target="_blank" rel="noopener">{{$clientLabel}}</a>{{else}}{{$clientLabel}}{{end}}
       </td>
       <td class="col-actions cell-actions" style="white-space:nowrap">
-        <button type="button" class="btn-sm" onclick="event.stopPropagation();publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
+        <button type="button" class="btn-sm" data-stop data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         {{if $canManagePub}}
-        <button type="button" class="btn-sm" onclick="event.stopPropagation();regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
-        <button type="button" class="btn-sm btn-del" onclick="event.stopPropagation();deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
+        <button type="button" class="btn-sm" data-stop data-fn="regenerateKey" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_regen_key"}}</button>
+        <button type="button" class="btn-sm btn-del" data-stop data-fn="deletePublisher" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_delete"}}</button>
         {{end}}
       </td>
     </tr>
@@ -164,10 +164,10 @@
       <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{end}} <span class="muted user-id-tag">#{{.ID}}</span></h3>
       <p class="muted">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}{{if $clientLabel}} · {{$clientLabel}}{{end}}</p>
       <div class="popup-actions">
-        <button type="button" class="btn-sm" onclick="publisherConnectLink({{.ID}}, {{$firstOrgID}})">{{$.Strings.T "admin_publisher_connect_link"}}</button>
+        <button type="button" class="btn-sm" data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         {{if $canManagePub}}
-        <button type="button" class="btn-sm" onclick="regenerateKey({{.ID}})">{{$.Strings.T "admin_publisher_regen_key"}}</button>
-        <button type="button" class="btn-sm btn-del" onclick="deletePublisher({{.ID}})">{{$.Strings.T "admin_publisher_delete"}}</button>
+        <button type="button" class="btn-sm" data-fn="regenerateKey" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_regen_key"}}</button>
+        <button type="button" class="btn-sm btn-del" data-fn="deletePublisher" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_delete"}}</button>
         {{end}}
       </div>
     </template>
@@ -180,7 +180,7 @@
 
 <div class="invite-section">
   <h2>{{$.Strings.T "admin_invite_active"}}</h2>
-  <button type="button" class="btn-primary-sm" onclick="openCreateInviteModal()">+ {{$.Strings.T "admin_invite_create_section"}}</button>
+  <button type="button" class="btn-primary-sm" data-fn="openCreateInviteModal" data-args="[]">+ {{$.Strings.T "admin_invite_create_section"}}</button>
 
   {{if .Invites}}
   <table class="event-table" id="invite-table" style="margin-top:1rem">
@@ -201,16 +201,16 @@
     <tr data-invite-row data-invite-token="{{.Token}}">
       <td class="invite-link-cell cell-link">
         <code title="{{$.Data.BaseURL}}/invites/{{.Token}}">{{$.Data.BaseURL}}/invites/{{.Token}}</code>
-        <button type="button" class="btn-sm" onclick="event.stopPropagation();copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
+        <button type="button" class="btn-sm" data-stop data-fn="copyText" data-args="{{dargs (printf "%s/invites/%s" $.Data.BaseURL .Token)}}">{{$.Strings.T "admin_invite_copy"}}</button>
       </td>
       <td class="cell-type">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}}</td>
       <td class="cell-org">{{$orgName}}</td>
       <td class="muted cell-expires">{{.ExpiresAt}}</td>
       <td class="cell-actions">
         {{if $canManageInv}}
-        <button type="button" class="btn-sm" onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
+        <button type="button" class="btn-sm" data-stop data-confirm="{{$.Strings.T "admin_invite_confirm_resend"}}" data-fn="resendInvite" data-args="{{dargs .Token}}">{{$.Strings.T "admin_invite_resend"}}</button>
         <button type="button" class="btn-sm btn-del"
-                onclick="event.stopPropagation();if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+                data-stop data-confirm="{{$.Strings.T "admin_invite_confirm_revoke"}}" data-fn="revokeInvite" data-args="{{dargs .Token}}">{{$.Strings.T "admin_invite_revoke"}}</button>
         {{end}}
       </td>
     </tr>
@@ -219,12 +219,12 @@
       <p class="muted" style="word-break:break-all">{{$.Data.BaseURL}}/invites/{{.Token}}</p>
       <p class="muted">{{if eq .InviteType "qr"}}{{$.Strings.T "admin_invite_type_qr"}}{{else}}{{$.Strings.T "admin_invite_type_link"}}{{end}} · {{$.Strings.T "admin_invite_expires"}}: {{.ExpiresAt}}</p>
       <div class="popup-actions">
-        <button type="button" class="btn-sm" onclick="shareInviteURL('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_share"}}</button>
-        <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
-        {{if eq .InviteType "qr"}}<button type="button" class="btn-sm" onclick="showInviteQR(this,'{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_qr_show"}}</button>{{end}}
+        <button type="button" class="btn-sm" data-fn="shareInviteURL" data-args="{{dargs (printf "%s/invites/%s" $.Data.BaseURL .Token)}}">{{$.Strings.T "admin_invite_share"}}</button>
+        <button type="button" class="btn-sm" data-fn="copyText" data-args="{{dargs (printf "%s/invites/%s" $.Data.BaseURL .Token)}}">{{$.Strings.T "admin_invite_copy"}}</button>
+        {{if eq .InviteType "qr"}}<button type="button" class="btn-sm" data-fn="showInviteQR" data-args="{{dargs "@this" (printf "%s/invites/%s" $.Data.BaseURL .Token)}}">{{$.Strings.T "admin_qr_show"}}</button>{{end}}
         {{if $canManageInv}}
-        <button type="button" class="btn-sm" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_resend"}}'))resendInvite('{{.Token}}')">{{$.Strings.T "admin_invite_resend"}}</button>
-        <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+        <button type="button" class="btn-sm" data-confirm="{{$.Strings.T "admin_invite_confirm_resend"}}" data-fn="resendInvite" data-args="{{dargs .Token}}">{{$.Strings.T "admin_invite_resend"}}</button>
+        <button type="button" class="btn-sm btn-del" data-confirm="{{$.Strings.T "admin_invite_confirm_revoke"}}" data-fn="revokeInvite" data-args="{{dargs .Token}}">{{$.Strings.T "admin_invite_revoke"}}</button>
         {{end}}
       </div>
       <div class="invite-qr-container" style="display:none;text-align:center;margin-top:.75rem"></div>
@@ -238,15 +238,15 @@
 {{end}}
 
 <!-- Shared generic popup, used by users / service accounts / active invites row taps -->
-<div id="generic-modal" hidden class="popup-overlay" onclick="if(event.target===this)closePopup()">
+<div id="generic-modal" hidden class="popup-overlay" data-self-only data-fn="closePopup" data-args="[]">
   <div class="popup-card">
     <div id="generic-modal-body"></div>
-    <button type="button" class="btn-sm" onclick="closePopup()">{{$.Strings.T "admin_magic_link_close"}}</button>
+    <button type="button" class="btn-sm" data-fn="closePopup" data-args="[]">{{$.Strings.T "admin_magic_link_close"}}</button>
   </div>
 </div>
 
 <!-- Create service account modal -->
-<div id="create-publisher-modal" hidden class="popup-overlay" onclick="if(event.target===this)closeCreatePublisherModal()">
+<div id="create-publisher-modal" hidden class="popup-overlay" data-self-only data-fn="closeCreatePublisherModal" data-args="[]">
   <div class="popup-card">
     <h3 class="popup-title">{{.Strings.T "admin_publisher_create"}}</h3>
     <div class="invite-create-row">
@@ -259,16 +259,16 @@
       </select>
     </div>
     <div class="popup-actions">
-      <button type="button" class="btn-sm" onclick="createPublisher()">{{.Strings.T "admin_publisher_create"}}</button>
-      <button type="button" class="btn-sm" onclick="publisherConnectLinkFromForm()">{{.Strings.T "admin_publisher_connect_link"}}</button>
-      <button type="button" class="btn-sm" onclick="closeCreatePublisherModal()">{{.Strings.T "admin_magic_link_close"}}</button>
+      <button type="button" class="btn-sm" data-fn="createPublisher" data-args="[]">{{.Strings.T "admin_publisher_create"}}</button>
+      <button type="button" class="btn-sm" data-fn="publisherConnectLinkFromForm" data-args="[]">{{.Strings.T "admin_publisher_connect_link"}}</button>
+      <button type="button" class="btn-sm" data-fn="closeCreatePublisherModal" data-args="[]">{{.Strings.T "admin_magic_link_close"}}</button>
     </div>
     <div id="create-publisher-result" hidden style="margin-top:.75rem"></div>
   </div>
 </div>
 
 <!-- Create invitation modal -->
-<div id="create-invite-modal" hidden class="popup-overlay" onclick="if(event.target===this)closeCreateInviteModal()">
+<div id="create-invite-modal" hidden class="popup-overlay" data-self-only data-fn="closeCreateInviteModal" data-args="[]">
   <div class="popup-card">
     <h3 class="popup-title">{{.Strings.T "admin_invite_create_section"}}</h3>
     <div class="invite-create-row">
@@ -280,8 +280,8 @@
       </select>
     </div>
     <div class="popup-actions">
-      <button type="button" class="btn-sm" onclick="createInvite()">{{.Strings.T "admin_invite_create"}}</button>
-      <button type="button" class="btn-sm" onclick="closeCreateInviteModal()">{{.Strings.T "admin_magic_link_close"}}</button>
+      <button type="button" class="btn-sm" data-fn="createInvite" data-args="[]">{{.Strings.T "admin_invite_create"}}</button>
+      <button type="button" class="btn-sm" data-fn="closeCreateInviteModal" data-args="[]">{{.Strings.T "admin_magic_link_close"}}</button>
     </div>
     <div id="invite-result" hidden style="margin-top:.75rem"></div>
   </div>
@@ -295,11 +295,11 @@
     <p id="magic-link-sent-to" hidden style="font-size:.85rem;color:#065f46;background:#d1fae5;border-radius:4px;padding:.3rem .6rem;margin-bottom:.5rem"></p>
     <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
       <input id="magic-link-input" type="text" readonly style="flex:1;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.82rem;background:var(--bg);color:var(--fg);font-family:monospace">
-      <button type="button" class="btn-sm" onclick="copyMagicLink()">{{.Strings.T "admin_invite_copy"}}</button>
-      <button type="button" class="btn-sm" onclick="toggleQR('magic-link-qr','magic-link-input')">{{.Strings.T "admin_qr_show"}}</button>
+      <button type="button" class="btn-sm" data-fn="copyMagicLink" data-args="[]">{{.Strings.T "admin_invite_copy"}}</button>
+      <button type="button" class="btn-sm" data-fn="toggleQR" data-args='["magic-link-qr","magic-link-input"]'>{{.Strings.T "admin_qr_show"}}</button>
     </div>
     <div id="magic-link-qr" style="display:none;text-align:center;margin-bottom:.75rem"></div>
-    <button type="button" class="btn-sm" onclick="closeMagicModal()">{{.Strings.T "admin_magic_link_close"}}</button>
+    <button type="button" class="btn-sm" data-fn="closeMagicModal" data-args="[]">{{.Strings.T "admin_magic_link_close"}}</button>
   </div>
 </div>
 
@@ -442,7 +442,7 @@ async function createPublisher() {
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
     res.innerHTML = '<strong>' + (d.name||('publisher#'+d.user_id)) + '</strong> {{.Strings.T "admin_publisher_created_key"}}: ' +
       '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      ' <button class="btn-sm" data-fn="copyElementText" data-args=\'["pub-key-val"]\'>{{.Strings.T "admin_invite_copy"}}</button>' +
       '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_key_once_hint"}}</p>';
     setTimeout(function(){ location.reload(); }, 8000);
   } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
@@ -457,7 +457,7 @@ async function regenerateKey(id) {
     res.hidden = false;
     res.innerHTML = '{{.Strings.T "admin_publisher_new_key"}}: ' +
       '<code id="pub-key-val" style="word-break:break-all;font-size:.82rem">' + d.api_key + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-key-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      ' <button class="btn-sm" data-fn="copyElementText" data-args=\'["pub-key-val"]\'>{{.Strings.T "admin_invite_copy"}}</button>' +
       '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_key_once_hint"}}</p>';
     closePopup();
   } catch(e) { alert(e.message); }
@@ -487,7 +487,7 @@ async function publisherConnectLink(id, orgID, resultId) {
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
     res.innerHTML = '{{.Strings.T "admin_publisher_connect_link_hint"}}: ' +
       '<code id="pub-connect-val" style="word-break:break-all;font-size:.82rem">' + d.redeem_url + '</code>' +
-      ' <button class="btn-sm" onclick="copyText(document.getElementById(\'pub-connect-val\').textContent)">{{.Strings.T "admin_invite_copy"}}</button>' +
+      ' <button class="btn-sm" data-fn="copyElementText" data-args=\'["pub-connect-val"]\'>{{.Strings.T "admin_invite_copy"}}</button>' +
       '<p style="font-size:.8rem;color:var(--fg-muted);margin:.4rem 0 0">{{.Strings.T "admin_publisher_connect_link_expires"}}: ' + new Date(d.expires_at).toLocaleString() + '</p>';
     if (!resultId) closePopup();
   } catch(e) { res.innerHTML = '<span style="color:red">'+e.message+'</span>'; }
@@ -528,8 +528,8 @@ async function createInvite() {
     }
     var acts = document.createElement('div');
     acts.style.cssText = 'display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.6rem';
-    acts.innerHTML = '<button class="btn-sm" onclick="shareInviteURL(\'' + d.url + '\')">{{.Strings.T "admin_invite_share"}}</button>' +
-      '<button class="btn-sm" onclick="copyText(\'' + d.url + '\')">{{.Strings.T "admin_invite_copy"}}</button>';
+    acts.innerHTML = '<button class="btn-sm" data-fn="shareInviteURL" data-args="' + JSON.stringify([d.url]).replace(/"/g, '&quot;') + '">{{.Strings.T "admin_invite_share"}}</button>' +
+      '<button class="btn-sm" data-fn="copyText" data-args="' + JSON.stringify([d.url]).replace(/"/g, '&quot;') + '">{{.Strings.T "admin_invite_copy"}}</button>';
     res.appendChild(acts);
   } catch(e) {
     res.innerHTML = '<span style="color:red">' + e.message + '</span>';
@@ -537,6 +537,14 @@ async function createInvite() {
 }
 function copyText(t) {
   if (navigator.clipboard) navigator.clipboard.writeText(t);
+}
+function copyElementText(id) {
+  var el = document.getElementById(id);
+  if (el) copyText(el.textContent);
+}
+function closeAndGenMagicLink(uid) {
+  closePopup();
+  genMagicLink(uid);
 }
 function shareInviteURL(url) {
   if (navigator.share) {

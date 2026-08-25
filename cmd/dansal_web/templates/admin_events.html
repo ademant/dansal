@@ -89,11 +89,11 @@
     </div>
   </div>
   <label class="filter-check">
-    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "filter_include_past"}}
   </label>
   <label class="filter-check">
-    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="has_source" value="1" {{if .FilterHasSource}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "admin_filter_has_source"}}
   </label>
   <div class="af-field" id="org-filter-wrap">
@@ -110,19 +110,19 @@
     <input type="hidden" name="location_id" id="loc-filter-id" value="{{if .FilterLocationID}}{{.FilterLocationID}}{{end}}">
     <div id="loc-filter-suggest" class="af-suggest" hidden></div>
   </div>
-  <select name="musician_id" onchange="this.form.submit()">
+  <select name="musician_id" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     <option value="">{{$.Strings.T "filter_all_musicians"}}</option>
     {{range .Musicians}}
     <option value="{{.ID}}" {{if eq .ID $.Data.FilterMusicianID}}selected{{end}}>{{.Bandname}}</option>
     {{end}}
   </select>
-  <select name="type" onchange="this.form.submit()">
+  <select name="type" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     <option value="">{{$.Strings.T "filter_all_types"}}</option>
     <option value="ball" {{if eq .FilterType "ball"}}selected{{end}}>{{$.Strings.T "filter_type_ball"}}</option>
     <option value="workshop" {{if eq .FilterType "workshop"}}selected{{end}}>{{$.Strings.T "filter_type_workshop"}}</option>
     <option value="festival" {{if eq .FilterType "festival"}}selected{{end}}>{{$.Strings.T "filter_type_festival"}}</option>
   </select>
-  <select name="dance" onchange="this.form.submit()">
+  <select name="dance" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     <option value="">{{$.Strings.T "filter_all_dances"}}</option>
     {{range .Dances}}
     <option value="{{.Name}}" {{if eq .Name $.Data.FilterDance}}selected{{end}}>{{.Name}}</option>
@@ -170,7 +170,7 @@
     <td class="cell-actions" style="white-space:nowrap">
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm mobile-hide">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
-      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
       {{if .Deletable}}<button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>

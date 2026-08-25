@@ -45,7 +45,7 @@
         <button type="submit" class="btn-sm btn-cancel">{{$.Strings.T "booking_cancel_btn"}}</button>
       </form>
       {{end}}
-      <form method="post" action="/admin/bookings/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('{{$.Strings.T "booking_delete_confirm"}}')">
+      <form method="post" action="/admin/bookings/{{.ID}}/delete" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "booking_delete_confirm"}}">
         <input type="hidden" name="event_id" value="{{$.Data.Event.ID}}">
         <button type="submit" class="btn-sm btn-del">{{$.Strings.T "booking_delete_btn"}}</button>
       </form>

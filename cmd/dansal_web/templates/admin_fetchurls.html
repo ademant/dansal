@@ -60,7 +60,7 @@
       <button type="button" class="btn-icon btn-run" title="{{$.Strings.T "fetch_run"}}" aria-label="{{$.Strings.T "fetch_run"}}"
               data-run-url="/admin/fetchurls/{{.ID}}/run">🔄</button>
       <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">🗑️</button>
+              data-confirm="{{$.Strings.T "fetch_confirm_delete"}}" data-fn="rowAction" data-args="{{dargs (printf "/admin/fetchurls/%d/delete" .ID)}}">🗑️</button>
     </td>
   </tr>
   {{end}}

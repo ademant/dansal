@@ -255,7 +255,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 <body>
 <nav>
   <div class="nav-menu-wrap">
-    <button class="nav-hamburger" onclick="toggleNavMenu()" aria-label="Menu" title="Menu">☰</button>
+    <button class="nav-hamburger" data-fn="toggleNavMenu" data-args="[]" aria-label="Menu" title="Menu">☰</button>
     <!-- Navigation Dropdown Menu -->
     <div class="nav-dropdown" id="nav-dropdown" hidden>
       {{if .User}}
@@ -307,7 +307,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
   <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}" width="36" height="36"></a>
   
   <div class="user-menu-wrap">
-    <button class="nav-user-btn{{if .User}}{{if eq .User.Role "admin"}} nav-user-admin{{else if eq .User.Role "publisher"}} nav-user-publisher{{else}} nav-user-loggedin{{end}}{{end}}" onclick="toggleUserMenu()" aria-label="User menu">👤</button>
+    <button class="nav-user-btn{{if .User}}{{if eq .User.Role "admin"}} nav-user-admin{{else if eq .User.Role "publisher"}} nav-user-publisher{{else}} nav-user-loggedin{{end}}{{end}}" data-fn="toggleUserMenu" data-args="[]" aria-label="User menu">👤</button>
     <!-- User Dropdown Menu -->
     <div class="user-dropdown" id="user-dropdown" hidden>
     {{if .User}}
@@ -326,14 +326,14 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
       </div>
     {{end}}
     <div class="user-section">
-      <select class="lang-select" id="lang-select" aria-label="Language" onchange="handleLangChange(this)">
+      <select class="lang-select" id="lang-select" aria-label="Language" data-on="change" data-fn="handleLangChange" data-args="{{dargs "@this"}}">
         {{range .Languages}}<option value="{{.Code}}"{{if .Active}} selected{{end}}>{{.Flag}} {{.Name}}</option>{{end}}
       </select>
     </div>
     <div class="user-section">
-      <button onclick="cycleTheme()" class="user-menu-btn" title="Toggle colour scheme">Toggle Theme</button>
-      <button onclick="openHelpModal()" class="user-menu-btn" title="Help">Help</button>
-      <button onclick="toggleInfoPopup(this)" class="user-menu-btn" title="About dansal">About</button>
+      <button data-fn="cycleTheme" data-args="[]" class="user-menu-btn" title="Toggle colour scheme">Toggle Theme</button>
+      <button data-fn="openHelpModal" data-args="[]" class="user-menu-btn" title="Help">Help</button>
+      <button data-fn="toggleInfoPopup" data-args='["@this"]' class="user-menu-btn" title="About dansal">About</button>
       <div class="nav-info-popup" id="info-popup" hidden>
         <a href="https://github.com/ademant/dansal" target="_blank" rel="noopener">dansal</a>
         <span class="info-ver">{{.AppVersion}}</span>
@@ -347,8 +347,8 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     <h3 style="margin:0 0 .75rem;font-size:1rem">{{.Strings.T "cookie_lang_title"}}</h3>
     <p style="font-size:.9rem;color:var(--fg-dim);margin:0 0 1.25rem">{{.Strings.T "cookie_lang_text"}}</p>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-      <button type="button" onclick="langConsentAccept()" style="background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "accept_cookies"}}</button>
-      <button type="button" onclick="langConsentDeny()" style="background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "cookie_lang_deny"}}</button>
+      <button type="button" data-fn="langConsentAccept" data-args="[]" style="background:#1a6eb5;color:#fff;border:none;border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "accept_cookies"}}</button>
+      <button type="button" data-fn="langConsentDeny" data-args="[]" style="background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.45rem 1rem;cursor:pointer;font-size:.95rem">{{.Strings.T "cookie_lang_deny"}}</button>
     </div>
   </div>
 </div>
@@ -365,6 +365,84 @@ th.sortable-th:hover{background:#e8eef7}
 </style>
 <script nonce="{{$.Nonce}}">
 var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}",cancel:"{{.Strings.T "js_cancel"}}",select:"{{.Strings.T "js_select"}}",prevWeek:"{{.Strings.T "js_prev_week"}}",nextWeek:"{{.Strings.T "js_next_week"}}",tableModeWeek:"{{.Strings.T "table_mode_week"}}",tableModeAll:"{{.Strings.T "table_mode_all"}}"};
+
+// --- Delegated event-handler dispatcher (#1149) ---
+// Elements use data-fn/data-args instead of inline onclick=/onchange=/
+// onsubmit=/oninput=/onkeydown=/onfocus=/onload= so CSP can drop
+// 'unsafe-inline' from script-src once #1141 flips the header (a nonce in
+// script-src makes CSP-compliant browsers ignore 'unsafe-inline' entirely,
+// so those attributes would otherwise silently stop firing). One
+// document-level, capture-phase listener per event kind replaces every
+// inline handler (capture phase works even for non-bubbling kinds like
+// focus/load, since capture always travels down to the target regardless
+// of bubbling); attributes:
+//   data-fn="name"        function on window to call (dotted paths like
+//                          "obj.method" are resolved against window)
+//   data-args='[...]'     JSON array of arguments (built by the `dargs`
+//                          template func); "@this"/"@value"/"@event" tokens
+//                          are replaced with the element/its value/the event
+//   data-confirm="text"   confirm() first; abort (and preventDefault) if declined
+//   data-stop             call event.stopPropagation() (independent of
+//                          data-on — matches a separately-attached ancestor
+//                          listener, e.g. a table row's own click handler)
+//   data-if-value         only dispatch when the element's value is truthy
+//                          (the onchange="if(this.value)fn(...)" pattern)
+//   data-self-only         only dispatch when the event target IS this element,
+//                          not a descendant (modal-backdrop click-outside-closes)
+//   data-on="change|submit|input|keydown|focus|load" dispatch data-fn/
+//                          data-confirm on that event kind instead of the
+//                          default "click" (data-stop always
+//                          applies to click regardless of data-on)
+function csp1149DispatchOne(el, evt, kind, suf) {
+  var onAttr = el.getAttribute('data-on' + suf);
+  var on = onAttr || (suf === '' ? 'click' : null);
+  if (!on || on.split(',').indexOf(kind) === -1) return;
+  if (el.hasAttribute('data-self-only') && evt.target !== el) return;
+  if (el.hasAttribute('data-if-value') && !el.value) return;
+  var confirmMsg = el.getAttribute('data-confirm' + suf);
+  if (confirmMsg !== null && !confirm(confirmMsg)) {
+    evt.preventDefault();
+    return;
+  }
+  var fnName = el.getAttribute('data-fn' + suf);
+  if (!fnName) return;
+  var fn = fnName.split('.').reduce(function (o, k) { return o ? o[k] : undefined; }, window);
+  if (typeof fn !== 'function') { console.error('csp1149Dispatch: unknown function', fnName); return; }
+  var args = [];
+  var raw = el.getAttribute('data-args' + suf);
+  try { args = raw ? JSON.parse(raw) : []; } catch (err) { args = []; }
+  args = args.map(function (a) {
+    if (a === '@this') return el;
+    if (a === '@value') return el.value;
+    if (a === '@event') return evt;
+    return a;
+  });
+  var result = fn.apply(el, args);
+  if (kind === 'submit' && result === false) evt.preventDefault();
+}
+// A single element can carry up to three independent dispatch rules
+// (data-fn/data-args/data-on, then data-fn2/data-args2/data-on2, then
+// .../3) for the rare case where different event kinds on the same element
+// need different functions or arguments (e.g. oninput vs onfocus vs
+// onkeydown on one autocomplete box). data-stop/data-self-only/data-if-value
+// are shared guards, not per-rule.
+function csp1149Dispatch(el, evt, kind) {
+  if (el.hasAttribute('data-stop')) evt.stopPropagation();
+  ['', '2', '3'].forEach(function (suf) { csp1149DispatchOne(el, evt, kind, suf); });
+}
+['click', 'change', 'submit', 'input', 'keydown', 'focus', 'load'].forEach(function (kind) {
+  document.addEventListener(kind, function (e) {
+    var el = e.target.closest('[data-fn],[data-stop],[data-confirm]');
+    if (el) csp1149Dispatch(el, e, kind);
+  }, true);
+});
+// navigateTo: small data-fn helper for whole-card/whole-row "click to open"
+// elements (e.g. the mobile map popup in index.html).
+function navigateTo(url) { window.location = url; }
+// submitParentForm: data-fn helper for the very common auto-submit-filter
+// pattern (data-on="change" data-fn="submitParentForm" data-args='["@this"]').
+function submitParentForm(el) { el.form.submit(); }
+function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){
@@ -624,7 +702,7 @@ function initDateRangePicker(opts){
 {{block "breadcrumb" .}}{{end}}
 {{block "content" .}}{{end}}
 </main>
-<button id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button id="back-to-top" data-fn="scrollToTop" data-args="[]" aria-label="Back to top">↑</button>
 <footer>
   <div class="footer-inner">
     <div class="footer-left">{{if .Contact}}{{.Contact}}{{end}}</div>
@@ -632,9 +710,9 @@ function initDateRangePicker(opts){
     <div class="footer-right"><a href="/help">{{.Strings.T "nav_help"}}</a>{{if .ImpressumURL}} · <a href="{{.ImpressumURL}}">{{.Strings.T "nav_impressum"}}</a>{{end}}</div>
   </div>
 </footer>
-<div id="hm-backdrop" class="hm-backdrop" hidden onclick="if(event.target===this)closeHelpModal()">
+<div id="hm-backdrop" class="hm-backdrop" hidden data-self-only data-fn="closeHelpModal" data-args="[]">
   <div class="hm-box" role="dialog" aria-modal="true" aria-label="Quick help">
-    <h2>Quick help <button class="hm-close" onclick="closeHelpModal()" aria-label="Close">&#x2715;</button></h2>
+    <h2>Quick help <button class="hm-close" data-fn="closeHelpModal" data-args="[]" aria-label="Close">&#x2715;</button></h2>
     {{if .User}}
     <p class="hm-sec">Managing events</p>
     <ul class="hm-list">

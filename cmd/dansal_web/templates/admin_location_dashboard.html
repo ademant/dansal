@@ -63,10 +63,10 @@
 <form method="get" action="/admin/location/{{.Location.ID}}" class="event-filters">
   {{if $.Data.FilterRoomID}}<input type="hidden" name="room_id" value="{{$.Data.FilterRoomID}}">{{end}}
   <label class="filter-check">
-    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "filter_include_past"}}
   </label>
-  <select name="type" onchange="this.form.submit()">
+  <select name="type" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     <option value="">{{$.Strings.T "filter_all_types"}}</option>
     <option value="ball">{{$.Strings.T "filter_type_ball"}}</option>
     <option value="workshop">{{$.Strings.T "filter_type_workshop"}}</option>
@@ -151,7 +151,7 @@
     <td style="white-space:nowrap">
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
-      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
       {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>

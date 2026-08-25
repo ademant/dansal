@@ -80,7 +80,7 @@
 
 <form method="get" action="/admin/musician/{{.Musician.ID}}" class="event-filters">
   <label class="filter-check">
-    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
     {{$.Strings.T "filter_include_past"}}
   </label>
   <a href="/admin/musician/{{.Musician.ID}}" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
@@ -130,7 +130,7 @@
     </td>
     <td style="white-space:nowrap">
       {{if .Editable}}<a href="/admin/events/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>{{end}}
-      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" onsubmit="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
+      {{if and .Cancelable (not .IsCancelled)}}<form method="post" action="/admin/events/{{.ID}}/cancel" style="display:inline" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}"><button type="submit" class="btn-icon" title="{{$.Strings.T "admin_event_cancel"}}" aria-label="{{$.Strings.T "admin_event_cancel"}}">🚫</button></form>{{end}}
       {{if .Deletable}}<button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">🗑️</button>{{end}}
     </td>
   </tr>

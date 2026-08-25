@@ -22,7 +22,7 @@
     <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
     {{end}}
 
-    <button type="button" id="btn-passkey-instant" onclick="passkeyLoginDiscoverable()" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
+    <button type="button" id="btn-passkey-instant" data-fn="passkeyLoginDiscoverable" data-args="[]" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
 
     <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
 
@@ -49,15 +49,15 @@
              inputmode="email" autocomplete="username"{{if .ErrorKey}} autofocus{{end}}>
       <label for="password">{{$.Strings.T "login_password"}}</label>
       <input id="password" type="password" name="password"
-             autocomplete="current-password" oninput="updateLoginBtn()">
+             autocomplete="current-password" data-on="input" data-fn="updateLoginBtn" data-args="[]">
       <button type="submit" id="btn-login" class="btn-login" disabled>{{$.Strings.T "login_submit"}}</button>
     </form>
 
     <div class="alt-btns">
-      <button type="button" onclick="doPasskeyFromShared()" class="btn-alt btn-passkey-alt">{{$.Strings.T "login_passkey_submit"}}</button>
-      <button type="button" onclick="submitMagic('email')" class="btn-alt">{{$.Strings.T "login_magic_submit"}}</button>
-      <button type="button" onclick="submitMagic('telegram')" class="btn-alt btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
-      <button type="button" onclick="submitMagic('matrix')" class="btn-alt btn-matrix">{{$.Strings.T "login_magic_submit_matrix"}}</button>
+      <button type="button" data-fn="doPasskeyFromShared" data-args="[]" class="btn-alt btn-passkey-alt">{{$.Strings.T "login_passkey_submit"}}</button>
+      <button type="button" data-fn="submitMagic" data-args='["email"]' class="btn-alt">{{$.Strings.T "login_magic_submit"}}</button>
+      <button type="button" data-fn="submitMagic" data-args='["telegram"]' class="btn-alt btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
+      <button type="button" data-fn="submitMagic" data-args='["matrix"]' class="btn-alt btn-matrix">{{$.Strings.T "login_magic_submit_matrix"}}</button>
     </div>
 
     <form id="magic-form" method="post" action="/magic" hidden>
@@ -77,7 +77,7 @@
       <label for="wa-totp-code">{{$.Strings.T "login_totp_code"}}</label>
       <input id="wa-totp-code" type="text" inputmode="numeric" pattern="[0-9]{6}"
              maxlength="6" placeholder="000000" autocomplete="one-time-code">
-      <button type="button" onclick="submitWaTOTP()">{{$.Strings.T "login_submit"}}</button>
+      <button type="button" data-fn="submitWaTOTP" data-args="[]">{{$.Strings.T "login_submit"}}</button>
       <p id="wa-totp-msg" hidden class="login-error" style="margin-top:.4rem"></p>
     </div>
   </div>

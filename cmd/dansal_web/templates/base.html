@@ -447,6 +447,8 @@ function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
 function clickElement(id) { document.getElementById(id).click(); }
 // hideParentElement: data-fn helper for onclick="this.parentElement.hidden=true".
 function hideParentElement(el) { el.parentElement.hidden = true; }
+// closeBulkAttrsDialog: shared by the admin events/locations/org bulk-attrs modal.
+function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){

@@ -24,7 +24,7 @@
     <div class="passkey-bind-box" id="passkey-bind-box" hidden>
       <p style="font-weight:600;margin:0 0 .4rem">{{$.Strings.T "pending_reg_bind_passkey_title"}}</p>
       <p style="font-size:.88rem;color:var(--fg-muted);margin:0 0 .75rem">{{$.Strings.T "pending_reg_bind_passkey_hint"}}</p>
-      <button type="button" class="btn-primary" id="btn-bind-passkey" onclick="bindPasskey()">{{$.Strings.T "pending_reg_bind_passkey_btn"}}</button>
+      <button type="button" class="btn-primary" id="btn-bind-passkey" data-fn="bindPasskey" data-args="[]">{{$.Strings.T "pending_reg_bind_passkey_btn"}}</button>
       <div id="bind-msg" hidden class="bind-msg"></div>
     </div>
     {{end}}
@@ -41,8 +41,8 @@
   {{else}}
 
   <div class="tab-bar" style="margin-bottom:1.25rem">
-    <button type="button" class="tab-btn active" onclick="switchTab('join')">{{$.Strings.T "register_tab_join"}}</button>
-    <button type="button" class="tab-btn" onclick="switchTab('new')">{{$.Strings.T "register_tab_new"}}</button>
+    <button type="button" class="tab-btn active" data-fn="switchTab" data-args='["join"]'>{{$.Strings.T "register_tab_join"}}</button>
+    <button type="button" class="tab-btn" data-fn="switchTab" data-args='["new"]'>{{$.Strings.T "register_tab_new"}}</button>
   </div>
 
   <form method="post" action="/register">
@@ -55,9 +55,9 @@
     <div class="form-group">
       <label>{{$.Strings.T "register_channel"}}</label>
       <div class="radio-group">
-        <label><input type="radio" name="channel" value="none" onchange="updateChannelFields()"> {{$.Strings.T "register_channel_none"}}</label>
-        <label><input type="radio" name="channel" value="email" checked onchange="updateChannelFields()"> {{$.Strings.T "register_email"}}</label>
-        {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram" onchange="updateChannelFields()"> Telegram</label>{{end}}
+        <label><input type="radio" name="channel" value="none" data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_channel_none"}}</label>
+        <label><input type="radio" name="channel" value="email" checked data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_email"}}</label>
+        {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram" data-on="change" data-fn="updateChannelFields" data-args="[]"> Telegram</label>{{end}}
       </div>
     </div>
     <div id="email-field" class="form-group">
@@ -118,7 +118,7 @@
 
     <p class="form-hint" style="margin:.75rem 0">{{$.Strings.T "register_data_notice"}}</p>
     <p class="form-hint" style="margin-bottom:.75rem">{{$.Strings.T "register_expiry_hint"}}</p>
-    <button type="button" class="btn-primary" onclick="submitRegForm()">{{$.Strings.T "register_submit"}}</button>
+    <button type="button" class="btn-primary" data-fn="submitRegForm" data-args="[]">{{$.Strings.T "register_submit"}}</button>
   </form>
   {{end}}{{/* end if PendingID else */}}
 </div>

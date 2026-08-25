@@ -376,7 +376,6 @@
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
 <script nonce="{{$.Nonce}}">
-function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
 var _afLocs = {{locationsJSON .Data.Locations}};
 (function(){
   function setupSuggest(opts){

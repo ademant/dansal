@@ -153,7 +153,7 @@
         <td>
           {{if not .Current}}
           <form method="post" action="/settings/sessions/{{.ID}}/revoke" style="display:inline">
-            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_sessions_confirm_revoke"}}')">{{$.Strings.T "settings_sessions_revoke"}}</button>
+            <button type="submit" class="btn-sm btn-del" data-confirm="{{$.Strings.T "settings_sessions_confirm_revoke"}}">{{$.Strings.T "settings_sessions_revoke"}}</button>
           </form>
           {{end}}
         </td>
@@ -177,7 +177,7 @@
         <td style="font-size:.82rem;color:#888">{{.CreatedAt}}</td>
         <td>
           <form method="post" action="/settings/passkeys/{{.ID}}/delete" style="display:inline">
-            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_passkeys_confirm_delete"}}')">{{$.Strings.T "settings_passkeys_delete"}}</button>
+            <button type="submit" class="btn-sm btn-del" data-confirm="{{$.Strings.T "settings_passkeys_confirm_delete"}}">{{$.Strings.T "settings_passkeys_delete"}}</button>
           </form>
         </td>
       </tr>
@@ -187,16 +187,16 @@
     {{else}}
     <p class="hint">{{$.Strings.T "settings_passkeys_none"}}</p>
     {{end}}
-    <button type="button" id="btn-add-passkey" class="btn-secondary" style="margin-top:.5rem" onclick="addPasskey()">{{$.Strings.T "settings_passkeys_add"}}</button>
+    <button type="button" id="btn-add-passkey" class="btn-secondary" style="margin-top:.5rem" data-fn="addPasskey" data-args="[]">{{$.Strings.T "settings_passkeys_add"}}</button>
     <div id="passkey-msg" hidden class="msg msg-error" style="margin-top:.5rem"></div>
     <p class="hint" style="margin-top:.75rem">{{$.Strings.T "settings_magic_link_hint"}}</p>
-    <button type="button" class="btn-secondary" style="margin-top:.25rem" onclick="generateSelfMagicLink()">{{$.Strings.T "settings_magic_link_device"}}</button>
+    <button type="button" class="btn-secondary" style="margin-top:.25rem" data-fn="generateSelfMagicLink" data-args="[]">{{$.Strings.T "settings_magic_link_device"}}</button>
     <div id="self-magic-result" hidden style="margin-top:.75rem;text-align:center">
       <div id="self-magic-qr" style="display:inline-block;max-width:100%"></div>
       <p id="self-magic-cd" style="font-size:.85rem;color:#888;margin:.4rem 0 0"></p>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem">
-        <button class="btn-sm" id="self-magic-share" onclick="shareInviteURL(selfMagicURL)">{{$.Strings.T "admin_invite_share"}}</button>
-        <button class="btn-sm" onclick="copyText(selfMagicURL)">{{$.Strings.T "admin_invite_copy"}}</button>
+        <button class="btn-sm" id="self-magic-share" data-fn="shareInviteURLSelfMagic" data-args="[]">{{$.Strings.T "admin_invite_share"}}</button>
+        <button class="btn-sm" data-fn="copyTextSelfMagic" data-args="[]">{{$.Strings.T "admin_invite_copy"}}</button>
       </div>
     </div>
   </div>
@@ -212,7 +212,7 @@
         <td style="font-size:.82rem;color:#888">{{.LinkedAt}}</td>
         <td>
           <form method="post" action="/settings/oidc/{{.ID}}/unlink" style="display:inline">
-            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_oidc_confirm_unlink"}}')">{{$.Strings.T "settings_oidc_unlink"}}</button>
+            <button type="submit" class="btn-sm btn-del" data-confirm="{{$.Strings.T "settings_oidc_confirm_unlink"}}">{{$.Strings.T "settings_oidc_unlink"}}</button>
           </form>
         </td>
       </tr>
@@ -310,7 +310,7 @@
     {{if .NewAPIKey}}
     <div class="msg msg-ok" style="margin-bottom:.75rem">
       <strong>{{$.Strings.T "settings_apikeys_new_key"}}</strong><br>
-      <input type="text" value="{{.NewAPIKey.Key}}" readonly style="margin-top:.4rem;font-family:monospace;font-size:.85rem;width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px" onclick="this.select()">
+      <input type="text" value="{{.NewAPIKey.Key}}" readonly style="margin-top:.4rem;font-family:monospace;font-size:.85rem;width:100%;padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px" data-fn="selectText" data-args='["@this"]'>
     </div>
     {{end}}
     {{if .APIKeys}}
@@ -327,7 +327,7 @@
         <td>{{if .ExpiresAt}}{{.ExpiresAt}}{{else}}{{$.Strings.T "settings_apikeys_no_expiry"}}{{end}}</td>
         <td>
           <form method="post" action="/settings/apikeys/{{.ID}}/delete" style="display:inline">
-            <button type="submit" class="btn-sm btn-del" onclick="return confirm('{{$.Strings.T "settings_apikeys_confirm_delete"}}')">{{$.Strings.T "settings_apikeys_delete"}}</button>
+            <button type="submit" class="btn-sm btn-del" data-confirm="{{$.Strings.T "settings_apikeys_confirm_delete"}}">{{$.Strings.T "settings_apikeys_delete"}}</button>
           </form>
         </td>
       </tr>
@@ -459,6 +459,9 @@ function copyText(t) { if (navigator.clipboard) navigator.clipboard.writeText(t)
 function shareInviteURL(url) {
   if (navigator.share) { navigator.share({url: url}).catch(function(){}); } else { copyText(url); }
 }
+function shareInviteURLSelfMagic() { shareInviteURL(selfMagicURL); }
+function copyTextSelfMagic() { copyText(selfMagicURL); }
+function selectText(el) { el.select(); }
 async function generateSelfMagicLink() {
   var res = document.getElementById('self-magic-result');
   var qrEl = document.getElementById('self-magic-qr');

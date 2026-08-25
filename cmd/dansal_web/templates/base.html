@@ -443,6 +443,8 @@ function navigateTo(url) { window.location = url; }
 // pattern (data-on="change" data-fn="submitParentForm" data-args='["@this"]').
 function submitParentForm(el) { el.form.submit(); }
 function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
+// clickElement: data-fn helper for onclick="document.getElementById(id).click()".
+function clickElement(id) { document.getElementById(id).click(); }
 
 // --- New menu toggle functions ---
 function toggleNavMenu(){

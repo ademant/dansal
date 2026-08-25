@@ -111,13 +111,13 @@
 </nav>
 {{end}}
 {{define "evt_tt_row"}}
-<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" onclick="openTTDetail(this,true)">
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" data-fn="openTTDetail" data-args='["@this",true]'>
   <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
   <div class="tt-body">
     <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
     {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
     {{if .Entry.LocationName}}<div class="tt-meta">{{.Entry.LocationName}}</div>{{end}}
-    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+    {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" data-stop>{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
     {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
     {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
   </div>
@@ -155,7 +155,7 @@
 
 <div class="evt-header">
   <h1>{{.Title}}</h1>
-  <button type="button" class="btn-icon" onclick="history.back()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" class="btn-icon" data-fn="historyBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <a href="/events/{{.ID}}.ics" class="btn-icon" title="{{$.Strings.T "evt_add_to_calendar"}}" aria-label="{{$.Strings.T "evt_add_to_calendar"}}">📅</a>
   {{$hasBall := or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}
   {{$hasWorkshop := or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}
@@ -175,7 +175,7 @@
         <option value="">{{$.Strings.T "admin_template_personal"}}</option>
         {{range $.Data.UserOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
       </select>{{end}}
-      <button type="button" class="btn-tpl-save" onclick="saveTpl({{.ID}},this)">{{$.Strings.T "admin_template_save_btn"}}</button>
+      <button type="button" class="btn-tpl-save" data-fn="saveTpl" data-args="{{dargs .ID "@this"}}">{{$.Strings.T "admin_template_save_btn"}}</button>
       <span class="tpl-msg" id="evt-tpl-msg-{{.ID}}"></span>
     </div>
   </details>{{end}}
@@ -293,10 +293,10 @@
             <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
             <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
               {{range $col.Panels}}
-              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" onclick="openTTDetail(this,false)">
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-fn="openTTDetail" data-args='["@this",false]'>
                 <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
                 {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
-                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" onclick="event.stopPropagation()">{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
+                {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" data-stop>{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
                 {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
                 {{if .Entry.Description}}<div class="tt-desc md-content">{{markdownHTML .Entry.Description}}</div>{{end}}
               </div>
@@ -315,7 +315,7 @@
       </div>
       {{end}}
       <dialog id="tt-detail-dialog" class="tt-detail-dialog">
-        <button type="button" class="tt-detail-close" onclick="document.getElementById('tt-detail-dialog').close()" aria-label="Close">×</button>
+        <button type="button" class="tt-detail-close" data-fn="closeTTDetailDialog" data-args="[]" aria-label="Close">×</button>
         <div id="tt-detail-body"></div>
       </dialog>
       <script>
@@ -648,10 +648,10 @@
         <input type="hidden" name="_form_token" value="{{$.Data.BoardFormToken}}">
         <div class="board-contact-method board-contact-method-icons">
           <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">
-            <input type="radio" name="contact_method" value="email" checked onchange="boardContactToggle(this.closest('form'),this.value)"><span aria-hidden="true">✉️</span>
+            <input type="radio" name="contact_method" value="email" checked data-on="change" data-fn="boardContactToggleFromRadio" data-args='["@this"]'><span aria-hidden="true">✉️</span>
           </label>
           <label class="board-method-icon" data-value="telegram" title="{{$.Strings.T "board_telegram_label"}}">
-            <input type="radio" name="contact_method" value="telegram" onchange="boardContactToggle(this.closest('form'),this.value)"><span aria-hidden="true">✈️</span>
+            <input type="radio" name="contact_method" value="telegram" data-on="change" data-fn="boardContactToggleFromRadio" data-args='["@this"]'><span aria-hidden="true">✈️</span>
           </label>
         </div>
         <div class="board-contact-email-row">
@@ -727,10 +727,10 @@
       </div>
       <div class="board-contact-method board-contact-method-icons">
         <label class="board-method-icon active" data-value="email" title="{{$.Strings.T "board_email_label"}}">
-          <input type="radio" name="contact_method" value="email" checked onchange="boardToggleMethod(this.value)"><span aria-hidden="true">✉️</span>
+          <input type="radio" name="contact_method" value="email" checked data-on="change" data-fn="boardToggleMethod" data-args='["@value"]'><span aria-hidden="true">✉️</span>
         </label>
         <label class="board-method-icon" data-value="telegram" title="{{$.Strings.T "board_telegram_label"}}">
-          <input type="radio" name="contact_method" value="telegram" onchange="boardToggleMethod(this.value)"><span aria-hidden="true">✈️</span>
+          <input type="radio" name="contact_method" value="telegram" data-on="change" data-fn="boardToggleMethod" data-args='["@value"]'><span aria-hidden="true">✈️</span>
         </label>
       </div>
       <div class="board-form-row" id="board-email-row">
@@ -1006,6 +1006,11 @@ function boardContactToggle(form, val) {
   if (emailRow) { emailRow.style.display = val === 'email' ? '' : 'none'; var inp = emailRow.querySelector('input'); if(inp) inp.required = val === 'email'; }
   if (tgRow) { tgRow.style.display = val === 'telegram' ? '' : 'none'; var inp2 = tgRow.querySelector('input'); if(inp2) inp2.required = val === 'telegram'; }
 }
+function boardContactToggleFromRadio(radio) {
+  boardContactToggle(radio.closest('form'), radio.value);
+}
+function historyBack() { history.back(); }
+function closeTTDetailDialog() { document.getElementById('tt-detail-dialog').close(); }
 var _boardLabelPersons = {{$.Strings.T "board_persons_label" | jsStr}};
 var _boardLabelPlaces  = {{$.Strings.T "board_num_places_label" | jsStr}};
 var _boardLabelTickets = {{$.Strings.T "board_num_tickets_label" | jsStr}};

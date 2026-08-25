@@ -95,10 +95,10 @@
 <h1 style="margin-bottom:.5rem">{{$.Strings.T "evt_timetable"}} — <a href="/admin/events/{{.Event.ID}}/edit">{{.Event.Title}}</a></h1>
 
 <div class="tt-action-bar evt-action-bar">
-  <button type="button" class="btn-secondary" id="back-btn" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}">←</button>
-  <button type="button" class="btn-primary" id="save-btn" onclick="saveTimetable()" disabled>{{$.Strings.T "admin_save"}}</button>
-  <button type="button" class="btn-secondary" id="sync-btn" onclick="syncEventTimes()" title="Set event start/end times from timetable entries">⇄ Sync event times</button>
-  <button type="button" class="btn-del" onclick="deleteTimetable()">Delete timetable</button>
+  <button type="button" class="btn-secondary" id="back-btn" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" class="btn-primary" id="save-btn" data-fn="saveTimetable" data-args="[]" disabled>{{$.Strings.T "admin_save"}}</button>
+  <button type="button" class="btn-secondary" id="sync-btn" data-fn="syncEventTimes" data-args="[]" title="Set event start/end times from timetable entries">⇄ Sync event times</button>
+  <button type="button" class="btn-del" data-fn="deleteTimetable" data-args="[]">Delete timetable</button>
   <span class="save-status" id="save-status" hidden></span>
 </div>
 
@@ -107,15 +107,15 @@
   <div id="tt-chips"></div>
   <div class="tt-room-add-wrap">
     <input type="text" class="tt-room-add-input" id="tt-room-add" placeholder="+ Add room…" autocomplete="off"
-      oninput="roomAddInput(this)" onkeydown="roomAddKeydown(event,this)" onfocus="roomAddInput(this)">
+      data-on="input,focus" data-fn="roomAddInput" data-args='["@this"]' data-on2="keydown" data-fn2="roomAddKeydown" data-args2='["@event","@this"]'>
     <ul class="tt-room-suggest" id="tt-room-suggest" hidden></ul>
   </div>
 </div>
 
 <div id="tt-page-nav" class="tt-page-nav" hidden>
-  <button type="button" id="tt-prev" onclick="changePage(-1)">‹</button>
+  <button type="button" id="tt-prev" data-fn="changePage" data-args="[-1]">‹</button>
   <span class="tt-page-label" id="tt-page-label"></span>
-  <button type="button" id="tt-next" onclick="changePage(1)">›</button>
+  <button type="button" id="tt-next" data-fn="changePage" data-args="[1]">›</button>
 </div>
 
 <div class="tt-editor-scroll">
@@ -127,15 +127,15 @@
 <dialog id="tt-popup">
   <h2 id="tt-popup-title">Entry</h2>
   <div class="tt-popup-row">
-    <div class="tt-popup-field"><label>Start</label><input type="time" id="pp-start" oninput="ppDirty()"></div>
-    <div class="tt-popup-field"><label>End</label><input type="time" id="pp-end" oninput="ppDirty()"></div>
+    <div class="tt-popup-field"><label>Start</label><input type="time" id="pp-start" data-on="input" data-fn="ppDirty" data-args="[]"></div>
+    <div class="tt-popup-field"><label>End</label><input type="time" id="pp-end" data-on="input" data-fn="ppDirty" data-args="[]"></div>
   </div>
   <div class="tt-popup-row full">
-    <div class="tt-popup-field"><label>Title</label><input type="text" id="pp-title" oninput="ppDirty()"></div>
+    <div class="tt-popup-field"><label>Title</label><input type="text" id="pp-title" data-on="input" data-fn="ppDirty" data-args="[]"></div>
   </div>
   <div class="tt-popup-row">
     <div class="tt-popup-field"><label>Type</label>
-      <select id="pp-type" onchange="ppDirty()">
+      <select id="pp-type" data-on="change" data-fn="ppDirty" data-args="[]">
         <optgroup label="{{$.Strings.T "tt_group_main"}}">
           <option value="bal">{{$.Strings.T "tt_type_bal"}}</option>
           <option value="concert">{{$.Strings.T "tt_type_concert"}}</option>
@@ -153,34 +153,34 @@
       </select>
     </div>
     <div class="tt-popup-field"><label>Room</label>
-      <select id="pp-room-sel" onchange="ppRoomSelChange()">
+      <select id="pp-room-sel" data-on="change" data-fn="ppRoomSelChange" data-args="[]">
         <option value="">— none —</option>
       </select>
     </div>
   </div>
   <div class="tt-popup-row full tt-ac-wrap">
     <div class="tt-popup-field"><label>Musician</label>
-      <input type="text" id="pp-mus-text" autocomplete="off" oninput="ppMusInput()" onfocus="ppMusOpen()">
+      <input type="text" id="pp-mus-text" autocomplete="off" data-on="input" data-fn="ppMusInput" data-args="[]" data-on2="focus" data-fn2="ppMusOpen" data-args2="[]">
       <input type="hidden" id="pp-mus-id">
     </div>
     <ul class="tt-ac-suggest" id="pp-mus-suggest" hidden></ul>
   </div>
   <div class="tt-popup-row full tt-ac-wrap">
     <div class="tt-popup-field"><label>Instructor</label>
-      <input type="text" id="pp-ins-text" autocomplete="off" oninput="ppInsInput()" onfocus="ppInsOpen()">
+      <input type="text" id="pp-ins-text" autocomplete="off" data-on="input" data-fn="ppInsInput" data-args="[]" data-on2="focus" data-fn2="ppInsOpen" data-args2="[]">
       <input type="hidden" id="pp-ins-id">
     </div>
     <ul class="tt-ac-suggest" id="pp-ins-suggest" hidden></ul>
   </div>
   <div class="tt-popup-row full">
     <div class="tt-popup-field"><label>Description</label>
-      <textarea id="pp-desc" oninput="ppDirty()"></textarea>
+      <textarea id="pp-desc" data-on="input" data-fn="ppDirty" data-args="[]"></textarea>
     </div>
   </div>
   <div class="tt-popup-actions">
-    <button type="button" class="btn-primary" onclick="ppSave()">Save entry</button>
-    <button type="button" class="btn-secondary" onclick="ppCancel()">Cancel</button>
-    <button type="button" class="btn-del tt-del-entry" id="pp-del-btn" onclick="ppDelete()">Delete</button>
+    <button type="button" class="btn-primary" data-fn="ppSave" data-args="[]">Save entry</button>
+    <button type="button" class="btn-secondary" data-fn="ppCancel" data-args="[]">Cancel</button>
+    <button type="button" class="btn-del tt-del-entry" id="pp-del-btn" data-fn="ppDelete" data-args="[]">Delete</button>
   </div>
 </dialog>
 
@@ -188,9 +188,9 @@
 <dialog id="tt-nav-modal">
   <p>{{$.Strings.T "admin_unsaved_confirm"}}</p>
   <div class="modal-actions">
-    <button type="button" class="btn-primary" onclick="navModalSaveGo()">Save &amp; leave</button>
-    <button type="button" class="btn-del" onclick="navModalDiscard()">Discard &amp; leave</button>
-    <button type="button" class="btn-secondary" onclick="navModalClose()">Stay</button>
+    <button type="button" class="btn-primary" data-fn="navModalSaveGo" data-args="[]">Save &amp; leave</button>
+    <button type="button" class="btn-del" data-fn="navModalDiscard" data-args="[]">Discard &amp; leave</button>
+    <button type="button" class="btn-secondary" data-fn="navModalClose" data-args="[]">Stay</button>
   </div>
 </dialog>
 

@@ -6,7 +6,7 @@
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
 <div class="evt-action-bar">
-  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
   <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
         data-on="submit" data-confirm="{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?">
@@ -20,7 +20,7 @@
     <legend>{{$.Strings.T "org_image"}}</legend>
     {{with .Series.ImageURL}}<div style="position:relative;display:inline-block;width:100%"><img src="{{.}}" alt="" id="existing-series-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">{{if $.Data.Series.ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}</div>
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem"
-      onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))postTo('/admin/series/{{$.Data.Series.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>
+      data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="postTo" data-args="{{dargs (printf "/admin/series/%d/image/delete" $.Data.Series.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>
     <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem;font-weight:normal;font-size:.9rem">
       <input type="checkbox" name="image_ai_generated" value="1" form="series-header-form"{{if $.Data.Series.ImageAIGenerated}} checked{{end}}>
       {{$.Strings.T "evt_image_ai_label"}}
@@ -28,9 +28,9 @@
     {{end}}
     <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
       <input type="file" id="series-image" name="image" accept="image/*" style="display:none"
-        onchange="(function(f,p){if(f&&f.type.startsWith('image/')){var r=new FileReader();r.onload=function(e){p.src=e.target.result;p.style.display='block'};r.readAsDataURL(f)}})(this.files[0],document.getElementById('series-image-preview'))">
+        data-on="change" data-fn="previewSeriesImage" data-args='["@this"]'>
       <span>{{$.Strings.T "evt_image_hint"}}</span>
-      <button type="button" onclick="document.getElementById('series-image').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      <button type="button" data-fn="clickElement" data-args='["series-image"]' class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
       <button type="submit" class="btn-sm-secondary">{{$.Strings.T "admin_save"}}</button>
     </div>
     <img id="series-image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
@@ -88,7 +88,7 @@
   <section class="form-section">
     <label>{{$.Strings.T "series_default_location"}}</label>
     <div class="loc-filter-wrap">
-      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" oninput="filterLocOptions(this.value)" onfocus="filterLocOptions(this.value)">
+      <input type="text" id="loc-search" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" data-on="input,focus" data-fn="filterLocOptions" data-args='["@value"]'>
       <select name="default_location_id" id="loc-select" size="1" style="width:100%">
         <option value="">—</option>
         {{range .Locations}}
@@ -229,7 +229,7 @@
   {{if .Series.InviteToken}}
   <p style="margin:.25rem 0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
     <a id="invite-link" href="{{.BaseURL}}/series_token/{{.Series.InviteToken}}" target="_blank" style="word-break:break-all">{{.BaseURL}}/series_token/{{.Series.InviteToken}}</a>
-    <button type="button" class="btn-sm" onclick="copyInviteLink(this)" title="{{$.Strings.T "series_copy_link"}}">{{$.Strings.T "series_copy_link"}}</button>
+    <button type="button" class="btn-sm" data-fn="copyInviteLink" data-args='["@this"]' title="{{$.Strings.T "series_copy_link"}}">{{$.Strings.T "series_copy_link"}}</button>
   </p>
   <form method="post" action="/admin/series/{{.Series.ID}}/token/regenerate" style="display:inline">
     <button class="btn-sm">{{$.Strings.T "series_regenerate_token"}}</button>
@@ -270,7 +270,7 @@
   <button type="submit" formaction="/admin/events/bulk-set-time" class="btn-sm btn-assign bulk-action-btn" disabled>{{$.Strings.T "evt_bulk_attrs_apply"}}</button>
   <span class="bulk-sep"></span>
   <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk bulk-action-btn" disabled
-          onclick="return confirm('{{$.Strings.T "evt_bulk_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+          data-confirm="{{$.Strings.T "evt_bulk_confirm_cancel"}}">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
 </div>
 <div class="table-wrap">
 <table class="event-table">
@@ -296,8 +296,8 @@
     <td class="cell-status">{{if .IsCancelled}}<span class="badge-cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{else if .IsPublished}}<span class="badge-pub">✓</span>{{end}}</td>
     <td class="col-actions cell-actions" style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm" title="{{$.Strings.T "admin_edit"}}">{{$.Strings.T "admin_edit"}} ↗</a>
-      <button class="btn-sm" type="button" onclick="postTo('/admin/events/{{.ID}}/cancel')">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
-      <button class="btn-sm btn-del" type="button" onclick="if(confirm('{{$.Strings.T "admin_delete"}}?'))postTo('/admin/events/{{.ID}}/delete')">✕</button>
+      <button class="btn-sm" type="button" data-fn="postTo" data-args="{{dargs (printf "/admin/events/%d/cancel" .ID)}}">{{if .IsCancelled}}↩{{else}}{{$.Strings.T "badge_cancelled"}}{{end}}</button>
+      <button class="btn-sm btn-del" type="button" data-confirm="{{$.Strings.T "admin_delete"}}?" data-fn="postTo" data-args="{{dargs (printf "/admin/events/%d/delete" .ID)}}">✕</button>
     </td>
   </tr>
   {{else}}
@@ -434,6 +434,15 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 }
 </style>
 <script nonce="{{$.Nonce}}">
+function previewSeriesImage(input) {
+  var f = input.files[0];
+  var p = document.getElementById('series-image-preview');
+  if (f && f.type.startsWith('image/')) {
+    var r = new FileReader();
+    r.onload = function (e) { p.src = e.target.result; p.style.display = 'block'; };
+    r.readAsDataURL(f);
+  }
+}
 function copyInviteLink(btn){
   var url=document.getElementById('invite-link').href;
   navigator.clipboard.writeText(url).then(function(){

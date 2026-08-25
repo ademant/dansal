@@ -595,7 +595,7 @@ func baselineCSP(nonce string) string {
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
 		"script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; " +
 		"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
-		"object-src 'none'; base-uri 'self'; "
+		"object-src 'none'; base-uri 'self'; form-action 'self'; "
 }
 
 // cspNonceKey is the context key securityHeadersMiddleware stores the
@@ -656,18 +656,57 @@ func panicRecoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// securityHeadersMiddleware sets X-Frame-Options and Content-Security-Policy
-// only. X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS,
-// and Cross-Origin-Opener-Policy are deliberately NOT set here: nginx
-// (deploy/nginx/dansal.conf) already applies them unconditionally to every
-// response in this server block, including ones proxied to the API and ones
-// nginx itself generates (errors, rate limits) that never reach this
-// middleware at all — setting them here too produced duplicate, and for
-// Permissions-Policy actually conflicting, header lines (#1142). X-Frame-
-// Options and CSP stay app-side because they're path-dependent (/embed/*
-// needs different framing rules than everything else) — nginx no longer
-// sets X-Frame-Options at all, precisely so this per-path value is the only
-// one that reaches the client.
+// corpAllowCrossOrigin lists path prefixes for static assets that are
+// deliberately hotlinked/embedded from other origins: the site logo/banner/
+// favicon/AI badge, and the relay actor's avatar/banner shown on remote
+// Mastodon/Fediverse profiles (#1148). These are the only dansal_web
+// subresources a browser plausibly loads via a cross-origin <img>/<link>.
+var corpAllowCrossOrigin = []string{
+	"/favicon.svg", "/logo.avif", "/banner.avif",
+	"/relay-icon", "/relay-banner", "/ai-badge",
+}
+
+// corpSameOrigin lists path prefixes for private/session-bound areas where
+// Cross-Origin-Resource-Policy: same-origin is unambiguously safe: nothing
+// under them is meant to be fetched (no-cors) from another origin.
+var corpSameOrigin = []string{"/admin/", "/settings", "/internal/"}
+
+// corpForPath returns the Cross-Origin-Resource-Policy value for path, or ""
+// to omit the header entirely (#1148). Most of dansal_web's surface —
+// ordinary HTML pages, ActivityPub actor/webfinger/inbox JSON, embed pages —
+// is intentionally left unset rather than forced to 'same-origin': CORP only
+// governs no-cors subresource fetches (img/script/no-cors fetch), not
+// top-level navigation or iframe loads, and federation JSON is fetched
+// server-to-server (CORP is a browser-only mechanism), so blanket
+// same-origin would add no real protection there while risking false
+// positives if that assumption ever changes. See #1148 for the audit.
+func corpForPath(path string) string {
+	for _, p := range corpAllowCrossOrigin {
+		if strings.HasPrefix(path, p) {
+			return "cross-origin"
+		}
+	}
+	for _, p := range corpSameOrigin {
+		if strings.HasPrefix(path, p) {
+			return "same-origin"
+		}
+	}
+	return ""
+}
+
+// securityHeadersMiddleware sets X-Frame-Options, Content-Security-Policy,
+// and (route-aware) Cross-Origin-Resource-Policy. X-Content-Type-Options,
+// Referrer-Policy, Permissions-Policy, HSTS, and Cross-Origin-Opener-Policy
+// are deliberately NOT set here: nginx (deploy/nginx/dansal.conf) already
+// applies them unconditionally to every response in this server block,
+// including ones proxied to the API and ones nginx itself generates (errors,
+// rate limits) that never reach this middleware at all — setting them here
+// too produced duplicate, and for Permissions-Policy actually conflicting,
+// header lines (#1142). X-Frame-Options, CSP, and CORP stay app-side because
+// they're path-dependent (/embed/* needs different framing rules than
+// everything else, and CORP differs for static assets vs. admin pages) —
+// nginx no longer sets X-Frame-Options at all, precisely so this per-path
+// value is the only one that reaches the client.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce := newCSPNonce()
@@ -679,6 +718,9 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		} else {
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 			w.Header().Set("Content-Security-Policy", csp+"frame-ancestors 'self'")
+		}
+		if corp := corpForPath(r.URL.Path); corp != "" {
+			w.Header().Set("Cross-Origin-Resource-Policy", corp)
 		}
 		next.ServeHTTP(w, r)
 	})

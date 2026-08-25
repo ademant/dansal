@@ -293,6 +293,35 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// corpPublicImagePrefixes lists the GET image-serving endpoints that other
+// origins are expected to hotlink directly (event/org/musician/instructor/
+// location/series images and avatars, contact-post images) — e.g. via
+// <img src>, social-preview scrapers, or third-party embeds (#1148).
+var corpPublicImagePrefixes = []string{
+	"/api/v1/images/", "/api/v1/event-banner/", "/api/v1/org-images/",
+	"/api/v1/org-avatars/", "/api/v1/musician-images/", "/api/v1/musician-avatars/",
+	"/api/v1/instructor-avatars/", "/api/v1/location-images/", "/api/v1/series-images/",
+	"/api/v1/contact-post-images/",
+}
+
+// corpForAPIPath returns the Cross-Origin-Resource-Policy value for path, or
+// "" to omit the header (#1148). The JSON CRUD surface is deliberately left
+// unset rather than forced to 'same-origin': corsOrigin() already makes this
+// API's read endpoints consumable from configured (or, by default, any)
+// cross-origin caller via CORS-mode fetch, and CORP is enforced independently
+// of the CORS check — a blanket same-origin value here would silently break
+// that intentionally-open cross-origin consumption. Only the routes actually
+// expected to be loaded no-cors (plain <img> tags, not fetch/XHR) get an
+// explicit 'cross-origin' value.
+func corpForAPIPath(path string) string {
+	for _, p := range corpPublicImagePrefixes {
+		if strings.HasPrefix(path, p) {
+			return "cross-origin"
+		}
+	}
+	return ""
+}
+
 // SecurityHeadersMiddleware adds defensive HTTP headers to every response.
 // X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS, and
 // Cross-Origin-Opener-Policy are intentionally NOT set here: /api/* is
@@ -303,10 +332,14 @@ func CORSMiddleware(next http.Handler) http.Handler {
 // here since they're app-specific (nginx no longer sets X-Frame-Options at
 // all, precisely so each backend's own value — DENY here, since a JSON API
 // has no reason to ever be framed — is the only one that reaches the client).
+// Cross-Origin-Resource-Policy is route-aware (see corpForAPIPath, #1148).
 func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'")
+		if corp := corpForAPIPath(r.URL.Path); corp != "" {
+			w.Header().Set("Cross-Origin-Resource-Policy", corp)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

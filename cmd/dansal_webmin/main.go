@@ -149,7 +149,7 @@ func webminCSP(nonce string) string {
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
 		"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
-		"object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		"object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 }
 
 // cspNonceKey is the context key securityHeadersMiddleware stores the
@@ -176,21 +176,26 @@ func nonceFromRequest(r *http.Request) string {
 	return ""
 }
 
-// securityHeadersMiddleware sets X-Frame-Options and Content-Security-Policy
-// (plus the nonce plumbing) only. X-Content-Type-Options, Referrer-Policy,
-// Permissions-Policy, HSTS, Cross-Origin-Opener-Policy, and Cache-Control are
-// deliberately NOT set here: nginx (deploy/nginx/dansal-webmin.conf) already
-// applies them unconditionally to every response, including ones nginx
-// itself generates that never reach this middleware — setting them here too
-// produced duplicate, and for Permissions-Policy/HSTS actually conflicting
-// (different max-age/usb= values), header lines (#1142). X-Frame-Options and
-// CSP stay app-side as the single source of truth for those.
+// securityHeadersMiddleware sets X-Frame-Options, Content-Security-Policy
+// (plus the nonce plumbing), and Cross-Origin-Resource-Policy. X-Content-
+// Type-Options, Referrer-Policy, Permissions-Policy, HSTS, Cross-Origin-
+// Opener-Policy, and Cache-Control are deliberately NOT set here: nginx
+// (deploy/nginx/dansal-webmin.conf) already applies them unconditionally to
+// every response, including ones nginx itself generates that never reach
+// this middleware — setting them here too produced duplicate, and for
+// Permissions-Policy/HSTS actually conflicting (different max-age/usb=
+// values), header lines (#1142). X-Frame-Options and CSP stay app-side as
+// the single source of truth for those. Cross-Origin-Resource-Policy is a
+// flat 'same-origin' (unlike dansal_web/dansal's route-aware value, #1148):
+// webmin is entirely private/admin, with no route meant to be fetched
+// (no-cors) from another origin.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce := newCSPNonce()
 		r = r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce))
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", webminCSP(nonce))
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
 }

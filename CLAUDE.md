@@ -201,6 +201,14 @@ The full `Event` struct (with all API fields) is never sent to the browser — `
 
 All mobile adaptation is CSS (`@media` queries) and JS — the server sends identical HTML to all clients. Never use User-Agent detection for layout decisions: it's unreliable and fragments the HTTP cache (`Vary: User-Agent` is very cache-unfriendly).
 
+## style-src CSP migration (inline `style=` attributes — legacy, chip away over time)
+
+`script-src` dropped `'unsafe-inline'` in #1141/#1147/#1149 (nonce + `'strict-dynamic'`), but `style-src` still carries `'unsafe-inline'` — Mozilla Observatory's only remaining ding on an otherwise A+/115 score. It's deliberately left as-is rather than tackled in one refactor: there are ~800 `style="..."` attribute occurrences across ~60 templates (vs. ~24 external `<script src>` tags + a handful of inline blocks for the script migration), and unlike `<script>`/`<style>` *elements*, a nonce cannot cover the `style=""` *attribute* at all — the only real fix is moving each one to a CSS class.
+
+**Whenever a template edit touches an element's `style="..."` attribute anyway** (not as a dedicated cleanup pass, just opportunistically since you're already there), prefer converting it to a class in that template's `<style>` block (or a shared one in `base.html` if the rule is reusable) over leaving or extending the inline attribute. Don't go out of your way to grep for and batch-convert unrelated `style=` attributes elsewhere in the file — this is meant to shrink the count incrementally, not turn an unrelated change into a big diff. `<style>` blocks themselves already carry `nonce="{{$.Nonce}}"` (or should, if a template's `<style>` block predates that) — only the attribute form is the unresolved case.
+
+Once the count is low enough to matter, dropping `'unsafe-inline'` from `style-src` becomes a normal discuss → issue → implement change per the Workflow above — no need to revisit this file for that; the section can be deleted once it's done.
+
 ## Navigation deep-links
 
 Use `geo:lat,lon?q=lat,lon` links alongside OpenStreetMap links to let mobile users open OsmAnd or other native navigation apps. Both `event.html` and `location.html` have these. No `target="_blank"` on `geo:` links — they open native apps, not browser tabs.

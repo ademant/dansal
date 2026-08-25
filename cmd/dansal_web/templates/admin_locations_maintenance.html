@@ -29,7 +29,7 @@
   </select>
   <button type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge"
-          onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
+          data-confirm="{{$.Strings.T "loc_merge_confirm"}}">{{$.Strings.T "loc_merge_btn"}}</button>
 </div>
 </div>{{/* end .maint-sticky */}}
 
@@ -86,7 +86,7 @@
     <td class="col-actions">
       <a href="/admin/locations/{{.ID}}/edit?return={{$.Data.ReturnURL | urlquery}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
       <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">🗑️</button>
+              data-confirm="{{$.Strings.T "loc_confirm_delete"}}" data-fn="delLocation" data-args="{{dargs .ID}}">🗑️</button>
     </td>
   </tr>
   {{end}}

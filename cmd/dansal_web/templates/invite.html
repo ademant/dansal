@@ -25,10 +25,10 @@
 
   <!-- Track selector -->
   <div class="invite-tracks">
-    <button type="button" id="btn-passkey" class="track-btn track-active" onclick="showTrack('passkey')">
+    <button type="button" id="btn-passkey" class="track-btn track-active" data-fn="showTrack" data-args='["passkey"]'>
       🔑 {{$.Strings.T "invite_use_passkey"}}
     </button>
-    <button type="button" id="btn-password" class="track-btn" onclick="showTrack('password')">
+    <button type="button" id="btn-password" class="track-btn" data-fn="showTrack" data-args='["password"]'>
       🔒 {{$.Strings.T "invite_use_password"}}
     </button>
   </div>
@@ -53,7 +53,7 @@
     <div id="track-passkey">
       <p class="track-hint">{{$.Strings.T "invite_passkey_what"}}</p>
       <p class="track-hint">{{$.Strings.T "invite_passkey_hint"}}</p>
-      <button type="button" class="btn-primary" id="btn-register-passkey" onclick="registerPasskey()">
+      <button type="button" class="btn-primary" id="btn-register-passkey" data-fn="registerPasskey" data-args="[]">
         {{$.Strings.T "invite_create_passkey"}}
       </button>
     </div>

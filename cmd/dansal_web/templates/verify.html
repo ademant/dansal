@@ -6,17 +6,17 @@
     {{if .BoardVerify}}
     <div class="verify-box verify-ok">
       <p>{{$.Strings.T "board_verify_success"}}</p>
-      <button onclick="window.close()" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
+      <button data-fn="closeWindow" data-args="[]" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
     </div>
     {{else if .ContactRequestVerify}}
     <div class="verify-box verify-ok">
       <p>{{$.Strings.T "board_request_verify_success"}}</p>
-      <button onclick="window.close()" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
+      <button data-fn="closeWindow" data-args="[]" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
     </div>
     {{else if .BoardDelete}}
     <div class="verify-box verify-ok">
       <p>{{$.Strings.T "board_delete_success"}}</p>
-      <button onclick="window.close()" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
+      <button data-fn="closeWindow" data-args="[]" class="verify-close-btn">{{$.Strings.T "board_verify_close"}}</button>
     </div>
     {{else}}
     <div class="verify-box verify-ok">

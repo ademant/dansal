@@ -28,7 +28,7 @@
   </select>
   <button type="submit" class="btn-sm loc-bulk-action-btn" disabled>{{$.Strings.T "loc_bulk_assign_btn"}}</button>
   <button type="submit" formaction="/admin/locations/merge" class="btn-sm btn-merge loc-bulk-action-btn" disabled
-          onclick="return confirm('{{$.Strings.T "loc_merge_confirm"}}')">{{$.Strings.T "loc_merge_btn"}}</button>
+          data-confirm="{{$.Strings.T "loc_merge_confirm"}}">{{$.Strings.T "loc_merge_btn"}}</button>
   <button type="button" class="btn-sm ms-close" id="ms-close" title="{{$.Strings.T "admin_magic_link_close"}}" aria-label="{{$.Strings.T "admin_magic_link_close"}}">✕</button>
 </aside>
 <div class="bulk-main">
@@ -86,7 +86,7 @@
       </form>
       {{end}}
       {{if $.Data.IsAdmin}}<button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
-              onclick="if(confirm('{{$.Strings.T "loc_confirm_delete"}}'))delLocation({{.ID}})">🗑️</button>{{end}}
+              data-confirm="{{$.Strings.T "loc_confirm_delete"}}" data-fn="delLocation" data-args="{{dargs .ID}}">🗑️</button>{{end}}
     </td>
   </tr>
   {{end}}

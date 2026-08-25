@@ -133,11 +133,11 @@
   <div class="em-bulk-actions">
     <button type="submit" class="btn-sm btn-assign" id="em-btn-assign">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
     <button type="submit" formaction="/admin/events/merge" class="btn-sm btn-merge" id="em-btn-merge"
-            onclick="return confirm('{{$.Strings.T "evt_merge_confirm"}}')">{{$.Strings.T "evt_merge_btn"}}</button>
+            data-confirm="{{$.Strings.T "evt_merge_confirm"}}">{{$.Strings.T "evt_merge_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-publish" class="btn-sm btn-publish-bulk" id="em-btn-publish"
-            onclick="return confirm('{{$.Strings.T "admin_event_confirm_publish"}}')">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
+            data-confirm="{{$.Strings.T "admin_event_confirm_publish"}}">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk" id="em-btn-cancel"
-            onclick="return confirm('{{$.Strings.T "admin_event_confirm_cancel"}}')">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
+            data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-recheck-source" class="btn-sm btn-assign" id="em-btn-recheck-source"
             title="{{$.Strings.T "admin_filter_has_source"}}">{{$.Strings.T "evt_bulk_recheck_source_btn"}}</button>
   </div>

@@ -48,7 +48,7 @@
       <input type="text" name="display_name" required>
     </label>
     <label>{{$.Strings.T "admin_oidc_col_kind"}}
-      <select name="kind" id="oidc-kind-select" onchange="oidcToggleAutoRegister()">
+      <select name="kind" id="oidc-kind-select" data-on="change" data-fn="oidcToggleAutoRegister" data-args="[]">
         <option value="oidc">{{$.Strings.T "admin_oidc_kind_oidc"}}</option>
         <option value="mastodon">{{$.Strings.T "admin_oidc_kind_mastodon"}}</option>
       </select>

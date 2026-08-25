@@ -24,7 +24,7 @@
 {{end}}
 
 <div class="loc-action-bar">
-  <button type="button" id="back-btn" class="btn-secondary" onclick="safeGoBack()" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
+  <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   {{if not .ReadOnly}}<button type="submit" id="save-btn" class="btn-primary" form="loc-edit-form">{{$.Strings.T "admin_save"}}</button>{{end}}
   {{if .Location.ID}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/delete" style="margin:0" data-on="submit" data-confirm="Delete this location?">
@@ -329,7 +329,7 @@
   <textarea id="notes_md" name="notes_md" rows="5" placeholder="{{$.Strings.T "notes_md_placeholder"}}">{{.Location.NotesMd}}</textarea>
   <div id="md-paste-hint" class="md-paste-hint" hidden>
     <span>📋 {{$.Strings.T "paste_md_converted"}}</span>
-    <button type="button" onclick="this.parentElement.hidden=true" aria-label="×">×</button>
+    <button type="button" data-fn="hideParentElement" data-args='["@this"]' aria-label="×">×</button>
   </div>
   <details class="md-help-details">
     <summary>{{$.Strings.T "md_help_title"}}</summary>
@@ -679,7 +679,7 @@
       m.bindPopup(
         '<div style="max-width:220px;font-size:.85rem">' + label + '</div>' +
         '<button type="button" style="margin-top:.4rem;padding:.2rem .6rem;background:#1a6eb5;color:#fff;border:none;border-radius:3px;cursor:pointer" ' +
-        'onclick="window._geoSelect(' + idx + ')">↙ Übernehmen</button>'
+        'data-fn=\'_geoSelect\' data-args=\'[' + idx + ']\'>↙ Übernehmen</button>'
       );
       resultMarkers.push(m);
     });

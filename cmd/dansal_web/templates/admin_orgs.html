@@ -35,7 +35,7 @@
         <button type="submit" class="btn-icon btn-run" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}">🔄</button>
       </form>
       {{end}}
-      <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" onclick="return confirmTypedDelete('{{js .Org.Name}}',function(){delOrg({{.Org.ID}});})">🗑️</button>
+      <button type="button" class="btn-icon btn-del mobile-hide" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}" data-fn="confirmTypedDeleteOrg" data-args="{{dargs .Org.Name .Org.ID}}">🗑️</button>
       {{end}}
     </td>
   </tr>
@@ -82,14 +82,15 @@
     <p id="ctd-prompt" style="margin:0 0 .75rem;font-size:.95rem;color:var(--fg,#333)"></p>
     <input id="ctd-input" type="text" autocomplete="off" style="width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;box-sizing:border-box;margin-bottom:.75rem">
     <div style="display:flex;gap:.5rem">
-      <button id="ctd-ok" class="btn-del btn-sm" disabled onclick="ctdConfirm()">{{$.Strings.T "admin_delete"}}</button>
-      <button class="btn-sm" onclick="ctdClose()">{{$.Strings.T "admin_magic_link_close"}}</button>
+      <button id="ctd-ok" class="btn-del btn-sm" disabled data-fn="ctdConfirm" data-args="[]">{{$.Strings.T "admin_delete"}}</button>
+      <button class="btn-sm" data-fn="ctdClose" data-args="[]">{{$.Strings.T "admin_magic_link_close"}}</button>
     </div>
   </div>
 </div>
 <script nonce="{{$.Nonce}}">
 document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delOrg(id){var f=document.createElement('form');f.method='post';f.action='/admin/organizations/'+id+'/delete';document.body.appendChild(f);f.submit();}
+function confirmTypedDeleteOrg(name,id){ return confirmTypedDelete(name,function(){delOrg(id);}); }
 var _ctdCb=null,_ctdExpected='';
 function confirmTypedDelete(name,cb){
   _ctdExpected=name;_ctdCb=cb;

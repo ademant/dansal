@@ -66,6 +66,22 @@ run: build-dansal
 clean:
 	rm -f dansal dansal_web dansal_admin dansal_webmin dansal_doc *.deb
 
+# E2E Playwright tests
+e2e-install:
+	cd e2e && npm ci && npx playwright install --with-deps chromium
+
+e2e: e2e-install
+	cd e2e && npx playwright test
+
+e2e-desktop: e2e-install
+	cd e2e && npx playwright test --project=desktop
+
+e2e-mobile: e2e-install
+	cd e2e && npx playwright test --project=mobile
+
+e2e-a11y: e2e-install
+	cd e2e && npx playwright test tests/accessibility/
+
 install: build
 	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }
 	# system user

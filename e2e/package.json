@@ -1,0 +1,18 @@
+{
+  "name": "dansal-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:desktop": "playwright test --project=desktop",
+    "test:mobile": "playwright test --project=mobile",
+    "test:a11y": "playwright test tests/accessibility/",
+    "seed": "tsx helpers/seed.ts",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.9.0",
+    "@playwright/test": "^1.45.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.16.0"
+  }
+}

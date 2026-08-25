@@ -2051,9 +2051,9 @@ function addTTRow(){
       _buildTTLocWidget()+
       '<input type="text" name="tt_room" class="tt-room-input" placeholder='+{{$.Strings.T "tt_room_placeholder" | jsStr}}+'>'+
       '<select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select>'+
-      '<button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>'+
+      '<button type="button" class="btn-del-row" data-fn="delRow" data-args=\'["@this"]\' title="Remove">×</button>'+
     '</div>'+
-    '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>'+
+    '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args=\'["@this"]\'></div>'+
     '<div class="tt-line3">'+_buildTTMusWidget()+_buildTTInsWidget()+'</div>'+
     '<div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></textarea></div>';
   tbody.appendChild(entry);
@@ -2163,7 +2163,7 @@ function growPricingTable(el){
   var last=rows[rows.length-1];
   if(el.closest('tr')===last && el.value.trim()!==''){
     var row=document.createElement('tr');
-    row.innerHTML='<td><input type="text" name="pl_label" data-on="input" data-fn="growPricingTable" data-args='["@this"]'></td>'+
+    row.innerHTML='<td><input type="text" name="pl_label" data-on="input" data-fn="growPricingTable" data-args=\'["@this"]\'></td>'+
       '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
     tbody.appendChild(row);
   }

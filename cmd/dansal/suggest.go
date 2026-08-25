@@ -450,12 +450,26 @@ func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #1151: the verify token is a standing link that's never destroyed, so a
+	// suggester can revisit it long after the event was already verified (or
+	// published). Only notify admins on the genuine first verification —
+	// otherwise every repeat visit re-fires a "new suggestion" alert for an
+	// event that isn't new anymore, sending admins hunting for a suggestion
+	// that doesn't exist.
+	var alreadyVerified bool
+	if err := db.QueryRow(`SELECT email_verified FROM events WHERE id = ?`, eventID).Scan(&alreadyVerified); err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
 	if _, err := db.Exec(`UPDATE events SET email_verified = 1 WHERE id = ?`, eventID); err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 
-	go notifyAdminsSuggestion("", "")
+	if !alreadyVerified {
+		go notifyAdminsSuggestion("", "")
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -763,8 +763,12 @@
 .series-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.88rem}
 .series-nav a{color:var(--link);text-decoration:none;padding:.2rem .4rem;border-radius:3px}
 .series-nav a:hover{background:var(--bg-alt,#f4f6fb)}
-.evt-hero{margin:0 -1rem 0;background:#111;max-height:420px;overflow:hidden}
-.evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
+.evt-hero{margin:0 -1rem 0;background:#111}
+/* #1156/#1157: no crop/focal-point control on upload, so cropping to a
+   fixed height (object-fit:cover) cut off subjects (e.g. heads) at random
+   relative to what the uploader actually framed. Render at the image's
+   own aspect ratio instead. */
+.evt-hero img{width:100%;height:auto;display:block;opacity:.95}
 .evt-header{padding:1.25rem 0 .75rem}
 .evt-header h1{margin-bottom:.35rem}
 .evt-header .btn-icon{margin-left:.4rem}

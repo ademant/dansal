@@ -2209,6 +2209,15 @@ function showGeoMap(lat,lon){
   });
 })();
 
+// #1162: sub-editor pages (description, timetable) have their own save
+// action and a "←" back button that just calls history.back(). That
+// restores this page's bfcache snapshot from before the user left — not a
+// fresh fetch — so a save made on the sub-editor doesn't show up here.
+// Force a real reload whenever we're shown via bfcache restore.
+window.addEventListener('pageshow',function(e){
+  if(e.persisted) location.reload();
+});
+
 var _formDirty=false;
 function _markDirty(){
   if(_formDirty) return;

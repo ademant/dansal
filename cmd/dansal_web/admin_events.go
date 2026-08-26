@@ -3216,15 +3216,6 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			http.NotFound(w, r)
 			return
 		}
-		// #1160 follow-up: the list endpoint (GetOrganizations, used above to
-		// resolve slug->org) never populates FetchSourceIDs — only the
-		// singular GetOrganization does. Re-fetch by ID so the dashboard's
-		// feed-source icons actually show up; fall back to the list-sourced
-		// org (missing FetchSourceIDs) if that call fails rather than 404
-		// the whole page over it.
-		if full, err := client.GetOrganization(r.Context(), org.ID); err == nil {
-			org = full
-		}
 
 		token := getSessionToken(r)
 

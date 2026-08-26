@@ -276,6 +276,38 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 		}
 		orgs = append(orgs, o)
 	}
+
+	// #1163: populate FetchSourceIDs here too, not just in getOrganization —
+	// DansalClient.GetOrganization(id) prefers a match from this list
+	// endpoint over the singular one whenever the list call succeeds (to
+	// avoid an extra round-trip), so leaving this list endpoint without
+	// FetchSourceIDs silently defeats getOrganization's own population of
+	// it for every caller that goes through GetOrganization (org.html,
+	// the admin org dashboard's re-fetch, ...). One bulk query for the
+	// whole page, same union as getOrganization: fetch sources explicitly
+	// linked via organization_id, plus any fetch_source_id already
+	// recorded on that org's events (a source can resolve the organizer
+	// per-event dynamically without ever setting its own organization_id).
+	if len(orgs) > 0 {
+		byOrg := make(map[int][]int, len(orgs))
+		rows2, err := db.Query(`
+			SELECT organization_id, id FROM fetch_sources WHERE organization_id IS NOT NULL
+			UNION
+			SELECT organization_id, fetch_source_id FROM events WHERE organization_id IS NOT NULL AND fetch_source_id IS NOT NULL`)
+		if err == nil {
+			for rows2.Next() {
+				var orgID, fsID int
+				if rows2.Scan(&orgID, &fsID) == nil {
+					byOrg[orgID] = append(byOrg[orgID], fsID)
+				}
+			}
+			rows2.Close()
+		}
+		for i := range orgs {
+			orgs[i].FetchSourceIDs = byOrg[orgs[i].ID]
+		}
+	}
+
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/atom+xml") {
 		writeOrgsAtom(w, r, orgs)

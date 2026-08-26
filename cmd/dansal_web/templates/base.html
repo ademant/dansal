@@ -362,6 +362,17 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 th.sortable-th{cursor:pointer;user-select:none}
 th.sortable-th:hover{background:#e8eef7}
 .sort-ind{font-size:.75em;opacity:.6}
+/* Mini event calendar (renderMiniCalendar, #1144/#1161) — shared by
+   /festivals (fixed calendar year) and /org/{slug} (rolling month window). */
+.fest-calendar{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem}
+.fest-month{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem}
+.fest-month-title{font-weight:600;font-size:.9rem;margin-bottom:.4rem;text-align:center;text-transform:capitalize}
+.fest-month-grid{width:100%;border-collapse:collapse;font-size:.78rem}
+.fest-month-grid th{color:var(--fg-muted);font-weight:400;padding:.15rem;text-align:center}
+.fest-month-grid td{text-align:center;padding:.2rem 0;color:var(--fg-2)}
+.fest-month-grid td.fest-other{color:var(--fg-faint)}
+.fest-month-grid td.fest-day{cursor:pointer;background:var(--heading);color:#fff;border-radius:3px;font-weight:600}
+.fest-month-grid td.fest-day:hover{opacity:.85}
 </style>
 <script nonce="{{$.Nonce}}">
 var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}",cancel:"{{.Strings.T "js_cancel"}}",select:"{{.Strings.T "js_select"}}",prevWeek:"{{.Strings.T "js_prev_week"}}",nextWeek:"{{.Strings.T "js_next_week"}}",tableModeWeek:"{{.Strings.T "table_mode_week"}}",tableModeAll:"{{.Strings.T "table_mode_all"}}"};
@@ -579,6 +590,64 @@ function nominatimRefine(lat, lon, countryCode, cb){
   }).then(function(r){ return r.json(); }).then(function(item){
     cb((item && item.address) || null);
   }).catch(function(){ cb(null); });
+}
+// renderMiniCalendar draws a small multi-month event calendar into
+// #containerId: one grid per month in `months` (array of Date, each the
+// 1st of a month to render), days with an event highlighted and linking
+// to /events/{id}. calEvents is the [{id,t,s,e}] shape produced by the
+// festivalCalendarJSON template func. Shared by /festivals (fixed
+// calendar year, its own month list) and /org/{slug} (#1161, a rolling
+// window of upcoming months) so this rendering logic isn't duplicated.
+function renderMiniCalendar(containerId, calEvents, months){
+  var cal=document.getElementById(containerId);
+  if(!cal) return;
+  if(!calEvents.length || !months.length){cal.hidden=true;return;}
+  var lang=document.documentElement.lang||'de';
+  var fmtMonth=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
+  var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
+  function dayKey(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+  // Map every day covered by an event (start..end) to the event shown there.
+  var dayMap={};
+  calEvents.forEach(function(ev){
+    var start=new Date(ev.s);
+    var end=ev.e?new Date(ev.e):start;
+    var d=new Date(start.getFullYear(),start.getMonth(),start.getDate());
+    var last=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+    while(d<=last){dayMap[dayKey(d)]=ev;d.setDate(d.getDate()+1);}
+  });
+  var html='';
+  months.forEach(function(monthDate){
+    var year=monthDate.getFullYear(), month=monthDate.getMonth();
+    html+='<div class="fest-month"><div class="fest-month-title">'+fmtMonth.format(monthDate)+'</div>';
+    html+='<table class="fest-month-grid"><thead><tr>';
+    var wd0=new Date(year,month,1);
+    var dow0=wd0.getDay();
+    wd0.setDate(wd0.getDate()-(dow0===0?6:dow0-1));
+    for(var i=0;i<7;i++){var hd=new Date(wd0);hd.setDate(hd.getDate()+i);html+='<th>'+fmtWd.format(hd)+'</th>';}
+    html+='</tr></thead><tbody>';
+    var cur=new Date(wd0);
+    for(var row=0;row<6;row++){
+      html+='<tr>';
+      for(var col=0;col<7;col++){
+        var inMonth=cur.getMonth()===month;
+        var ev=dayMap[dayKey(cur)];
+        if(ev){
+          html+='<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
+        } else {
+          html+='<td class="'+(inMonth?'':'fest-other')+'">'+cur.getDate()+'</td>';
+        }
+        cur.setDate(cur.getDate()+1);
+      }
+      html+='</tr>';
+      if(row>=3 && cur.getMonth()!==month) break;
+    }
+    html+='</tbody></table></div>';
+  });
+  cal.innerHTML=html;
+  cal.hidden=false;
+  cal.querySelectorAll('td.fest-day').forEach(function(td){
+    td.addEventListener('click',function(){window.location.href=this.dataset.href;});
+  });
 }
 function attachTileLayer(map){
   var tl=makeTileLayer().addTo(map);

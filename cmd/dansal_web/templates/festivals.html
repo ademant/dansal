@@ -75,15 +75,6 @@
 .fest-year-btn:hover{background:var(--bg-hover)}
 .fest-year-current{font-size:1.3rem;font-weight:700}
 #map-container{height:360px;border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:1.25rem}
-.fest-calendar{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem}
-.fest-month{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem}
-.fest-month-title{font-weight:600;font-size:.9rem;margin-bottom:.4rem;text-align:center;text-transform:capitalize}
-.fest-month-grid{width:100%;border-collapse:collapse;font-size:.78rem}
-.fest-month-grid th{color:var(--fg-muted);font-weight:400;padding:.15rem;text-align:center}
-.fest-month-grid td{text-align:center;padding:.2rem 0;color:var(--fg-2)}
-.fest-month-grid td.fest-other{color:var(--fg-faint)}
-.fest-month-grid td.fest-day{cursor:pointer;background:var(--heading);color:#fff;border-radius:3px;font-weight:600}
-.fest-month-grid td.fest-day:hover{opacity:.85}
 .fest-folded-heading{margin-top:1.5rem;color:var(--fg-2);font-size:1.05rem}
 table.fest-folded{opacity:.75}
 .empty-state{color:var(--fg-muted);padding:1rem;text-align:center}
@@ -120,62 +111,11 @@ table.fest-folded{opacity:.75}
   }
 
   // ── Calendar ─────────────────────────────────────────────────────────────
-  if (calEvents.length) {
-    var lang = document.documentElement.lang || 'de';
-    var fmtMonth = new Intl.DateTimeFormat(lang, {month:'long'});
-    var fmtWd = new Intl.DateTimeFormat(lang, {weekday:'narrow'});
-    var cal = document.getElementById('fest-calendar');
-
-    function dayKey(d){ return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
-    // Map every day covered by a festival (start..end, clipped to the year)
-    // to the event that should be shown there.
-    var dayMap = {};
-    calEvents.forEach(function(ev){
-      var start = new Date(ev.s);
-      var end = ev.e ? new Date(ev.e) : start;
-      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      var last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-      while (d <= last) {
-        if (d.getFullYear() === year) dayMap[dayKey(d)] = ev;
-        d.setDate(d.getDate()+1);
-      }
-    });
-
-    var html = '';
-    for (var month = 0; month < 12; month++) {
-      var monthDate = new Date(year, month, 1);
-      html += '<div class="fest-month"><div class="fest-month-title">'+fmtMonth.format(monthDate)+'</div>';
-      html += '<table class="fest-month-grid"><thead><tr>';
-      var wd0 = new Date(year, month, 1);
-      var dow0 = wd0.getDay();
-      wd0.setDate(wd0.getDate() - (dow0===0?6:dow0-1));
-      for (var i=0;i<7;i++){ var hd=new Date(wd0); hd.setDate(hd.getDate()+i); html+='<th>'+fmtWd.format(hd)+'</th>'; }
-      html += '</tr></thead><tbody>';
-
-      var cur = new Date(wd0);
-      for (var row=0; row<6; row++) {
-        html += '<tr>';
-        for (var col=0; col<7; col++) {
-          var inMonth = cur.getMonth() === month;
-          var key = dayKey(cur);
-          var ev = dayMap[key];
-          if (ev) {
-            html += '<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
-          } else {
-            html += '<td class="'+(inMonth?'':'fest-other')+'">'+cur.getDate()+'</td>';
-          }
-          cur.setDate(cur.getDate()+1);
-        }
-        html += '</tr>';
-        if (row>=3 && cur.getMonth()!==month) break;
-      }
-      html += '</tbody></table></div>';
-    }
-    cal.innerHTML = html;
-    cal.querySelectorAll('td.fest-day').forEach(function(td){
-      td.addEventListener('click', function(){ window.location.href = this.dataset.href; });
-    });
-  }
+  // #1161: rendering itself now lives in renderMiniCalendar (base.html),
+  // shared with the /org/{slug} rolling-month calendar.
+  var months = [];
+  for (var m = 0; m < 12; m++) months.push(new Date(year, m, 1));
+  renderMiniCalendar('fest-calendar', calEvents, months);
 })();
 </script>
 {{end}}

@@ -121,6 +121,25 @@
 </script>
 {{end}}
 
+{{/* #1161: rolling monthly calendar, same component as /festivals, showing
+    which days in the coming months have events. */}}
+{{$calEvents := festivalCalendarJSON .UpcomingEvents}}
+<div id="org-calendar" class="fest-calendar" hidden></div>
+<script type="application/json" id="org-cal-events">{{$calEvents}}</script>
+<script nonce="{{$.Nonce}}">
+(function(){
+  var el = document.getElementById('org-cal-events');
+  var calEvents = el ? JSON.parse(el.textContent || '[]') : [];
+  var months = [];
+  var d = new Date();
+  d.setDate(1);
+  for (var i = 0; i < 6; i++) {
+    months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
+  }
+  renderMiniCalendar('org-calendar', calEvents, months);
+})();
+</script>
+
 {{/* Upcoming events */}}
 <div class="events-heading-row">
   <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>

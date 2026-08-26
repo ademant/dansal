@@ -529,7 +529,7 @@ type Organization struct {
 	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
 	AvatarURL        string     `json:"avatar_url,omitempty"`
 	NotesMd          string     `json:"notes_md,omitempty"`
-	FetchSourceID    *int       `json:"fetch_source_id,omitempty"`
+	FetchSourceIDs   []int      `json:"fetch_source_ids,omitempty"`
 	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
 }
 

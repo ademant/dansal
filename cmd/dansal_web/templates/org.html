@@ -46,9 +46,9 @@
   {{if $.User}}
   <a href="/admin/organization/{{.Slug}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
-  {{if .Org.FetchSourceID}}
-  <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
-  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .Org.FetchSourceID}}">🔄</button>
+  {{range .Org.FetchSourceIDs}}
+  <a href="/admin/fetchurls/{{.}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}} #{{.}}" aria-label="{{$.Strings.T "org_edit_feed_source"}} #{{.}}">⚙️</a>
+  <button type="button" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}} #{{.}}" aria-label="{{$.Strings.T "org_run_feeds"}} #{{.}}" data-fn="orgFetchNow" data-args="{{dargs . "@this"}}">🔄</button>
   {{end}}
   {{end}}
 </div>
@@ -231,8 +231,7 @@ function togglePastList(btn) {
   l.hidden = !l.hidden;
   btn.classList.toggle('btn-toggle-active');
 }
-function orgFetchNow(id) {
-  var btn = document.getElementById('btn-fetch-now');
+function orgFetchNow(id, btn) {
   btn.disabled = true;
   btn.textContent = 'Fetching…';
   fetch('/admin/fetchurls/' + id + '/run', {method: 'POST', credentials: 'same-origin', headers: {'Accept': 'application/json'}})

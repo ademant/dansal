@@ -14,9 +14,9 @@
   <h1>{{.Org.Name}}</h1>
   <a href="/org/{{.Slug}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
-  {{if .Org.FetchSourceID}}
-  <a href="/admin/fetchurls/{{.Org.FetchSourceID}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}}" aria-label="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
-  <button id="btn-fetch-now" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .Org.FetchSourceID}}">🔄</button>
+  {{range .Org.FetchSourceIDs}}
+  <a href="/admin/fetchurls/{{.}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}} #{{.}}" aria-label="{{$.Strings.T "org_edit_feed_source"}} #{{.}}">⚙️</a>
+  <button type="button" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}} #{{.}}" aria-label="{{$.Strings.T "org_run_feeds"}} #{{.}}" data-fn="orgFetchNow" data-args="{{dargs . "@this"}}">🔄</button>
   {{end}}
 </div>
 
@@ -483,8 +483,7 @@ document.querySelectorAll('table[data-sortable]').forEach(initSortable);
     mergeForm.querySelectorAll('input[name^="event_org_"]').forEach(function(inp){if(!ids[inp.name.replace('event_org_','')])inp.remove();});
   });
 })();
-function orgFetchNow(id){
-  var btn=document.getElementById('btn-fetch-now');
+function orgFetchNow(id,btn){
   btn.disabled=true;btn.textContent='Fetching…';
   fetch('/admin/fetchurls/'+id+'/run',{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})

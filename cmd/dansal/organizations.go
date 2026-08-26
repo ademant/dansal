@@ -31,7 +31,7 @@ type Organization struct {
 	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
 	AvatarURL        string     `json:"avatar_url,omitempty"`
 	NotesMd          string     `json:"notes_md,omitempty"`
-	FetchSourceID    *int       `json:"fetch_source_id,omitempty"`
+	FetchSourceIDs   []int      `json:"fetch_source_ids,omitempty"`
 	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
 
 	FutureEventCount int      `json:"future_event_count,omitempty"`
@@ -394,9 +394,24 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	var fsID int
-	if db.QueryRow("SELECT id FROM fetch_sources WHERE organization_id = ? LIMIT 1", o.ID).Scan(&fsID) == nil {
-		o.FetchSourceID = &fsID
+	// #1160: a fetch source can either be explicitly linked to this org
+	// (fetch_sources.organization_id) or resolve the organizer per-event
+	// dynamically (ensureOrgFromOrganizer), tagging events.organization_id
+	// without ever setting its own organization_id. Union both so a feed
+	// that's actively populating this org's events is never hidden.
+	rows, err := db.Query(`
+		SELECT id FROM fetch_sources WHERE organization_id = ?
+		UNION
+		SELECT fetch_source_id FROM events WHERE organization_id = ? AND fetch_source_id IS NOT NULL`,
+		o.ID, o.ID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var fsID int
+			if rows.Scan(&fsID) == nil {
+				o.FetchSourceIDs = append(o.FetchSourceIDs, fsID)
+			}
+		}
 	}
 	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
 

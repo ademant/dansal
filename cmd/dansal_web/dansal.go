@@ -2038,6 +2038,30 @@ func (c *DansalClient) SetEventExtraLocationPrimary(ctx context.Context, eventID
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/locations/%d/primary", eventID, locationID), token, nil, nil, http.StatusNoContent)
 }
 
+// PatchEventDescription saves just the description field — used by the
+// dedicated /admin/events/{id}/description editor (#1159) so it doesn't
+// need to resubmit the whole event form.
+func (c *DansalClient) PatchEventDescription(ctx context.Context, eventID int, description, token string) error {
+	body, _ := json.Marshal(map[string]string{"description": description})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("patch event description: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
 func (c *DansalClient) PatchEventTimes(ctx context.Context, eventID int, startTime, endTime, token string) error {
 	body, _ := json.Marshal(map[string]string{"start_time": startTime, "end_time": endTime})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,

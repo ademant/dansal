@@ -370,6 +370,8 @@ func main() {
 		r.HandleFunc("PUT /admin/events/{id}/timetable", adminRateLimit(adminTimetableSaveHandler(client)))
 		r.HandleFunc("DELETE /admin/events/{id}/timetable", adminRateLimit(adminTimetableDeleteHandler(client)))
 		r.HandleFunc("POST /admin/events/{id}/timetable/sync-times", adminRateLimit(adminTimetableSyncTimesHandler(client)))
+		r.HandleFunc("GET /admin/events/{id}/description", adminEventDescriptionPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/events/{id}/description", adminRateLimit(adminEventDescriptionSaveHandler(client)))
 		r.HandleFunc("PUT /admin/events/{id}/locations/{location_id}", adminRateLimit(adminAddEventExtraLocationHandler(client)))
 		r.HandleFunc("DELETE /admin/events/{id}/locations/{location_id}", adminRateLimit(adminRemoveEventExtraLocationHandler(client)))
 		r.HandleFunc("PUT /admin/events/{id}/locations/{location_id}/primary", adminRateLimit(adminSetEventExtraLocationPrimaryHandler(client)))

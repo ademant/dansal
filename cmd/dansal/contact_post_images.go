@@ -199,7 +199,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 	}
 	imgID, _ := result.LastInsertId()
 
-	if err := saveImageToDir(int(imgID), contactPostImagesDir(), file); err != nil {
+	if err := saveImageToDir(int(imgID), contactPostImagesDir(), file, false); err != nil {
 		db.Exec("DELETE FROM contact_post_images WHERE id=?", imgID) // roll back row
 		if errors.Is(err, errNotImage) {
 			writeError(w, "file is not an image", http.StatusUnsupportedMediaType)

@@ -37,7 +37,14 @@ func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	imgPath, contentType, found := imagePathForID(musicianImagesDir, idStr)
+	// Grid-thumbnail variant (#1158): ?thumb=sq for the musician grid's
+	// square crop. Falls back to the canonical full-size image (and the
+	// caller's CSS object-fit:cover) when no variant exists yet.
+	var thumbSuffix string
+	if r.URL.Query().Get("thumb") == "sq" {
+		thumbSuffix = ".sq"
+	}
+	imgPath, contentType, _, found := imagePathForIDVariant(musicianImagesDir, idStr, thumbSuffix)
 	if !found {
 		writeError(w, "Image not found", http.StatusNotFound)
 		return
@@ -64,7 +71,7 @@ var uploadMusicianImage = imageUploadHandler(imageUploadSpec{
 		}
 		return true
 	},
-	save:     func(id int, r io.Reader) error { return saveImageToDir(id, musicianImagesDir, r) },
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, musicianImagesDir, r, true) },
 	cacheAdd: musicianImgCache.add,
 })
 

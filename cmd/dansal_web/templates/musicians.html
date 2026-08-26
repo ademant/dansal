@@ -8,7 +8,7 @@
 {{range .Musicians}}
 <a href="/musicians/{{.ID}}" class="musician-card">
   {{if .ImageURL}}
-  <img src="{{.ImageURL}}" class="mcard-img" alt="{{.Bandname}}">
+  <img src="{{.ImageURL}}?thumb=sq" class="mcard-img" alt="{{.Bandname}}">
   {{else}}
   <div class="mcard-img mcard-placeholder"></div>
   {{end}}

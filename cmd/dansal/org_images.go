@@ -106,7 +106,7 @@ var uploadOrgImage = imageUploadHandler(imageUploadSpec{
 		}
 		return true
 	},
-	save: func(id int, r io.Reader) error { return saveImageToDir(id, orgImagesDir, r) },
+	save: func(id int, r io.Reader) error { return saveImageToDir(id, orgImagesDir, r, false) },
 	cacheAdd: func(id int) {
 		_, mime := imageExtFromConfig()
 		orgImgCache.add(id, mime)

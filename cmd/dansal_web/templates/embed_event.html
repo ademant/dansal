@@ -22,7 +22,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 </head>
 <body>
 <div class="card">
-  {{if .Event.ImageURL}}<img class="card-img" src="{{.BaseURL}}{{.Event.ImageURL}}" alt="">{{end}}
+  {{if .Event.ImageURL}}<img class="card-img" src="{{.BaseURL}}{{.Event.ImageURL}}?thumb=wide" alt="">{{end}}
   <div class="card-body">
     {{if .Event.IsCancelled}}<span class="card-cancelled">✕ Cancelled</span>{{end}}
     <div class="card-date">{{formatDate .Lang .Event.StartTime}}{{if .Event.EndTime}} · {{isoTime .Event.StartTime}} – {{isoTime .Event.EndTime}}{{else}} · {{isoTime .Event.StartTime}}{{end}}</div>

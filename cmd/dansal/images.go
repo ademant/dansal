@@ -58,6 +58,23 @@ func imagePathForID(dir, idStr string) (path, contentType string, found bool) {
 	return "", "", false
 }
 
+// imagePathForIDVariant looks for a grid-thumbnail variant ("{id}.sq" /
+// "{id}.wide", #1158) and falls back to the canonical full-size image when
+// the variant doesn't exist — e.g. images uploaded before this feature
+// shipped. Callers keep object-fit:cover as a CSS safety net for that case.
+// resolvedID is idStr+suffix when the variant was found, else plain idStr —
+// callers needing the on-disk basename (e.g. for the ?format=jpeg sibling)
+// should use it instead of idStr.
+func imagePathForIDVariant(dir, idStr, suffix string) (path, contentType, resolvedID string, found bool) {
+	if suffix != "" {
+		if p, ct, ok := imagePathForID(dir, idStr+suffix); ok {
+			return p, ct, idStr + suffix, true
+		}
+	}
+	p, ct, ok := imagePathForID(dir, idStr)
+	return p, ct, idStr, ok
+}
+
 // imgCache is an in-memory set of event IDs that have an image on disk.
 // See imageIDCache (image_cache.go) for the shared implementation.
 var imgCache = newImageIDCache()
@@ -132,23 +149,62 @@ func isAVIF(head []byte) bool {
 	return false
 }
 
-// saveImageToDir decodes image data from r, resizes, and stores as AVIF in the given directory.
-// The file is named "{id}.avif". The caller is responsible for updating any cache.
-func saveImageToDir(id int, dir string, r io.Reader) error {
+// Grid-thumbnail target sizes (#1158). Square feeds the musician grid
+// (musicians.html, aspect-ratio:1); wide feeds event cards (index page,
+// embed_event.html, ~16:9-ish). Deliberately small — these back small grid
+// tiles, not full-bleed views.
+const (
+	thumbSquareSize = 400
+	thumbWideW      = 480
+	thumbWideH      = 270
+)
+
+// saveImageToDir decodes image data from r, resizes, and stores as AVIF in
+// the given directory. The file is named "{id}.avif". When genThumbs is
+// true, it additionally generates and stores center-cropped grid-thumbnail
+// variants ("{id}.sq.avif", "{id}.wide.avif") from the original (pre-fit)
+// image — used by event and musician images (#1158), whose grid views
+// otherwise had to crop the full-size image blindly via CSS
+// object-fit:cover. No focal-point/manual-crop control (deliberately out
+// of scope, see #1158). The caller is responsible for updating any cache.
+func saveImageToDir(id int, dir string, r io.Reader, genThumbs bool) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("read: %w", err)
 	}
-	img, err := decodeImageSafely(data)
+	orig, err := decodeImageSafely(data)
 	if err != nil {
 		return err
 	}
-	img = fitImage(img, config.Server.ImageXMax, config.Server.ImageYMax)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
+	fitted := fitImage(orig, config.Server.ImageXMax, config.Server.ImageYMax)
+	if err := encodeImageVariant(fitted, dir, id, ""); err != nil {
+		return err
+	}
+	if genThumbs {
+		sq := cropToAspect(orig, thumbSquareSize, thumbSquareSize)
+		if err := encodeImageVariant(sq, dir, id, ".sq"); err != nil {
+			return err
+		}
+		wide := cropToAspect(orig, thumbWideW, thumbWideH)
+		if err := encodeImageVariant(wide, dir, id, ".wide"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// encodeImageVariant writes img to dir as "{id}{suffix}{ext}" using the
+// configured server image format. When that format is AVIF, it also keeps a
+// JPEG sibling ("{id}{suffix}.jpeg") so ActivityPub consumers requesting
+// ?format=jpeg (or an AVIF-incapable client for a thumbnail variant) get an
+// honestly-declared image/jpeg; declaring image/jpeg while serving the AVIF
+// file breaks Mastodon previews (#1054).
+func encodeImageVariant(img image.Image, dir string, id int, suffix string) error {
 	ext, _ := imageExtFromConfig()
-	outPath := filepath.Join(dir, fmt.Sprintf("%d%s", id, ext))
+	outPath := filepath.Join(dir, fmt.Sprintf("%d%s%s", id, suffix, ext))
 	f, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
@@ -158,23 +214,19 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 		if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
 			return fmt.Errorf("encode jpeg: %w", err)
 		}
-	} else {
-		if err := avif.Encode(f, img); err != nil {
-			return fmt.Errorf("encode avif: %w", err)
-		}
-		// Keep a JPEG sibling alongside the AVIF so ActivityPub consumers can
-		// request ?format=jpeg and receive an honestly-declared image/jpeg;
-		// declaring image/jpeg while serving the AVIF file breaks Mastodon
-		// previews (#1054).
-		jpegPath := filepath.Join(dir, fmt.Sprintf("%d.jpeg", id))
-		jf, err := os.Create(jpegPath)
-		if err != nil {
-			return fmt.Errorf("create jpeg sibling: %w", err)
-		}
-		defer jf.Close()
-		if err := jpeg.Encode(jf, img, &jpeg.Options{Quality: 85}); err != nil {
-			return fmt.Errorf("encode jpeg sibling: %w", err)
-		}
+		return nil
+	}
+	if err := avif.Encode(f, img); err != nil {
+		return fmt.Errorf("encode avif: %w", err)
+	}
+	jpegPath := filepath.Join(dir, fmt.Sprintf("%d%s.jpeg", id, suffix))
+	jf, err := os.Create(jpegPath)
+	if err != nil {
+		return fmt.Errorf("create jpeg sibling: %w", err)
+	}
+	defer jf.Close()
+	if err := jpeg.Encode(jf, img, &jpeg.Options{Quality: 85}); err != nil {
+		return fmt.Errorf("encode jpeg sibling: %w", err)
 	}
 	return nil
 }
@@ -208,7 +260,7 @@ func saveAvatarToDir(id int, dir string, r io.Reader) error {
 
 // saveImageFromReader decodes image data from r, resizes, and stores as AVIF for the given event ID.
 func saveImageFromReader(eventID int, r io.Reader) error {
-	if err := saveImageToDir(eventID, config.Server.ImagesDir, r); err != nil {
+	if err := saveImageToDir(eventID, config.Server.ImagesDir, r, true); err != nil {
 		return err
 	}
 	imgCache.add(eventID)
@@ -317,7 +369,18 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	imgPath, contentType, found := imagePathForID(config.Server.ImagesDir, eventID)
+	// Grid-thumbnail variant (#1158): ?thumb=sq for the musician-grid-style
+	// square crop, ?thumb=wide for the event-card landscape crop. Falls back
+	// to the canonical full-size image (and the caller's CSS
+	// object-fit:cover) when no variant exists yet.
+	var thumbSuffix string
+	switch r.URL.Query().Get("thumb") {
+	case "sq":
+		thumbSuffix = ".sq"
+	case "wide":
+		thumbSuffix = ".wide"
+	}
+	imgPath, contentType, resolvedID, found := imagePathForIDVariant(config.Server.ImagesDir, eventID, thumbSuffix)
 	if !found {
 		writeError(w, "Image not found", http.StatusNotFound)
 		return
@@ -329,7 +392,7 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 	// image/jpeg honestly. New uploads get a JPEG sibling at save time;
 	// legacy files are converted on first request and cached on disk.
 	if r.URL.Query().Get("format") == "jpeg" {
-		serveJpegVariant(w, r, imgPath, eventID)
+		serveJpegVariant(w, r, imgPath, resolvedID)
 		return
 	}
 
@@ -423,6 +486,34 @@ func fitImage(img image.Image, maxW, maxH int) image.Image {
 	return dst
 }
 
+// cropToAspect center-crops img to the targetW:targetH aspect ratio, then
+// scales the crop to exactly targetW x targetH. Used to generate the
+// square/landscape grid thumbnails (#1158) — deliberately a plain center
+// crop with no focal-point/manual-crop control, matching the scope agreed
+// for that issue.
+func cropToAspect(img image.Image, targetW, targetH int) image.Image {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	targetRatio := float64(targetW) / float64(targetH)
+	srcRatio := float64(w) / float64(h)
+	var cropW, cropH int
+	if srcRatio > targetRatio {
+		// Source is relatively wider than the target: crop the sides.
+		cropH = h
+		cropW = int(float64(h) * targetRatio)
+	} else {
+		// Source is relatively taller (or equal): crop top/bottom.
+		cropW = w
+		cropH = int(float64(w) / targetRatio)
+	}
+	x0 := b.Min.X + (w-cropW)/2
+	y0 := b.Min.Y + (h-cropH)/2
+	cropRect := image.Rect(x0, y0, x0+cropW, y0+cropH)
+	dst := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
+	xdraw.BiLinear.Scale(dst, dst.Bounds(), img, cropRect, draw.Over, nil)
+	return dst
+}
+
 // DELETE /api/v1/images/{event_id}
 func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
@@ -487,7 +578,7 @@ var uploadEventImage = imageUploadHandler(imageUploadSpec{
 		}
 		return true
 	},
-	save:     func(id int, r io.Reader) error { return saveImageToDir(id, config.Server.ImagesDir, r) },
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, config.Server.ImagesDir, r, true) },
 	cacheAdd: imgCache.add,
 	respond: func(w http.ResponseWriter, id int) {
 		ext, _ := imageExtFromConfig()

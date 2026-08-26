@@ -67,7 +67,7 @@ var uploadLocationSitePlan = imageUploadHandler(imageUploadSpec{
 		}
 		return true
 	},
-	save:     func(id int, r io.Reader) error { return saveImageToDir(id, locationImagesDir, r) },
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, locationImagesDir, r, false) },
 	cacheAdd: locationImgCache.add,
 })
 

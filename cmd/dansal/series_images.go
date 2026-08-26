@@ -123,7 +123,7 @@ var uploadSeriesImage = imageUploadHandler(imageUploadSpec{
 	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
 		return checkSeriesImageAccess(w, callerID, userRole, id)
 	},
-	save:     func(id int, r io.Reader) error { return saveImageToDir(id, seriesImagesDir, r) },
+	save:     func(id int, r io.Reader) error { return saveImageToDir(id, seriesImagesDir, r, false) },
 	cacheAdd: func(id int) { _, mime := imageExtFromConfig(); seriesImgCache.add(id, mime) },
 })
 

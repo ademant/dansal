@@ -111,6 +111,9 @@
 
 {{end}}{{/* .Location */}}
 
+{{/* #1168: rolling monthly calendar, same shared component as /org/{slug}. */}}
+{{template "month-calendar" (dict "ID" "loc-calendar" "Events" .Events "Strings" $.Strings "Nonce" $.Nonce)}}
+
 <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
 {{if .Events}}
 <ul class="event-list">

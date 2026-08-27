@@ -13,10 +13,11 @@ type InstructorsPageData struct {
 }
 
 type InstructorPageData struct {
-	Instructor  Instructor
-	Events      []Event
-	HasPast     bool
-	IncludePast bool
+	Instructor     Instructor
+	Events         []Event
+	UpcomingEvents []Event // #1168: always upcoming-only, feeds the monthly calendar regardless of IncludePast
+	HasPast        bool
+	IncludePast    bool
 }
 
 // instructorSearchHandler serves GET /search/instructors?name=... — proxies the
@@ -89,10 +90,11 @@ func instructorHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		title := instructor.Name
 		td := tmplData(r, cfg, i18n, title, InstructorPageData{
-			Instructor:  instructor,
-			Events:      displayEvents,
-			HasPast:     len(past) > 0,
-			IncludePast: includePast,
+			Instructor:     instructor,
+			Events:         displayEvents,
+			UpcomingEvents: upcoming,
+			HasPast:        len(past) > 0,
+			IncludePast:    includePast,
 		})
 		td.MetaDescription = metaDesc(instructor.Bio, metaDescMaxLen)
 		renderTemplate(w, tmpls.instructor, td)

@@ -895,6 +895,37 @@ document.addEventListener('keydown',function(e){
 {{- if $ev.Pricing}}{{if eq $ev.Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$s.T "filter_fee_free"}}">0€</span>{{else if eq $ev.Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$s.T "filter_fee_donation"}}">♥</span>{{else if or (eq $ev.Pricing.Type "single") (eq $ev.Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$s.T "filter_fee_paid"}}">€</span>{{end}}{{end -}}
 {{end}}
 
+{{/* Rolling 6-month carousel calendar (#1161, #1167, #1168). Takes a dict:
+     ID (unique container id prefix, e.g. "org-calendar"), Events (upcoming
+     events only — callers with a past/future toggle must pass the
+     upcoming-only slice, not the toggled display list), Strings, Nonce.
+     Shared by org.html, location.html, musician.html, instructor.html so
+     the carousel behavior (#1167) can't drift between pages. */}}
+{{define "month-calendar"}}
+{{$calEvents := festivalCalendarJSON .Events}}
+<div class="fest-calendar-wrap" id="{{.ID}}-wrap" hidden>
+  <button type="button" class="fest-nav" id="{{.ID}}-prev" aria-label="{{.Strings.T "pagination_prev"}}">‹</button>
+  <div id="{{.ID}}" class="fest-calendar" hidden></div>
+  <button type="button" class="fest-nav" id="{{.ID}}-next" aria-label="{{.Strings.T "pagination_next"}}">›</button>
+</div>
+<script type="application/json" id="{{.ID}}-events">{{$calEvents}}</script>
+<script nonce="{{.Nonce}}">
+(function(){
+  var el = document.getElementById('{{.ID}}-events');
+  var calEvents = el ? JSON.parse(el.textContent || '[]') : [];
+  var months = [];
+  var d = new Date();
+  d.setDate(1);
+  for (var i = 0; i < 6; i++) {
+    months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
+  }
+  document.getElementById('{{.ID}}-wrap').hidden = false;
+  renderMiniCalendar('{{.ID}}', calEvents, months,
+    {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap'});
+})();
+</script>
+{{end}}
+
 {{/* event-row renders one <tr> for an event. Takes a dict: Event, OrgMap, TagMap, Strings.
      Shared across index.html (initial render + /api/events-more) and search.html
      (/search/results), so rows can never drift between the pages that render them. */}}

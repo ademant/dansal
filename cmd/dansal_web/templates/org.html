@@ -121,32 +121,9 @@
 </script>
 {{end}}
 
-{{/* #1161: rolling monthly calendar, same component as /festivals, showing
-    which days in the coming months have events. */}}
-{{$calEvents := festivalCalendarJSON .UpcomingEvents}}
-<div class="fest-calendar-wrap" id="org-calendar-wrap" hidden>
-  <button type="button" class="fest-nav" id="org-cal-prev" aria-label="{{$.Strings.T "pagination_prev"}}">‹</button>
-  <div id="org-calendar" class="fest-calendar" hidden></div>
-  <button type="button" class="fest-nav" id="org-cal-next" aria-label="{{$.Strings.T "pagination_next"}}">›</button>
-</div>
-<script type="application/json" id="org-cal-events">{{$calEvents}}</script>
-<script nonce="{{$.Nonce}}">
-(function(){
-  var el = document.getElementById('org-cal-events');
-  var calEvents = el ? JSON.parse(el.textContent || '[]') : [];
-  var months = [];
-  var d = new Date();
-  d.setDate(1);
-  for (var i = 0; i < 6; i++) {
-    months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
-  }
-  // #1167: carousel mode keeps the 6-month window on one row, paged with
-  // the prev/next arrows instead of wrapping onto a second line.
-  document.getElementById('org-calendar-wrap').hidden = false;
-  renderMiniCalendar('org-calendar', calEvents, months,
-    {carousel: true, prevId: 'org-cal-prev', nextId: 'org-cal-next', wrapId: 'org-calendar-wrap'});
-})();
-</script>
+{{/* #1161/#1167/#1168: rolling monthly calendar, shared component (base.html) also
+    used by location.html, musician.html and instructor.html. */}}
+{{template "month-calendar" (dict "ID" "org-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
 
 {{/* Upcoming events */}}
 <div class="events-heading-row">

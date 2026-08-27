@@ -128,6 +128,10 @@
     <a href="/feed/musician/{{.Slug}}/events.json" class="feed-link">JSON</a>
   </div>
 
+  {{/* #1168: rolling monthly calendar, same shared component as /org/{slug}.
+      Always upcoming-only, independent of the include_past toggle above. */}}
+  {{template "month-calendar" (dict "ID" "musician-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
+
   {{if .Events}}
   {{/* Map — only rendered if at least one event has coordinates */}}
   <div id="mmap-wrap" hidden>

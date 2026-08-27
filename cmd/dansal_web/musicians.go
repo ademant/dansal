@@ -13,13 +13,14 @@ type MusiciansPageData struct {
 }
 
 type MusicianPageData struct {
-	Musician    Musician
-	Events      []Event
-	Slug        string
-	Members     []string
-	Albums      []string
-	HasPast     bool
-	IncludePast bool
+	Musician       Musician
+	Events         []Event
+	UpcomingEvents []Event // #1168: always upcoming-only, feeds the monthly calendar regardless of IncludePast
+	Slug           string
+	Members        []string
+	Albums         []string
+	HasPast        bool
+	IncludePast    bool
 }
 
 // musicianSearchHandler serves GET /search/musicians?name=... — proxies the
@@ -95,13 +96,14 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 		json.Unmarshal([]byte(musician.AlbumsJSON), &albums)
 		title := musician.Bandname
 		td := tmplData(r, cfg, i18n, title, MusicianPageData{
-			Musician:    musician,
-			Events:      displayEvents,
-			Slug:        orgSlug(musician.Bandname),
-			Members:     members,
-			Albums:      albums,
-			HasPast:     len(past) > 0,
-			IncludePast: includePast,
+			Musician:       musician,
+			Events:         displayEvents,
+			UpcomingEvents: upcoming,
+			Slug:           orgSlug(musician.Bandname),
+			Members:        members,
+			Albums:         albums,
+			HasPast:        len(past) > 0,
+			IncludePast:    includePast,
 		})
 		desc := musician.Biography
 		if desc == "" {

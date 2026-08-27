@@ -3187,6 +3187,7 @@ type AdminOrgDashboardData struct {
 	LocEventCounts      map[int]int
 	OrgTemplates        []EventTemplate
 	OrgSeries           []EventSeries
+	OrgFetchSources     []FetchSource
 }
 
 func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -3373,6 +3374,25 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		// #1160/#1164: org.FetchSourceIDs is just the id set; fetch full
+		// FetchSource rows (url/type/last_fetched_at/last_result) so the
+		// "assigned fetch sources" section can show something meaningful
+		// per row, same as OrgLocations/OrgTemplates/OrgSeries above.
+		var orgFetchSources []FetchSource
+		if len(org.FetchSourceIDs) > 0 {
+			wantFS := make(map[int]bool, len(org.FetchSourceIDs))
+			for _, id := range org.FetchSourceIDs {
+				wantFS[id] = true
+			}
+			if allFS, err := client.GetFetchSources(r.Context(), token); err == nil {
+				for _, fs := range allFS {
+					if wantFS[fs.ID] {
+						orgFetchSources = append(orgFetchSources, fs)
+					}
+				}
+			}
+		}
+
 		renderTemplate(w, tmpls.adminOrgDashboard, tmplData(r, cfg, i18n, org.Name, AdminOrgDashboardData{
 			Org:                 org,
 			Slug:                slug,
@@ -3396,6 +3416,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			LocEventCounts:      locEventCounts,
 			OrgTemplates:        orgTemplates,
 			OrgSeries:           orgSeries,
+			OrgFetchSources:     orgFetchSources,
 		}))
 	}
 }

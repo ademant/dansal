@@ -14,10 +14,6 @@
   <h1>{{.Org.Name}}</h1>
   <a href="/org/{{.Slug}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
-  {{range .Org.FetchSourceIDs}}
-  <a href="/admin/fetchurls/{{.}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}} #{{.}}" aria-label="{{$.Strings.T "org_edit_feed_source"}} #{{.}}">⚙️</a>
-  <button type="button" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}} #{{.}}" aria-label="{{$.Strings.T "org_run_feeds"}} #{{.}}" data-fn="orgFetchNow" data-args="{{dargs . "@this"}}">🔄</button>
-  {{end}}
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
@@ -90,6 +86,26 @@
 <div class="dash-actions">
   <a href="/admin/series/new?org_id={{.Org.ID}}" class="dash-btn">+ {{$.Strings.T "series_new"}}</a>
 </div>
+{{end}}
+
+{{if .OrgFetchSources}}
+<details class="dash-orgs">
+  <summary>{{$.Strings.T "org_assigned_fetch_sources"}} ({{len .OrgFetchSources}})</summary>
+  <div class="dash-orgs-list">
+    {{range .OrgFetchSources}}
+    <div class="dash-org-row">
+      <a href="/admin/fetchurls/{{.ID}}/edit" class="dash-org-name">{{.URL}}</a>
+      <div class="dash-org-mini-stats">
+        {{if .LastFetchedAt}}<span title="{{$.Strings.T "org_run_feeds"}}">🕒 {{.LastFetchedAt}}</span>{{end}}
+      </div>
+      <div class="dash-org-actions">
+        <button type="button" class="btn-sm" title="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .ID "@this"}}">🔄</button>
+        <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm" title="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</details>
 {{end}}
 
 {{if .NewEventOrgID}}

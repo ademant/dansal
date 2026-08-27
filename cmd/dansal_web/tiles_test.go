@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // withTestTileUpstream registers a temporary scheme in tileUpstreams pointing
@@ -74,6 +75,57 @@ func TestTileProxyFetchesAndCaches(t *testing.T) {
 	}
 	if upstreamHits != 1 {
 		t.Fatalf("upstreamHits after cached request = %d, want still 1", upstreamHits)
+	}
+}
+
+// TestTileProxyRefetchesStaleCache asserts a cached tile older than
+// tileCacheMaxAge (#1169) is treated as a miss and re-fetched from upstream,
+// refreshing the cache file's mtime.
+func TestTileProxyRefetchesStaleCache(t *testing.T) {
+	upstreamHits := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "image/png")
+		w.Write([]byte("fresh-png-bytes"))
+	}))
+	defer ts.Close()
+	scheme := withTestTileUpstream(t, ts)
+
+	cfg := &Config{TileCacheDir: t.TempDir()}
+	h := tileProxyHandler(cfg)
+
+	cachePath := filepath.Join(cfg.TileCacheDir, scheme, "5", "10", "20.png")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cachePath, []byte("stale-png-bytes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-tileCacheMaxAge - time.Hour)
+	if err := os.Chtimes(cachePath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/tiles/%s/5/10/20.png", scheme), nil)
+	req.SetPathValue("scheme", scheme)
+	req.SetPathValue("z", "5")
+	req.SetPathValue("x", "10")
+	req.SetPathValue("yfile", "20.png")
+	w := httptest.NewRecorder()
+	h(w, req)
+
+	if w.Code != http.StatusOK || w.Body.String() != "fresh-png-bytes" {
+		t.Fatalf("status=%d body=%q, want 200 fresh-png-bytes", w.Code, w.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstreamHits = %d, want 1 (stale cache should trigger a re-fetch)", upstreamHits)
+	}
+	fi, err := os.Stat(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(fi.ModTime()) > time.Minute {
+		t.Fatalf("cache file mtime not refreshed: %v", fi.ModTime())
 	}
 }
 

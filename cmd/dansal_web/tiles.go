@@ -41,13 +41,20 @@ var tileHTTPClient = &http.Client{Timeout: 10 * time.Second}
 // few KB to ~100KB; this just guards against a misbehaving upstream.
 const tileCacheMaxBytes = 2 << 20 // 2MB
 
+// tileCacheMaxAge is how long a cached tile is served before being treated
+// as a cache miss and re-fetched (#1169). Map imagery changes rarely, so a
+// monthly refresh is a reasonable balance between staying current and
+// minimizing repeat load on the OSM tile server — there's no background
+// sweep, a tile just quietly refreshes itself next time it's requested.
+const tileCacheMaxAge = 30 * 24 * time.Hour
+
 // tileProxyHandler serves GET /tiles/{scheme}/{z}/{x}/{yfile}, proxying and
-// disk-caching OSM/CARTO map tiles (#1079) so visitor browsers only ever
-// talk to dansal_web — never a third-party tile server directly. This both
-// brings tile fetching into compliance with OSM's tile usage policy (which
+// disk-caching OSM map tiles (#1079) so visitor browsers only ever talk to
+// dansal_web — never a third-party tile server directly. This both brings
+// tile fetching into compliance with OSM's tile usage policy (which
 // forbids heavy direct use by distributed apps) and stops leaking visitor
-// IPs to OSM/CARTO on every map view. yfile is "{y}.png" or "{y}@2x.png" —
-// the latter only ever requested if a caller enables Leaflet's detectRetina,
+// IPs to OSM on every map view. yfile is "{y}.png" or "{y}@2x.png" — the
+// latter only ever requested if a caller enables Leaflet's detectRetina,
 // which dansal_web's own tile layers currently don't, but the proxy handles
 // it anyway for forward compatibility.
 func tileProxyHandler(cfg *Config) http.HandlerFunc {
@@ -88,9 +95,11 @@ func tileProxyHandler(cfg *Config) http.HandlerFunc {
 		}
 		cachePath := filepath.Join(cacheDir, scheme, strconv.Itoa(z), strconv.Itoa(x), strconv.Itoa(y)+retina+".png")
 
-		if data, err := os.ReadFile(cachePath); err == nil {
-			writeTileResponse(w, data)
-			return
+		if fi, err := os.Stat(cachePath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
+			if data, err := os.ReadFile(cachePath); err == nil {
+				writeTileResponse(w, data)
+				return
+			}
 		}
 
 		upstreamURL := fmt.Sprintf(tpl, z, x, y)

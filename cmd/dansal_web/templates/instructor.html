@@ -76,7 +76,7 @@
     <a href="/feed/instructor/{{.Instructor.ID}}/events.json" class="feed-link">JSON</a>
   </div>
 
-  {{/* #1168: rolling monthly calendar, same shared component as /org/{slug}.
+  {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}.
       Always upcoming-only, independent of the include_past toggle above. */}}
   {{template "month-calendar" (dict "ID" "instructor-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
 

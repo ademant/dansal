@@ -121,7 +121,7 @@
 </script>
 {{end}}
 
-{{/* #1161/#1167/#1168: rolling monthly calendar, shared component (base.html) also
+{{/* #1161/#1167: rolling monthly calendar, shared component (base.html) also
     used by location.html, musician.html and instructor.html. */}}
 {{template "month-calendar" (dict "ID" "org-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
 

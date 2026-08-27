@@ -18,9 +18,15 @@ import (
 // traditionally rotate across {a,b,c} subdomains to let browsers open more
 // parallel connections; since dansal_web itself does the fetching now (the
 // browser only ever talks to dansal_web), a single static subdomain is fine.
+//
+// #1169: there used to be a second "dark" entry pointing at CARTO's
+// dark_all basemap for dark-mode maps. CARTO now requires a registered API
+// key for that basemap and serves an "API key required" overlay without
+// one, so dark mode was switched to darken these same OSM tiles with a CSS
+// filter instead (base.html's .leaflet-tile-pane rule) — no second
+// upstream needed any more.
 var tileUpstreams = map[string]string{
-	"osm":  "https://a.tile.openstreetmap.org/%d/%d/%d.png",
-	"dark": "https://a.basemaps.cartocdn.com/dark_all/%d/%d/%d%s.png",
+	"osm": "https://a.tile.openstreetmap.org/%d/%d/%d.png",
 }
 
 // tileUserAgent identifies dansal_web to upstream tile servers, as required
@@ -87,12 +93,7 @@ func tileProxyHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		var upstreamURL string
-		if scheme == "dark" {
-			upstreamURL = fmt.Sprintf(tpl, z, x, y, retina)
-		} else {
-			upstreamURL = fmt.Sprintf(tpl, z, x, y)
-		}
+		upstreamURL := fmt.Sprintf(tpl, z, x, y)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()

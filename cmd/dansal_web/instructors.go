@@ -15,7 +15,7 @@ type InstructorsPageData struct {
 type InstructorPageData struct {
 	Instructor     Instructor
 	Events         []Event
-	UpcomingEvents []Event // #1168: always upcoming-only, feeds the monthly calendar regardless of IncludePast
+	UpcomingEvents []Event // follow-up to #1161: always upcoming-only, feeds the monthly calendar regardless of IncludePast
 	HasPast        bool
 	IncludePast    bool
 }

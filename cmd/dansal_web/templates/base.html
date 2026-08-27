@@ -98,6 +98,16 @@
     --badge-info-bg:#0d2540;--badge-info-fg:#5ab8ff;
   }
 }
+/* Dark-mode map tiles (#1169): CARTO's free dark_all basemap now requires a
+   registered API key (the map used to show a CARTO-hosted "API key
+   required" overlay instead of tiles). Rather than take a dependency on a
+   paid/keyed third-party service, dark mode reuses the same OSM tiles as
+   light mode (makeTileLayer, base.html JS) and darkens them with a CSS
+   filter on Leaflet's own tile pane — no upstream change needed. */
+.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.9)}
+@media(prefers-color-scheme:dark){
+  :root:not(.light) .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.9)}
+}
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 body{font-family:system-ui,sans-serif;line-height:1.6;color:var(--fg);background:var(--bg);padding:0 1rem 3rem;display:flex;flex-direction:column;min-height:100vh}
@@ -558,23 +568,20 @@ function cycleTheme(){
   if(next==='dark')h.classList.add('dark');
   else if(next==='light')h.classList.add('light');
 }
-function isDarkMode(){
-  var h=document.documentElement;
-  return h.classList.contains('dark')||(
-    !h.classList.contains('light')&&window.matchMedia('(prefers-color-scheme:dark)').matches);
-}
 // Tiles are proxied and disk-cached through dansal_web itself (#1079) rather
-// than fetched by the browser directly from OSM/CARTO — both a tile usage
-// policy requirement (OSM forbids heavy direct use by distributed apps) and
-// a privacy win (visitor IPs never reach a third-party tile server).
+// than fetched by the browser directly from OSM — both a tile usage policy
+// requirement (OSM forbids heavy direct use by distributed apps) and a
+// privacy win (visitor IPs never reach a third-party tile server).
+// #1169: dark mode used to switch to a separate CARTO "dark_all" upstream,
+// which now requires a registered API key and serves an "API key required"
+// overlay without one. Dark mode now reuses these same OSM tiles and is
+// darkened purely with a CSS filter on the tile pane (see base.html's
+// .leaflet-tile-pane rule) — no second upstream, no swap needed on theme
+// change.
 function makeTileLayer(){
-  return isDarkMode()
-    ?L.tileLayer('/tiles/dark/{z}/{x}/{y}{r}.png',{
-        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-        maxZoom:19})
-    :L.tileLayer('/tiles/osm/{z}/{x}/{y}.png',{
-        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom:18});
+  return L.tileLayer('/tiles/osm/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:18});
 }
 // Nominatim address results are re-fetched in the venue's own country's
 // language, so a German venue always gets "München"/"Bayern" etc. regardless
@@ -686,15 +693,9 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
   }
 }
 function attachTileLayer(map){
-  var tl=makeTileLayer().addTo(map);
-  new MutationObserver(function(){map.removeLayer(tl);tl=makeTileLayer().addTo(map);})
-    .observe(document.documentElement,{attributes:true,attributeFilter:['class']});
-  window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',function(){
-    if(!document.documentElement.classList.contains('dark')&&
-       !document.documentElement.classList.contains('light')){
-      map.removeLayer(tl);tl=makeTileLayer().addTo(map);
-    }
-  });
+  // #1169: light and dark now share one tile layer (CSS filter handles the
+  // dark styling), so there's no swap-on-theme-change to observe any more.
+  makeTileLayer().addTo(map);
 }
 (function(){
   var btn=document.getElementById('back-to-top');
@@ -895,7 +896,7 @@ document.addEventListener('keydown',function(e){
 {{- if $ev.Pricing}}{{if eq $ev.Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$s.T "filter_fee_free"}}">0€</span>{{else if eq $ev.Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$s.T "filter_fee_donation"}}">♥</span>{{else if or (eq $ev.Pricing.Type "single") (eq $ev.Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$s.T "filter_fee_paid"}}">€</span>{{end}}{{end -}}
 {{end}}
 
-{{/* Rolling 6-month carousel calendar (#1161, #1167, #1168). Takes a dict:
+{{/* Rolling 6-month carousel calendar (#1161, #1167, plus reuse on location/musician/instructor pages). Takes a dict:
      ID (unique container id prefix, e.g. "org-calendar"), Events (upcoming
      events only — callers with a past/future toggle must pass the
      upcoming-only slice, not the toggled display list), Strings, Nonce.

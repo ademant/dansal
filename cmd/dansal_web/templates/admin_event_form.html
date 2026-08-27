@@ -509,7 +509,7 @@
           <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" value="{{.MusicianName}}" placeholder="{{$.Strings.T "tt_musician"}}" data-on="input" data-fn="_ttMusInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttMusOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttMusKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_musician_id" value="{{if $entry.MusicianID}}{{derefInt $entry.MusicianID}}{{end}}"><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
           <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" value="{{.InstructorName}}" placeholder="{{$.Strings.T "tt_instructor"}}" data-on="input" data-fn="_ttInsInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttInsOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttInsKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_instructor_id" value="{{if $entry.InstructorID}}{{derefInt $entry.InstructorID}}{{end}}"><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
-        <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}">{{.Description}}</textarea></div>
+        <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}" data-on="input" data-fn="_ttMarkEdited" data-args="[]">{{.Description}}</textarea></div>
       </div>
       {{end}}
       <div class="tt-entry">
@@ -527,7 +527,7 @@
           <div class="tt-mus-wrap"><input type="text" class="tt-mus-input" autocomplete="off" placeholder="{{$.Strings.T "tt_musician"}}" data-on="input" data-fn="_ttMusInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttMusOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttMusKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_musician_id" value=""><input type="hidden" name="tt_musician_name" value=""><ul class="tt-mus-suggest" hidden></ul></div>
           <div class="tt-ins-wrap"><input type="text" class="tt-ins-input" autocomplete="off" placeholder="{{$.Strings.T "tt_instructor"}}" data-on="input" data-fn="_ttInsInput" data-args='["@this"]' data-on2="focus" data-fn2="_ttInsOpen" data-args2='["@this"]' data-on3="keydown" data-fn3="_ttInsKeydown" data-args3='["@event","@this"]'><input type="hidden" name="tt_instructor_id" value=""><input type="hidden" name="tt_instructor_name" value=""><ul class="tt-ins-suggest" hidden></ul></div>
         </div>
-        <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></textarea></div>
+        <div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder="{{$.Strings.T "tt_desc_placeholder"}}" data-on="input" data-fn="_ttMarkEdited" data-args="[]"></textarea></div>
       </div>
     </div>
     <input type="hidden" name="timetable_edited" id="tt-edited" value="0">
@@ -2056,7 +2056,7 @@ function addTTRow(){
     '</div>'+
     '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args=\'["@this"]\'></div>'+
     '<div class="tt-line3">'+_buildTTMusWidget()+_buildTTInsWidget()+'</div>'+
-    '<div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+'></textarea></div>';
+    '<div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+' data-on="input" data-fn="_ttMarkEdited" data-args="[]"></textarea></div>';
   tbody.appendChild(entry);
   _ttUpdateMultiDay();
 }

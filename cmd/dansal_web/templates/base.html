@@ -111,7 +111,12 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 body{font-family:system-ui,sans-serif;line-height:1.6;color:var(--fg);background:var(--bg);padding:0 1rem 3rem;display:flex;flex-direction:column;min-height:100vh}
-nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1000}
+/* #1170: z-index must beat Leaflet's own .leaflet-top/.leaflet-bottom
+   controls (z-index:1000, set by leaflet.css) — at an exact tie the later
+   element in DOM order wins, and the map markup comes after <nav>, so the
+   mobile hamburger dropdown (nested inside nav) would otherwise paint
+   behind the zoom +/- buttons on any page with a map. */
+nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1100}
 .nav-brand{display:flex;align-items:center;gap:.4rem;text-decoration:none;flex-shrink:0}
 .nav-brand img{object-fit:contain;height:36px;width:36px}
 .nav-brand:hover{opacity:.85}

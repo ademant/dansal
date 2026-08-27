@@ -373,6 +373,17 @@ th.sortable-th:hover{background:#e8eef7}
 .fest-month-grid td.fest-other{color:var(--fg-faint)}
 .fest-month-grid td.fest-day{cursor:pointer;background:var(--heading);color:#fff;border-radius:3px;font-weight:600}
 .fest-month-grid td.fest-day:hover{opacity:.85}
+/* Carousel mode (#1167): a fixed number of months on one row, paged with
+   arrow buttons instead of wrapping onto a second line. Opt-in via
+   renderMiniCalendar's opts.carousel — /org/{slug}'s 6-month window uses it,
+   /festivals' 12-month grid still wraps freely. */
+.fest-calendar-wrap{display:flex;align-items:center;gap:.5rem;margin-bottom:1.5rem}
+.fest-calendar-wrap .fest-calendar{margin-bottom:0}
+.fest-calendar.fest-carousel{display:flex;flex-wrap:nowrap;overflow-x:hidden;scroll-behavior:smooth;flex:1;min-width:0}
+.fest-calendar.fest-carousel .fest-month{flex:0 0 220px}
+.fest-nav{flex:0 0 auto;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:2rem;height:2rem;cursor:pointer;font-size:1.1rem;line-height:1;color:var(--fg-2)}
+.fest-nav:disabled{opacity:.3;cursor:default}
+.fest-nav:hover:not(:disabled){background:var(--heading);color:#fff}
 </style>
 <script nonce="{{$.Nonce}}">
 var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}",noEventsDay:"{{.Strings.T "js_no_events_day"}}",cancel:"{{.Strings.T "js_cancel"}}",select:"{{.Strings.T "js_select"}}",prevWeek:"{{.Strings.T "js_prev_week"}}",nextWeek:"{{.Strings.T "js_next_week"}}",tableModeWeek:"{{.Strings.T "table_mode_week"}}",tableModeAll:"{{.Strings.T "table_mode_all"}}"};
@@ -598,10 +609,15 @@ function nominatimRefine(lat, lon, countryCode, cb){
 // festivalCalendarJSON template func. Shared by /festivals (fixed
 // calendar year, its own month list) and /org/{slug} (#1161, a rolling
 // window of upcoming months) so this rendering logic isn't duplicated.
-function renderMiniCalendar(containerId, calEvents, months){
+function renderMiniCalendar(containerId, calEvents, months, opts){
+  opts=opts||{};
   var cal=document.getElementById(containerId);
   if(!cal) return;
-  if(!calEvents.length || !months.length){cal.hidden=true;return;}
+  if(!calEvents.length || !months.length){
+    cal.hidden=true;
+    if(opts.wrapId){var w=document.getElementById(opts.wrapId); if(w) w.hidden=true;}
+    return;
+  }
   var lang=document.documentElement.lang||'de';
   var fmtMonth=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
   var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
@@ -648,6 +664,23 @@ function renderMiniCalendar(containerId, calEvents, months){
   cal.querySelectorAll('td.fest-day').forEach(function(td){
     td.addEventListener('click',function(){window.location.href=this.dataset.href;});
   });
+  if(opts.carousel){
+    cal.classList.add('fest-carousel');
+    var prevBtn=opts.prevId&&document.getElementById(opts.prevId);
+    var nextBtn=opts.nextId&&document.getElementById(opts.nextId);
+    function step(){
+      var m=cal.querySelector('.fest-month');
+      return m?m.getBoundingClientRect().width+16:cal.clientWidth;
+    }
+    function updateBtns(){
+      if(prevBtn) prevBtn.disabled=cal.scrollLeft<=2;
+      if(nextBtn) nextBtn.disabled=cal.scrollLeft+cal.clientWidth>=cal.scrollWidth-2;
+    }
+    if(prevBtn) prevBtn.onclick=function(){cal.scrollBy({left:-step(),behavior:'smooth'});};
+    if(nextBtn) nextBtn.onclick=function(){cal.scrollBy({left:step(),behavior:'smooth'});};
+    cal.addEventListener('scroll',updateBtns);
+    updateBtns();
+  }
 }
 function attachTileLayer(map){
   var tl=makeTileLayer().addTo(map);

@@ -70,6 +70,52 @@ dansal helps dance communities organize, publish, and discover events — from b
 - Runtime config without restarts (IndexNow key, site name, banner, board settings, …)
 - Automated SQLite backups; optional Docker deployment
 
+## 🏆 Why dansal?
+
+### Vertical Domain Expertise
+- **Only platform specifically designed for bal-folk/folk-dance events**
+- Pre-built understanding of: venues with multiple rooms, dance workshops, festivals, musicians, instructors, organizations
+- **Tag-based categorization** instead of rigid boolean fields (e.g., `bal-folk`, `fest-noz`, `workshop`, `dance-workshop`, `music-course`)
+
+### Advanced Architecture
+- **Four independent services** built from a single monorepo:
+  - `dansal`: REST API + core logic + calendar.db
+  - `dansal-web`: Web frontend + ActivityPub + web.db
+  - `dansal-webmin`: Admin web UI
+  - `dansal-doc`: Documentation server
+- **Dual database design**: Separates content (calendar.db) from presentation/ActivityPub state (web.db)
+
+### Sophisticated Data Management
+- **5-tier deduplication** prevents duplicate events from multiple feeds:
+  1. Exact UID match
+  2. Exact URL match
+  3. Location + start_time ±3h
+  4. Title + start_time ±3h
+  5. Fuzzy title + source + start_time ±3h (flags for admin review)
+- **Location aliasing**: Feed locations auto-match to DB locations after first manual mapping
+- **Parent-child locations**: Rooms inherit address/coordinates/parking from parent buildings
+- **Geocoding cache**: Reduces external API calls
+
+### Flexible Import/Export
+- **Supports iCal, JSON, RSS** for both import and export
+- **Regular feed imports** with automatic deduplication
+- **Single iCal link imports** for one-off events
+- **WordPress plugin integration** via REST API
+- **Template-based event creation** for recurring events
+
+### Multi-Interface Administration
+- **CLI (`dansal_admin`)** for power users and scripting
+- **Web admin UI (`dansal-webmin`)** for browser-based management
+- **Privileged Unix socket** for admin operations (no network exposure)
+
+### Self-Hosted Focus
+- **No SaaS**: Full control over data and deployment
+- **Systemd integration**: Proper service management with template units
+- **SQLite databases**: No external DB server required, easy backups
+
+### Internationalization
+- **12 built-in languages**: Basque (br), Catalan (ca), Czech (cs), German (de), English (en), Spanish (es), French (fr), Italian (it), Dutch (nl), Polish (pl), Portuguese (pt), Ukrainian (uk)
+
 ## 📖 Documentation
 
 | Audience | Guide |

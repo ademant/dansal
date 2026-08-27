@@ -381,6 +381,9 @@ th.sortable-th:hover{background:#e8eef7}
 .fest-calendar-wrap .fest-calendar{margin-bottom:0}
 .fest-calendar.fest-carousel{display:flex;flex-wrap:nowrap;overflow-x:hidden;scroll-behavior:smooth;flex:1;min-width:0}
 .fest-calendar.fest-carousel .fest-month{flex:0 0 220px}
+@media(max-width:600px){
+  .fest-calendar.fest-carousel .fest-month{flex:0 0 100%}
+}
 .fest-nav{flex:0 0 auto;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:2rem;height:2rem;cursor:pointer;font-size:1.1rem;line-height:1;color:var(--fg-2)}
 .fest-nav:disabled{opacity:.3;cursor:default}
 .fest-nav:hover:not(:disabled){background:var(--heading);color:#fff}

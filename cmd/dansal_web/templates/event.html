@@ -1246,6 +1246,13 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
      until after the deferred external script has run and L is defined. -->
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
+// #1166: same bfcache staleness as #1162 — an admin editing this event
+// elsewhere and coming back via history.back() restores this page's
+// pre-edit snapshot instead of re-fetching it. Read-only content page, so
+// a forced reload has no unsaved-state downside.
+window.addEventListener('pageshow', function(e){
+  if(e.persisted) location.reload();
+});
 document.addEventListener('DOMContentLoaded', function(){
 {{if and .Event.Location .Event.Location.Latitude}}
 (function(){

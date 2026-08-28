@@ -6,8 +6,6 @@ nav_order: 4
 
 Diese Seite zeigt anhand von Screenshots, wie die Registrierung eines neuen Kontos abläuft.
 
-Eine Übersicht aller Kontotypen und Anmeldemethoden findest du unter [Konto, Anmeldung & Rollen](Benutzer-Konto).
-
 Für die Anmeldung mit einem bestehenden Konto siehe [Anmeldung](Benutzer-Anmeldung).
 
 ---
@@ -250,5 +248,5 @@ Anzeigename und E-Mail sind optional — ein Konto ohne E-Mail-Adresse ist mögl
 
 ---
 
-**Weiter zu**: [Konto, Anmeldung & Rollen](Benutzer-Konto) | [Veranstaltungen verwalten](Benutzer-Veranstaltungen) | [Anmeldung](Benutzer-Anmeldung)
+**Weiter zu**: [Veranstaltungen verwalten](Benutzer-Veranstaltungen) | [Anmeldung](Benutzer-Anmeldung)
 

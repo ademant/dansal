@@ -6,8 +6,6 @@ nav_order: 5
 
 Diese Seite zeigt, wie du dich bei dansal anmeldest. Für die Registrierung eines neuen Kontos siehe [Registrierung](Benutzer-Registrierung).
 
-Eine Übersicht aller Kontotypen und Anmeldemethoden findest du unter [Konto, Anmeldung & Rollen](Benutzer-Konto).
-
 ---
 
 ## Anmeldeseite
@@ -134,4 +132,4 @@ Damit ist ein weiteres Gerät freigeschaltet, mit dem Du ohne Passwort Dich anme
 
 ---
 
-**Weiter zu**: [Konto, Anmeldung & Rollen](Benutzer-Konto) | [Registrierung](Benutzer-Registrierung)
+**Weiter zu**: [Registrierung](Benutzer-Registrierung) | [Veranstaltungen verwalten](Benutzer-Veranstaltungen)

@@ -385,6 +385,7 @@ type Event struct {
 	Instructors            []Instructor     `json:"instructors,omitempty"`
 	DanceNames             []string         `json:"dance_names,omitempty"`
 	Timetable              []TimetableEntry `json:"timetable,omitempty"`
+	TimetableTracks        []TimetableTrack `json:"timetable_tracks,omitempty"`
 	CreatedAt              string           `json:"created_at"`
 	Source                 string           `json:"source,omitempty"`
 	SourceURL              string           `json:"source_url,omitempty"`
@@ -572,6 +573,29 @@ type Pricing struct {
 type Price struct {
 	Label  string  `json:"label"`
 	Amount float64 `json:"amount"`
+}
+
+// TimetableHistoryEntry is one journal row (#1176): a full snapshot of an
+// event's timetable right after one save. ChangedAt is always shown;
+// ChangedBy follows the same privacy split as Event.ChangedAt/ChangedBy
+// (event.html's "Last update" block) — the API always returns it, the
+// template only displays it to a logged-in viewer.
+type TimetableHistoryEntry struct {
+	ID        int              `json:"id"`
+	EventID   int              `json:"event_id"`
+	ChangedAt string           `json:"changed_at"`
+	ChangedBy string           `json:"changed_by,omitempty"`
+	Snapshot  []TimetableEntry `json:"snapshot"`
+}
+
+// TimetableTrack is one entry-type option in an event's timetable editor
+// (#1174): a slug used by TimetableEntry.EntryType, a display name, and a
+// CSS color. The API always returns an effective (non-empty) list — the
+// default 8-slug palette when the event has no custom tracks of its own.
+type TimetableTrack struct {
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 type Musician struct {
@@ -1099,6 +1123,17 @@ func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {
 		return Event{}, err
 	}
 	return event, nil
+}
+
+// GetTimetableHistory fetches an event's timetable change journal (#1176),
+// newest first. Public/unauthenticated like GetEvent — the API applies the
+// same published-event visibility rule.
+func (c *DansalClient) GetTimetableHistory(ctx context.Context, eventID int) ([]TimetableHistoryEntry, error) {
+	var history []TimetableHistoryEntry
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/events/%d/timetable/history", eventID), &history); err != nil {
+		return nil, err
+	}
+	return history, nil
 }
 
 func (c *DansalClient) GetEventAuthed(ctx context.Context, id int, token string) (Event, error) {
@@ -2058,6 +2093,30 @@ func (c *DansalClient) PatchEventDescription(ctx context.Context, eventID int, d
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("patch event description: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
+// PatchEventTimetableTracks replaces an event's timetable track palette
+// (#1174) via merge-patch. tracks may be empty (but non-nil) to explicitly
+// reset a custom palette back to the default.
+func (c *DansalClient) PatchEventTimetableTracks(ctx context.Context, eventID int, tracks []TimetableTrack, token string) error {
+	body, _ := json.Marshal(map[string][]TimetableTrack{"timetable_tracks": tracks})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("patch event timetable tracks: %s: %s", resp.Status, apiErrorMessage(resp))
 	}
 	return nil
 }

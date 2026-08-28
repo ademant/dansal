@@ -472,6 +472,13 @@ function csp1149Dispatch(el, evt, kind) {
 }
 ['click', 'change', 'submit', 'input', 'keydown', 'focus', 'load'].forEach(function (kind) {
   document.addEventListener(kind, function (e) {
+    // e.target isn't always an Element with .closest(): some browsers fire
+    // events targeting document/window itself (observed with <input
+    // type=color>'s native picker), and .closest doesn't exist on those —
+    // throwing here would silently swallow this one event's dispatch
+    // (the exception aborts this listener before reaching the data-fn
+    // button the click was actually meant for), not just this diagnostic.
+    if (!(e.target instanceof Element)) return;
     var el = e.target.closest('[data-fn],[data-stop],[data-confirm]');
     if (el) csp1149Dispatch(el, e, kind);
   }, true);
@@ -512,7 +519,10 @@ function toggleUserMenu(){
 }
 // Close dropdowns when clicking outside
 document.addEventListener('click',function(e){
-  if(!e.target.closest('nav')){
+  // e.target isn't always an Element with .closest() — see the capture-phase
+  // dispatcher above for why (observed with <input type=color>'s native
+  // picker); guard the same way here.
+  if(!(e.target instanceof Element) || !e.target.closest('nav')){
     document.getElementById('nav-dropdown').hidden=true;
     document.getElementById('user-dropdown').hidden=true;
   }

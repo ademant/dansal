@@ -111,7 +111,8 @@
 </nav>
 {{end}}
 {{define "evt_tt_row"}}
-<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" data-fn="openTTDetail" data-args='["@this",true]'>
+<div class="tt-row{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" data-entry-id="{{.Entry.ID}}" data-fn="openTTDetail" data-args='["@this",true]'>
+  <button type="button" class="tt-star-btn" data-entry-id="{{.Entry.ID}}" data-fn="toggleStar" data-args='["@this"]' title="{{.Strings.T "tt_star_toggle"}}" aria-label="{{.Strings.T "tt_star_toggle"}}">☆</button>
   <div class="tt-time">{{.Entry.StartTime}}{{if .Entry.EndTime}} – {{.Entry.EndTime}}{{end}}</div>
   <div class="tt-body">
     <div class="tt-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{.Strings.T "tt_type_bal"}}</span>{{end}}</div>
@@ -267,6 +268,11 @@
     {{if .Timetable}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
+      <div class="tt-toolbar">
+        <button type="button" id="tt-my-toggle" data-fn="toggleMyTimetable" data-args="[]">{{$.Strings.T "tt_my_timetable"}}</button>
+        <a id="tt-export-link" href="#" hidden>{{$.Strings.T "tt_export_starred"}}</a>
+      </div>
+      <div id="tt-nextup" class="tt-nextup" hidden></div>
       {{$days := timetableDays .Timetable .StartTime .EndTime}}
       {{$multiDay := gt (len $days) 1}}
       {{range $days}}
@@ -293,7 +299,8 @@
             <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
             <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
               {{range $col.Panels}}
-              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-fn="openTTDetail" data-args='["@this",false]'>
+              <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-entry-id="{{.Entry.ID}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-fn="openTTDetail" data-args='["@this",false]'>
+                <button type="button" class="tt-star-btn" data-entry-id="{{.Entry.ID}}" data-fn="toggleStar" data-args='["@this"]' title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
                 <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
                 {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
                 {{if .Entry.MusicianName}}<div class="tt-meta">{{if .Entry.MusicianID}}<a href="/musicians/{{.Entry.MusicianID}}" data-stop>{{.Entry.MusicianName}}</a>{{else}}{{.Entry.MusicianName}}{{end}}</div>{{end}}
@@ -362,7 +369,132 @@
           }
         },{passive:true});
       });
+
+      // ─── starred timetable entries (#1177) ──────────────────────────────
+      // Purely client-side: which entries are starred lives only in this
+      // browser's localStorage, keyed per event — dansal never learns who
+      // starred what. Highlighting, the "my timetable" filter, and the
+      // .ics export link are all derived from this one array.
+      var TT_EVENT_ID = {{.ID}};
+      var TT_STAR_KEY = 'dansal_starred_' + TT_EVENT_ID;
+      // Entry id -> {date,start,end,title,room}, resolved server-side by the
+      // same date-fallback rule the .ics/.csv/.json exports use (#1179).
+      var TT_ENTRY_DATA = {{timetableEntriesForNextUpJSON .Timetable .StartTime}};
+      function ttStars(){
+        try{
+          var raw = localStorage.getItem(TT_STAR_KEY);
+          return raw ? JSON.parse(raw) : [];
+        }catch(e){ return []; }
+      }
+      function ttSaveStars(ids){
+        try{ localStorage.setItem(TT_STAR_KEY, JSON.stringify(ids)); }catch(e){}
+      }
+      function ttApplyStarredUI(){
+        var stars = ttStars();
+        document.querySelectorAll('[data-entry-id]').forEach(function(el){
+          var starred = stars.indexOf(parseInt(el.dataset.entryId,10)) !== -1;
+          if(el.classList.contains('tt-star-btn')){
+            el.textContent = starred ? '★' : '☆';
+          } else {
+            el.classList.toggle('tt-starred', starred);
+          }
+        });
+        ttUpdateExportLink(stars);
+        ttNextUp(stars);
+      }
+      function toggleStar(btn){
+        var id = parseInt(btn.dataset.entryId,10);
+        if(!id && id!==0) return;
+        var stars = ttStars();
+        var idx = stars.indexOf(id);
+        if(idx===-1) stars.push(id); else stars.splice(idx,1);
+        ttSaveStars(stars);
+        ttApplyStarredUI();
+      }
+      function toggleMyTimetable(){
+        var section = document.getElementById('tt-my-toggle').closest('.evt-section');
+        var active = section.classList.toggle('tt-filter-my');
+        document.getElementById('tt-my-toggle').classList.toggle('active', active);
+      }
+      function ttUpdateExportLink(stars){
+        var link = document.getElementById('tt-export-link');
+        if(!link) return;
+        if(!stars.length){ link.hidden = true; return; }
+        link.hidden = false;
+        link.href = '/events/' + TT_EVENT_ID + '/timetable.ics?entries=' + stars.join(',');
+      }
+
+      // ─── "Now/Next" starred-entry indicator (#1179) ─────────────────────
+      // Purely client-side, comparing the browser's current time against
+      // TT_ENTRY_DATA — no new fetch, no new backend. Templates carry %s
+      // placeholders filled in order (title[, time][, room]); an entry
+      // without a room drops straight to the "_noroom" variant rather than
+      // rendering an empty " in " clause.
+      var TT_NEXTUP_NOW = '{{$.Strings.T "tt_nextup_now" | js}}';
+      var TT_NEXTUP_NOW_NOROOM = '{{$.Strings.T "tt_nextup_now_noroom" | js}}';
+      var TT_NEXTUP_NEXT = '{{$.Strings.T "tt_nextup_next" | js}}';
+      var TT_NEXTUP_NEXT_NOROOM = '{{$.Strings.T "tt_nextup_next_noroom" | js}}';
+      function ttFillTemplate(tmpl, args){
+        var i = 0;
+        return tmpl.replace(/%s/g, function(){ return args[i++]; });
+      }
+      function ttEntryWindow(id){
+        var d = TT_ENTRY_DATA[id];
+        if(!d || !d.date || !d.start || !d.end) return null;
+        var start = new Date(d.date + 'T' + d.start + ':00');
+        var end = new Date(d.date + 'T' + d.end + ':00');
+        if(isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+        if(end <= start) end = new Date(end.getTime() + 24*60*60*1000); // crosses midnight
+        return {start: start, end: end, title: d.title, room: d.room, startLabel: d.start};
+      }
+      function ttNextUp(stars){
+        var el = document.getElementById('tt-nextup');
+        if(!el) return;
+        if(!stars || !stars.length){ el.hidden = true; return; }
+        var now = new Date();
+        var current = null, next = null;
+        stars.forEach(function(id){
+          var w = ttEntryWindow(id);
+          if(!w) return;
+          if(now >= w.start && now < w.end){
+            if(!current || w.start < current.start) current = w;
+          } else if(w.start > now){
+            if(!next || w.start < next.start) next = w;
+          }
+        });
+        if(current){
+          el.hidden = false;
+          el.textContent = current.room
+            ? ttFillTemplate(TT_NEXTUP_NOW, [current.title, current.room])
+            : ttFillTemplate(TT_NEXTUP_NOW_NOROOM, [current.title]);
+        } else if(next){
+          el.hidden = false;
+          el.textContent = next.room
+            ? ttFillTemplate(TT_NEXTUP_NEXT, [next.title, next.startLabel, next.room])
+            : ttFillTemplate(TT_NEXTUP_NEXT_NOROOM, [next.title, next.startLabel]);
+        } else {
+          el.hidden = true;
+        }
+      }
+      ttApplyStarredUI();
+      // Refresh every 30s so "Now" flips to the next entry (and "Next"'s
+      // countdown-relevant "now" comparison stays current) without a reload.
+      setInterval(function(){ ttNextUp(ttStars()); }, 30000);
       </script>
+    </section>
+    {{end}}
+
+    {{if $.Data.TimetableHistory}}
+    <section class="evt-section">
+      <h2>{{$.Strings.T "evt_timetable_history"}}</h2>
+      <ul class="tt-history-list">
+        {{range $.Data.TimetableHistory}}
+        <li class="tt-history-item">
+          <span class="tt-history-time">{{formatTime $.LangCode $.TimeFormat $.DateFormat .ChangedAt}}</span>
+          {{if and $.User .ChangedBy}}<span class="tt-history-by">{{.ChangedBy}}</span>{{end}}
+        </li>
+        {{end}}
+      </ul>
     </section>
     {{end}}
 
@@ -796,8 +928,24 @@
 .evt-instructor-link{color:var(--link);text-decoration:none;font-size:.85rem;margin-left:.4rem}
 .evt-instructor-bio{font-size:.88rem;color:var(--fg-dim);margin:.25rem 0 0;padding:0}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
-.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer}
+.tt-row{position:relative;display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer}
 .tt-workshop{border-left:3px solid var(--link)}
+/* Starred timetable entries (#1177) — client-side only, no server storage:
+   see the star/toggleMyTimetable/updateStarExportLink script below. */
+.tt-star-btn{position:absolute;top:.3rem;right:.3rem;background:none;border:none;font-size:1.05rem;line-height:1;cursor:pointer;color:var(--fg-faint);padding:.15rem .3rem;z-index:1}
+.tt-star-btn:hover{color:#e0a800}
+.tt-starred{outline:2px solid #e0a800;outline-offset:-2px}
+.tt-starred>.tt-star-btn{color:#e0a800}
+.tt-filter-my :is(.tt-row,.tt-panel):not(.tt-starred){display:none}
+.tt-toolbar{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+.tt-toolbar button{border:1px solid var(--border);background:var(--bg-card);color:var(--fg-dim);border-radius:999px;padding:.3rem .8rem;font-size:.82rem;cursor:pointer}
+.tt-toolbar button.active{background:var(--link);color:#fff;border-color:var(--link)}
+.tt-toolbar a{font-size:.82rem;color:var(--link);text-decoration:none}
+.tt-toolbar a:hover{text-decoration:underline}
+.tt-toolbar a[hidden]{display:none}
+/* "Now/Next" starred-entry indicator (#1179) — see ttNextUp() below. */
+.tt-nextup{font-size:.85rem;font-weight:600;color:var(--link);background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.4rem .7rem;margin-bottom:.6rem}
+.tt-nextup[hidden]{display:none}
 .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);padding-top:.1rem}
 .tt-title{font-weight:600;font-size:.95rem;color:var(--heading)}
 .tt-badge-ws{display:inline-block;font-size:.7rem;font-weight:700;background:var(--link);color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
@@ -824,6 +972,9 @@
 .tt-day+.tt-day{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--border)}
 .tt-day-heading{font-size:1rem;font-weight:700;color:var(--heading);margin:0 0 .6rem}
 .tt-day-empty{font-size:.85rem;color:var(--fg-faint);font-style:italic}
+.tt-history-list{list-style:none;display:flex;flex-direction:column;gap:.3rem}
+.tt-history-item{font-size:.85rem;color:var(--fg-dim);display:flex;gap:.5rem}
+.tt-history-by{color:var(--fg-faint)}
 .tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 .tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
 .tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}

@@ -368,6 +368,7 @@ func main() {
 		r.HandleFunc("POST /admin/events/new", adminRateLimit(adminEventCreateHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("GET /admin/events/{id}/timetable", adminTimetablePageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("PUT /admin/events/{id}/timetable", adminRateLimit(adminTimetableSaveHandler(client)))
+		r.HandleFunc("PUT /admin/events/{id}/timetable/tracks", adminRateLimit(adminTimetableTracksSaveHandler(client)))
 		r.HandleFunc("DELETE /admin/events/{id}/timetable", adminRateLimit(adminTimetableDeleteHandler(client)))
 		r.HandleFunc("POST /admin/events/{id}/timetable/sync-times", adminRateLimit(adminTimetableSyncTimesHandler(client)))
 		r.HandleFunc("GET /admin/events/{id}/description", adminEventDescriptionPageHandler(cfg, tmpls, client, i18n))
@@ -504,6 +505,7 @@ func main() {
 
 		r.HandleFunc("GET /embed/events", embedEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/event/{id}", embedEventHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /embed/timetable/{id}", embedTimetableHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/org/{slug}", embedOrgHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/next", embedNextHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/calendar", embedCalendarHandler(cfg, tmpls, client, i18n))

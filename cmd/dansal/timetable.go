@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 type TimetableEntry struct {
@@ -38,6 +40,48 @@ type TimetableEntryRequest struct {
 	LocationID   *int   `json:"location_id"`
 	MusicianID   *int   `json:"musician_id"`
 	InstructorID *int   `json:"instructor_id"`
+}
+
+// TimetableHistoryEntry is one journal entry (#1176): a full snapshot of an
+// event's timetable as it stood right after one save
+// (addTimetableEntries/replaceTimetable/deleteTimetable), append-only — no
+// draft state, no diffing at write time. ChangedBy follows the same
+// public-timestamp/private-attribution split events.ChangedAt/ChangedBy
+// already uses (see event.html's "Last update" sidebar block): the API
+// always returns it, dansal_web decides whether to display it based on
+// whether the viewer is logged in.
+type TimetableHistoryEntry struct {
+	ID        int              `json:"id"`
+	EventID   int              `json:"event_id"`
+	ChangedAt string           `json:"changed_at"`
+	ChangedBy string           `json:"changed_by,omitempty"`
+	Snapshot  []TimetableEntry `json:"snapshot"`
+}
+
+// timetableHistoryLimit caps how many journal rows a single GET returns —
+// this is a "recent changes" list, not a full audit export.
+const timetableHistoryLimit = 20
+
+// recordTimetableHistory appends one journal row capturing the timetable's
+// full state right after a save. Takes a querier so it can participate in
+// replaceTimetable's transaction (the snapshot there is the tx's own result,
+// not a separate re-read) as well as run standalone after
+// addTimetableEntries/deleteTimetable. Best-effort: a journal write failure
+// is logged, not surfaced as a failure of the save itself.
+func recordTimetableHistory(q querier, eventID, callerID int, snapshot []TimetableEntry) {
+	if snapshot == nil {
+		snapshot = []TimetableEntry{}
+	}
+	b, err := json.Marshal(snapshot)
+	if err != nil {
+		return
+	}
+	if _, err := q.Exec(
+		"INSERT INTO timetable_history (event_id, changed_at, changed_by, snapshot) VALUES (?, ?, ?, ?)",
+		eventID, time.Now().UTC().Unix(), resolveDisplayName(callerID), string(b),
+	); err != nil {
+		log.Printf("recordTimetableHistory: event %d: %v", eventID, err)
+	}
 }
 
 var timeSlotRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -189,10 +233,10 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 	if req.InstructorID != nil {
 		insIDArg = *req.InstructorID
 	}
+	// entry_type is free text (#1174: the track palette is per-event, not a
+	// fixed vocabulary) — only an empty value falls back to a default.
 	entryType := req.EntryType
-	switch entryType {
-	case "bal", "concert", "talk", "workshop", "dance-workshop", "musician-workshop", "break", "session":
-	default:
+	if entryType == "" {
 		entryType = "bal"
 	}
 	var entryDateArg any
@@ -240,6 +284,12 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		entries = append(entries, e)
+	}
+
+	// #1176: journal the resulting full timetable, not just the entries this
+	// call added — addTimetableEntries appends to whatever already existed.
+	if full, err := fetchTimetable(eventID); err == nil {
+		recordTimetableHistory(db, eventID, callerID, full)
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -301,6 +351,10 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, e)
 	}
 
+	// #1176: journal within the same transaction — entries is already the
+	// full resulting timetable, no re-read needed.
+	recordTimetableHistory(tx, eventID, callerID, entries)
+
 	if err := tx.Commit(); err != nil {
 		writeInternalError(w, err)
 		return
@@ -328,5 +382,61 @@ func deleteTimetable(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	// #1176: journal the now-empty timetable.
+	recordTimetableHistory(db, eventID, callerID, nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/v1/events/{id}/timetable/history — recent timetable-journal
+// entries (#1176), newest first. Same visibility rule as the timetable
+// itself: unauthenticated callers only see history for published,
+// email-verified events.
+func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	_, userRole := callerFromRequest(r)
+	eventID, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+
+	var isPublished, emailVerified int
+	err = db.QueryRow("SELECT is_published, email_verified FROM events WHERE id = ?", eventID).Scan(&isPublished, &emailVerified)
+	if err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if userRole == "" && (isPublished == 0 || emailVerified == 0) {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+
+	rows, err := db.Query(
+		"SELECT id, event_id, changed_at, changed_by, snapshot FROM timetable_history WHERE event_id = ? ORDER BY changed_at DESC, id DESC LIMIT ?",
+		eventID, timetableHistoryLimit,
+	)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer rows.Close()
+
+	history := []TimetableHistoryEntry{}
+	for rows.Next() {
+		var h TimetableHistoryEntry
+		var changedAtEpoch int64
+		var snapshotJSON string
+		if err := rows.Scan(&h.ID, &h.EventID, &changedAtEpoch, &h.ChangedBy, &snapshotJSON); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		h.ChangedAt = epochToLocal(changedAtEpoch)
+		json.Unmarshal([]byte(snapshotJSON), &h.Snapshot)
+		history = append(history, h)
+	}
+	json.NewEncoder(w).Encode(history)
 }

@@ -97,4 +97,40 @@ func TestInlineJSSyntax(t *testing.T) {
 		}
 		checkJS(t, string(body))
 	})
+
+	// #1177: the starring/my-timetable/export script only renders inside
+	// the {{if .Timetable}} section, so it needs its own case — neither
+	// "index" nor "event-with-location" above has a timetable.
+	t.Run("event-with-timetable", func(t *testing.T) {
+		loc1, loc2 := 1, 2
+		ev := Event{
+			ID: 1, Title: "Test festival", StartTime: "2026-07-01T20:00:00", EndTime: "2026-07-01T23:00:00",
+			Timetable: []TimetableEntry{
+				{ID: 10, StartTime: "20:00", EndTime: "21:00", Title: "Opening bal", LocationID: &loc1, LocationName: "Main hall"},
+				{ID: 12, StartTime: "20:00", EndTime: "21:30", Title: "Workshop", EntryType: "workshop", LocationID: &loc2, LocationName: "Side room"},
+			},
+		}
+		td := tmplData(req, cfg, i18n, ev.Title, EventData{Event: ev})
+		rec := httptest.NewRecorder()
+		renderTemplate(rec, tmpls.event, td)
+		body, _ := io.ReadAll(rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		checkJS(t, string(body))
+	})
+
+	t.Run("embed-timetable", func(t *testing.T) {
+		ev := Event{
+			ID: 1, Title: "Test festival", StartTime: "2026-07-01T20:00:00", EndTime: "2026-07-01T23:00:00",
+			Timetable: []TimetableEntry{{ID: 10, StartTime: "20:00", EndTime: "21:00", Title: "Opening bal"}},
+		}
+		rec := httptest.NewRecorder()
+		renderEmbed(rec, tmpls.embedTimetable, map[string]any{
+			"Lang": "en", "Nonce": "test-nonce", "Event": ev, "Strings": i18n.Strings("en"),
+			"BaseURL": "https://example.test", "SiteName": "dansal",
+		})
+		body, _ := io.ReadAll(rec.Body)
+		checkJS(t, string(body))
+	})
 }

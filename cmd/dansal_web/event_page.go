@@ -24,6 +24,7 @@ type eventPageData struct {
 	nextEvent              *Event
 	seriesImageURL         string // populated from event.SeriesImageURL (already in event response)
 	seriesImageAIGenerated bool
+	timetableHistory       []TimetableHistoryEntry
 }
 
 // fetchEventWithFallback fetches event id, preferring the authed endpoint when
@@ -125,6 +126,18 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 					break
 				}
 			}
+		}()
+	}
+	// #1176: only fetch the change journal when there's a timetable to have
+	// a history of — most events have none, and the section is hidden
+	// entirely when TimetableHistory is empty.
+	if len(event.Timetable) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h, err := client.GetTimetableHistory(r.Context(), event.ID)
+			addErr("GetTimetableHistory", err)
+			data.timetableHistory = h
 		}()
 	}
 	// For logged-in users: fetch their orgs (for assign/publish flow and save-as-template).

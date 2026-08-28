@@ -185,6 +185,37 @@ func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 	}
 }
 
+// embedTimetableHandler serves GET /embed/timetable/{id} — a single event's
+// full multi-room/multi-day timetable grid (#1175), for a festival that
+// wants to embed just its own program elsewhere. Reuses the exact same
+// timetableDays/timetableGrid rendering event.html already uses for its own
+// public timetable section — see embed_timetable.html.
+func embedTimetableHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		event, err := client.GetEvent(r.Context(), id)
+		if err != nil || !event.IsPublished {
+			http.NotFound(w, r)
+			return
+		}
+
+		lang := embedLang(r, i18n)
+		strs := i18n.Strings(lang)
+		renderEmbed(w, tmpls.embedTimetable, map[string]any{
+			"Lang":     lang,
+			"Nonce":    nonceFromRequest(r),
+			"Event":    event,
+			"Strings":  strs,
+			"BaseURL":  cfg.BaseURL,
+			"SiteName": embedSiteName(cfg),
+		})
+	}
+}
+
 // embedOrgHandler serves GET /embed/org/{slug} — org profile card with upcoming events.
 func embedOrgHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -541,6 +572,13 @@ var embedManifest = map[string]embedWidget{
 	"event": {
 		Path:        "/embed/event/{id}",
 		Description: "Single event card",
+		Params: map[string]embedParam{
+			"lang": {Type: "string", Description: "override display language (2-letter code)"},
+		},
+	},
+	"timetable": {
+		Path:        "/embed/timetable/{id}",
+		Description: "Single event's full multi-room/multi-day timetable grid",
 		Params: map[string]embedParam{
 			"lang": {Type: "string", Description: "override display language (2-letter code)"},
 		},

@@ -13,7 +13,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .tt-header-sub{color:#888;font-size:.82rem}
 .tt-empty{color:#888;font-style:italic;font-size:.88rem}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
-.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:#f7f7f7;border:1px solid #ddd;border-radius:6px;cursor:pointer}
+.tt-row{position:relative;display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:#f7f7f7;border:1px solid #ddd;border-radius:6px;cursor:pointer}
 .tt-workshop{border-left:3px solid #1a6eb5}
 .tt-break{border-left:3px solid #999}
 .tt-time{font-size:.85rem;font-weight:600;color:#666;padding-top:.1rem}
@@ -47,6 +47,18 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:#666;margin-bottom:.4rem}
 .tt-detail-close{position:absolute;top:.5rem;right:.6rem;background:none;border:none;font-size:1.3rem;line-height:1;color:#999;cursor:pointer;padding:.2rem .4rem}
 .powered-by{text-align:right;padding:.25rem .5rem;font-size:.72rem;color:#aaa}.powered-by a{color:#aaa;text-decoration:none}.powered-by a:hover{text-decoration:underline}
+/* Starred timetable entries (#1177) — client-side only, no server storage. */
+.tt-star-btn{position:absolute;top:.3rem;right:.3rem;background:none;border:none;font-size:1.05rem;line-height:1;cursor:pointer;color:#999;padding:.15rem .3rem;z-index:1}
+.tt-star-btn:hover{color:#e0a800}
+.tt-starred{outline:2px solid #e0a800;outline-offset:-2px}
+.tt-starred>.tt-star-btn{color:#e0a800}
+.tt-filter-my :is(.tt-row,.tt-panel):not(.tt-starred){display:none}
+.tt-toolbar{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+.tt-toolbar button{border:1px solid #ddd;background:#f7f7f7;color:#666;border-radius:999px;padding:.3rem .8rem;font-size:.82rem;cursor:pointer}
+.tt-toolbar button.active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
+.tt-toolbar a{font-size:.82rem;color:#1a6eb5;text-decoration:none}
+.tt-toolbar a:hover{text-decoration:underline}
+.tt-toolbar a[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -54,6 +66,13 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   <div class="tt-header-title"><a href="{{.BaseURL}}/events/{{.Event.ID}}" target="_blank" rel="noopener">{{.Event.Title}}</a></div>
   <div class="tt-header-sub">{{formatDate .Lang .Event.StartTime}}{{if .Event.Location}} · {{.Event.Location.Location}}{{end}}</div>
 </div>
+
+{{if .Event.Timetable}}
+<div class="tt-toolbar">
+  <button type="button" id="tt-my-toggle">{{.Strings.T "tt_my_timetable"}}</button>
+  <a id="tt-export-link" href="#" hidden>{{.Strings.T "tt_export_starred"}}</a>
+</div>
+{{end}}
 
 {{if not .Event.Timetable}}
 <p class="tt-empty">{{.Strings.T "tt_day_empty"}}</p>
@@ -84,7 +103,8 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
       <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
         {{range $col.Panels}}
-        <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-fn="openTTDetail" data-args='["@this",false]'>
+        <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-entry-id="{{.Entry.ID}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-tt-detail data-has-time="0">
+          <button type="button" class="tt-star-btn" data-entry-id="{{.Entry.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
           <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
           {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
           {{if .Entry.MusicianName}}<div class="tt-meta">{{.Entry.MusicianName}}</div>{{end}}
@@ -100,7 +120,8 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 {{else}}
 <div class="evt-timetable">
   {{range $dayEntries}}
-  <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{else if eq .EntryType "break"}} tt-break{{end}}" data-fn="openTTDetail" data-args='["@this",true]'>
+  <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{else if eq .EntryType "break"}} tt-break{{end}}" data-entry-id="{{.ID}}" data-tt-detail data-has-time="1">
+    <button type="button" class="tt-star-btn" data-entry-id="{{.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
     <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
     <div class="tt-body">
       <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
@@ -119,7 +140,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 {{end}}
 
 <dialog id="tt-detail-dialog" class="tt-detail-dialog">
-  <button type="button" class="tt-detail-close" data-fn="closeTTDetailDialog" data-args="[]" aria-label="Close">×</button>
+  <button type="button" class="tt-detail-close" id="tt-detail-close" aria-label="Close">×</button>
   <div id="tt-detail-body"></div>
 </dialog>
 {{end}}
@@ -136,12 +157,25 @@ function openTTDetail(el,hasTime){
   body.innerHTML=html+el.innerHTML;
   dlg.showModal();
 }
-function closeTTDetailDialog(){ document.getElementById('tt-detail-dialog').close(); }
 (function(){
   var dlg=document.getElementById('tt-detail-dialog');
   if(!dlg)return;
   dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+  var closeBtn=document.getElementById('tt-detail-close');
+  if(closeBtn)closeBtn.addEventListener('click',function(){dlg.close();});
 })();
+// Standalone embed page — no shared base.html data-fn dispatcher here, so
+// entry-open/star clicks are wired via one delegated listener (closest()
+// finds the star button before the detail dialog when both are ancestors of
+// the click, so a star click never also opens the dialog) — delegation also
+// means the star button openTTDetail copies into the popup (via
+// innerHTML) stays clickable there too, with no separate wiring needed.
+document.addEventListener('click',function(ev){
+  var star=ev.target.closest('[data-tt-star]');
+  if(star){ toggleStar(star); return; }
+  var detail=ev.target.closest('[data-tt-detail]');
+  if(detail){ openTTDetail(detail, detail.dataset.hasTime==='1'); }
+});
 document.querySelectorAll('.tt-day').forEach(function(dayEl){
   var wrap=dayEl.querySelector('.tt-columns');
   if(!wrap)return;
@@ -170,6 +204,63 @@ document.querySelectorAll('.tt-day').forEach(function(dayEl){
 function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
 window.addEventListener('load',reportHeight);
 new ResizeObserver(reportHeight).observe(document.body);
+
+// ─── starred timetable entries (#1177) ────────────────────────────────────
+// Purely client-side: which entries are starred lives only in this
+// browser's localStorage, keyed per event — dansal never learns who
+// starred what. Same key shape as event.html's own copy of this logic, so a
+// visitor's stars are shared between the full event page and this widget
+// when both are viewed from the same origin/browser.
+var TT_EVENT_ID = {{.Event.ID}};
+var TT_STAR_KEY = 'dansal_starred_' + TT_EVENT_ID;
+function ttStars(){
+  try{
+    var raw = localStorage.getItem(TT_STAR_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function ttSaveStars(ids){
+  try{ localStorage.setItem(TT_STAR_KEY, JSON.stringify(ids)); }catch(e){}
+}
+function ttApplyStarredUI(){
+  var stars = ttStars();
+  document.querySelectorAll('[data-entry-id]').forEach(function(el){
+    var starred = stars.indexOf(parseInt(el.dataset.entryId,10)) !== -1;
+    if(el.classList.contains('tt-star-btn')){
+      el.textContent = starred ? '★' : '☆';
+    } else {
+      el.classList.toggle('tt-starred', starred);
+    }
+  });
+  ttUpdateExportLink(stars);
+  reportHeight();
+}
+function toggleStar(btn){
+  var id = parseInt(btn.dataset.entryId,10);
+  if(!id && id!==0) return;
+  var stars = ttStars();
+  var idx = stars.indexOf(id);
+  if(idx===-1) stars.push(id); else stars.splice(idx,1);
+  ttSaveStars(stars);
+  ttApplyStarredUI();
+}
+function ttUpdateExportLink(stars){
+  var link = document.getElementById('tt-export-link');
+  if(!link) return;
+  if(!stars.length){ link.hidden = true; return; }
+  link.hidden = false;
+  link.href = '{{.BaseURL}}/events/' + TT_EVENT_ID + '/timetable.ics?entries=' + stars.join(',');
+}
+(function(){
+  var toggle = document.getElementById('tt-my-toggle');
+  if(!toggle) return;
+  toggle.addEventListener('click',function(){
+    var active = document.body.classList.toggle('tt-filter-my');
+    toggle.classList.toggle('active', active);
+    reportHeight();
+  });
+})();
+ttApplyStarredUI();
 </script>
 <div class="powered-by"><a href="{{.BaseURL}}" target="_blank" rel="noopener">Powered by {{.SiteName}}</a></div>
 </body>

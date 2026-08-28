@@ -584,6 +584,7 @@ func feedURL(cfg *Config, path, format string) string {
 // the wildcard is not the whole path segment (e.g. "{id}.ics", "events.{format}").
 func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler) http.Handler {
 	icsH := feedEventICSHandler(cfg, client)
+	timetableICSH := feedEventTimetableICSHandler(cfg, client)
 	mainH := feedMainHandler(cfg, db, client)
 	orgH := feedOrgHandler(cfg, db, client)
 	musicianH := feedMusicianHandler(cfg, client)
@@ -605,6 +606,12 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 			}
 			p := r.URL.Path
 			switch {
+			// Must precede the plain "/events/{id}.ics" case below — both
+			// match strings.HasSuffix(p, ".ics"), and this one is more
+			// specific ("/events/{id}/timetable.ics").
+			case strings.HasPrefix(p, "/events/") && strings.HasSuffix(p, "/timetable.ics"):
+				r.SetPathValue("id", strings.TrimSuffix(strings.TrimPrefix(p, "/events/"), "/timetable.ics"))
+				timetableICSH.ServeHTTP(w, r)
 			case strings.HasPrefix(p, "/events/") && strings.HasSuffix(p, ".ics"):
 				r.SetPathValue("id", strings.TrimSuffix(strings.TrimPrefix(p, "/events/"), ".ics"))
 				icsH.ServeHTTP(w, r)

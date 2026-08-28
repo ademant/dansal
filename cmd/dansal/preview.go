@@ -54,6 +54,15 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 
 	if feedURL := r.FormValue("url"); feedURL != "" {
+		// webcal:// and webcals:// are iCal subscription aliases (the latter the
+		// secure variant, analogous to http/https); treat both as https, same as
+		// the fetchURL handler does when saving a recurring fetch source.
+		lowerURL := strings.ToLower(feedURL)
+		if strings.HasPrefix(lowerURL, "webcals://") {
+			feedURL = "https://" + feedURL[len("webcals://"):]
+		} else if strings.HasPrefix(lowerURL, "webcal://") {
+			feedURL = "https://" + feedURL[len("webcal://"):]
+		}
 		parsed, err := url.Parse(feedURL)
 		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 			writeError(w, "URL must use http or https scheme", http.StatusBadRequest)

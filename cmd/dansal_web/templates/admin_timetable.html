@@ -18,8 +18,13 @@
 /* <input type=color> ignores outer width/height for its actual swatch in
    Chrome/Firefox unless the internal wrapper/swatch padding is zeroed too
    — without these, the element still renders visually wide regardless of
-   the box size set above. */
-.tt-track-color{width:1.6rem;height:1.6rem;flex:0 0 auto;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
+   the box size set above. Selector is qualified as ".tt-popup-field
+   input.tt-track-color" (specificity 0,2,1), not just ".tt-track-color"
+   (0,1,0) — the generic ".tt-popup-field input{width:100%;padding:.35rem
+   .5rem}" rule below has specificity 0,1,1, which beat the plain-class
+   version regardless of source order and is why an earlier fix here
+   didn't actually take effect. */
+.tt-popup-field input.tt-track-color{width:1.6rem;height:1.6rem;flex:0 0 auto;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
 .tt-track-color::-webkit-color-swatch-wrapper{padding:0}
 .tt-track-color::-webkit-color-swatch{border:none;border-radius:3px}
 .tt-track-color::-moz-color-swatch{border:none;border-radius:3px}

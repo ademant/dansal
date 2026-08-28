@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -124,5 +126,94 @@ func feedEventTimetableICSHandler(cfg *Config, client *DansalClient) http.Handle
 		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="event-%d-timetable.ics"`, id))
 		w.Write([]byte(cal.Serialize()))
+	}
+}
+
+// timetableExportRow is the flat, one-row-per-entry shape for #1178's
+// CSV/JSON exports — every field a poster/program-design tool would want
+// (date/room resolved, performer name picked from whichever of
+// musician_name/instructor_name is set) without making the consumer
+// reimplement that resolution against the nested Event/TimetableEntry JSON.
+type timetableExportRow struct {
+	Date      string `json:"date"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	Room      string `json:"room,omitempty"`
+	Title     string `json:"title"`
+	EntryType string `json:"entry_type,omitempty"`
+	Performer string `json:"performer,omitempty"`
+}
+
+// buildTimetableExportRows flattens an event's timetable entries into
+// timetableExportRow, resolving each entry's date the same way
+// timetableEntryStartEnd does (entry's own entry_date, else the event's own
+// start date) so CSV/JSON rows and the .ics VEVENTs agree on which day an
+// entry falls on.
+func buildTimetableExportRows(event Event, entries []TimetableEntry) []timetableExportRow {
+	eventDate := ""
+	if t, err := time.Parse(time.RFC3339, event.StartTime); err == nil {
+		eventDate = t.Format("2006-01-02")
+	}
+	rows := make([]timetableExportRow, 0, len(entries))
+	for _, e := range entries {
+		date := strings.TrimSpace(e.EntryDate)
+		if date == "" {
+			date = eventDate
+		}
+		room := e.LocationName
+		if room == "" {
+			room = e.Room
+		}
+		performer := e.MusicianName
+		if performer == "" {
+			performer = e.InstructorName
+		}
+		rows = append(rows, timetableExportRow{
+			Date:      date,
+			StartTime: e.StartTime,
+			EndTime:   e.EndTime,
+			Room:      room,
+			Title:     e.Title,
+			EntryType: e.EntryType,
+			Performer: performer,
+		})
+	}
+	return rows
+}
+
+// feedEventTimetableExportHandler serves GET /events/{id}/timetable.{csv,json}
+// (#1178) — the flat per-entry counterpart to the nested timetable already
+// available inside GET /api/v1/events/{id}. Same published-event visibility
+// and optional ?entries= filter as the .ics sibling above.
+func feedEventTimetableExportHandler(client *DansalClient, format string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		event, err := client.GetEvent(r.Context(), id)
+		if err != nil || !event.IsPublished {
+			http.NotFound(w, r)
+			return
+		}
+
+		entries := filterTimetableEntries(event.Timetable, r.URL.Query().Get("entries"))
+		rows := buildTimetableExportRows(event, entries)
+
+		switch format {
+		case "json":
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			json.NewEncoder(w).Encode(rows)
+		case "csv":
+			w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="event-%d-timetable.csv"`, id))
+			cw := csv.NewWriter(w)
+			cw.Write([]string{"date", "start_time", "end_time", "room", "title", "entry_type", "performer"})
+			for _, row := range rows {
+				cw.Write([]string{row.Date, row.StartTime, row.EndTime, row.Room, row.Title, row.EntryType, row.Performer})
+			}
+			cw.Flush()
+		}
 	}
 }

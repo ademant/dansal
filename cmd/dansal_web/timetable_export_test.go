@@ -126,6 +126,85 @@ func TestFeedEventTimetableICSHandler(t *testing.T) {
 	}
 }
 
+// TestFeedEventTimetableExportHandler exercises the flat CSV/JSON export
+// (#1178) — same fixture as the .ics test above, so the three formats can be
+// trusted to agree on which rows exist.
+func TestFeedEventTimetableExportHandler(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/events/1", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(Event{
+			ID: 1, Title: "Festival", StartTime: "2026-09-15T18:00:00+02:00", IsPublished: true,
+			Timetable: []TimetableEntry{
+				{ID: 10, Title: "Opening bal", StartTime: "18:00", EndTime: "19:00", LocationName: "Main hall", MusicianName: "Trio Foo"},
+				{ID: 11, Title: "Workshop", StartTime: "19:30", EndTime: "20:30", EntryType: "workshop", InstructorName: "Jane Doe"},
+			},
+		})
+	})
+	mux.HandleFunc("/api/v1/events/2", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(Event{ID: 2, Title: "Draft", IsPublished: false})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := &DansalClient{BaseURL: srv.URL, HTTP: srv.Client()}
+
+	render := func(h http.HandlerFunc, id, query string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/events/"+id+"/timetable?"+query, nil)
+		req.SetPathValue("id", id)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("csv", func(t *testing.T) {
+		h := feedEventTimetableExportHandler(client, "csv")
+		rec := render(h, "1", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "date,start_time,end_time,room,title,entry_type,performer") {
+			t.Fatalf("expected a header row, got:\n%s", body)
+		}
+		if !strings.Contains(body, "Main hall") || !strings.Contains(body, "Trio Foo") {
+			t.Fatalf("expected resolved room/performer, got:\n%s", body)
+		}
+		if strings.Count(body, "\n") != 3 { // header + 2 rows + trailing newline
+			t.Fatalf("expected 2 data rows, got:\n%s", body)
+		}
+
+		rec = render(h, "1", "entries=11")
+		if !strings.Contains(rec.Body.String(), "Jane Doe") || strings.Contains(rec.Body.String(), "Trio Foo") {
+			t.Fatalf("expected only the filtered entry's row, got:\n%s", rec.Body.String())
+		}
+
+		rec = render(h, "2", "")
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("unpublished event: expected 404, got %d", rec.Code)
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		h := feedEventTimetableExportHandler(client, "json")
+		rec := render(h, "1", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var rows []timetableExportRow
+		if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("invalid JSON: %v\n%s", err, rec.Body.String())
+		}
+		if len(rows) != 2 {
+			t.Fatalf("expected 2 rows, got %d", len(rows))
+		}
+		if rows[0].Date != "2026-09-15" || rows[0].Room != "Main hall" || rows[0].Performer != "Trio Foo" {
+			t.Fatalf("unexpected first row: %+v", rows[0])
+		}
+		if rows[1].EntryType != "workshop" || rows[1].Performer != "Jane Doe" {
+			t.Fatalf("unexpected second row: %+v", rows[1])
+		}
+	})
+}
+
 // TestFeedRouterTimetableICSPrecedence guards the ordering feed.go's comment
 // calls out: "/events/{id}/timetable.ics" and "/events/{id}.ics" both match
 // strings.HasSuffix(p, ".ics"), so the more specific timetable case must be

@@ -15,11 +15,11 @@
 .tt-room-suggest li{padding:.3rem .7rem;cursor:pointer;font-size:.85rem}
 .tt-room-suggest li:hover,.tt-room-suggest li.active{background:var(--bg-hover)}
 /* per-event track palette (#1174) — same visual language as the room-add chip above */
-.tt-track-color{width:2.1rem;height:1.9rem;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
-.tt-track-add-wrap{display:flex;align-items:center;gap:.3rem}
-.tt-track-add-wrap .tt-room-add-input{width:140px}
-.tt-type-row{display:flex;gap:.3rem;align-items:center}
-.tt-type-row select{flex:1}
+.tt-track-color{width:1.9rem;height:1.9rem;flex:0 0 auto;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
+.tt-track-add-wrap{display:flex;align-items:center;gap:.4rem}
+.tt-track-add-wrap .tt-room-add-input{flex:1;min-width:0;width:auto}
+.tt-type-row{display:flex;gap:.4rem;align-items:center}
+.tt-type-row select{flex:1;min-width:0}
 .tt-page-nav{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .tt-page-nav button{background:none;border:1px solid var(--border-mid);border-radius:4px;padding:.2rem .6rem;cursor:pointer;color:var(--fg)}
 .tt-page-nav button:disabled{opacity:.4;cursor:default}
@@ -138,7 +138,7 @@
     <div class="tt-popup-field"><label>Title</label><input type="text" id="pp-title" data-on="input" data-fn="ppDirty" data-args="[]"></div>
   </div>
   <div class="tt-popup-row">
-    <div class="tt-popup-field"><label>Type</label>
+    <div class="tt-popup-field"><label>Track</label>
       <div class="tt-type-row">
         <!-- #1174: options are the event's own track palette (defaults to the
              standard 8-slug palette server-side when no custom tracks are
@@ -158,11 +158,12 @@
     </div>
   </div>
   <div class="tt-popup-row full">
-    <div class="tt-popup-field"><label>Add custom track</label>
+    <div class="tt-popup-field"><label>New track</label>
       <div class="tt-track-add-wrap">
-        <input type="text" class="tt-room-add-input" id="tt-track-add-name" placeholder="+ Track name…" autocomplete="off">
+        <input type="text" class="tt-room-add-input" id="tt-track-add-name" placeholder="Track name…" autocomplete="off"
+          data-on="keydown" data-fn="trackAddKeydown" data-args='["@event"]'>
         <input type="color" id="tt-track-add-color" class="tt-track-color" value="#4a7fcb" title="Track color">
-        <button type="button" class="btn-secondary" data-fn="addTrack" data-args="[]">Add</button>
+        <button type="button" class="btn-secondary" data-fn="addTrack" data-args="[]">Add track</button>
       </div>
     </div>
   </div>
@@ -852,7 +853,9 @@ function openPopup(entry, isNew){
   document.getElementById('pp-start').value = entry.start_time||'';
   document.getElementById('pp-end').value = entry.end_time||'';
   document.getElementById('pp-title').value = entry.title||'';
-  document.getElementById('pp-type').value = entry.entry_type||(_tracks[0]&&_tracks[0].slug)||'bal';
+  var wantType = entry.entry_type||(_tracks[0]&&_tracks[0].slug)||'bal';
+  ensureTrackOption(wantType);
+  document.getElementById('pp-type').value = wantType;
   document.getElementById('pp-type-color').value = trackColor(document.getElementById('pp-type').value);
   document.getElementById('pp-desc').value = entry.description||'';
   document.getElementById('pp-mus-text').value = entry.musician_name||'';
@@ -889,6 +892,26 @@ function colorToHex(c){
   function h(n){ return ('0'+parseInt(n,10).toString(16)).slice(-2); }
   return '#'+h(m[1])+h(m[2])+h(m[3]);
 }
+// ensureTrackOption guarantees the Type/Track <select> has an <option> for
+// slug, adding one (using slug as its own display name, with a generic
+// fallback color) if it's missing from _tracks/the select entirely. Without
+// this, an entry whose entry_type isn't in the event's current track
+// palette (legacy data, or a track that never made it into
+// Event.TimetableTracks) would leave the <select> with no matching option:
+// per the HTML spec, setting select.value to a value with no matching
+// <option> sets selectedIndex to -1, and *reading* .value back then
+// silently returns "" — so ppSave() would blank entry_type on save, and the
+// entry would revert to the default track. Always called before setting
+// pp-type's value in openPopup() so this can never happen.
+function ensureTrackOption(slug){
+  if(!slug) return;
+  if(_tracks.some(function(t){return t.slug===slug;})) return;
+  var track = {slug: slug, name: slug, color: '#4a7fcb'};
+  _tracks.push(track);
+  var opt = document.createElement('option');
+  opt.value = track.slug; opt.textContent = track.name; opt.dataset.color = track.color;
+  document.getElementById('pp-type').appendChild(opt);
+}
 function ppTypeChange(){
   document.getElementById('pp-type-color').value = trackColor(document.getElementById('pp-type').value);
   ppDirty();
@@ -909,6 +932,9 @@ function slugify(name){
   var slug = base, n = 2;
   while(_tracks.some(function(t){return t.slug===slug;})){ slug = base+'-'+n; n++; }
   return slug;
+}
+function trackAddKeydown(ev){
+  if(ev.key==='Enter'){ ev.preventDefault(); addTrack(); }
 }
 function addTrack(){
   var nameInput = document.getElementById('tt-track-add-name');

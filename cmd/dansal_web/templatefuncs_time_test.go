@@ -1,6 +1,36 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+// TestTimetableEntriesForNextUpJSON verifies the entry-id -> {date,start,
+// end,title,room} JSON object the client-side "Now/Next" indicator (#1179)
+// is built from, including the entry_date-override case (multi-day
+// festival) and an empty timetable producing an empty (not null/invalid)
+// object.
+func TestTimetableEntriesForNextUpJSON(t *testing.T) {
+	entries := []TimetableEntry{
+		{ID: 10, Title: "Opening bal", StartTime: "18:00", EndTime: "19:00", LocationName: "Main hall"},
+		{ID: 11, Title: "Day 2 workshop", StartTime: "10:00", EndTime: "11:00", EntryDate: "2026-09-17", Room: "Studio"},
+	}
+	raw := timetableEntriesForNextUpJSON(entries, "2026-09-15T18:00:00+02:00")
+	var data map[string]map[string]string
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, raw)
+	}
+	if data["10"]["date"] != "2026-09-15" || data["10"]["room"] != "Main hall" || data["10"]["title"] != "Opening bal" {
+		t.Fatalf("unexpected entry 10: %+v", data["10"])
+	}
+	if data["11"]["date"] != "2026-09-17" || data["11"]["room"] != "Studio" {
+		t.Fatalf("expected entry_date to override the event's own date, got: %+v", data["11"])
+	}
+
+	if got := timetableEntriesForNextUpJSON(nil, "2026-09-15T18:00:00+02:00"); string(got) != "{}" {
+		t.Fatalf("expected an empty object for no entries, got %s", got)
+	}
+}
 
 // TestTimetableGridOverlapLanes verifies overlapping entries in the same
 // room are laid out side-by-side (lanes) instead of stacked on top of each

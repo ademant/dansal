@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"sort"
@@ -498,6 +499,37 @@ var tmplFuncsTime = template.FuncMap{
 	// known, deliberately deferred edge case (#888) — this only lays out
 	// columns/time, it doesn't detect or resolve overlaps.
 	"timetableGrid": timetableGrid,
+	// timetableEntriesForNextUpJSON (#1179) emits a small entry-id -> {date,
+	// start, end, title, room} JSON object for the client-side "Now/Next"
+	// starred-entry indicator. Reuses buildTimetableExportRows
+	// (cmd/dansal_web/timetable_export.go) for the date-resolution rule
+	// (entry's own entry_date, else the event's own start date) rather than
+	// reimplementing it a third time, so the indicator, the .ics export
+	// (#1177), and the flat CSV/JSON export (#1178) can never disagree about
+	// which day an entry falls on.
+	"timetableEntriesForNextUpJSON": timetableEntriesForNextUpJSON,
+}
+
+func timetableEntriesForNextUpJSON(entries []TimetableEntry, eventStartTime string) template.JS {
+	rows := buildTimetableExportRows(Event{StartTime: eventStartTime}, entries)
+	data := make(map[int]map[string]string, len(entries))
+	for i, e := range entries {
+		if i >= len(rows) {
+			break
+		}
+		data[e.ID] = map[string]string{
+			"date":  rows[i].Date,
+			"start": rows[i].StartTime,
+			"end":   rows[i].EndTime,
+			"title": rows[i].Title,
+			"room":  rows[i].Room,
+		}
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		return template.JS("{}")
+	}
+	return template.JS(b)
 }
 
 // defaultTrackI18nKeys maps the 8 slugs in the shipped default

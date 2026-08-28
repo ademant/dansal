@@ -59,6 +59,9 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .tt-toolbar a{font-size:.82rem;color:#1a6eb5;text-decoration:none}
 .tt-toolbar a:hover{text-decoration:underline}
 .tt-toolbar a[hidden]{display:none}
+/* "Now/Next" starred-entry indicator (#1179) — see ttNextUp() below. */
+.tt-nextup{font-size:.85rem;font-weight:600;color:#1a6eb5;background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:.4rem .7rem;margin-bottom:.6rem}
+.tt-nextup[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -72,6 +75,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   <button type="button" id="tt-my-toggle">{{.Strings.T "tt_my_timetable"}}</button>
   <a id="tt-export-link" href="#" hidden>{{.Strings.T "tt_export_starred"}}</a>
 </div>
+<div id="tt-nextup" class="tt-nextup" hidden></div>
 {{end}}
 
 {{if not .Event.Timetable}}
@@ -213,6 +217,9 @@ new ResizeObserver(reportHeight).observe(document.body);
 // when both are viewed from the same origin/browser.
 var TT_EVENT_ID = {{.Event.ID}};
 var TT_STAR_KEY = 'dansal_starred_' + TT_EVENT_ID;
+// Entry id -> {date,start,end,title,room}, resolved server-side by the same
+// date-fallback rule the .ics/.csv/.json exports use (#1179).
+var TT_ENTRY_DATA = {{timetableEntriesForNextUpJSON .Event.Timetable .Event.StartTime}};
 function ttStars(){
   try{
     var raw = localStorage.getItem(TT_STAR_KEY);
@@ -233,6 +240,7 @@ function ttApplyStarredUI(){
     }
   });
   ttUpdateExportLink(stars);
+  ttNextUp(stars);
   reportHeight();
 }
 function toggleStar(btn){
@@ -260,7 +268,64 @@ function ttUpdateExportLink(stars){
     reportHeight();
   });
 })();
+
+// ─── "Now/Next" starred-entry indicator (#1179) ──────────────────────────
+// Purely client-side, comparing the browser's current time against
+// TT_ENTRY_DATA — no new fetch, no new backend. Templates carry %s
+// placeholders filled in order (title[, time][, room]); an entry without a
+// room drops straight to the "_noroom" variant rather than rendering an
+// empty " in " clause.
+var TT_NEXTUP_NOW = '{{.Strings.T "tt_nextup_now" | js}}';
+var TT_NEXTUP_NOW_NOROOM = '{{.Strings.T "tt_nextup_now_noroom" | js}}';
+var TT_NEXTUP_NEXT = '{{.Strings.T "tt_nextup_next" | js}}';
+var TT_NEXTUP_NEXT_NOROOM = '{{.Strings.T "tt_nextup_next_noroom" | js}}';
+function ttFillTemplate(tmpl, args){
+  var i = 0;
+  return tmpl.replace(/%s/g, function(){ return args[i++]; });
+}
+function ttEntryWindow(id){
+  var d = TT_ENTRY_DATA[id];
+  if(!d || !d.date || !d.start || !d.end) return null;
+  var start = new Date(d.date + 'T' + d.start + ':00');
+  var end = new Date(d.date + 'T' + d.end + ':00');
+  if(isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  if(end <= start) end = new Date(end.getTime() + 24*60*60*1000); // crosses midnight
+  return {start: start, end: end, title: d.title, room: d.room, startLabel: d.start};
+}
+function ttNextUp(stars){
+  var el = document.getElementById('tt-nextup');
+  if(!el) return;
+  if(!stars || !stars.length){ el.hidden = true; return; }
+  var now = new Date();
+  var current = null, next = null;
+  stars.forEach(function(id){
+    var w = ttEntryWindow(id);
+    if(!w) return;
+    if(now >= w.start && now < w.end){
+      if(!current || w.start < current.start) current = w;
+    } else if(w.start > now){
+      if(!next || w.start < next.start) next = w;
+    }
+  });
+  if(current){
+    el.hidden = false;
+    el.textContent = current.room
+      ? ttFillTemplate(TT_NEXTUP_NOW, [current.title, current.room])
+      : ttFillTemplate(TT_NEXTUP_NOW_NOROOM, [current.title]);
+  } else if(next){
+    el.hidden = false;
+    el.textContent = next.room
+      ? ttFillTemplate(TT_NEXTUP_NEXT, [next.title, next.startLabel, next.room])
+      : ttFillTemplate(TT_NEXTUP_NEXT_NOROOM, [next.title, next.startLabel]);
+  } else {
+    el.hidden = true;
+  }
+  reportHeight();
+}
+
 ttApplyStarredUI();
+// Refresh every 30s so "Now" flips to the next entry without a reload.
+setInterval(function(){ ttNextUp(ttStars()); }, 30000);
 </script>
 <div class="powered-by"><a href="{{.BaseURL}}" target="_blank" rel="noopener">Powered by {{.SiteName}}</a></div>
 </body>

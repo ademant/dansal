@@ -36,6 +36,15 @@ func TestSmokeRenderEmbedTimetable(t *testing.T) {
 			if !strings.Contains(string(body), "</html>") {
 				t.Fatalf("truncated render (no closing </html>), body: %s", body)
 			}
+			// #1179's "Now/Next" indicator container only renders when
+			// there's a timetable at all.
+			hasNextup := strings.Contains(string(body), `id="tt-nextup"`)
+			if len(ev.Timetable) > 0 && !hasNextup {
+				t.Fatal("expected the Now/Next indicator container")
+			}
+			if len(ev.Timetable) == 0 && hasNextup {
+				t.Fatal("did not expect the Now/Next indicator container without a timetable")
+			}
 		})
 	}
 

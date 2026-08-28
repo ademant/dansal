@@ -146,6 +146,10 @@ func TestSmokeRenderEventPageStarredTimetable(t *testing.T) {
 			if !strings.Contains(string(body), "tt-star-btn") {
 				t.Fatal("expected a star toggle button on the timetable entry")
 			}
+			// #1179's "Now/Next" indicator container.
+			if !strings.Contains(string(body), `id="tt-nextup"`) {
+				t.Fatal("expected the Now/Next indicator container")
+			}
 		})
 	}
 

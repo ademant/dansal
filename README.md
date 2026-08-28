@@ -149,11 +149,15 @@ See [Admin Guide](ADMIN_GUIDE.md) for full installation and configuration instru
 |---|---|---|
 | REST API | `dansal` | 8000 |
 | Web frontend + ActivityPub | `dansal-web` | 8080 |
-| Web admin UI | `dansal-webmin` | — |
+| Web admin UI | `dansal-webmin` | 8090 |
+| Per-instance docs server (serves `wiki/`) | `dansal-doc` | 8070 |
 | Admin CLI | `dansal_admin` | — |
 
-Database: SQLite at `/var/lib/dansal/<instance>/calendar.db`  
-Config: `/etc/dansal/<instance>/{config,web,webmin}.yaml`
+`dansal` is the only component with real data — the other three services are all clients of its REST API (`dansal-webmin` also uses a local Unix socket for privileged admin actions). nginx sits in front of everything as a reverse proxy and TLS terminator; every service binds to `127.0.0.1` only.
+
+Two SQLite databases: `dansal`'s `calendar.db` (events, locations, organizations, musicians, users — the source of truth) and `dansal-web`'s own `web.db` (ActivityPub state, runtime site settings, caches). Uploaded images (events, organizations, musicians, venues) live under one shared directory tree, separate from `dansal-web`'s own tiny directory for instance branding (logo/banner/favicon).
+
+Config: `/etc/dansal/<instance>/{config,web,webmin,doc}.yaml`
 
 ## 📞 Support & Community
 

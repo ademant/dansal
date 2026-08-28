@@ -1,5 +1,5 @@
 ---
-nav_order: 9
+nav_order: 10
 ---
 
 # WordPress-Plugin „wp-dansal" nutzen

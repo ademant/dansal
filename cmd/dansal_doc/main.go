@@ -125,7 +125,7 @@ func loadConfig() Config {
 	cfg := Config{
 		Listen:                "127.0.0.1:8070",
 		ContentDir:            "/usr/share/dansal/wiki",
-		IndexPage:             "README",
+		IndexPage:             "Home",
 		SiteName:              "Dansal Documentation",
 		ReadHeaderTimeoutSecs: 5,
 		ReadTimeoutSecs:       10,

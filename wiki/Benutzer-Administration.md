@@ -1,5 +1,5 @@
 ---
-nav_order: 10 
+nav_order: 12
 ---
 
 # Administration – Systemverwaltung
@@ -128,6 +128,8 @@ sudo make deploy INSTANCE=prod
 ```
 
 ## 👥 Benutzerverwaltung
+
+> 💡 **Tipp für Bulk-Operationen**: Nutze [Multi-Select](Benutzer-Multi-Select) in der Webmin-Oberfläche, um mehrere Benutzer gleichzeitig auszuwählen und gemeinsam zu bearbeiten (z. B. Rollen ändern, Organisation zuweisen, löschen).
 
 ### Benutzer anlegen
 

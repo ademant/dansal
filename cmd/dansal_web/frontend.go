@@ -391,31 +391,34 @@ func displayNameOrEmail(u UserInfo) string {
 // initial page's #events-geo script tag and the /api/events-more incremental fetch.
 // Excludes fields the map doesn't need (geohash, osm_id, notes_md, aliases, contact_*, etc).
 type geoEvent struct {
-	ID                 int     `json:"id"`
-	Title              string  `json:"t"`
-	Start              string  `json:"s"`
-	End                string  `json:"e,omitempty"`
-	Location           string  `json:"loc,omitempty"`
-	ShortName          string  `json:"sn,omitempty"`
-	Town               string  `json:"town,omitempty"`
-	Country            string  `json:"c,omitempty"`
-	Lat                float64 `json:"lat"`
-	Lng                float64 `json:"lng"`
-	URL                string  `json:"url,omitempty"`
-	Ball               bool    `json:"ball,omitempty"`
-	Workshop           bool    `json:"ws,omitempty"`
-	WorkshopDifficulty string  `json:"wd,omitempty"`
-	Festival           bool    `json:"fest,omitempty"`
-	Session            bool    `json:"sess,omitempty"`
-	Concert            bool    `json:"conc,omitempty"`
-	Cancelled          bool    `json:"x,omitempty"`
-	Availability       string  `json:"av,omitempty"`
-	BookingEnabled     bool    `json:"book,omitempty"`
-	Fee                string  `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
-	Food               string  `json:"food,omitempty"`
-	Drink              string  `json:"drink,omitempty"`
-	Wheelchair         bool    `json:"wc,omitempty"`
-	HearingLoop        bool    `json:"hl,omitempty"`
+	ID        int     `json:"id"`
+	Title     string  `json:"t"`
+	Start     string  `json:"s"`
+	End       string  `json:"e,omitempty"`
+	Location  string  `json:"loc,omitempty"`
+	ShortName string  `json:"sn,omitempty"`
+	Town      string  `json:"town,omitempty"`
+	Country   string  `json:"c,omitempty"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	URL       string  `json:"url,omitempty"`
+	// Tags is the event's raw tag slug list (#1173) — index.html's JS
+	// derives per-home-group flags from this against HOME_GROUPS[i].members
+	// itself, rather than dansal_web precomputing a fixed Ball/Workshop/
+	// Festival/Session/Concert set of booleans for a vocabulary that's no
+	// longer fixed. WorkshopDifficulty stays a dedicated field: it's not a
+	// tag, it's a separate per-event attribute the "workshop" home-group's
+	// badge happens to also show a sub-badge for.
+	Tags               []string `json:"tags,omitempty"`
+	WorkshopDifficulty string   `json:"wd,omitempty"`
+	Cancelled          bool     `json:"x,omitempty"`
+	Availability       string   `json:"av,omitempty"`
+	BookingEnabled     bool     `json:"book,omitempty"`
+	Fee                string   `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
+	Food               string   `json:"food,omitempty"`
+	Drink              string   `json:"drink,omitempty"`
+	Wheelchair         bool     `json:"wc,omitempty"`
+	HearingLoop        bool     `json:"hl,omitempty"`
 }
 
 // eventsToGeo projects events to geoEvent, skipping any without coordinates.
@@ -456,20 +459,11 @@ func eventsToGeo(events []Event) []geoEvent {
 		if l := e.Location; l != nil {
 			locName, locShortName, locTown, locCountry = l.Location, l.ShortName, l.Town, l.Country
 		}
-		var hasSession, hasConcert bool
-		for _, tag := range e.Tags {
-			if tag == "session" {
-				hasSession = true
-			} else if tag == "concert" {
-				hasConcert = true
-			}
-		}
 		geo = append(geo, geoEvent{
 			ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
 			Location: locName, ShortName: locShortName, Town: locTown, Country: locCountry,
 			Lat: lat, Lng: lng, URL: e.URL,
-			Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
-			Festival: e.HasFestival, Session: hasSession, Concert: hasConcert,
+			Tags: e.Tags, WorkshopDifficulty: e.WorkshopDifficulty,
 			Cancelled: e.IsCancelled, Availability: e.Availability,
 			BookingEnabled: e.BookingEnabled,
 			Fee:            fee, Food: e.Food, Drink: e.Drink,

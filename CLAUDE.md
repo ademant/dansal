@@ -237,10 +237,16 @@ Runtime config that must not require a service restart lives in the `site_settin
 
 ## Tags vocabulary
 
-`tags` table: `slug TEXT PRIMARY KEY, name TEXT, category TEXT CHECK(category IN ('format','level','type'))`. `validateTags()` rejects unknown slugs. Categories:
+`tags` table: `slug TEXT PRIMARY KEY, name TEXT, category TEXT CHECK(category IN ('format','level','type')), emoji TEXT, home_group TEXT, color TEXT, sort_order INTEGER`. `validateTags()` rejects unknown slugs.
+
+The vocabulary itself is seed-derived (#1173), not hardcoded Go `INSERT` statements — `seedDefaultTags()` in `cmd/dansal/tags_seed.go` upserts it from `cmd/dansal/tags.yaml` (the embedded default: the balfolk vocabulary below) or, when `server.tags_file` is set in `config.yaml`, that file instead, on every startup. There's still no admin UI to create/edit a tag; a custom instance serving a different dance/event community ships its own `tags.yaml` at install time. Declaration order in the YAML becomes `sort_order`, which drives the home-page format-selector button order and (client-side) map-marker type priority — see `homeGroups()` in `cmd/dansal_web/templatefuncs_tags.go`. `emoji`/`home_group`/`color` are optional per tag: a non-empty `emoji` gives a tag a home-page button, grouped with other tags sharing the same `home_group` (defaults to the tag's own slug when unset) into one button — e.g. `bal-folk`+`fest-noz` collapse into one "Ball" button. A tag with no `emoji` (e.g. `open-air`, or any `level` tag) gets no home-page presence at all.
+
+The shipped default (balfolk) vocabulary:
 - `format`: `bal-folk`, `fest-noz`, `session`, `concert`, `festival`, `open-air`, `workshop`, `music-course`
 - `type`: `dance-workshop`, `musician-workshop`
 - `level`: `beginners`, `intermediate`, `advanced`
+
+For this default vocabulary specifically, a tag's public display name goes through `tagI18nKeys` (`cmd/dansal_web/templatefuncs_tags.go`) first — translated across all 12 languages — before falling back to the DB `name` column; a custom instance's own tags have no `tagI18nKeys` entry and always use their `name` column as-is.
 
 ## has_* boolean fields (legacy — prefer tags)
 

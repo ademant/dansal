@@ -167,12 +167,22 @@
   }
 
   // ── Map ───────────────────────────────────────────────────────────────────
+  // eventIcon reads geoEvent.tags directly rather than precomputed
+  // ball/workshop/festival booleans (#1173 — geoEvent no longer carries a
+  // fixed set of type flags, see the Tags field's doc comment in
+  // frontend.go's geoEvent struct). This page's own type filter stays a
+  // fixed 3-checkbox ball/workshop/festival subset (a deliberately smaller
+  // curated set than the home page's full dynamic button row), so matching
+  // against those same 3 slug groups here — rather than going fully dynamic
+  // like index.html's HOME_GROUPS — keeps this file's own scope unchanged.
   function eventIcon(e){
+    var tags = e.tags || [];
+    function has(s){ return tags.indexOf(s) !== -1; }
     var color;
-    if      (e.fest) color='#7c3aed';
-    else if (e.ws)   color='#d97706';
-    else if (e.ball) color='#1a6eb5';
-    else             color='#6b7280';
+    if      (has('festival')) color='#7c3aed';
+    else if (has('workshop') || has('dance-workshop') || has('musician-workshop') || has('music-course')) color='#d97706';
+    else if (has('bal-folk') || has('fest-noz')) color='#1a6eb5';
+    else color='#6b7280';
     if (e.x) color='#9e9e9e';
     var pin='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34"><path d="M12 2C6.5 2 2 6.5 2 12c0 7.8 10 20 10 20S22 19.8 22 12C22 6.5 17.5 2 12 2z" fill="'+color+'" stroke="rgba(0,0,0,.2)" stroke-width="1"/><circle cx="12" cy="12" r="4.5" fill="rgba(255,255,255,.85)"/></svg>';
     return L.divIcon({html:pin,className:'',iconSize:[24,34],iconAnchor:[12,34],popupAnchor:[0,-36]});

@@ -2,7 +2,7 @@ listen: "127.0.0.1:8070"
 domain: "doc.example.com"
 base_url: ""
 content_dir: "/usr/share/dansal/wiki"
-index_page: "README"
+index_page: "Home"
 site_name: "Dansal Documentation"
 
 read_header_timeout_secs: 5

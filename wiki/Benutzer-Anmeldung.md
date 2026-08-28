@@ -27,6 +27,29 @@ Die Anmeldeseite bietet mehrere Möglichkeiten:
 
 ---
 
+## Übersicht der Anmeldemethoden
+
+Dansal unterstützt mehrere Anmeldemethoden, die du kombinieren kannst:
+
+### 1. Passkey (empfohlen)
+- **Was ist das?** Ein kryptografischer Schlüssel, der sicher auf deinem Gerät gespeichert wird (Fingerabdruck, Gesichtserkennung oder PIN)
+- **Vorteile**: Kein Passwort nötig, sehr sicher, schnell
+- **Hinweis**: Jedes Gerät braucht seinen eigenen Passkey
+
+### 2. Passwort
+- **Klassische Anmeldung** mit Benutzername und Passwort
+- Kann mit anderen Methoden kombiniert werden
+
+### 3. Magic Link (Passwortlos)
+- **Per E-Mail**: Einmaliger Anmeldelink, 15 Minuten gültig
+- **Per Telegram**: Login-Link über Telegram
+- **Per Matrix**: Login-Link über Matrix
+- **Vorteile**: Kein Passwort nötig, ideal für Geräte ohne Passkey
+
+> 💡 **Tipp**: Nutze Passkey als primäre Methode und Magic Link als Backup. Du kannst mehrere Methoden gleichzeitig aktivieren.
+
+---
+
 ## Anmeldung per Magic Link (E-Mail)
 
 Hier die Beschreibung exemplarisch bei Verwendung einer E-Mail-Adresse. Die anderen Methoden (Telegram / Matrix) sind vergleichbar.
@@ -63,11 +86,33 @@ Du landest auf deinem Dashboard mit der Übersicht deiner Veranstaltungen.
 
 ---
 
-## Einrichtung Passkey auf weiterem Gerät
+## Benutzer-Einstellungen
+
+Nach der Anmeldung kannst du in deinen Profileinstellungen weitere Anmeldemethoden hinzufügen und dein Konto verwalten.
+
+![Benutzer-Einstellungen](images/screenshots/01_Registration_01_JoinOrg_12_userpage.png)
+
+Unter **Einstellungen** (Klick auf dein Avatar-Symbol) kannst du:
+
+- Anzeigenamen und Kurzbeschreibung anpassen
+- Telegram, Matrix, Mastodon verknüpfen
+- Weitere Passkeys hinzufügen oder löschen
+- TOTP (Authenticator-App) einrichten
+- Passwort setzen oder ändern
+- API-Schlüssel verwalten
+- Das Konto dauerhaft löschen
+
+Bis jetzt ist nur Deine E-Mail-Adresse gespeichert. Dies muss keine Adresse sein, welche Du für tägliche Arbeiten verwendest. Es wird davon abgeraten, ein Passwort zu verwenden.
+
+Auf den Profileinstellungen kannst Du einen Nutzernamen festlegen. Nutzername wird aktuell nur verwendet, um anderen angemeldeten Personen zu zeigen, ob Du eine Veranstaltung verändert hast.
+
+---
+
+## Passkey auf einem zweiten Gerät einrichten
 
 Passkey ist eine moderne und sichere Methode, mit der Du nur mit einem ausgewählten Gerät (z. B. Deinem Smartphone) anmelden kannst. Mit einem zweiten Gerät musst Du eine eigene Passkey einrichten.
 
-### Schritt 1: Anmelden mit Magic link
+### Schritt 1: Anmelden mit Magic Link
 
 ![Anmeldeseite](images/screenshots/02_Login.png)
 
@@ -79,9 +124,13 @@ Auf der Anmeldeseite trage Deine E-Mail-Adresse ein und gehe auf den Punkt "Per 
 
 In den Nutzer-Einstellungen ist der Abschnitt **Passkeys**. Dort ist ein Button **Passkey hinzufügen**. Hiermit wird auf dem aktuellen Gerät ein neuer Passkey erzeugt.
 
-### Schritt 3: Zusätzliches Gerät freigeschaltet
+### Schritt 3: zusätzliches Gerät freigeschaltet
 
 Damit ist ein weiteres Gerät freigeschaltet, mit dem Du ohne Passwort Dich anmelden kannst.
+
+> ⏱️ **Wichtig**: Der Passkey funktioniert nur auf dem Gerät, auf dem er erstellt wurde. Für jedes Gerät (Smartphone, Tablet, Laptop) musst du einen separaten Passkey einrichten.
+
+> 💡 **Tipp**: Richte Passkeys auf mindestens zwei Geräten ein, um den Zugang nicht zu verlieren, falls ein Gerät nicht mehr verfügbar ist.
 
 ---
 

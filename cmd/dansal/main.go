@@ -1883,6 +1883,36 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN timetable_tracks TEXT")
 		}
 	}
+	// v30: timetable change journal (#1176) — one row per timetable save
+	// (addTimetableEntries/replaceTimetable/deleteTimetable), holding a full
+	// JSON snapshot of the timetable at that point. Append-only, no draft
+	// state, no notifications — see recordTimetableHistory in timetable.go.
+	if !applied(30) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS timetable_history (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+			changed_at INTEGER NOT NULL,
+			changed_by TEXT DEFAULT '',
+			snapshot   TEXT NOT NULL
+		)`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_timetable_history_event ON timetable_history(event_id, changed_at DESC)`)
+		mark(30)
+	}
+	// Safety net: ensure timetable_history table exists even if v30 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='timetable_history'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS timetable_history (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+				changed_at INTEGER NOT NULL,
+				changed_by TEXT DEFAULT '',
+				snapshot   TEXT NOT NULL
+			)`)
+			db.Exec(`CREATE INDEX IF NOT EXISTS idx_timetable_history_event ON timetable_history(event_id, changed_at DESC)`)
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -2232,6 +2262,50 @@ func migrateDB() {
 	// #893: extend timetable_entries.entry_type to allow session, dance-workshop,
 	// musician-workshop — needed by the dedicated timetable editor.
 	migrateTimetableEntriesExtendedTypes()
+
+	// #1174/#1176: entry_type had a CHECK constraint fixed to the legacy 8
+	// slugs (progressively widened by the two migrations just above), which
+	// silently blocked the free-text custom tracks introduced by #1174 —
+	// insertEntry would coerce any unrecognized slug back to 'bal' rather
+	// than let the INSERT violate the constraint. entry_type is meant to be
+	// free text now (the palette is per-event, not a closed vocabulary), so
+	// drop the constraint entirely. Must run after the two migrations above
+	// (which each rebuild the table with their own CHECK) so it has the
+	// final word; SQLite can't ALTER a CHECK constraint away, so recreate
+	// the table when one is still present (same pattern as those two and
+	// the pending_registrations rebuild earlier in this function).
+	{
+		var schema string
+		db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='timetable_entries'").Scan(&schema)
+		if strings.Contains(schema, "CHECK(entry_type IN") {
+			db.Exec(`CREATE TABLE IF NOT EXISTS timetable_entries_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				event_id INTEGER NOT NULL,
+				start_time TEXT NOT NULL,
+				end_time TEXT NOT NULL,
+				title TEXT NOT NULL,
+				description TEXT,
+				room TEXT,
+				location_id INTEGER,
+				musician_id INTEGER,
+				instructor_id INTEGER,
+				entry_type TEXT NOT NULL DEFAULT 'bal',
+				entry_date TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+				FOREIGN KEY (location_id) REFERENCES locations(id),
+				FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE SET NULL,
+				FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
+			)`)
+			db.Exec(`INSERT INTO timetable_entries_new
+				SELECT id, event_id, start_time, end_time, title, description, room,
+				       location_id, musician_id, instructor_id, entry_type, entry_date, created_at
+				FROM timetable_entries`)
+			db.Exec("DROP TABLE timetable_entries")
+			db.Exec("ALTER TABLE timetable_entries_new RENAME TO timetable_entries")
+			db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
+		}
+	}
 
 	// #740: migrate locations.aliases JSON column to location_aliases junction table.
 	migrateLocationAliasesToJunction()
@@ -3544,7 +3618,7 @@ func createTables() error {
 		location_id INTEGER,
 		musician_id INTEGER,
 		instructor_id INTEGER,
-		entry_type TEXT NOT NULL DEFAULT 'bal' CHECK(entry_type IN ('bal', 'workshop', 'break', 'session', 'dance-workshop', 'musician-workshop')),
+		entry_type TEXT NOT NULL DEFAULT 'bal',
 		entry_date TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
@@ -3553,6 +3627,14 @@ func createTables() error {
 		FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
+	CREATE TABLE IF NOT EXISTS timetable_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+		changed_at INTEGER NOT NULL,
+		changed_by TEXT DEFAULT '',
+		snapshot TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_timetable_history_event ON timetable_history(event_id, changed_at DESC);
 	CREATE TABLE IF NOT EXISTS event_locations (
 		event_id INTEGER NOT NULL,
 		location_id INTEGER NOT NULL,
@@ -3815,6 +3897,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(25)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(26)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(29)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(30)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4096,6 +4179,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/enrich", auth(http.HandlerFunc(enrichEvent)))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
 	smux.Handle("DELETE /api/v1/events/{id}/timetable", auth(deleteTimetable))
+	smux.Handle("GET /api/v1/events/{id}/timetable/history", optAuth(http.HandlerFunc(getTimetableHistory)))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 	// Syndication (#971, #953)
 	smux.Handle("GET /api/v1/events/{id}/syndication", auth(http.HandlerFunc(getEventSyncStatus)))

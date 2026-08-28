@@ -264,6 +264,9 @@ type EventData struct {
 	// JSON-LD fallback, and hero display when the event has no own image (#1072).
 	SeriesImageURL         string
 	SeriesImageAIGenerated bool
+	// TimetableHistory (#1176) is the timetable's change journal, newest
+	// first; empty when the event has no timetable or no saves yet.
+	TimetableHistory []TimetableHistoryEntry
 }
 
 type OrgData struct {
@@ -928,6 +931,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BoardSessionNickname:   bsNickname,
 			SeriesImageURL:         epd.seriesImageURL,
 			SeriesImageAIGenerated: epd.seriesImageAIGenerated,
+			TimetableHistory:       epd.timetableHistory,
 		})
 		// OGImage fallback: event → generated series/org banner overlay
 		// (#1072, #1082, #1083). The generated banner is used whenever a

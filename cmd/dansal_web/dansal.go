@@ -575,6 +575,19 @@ type Price struct {
 	Amount float64 `json:"amount"`
 }
 
+// TimetableHistoryEntry is one journal row (#1176): a full snapshot of an
+// event's timetable right after one save. ChangedAt is always shown;
+// ChangedBy follows the same privacy split as Event.ChangedAt/ChangedBy
+// (event.html's "Last update" block) — the API always returns it, the
+// template only displays it to a logged-in viewer.
+type TimetableHistoryEntry struct {
+	ID        int              `json:"id"`
+	EventID   int              `json:"event_id"`
+	ChangedAt string           `json:"changed_at"`
+	ChangedBy string           `json:"changed_by,omitempty"`
+	Snapshot  []TimetableEntry `json:"snapshot"`
+}
+
 // TimetableTrack is one entry-type option in an event's timetable editor
 // (#1174): a slug used by TimetableEntry.EntryType, a display name, and a
 // CSS color. The API always returns an effective (non-empty) list — the
@@ -1110,6 +1123,17 @@ func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {
 		return Event{}, err
 	}
 	return event, nil
+}
+
+// GetTimetableHistory fetches an event's timetable change journal (#1176),
+// newest first. Public/unauthenticated like GetEvent — the API applies the
+// same published-event visibility rule.
+func (c *DansalClient) GetTimetableHistory(ctx context.Context, eventID int) ([]TimetableHistoryEntry, error) {
+	var history []TimetableHistoryEntry
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/events/%d/timetable/history", eventID), &history); err != nil {
+		return nil, err
+	}
+	return history, nil
 }
 
 func (c *DansalClient) GetEventAuthed(ctx context.Context, id int, token string) (Event, error) {

@@ -591,6 +591,7 @@ type Templates struct {
 	seriesToken               *template.Template
 	embedEvents               *template.Template
 	embedEvent                *template.Template
+	embedTimetable            *template.Template
 	embedOrg                  *template.Template
 	embedNext                 *template.Template
 	embedCalendar             *template.Template
@@ -693,6 +694,7 @@ func loadTemplates() *Templates {
 		seriesToken:               load("series_token"),
 		embedEvents:               loadEmbed("embed_events"),
 		embedEvent:                loadEmbed("embed_event"),
+		embedTimetable:            loadEmbed("embed_timetable"),
 		embedOrg:                  loadEmbed("embed_org"),
 		embedNext:                 loadEmbed("embed_next"),
 		embedCalendar:             loadEmbed("embed_calendar"),

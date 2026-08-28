@@ -505,6 +505,7 @@ func main() {
 
 		r.HandleFunc("GET /embed/events", embedEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/event/{id}", embedEventHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /embed/timetable/{id}", embedTimetableHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/org/{slug}", embedOrgHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/next", embedNextHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/calendar", embedCalendarHandler(cfg, tmpls, client, i18n))

@@ -133,4 +133,17 @@ func TestInlineJSSyntax(t *testing.T) {
 		body, _ := io.ReadAll(rec.Body)
 		checkJS(t, string(body))
 	})
+
+	// #1173: search.html's eventIcon()/typeFilter JS reads geoEvent.tags
+	// directly (not previously covered by this test at all).
+	t.Run("search", func(t *testing.T) {
+		td := tmplData(req, cfg, i18n, "Search", SearchData{DateFrom: "2026-01-01", DateTo: "2026-01-07", Locs: template.JS("[]")})
+		rec := httptest.NewRecorder()
+		renderTemplate(rec, tmpls.search, td)
+		body, _ := io.ReadAll(rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		checkJS(t, string(body))
+	})
 }

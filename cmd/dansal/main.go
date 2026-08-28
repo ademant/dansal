@@ -1199,20 +1199,11 @@ func migrateDB() {
 		name     TEXT NOT NULL,
 		category TEXT NOT NULL CHECK(category IN ('format','level','type'))
 	)`)
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',     'Ball',          'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',     'Fest Noz',      'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',      'Session',       'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',      'Concert',       'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',     'Festival',      'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',     'Open Air',      'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('ball',         'Ball',          'format')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',          'Workshop',          'type')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('dance-workshop',    'Dance Workshop',    'type')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('musician-workshop', 'Musician Workshop', 'type')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course',      'Music Course',      'type')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',    'Beginners',     'level')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate', 'Intermediate',  'level')")
-		db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',     'Advanced',      'level')")
+		// Seeding moved to seedDefaultTags() (#1173, called unconditionally
+		// near the end of this function) — it upserts from tags.yaml, so an
+		// old DB applying v1 for the first time here still ends up with the
+		// current vocabulary (plus emoji/home_group/color/sort_order, which
+		// this table didn't have columns for yet at the time v1 was written).
 		// #209: remap free-text event_tags rows to canonical slugs; delete the rest.
 		// OR IGNORE skips rows where the rename would duplicate an existing (event_id, slug) pair.
 		db.Exec("UPDATE OR IGNORE event_tags SET tag = 'bal-folk'     WHERE lower(tag) IN ('balfolk','bal folk','bal-folk','bal folk festival')")
@@ -1964,28 +1955,47 @@ func migrateDB() {
 			db.Exec("ALTER TABLE locations ADD COLUMN no_street_shoes INTEGER DEFAULT 0")
 		}
 	}
-	// Safety net: repopulate canonical tags vocabulary if the table is empty.
-	// Happens when createTables pre-marked the v1 migration on an existing DB that
-	// lacked schema_migrations, skipping all the INSERT statements in that block.
-	{
+	// v31: configurable event-format tag vocabulary (#1173) — tags gain
+	// optional emoji/home_group/color (home-page format-selector button) and
+	// a sort_order (declaration order from the seed file, giving the button
+	// row and map-marker type priority a deterministic order).
+	if !applied(31) {
+		db.Exec("ALTER TABLE tags ADD COLUMN emoji TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE tags ADD COLUMN home_group TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE tags ADD COLUMN color TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE tags ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+		mark(31)
+	}
+	// Safety net: ensure tags.emoji/home_group/color/sort_order exist even if
+	// v31 was pre-marked.
+	for _, col := range []struct{ name, ddl string }{
+		{"emoji", "ALTER TABLE tags ADD COLUMN emoji TEXT NOT NULL DEFAULT ''"},
+		{"home_group", "ALTER TABLE tags ADD COLUMN home_group TEXT NOT NULL DEFAULT ''"},
+		{"color", "ALTER TABLE tags ADD COLUMN color TEXT NOT NULL DEFAULT ''"},
+		{"sort_order", "ALTER TABLE tags ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"},
+	} {
 		var n int
-		db.QueryRow("SELECT COUNT(*) FROM tags").Scan(&n)
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tags') WHERE name=?", col.name).Scan(&n)
 		if n == 0 {
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('bal-folk',          'Ball',              'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('fest-noz',          'Fest Noz',          'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('session',           'Session',           'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('concert',           'Concert',           'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('festival',          'Festival',          'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('open-air',          'Open Air',          'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('workshop',          'Workshop',          'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('music-course',      'Music Course',      'format')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('dance-workshop',    'Dance Workshop',    'type')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('musician-workshop', 'Musician Workshop', 'type')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('beginners',         'Beginners',         'level')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('intermediate',      'Intermediate',      'level')")
-			db.Exec("INSERT OR IGNORE INTO tags (slug, name, category) VALUES ('advanced',          'Advanced',          'level')")
+			db.Exec(col.ddl)
 		}
 	}
+	// Reseed the tags vocabulary from tags.yaml (embedded default, or
+	// config.Server.TagsFile when set) on every startup rather than as a
+	// one-time migration: tags are entirely seed-derived — there's still no
+	// admin UI to create/edit one — so this is a plain upsert. It both
+	// repopulates an empty table (fresh install, or an existing DB where
+	// createTables had pre-marked v1 and skipped its old hardcoded INSERTs)
+	// and backfills emoji/home_group/color/sort_order on any row seeded
+	// before #1173 added those columns.
+	//
+	// config can be nil here (e.g. tests that call migrateDB() directly
+	// against an in-memory DB without going through main()'s config load).
+	tagsFile := ""
+	if config != nil {
+		tagsFile = config.Server.TagsFile
+	}
+	seedDefaultTags(db, tagsFile)
 	// Index for location_organizations(location_id), used by syncLocationOrgs
 	// deletes and location merge/lookup queries.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
@@ -3803,9 +3813,13 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_dance_id      ON fetch_source_dances(dance_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_active              ON contact_posts(expires_at, created_at) WHERE email_verified=1;
 	CREATE TABLE IF NOT EXISTS tags (
-		slug     TEXT PRIMARY KEY,
-		name     TEXT NOT NULL,
-		category TEXT NOT NULL CHECK(category IN ('format','level','type')),
+		slug       TEXT PRIMARY KEY,
+		name       TEXT NOT NULL,
+		category   TEXT NOT NULL CHECK(category IN ('format','level','type')),
+		emoji      TEXT NOT NULL DEFAULT '',
+		home_group TEXT NOT NULL DEFAULT '',
+		color      TEXT NOT NULL DEFAULT '',
+		sort_order INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,
@@ -3898,6 +3912,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(26)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(29)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(30)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(31)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

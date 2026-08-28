@@ -1,0 +1,92 @@
+# Default event-format tag vocabulary (#1173) — the balfolk vocabulary
+# dansal has always shipped with, now expressed as data instead of hardcoded
+# Go INSERT statements. Loaded by seedDefaultTags() in tags_seed.go.
+#
+# Each entry:
+#   slug       tags.slug — the stable identifier events are tagged with
+#   name       tags.name — the DB display name (i18n keys in tag_i18n_keys,
+#              see cmd/dansal_web/templatefuncs_tags.go, take priority over
+#              this on the shipped default vocabulary; a custom instance's
+#              own tags.yaml has no i18n and always falls back to this)
+#   category   format | level | type — see tags.category CHECK constraint
+#   emoji      optional — gives the tag a home-page format-selector button.
+#              Omitted (along with home_group) entirely = no button, same as
+#              open-air below.
+#   home_group optional — a key shared by tags that should collapse into one
+#              home-page button (e.g. bal-folk + fest-noz -> one "Ball"
+#              button). Defaults to the tag's own slug (i.e. its own button)
+#              when emoji is set but home_group is omitted.
+#   color      optional hex color for that button/badge/map-marker; falls
+#              back to a neutral gray when omitted.
+#
+# Declaration order becomes each tag's sort_order, which in turn is what
+# gives the home-page button row and the map-marker type priority (first
+# matching group wins — festival > ball > concert > workshop > session,
+# preserving today's exact behavior) a deterministic order.
+tags:
+  - slug: festival
+    name: Festival
+    category: format
+    emoji: "🎪"
+    home_group: festival
+    color: "#7c3aed"
+  - slug: bal-folk
+    name: Ball
+    category: format
+    emoji: "💃"
+    home_group: ball
+    color: "#1a6eb5"
+  - slug: fest-noz
+    name: Fest Noz
+    category: format
+    emoji: "💃"
+    home_group: ball
+    color: "#1a6eb5"
+  - slug: concert
+    name: Concert
+    category: format
+    emoji: "🎸"
+    home_group: concert
+    color: "#5b21b6"
+  - slug: workshop
+    name: Workshop
+    category: format
+    emoji: "🎓"
+    home_group: workshop
+    color: "#d97706"
+  - slug: music-course
+    name: Music Course
+    category: format
+    emoji: "🎓"
+    home_group: workshop
+    color: "#d97706"
+  - slug: dance-workshop
+    name: Dance Workshop
+    category: type
+    emoji: "🎓"
+    home_group: workshop
+    color: "#d97706"
+  - slug: musician-workshop
+    name: Musician Workshop
+    category: type
+    emoji: "🎓"
+    home_group: workshop
+    color: "#d97706"
+  - slug: session
+    name: Session
+    category: format
+    emoji: "🎶"
+    home_group: session
+    color: "#0a5a9c"
+  - slug: open-air
+    name: Open Air
+    category: format
+  - slug: beginners
+    name: Beginners
+    category: level
+  - slug: intermediate
+    name: Intermediate
+    category: level
+  - slug: advanced
+    name: Advanced
+    category: level

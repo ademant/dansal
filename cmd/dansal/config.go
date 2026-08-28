@@ -78,6 +78,13 @@ type ServerConfig struct {
 	// Debug gates verbose logging, e.g. dumping the full event request for a
 	// fetch-source entry that failed to import (see #923). Default false.
 	Debug bool `yaml:"debug"`
+
+	// TagsFile optionally overrides the embedded default tags.yaml (#1173) —
+	// the event-format tag vocabulary seeded into the tags table at startup.
+	// Empty (the default) uses the built-in balfolk vocabulary; set this to
+	// let an instance serving a different dance/event community ship its own
+	// vocabulary without a code fork. Mirrors dansal_web's i18n_file override.
+	TagsFile string `yaml:"tags_file"`
 }
 
 type SMTPConfig struct {

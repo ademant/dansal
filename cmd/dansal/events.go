@@ -3303,6 +3303,10 @@ type Tag struct {
 	Slug       string `json:"slug"`
 	Name       string `json:"name"`
 	Category   string `json:"category"`
+	Emoji      string `json:"emoji,omitempty"`
+	HomeGroup  string `json:"home_group,omitempty"`
+	Color      string `json:"color,omitempty"`
+	SortOrder  int    `json:"sort_order"`
 	EventCount int    `json:"event_count,omitempty"`
 }
 
@@ -3514,10 +3518,10 @@ func validateTags(tags []string) error {
 func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query(`
-		SELECT t.slug, t.name, t.category, COUNT(et.event_id) AS event_count
+		SELECT t.slug, t.name, t.category, t.emoji, t.home_group, t.color, t.sort_order, COUNT(et.event_id) AS event_count
 		FROM tags t
 		LEFT JOIN event_tags et ON et.tag = t.slug
-		GROUP BY t.slug, t.name, t.category
+		GROUP BY t.slug, t.name, t.category, t.emoji, t.home_group, t.color, t.sort_order
 		ORDER BY t.category, t.name`)
 	if err != nil {
 		writeInternalError(w, err)
@@ -3527,7 +3531,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	tags := []Tag{}
 	for rows.Next() {
 		var t Tag
-		if err := rows.Scan(&t.Slug, &t.Name, &t.Category, &t.EventCount); err != nil {
+		if err := rows.Scan(&t.Slug, &t.Name, &t.Category, &t.Emoji, &t.HomeGroup, &t.Color, &t.SortOrder, &t.EventCount); err != nil {
 			writeInternalError(w, err)
 			return
 		}

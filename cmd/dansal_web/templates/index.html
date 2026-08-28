@@ -12,11 +12,9 @@
 <!-- Filters -->
 <p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
 <div class="type-selector">
-  <button type="button" class="type-btn type-active" data-type="ball">💃 {{$.Strings.T "filter_type_ball"}}</button>
-  <button type="button" class="type-btn type-active" data-type="workshop">🎓 {{$.Strings.T "filter_type_workshop"}}</button>
-  <button type="button" class="type-btn type-active" data-type="festival">🎪 {{$.Strings.T "filter_type_festival"}}</button>
-  <button type="button" class="type-btn type-active" data-type="session">🎶 {{$.Strings.T "tag_session"}}</button>
-  <button type="button" class="type-btn type-active" data-type="concert">🎸 {{$.Strings.T "tag_concert"}}</button>
+  {{range homeGroups $.Strings $.Data.TagMap}}
+  <button type="button" class="type-btn type-active" data-type="{{.Key}}">{{.Emoji}} {{.Label}}</button>
+  {{end}}
 </div>
 
 <!-- Map -->
@@ -81,6 +79,7 @@
   {{range .Events}}
   {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
   {{end}}
+  {{$homeGroups := homeGroups $.Strings $.Data.TagMap}}
   {{range $.Data.FederatedEvents}}
   <tr class="event-row federated-event"
       data-date="{{isoDate .StartTime}}"
@@ -88,7 +87,7 @@
       data-title="{{.Name}}"
       data-location="{{.LocationName}}"
       data-country=""
-      data-ball="0" data-workshop="0" data-festival="0"
+      {{range $homeGroups}}data-{{.Key}}="0" {{end -}}
       data-organizer=""
       data-tags=""
       data-id="{{.ID}}"
@@ -326,7 +325,14 @@ document.addEventListener('DOMContentLoaded', function(){
   var total = {{.Data.TotalEvents}};
   var weekOffset = urlToWeekOffset();
   var weekKeys = [];
-  var typeFilter = {ball:true, workshop:true, festival:true, session:true, concert:true};
+  // HOME_GROUPS (#1173): the home-page format-selector buttons, derived
+  // server-side from the tags vocabulary (tags.yaml) instead of a fixed
+  // ball/workshop/festival/session/concert set — see homeGroups() in
+  // templatefuncs_tags.go. Declaration order doubles as map-marker type
+  // priority (eventIcon() below takes the first matching group).
+  var HOME_GROUPS = {{homeGroupsJSON $.Strings $.Data.TagMap}};
+  var typeFilter = {};
+  HOME_GROUPS.forEach(function(g){ typeFilter[g.key] = true; });
   var HOLIDAYS = new Set({{.Data.HolidayDates}});
   // 'week' = table shows only current-week events in sync with the calendar;
   // 'all'  = table shows all future events with pagination (classic view).
@@ -336,6 +342,13 @@ document.addEventListener('DOMContentLoaded', function(){
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function todayIso(){ return dateToIso(new Date()); }
   function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // rowFlag reads a row's data-<key> attribute for a HOME_GROUPS key that
+  // may itself contain hyphens (a custom instance's own home_group, e.g.
+  // "swing-dance") — the DOM camelCases data-swing-dance into
+  // dataset.swingDance, so a plain r.dataset[key] lookup would miss it.
+  function rowFlag(dataset, key){
+    return dataset[key.replace(/-([a-z0-9])/g, function(_,c){ return c.toUpperCase(); })];
+  }
 
   // Hides the locate button entirely when the Geolocation API is unavailable
   // (no API, or insecure context). When permission is already denied, marks
@@ -882,6 +895,19 @@ document.addEventListener('DOMContentLoaded', function(){
     "profi":    "{{$.Strings.T "workshop_difficulty_profi"}}"
   };
 
+  // eventGroupFlags derives per-home-group membership for a geoEvent from
+  // its raw tag list (e.tags) against HOME_GROUPS[i].members — geoEvent
+  // deliberately doesn't carry precomputed booleans for a vocabulary that's
+  // no longer fixed (#1173; see the Tags field's doc comment in
+  // frontend.go's geoEvent struct).
+  function eventGroupFlags(e){
+    var flags = {};
+    HOME_GROUPS.forEach(function(g){
+      flags[g.key] = !!(e.tags && g.members.some(function(m){ return e.tags.indexOf(m) !== -1; }));
+    });
+    return flags;
+  }
+
   function buildPopup(e){
     var start=e.s||'';
     var time=start.length>=16?start.slice(0,10)+' '+start.slice(11,16):start.slice(0,10);
@@ -892,14 +918,12 @@ document.addEventListener('DOMContentLoaded', function(){
       place=[e.loc,e.town,e.c].filter(Boolean).map(escHtml).join(', ');
     }
     var badges='';
-    if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">💃 {{$.Strings.T "filter_type_ball"}}</span>';
-    if(e.ws){
-      badges+='<span class="badge workshop" style="margin-right:.2rem">🎓 {{$.Strings.T "filter_type_workshop"}}</span>';
-      if(e.wd) badges+='<span class="badge badge-difficulty" style="margin-right:.2rem">'+escHtml(diffLabels[e.wd]||e.wd)+'</span>';
-    }
-    if(e.fest) badges+='<span class="badge festival" style="margin-right:.2rem">🎪 {{$.Strings.T "filter_type_festival"}}</span>';
-    if(e.sess) badges+='<span class="badge session" style="margin-right:.2rem">🎶 {{$.Strings.T "tag_session"}}</span>';
-    if(e.conc) badges+='<span class="badge concert" style="margin-right:.2rem">🎸 {{$.Strings.T "tag_concert"}}</span>';
+    var flags=eventGroupFlags(e);
+    HOME_GROUPS.forEach(function(g){
+      if(!flags[g.key]) return;
+      badges+='<span class="badge" style="margin-right:.2rem;background:'+g.color+';color:#fff">'+g.emoji+' '+escHtml(g.label)+'</span>';
+      if(g.key==='workshop' && e.wd) badges+='<span class="badge badge-difficulty" style="margin-right:.2rem">'+escHtml(diffLabels[e.wd]||e.wd)+'</span>';
+    });
     if(e.x)    badges+='<span class="badge cancelled">Abgesagt</span>';
     if(e.av==='limited')  badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
     if(e.av==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
@@ -937,11 +961,10 @@ document.addEventListener('DOMContentLoaded', function(){
     var loc=d.location||'', town=d.town||'';
     var place=(loc&&town&&loc!==town)?loc+', '+town:(loc||town);
     var badges='';
-    if(d.ball==='1') badges+='<span class="badge" style="margin-right:.2rem">💃 {{$.Strings.T "filter_type_ball"}}</span>';
-    if(d.workshop==='1') badges+='<span class="badge workshop" style="margin-right:.2rem">🎓 {{$.Strings.T "filter_type_workshop"}}</span>';
-    if(d.festival==='1') badges+='<span class="badge festival" style="margin-right:.2rem">🎪 {{$.Strings.T "filter_type_festival"}}</span>';
-    if(d.session==='1') badges+='<span class="badge session" style="margin-right:.2rem">🎶 {{$.Strings.T "tag_session"}}</span>';
-    if(d.concert==='1') badges+='<span class="badge concert" style="margin-right:.2rem">🎸 {{$.Strings.T "tag_concert"}}</span>';
+    HOME_GROUPS.forEach(function(g){
+      if(rowFlag(d,g.key)!=='1') return;
+      badges+='<span class="badge" style="margin-right:.2rem;background:'+g.color+';color:#fff">'+g.emoji+' '+escHtml(g.label)+'</span>';
+    });
     if(d.availability==='limited') badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
     if(d.availability==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
     var feeHtml='';
@@ -979,14 +1002,14 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function eventIcon(e){
-    // Priority: festival > ball > concert > workshop > session > no-type
-    var emoji, color;
-    if      (e.fest) { emoji='🎪'; color='#7c3aed'; }
-    else if (e.ball) { emoji='💃'; color='#1a6eb5'; }
-    else if (e.conc) { emoji='🎸'; color='#5b21b6'; }
-    else if (e.ws)   { emoji='🎓'; color='#d97706'; }
-    else if (e.sess) { emoji='🎶'; color='#0a5a9c'; }
-    else             { emoji='';   color='#6b7280'; }
+    // Priority: first matching group in HOME_GROUPS' own declaration order
+    // (tags.yaml's seed order — festival, ball, concert, workshop, session
+    // for the default vocabulary, preserving the old hardcoded priority).
+    var emoji='', color='#6b7280';
+    var flags=eventGroupFlags(e);
+    for(var i=0;i<HOME_GROUPS.length;i++){
+      if(flags[HOME_GROUPS[i].key]){ emoji=HOME_GROUPS[i].emoji; color=HOME_GROUPS[i].color; break; }
+    }
     if (e.x) color='#9e9e9e';
     var op=e.x?'0.65':'1';
     var inner=emoji
@@ -1190,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
-    typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true; typeFilter.session=true; typeFilter.concert=true;
+    HOME_GROUPS.forEach(function(g){ typeFilter[g.key]=true; });
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
     mapFitted=false;
     applyFilters();
@@ -1207,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // fetches more) -- otherwise the page misleadingly says "of 100" even
   // though e.g. 146 events actually exist (see #650 follow-up).
   function isUnfiltered(){
-    return typeFilter.ball && typeFilter.workshop && typeFilter.festival && typeFilter.session && typeFilter.concert;
+    return HOME_GROUPS.every(function(g){ return typeFilter[g.key]; });
   }
   function displayTotal(){
     if(tableMode === 'week') return tableRows().length;
@@ -1216,15 +1239,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function matchesFilters(r){
     var allOn  = isUnfiltered();
-    var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival && !typeFilter.session && !typeFilter.concert;
+    var noneOn = HOME_GROUPS.every(function(g){ return !typeFilter[g.key]; });
     if(!allOn && !noneOn){
-      var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1' || r.dataset.session==='1' || r.dataset.concert==='1';
+      var typed = HOME_GROUPS.some(function(g){ return rowFlag(r.dataset,g.key)==='1'; });
       if(typed){
-        var match = (typeFilter.ball     && r.dataset.ball    ==='1') ||
-                    (typeFilter.workshop && r.dataset.workshop==='1') ||
-                    (typeFilter.festival && r.dataset.festival==='1') ||
-                    (typeFilter.session  && r.dataset.session ==='1') ||
-                    (typeFilter.concert  && r.dataset.concert ==='1');
+        var match = HOME_GROUPS.some(function(g){ return typeFilter[g.key] && rowFlag(r.dataset,g.key)==='1'; });
         if(!match) return false;
       }
     }

@@ -34,6 +34,14 @@ server:
   # Required. Example: https://api.dansal.example.com
   base_url: ""
 
+  # Optional path to a custom event-format tag vocabulary, overriding the
+  # built-in balfolk seed (bal-folk, fest-noz, workshop, festival, session,
+  # concert, ...) — lets an instance serving a different dance/event
+  # community (tango, swing, ...) ship its own tags and home-page
+  # format-selector buttons without a code fork. See cmd/dansal/tags.yaml
+  # for the file format and field meanings.
+  # tags_file: /etc/dansal/tags.yaml
+
   # --- Authentication ---
 
   # Session token lifetime in hours.

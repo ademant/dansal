@@ -418,6 +418,10 @@ type Tag struct {
 	Slug       string `json:"slug"`
 	Name       string `json:"name"`
 	Category   string `json:"category"`
+	Emoji      string `json:"emoji,omitempty"`
+	HomeGroup  string `json:"home_group,omitempty"`
+	Color      string `json:"color,omitempty"`
+	SortOrder  int    `json:"sort_order"`
 	EventCount int    `json:"event_count,omitempty"`
 }
 

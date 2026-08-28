@@ -228,6 +228,8 @@ Raum B:
 
 ## 🔄 Veranstaltungen verwalten – Tagesgeschäft
 
+> 💡 **Tipp für mehrere Veranstaltungen**: Nutze [Multi-Select](Benutzer-Multi-Select), um mehrere Veranstaltungen gleichzeitig zu bearbeiten (z. B. absagen, Tags zuweisen, Organisation ändern).
+
 ### Veranstaltung bearbeiten
 
 Jede Veranstaltung lässt sich jederzeit bearbeiten:

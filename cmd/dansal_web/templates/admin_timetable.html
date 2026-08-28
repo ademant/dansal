@@ -15,7 +15,14 @@
 .tt-room-suggest li{padding:.3rem .7rem;cursor:pointer;font-size:.85rem}
 .tt-room-suggest li:hover,.tt-room-suggest li.active{background:var(--bg-hover)}
 /* per-event track palette (#1174) — same visual language as the room-add chip above */
-.tt-track-color{width:1.9rem;height:1.9rem;flex:0 0 auto;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
+/* <input type=color> ignores outer width/height for its actual swatch in
+   Chrome/Firefox unless the internal wrapper/swatch padding is zeroed too
+   — without these, the element still renders visually wide regardless of
+   the box size set above. */
+.tt-track-color{width:1.6rem;height:1.6rem;flex:0 0 auto;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:none;cursor:pointer}
+.tt-track-color::-webkit-color-swatch-wrapper{padding:0}
+.tt-track-color::-webkit-color-swatch{border:none;border-radius:3px}
+.tt-track-color::-moz-color-swatch{border:none;border-radius:3px}
 .tt-track-add-wrap{display:flex;align-items:center;gap:.4rem}
 .tt-track-add-wrap .tt-room-add-input{flex:1;min-width:0;width:auto}
 .tt-type-row{display:flex;gap:.4rem;align-items:center}

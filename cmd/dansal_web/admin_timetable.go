@@ -261,6 +261,38 @@ func adminTimetableSyncTimesHandler(client *DansalClient) http.HandlerFunc {
 	}
 }
 
+// PUT /admin/events/{id}/timetable/tracks — replace the event's timetable
+// track palette (#1174; proxy to a merge-patch on the API).
+func adminTimetableTracksSaveHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "invalid event id", http.StatusBadRequest)
+			return
+		}
+		tok := getSessionToken(r)
+
+		var tracks []TimetableTrack
+		if err := json.NewDecoder(io.LimitReader(r.Body, maxInboundJSONBody)).Decode(&tracks); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if tracks == nil {
+			tracks = []TimetableTrack{}
+		}
+		if err := client.PatchEventTimetableTracks(r.Context(), id, tracks, tok); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}
+}
+
 // DELETE /admin/events/{id}/timetable — delete all entries (proxy to API).
 func adminTimetableDeleteHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

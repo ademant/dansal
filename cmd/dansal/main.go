@@ -1869,6 +1869,20 @@ func migrateDB() {
 			db.Exec("ALTER TABLE event_series ADD COLUMN image_ai_generated INTEGER DEFAULT 0")
 		}
 	}
+	// v29: per-event timetable track palette (#1174) — JSON array of
+	// {slug,name,color}; NULL/empty means "use the default 8-slug palette".
+	if !applied(29) {
+		db.Exec("ALTER TABLE events ADD COLUMN timetable_tracks TEXT")
+		mark(29)
+	}
+	// Safety net: ensure events.timetable_tracks exists even if v29 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='timetable_tracks'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN timetable_tracks TEXT")
+		}
+	}
 	// Safety net: backfill events.organization_id from fetch_sources.organization_id
 	// for events imported before insertEvent() learned to write organization_id on
 	// update. Restricted to changed_by IN ('', 'fetch') so an admin who manually
@@ -3298,6 +3312,7 @@ func createTables() error {
 		duplicate_of_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
 		previous_start_time INTEGER,
 		image_ai_generated INTEGER DEFAULT 0,
+		timetable_tracks TEXT,
 		-- location_id and organization_id are intentionally nullable (#736):
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
@@ -3799,6 +3814,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(24)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(25)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(26)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(29)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

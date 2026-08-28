@@ -52,6 +52,7 @@ type Event struct {
 	Deletable              *bool            `json:"deletable,omitempty"`
 	CreatedByID            *int             `json:"created_by_id,omitempty"`
 	Timetable              []TimetableEntry `json:"timetable,omitempty"`
+	TimetableTracks        []TimetableTrack `json:"timetable_tracks,omitempty"`
 	Pricing                *Pricing         `json:"pricing,omitempty"`
 	Locations              []Location       `json:"locations,omitempty"`
 	Musicians              []Musician       `json:"musicians,omitempty"`
@@ -85,6 +86,7 @@ type Event struct {
 	EmailVerified          bool             `json:"email_verified"`
 	TagsJSON               string           `json:"-"`
 	PricingJSON            string           `json:"-"`
+	TimetableTracksJSON    string           `json:"-"`
 }
 
 type EventDate struct {
@@ -114,17 +116,22 @@ type EventWriteRequest struct {
 	Musicians          []int                `json:"musicians"`
 	Instructors        []int                `json:"instructors,omitempty"`
 	Dances             []int                `json:"dances,omitempty"`
-	BookingURL         string               `json:"booking_url,omitempty"`
-	Availability       string               `json:"availability,omitempty"`
-	TicketsTotal       int                  `json:"tickets_total,omitempty"`
-	BookingEnabled     bool                 `json:"booking_enabled,omitempty"`
-	Food               string               `json:"food,omitempty" enum:"sold,potluck,none"`
-	Drink              string               `json:"drink,omitempty" enum:"alcohol,soft,none"`
-	FloorCondition     string               `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
-	Attributes         map[string]bool      `json:"attributes,omitempty"`
-	ContactName        string               `json:"contact_name,omitempty"`
-	ContactEmail       string               `json:"contact_email,omitempty"`
-	ImageAIGenerated   bool                 `json:"image_ai_generated,omitempty"`
+	// TimetableTracks, when non-empty, replaces the event's timetable track
+	// palette (#1174); left empty, the existing/default palette is preserved
+	// rather than being cleared — use PATCH with an explicit [] to reset a
+	// custom palette back to the default.
+	TimetableTracks  []TimetableTrack `json:"timetable_tracks,omitempty"`
+	BookingURL       string           `json:"booking_url,omitempty"`
+	Availability     string           `json:"availability,omitempty"`
+	TicketsTotal     int              `json:"tickets_total,omitempty"`
+	BookingEnabled   bool             `json:"booking_enabled,omitempty"`
+	Food             string           `json:"food,omitempty" enum:"sold,potluck,none"`
+	Drink            string           `json:"drink,omitempty" enum:"alcohol,soft,none"`
+	FloorCondition   string           `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	Attributes       map[string]bool  `json:"attributes,omitempty"`
+	ContactName      string           `json:"contact_name,omitempty"`
+	ContactEmail     string           `json:"contact_email,omitempty"`
+	ImageAIGenerated bool             `json:"image_ai_generated,omitempty"`
 }
 
 // EventMergePatchRequest is the body accepted by PATCH /api/v1/events/{id}
@@ -144,34 +151,35 @@ type EventWriteRequest struct {
 // from "explicitly cleared" through a single Go pointer — send a full PUT
 // for that case.
 type EventMergePatchRequest struct {
-	Title              *string          `json:"title,omitempty"`
-	Description        *string          `json:"description,omitempty"`
-	StartTime          *string          `json:"start_time,omitempty"`
-	EndTime            *string          `json:"end_time,omitempty"`
-	HasBall            *bool            `json:"has_ball,omitempty"`
-	HasWorkshop        *bool            `json:"has_workshop,omitempty"`
-	HasFestival        *bool            `json:"has_festival,omitempty"`
-	WorkshopDifficulty *string          `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
-	IsCancelled        *bool            `json:"is_cancelled,omitempty"`
-	IsPublished        *bool            `json:"is_published,omitempty"`
-	Tags               *[]string        `json:"tags,omitempty"`
-	URL                *string          `json:"url,omitempty"`
-	OrganizationID     *int             `json:"organization_id,omitempty"`
-	LocationID         *int             `json:"location_id,omitempty"`
-	Pricing            *Pricing         `json:"pricing,omitempty"`
-	Musicians          *[]int           `json:"musicians,omitempty"`
-	Instructors        *[]int           `json:"instructors,omitempty"`
-	Dances             *[]int           `json:"dances,omitempty"`
-	BookingURL         *string          `json:"booking_url,omitempty"`
-	Availability       *string          `json:"availability,omitempty"`
-	TicketsTotal       *int             `json:"tickets_total,omitempty"`
-	BookingEnabled     *bool            `json:"booking_enabled,omitempty"`
-	Food               *string          `json:"food,omitempty" enum:"sold,potluck,none"`
-	Drink              *string          `json:"drink,omitempty" enum:"alcohol,soft,none"`
-	FloorCondition     *string          `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
-	Attributes         *map[string]bool `json:"attributes,omitempty"`
-	ContactName        *string          `json:"contact_name,omitempty"`
-	ContactEmail       *string          `json:"contact_email,omitempty"`
+	Title              *string           `json:"title,omitempty"`
+	Description        *string           `json:"description,omitempty"`
+	StartTime          *string           `json:"start_time,omitempty"`
+	EndTime            *string           `json:"end_time,omitempty"`
+	HasBall            *bool             `json:"has_ball,omitempty"`
+	HasWorkshop        *bool             `json:"has_workshop,omitempty"`
+	HasFestival        *bool             `json:"has_festival,omitempty"`
+	WorkshopDifficulty *string           `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
+	IsCancelled        *bool             `json:"is_cancelled,omitempty"`
+	IsPublished        *bool             `json:"is_published,omitempty"`
+	Tags               *[]string         `json:"tags,omitempty"`
+	URL                *string           `json:"url,omitempty"`
+	OrganizationID     *int              `json:"organization_id,omitempty"`
+	LocationID         *int              `json:"location_id,omitempty"`
+	Pricing            *Pricing          `json:"pricing,omitempty"`
+	Musicians          *[]int            `json:"musicians,omitempty"`
+	Instructors        *[]int            `json:"instructors,omitempty"`
+	Dances             *[]int            `json:"dances,omitempty"`
+	TimetableTracks    *[]TimetableTrack `json:"timetable_tracks,omitempty"`
+	BookingURL         *string           `json:"booking_url,omitempty"`
+	Availability       *string           `json:"availability,omitempty"`
+	TicketsTotal       *int              `json:"tickets_total,omitempty"`
+	BookingEnabled     *bool             `json:"booking_enabled,omitempty"`
+	Food               *string           `json:"food,omitempty" enum:"sold,potluck,none"`
+	Drink              *string           `json:"drink,omitempty" enum:"alcohol,soft,none"`
+	FloorCondition     *string           `json:"floor_condition,omitempty" enum:"parquet,stone,tiles,grass,sand,pavement"`
+	Attributes         *map[string]bool  `json:"attributes,omitempty"`
+	ContactName        *string           `json:"contact_name,omitempty"`
+	ContactEmail       *string           `json:"contact_email,omitempty"`
 }
 
 type EventCreateRequest struct {
@@ -215,6 +223,31 @@ type Pricing struct {
 	Amount   float64 `json:"amount,omitempty"`
 	Currency string  `json:"currency,omitempty"`
 	Prices   []Price `json:"prices,omitempty"`
+}
+
+// TimetableTrack is one entry-type option offered by an event's timetable
+// editor: a slug used by TimetableEntry.EntryType, a display name, and a CSS
+// color (any valid CSS color value, e.g. "rgba(74,127,203,.78)" or "#4a7fcb").
+type TimetableTrack struct {
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// defaultTimetableTracks is the palette used when an event has no custom
+// timetable_tracks of its own (#1174) — today's fixed 8 slugs sharing 5
+// colors, matching admin_timetable.html's former hardcoded .tt-panel CSS
+// exactly, so existing events see no visual change until an organizer
+// customizes their own event's tracks.
+var defaultTimetableTracks = []TimetableTrack{
+	{Slug: "bal", Name: "Bal", Color: "rgba(74,127,203,.78)"},
+	{Slug: "concert", Name: "Concert", Color: "rgba(74,127,203,.78)"},
+	{Slug: "talk", Name: "Talk", Color: "rgba(74,127,203,.78)"},
+	{Slug: "workshop", Name: "Workshop", Color: "rgba(201,80,10,.78)"},
+	{Slug: "dance-workshop", Name: "Dance workshop", Color: "rgba(201,80,10,.78)"},
+	{Slug: "musician-workshop", Name: "Musician workshop", Color: "rgba(138,42,176,.78)"},
+	{Slug: "break", Name: "Break", Color: "rgba(102,102,102,.78)"},
+	{Slug: "session", Name: "Session", Color: "rgba(42,138,74,.78)"},
 }
 
 // VocabEntry describes one allowed value in a closed vocabulary, pairing the
@@ -286,7 +319,7 @@ func parseTimeToUnix(s string) (int64, error) {
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE(json(e.timetable_tracks),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {
@@ -357,7 +390,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
 		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime,
 		&event.SuggesterEmail, &event.SuggesterName, &event.PendingEditJSON, &pendingEditSubmittedEpoch,
-		&imageAIGeneratedInt, &emailVerifiedInt, &seriesImageAIGeneratedInt); err != nil {
+		&imageAIGeneratedInt, &emailVerifiedInt, &seriesImageAIGeneratedInt, &event.TimetableTracksJSON); err != nil {
 		return Event{}, err
 	}
 	if previousStartTime.Valid {
@@ -444,6 +477,15 @@ func scanEventRow(s scanner) (Event, error) {
 		if json.Unmarshal([]byte(event.PricingJSON), &p) == nil {
 			event.Pricing = &p
 		}
+	}
+	if event.TimetableTracksJSON != "" {
+		json.Unmarshal([]byte(event.TimetableTracksJSON), &event.TimetableTracks)
+	}
+	// #1174: no custom tracks set on this event — expose the default palette
+	// so every consumer (admin editor, future export) always sees an
+	// effective list, without needing to know about the fallback itself.
+	if len(event.TimetableTracks) == 0 {
+		event.TimetableTracks = defaultTimetableTracks
 	}
 	if danceNamesCSV != "" {
 		event.DanceNames = strings.Split(danceNamesCSV, ",")
@@ -918,6 +960,7 @@ type EventInput struct {
 	UID, URL, Source                  string
 	SourceLastModified                int64
 	Pricing                           *Pricing
+	TimetableTracks                   []TimetableTrack
 	FetchSourceID                     int
 	Food, Drink, FloorCondition       string
 	Attributes                        map[string]bool
@@ -942,6 +985,7 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 	uid, url, source := in.UID, in.URL, in.Source
 	sourceLastModified := in.SourceLastModified
 	pricing := in.Pricing
+	timetableTracks := in.TimetableTracks
 	fetchSourceID := in.FetchSourceID
 	food, drink, floorCondition := in.Food, in.Drink, in.FloorCondition
 	attributes := in.Attributes
@@ -980,6 +1024,13 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 	if pricing != nil {
 		if b, err := json.Marshal(pricing); err == nil {
 			pricingArg = string(b)
+		}
+	}
+
+	var timetableTracksArg any
+	if len(timetableTracks) > 0 {
+		if b, err := json.Marshal(timetableTracks); err == nil {
+			timetableTracksArg = string(b)
 		}
 	}
 
@@ -1115,8 +1166,8 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 			createdByArg = *createdByID
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1)",
-			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified, timetable_tracks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1, jsonb(?))",
+			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated, timetableTracksArg,
 		)
 		if err == nil {
 			break
@@ -1205,6 +1256,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			Source:             req.Source,
 			SourceLastModified: req.SourceLastModified,
 			Pricing:            req.Pricing,
+			TimetableTracks:    req.TimetableTracks,
 			FetchSourceID:      req.FetchSourceID,
 			Food:               req.Food,
 			Drink:              req.Drink,
@@ -2226,6 +2278,18 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 			pricingArg = string(b)
 		}
 	}
+	// timetable_tracks (#1174): PUT is a full-resource replace for most
+	// fields, but a plain []TimetableTrack here can't distinguish "the
+	// caller omitted this field" from "clear back to default" — unlike
+	// Pricing's *Pricing. Only overwrite when the request actually carries
+	// tracks, so an ordinary event-edit-form PUT that knows nothing about
+	// tracks can't silently wipe an organizer's custom palette.
+	var timetableTracksArg any
+	if len(req.TimetableTracks) > 0 {
+		if b, err := json.Marshal(req.TimetableTracks); err == nil {
+			timetableTracksArg = string(b)
+		}
+	}
 	var orgIDArg any
 	if req.OrganizationID != nil {
 		orgIDArg = *req.OrganizationID
@@ -2248,13 +2312,14 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, image_ai_generated=?, changed_at=?, changed_by=?, changed_by_id=?,
-		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
+		 previous_start_time=COALESCE(?,previous_start_time),
+		 timetable_tracks=CASE WHEN ? IS NOT NULL THEN jsonb(?) ELSE timetable_tracks END WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationIDArg,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
 		req.ContactName, req.ContactEmail, req.ImageAIGenerated, time.Now().UTC().Unix(), changedByUser, callerIDArg,
-		previousStartTimeArg, id,
+		previousStartTimeArg, timetableTracksArg, timetableTracksArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -2368,19 +2433,20 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		existingOrgID, existingLocationID                                     sql.NullInt64
 		existingCreatedBy                                                     sql.NullInt64
 		pricingRaw                                                            sql.NullString
+		ttTracksRaw                                                           sql.NullString
 		existingChangedAt                                                     int64
 	)
 	err = db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
 		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), json(pricing),
 		COALESCE(workshop_difficulty,''), COALESCE(booking_url,''), COALESCE(availability,''), tickets_total, booking_enabled,
 		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(json(attributes),'{}'),
-		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id, COALESCE(changed_at,0)
+		COALESCE(contact_name,''), COALESCE(contact_email,''), created_by_id, COALESCE(changed_at,0), json(timetable_tracks)
 		FROM events WHERE id=?`, id).Scan(
 		&title, &description, &startUnix, &endUnix, &existingLocationID, &existingOrgID,
 		&hasBall, &hasWorkshop, &hasFestival, &isCancelled, &isPublished, &url, &pricingRaw,
 		&workshopDifficulty, &bookingURL, &availability, &ticketsTotal, &bookingEnabled,
 		&food, &drink, &floorCondition, &attrsRaw,
-		&contactName, &contactEmail, &existingCreatedBy, &existingChangedAt,
+		&contactName, &contactEmail, &existingCreatedBy, &existingChangedAt, &ttTracksRaw,
 	)
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
@@ -2503,6 +2569,15 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		pricingArg = pricingRaw.String
 	}
 
+	var ttTracksArg any
+	if req.TimetableTracks != nil {
+		if b, err := json.Marshal(*req.TimetableTracks); err == nil {
+			ttTracksArg = string(b)
+		}
+	} else if ttTracksRaw.Valid && ttTracksRaw.String != "" {
+		ttTracksArg = ttTracksRaw.String
+	}
+
 	var orgIDArg any
 	if newOrgID.Valid {
 		orgIDArg = newOrgID.Int64
@@ -2557,13 +2632,13 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
 		 availability=?, tickets_total=?, booking_enabled=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=?,
-		 previous_start_time=COALESCE(?,previous_start_time) WHERE id=?`,
+		 previous_start_time=COALESCE(?,previous_start_time), timetable_tracks=jsonb(?) WHERE id=?`,
 		title, description, startUnix, endUnix, locationIDArg,
 		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished,
 		workshopDifficulty, urlVal(url), urlVal(bookingURL), orgIDArg, pricingArg,
 		availability, ticketsTotal, bookingEnabled, food, drink, floorCondition, attrsRaw,
 		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg,
-		previousStartTimeArg, id,
+		previousStartTimeArg, ttTracksArg, id,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -2935,6 +3010,10 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	if src.Pricing != nil {
 		cloneReq.Pricing = src.Pricing
 	}
+	// Custom track palette (#1174) carries over to the clone; scanEventRow
+	// already substitutes the default palette when src had none of its own,
+	// so this is a no-op copy-of-default in that case, not a forced override.
+	cloneReq.TimetableTracks = src.TimetableTracks
 	// Tags.
 	cloneReq.Tags = append([]string(nil), src.Tags...)
 
@@ -2964,6 +3043,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		Source:             "", // cleared
 		SourceLastModified: 0,  // cleared
 		Pricing:            cloneReq.Pricing,
+		TimetableTracks:    cloneReq.TimetableTracks,
 		FetchSourceID:      0,
 		Food:               cloneReq.Food,
 		Drink:              cloneReq.Drink,

@@ -181,6 +181,24 @@ func buildTimetableExportRows(event Event, entries []TimetableEntry) []timetable
 	return rows
 }
 
+// csvFormulaSafe neutralizes CSV formula injection: a cell whose value
+// starts with =, +, -, @, or a tab/CR (the characters Excel/LibreOffice/
+// Google Sheets treat as a formula prefix) gets a leading single quote, so a
+// timetable entry title/room/performer an organizer typed (e.g.
+// "=cmd|'/bin/calc'!A1") can never execute as a formula for whoever opens
+// the exported .csv in a spreadsheet app. Values that don't start with one
+// of those characters are returned unchanged.
+func csvFormulaSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
+}
+
 // feedEventTimetableExportHandler serves GET /events/{id}/timetable.{csv,json}
 // (#1178) — the flat per-entry counterpart to the nested timetable already
 // available inside GET /api/v1/events/{id}. Same published-event visibility
@@ -211,7 +229,10 @@ func feedEventTimetableExportHandler(client *DansalClient, format string) http.H
 			cw := csv.NewWriter(w)
 			cw.Write([]string{"date", "start_time", "end_time", "room", "title", "entry_type", "performer"})
 			for _, row := range rows {
-				cw.Write([]string{row.Date, row.StartTime, row.EndTime, row.Room, row.Title, row.EntryType, row.Performer})
+				cw.Write([]string{
+					csvFormulaSafe(row.Date), csvFormulaSafe(row.StartTime), csvFormulaSafe(row.EndTime),
+					csvFormulaSafe(row.Room), csvFormulaSafe(row.Title), csvFormulaSafe(row.EntryType), csvFormulaSafe(row.Performer),
+				})
 			}
 			cw.Flush()
 		}

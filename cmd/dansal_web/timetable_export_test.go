@@ -126,6 +126,28 @@ func TestFeedEventTimetableICSHandler(t *testing.T) {
 	}
 }
 
+// TestCSVFormulaSafe guards against CSV formula injection: a timetable
+// title/room/performer an organizer typed that happens to start with a
+// formula-prefix character must not execute as a formula for whoever opens
+// the exported .csv in Excel/LibreOffice/Sheets.
+func TestCSVFormulaSafe(t *testing.T) {
+	cases := map[string]string{
+		"":                          "",
+		"Opening bal":               "Opening bal",
+		"=cmd|'/bin/calc'!A1":       "'=cmd|'/bin/calc'!A1",
+		"+1+1":                      "'+1+1",
+		"-1+1":                      "'-1+1",
+		"@SUM(A1:A2)":               "'@SUM(A1:A2)",
+		"\t=evil":                   "'\t=evil",
+		"Main hall — not a formula": "Main hall — not a formula",
+	}
+	for in, want := range cases {
+		if got := csvFormulaSafe(in); got != want {
+			t.Errorf("csvFormulaSafe(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // TestFeedEventTimetableExportHandler exercises the flat CSV/JSON export
 // (#1178) — same fixture as the .ics test above, so the three formats can be
 // trusted to agree on which rows exist.

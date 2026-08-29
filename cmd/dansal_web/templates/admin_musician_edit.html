@@ -737,7 +737,11 @@ function _mdToHtml(md){
     s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
     s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
     s=s.replace(/_(.+?)_/g,'<em>$1</em>');
-    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){
+      url=url.trim();
+      if(!/^(https?:|mailto:|tel:|\/|#)/i.test(url)) url='#';
+      return '<a href="'+url.replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">'+txt+'</a>';
+    });
     return s;
   }
   var lines=md.split('\n'),out=[],inUl=false,inOl=false,inPre=false,preBuf=[];

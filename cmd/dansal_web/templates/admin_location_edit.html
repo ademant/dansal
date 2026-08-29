@@ -67,7 +67,7 @@
     <button type="button" class="loc-nav-item" data-target="sec-address"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_section_address"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-website"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_website"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-access"><span class="loc-nav-dot"></span>{{$.Strings.T "access_label"}}</button>
-    <button type="button" class="loc-nav-item" data-target="sec-kitchenbar"><span class="loc-nav-dot"></span>{{$.Strings.T "section_kitchen_bar"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-amenities"><span class="loc-nav-dot"></span>{{$.Strings.T "section_amenities"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-capacity"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_capacity_section"}}</button>
@@ -180,8 +180,8 @@
     </div>
   </section>
 
-  <section class="form-section" id="sec-kitchenbar">
-    <h2>{{$.Strings.T "section_kitchen_bar"}}</h2>
+  <section class="form-section" id="sec-amenities">
+    <h2>{{$.Strings.T "section_amenities"}}</h2>
     <div class="attr-override-grid">
       <span class="attr-override-name">{{$.Strings.T "attr_bar"}}</span>
       <label class="check-label"><input type="radio" name="attr_bar" value=""{{if eq (attrState $a "bar") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
@@ -192,12 +192,7 @@
       <label class="check-label"><input type="radio" name="attr_kitchen" value=""{{if eq (attrState $a "kitchen") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
       <label class="check-label"><input type="radio" name="attr_kitchen" value="1"{{if eq (attrState $a "kitchen") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
       <label class="check-label"><input type="radio" name="attr_kitchen" value="0"{{if eq (attrState $a "kitchen") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
-    </div>
-  </section>
 
-  <section class="form-section" id="sec-amenities">
-    <h2>{{$.Strings.T "section_amenities"}}</h2>
-    <div class="attr-override-grid">
       <span class="attr-override-name">{{$.Strings.T "attr_toilet"}}</span>
       <label class="check-label"><input type="radio" name="attr_toilet" value=""{{if eq (attrState $a "toilet") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
       <label class="check-label"><input type="radio" name="attr_toilet" value="1"{{if eq (attrState $a "toilet") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
@@ -918,10 +913,10 @@
     },
     'sec-website':function(){return !!document.getElementById('internetsite').value.trim();},
     'sec-access':function(){
-      return document.querySelector('#sec-access input[type=checkbox]:checked')!==null;
+      return document.querySelector('#sec-access input[type=radio]:checked:not([value=""])')!==null;
     },
-    'sec-kitchenbar':function(){
-      return document.querySelector('#sec-kitchenbar input[type=checkbox]:checked')!==null;
+    'sec-amenities':function(){
+      return document.querySelector('#sec-amenities input[type=radio]:checked:not([value=""])')!==null;
     },
     'sec-parking':function(){return !!document.getElementById('parking').value;},
     'sec-floor':function(){

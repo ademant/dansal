@@ -57,6 +57,16 @@ appearing on the room's own page.
 application/activity+json` returns the Actor object instead of HTML; see
 `/.well-known/webfinger` under [Discovery Files](#discovery-files).
 
+**Recurring events.** An event belonging to a series with a `cadence` set
+(free-text, e.g. "every 2nd + 4th Thursday, except holidays") shows that
+text on its own `/events/{id}` page and carries a 🔁 badge wherever it's
+listed. `/org/{name}` additionally gets a "Recurring events" section listing
+each of the org's recurring series, linked to that series' next upcoming
+occurrence. This is disclosure-only — there is no RRULE engine computing
+occurrences; each instance is still created individually, which is what
+makes an exception like "except holidays" correct without dansal needing to
+know about holiday calendars.
+
 `/tags/{slug}` works the same way for tags (issue #949): `Accept:
 application/activity+json` (or `ld+json`) returns a paged `OrderedCollection`
 of `Note` objects (`?page=true` for the embedded items, mirroring

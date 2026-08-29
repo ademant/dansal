@@ -277,13 +277,14 @@ There is no user-creation or admin-driven password-reset endpoint, and no `DELET
 Publishers are service accounts (`role=publisher`) with no email/password/passkeys, authenticated purely via API key — the identity an external integration (e.g. the [wp-dansal](https://github.com/ademant/wp-dansal) WordPress plugin) uses to post events under an organization.
 
 ```
-POST   /api/v1/publishers                       # create a publisher + API key atomically (admin/user)
-POST   /api/v1/publishers/token                 # exchange an API key for a short-lived, IP-pinned session token
-POST   /api/v1/publishers/{id}/regenerate-key   # rotate a publisher's API key
-DELETE /api/v1/publishers/{id}                  # delete a publisher account
+POST   /api/v1/publishers                        # create a publisher + API key atomically (admin/user)
+POST   /api/v1/publishers/token                  # exchange an API key for a short-lived, IP-pinned session token
+POST   /api/v1/publishers/{id}/regenerate-key     # rotate a publisher's API key (raw key, manual copy-paste)
+POST   /api/v1/publishers/{id}/reconnect-invite   # mint a self-redeemable reconnect link (see below)
+DELETE /api/v1/publishers/{id}                    # delete a publisher account
 ```
 
-Admin may act on any publisher. A `user`-role caller may create a publisher for any organization they belong to, and may regenerate/delete a publisher only if it shares at least one organization with the caller.
+Admin may act on any publisher. A `user`-role caller may create a publisher for any organization they belong to, and may regenerate/delete/reconnect a publisher only if it shares at least one organization with the caller.
 
 **Create request:**
 ```json
@@ -308,7 +309,7 @@ Admin may act on any publisher. A `user`-role caller may create a publisher for 
 }
 ```
 
-`regenerate-key` accepts an optional `{"expires_at": "..."}` body (same RFC3339 format) and returns `{"key_id": ..., "api_key": "ak_...", "expires_at": "..."}`, invalidating all previous keys for that publisher.
+`regenerate-key` accepts an optional `{"expires_at": "..."}` body (same RFC3339 format) and returns `{"key_id": ..., "api_key": "ak_...", "expires_at": "..."}`, invalidating all previous keys for that publisher. The raw key is returned for manual copy-paste into the integration's settings — for a self-redeemable link instead, see `reconnect-invite` below.
 
 Keys are stored hashed (SHA-256), never in plaintext — the raw value is only ever visible in the create/regenerate response.
 
@@ -354,11 +355,12 @@ Public (no `Authorization` header required — the token is the credential). The
   "org_id": 7,
   "org_name": "Bal Folk Berlin",
   "org_slug": "balfolkberlin",
-  "base_url": "https://api.balfolk.jetzt"
+  "base_url": "https://api.balfolk.jetzt",
+  "expires_at": "2027-01-01T00:00:00Z"
 }
 ```
 
-The token is consumed on first use (single-use) and expires after `server.invite_expiry_hours`. The `api_key` is shown only in this response — store it securely.
+The token is consumed on first use (single-use) and expires after `server.invite_publisher_expiry_minutes`. The `api_key` is shown only in this response — store it securely. `expires_at` is present only when the new key was actually given an expiry (invite-created keys have none by default) — record it if present so the integration can proactively renew via `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) instead of only discovering an expiry via a failed request.
 
 **End-to-end flow for a WordPress plugin:**
 
@@ -368,11 +370,23 @@ The token is consumed on first use (single-use) and expires after `server.invite
 4. Plugin POSTs to the URL with `{"user_metadata": {"client_name": "wp-dansal @ example.com", "client_url": "https://example.com"}}`
 5. Plugin stores the returned `api_key`, `org_id`, and `base_url` — setup complete, no manual ID lookup needed
 
+**Reconnecting an existing publisher (`POST /api/v1/publishers/{id}/reconnect-invite`):** for when a publisher's key has already fully expired (past the renewal grace window below) and the original connect flow can't run again without creating a duplicate account. Authenticated (admin, or a caller sharing an org with the publisher) — this is what mints the link; redeeming the resulting token is still the same public `POST /api/v1/invites/{token}/publisher` call above. Response:
+
+```json
+{
+  "token": "...",
+  "redeem_url": "https://api.balfolk.jetzt/api/v1/invites/abc123/publisher",
+  "expires_at": "2026-07-03T01:00:00Z"
+}
+```
+
+Redeeming this token **rotates the target publisher's existing key in place** — old key invalidated, same `user_id`/`org_id`, no new account or org-membership row — instead of creating a new publisher, but the request/response shape at redemption time is identical to a fresh connect link, so the integration's redemption code needs no changes to handle it. On `/admin/users`, this is what the **Reconnect link** button on an existing publisher row generates.
+
 ### Building a third-party integration on a publisher account
 
 This is the intended shape for any external integration that authenticates as a publisher.
 
-1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's rarely-used credential-exchange secret — rather than sending it on every request, call `POST /api/v1/publishers/token` to mint a short-lived IP-pinned session token (above) and use that for actual API calls. If the integration's IP changes, its pinned token simply stops validating; re-exchange the API key from the new IP for a fresh one. If the API key itself was created with an `expires_at`, call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before it expires.
+1. **One key, one org, no OAuth.** Each publisher API key is scoped to exactly one `org_id` at creation time and never changes org. Store the key as the connection's rarely-used credential-exchange secret — rather than sending it on every request, call `POST /api/v1/publishers/token` to mint a short-lived IP-pinned session token (above) and use that for actual API calls. If the integration's IP changes, its pinned token simply stops validating; re-exchange the API key from the new IP for a fresh one. If the API key itself was created with an `expires_at`, call `POST /api/v1/apikeys/renew` (see [API Keys](#api-keys)) shortly before it expires — `POST /api/v1/apikeys/renew` also tolerates a short grace window past `expires_at` (`server.api_key_renew_grace_hours`, default 6h), so a renewal attempt that lands slightly late due to the integration's own polling cadence can still succeed; past that window a human has to reissue the key via `regenerate-key` or a reconnect link.
 2. **Location sync — check before creating:**
    - `GET /api/v1/locations?osm_id=<id>&osm_type=<type>` — exact match
    - `GET /api/v1/locations?lat=<lat>&lng=<lng>&radius=<km>` — proximity match (adds `distance_km` to results)
@@ -591,7 +605,7 @@ POST /api/v1/apikeys/renew
 Authorization: Bearer ak_<current-key>
 ```
 
-Only keys with a non-null `expires_at` that hasn't passed yet can be renewed — a key with no expiry returns `400`, an already-expired key returns `401` (a human must reissue it via `regenerate-key` or a fresh `POST /api/v1/apikeys`). On success, the old key is invalidated immediately and a new key is returned with the same lifetime duration as the original, counted from now:
+Only keys with a non-null `expires_at` can be renewed — a key with no expiry returns `400`. A key past its `expires_at` can still be renewed within a grace window (`server.api_key_renew_grace_hours`, default 6h) to tolerate a client's own polling cadence landing slightly late; beyond that window it returns `401` and a human must reissue the key (via `regenerate-key`, or for a publisher, a reconnect link — see [Publishers](#publishers)). On success, the old key is invalidated immediately and a new key is returned with the same lifetime duration as the original, counted from now:
 
 ```json
 {
@@ -671,6 +685,8 @@ GET    /api/v1/location-images/{id}         # serves the image; public, no auth
 POST /api/v1/locations/42/children
 { "name": "Grand Hall", "floor_condition": "parquet" }
 ```
+
+**`attributes` (map of string → bool, tri-state):** free-form venue attributes, e.g. `{"wheelchair": true, "toilet": false}`. Key *absent* means unspecified/unknown (not "no") — a venue can be wheelchair-accessible without that ever having been explicitly recorded; only an explicit `true`/`false` asserts a known fact. The dansal-web admin UI's known keys are `wheelchair`, `hearing_loop`, `visual_support`, `bar`, `kitchen`, `toilet`, but the API itself doesn't validate against a fixed key list — any string key is accepted and stored.
 
 **Query parameters for GET /api/v1/locations:**
 - `name=` — substring match on location name
@@ -876,6 +892,8 @@ Authentication required (except `GET /api/v1/series-by-token/{token}` and the PA
 
 The `.../events/{event_id}` pair is the single-item counterpart to `assign-events`/`remove-from-series` (#727): `PUT` adds one event to the series (rejecting, with `409 Conflict`, an event whose `organization_id` doesn't match the series' organization — `assign-events` instead skips mismatches silently when bulk-assigning); `DELETE` removes one event, equivalent to `POST /api/v1/events/{id}/remove-from-series` but addressed from the series side.
 
+**Cadence (`cadence`, string, optional):** a single free-text, human-readable description of how often the series recurs (e.g. `"every 2nd + 4th Thursday, except holidays"`), shown to visitors on the event page and the org page's recurring-events list. Disclosure-only — there is no RRULE engine and it never generates occurrences; instances are still created/edited/cancelled individually via `add-date`/`assign-events`/deleting an event. It's denormalized onto every `GET /api/v1/events` response for that series as `series_cadence` (empty string when unset or the event has no series), so clients don't need a separate series lookup to display it.
+
 ## Timetable
 
 ```
@@ -920,6 +938,8 @@ POST   /api/v1/fetchurl/bulk-assign-org
 Authentication required. Fetch sources are iCal/JSON/RSS feeds imported automatically by the `dansal-fetch` timer.
 
 **Note:** The path is `/api/v1/fetchurl` (no trailing `s`).
+
+**`category_filter` (array of strings, optional, iCal sources only):** when set, only VEVENTs whose `CATEGORIES` intersect the filter (case-insensitively) are imported — an empty/unset filter imports everything, same as before. Useful for a shared feed that mixes multiple event types (e.g. import only `CATEGORIES:Balfolk` entries from a venue's general events calendar) without needing separate title-keyword heuristics.
 
 ## Contact Posts
 
@@ -989,7 +1009,7 @@ POST   /api/v1/pending-invites/{id}/resend
 
 **Redemption for human users (`POST /api/v1/invites/{token}`):** creates a `role=user` account with optional email/password/passkey. See [Registration](#registration).
 
-**Redemption for publisher accounts (`POST /api/v1/invites/{token}/publisher`):** creates a `role=publisher` service account + API key atomically, with optional `user_metadata`. See [Connect-link bootstrap](#connect-link-bootstrap-recommended-setup-flow) in the Publishers section for the full flow and response shape.
+**Redemption for publisher accounts (`POST /api/v1/invites/{token}/publisher`):** creates a `role=publisher` service account + API key atomically, with optional `user_metadata`. See [Connect-link bootstrap](#connect-link-bootstrap-recommended-setup-flow) in the Publishers section for the full flow and response shape. An invite minted via `POST /api/v1/publishers/{id}/reconnect-invite` instead redeems through this same endpoint but rotates that existing publisher's key in place rather than creating a new account — see the same section.
 
 ## Telegram Webhook
 

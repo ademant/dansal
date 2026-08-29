@@ -51,13 +51,15 @@
   {{if .Internetsite}}
   <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
   {{end}}
-  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") .Parking .FloorCondition .Capacity .SizeSqm}}
+  {{if or (index .Attributes "wheelchair") (index .Attributes "hearing_loop") (index .Attributes "visual_support") (index .Attributes "bar") (index .Attributes "kitchen") (ne (attrState .Attributes "toilet") "") .Parking .FloorCondition .Capacity .SizeSqm}}
   <div class="loc-attrs">
     {{if index .Attributes "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
     {{if index .Attributes "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
     {{if index .Attributes "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
     {{if index .Attributes "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
     {{if index .Attributes "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
+    {{if eq (attrState .Attributes "toilet") "1"}}<span class="access-badge" title="{{$.Strings.T "attr_toilet"}}">🚻</span>{{end}}
+    {{if eq (attrState .Attributes "toilet") "0"}}<span class="access-badge" title="{{$.Strings.T "access_no_toilet"}}">🚫🚻</span>{{end}}
     {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
     {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
     {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}

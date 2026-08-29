@@ -66,4 +66,15 @@ func TestSmokeRenderAdminLocationEdit(t *testing.T) {
 			{ID: 56, Location: "Room B"},
 		}},
 	})
+
+	// #1188: tri-state attributes -- an explicit "no" (false) must render
+	// distinctly from an unset key, for every attribute including the new
+	// "toilet" one, without a template error.
+	render("tristate-attributes", AdminLocationEditData{
+		Location: Location{ID: 7, Location: "Elisenbrunnen (open air)", Attributes: map[string]bool{
+			"wheelchair": true,
+			"toilet":     false,
+			"bar":        false,
+		}},
+	})
 }

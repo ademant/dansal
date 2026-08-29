@@ -547,13 +547,15 @@
       {{end}}
       {{$locAttrs := .Attributes}}
       {{$attrs := mergeAttrs $locAttrs $.Data.Event.Attributes}}
-      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") .Parking .NoStreetShoes}}
+      {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") (ne (attrState $attrs "toilet") "") .Parking .NoStreetShoes}}
       <div class="evt-access">
         {{if index $attrs "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
         {{if index $attrs "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
         {{if index $attrs "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
         {{if index $attrs "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
         {{if index $attrs "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
+        {{if eq (attrState $attrs "toilet") "1"}}<span class="access-badge" title="{{$.Strings.T "attr_toilet"}}">🚻</span>{{end}}
+        {{if eq (attrState $attrs "toilet") "0"}}<span class="access-badge" title="{{$.Strings.T "access_no_toilet"}}">🚫🚻</span>{{end}}
         {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
         {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
         {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}

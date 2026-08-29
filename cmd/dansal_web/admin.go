@@ -166,19 +166,16 @@ func splitEventLocations(allLocs []Location, event Event) (orgFirst, others []Lo
 	return
 }
 
-var locAttrKeys = []string{"wheelchair", "hearing_loop", "visual_support", "bar", "kitchen"}
+var locAttrKeys = []string{"wheelchair", "hearing_loop", "visual_support", "bar", "kitchen", "toilet"}
 
+// locationAttrsFromForm reads the tri-state (unset/yes/no) attribute radio
+// groups on the location edit form (#1188). It shares eventAttrsFromForm's
+// logic exactly -- both read "attr_"+key from the same locAttrKeys list and
+// the same "", "1", "0" values -- so an unchecked/omitted radio stays
+// genuinely "no info" rather than being read as "no", letting a location be
+// e.g. wheelchair-friendly without that having been explicitly recorded.
 func locationAttrsFromForm(r *http.Request) map[string]bool {
-	attrs := map[string]bool{}
-	for _, k := range locAttrKeys {
-		if r.FormValue("attr_"+k) == "1" {
-			attrs[k] = true
-		}
-	}
-	if len(attrs) == 0 {
-		return nil
-	}
-	return attrs
+	return eventAttrsFromForm(r)
 }
 
 func eventAttrsFromForm(r *http.Request) map[string]bool {

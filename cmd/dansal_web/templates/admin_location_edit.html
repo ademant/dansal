@@ -158,17 +158,51 @@
     <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
   </section>
 
+  {{$a := .Location.Attributes}}
   <section class="form-section" id="sec-access">
     <h2>{{$.Strings.T "access_label"}}</h2>
-    <label class="check-label"><input type="checkbox" name="attr_wheelchair" value="1"{{if index .Location.Attributes "wheelchair"}} checked{{end}}> {{$.Strings.T "access_wheelchair"}}</label>
-    <label class="check-label"><input type="checkbox" name="attr_hearing_loop" value="1"{{if index .Location.Attributes "hearing_loop"}} checked{{end}}> {{$.Strings.T "access_hearing_loop"}}</label>
-    <label class="check-label"><input type="checkbox" name="attr_visual_support" value="1"{{if index .Location.Attributes "visual_support"}} checked{{end}}> {{$.Strings.T "access_visual_support"}}</label>
+    <p class="field-hint">{{$.Strings.T "attr_tristate_hint"}}</p>
+    <div class="attr-override-grid">
+      <span class="attr-override-name">{{$.Strings.T "access_wheelchair"}}</span>
+      <label class="check-label"><input type="radio" name="attr_wheelchair" value=""{{if eq (attrState $a "wheelchair") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_wheelchair" value="1"{{if eq (attrState $a "wheelchair") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_wheelchair" value="0"{{if eq (attrState $a "wheelchair") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+
+      <span class="attr-override-name">{{$.Strings.T "access_hearing_loop"}}</span>
+      <label class="check-label"><input type="radio" name="attr_hearing_loop" value=""{{if eq (attrState $a "hearing_loop") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_hearing_loop" value="1"{{if eq (attrState $a "hearing_loop") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_hearing_loop" value="0"{{if eq (attrState $a "hearing_loop") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+
+      <span class="attr-override-name">{{$.Strings.T "access_visual_support"}}</span>
+      <label class="check-label"><input type="radio" name="attr_visual_support" value=""{{if eq (attrState $a "visual_support") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_visual_support" value="1"{{if eq (attrState $a "visual_support") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_visual_support" value="0"{{if eq (attrState $a "visual_support") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+    </div>
   </section>
 
   <section class="form-section" id="sec-kitchenbar">
     <h2>{{$.Strings.T "section_kitchen_bar"}}</h2>
-    <label class="check-label"><input type="checkbox" name="attr_bar" value="1"{{if index .Location.Attributes "bar"}} checked{{end}}> {{$.Strings.T "attr_bar"}}</label>
-    <label class="check-label"><input type="checkbox" name="attr_kitchen" value="1"{{if index .Location.Attributes "kitchen"}} checked{{end}}> {{$.Strings.T "attr_kitchen"}}</label>
+    <div class="attr-override-grid">
+      <span class="attr-override-name">{{$.Strings.T "attr_bar"}}</span>
+      <label class="check-label"><input type="radio" name="attr_bar" value=""{{if eq (attrState $a "bar") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_bar" value="1"{{if eq (attrState $a "bar") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_bar" value="0"{{if eq (attrState $a "bar") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+
+      <span class="attr-override-name">{{$.Strings.T "attr_kitchen"}}</span>
+      <label class="check-label"><input type="radio" name="attr_kitchen" value=""{{if eq (attrState $a "kitchen") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_kitchen" value="1"{{if eq (attrState $a "kitchen") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_kitchen" value="0"{{if eq (attrState $a "kitchen") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+    </div>
+  </section>
+
+  <section class="form-section" id="sec-amenities">
+    <h2>{{$.Strings.T "section_amenities"}}</h2>
+    <div class="attr-override-grid">
+      <span class="attr-override-name">{{$.Strings.T "attr_toilet"}}</span>
+      <label class="check-label"><input type="radio" name="attr_toilet" value=""{{if eq (attrState $a "toilet") ""}} checked{{end}}> {{$.Strings.T "attr_unspecified"}}</label>
+      <label class="check-label"><input type="radio" name="attr_toilet" value="1"{{if eq (attrState $a "toilet") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_toilet" value="0"{{if eq (attrState $a "toilet") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+    </div>
   </section>
 
   <section class="form-section" id="sec-parking">
@@ -531,6 +565,8 @@
 .access-fieldset legend{font-size:.85rem;font-weight:600;color:var(--fg-muted,#666);padding:0 .25rem}
 .check-label{display:flex;align-items:center;gap:.4rem;font-weight:normal;cursor:pointer;margin:.2rem 0}
 .check-label input[type=checkbox]{width:auto}
+.attr-override-grid{display:grid;grid-template-columns:12rem repeat(3,auto);align-items:center;gap:.35rem .75rem;margin-top:.4rem}
+.attr-override-name{font-size:.88rem;font-weight:600;color:#444}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}

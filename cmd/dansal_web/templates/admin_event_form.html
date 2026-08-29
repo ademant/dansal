@@ -382,6 +382,11 @@
       <label class="check-label"><input type="radio" name="attr_kitchen" value=""{{if eq (attrState $a "kitchen") ""}} checked{{end}}> {{$.Strings.T "attr_inherit"}}</label>
       <label class="check-label"><input type="radio" name="attr_kitchen" value="1"{{if eq (attrState $a "kitchen") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
       <label class="check-label"><input type="radio" name="attr_kitchen" value="0"{{if eq (attrState $a "kitchen") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
+
+      <span class="attr-override-name">{{$.Strings.T "attr_toilet"}}</span>
+      <label class="check-label"><input type="radio" name="attr_toilet" value=""{{if eq (attrState $a "toilet") ""}} checked{{end}}> {{$.Strings.T "attr_inherit"}}</label>
+      <label class="check-label"><input type="radio" name="attr_toilet" value="1"{{if eq (attrState $a "toilet") "1"}} checked{{end}}> {{$.Strings.T "attr_yes"}}</label>
+      <label class="check-label"><input type="radio" name="attr_toilet" value="0"{{if eq (attrState $a "toilet") "0"}} checked{{end}}> {{$.Strings.T "attr_no"}}</label>
     </div>
 
     <label for="floor_condition" style="margin-top:.75rem">{{$.Strings.T "floor_label"}}</label>

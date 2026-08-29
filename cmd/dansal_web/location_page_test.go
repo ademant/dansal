@@ -57,4 +57,64 @@ func TestSmokeRenderLocationPage(t *testing.T) {
 	render("room-page", LocationPageData{
 		Location: Location{ID: 55, Location: "Room A", ParentID: &buildingID},
 	})
+
+	// #1188: an explicit "no toilet" (false) renders its own warning badge,
+	// distinct from a location that simply has no attributes recorded at all.
+	render("open-air-no-toilet", LocationPageData{
+		Location: Location{ID: 7, Location: "Elisenbrunnen", Town: "Aachen", Attributes: map[string]bool{"toilet": false}},
+	})
+	render("has-toilet", LocationPageData{
+		Location: Location{ID: 8, Location: "Bürgerhaus Stollwerck", Attributes: map[string]bool{"toilet": true}},
+	})
+}
+
+// TestLocationPageToiletBadge asserts the actual badge content (not just
+// error-free rendering, unlike the smoke test above): explicit false shows
+// the "no toilet" warning badge and not the "has toilet" one, and vice versa
+// for explicit true (#1188).
+func TestLocationPageToiletBadge(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/location/7", nil)
+
+	render := func(attrs map[string]bool) string {
+		rec := httptest.NewRecorder()
+		data := LocationPageData{Location: Location{ID: 7, Location: "Elisenbrunnen", Attributes: attrs}}
+		renderTemplate(rec, tmpls.location, tmplData(req, cfg, i18n, data.Location.Location, data))
+		body, _ := io.ReadAll(rec.Body)
+		return string(body)
+	}
+
+	t.Run("explicit no toilet", func(t *testing.T) {
+		body := render(map[string]bool{"toilet": false})
+		if !strings.Contains(body, "🚫🚻") {
+			t.Error("expected the no-toilet warning badge (🚫🚻)")
+		}
+	})
+
+	t.Run("explicit has toilet", func(t *testing.T) {
+		body := render(map[string]bool{"toilet": true})
+		if !strings.Contains(body, "🚻") {
+			t.Error("expected the has-toilet badge (🚻)")
+		}
+		if strings.Contains(body, "🚫🚻") {
+			t.Error("did not expect the no-toilet warning badge when toilet is explicitly true")
+		}
+	})
+
+	t.Run("unset shows neither badge", func(t *testing.T) {
+		body := render(nil)
+		if strings.Contains(body, "🚻") {
+			t.Error("did not expect any toilet badge when attribute is unset")
+		}
+	})
 }

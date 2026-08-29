@@ -2515,6 +2515,23 @@ func migrateDB() {
 			db.Exec("ALTER TABLE oidc_flows ADD COLUMN link_user_id INTEGER")
 		}
 	}
+	// v32: optional category filter on iCal fetch sources (#1187). When set,
+	// only VEVENTs whose CATEGORIES intersect the filter (case-insensitively)
+	// are imported; empty/unset keeps today's behavior (import everything).
+	// Stored as a JSON array, same shape as fetch_sources.tags.
+	if !applied(32) {
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN category_filter TEXT")
+		mark(32)
+	}
+	// Safety net: ensure fetch_sources.category_filter exists even if v32
+	// was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='category_filter'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN category_filter TEXT")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3532,7 +3549,8 @@ func createTables() error {
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT '',
-		kufer_config TEXT
+		kufer_config TEXT,
+		category_filter TEXT
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
@@ -3913,6 +3931,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(29)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(30)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(31)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(32)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

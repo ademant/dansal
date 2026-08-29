@@ -30,6 +30,7 @@ type FetchURLRequest struct {
 	TemplateMode   string   `json:"template_mode,omitempty" enum:"fetch_master,template_master"`
 	TemplateData   string   `json:"template_data,omitempty"`
 	KuferConfig    string   `json:"kufer_config,omitempty"`
+	CategoryFilter []string `json:"category_filter,omitempty"`
 }
 
 // FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
@@ -42,6 +43,7 @@ type FetchSourcePatchRequest struct {
 	TemplateMode   string   `json:"template_mode" enum:"fetch_master,template_master"`
 	TemplateData   string   `json:"template_data"`
 	KuferConfig    string   `json:"kufer_config"`
+	CategoryFilter []string `json:"category_filter"`
 }
 
 type FetchSource struct {
@@ -58,6 +60,12 @@ type FetchSource struct {
 	TemplateMode   string   `json:"template_mode,omitempty"`
 	TemplateData   string   `json:"template_data,omitempty"`
 	KuferConfig    string   `json:"kufer_config,omitempty"`
+	// CategoryFilter (#1187), iCal sources only: when non-empty, only
+	// VEVENTs whose CATEGORIES intersect this list (case-insensitively) are
+	// imported; others are skipped entirely (not merely excluded from
+	// tags). Empty/unset imports everything, as before. See
+	// eventCategoriesMatchFilter in fetchurl.go.
+	CategoryFilter []string `json:"category_filter,omitempty"`
 }
 
 // KuferConfig is the JSON stored in fetch_sources.kufer_config for type="kufer"
@@ -75,7 +83,7 @@ type KuferConfig struct {
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,'')"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,'')"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -533,17 +541,40 @@ func parseICalCategories(event *ics.VEvent) []string {
 	return tags
 }
 
+// eventCategoriesMatchFilter reports whether an event's feed-provided
+// categories satisfy a fetch source's CategoryFilter (#1187). An empty
+// filter always matches (default: import everything). Matching is
+// case-insensitive since feeds are inconsistent about capitalization.
+func eventCategoriesMatchFilter(eventCategories, filter []string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	want := make(map[string]bool, len(filter))
+	for _, f := range filter {
+		want[strings.ToLower(strings.TrimSpace(f))] = true
+	}
+	for _, c := range eventCategories {
+		if want[strings.ToLower(strings.TrimSpace(c))] {
+			return true
+		}
+	}
+	return false
+}
+
 func scanFetchSource(s scanner) (FetchSource, error) {
 	var src FetchSource
-	var tagsJSON, danceIDsCSV string
+	var tagsJSON, danceIDsCSV, categoryFilterJSON string
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
 		json.Unmarshal([]byte(tagsJSON), &src.Tags)
+	}
+	if categoryFilterJSON != "" {
+		json.Unmarshal([]byte(categoryFilterJSON), &src.CategoryFilter)
 	}
 	if danceIDsCSV != "" {
 		for _, part := range strings.Split(danceIDsCSV, ",") {
@@ -717,6 +748,9 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	if req.Tags != nil {
 		src.Tags = req.Tags
 	}
+	if req.CategoryFilter != nil {
+		src.CategoryFilter = req.CategoryFilter
+	}
 	src.DanceIDs = req.DanceIDs
 	src.OrganizationID = req.OrganizationID
 	src.TemplateID = req.TemplateID
@@ -728,6 +762,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tagsJSON, _ := json.Marshal(src.Tags)
+	categoryFilterJSON, _ := json.Marshal(src.CategoryFilter)
 	var orgVal any
 	if src.OrganizationID != nil {
 		orgVal = *src.OrganizationID
@@ -745,8 +780,8 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		kuferVal = src.KuferConfig
 	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, kufer_config = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, kuferVal, resolveDisplayName(callerID), src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, kufer_config = ?, category_filter = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, kuferVal, string(categoryFilterJSON), resolveDisplayName(callerID), src.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return
@@ -1199,7 +1234,11 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 			continue
 		}
 
-		tags := mergeTags(parseICalCategories(vevent), src.Tags)
+		eventCategories := parseICalCategories(vevent)
+		if !eventCategoriesMatchFilter(eventCategories, src.CategoryFilter) {
+			continue
+		}
+		tags := mergeTags(eventCategories, src.Tags)
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)
 
@@ -1286,7 +1325,11 @@ func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
 			continue
 		}
 
-		tags := mergeTags(parseICalCategories(vevent), src.Tags)
+		eventCategories := parseICalCategories(vevent)
+		if !eventCategoriesMatchFilter(eventCategories, src.CategoryFilter) {
+			continue
+		}
+		tags := mergeTags(eventCategories, src.Tags)
 		baseUID := prop(ics.ComponentPropertyUniqueId)
 		sourceLastModified := icalLastModified(vevent)
 
@@ -1434,8 +1477,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	if req.KuferConfig != "" {
 		db.Exec("UPDATE fetch_sources SET kufer_config = ? WHERE id = ?", req.KuferConfig, sourceID)
 	}
+	if req.CategoryFilter != nil {
+		categoryFilterJSON, _ := json.Marshal(req.CategoryFilter)
+		db.Exec("UPDATE fetch_sources SET category_filter = ? WHERE id = ?", string(categoryFilterJSON), sourceID)
+	}
 
-	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData, KuferConfig: req.KuferConfig}
+	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData, KuferConfig: req.KuferConfig, CategoryFilter: req.CategoryFilter}
 	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)

@@ -270,14 +270,63 @@ type EventData struct {
 }
 
 type OrgData struct {
-	Org            Organization
-	UpcomingEvents []Event
-	PastEvents     []Event
-	AllEvents      []Event
-	Musicians      []Musician
-	Slug           string
-	Handle         string
-	FollowerCount  int
+	Org             Organization
+	UpcomingEvents  []Event
+	PastEvents      []Event
+	AllEvents       []Event
+	Musicians       []Musician
+	Slug            string
+	Handle          string
+	FollowerCount   int
+	RecurringSeries []SeriesCadenceEntry
+}
+
+// SeriesCadenceEntry is one row in an org page's "recurring events" section
+// (#1185): title/cadence/next-occurrence for one series, derived from the
+// org's already-loaded upcoming events rather than a separate series API
+// call. This is what makes "cadence set AND at least one published event"
+// hold by construction — upcoming is already published-only (GetAllEventsByOrg
+// requests is_published=true) and by definition in the future, so a series
+// only appears here when both conditions are actually true right now.
+type SeriesCadenceEntry struct {
+	SeriesID     int
+	Title        string
+	Cadence      string
+	NextEventID  int
+	NextStart    string
+	LocationName string
+}
+
+// recurringSeriesFromEvents derives the distinct list of series to show in
+// an org page's recurring-events section from that org's upcoming events,
+// which are chronologically ordered (GetEvents/GetAllEventsByOrg both sort
+// "e.start_time ASC" server-side) — so the first event seen for a given
+// series_id is its soonest upcoming occurrence.
+func recurringSeriesFromEvents(events []Event) []SeriesCadenceEntry {
+	seen := make(map[int]bool)
+	var out []SeriesCadenceEntry
+	for _, e := range events {
+		if e.SeriesID == nil || e.SeriesCadence == "" || seen[*e.SeriesID] {
+			continue
+		}
+		seen[*e.SeriesID] = true
+		locName := ""
+		if e.Location != nil {
+			switch {
+			case e.Location.ShortName != "":
+				locName = e.Location.ShortName
+			case e.Location.Location != "":
+				locName = e.Location.Location
+			default:
+				locName = e.Location.Town
+			}
+		}
+		out = append(out, SeriesCadenceEntry{
+			SeriesID: *e.SeriesID, Title: e.Title, Cadence: e.SeriesCadence,
+			NextEventID: e.ID, NextStart: e.StartTime, LocationName: locName,
+		})
+	}
+	return out
 }
 
 type LocationPageData struct {
@@ -1048,14 +1097,15 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 		handle := "@" + slug + "@" + cfg.Domain
 		td := tmplData(r, cfg, i18n, org.Name, OrgData{
-			Org:            org,
-			UpcomingEvents: upcoming,
-			PastEvents:     past,
-			AllEvents:      allEvents,
-			Musicians:      musicians,
-			Slug:           slug,
-			Handle:         handle,
-			FollowerCount:  followerCount,
+			Org:             org,
+			UpcomingEvents:  upcoming,
+			PastEvents:      past,
+			AllEvents:       allEvents,
+			Musicians:       musicians,
+			Slug:            slug,
+			Handle:          handle,
+			FollowerCount:   followerCount,
+			RecurringSeries: recurringSeriesFromEvents(upcoming),
 		})
 		renderPage(w, cfg, tmpls.org, td, metaDesc(org.Description, metaDescMaxLen), org.ImageURL)
 	}

@@ -32,6 +32,11 @@ type EventSeries struct {
 	EventCount        int             `json:"event_count,omitempty"`
 	Events            []SeriesEvent   `json:"events,omitempty"`
 	TemplateData      json.RawMessage `json:"template_data,omitempty"`
+	// Cadence (#1185) is a single free-text, human-readable description of
+	// how often this series recurs (e.g. "every 2nd + 4th Thursday, except
+	// holidays"), shown to visitors. Disclosure-only: it does not generate
+	// occurrences — instance create/edit/cancel remains the mechanism.
+	Cadence string `json:"cadence,omitempty"`
 }
 
 // seriesTemplateData is the rich per-series default set applied to every
@@ -175,7 +180,7 @@ func scanSeries(row interface{ Scan(...any) error }, extra ...any) (EventSeries,
 		&orgID, &musicianID, &instructorID, &locID,
 		&s.DefaultStartTime, &s.DefaultEndTime,
 		&inviteToken, &s.CreatedAt, &s.UpdatedAt, &templateData,
-		&imageAIGeneratedInt,
+		&imageAIGeneratedInt, &s.Cadence,
 	}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return s, err
@@ -209,7 +214,7 @@ const seriesSelectCols = `id, slug, title, COALESCE(description,''),
 	organization_id, musician_id, instructor_id, default_location_id,
 	COALESCE(default_start_time,''), COALESCE(default_end_time,''),
 	invite_token, created_at, COALESCE(updated_at,0), COALESCE(template_data,'{}'),
-	COALESCE(image_ai_generated,0)`
+	COALESCE(image_ai_generated,0), COALESCE(cadence,'')`
 
 // loadSeriesEvents loads all events belonging to a series, ordered by start_time.
 func loadSeriesEvents(seriesID int) ([]SeriesEvent, error) {
@@ -412,6 +417,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		Occurrences       int             `json:"occurrences"`
 		EndDate           string          `json:"end_date"`
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
+		Cadence           string          `json:"cadence,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -522,13 +528,13 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	slug := uniqueSlug(baseSlug, 0)
 
 	result, err := tx.Exec(`INSERT INTO event_series
-		(slug, title, description, organization_id, musician_id, instructor_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		(slug, title, description, organization_id, musician_id, instructor_id, default_location_id, default_start_time, default_end_time, updated_at, created_by_id, updated_by, template_data, cadence)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		slug, req.Title, req.Description,
 		optionalInt(req.OrganizationID), optionalInt(req.MusicianID), optionalInt(req.InstructorID),
 		optionalInt(req.DefaultLocationID),
 		startTimeStr, endTimeStr,
-		time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr,
+		time.Now().Unix(), callerID, resolveDisplayName(callerID), templateDataStr, req.Cadence,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -634,9 +640,14 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 		InstructorID      *int            `json:"instructor_id"`
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 		ImageAIGenerated  bool            `json:"image_ai_generated"`
+		Cadence           *string         `json:"cadence,omitempty"`
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	cadence := series.Cadence
+	if req.Cadence != nil {
+		cadence = *req.Cadence
 	}
 
 	if strings.TrimSpace(req.Title) == "" {
@@ -681,14 +692,14 @@ func updateSeries(w http.ResponseWriter, r *http.Request) {
 	_, err := db.Exec(`UPDATE event_series
 		SET title=?, description=?, default_location_id=?, default_start_time=?, default_end_time=?,
 		    organization_id=?, musician_id=?, instructor_id=?, updated_at=?, updated_by=?, template_data=?,
-		    image_ai_generated=?
+		    image_ai_generated=?, cadence=?
 		WHERE id=?`,
 		req.Title, req.Description,
 		optionalInt(req.DefaultLocationID),
 		req.DefaultStartTime, req.DefaultEndTime,
 		optionalInt(orgID), optionalInt(musicianID), optionalInt(instructorID),
 		time.Now().Unix(), resolveDisplayName(callerID), templateDataStr,
-		req.ImageAIGenerated,
+		req.ImageAIGenerated, cadence,
 		series.ID,
 	)
 	if err != nil {

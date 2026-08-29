@@ -435,6 +435,7 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			"description":        strings.TrimSpace(r.FormValue("description")),
 			"default_start_time": r.FormValue("default_start_time"),
 			"default_end_time":   r.FormValue("default_end_time"),
+			"cadence":            strings.TrimSpace(r.FormValue("cadence")),
 		}
 		if v := r.FormValue("default_location_id"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {

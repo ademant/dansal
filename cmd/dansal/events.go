@@ -76,17 +76,24 @@ type Event struct {
 	SeriesID               *int             `json:"series_id,omitempty"`
 	SeriesImageURL         string           `json:"series_image_url,omitempty"`
 	SeriesImageAIGenerated bool             `json:"series_image_ai_generated,omitempty"`
-	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
-	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
-	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
-	SuggesterEmail         string           `json:"suggester_email,omitempty"`
-	SuggesterName          string           `json:"suggester_name,omitempty"`
-	PendingEditJSON        string           `json:"pending_edit_json,omitempty"`
-	PendingEditSubmittedAt string           `json:"pending_edit_submitted_at,omitempty"`
-	EmailVerified          bool             `json:"email_verified"`
-	TagsJSON               string           `json:"-"`
-	PricingJSON            string           `json:"-"`
-	TimetableTracksJSON    string           `json:"-"`
+	// SeriesCadence (#1185) mirrors event_series.cadence for this event's
+	// series, if any — a human-readable recurrence description (e.g. "every
+	// 2nd + 4th Thursday, except holidays"). Denormalized onto every event
+	// response the same way SeriesImageURL already is, so consumers (the
+	// event detail page, the org page's recurring-events section) don't
+	// need a separate series lookup.
+	SeriesCadence          string `json:"series_cadence,omitempty"`
+	NeedsDuplicateReview   bool   `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID          *int   `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime      string `json:"previous_start_time,omitempty"`
+	SuggesterEmail         string `json:"suggester_email,omitempty"`
+	SuggesterName          string `json:"suggester_name,omitempty"`
+	PendingEditJSON        string `json:"pending_edit_json,omitempty"`
+	PendingEditSubmittedAt string `json:"pending_edit_submitted_at,omitempty"`
+	EmailVerified          bool   `json:"email_verified"`
+	TagsJSON               string `json:"-"`
+	PricingJSON            string `json:"-"`
+	TimetableTracksJSON    string `json:"-"`
 }
 
 type EventDate struct {
@@ -319,7 +326,7 @@ func parseTimeToUnix(s string) (int64, error) {
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE(json(e.timetable_tracks),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {
@@ -390,7 +397,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&createdByID, &loc.OsmID, &loc.OsmType, &loc.Geohash, &seriesID,
 		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime,
 		&event.SuggesterEmail, &event.SuggesterName, &event.PendingEditJSON, &pendingEditSubmittedEpoch,
-		&imageAIGeneratedInt, &emailVerifiedInt, &seriesImageAIGeneratedInt, &event.TimetableTracksJSON); err != nil {
+		&imageAIGeneratedInt, &emailVerifiedInt, &seriesImageAIGeneratedInt, &event.SeriesCadence, &event.TimetableTracksJSON); err != nil {
 		return Event{}, err
 	}
 	if previousStartTime.Valid {

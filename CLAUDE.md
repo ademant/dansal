@@ -158,6 +158,12 @@ Tier 4 fires as a fallback when tiers 1–3 all miss. This catches: (a) feeds us
 
 `isOrgMember(userID, orgID int) bool` is the single-org-column membership check these build on. It's distinct from `locationHasOrgMember` (`locations.go`), which checks the many-to-many `location_organizations` join table — don't try to merge the two, they answer different questions.
 
+## Event series cadence (disclosure-only, #1185)
+
+`event_series.cadence` (`TEXT NOT NULL DEFAULT ''`) is a single free-text, human-readable description of how often a series recurs (e.g. "every 2nd + 4th Thursday, except holidays"), shown to visitors. **It's disclosure-only — there is no RRULE engine and it never generates occurrences.** Instance create/edit/cancel via the existing `addSeriesDate`/`assignSeriesEvents`/event-delete flow remains the actual mechanism; this is exactly what makes an exception like "except holidays" correct by construction — the org simply doesn't create (or cancels) that one instance, rather than the system needing to know about holiday calendars.
+
+`Event.SeriesCadence` (`cmd/dansal`, mirrored in `cmd/dansal_web/dansal.go`) denormalizes `event_series.cadence` onto every event of that series via a scalar subquery in `eventListSelect`, the same pattern `SeriesImageURL`/`SeriesImageAIGenerated` already use — so `event.html` and the org page can show it without a separate series lookup. The org page's recurring-events section (`OrgData.RecurringSeries`, built by `recurringSeriesFromEvents` in `frontend.go`) derives its list from the org's already-loaded *upcoming* events rather than a dedicated API call: since `GetAllEventsByOrg` only returns published events and `upcoming` is by definition still in the future, "cadence set AND at least one published event" holds by construction rather than needing to be checked separately. That function also relies on `upcoming` being chronologically ordered (`e.start_time ASC`, guaranteed server-side) to pick each series' *soonest* occurrence as the link target.
+
 ## Location aliases
 
 `locations.aliases` (JSON array column) stores alternate names a location is known by in external feeds. Used in:

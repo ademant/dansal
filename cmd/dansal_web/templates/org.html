@@ -125,6 +125,25 @@
     used by location.html, musician.html and instructor.html. */}}
 {{template "month-calendar" (dict "ID" "org-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
 
+{{/* #1185: recurring-series disclosure — only series with a cadence set AND
+    at least one upcoming published event show up here (see
+    recurringSeriesFromEvents' doc comment in frontend.go for why that
+    condition holds by construction). */}}
+{{if .RecurringSeries}}
+<div class="org-recurring">
+  <h2 class="section-heading">{{$.Strings.T "org_recurring_title"}}</h2>
+  <ul class="recurring-list">
+  {{range .RecurringSeries}}
+  <li class="recurring-item">
+    <a href="/events/{{.NextEventID}}">{{.Title}}</a>
+    <span class="recurring-cadence">🔁 {{.Cadence}}</span>
+    {{if .LocationName}}<span class="recurring-loc">— {{.LocationName}}</span>{{end}}
+  </li>
+  {{end}}
+  </ul>
+</div>
+{{end}}
+
 {{/* Upcoming events */}}
 <div class="events-heading-row">
   <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
@@ -202,6 +221,13 @@
 .org-link-mastodon{background:#563acc}.org-link-mastodon:hover{background:#3c278e}
 .org-link-instagram{background:#c13584}.org-link-instagram:hover{background:#8a255e}
 .org-link-facebook{background:#1877f2}.org-link-facebook:hover{background:#0d5ab5}
+.org-recurring{margin-bottom:1.25rem}
+.recurring-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.3rem}
+.recurring-item{font-size:.92rem}
+.recurring-item a{color:var(--link);text-decoration:none;font-weight:600}
+.recurring-item a:hover{text-decoration:underline}
+.recurring-cadence{color:var(--fg-muted,#666);margin-left:.4rem}
+.recurring-loc{color:var(--fg-muted,#666)}
 .org-chat-section{margin-bottom:1.25rem}
 .org-chat-section>strong{display:block;margin-bottom:.4rem;font-size:.9rem;color:var(--fg-dim)}
 .org-link-chat{background:#555}

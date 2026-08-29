@@ -14,12 +14,13 @@ import (
 // inviteRecord holds the invite_links columns needed to validate and redeem
 // an invite.
 type inviteRecord struct {
-	ID          int
-	Role        string
-	OrgID       sql.NullInt64
-	ExpiresAt   string
-	UsedAt      string
-	PresetEmail string
+	ID           int
+	Role         string
+	OrgID        sql.NullInt64
+	ExpiresAt    string
+	UsedAt       string
+	PresetEmail  string
+	TargetUserID sql.NullInt64 // #1190: set on publisher reconnect invites — see redeemPublisherReconnectInvite
 }
 
 var (
@@ -35,9 +36,9 @@ var (
 func loadValidInvite(token string) (inviteRecord, error) {
 	var invite inviteRecord
 	err := db.QueryRow(
-		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
+		`SELECT id, role, org_id, expires_at, COALESCE(used_at,''), COALESCE(preset_email,''), target_user_id
 		 FROM invite_links WHERE token=?`, token,
-	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail)
+	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt, &invite.PresetEmail, &invite.TargetUserID)
 	if err != nil {
 		return inviteRecord{}, err
 	}
@@ -217,6 +218,39 @@ func createInviteRecord(creatorID int, role, inviteType string, orgID *int) (Inv
 		Token:      token,
 		Role:       role,
 		InviteType: inviteType,
+		OrgID:      orgID,
+		ExpiresAt:  expiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+// createPublisherReconnectInviteRecord mints a publisher-role invite tied to
+// an existing user (target_user_id set) rather than a fresh signup (#1190).
+// Redeeming it via POST /api/v1/invites/{token}/publisher rotates that
+// user's API key instead of creating a new user/org-membership — same
+// endpoint and response shape as a regular publisher invite, so a client
+// (e.g. wp-dansal) that already knows how to redeem a connect link needs no
+// changes to consume a reconnect link too.
+func createPublisherReconnectInviteRecord(creatorID, targetUserID int, orgID *int) (InviteLink, error) {
+	expiresAt := time.Now().UTC().Add(time.Duration(config.Server.InvitePublisherExpiryMinutes) * time.Minute)
+	token, err := signInviteJWT(RolePublisher, orgID, inviteTokenType(RolePublisher), expiresAt)
+	if err != nil {
+		return InviteLink{}, err
+	}
+	var orgVal any
+	if orgID != nil {
+		orgVal = *orgID
+	}
+	_, err = db.Exec(
+		"INSERT INTO invite_links (token, created_by, role, org_id, expires_at, invite_type, target_user_id) VALUES (?, ?, ?, ?, ?, 'link', ?)",
+		token, creatorID, RolePublisher, orgVal, expiresAt.Unix(), targetUserID,
+	)
+	if err != nil {
+		return InviteLink{}, err
+	}
+	return InviteLink{
+		Token:      token,
+		Role:       RolePublisher,
+		InviteType: "link",
 		OrgID:      orgID,
 		ExpiresAt:  expiresAt.Format(time.RFC3339),
 	}, nil
@@ -534,6 +568,13 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #1190: a reconnect invite (target_user_id set) rotates the existing
+	// publisher's key instead of creating a new user/org-membership.
+	if invite.TargetUserID.Valid {
+		redeemPublisherReconnectInvite(w, invite, int(invite.TargetUserID.Int64), orgID, req.ClientPubkey, challenge)
+		return
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
@@ -616,6 +657,93 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 			// The API key was already committed to the DB; the account exists
 			// and its key can still be reset via the admin UI, so fail closed
 			// on the response rather than leaking it in plaintext.
+			writeError(w, "failed to encrypt API key for client_pubkey", http.StatusInternalServerError)
+			return
+		}
+		resp["api_key_encrypted"] = encrypted
+		resp["encryption_algorithm"] = algorithm
+	} else {
+		resp["api_key"] = key
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// redeemPublisherReconnectInvite handles redemption of an invite carrying
+// target_user_id (#1190): rotates the existing publisher's API key instead
+// of creating a new user/org-membership, returning the same response shape
+// as a fresh publisher invite (see redeemPublisherInvite) so a client that
+// already knows how to redeem a connect link needs no changes to consume a
+// reconnect link too.
+func redeemPublisherReconnectInvite(w http.ResponseWriter, invite inviteRecord, userID, orgID int, clientPubkey, challenge string) {
+	tx, err := db.Begin()
+	if err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	var name, role string
+	if err := tx.QueryRow("SELECT COALESCE(display_name,''), role FROM users WHERE id=?", userID).Scan(&name, &role); err != nil {
+		writeError(w, "publisher account no longer exists", http.StatusGone)
+		return
+	}
+	if role != RolePublisher {
+		writeError(w, "target account is no longer a publisher", http.StatusGone)
+		return
+	}
+	if name == "" {
+		name = fmt.Sprintf("publisher#%d", userID)
+	}
+
+	// Same rotation as regeneratePublisherKey: drop any existing key(s) for
+	// this user before minting the new one.
+	tx.Exec("DELETE FROM api_keys WHERE user_id=?", userID)
+
+	key, err := generateAPIKey()
+	if err != nil {
+		writeError(w, "failed to generate API key", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.Exec(
+		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?)",
+		userID, name, hashAPIKey(key),
+	); err != nil {
+		writeError(w, "failed to create API key", http.StatusInternalServerError)
+		return
+	}
+
+	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	credentials.pruneByUserID(userID)
+
+	var orgName, actorName string
+	db.QueryRow("SELECT name, COALESCE(actor_name,'') FROM organizations WHERE id=?", orgID).Scan(&orgName, &actorName)
+
+	log.Printf("invite: publisher %q (user_id=%d) reconnected via invite link id=%d for org %d", name, userID, invite.ID, orgID)
+
+	resp := map[string]any{
+		"user_id":  userID,
+		"org_id":   orgID,
+		"org_name": orgName,
+		"org_slug": actorName,
+		"base_url": strings.TrimRight(config.Server.BaseURL, "/"),
+	}
+	if challenge != "" {
+		resp["challenge"] = challenge
+	}
+	if clientPubkey != "" {
+		encrypted, algorithm, err := encryptAPIKeyForClient(clientPubkey, key)
+		if err != nil {
+			// The new key was already committed to the DB; it can still be reset
+			// via the admin UI, so fail closed on the response rather than
+			// leaking it in plaintext.
 			writeError(w, "failed to encrypt API key for client_pubkey", http.StatusInternalServerError)
 			return
 		}

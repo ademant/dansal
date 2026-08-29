@@ -3236,6 +3236,17 @@ func (c *DansalClient) RegeneratePublisherKey(ctx context.Context, publisherID i
 	return r.APIKey, r.KeyID, nil
 }
 
+// CreatePublisherReconnectInvite (#1190) mints a one-time invite link for an
+// existing publisher that, when redeemed, rotates that publisher's API key
+// instead of creating a new account — same redemption endpoint/response
+// shape as CreatePublisherInvite, so wp-dansal needs no client-side changes
+// to consume it.
+func (c *DansalClient) CreatePublisherReconnectInvite(ctx context.Context, publisherID int, token string) (InviteLink, error) {
+	var link InviteLink
+	err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/publishers/%d/reconnect-invite", publisherID), token, nil, &link, http.StatusCreated)
+	return link, err
+}
+
 func (c *DansalClient) DeletePublisher(ctx context.Context, publisherID int, token string) error {
 	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/publishers/%d", publisherID), token, nil, nil, http.StatusNoContent)
 }

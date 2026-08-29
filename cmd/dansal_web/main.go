@@ -333,6 +333,7 @@ func main() {
 		r.HandleFunc("POST /admin/publishers/new", adminRateLimit(adminPublisherCreateHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/invite", adminRateLimit(adminPublisherInviteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/{id}/regenerate-key", adminRateLimit(adminPublisherRegenerateKeyHandler(cfg, client)))
+		r.HandleFunc("POST /admin/publishers/{id}/reconnect-invite", adminRateLimit(adminPublisherReconnectLinkHandler(cfg, client)))
 		r.HandleFunc("POST /admin/publishers/{id}/delete", adminRateLimit(adminPublisherDeleteHandler(cfg, client)))
 
 		r.HandleFunc("GET /admin/events/{id}/bookings", adminBookingsHandler(cfg, tmpls, client, i18n))

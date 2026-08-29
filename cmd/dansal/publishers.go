@@ -258,6 +258,72 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// POST /api/v1/publishers/{id}/reconnect-invite — mint a one-time invite
+// link that, when redeemed via POST /api/v1/invites/{token}/publisher,
+// rotates this existing publisher's API key instead of creating a new
+// account (#1190). Lets an admin/org-member hand a client (e.g. wp-dansal)
+// a self-redeemable reconnect link instead of hand-copying a raw key —
+// useful once the key has fully expired and the #1189 renew grace window
+// has also passed.
+func createPublisherReconnectInvite(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+
+	targetID, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	// Verify target is a publisher.
+	var targetRole string
+	if err := db.QueryRow("SELECT role FROM users WHERE id=?", targetID).Scan(&targetRole); err != nil {
+		writeError(w, "publisher not found", http.StatusNotFound)
+		return
+	}
+	if targetRole != RolePublisher {
+		writeError(w, "target is not a publisher", http.StatusBadRequest)
+		return
+	}
+
+	// Non-admins must share an org with the publisher (same check as
+	// regeneratePublisherKey).
+	if callerRole != RoleAdmin {
+		if callerRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var shared int
+		db.QueryRow(`
+			SELECT COUNT(*) FROM organization_members om1
+			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
+			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
+		if shared == 0 {
+			writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
+			return
+		}
+	}
+
+	var orgID *int
+	var oid int
+	if err := db.QueryRow("SELECT organization_id FROM organization_members WHERE user_id=? LIMIT 1", targetID).Scan(&oid); err == nil {
+		orgID = &oid
+	}
+	if orgID == nil {
+		writeError(w, "publisher has no organisation membership", http.StatusInternalServerError)
+		return
+	}
+
+	link, err := createPublisherReconnectInviteRecord(callerID, targetID, orgID)
+	if err != nil {
+		writeError(w, "failed to create reconnect invite", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(link)
+}
+
 // DELETE /api/v1/publishers/{id} — delete a publisher service account.
 // Admin may act on any publisher; user may only act on publishers in their org.
 func deletePublisher(w http.ResponseWriter, r *http.Request) {

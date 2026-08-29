@@ -540,6 +540,42 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 	}
 }
 
+// adminPublisherReconnectLinkHandler (#1190) mints a one-time reconnect
+// link for an existing publisher: redeeming it rotates that publisher's
+// API key instead of creating a new account, via the same redemption
+// endpoint/response shape as a fresh publisher invite. Distinct from
+// adminPublisherInviteHandler, which always creates a brand-new publisher.
+func adminPublisherReconnectLinkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+			return
+		}
+		token := getSessionToken(r)
+		if !publisherInCallerOrgs(r, client, su, id, token) {
+			forbidden(w, r)
+			return
+		}
+		link, err := client.CreatePublisherReconnectInvite(r.Context(), id, token)
+		if err != nil {
+			log.Printf("create publisher reconnect invite %d: %v", id, err)
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
+			return
+		}
+		redeemURL := cfg.publicBaseURL() + "/api/v1/invites/" + link.Token + "/publisher"
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"redeem_url": redeemURL,
+			"expires_at": link.ExpiresAt,
+		})
+	}
+}
+
 func adminPublisherInviteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

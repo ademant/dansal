@@ -153,8 +153,8 @@
         {{if $clientURL}}<a href="{{$clientURL}}" target="_blank" rel="noopener">{{$clientLabel}}</a>{{else}}{{$clientLabel}}{{end}}
       </td>
       <td class="col-actions cell-actions" style="white-space:nowrap">
-        <button type="button" class="btn-sm" data-stop data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         {{if $canManagePub}}
+        <button type="button" class="btn-sm" data-stop data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_reconnect_link"}}</button>
         <button type="button" class="btn-sm" data-stop data-fn="regenerateKey" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" data-stop data-fn="deletePublisher" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_delete"}}</button>
         {{end}}
@@ -164,8 +164,8 @@
       <h3 class="popup-title">{{if .DisplayName}}{{.DisplayName}}{{end}} <span class="muted user-id-tag">#{{.ID}}</span></h3>
       <p class="muted">{{range $i, $oid := index $.Data.UserOrgs .ID}}{{if $i}}, {{end}}{{$o := index $.Data.OrgMap $oid}}{{$o.Name}}{{end}}{{if $clientLabel}} · {{$clientLabel}}{{end}}</p>
       <div class="popup-actions">
-        <button type="button" class="btn-sm" data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_connect_link"}}</button>
         {{if $canManagePub}}
+        <button type="button" class="btn-sm" data-fn="publisherConnectLink" data-args="{{dargs .ID $firstOrgID}}">{{$.Strings.T "admin_publisher_reconnect_link"}}</button>
         <button type="button" class="btn-sm" data-fn="regenerateKey" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_regen_key"}}</button>
         <button type="button" class="btn-sm btn-del" data-fn="deletePublisher" data-args="{{dargs .ID}}">{{$.Strings.T "admin_publisher_delete"}}</button>
         {{end}}
@@ -480,9 +480,14 @@ async function publisherConnectLink(id, orgID, resultId) {
   var res = document.getElementById(resultId || 'publisher-result');
   res.hidden = false; res.innerHTML = '…';
   try {
-    var r = await fetch('/admin/publishers/invite', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({org_id: orgID})
-    });
+    // id !== 0: reconnect link for an existing publisher row (rotates that
+    // publisher's key on redemption). id === 0: the "create new publisher"
+    // modal, which mints a brand-new account + invite (#1190).
+    var r = id ?
+      await fetch('/admin/publishers/'+id+'/reconnect-invite', {method:'POST'}) :
+      await fetch('/admin/publishers/invite', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({org_id: orgID})
+      });
     var d = await r.json();
     if (!r.ok) { res.innerHTML = '<span style="color:red">' + (d.error||r.statusText) + '</span>'; return; }
     res.innerHTML = '{{.Strings.T "admin_publisher_connect_link_hint"}}: ' +

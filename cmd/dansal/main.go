@@ -2551,6 +2551,26 @@ func migrateDB() {
 			db.Exec("ALTER TABLE event_series ADD COLUMN cadence TEXT NOT NULL DEFAULT ''")
 		}
 	}
+	// v34: invite_links.target_user_id (#1190) — when set, this invite is a
+	// publisher *reconnect* link rather than a fresh-account invite:
+	// redeemPublisherInvite rotates that existing user's API key instead of
+	// creating a new user/org-membership. Lets an admin/org-member hand a
+	// client (e.g. wp-dansal) a self-redeemable reconnect link via the same
+	// POST /api/v1/invites/{token}/publisher endpoint, instead of hand-copying
+	// a raw regenerated key.
+	if !applied(34) {
+		db.Exec("ALTER TABLE invite_links ADD COLUMN target_user_id INTEGER")
+		mark(34)
+	}
+	// Safety net: ensure invite_links.target_user_id exists even if v34 was
+	// pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('invite_links') WHERE name='target_user_id'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE invite_links ADD COLUMN target_user_id INTEGER")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3632,9 +3652,11 @@ func createTables() error {
 		used_at INTEGER,
 		preset_email TEXT,
 		invite_type TEXT NOT NULL DEFAULT 'link',
+		target_user_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
+		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL,
+		FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3953,6 +3975,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(31)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(32)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(33)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(34)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4401,6 +4424,7 @@ func main() {
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
 	smux.Handle("POST /api/v1/publishers/token", auth(publisherToken))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))
+	smux.Handle("POST /api/v1/publishers/{id}/reconnect-invite", auth(createPublisherReconnectInvite))
 	smux.Handle("DELETE /api/v1/publishers/{id}", auth(deletePublisher))
 
 	// Invite management (protected)

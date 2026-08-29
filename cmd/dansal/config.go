@@ -34,6 +34,7 @@ type ServerConfig struct {
 	InviteQRExpiryMinutes         int      `yaml:"invite_qr_expiry_minutes"`
 	InvitePublisherExpiryMinutes  int      `yaml:"invite_publisher_expiry_minutes"`
 	VerificationExpiryHours       int      `yaml:"verification_expiry_hours"`
+	APIKeyRenewGraceHours         int      `yaml:"api_key_renew_grace_hours"` // #1189: grace window past expires_at during which POST /apikeys/renew still succeeds
 	BaseURL                       string   `yaml:"base_url"`
 	TelegramBotToken              string   `yaml:"telegram_bot_token"`
 	TelegramBotName               string   `yaml:"telegram_bot_name"`
@@ -241,6 +242,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.VerificationExpiryHours == 0 {
 		cfg.Server.VerificationExpiryHours = 24
+	}
+	if cfg.Server.APIKeyRenewGraceHours == 0 {
+		cfg.Server.APIKeyRenewGraceHours = 6
 	}
 	if cfg.Server.MagicLoginExpirySecs == 0 {
 		cfg.Server.MagicLoginExpirySecs = 900

@@ -285,7 +285,13 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
 		return
 	}
-	if time.Now().After(oldExpiry) {
+	// #1189: tolerate a short grace window past expires_at so a client
+	// polling on its own lead-time schedule (daily/weekly) doesn't lose the
+	// connection to a timing race — it can still recover by renewing shortly
+	// after the clock ticks over, rather than needing a human to reissue the
+	// key via regenerate-key the instant expiry passes.
+	graceUntil := oldExpiry.Add(time.Duration(config.Server.APIKeyRenewGraceHours) * time.Hour)
+	if time.Now().After(graceUntil) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "This key has already expired; ask an admin or org member to issue a new one"})
 		return

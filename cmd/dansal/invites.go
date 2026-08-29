@@ -571,10 +571,11 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var keyID int
+	var keyExpiresAt sql.NullString
 	if err := tx.QueryRow(
-		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id",
+		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id, expires_at",
 		userID, name, hashAPIKey(key),
-	).Scan(&keyID); err != nil {
+	).Scan(&keyID, &keyExpiresAt); err != nil {
 		writeError(w, "failed to create API key", http.StatusInternalServerError)
 		return
 	}
@@ -597,6 +598,14 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		"org_name": orgName,
 		"org_slug": actorName,
 		"base_url": strings.TrimRight(config.Server.BaseURL, "/"),
+	}
+	// #1189: surface expires_at (same field name/format as POST
+	// /api/v1/apikeys/renew) so a client can record a real expiry at connect
+	// time instead of discovering one only via a later renew attempt.
+	// Currently always empty since invite-created keys have no default
+	// expiry, but this keeps the contract explicit and forward-compatible.
+	if keyExpiresAt.Valid && keyExpiresAt.String != "" {
+		resp["expires_at"] = epochStrToRFC3339(keyExpiresAt.String)
 	}
 	if challenge != "" {
 		resp["challenge"] = challenge

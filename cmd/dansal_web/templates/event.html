@@ -143,7 +143,7 @@
 </div>
 {{end}}
 
-{{if or $.Data.PrevEvent $.Data.NextEvent}}
+{{if or $.Data.PrevEvent $.Data.NextEvent .SeriesCadence}}
 <nav class="series-nav">
   {{if $.Data.PrevEvent}}
   <a href="/events/{{$.Data.PrevEvent.ID}}" class="series-nav-prev" title="{{$.Data.PrevEvent.Title}}">← {{formatDate $.LangCode $.DateFormat $.Data.PrevEvent.StartTime}}</a>
@@ -152,6 +152,9 @@
   <a href="/events/{{$.Data.NextEvent.ID}}" class="series-nav-next" title="{{$.Data.NextEvent.Title}}">{{formatDate $.LangCode $.DateFormat $.Data.NextEvent.StartTime}} →</a>
   {{else}}<span></span>{{end}}
 </nav>
+{{end}}
+{{if .SeriesCadence}}
+<p class="series-cadence" title="{{$.Strings.T "evt_cadence_tooltip"}}">🔁 {{.SeriesCadence}}</p>
 {{end}}
 
 <div class="evt-header">
@@ -897,6 +900,7 @@
 .series-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.88rem}
 .series-nav a{color:var(--link);text-decoration:none;padding:.2rem .4rem;border-radius:3px}
 .series-nav a:hover{background:var(--bg-alt,#f4f6fb)}
+.series-cadence{font-size:.85rem;color:var(--fg-muted,#666);margin:0 0 .5rem}
 .evt-hero{margin:0 -1rem 0;background:#111}
 /* #1156/#1157: no crop/focal-point control on upload, so cropping to a
    fixed height (object-fit:cover) cut off subjects (e.g. heads) at random

@@ -399,14 +399,17 @@ type Event struct {
 	SeriesID               *int             `json:"series_id,omitempty"`
 	SeriesImageURL         string           `json:"series_image_url,omitempty"`
 	SeriesImageAIGenerated bool             `json:"series_image_ai_generated,omitempty"`
-	NeedsDuplicateReview   bool             `json:"needs_duplicate_review,omitempty"`
-	DuplicateOfID          *int             `json:"duplicate_of_id,omitempty"`
-	PreviousStartTime      string           `json:"previous_start_time,omitempty"`
-	SuggesterEmail         string           `json:"suggester_email,omitempty"`
-	SuggesterName          string           `json:"suggester_name,omitempty"`
-	PendingEditJSON        string           `json:"pending_edit_json,omitempty"`
-	PendingEditSubmittedAt string           `json:"pending_edit_submitted_at,omitempty"`
-	EmailVerified          bool             `json:"email_verified"`
+	// SeriesCadence (#1185) mirrors event_series.cadence for this event's
+	// series — see cmd/dansal's Event.SeriesCadence doc comment.
+	SeriesCadence          string `json:"series_cadence,omitempty"`
+	NeedsDuplicateReview   bool   `json:"needs_duplicate_review,omitempty"`
+	DuplicateOfID          *int   `json:"duplicate_of_id,omitempty"`
+	PreviousStartTime      string `json:"previous_start_time,omitempty"`
+	SuggesterEmail         string `json:"suggester_email,omitempty"`
+	SuggesterName          string `json:"suggester_name,omitempty"`
+	PendingEditJSON        string `json:"pending_edit_json,omitempty"`
+	PendingEditSubmittedAt string `json:"pending_edit_submitted_at,omitempty"`
+	EmailVerified          bool   `json:"email_verified"`
 }
 
 type Dance struct {
@@ -3704,6 +3707,9 @@ type EventSeries struct {
 	EventCount        int             `json:"event_count,omitempty"`
 	Events            []SeriesEvent   `json:"events,omitempty"`
 	TemplateData      json.RawMessage `json:"template_data,omitempty"`
+	// Cadence (#1185): human-readable recurrence description, e.g. "every
+	// 2nd + 4th Thursday, except holidays". Disclosure-only.
+	Cadence string `json:"cadence,omitempty"`
 }
 
 func (c *DansalClient) GetSeriesList(ctx context.Context, token string) ([]EventSeries, error) {

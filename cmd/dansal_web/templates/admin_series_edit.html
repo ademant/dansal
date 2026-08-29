@@ -47,6 +47,11 @@
     <label>{{$.Strings.T "series_description"}}</label>
     <textarea name="description" rows="3" style="width:100%">{{.Series.Description}}</textarea>
   </section>
+  <section class="form-section">
+    <label>{{$.Strings.T "series_cadence_label"}}</label>
+    <input type="text" name="cadence" value="{{.Series.Cadence}}" placeholder="{{$.Strings.T "series_cadence_placeholder"}}" style="width:100%">
+    <p class="field-hint">{{$.Strings.T "series_cadence_hint"}}</p>
+  </section>
   <details class="series-seg">
   <summary>{{$.Strings.T "series_seg_org_location"}}</summary>
   {{if .IsAdmin}}

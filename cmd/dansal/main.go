@@ -2532,6 +2532,25 @@ func migrateDB() {
 			db.Exec("ALTER TABLE fetch_sources ADD COLUMN category_filter TEXT")
 		}
 	}
+	// v33: event_series.cadence (#1185) — a single free-text, human-readable
+	// description of how often a series recurs (e.g. "every 2nd + 4th
+	// Thursday, except holidays"), shown to visitors. Disclosure-only: it
+	// does not generate occurrences — instance create/edit/cancel remains
+	// the actual mechanism, which is what makes exceptions like "except
+	// holidays" correct by construction (the org just doesn't create /
+	// cancels that instance).
+	if !applied(33) {
+		db.Exec("ALTER TABLE event_series ADD COLUMN cadence TEXT NOT NULL DEFAULT ''")
+		mark(33)
+	}
+	// Safety net: ensure event_series.cadence exists even if v33 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('event_series') WHERE name='cadence'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE event_series ADD COLUMN cadence TEXT NOT NULL DEFAULT ''")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3440,7 +3459,8 @@ func createTables() error {
 		created_by_id INTEGER REFERENCES users(id),
 		updated_by TEXT DEFAULT '',
 		template_data TEXT NOT NULL DEFAULT '{}',
-		image_ai_generated INTEGER DEFAULT 0
+		image_ai_generated INTEGER DEFAULT 0,
+		cadence TEXT NOT NULL DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3932,6 +3952,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(30)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(31)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(32)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(33)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

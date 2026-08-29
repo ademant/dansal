@@ -989,6 +989,7 @@ document.addEventListener('keydown',function(e){
   <td class="col-time">{{isoTime .StartTime}}</td>
   <td>
     <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
+    {{if .SeriesID}}<span class="badge" title="{{$.Strings.T "badge_recurring"}}">🔁</span>{{end}}
     {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
     {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
   </td>

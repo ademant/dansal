@@ -931,6 +931,7 @@ func updateSeriesDescriptions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	callerID, _ := callerFromRequest(r)
 	var req struct {
 		Updates []struct {
 			EventID     int    `json:"event_id"`
@@ -950,6 +951,9 @@ func updateSeriesDescriptions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		db.Exec("UPDATE events SET description=? WHERE id=?", u.Description, u.EventID)
+		// #1191: stamp changed_at/changed_by so ETag/Atom-feed-updated/pull-sync
+		// consumers (e.g. wp-dansal's "Accept dansal update" notice) see this.
+		touchEvent(u.EventID, callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -963,6 +967,7 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	callerID, _ := callerFromRequest(r)
 	var req struct {
 		IDs []int `json:"ids"`
 	}
@@ -988,6 +993,8 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 		if series.OrganizationID != nil {
 			db.Exec("UPDATE events SET organization_id=? WHERE id=?", *series.OrganizationID, id)
 		}
+		// #1191: stamp changed_at/changed_by, same reasoning as updateSeriesDescriptions.
+		touchEvent(id, callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

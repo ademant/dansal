@@ -14,7 +14,11 @@ for (const f of ["metrics.jsonl", "errors.jsonl", "analysis.json"]) {
 
 export default defineConfig({
   testDir: "./tests",
-  timeout: 60_000,
+  // fullSeed()'s beforeAll hook is many sequential HTTP round-trips (3 CLI
+  // user-creates, login, org/location lookups, 3 event creates, timetable,
+  // musician, instructor) — 90s gives it real margin under load without
+  // masking a genuinely hung step for minutes.
+  timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
   retries: 1,

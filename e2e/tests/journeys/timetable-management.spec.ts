@@ -18,12 +18,14 @@ test.describe("Admin: manage timetable", () => {
     const token = await getTokenFromCookie(page);
     const eventId = seed.eventIds[0];
 
-    // Verify existing entries from seed
+    // Verify existing entries from seed. There is no GET .../timetable
+    // route (only POST/PUT/DELETE) — the timetable is read via the
+    // `timetable` field embedded in the event itself.
     const getResp = await page.request.fetch(
-      `${API_BASE}/api/v1/events/${eventId}/timetable`
+      `${API_BASE}/api/v1/events/${eventId}`
     );
-    const existing = await getResp.json();
-    expect(existing.length).toBeGreaterThanOrEqual(3);
+    const existingEvent = await getResp.json();
+    expect(existingEvent.timetable.length).toBeGreaterThanOrEqual(3);
 
     // Replace timetable
     const newEntries = [
@@ -62,9 +64,10 @@ test.describe("Admin: manage timetable", () => {
 
     // Verify replacement
     const verifyResp = await page.request.fetch(
-      `${API_BASE}/api/v1/events/${eventId}/timetable`
+      `${API_BASE}/api/v1/events/${eventId}`
     );
-    const verified = await verifyResp.json();
+    const verifiedEvent = await verifyResp.json();
+    const verified = verifiedEvent.timetable;
     expect(verified.length).toBe(3);
     expect(verified[0].title).toBe("Ouverture");
     expect(verified[2].title).toBe("Grand Bal");

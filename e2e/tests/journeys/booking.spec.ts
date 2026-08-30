@@ -1,5 +1,5 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
-import { fullSeed, SeedResult, loginAs, getTokenFromCookie } from "../../helpers/seed";
+import { fullSeed, SeedResult } from "../../helpers/seed";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -10,8 +10,11 @@ test.describe("Booking flow", () => {
   test.beforeAll(async ({ browser }) => {
     const setupPage = await browser.newPage();
     seed = await fullSeed(setupPage);
-    // Enable internal booking on the first event via PATCH
-    await loginAs(setupPage, "e2e-admin@dansal.test", "E2e-Admin-2026!");
+    // Enable internal booking on the first event via PATCH. fullSeed()
+    // already left setupPage logged in as admin — a second loginAs() here
+    // would navigate to /login while already authenticated, which redirects
+    // straight to /dashboard without ever rendering the form (see
+    // loginPageHandler) and hangs the subsequent #identifier fill forever.
     const cookies = await setupPage.context().cookies();
     const token = cookies.find((c) => c.name === "dsw_token")?.value ?? "";
     await setupPage.request.fetch(

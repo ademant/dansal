@@ -13,11 +13,13 @@ let seed: SeedResult;
 test.describe("Admin: create event", () => {
   test.beforeAll(async ({ browser }) => {
     const setupPage = await browser.newPage();
+    // fullSeed() already logs setupPage in as admin — no need to log in
+    // again here. (A second loginAs() on an already-authenticated page
+    // navigates to /login, which redirects straight to /dashboard without
+    // rendering the form — see loginPageHandler — hanging the next fill()
+    // forever.) Each test() below gets its own fresh, unauthenticated page
+    // from the fixture, so it still needs its own loginAs() call.
     seed = await fullSeed(setupPage);
-    await loginAs(setupPage, "e2e-admin@dansal.test", "E2e-Admin-2026!");
-    // Don't close — login state is needed. But we need per-test pages.
-    // Actually, each test gets its own page from the fixture, so we need
-    // a separate login. The beforeAll just seeds data.
     await setupPage.context().close();
   });
 

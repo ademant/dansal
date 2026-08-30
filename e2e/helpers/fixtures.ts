@@ -5,6 +5,7 @@ import {
   appendMetrics,
   writeErrorContext,
   PageMetrics,
+  ObservedVitals,
   ConsoleEntry,
   NetworkFailure,
 } from "./metrics";
@@ -88,13 +89,67 @@ export const test = base.extend<DansalFixtures>({
       }
     });
 
+    const projectName = testInfo.project?.name || "unknown";
+
+    // ── Web Vitals observers ───────────────────────────────────────────────
+    // LCP/TBT/INP are recorded live during the page's lifetime; reading them
+    // back via performance.getEntriesByType after `networkidle` is too late
+    // (the entries have already fired or, for INP, are buffered/never read).
+    try {
+      await page.addInitScript(() => {
+        const ov = (window as any).__dansalVitals = {
+          lcp: null,
+          tbt: 0,
+          inp: null,
+        };
+        try {
+          new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            const last = entries[entries.length - 1];
+            if (last) ov.lcp = last.startTime;
+          }).observe({ type: "largest-contentful-paint", buffered: true });
+        } catch {}
+        try {
+          new PerformanceObserver((list) => {
+            for (const e of list.getEntries()) {
+              ov.tbt += Math.min(e.duration, 500);
+            }
+          }).observe({ type: "longtask" });
+        } catch {}
+        try {
+          new PerformanceObserver((list) => {
+            for (const e of list.getEntries() as any[]) {
+              ov.inp = e.processingStart
+                ? e.duration
+                : null;
+            }
+          }).observe({ type: "event", durationThreshold: 16 });
+        } catch {}
+      });
+    } catch {}
+
     // Provide the metrics collector
     const startMs = Date.now();
     const collector: MetricsCollector = {
       consoleErrors,
       networkFailures,
       async collect(testLabel: string) {
-        return collectPageMetrics(page, testLabel, startMs);
+        let observedVitals: ObservedVitals | undefined;
+        try {
+          const pageVitals = await page.evaluate(
+            () => (window as any).__dansalVitals ?? null
+          );
+          if (pageVitals) observedVitals = { ...pageVitals };
+        } catch {
+          observedVitals = undefined;
+        }
+        return collectPageMetrics(
+          page,
+          testLabel,
+          startMs,
+          projectName,
+          observedVitals
+        );
       },
     };
 
@@ -107,7 +162,22 @@ export const test = base.extend<DansalFixtures>({
     const label = testInfo.titlePath.join(" > ");
     let metrics: PageMetrics | null = null;
     try {
-      metrics = await collectPageMetrics(page, label, startMs);
+      let observedVitals: ObservedVitals | undefined;
+      try {
+        const pageVitals = await page.evaluate(
+          () => (window as any).__dansalVitals ?? null
+        );
+        if (pageVitals) observedVitals = { ...pageVitals };
+      } catch {
+        observedVitals = undefined;
+      }
+      metrics = await collectPageMetrics(
+        page,
+        label,
+        startMs,
+        projectName,
+        observedVitals
+      );
       appendMetrics(metrics);
     } catch {
       // page may be closed — skip metrics
@@ -123,7 +193,8 @@ export const test = base.extend<DansalFixtures>({
           testInfo.error,
           consoleErrors,
           networkFailures,
-          metrics
+          metrics,
+          projectName
         );
         writeErrorContext(ctx);
       } catch {
@@ -131,7 +202,7 @@ export const test = base.extend<DansalFixtures>({
         writeErrorContext({
           test: label,
           file: testInfo.file,
-          viewport: process.env.PLAYWRIGHT_PROJECT_NAME ?? "unknown",
+          viewport: projectName,
           url: "",
           error:
             testInfo.error?.stack ?? testInfo.error?.message ?? "unknown",

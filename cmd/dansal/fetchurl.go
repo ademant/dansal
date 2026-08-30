@@ -826,18 +826,19 @@ func recordFetchResult(src FetchSource, events int, fetchErr error) {
 func notifyAdminsFetchFailure(src FetchSource, failures int, fetchErr error) {
 	msg := fmt.Sprintf("Fetch source #%d (%s) has failed %d times in a row: %v — check /admin/fetchurls.", src.ID, src.URL, failures, fetchErr)
 
-	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role = 'admin'`)
+	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
 	if err != nil {
 		log.Printf("fetchurl: notify admins: %v", err)
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var email, chatID string
-		if err := rows.Scan(&email, &chatID); err != nil {
+		var email, chatID, matrixID string
+		var matrixVerified bool
+		if err := rows.Scan(&email, &chatID, &matrixID, &matrixVerified); err != nil {
 			continue
 		}
-		notifyUser(chatID, email, "Fetch source failing", msg)
+		notifyUser(chatID, matrixID, matrixVerified, email, "Fetch source failing", msg)
 	}
 }
 

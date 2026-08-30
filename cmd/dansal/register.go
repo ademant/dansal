@@ -621,7 +621,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("register: approved pending registration %d — enabled passkey user %d (role=%s)", id, userID, role)
 
-		go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
+		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
 			"Your registration has been approved. You can now sign in with the passkey you registered.")
 
 		w.Header().Set("Content-Type", "application/json")
@@ -688,7 +688,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
-	go notifyUser(pr.TelegramChatID, pr.Email, "Your registration was approved",
+	go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
 		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -755,7 +755,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 			rejectMsg += "\n\nReason: " + body.Reason
 		}
 		rejectMsg += "\n\nAll submitted data has been deleted. You are welcome to register again at any time using the same email address."
-		go notifyUser(pr.TelegramChatID, pr.Email, "Registration not approved", rejectMsg)
+		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Registration not approved", rejectMsg)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -786,22 +786,23 @@ func notifyApprovers(pendingID int) {
 	}
 	// Always notify admins, each with their own one-time direct-login link.
 	rows, err := db.Query(
-		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE role='admin'",
+		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role='admin'",
 	)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var adminID int
-			var email, chatID string
-			rows.Scan(&adminID, &email, &chatID)
-			notifyUser(chatID, email, "New registration request", msg+" — "+adminReviewLink(adminID, "/admin/registrations"))
+			var email, chatID, matrixID string
+			var matrixVerified bool
+			rows.Scan(&adminID, &email, &chatID, &matrixID, &matrixVerified)
+			notifyUser(chatID, matrixID, matrixVerified, email, "New registration request", msg+" — "+adminReviewLink(adminID, "/admin/registrations"))
 		}
 	}
 
 	// For join_org, also notify org members.
 	if regType == "join_org" && orgID.Valid {
 		orgRows, err := db.Query(
-			`SELECT COALESCE(u.email,''), COALESCE(u.telegram_chat_id,'')
+			`SELECT COALESCE(u.email,''), COALESCE(u.telegram_chat_id,''), COALESCE(u.matrix,''), COALESCE(u.matrix_verified,0)
 			 FROM users u JOIN organization_members om ON om.user_id=u.id
 			 WHERE om.organization_id=? AND u.role != 'admin'`,
 			orgID.Int64,
@@ -809,9 +810,10 @@ func notifyApprovers(pendingID int) {
 		if err == nil {
 			defer orgRows.Close()
 			for orgRows.Next() {
-				var email, chatID string
-				orgRows.Scan(&email, &chatID)
-				notifyUser(chatID, email, "New registration request for your organisation", msg)
+				var email, chatID, matrixID string
+				var matrixVerified bool
+				orgRows.Scan(&email, &chatID, &matrixID, &matrixVerified)
+				notifyUser(chatID, matrixID, matrixVerified, email, "New registration request for your organisation", msg)
 			}
 		}
 	}
@@ -945,7 +947,7 @@ func processExpiredRegistrations() {
 
 	for _, e := range expired {
 		if e.verified == 1 {
-			go notifyUser(e.telegramChatID, e.email,
+			go notifyUser(e.telegramChatID, "", false, e.email,
 				"Registration not approved",
 				"Your registration request was not approved within the review period. Your contact information has been deleted.",
 			)

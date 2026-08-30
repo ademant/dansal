@@ -260,8 +260,14 @@ export async function seedMusician(
   page: Page,
   token: string
 ): Promise<number> {
+  // Unlike instructors, POST /api/v1/musicians always responds with an
+  // array of created musicians (it accepts bulk request bodies too) — same
+  // wrapper shape as /api/v1/locations. A flat data.id here is always
+  // undefined, which was the actual cause of the WCAG sweep hitting
+  // /musicians/undefined (#1195 item 4): not a broken template, a broken
+  // seed helper.
   const data = await apiPost(page, "/api/v1/musicians", token, MUSICIAN);
-  return data.id;
+  return data[0].id;
 }
 
 export async function seedInstructor(

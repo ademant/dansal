@@ -53,25 +53,25 @@ tags:
     category: format
     emoji: "🎓"
     home_group: workshop
-    color: "#d97706"
+    color: "#b45309"
   - slug: music-course
     name: Music Course
     category: format
     emoji: "🎓"
     home_group: workshop
-    color: "#d97706"
+    color: "#b45309"
   - slug: dance-workshop
     name: Dance Workshop
     category: type
     emoji: "🎓"
     home_group: workshop
-    color: "#d97706"
+    color: "#b45309"
   - slug: musician-workshop
     name: Musician Workshop
     category: type
     emoji: "🎓"
     home_group: workshop
-    color: "#d97706"
+    color: "#b45309"
   - slug: session
     name: Session
     category: format

@@ -29,9 +29,10 @@ test.describe("Admin: create event", () => {
     await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
     const m = await gotoAndMeasure(page, "/admin/events", metrics, "admin_events_list");
     await expect(page.locator("h1, .admin-title")).toBeVisible();
-    // Admin page should have a table of events
-    const table = page.locator("table, .admin-events, .event-list");
-    await expect(table.first()).toBeVisible();
+    // Admin page should have a table of events. Scoped to .event-table:
+    // the bare "table" fallback also matches #ae-cal-grid, a hidden
+    // date-range-picker calendar table that sits earlier in the DOM.
+    await expect(page.locator(".event-table")).toBeVisible();
   });
 
   test("creating a new event via admin form", async ({ page, metrics }) => {
@@ -64,7 +65,9 @@ test.describe("Admin: create event", () => {
       await orgSelect.selectOption({ label: /Bal Test Association/ });
     }
 
-    await page.locator('button[type="submit"], input[type="submit"]').click();
+    // Scoped to #save-btn: the generic type="submit" selector also matches
+    // the page nav's own Logout button, a Playwright strict-mode violation.
+    await page.locator("#save-btn").click();
     await page.waitForTimeout(3000);
     const url = page.url();
     const isEditPage = url.includes("/admin/events/") && url.includes("/edit");

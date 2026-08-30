@@ -157,26 +157,36 @@ export async function seedOrg(page: Page, token: string): Promise<number> {
   return data.id;
 }
 
-// seedLocation reuses an existing "Salle des Fêtes Testville" location
-// rather than creating a fresh one every run. The fixture's lat/lon are
-// fixed, and locations.geohash carries a UNIQUE index (see
-// cmd/dansal/locations.go) — a second POST with the same coordinates
-// against a pre-filled/persistent database 500s once a prior run has
-// already created that geohash, rather than deduping cleanly like
-// dansal_admin's create-user does.
+// seedLocation creates a fresh location every run, with the fixture's
+// lat/lon jittered by a small random offset. Two things need this to NOT
+// just reuse one shared row (unlike seedOrg/createUser):
+//  1. locations.geohash carries a UNIQUE index (cmd/dansal/locations.go) —
+//     POSTing the fixture's exact fixed coordinates twice 500s once a prior
+//     run has already created that geohash.
+//  2. A shared location_id would defeat the whole point of seedEvents'
+//     randomized dates: dansal's dedup tier 3 matches on
+//     location_id + start_time ±3h with NO title check (see
+//     cmd/dansal/dedup.go), so two runs landing on the same day at the same
+//     *shared* location would silently get merged into one event — which is
+//     exactly what happened before this fix (timetable.spec.ts read back
+//     timetable-management.spec.ts's replaced entries because both runs'
+//     "Bal de Testville" picked the same location + a close enough time).
+// ~0.01° (~1km) reliably lands in a different geohash cell while still
+// reading as "the same test venue" for anything the specs assert on.
+function jitteredLocation() {
+  const jitter = () => (Math.random() - 0.5) * 0.02;
+  return {
+    ...LOCATION,
+    latitude: LOCATION.latitude + jitter(),
+    longitude: LOCATION.longitude + jitter(),
+  };
+}
+
 export async function seedLocation(
   page: Page,
   token: string
 ): Promise<number> {
-  const existing = await apiGet(
-    page,
-    `/api/v1/locations?name=${encodeURIComponent(LOCATION.location)}`
-  );
-  const found = Array.isArray(existing)
-    ? existing.find((l: any) => l.location === LOCATION.location)
-    : undefined;
-  if (found) return found.id;
-  const data = await apiPost(page, "/api/v1/locations", token, LOCATION);
+  const data = await apiPost(page, "/api/v1/locations", token, jitteredLocation());
   return data.id;
 }
 

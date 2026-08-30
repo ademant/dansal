@@ -45,6 +45,9 @@ test.describe("Booking flow", () => {
       "booking_form_visible"
     );
     await expect(page.locator(".booking-section")).toBeVisible();
+    // The form lives inside a collapsed <details>/<summary> — expand it
+    // before asserting on anything inside.
+    await page.locator(".booking-details summary").click();
     await expect(page.locator(".booking-form")).toBeVisible();
     // Form should have required fields
     await expect(page.locator(".booking-form input[name='name']")).toBeVisible();
@@ -56,10 +59,12 @@ test.describe("Booking flow", () => {
     metrics,
   }) => {
     await page.goto(`${EVENT_HREF_PREFIX}${seed.eventIds[0]}`);
+    await page.locator(".booking-details summary").click();
     const form = page.locator(".booking-form");
     await form.locator('input[name="name"]').fill("Alice Testeur");
     await form.locator('input[name="email"]').fill("alice@test.example.com");
-    await form.locator('select[name="persons"]').selectOption("2");
+    // persons is a plain number input, not a <select>.
+    await form.locator('input[name="persons"]').fill("2");
     await form.locator('textarea[name="message"]').fill("Avec mon partenaire");
     await form.locator('button[type="submit"]').click();
     await expect(page.locator(".msg-ok")).toBeVisible({ timeout: 10_000 });

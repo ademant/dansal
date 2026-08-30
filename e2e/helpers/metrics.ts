@@ -315,7 +315,16 @@ export async function gatherErrorContext(
     file,
     viewport,
     url: page.url(),
-    error: error instanceof Error ? error.stack ?? error.message : String(error),
+    // testInfo.error is Playwright's plain TestError object ({ message,
+    // stack, ... }), never `instanceof Error` — that check was always false,
+    // so every entry fell through to String(error), i.e. the useless
+    // "[object Object]", silently discarding the actual assertion message
+    // (including the WCAG violation report text the reporter's
+    // accessibilitySummary greps for).
+    error:
+      (error as { stack?: string; message?: string } | undefined)?.stack ??
+      (error as { stack?: string; message?: string } | undefined)?.message ??
+      String(error),
     consoleErrors,
     networkFailures,
     domSnapshot,

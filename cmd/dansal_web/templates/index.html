@@ -1030,7 +1030,10 @@ document.addEventListener('DOMContentLoaded', function(){
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){
-      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e)});
+      // alt gives the marker's <img role="button"> an accessible name
+      // (axe-core's aria-command-name rule) — Leaflet's marker icon is
+      // otherwise unlabelled for screen readers.
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });
@@ -1101,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', function(){
       geoById[e.id] = {lat:e.lat, lng:e.lng};
       eventsGeo.push(e);
       if(!allMarkers[e.id]){
-        var m = L.marker([e.lat, e.lng], {icon: eventIcon(e)});
+        var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
         m.bindPopup(buildPopup(e),{maxWidth:300});
         allMarkers[e.id] = m;
       }

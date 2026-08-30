@@ -1,6 +1,12 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
-import { loadAllRows, clickEventInTable, goToAllView, getEventRowCount } from "../../helpers/nav";
+import {
+  loadAllRows,
+  clickEventInTable,
+  goToAllView,
+  getEventRowCount,
+  expectEventListVisible,
+} from "../../helpers/nav";
 import { SEARCH_TERM, ADMIN } from "../../fixtures/data";
 
 let seed: SeedResult;
@@ -14,7 +20,14 @@ test.describe("Discover events on index", () => {
 
   test("index loads with event table visible", async ({ page, metrics }) => {
     const m = await gotoAndMeasure(page, "/", metrics, "index_load");
-    await expect(page.locator("#event-table")).toBeVisible();
+    // The default "week" view only lists whatever the *current* calendar
+    // week has (often nothing, since seeded events land 3-45 days out) and
+    // renders through a third container (#week-outer/.week-mobile) neither
+    // #event-table nor #event-tiles — switch to "all" mode first so this
+    // deterministically has the seeded events to find, matching the other
+    // tests in this file.
+    await goToAllView(page);
+    await expectEventListVisible(page);
     const rows = await getEventRowCount(page);
     expect(rows).toBeGreaterThan(0);
     // Vitals are automatically captured — assert reasonable values

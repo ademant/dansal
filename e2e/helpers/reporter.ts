@@ -227,7 +227,9 @@ export default class DansalReporter implements Reporter {
     );
     const byRule: Record<string, number> = {};
     for (const e of axeErrors) {
-      const matches = e.error.matchAll(/\] (\w+):/g);
+      // Rule ids are hyphenated (e.g. "aria-command-name", "document-title")
+      // — \w+ alone stops at the first hyphen and would truncate them.
+      const matches = e.error.matchAll(/\] ([\w-]+):/g);
       for (const m of matches) {
         byRule[m[1]] = (byRule[m[1]] || 0) + 1;
       }

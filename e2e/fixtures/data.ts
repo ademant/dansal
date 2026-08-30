@@ -64,19 +64,18 @@ function isoDateTime(d: Date, hour: number, minute = 0): string {
 // isoDate formats d's own local calendar date (not toISOString()'s UTC
 // date, which can land on the previous/next day depending on the host's
 // timezone offset and desync from the local date isoDateTime/
-// datetimeLocalValue actually build the event around).
-function isoDate(d: Date): string {
+// datetimeLocalValue actually build the event around). Also the format the
+// admin event form's <input type="date"> fields expect.
+export function isoDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// datetimeLocalValue formats a date/time as the value a browser
-// <input type="datetime-local"> expects (local wall-clock, no seconds/zone).
-export function datetimeLocalValue(d: Date, hour: number, minute = 0): string {
-  const dd = new Date(d);
-  dd.setHours(hour, minute, 0, 0);
+// hhmm formats an hour/minute pair as the admin event form's separate
+// <input type="time"> fields expect (bare HH:MM, no date component).
+export function hhmm(hour: number, minute: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${dd.getFullYear()}-${pad(dd.getMonth() + 1)}-${pad(dd.getDate())}T${pad(dd.getHours())}:${pad(dd.getMinutes())}`;
+  return `${pad(hour)}:${pad(minute)}`;
 }
 
 // titleWithDate appends the event's own date to its title so repeated runs

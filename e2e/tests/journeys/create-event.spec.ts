@@ -3,7 +3,8 @@ import { fullSeed, SeedResult, loginAs } from "../../helpers/seed";
 import {
   randomFutureDate,
   titleWithDate,
-  datetimeLocalValue,
+  isoDate,
+  hhmm,
   EVENT_DATE_MIN_DAYS,
   EVENT_DATE_MAX_DAYS,
 } from "../../fixtures/data";
@@ -50,8 +51,13 @@ test.describe("Admin: create event", () => {
       'textarea[name="description"]',
       "Bal créé automatiquement par les tests E2E"
     );
-    await page.fill('input[name="start_time"]', datetimeLocalValue(eventDate, 20, 30));
-    await page.fill('input[name="end_time"]', datetimeLocalValue(eventDate, 23, 30));
+    // The admin event form has separate <input type="date"> and
+    // <input type="time"> fields (not a combined datetime-local input) —
+    // filling a full datetime string into #start_time/#end_time throws
+    // "Malformed value" since those are bare HH:MM time inputs.
+    await page.fill("#date", isoDate(eventDate));
+    await page.fill('input[name="start_time"]', hhmm(20, 30));
+    await page.fill('input[name="end_time"]', hhmm(23, 30));
 
     const orgSelect = page.locator('select[name="organization_id"]');
     if (await orgSelect.isVisible()) {

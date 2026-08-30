@@ -190,8 +190,12 @@ export async function seedLocation(
   page: Page,
   token: string
 ): Promise<number> {
+  // POST /api/v1/locations always responds with an array of
+  // {location, similar_locations} wrappers (it accepts bulk request
+  // bodies too) — never a flat object with .id at the top level, even for
+  // a single-location request.
   const data = await apiPost(page, "/api/v1/locations", token, jitteredLocation());
-  return data.id;
+  return data[0].location.id;
 }
 
 // safeMaxDaysOut looks at the database's actual published-future-event

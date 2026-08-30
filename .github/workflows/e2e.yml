@@ -47,9 +47,9 @@ jobs:
           sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --instance e2e &
+          ./dansal --config /etc/dansal/e2e/config.yaml &
           sleep 2
-          ./dansal_web --instance e2e &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml &
           sleep 2
 
       - name: Run journey tests
@@ -59,7 +59,8 @@ jobs:
         env:
           BASE_URL: http://localhost:18080
           API_URL: http://localhost:18000
-          INSTANCE: e2e
+          ADMIN_SOCKET: /var/lib/dansal/dansal.sock
+          ADMIN_NO_SUDO: "1"
 
       - name: Upload test results
         if: always()
@@ -111,9 +112,9 @@ jobs:
           sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --instance e2e &
+          ./dansal --config /etc/dansal/e2e/config.yaml &
           sleep 2
-          ./dansal_web --instance e2e &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml &
           sleep 2
 
       - name: Run accessibility sweep
@@ -123,7 +124,8 @@ jobs:
         env:
           BASE_URL: http://localhost:18080
           API_URL: http://localhost:18000
-          INSTANCE: e2e
+          ADMIN_SOCKET: /var/lib/dansal/dansal.sock
+          ADMIN_NO_SUDO: "1"
 
       - name: Upload test results
         if: always()

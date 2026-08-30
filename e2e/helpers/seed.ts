@@ -14,10 +14,12 @@ import {
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 const ADMIN_CLI = process.env.ADMIN_CLI ?? "dansal_admin";
-const INSTANCE = process.env.INSTANCE ?? "dev";
+const ADMIN_SOCKET =
+  process.env.ADMIN_SOCKET ?? "/var/lib/dansal/dev/dansal.sock";
+const SUDO = process.env.ADMIN_NO_SUDO === "1" ? "" : "sudo -n ";
 
 function cli(args: string): string {
-  return execSync(`${ADMIN_CLI} --instance ${INSTANCE} ${args}`, {
+  return execSync(`${SUDO}${ADMIN_CLI} --socket ${ADMIN_SOCKET} ${args}`, {
     encoding: "utf-8",
     timeout: 30_000,
   }).trim();
@@ -27,6 +29,34 @@ function extractUserId(output: string): number {
   const m = output.match(/id=(\d+)/);
   if (!m) throw new Error(`Cannot extract user ID from: ${output}`);
   return parseInt(m[1], 10);
+}
+
+// Look up an existing user's ID from `list-users` table output; -1 if absent.
+function findExistingUserId(email: string): number {
+  const out = cli("list-users");
+  for (const line of out.split("\n")) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.includes(email) && /^\d+$/.test(cols[0])) {
+      return parseInt(cols[0], 10);
+    }
+  }
+  return -1;
+}
+
+function createUser(email: string, password: string, role: string): number {
+  try {
+    const out = cli(
+      `create-user --email ${email} --password "${password}" --role ${role}`
+    );
+    return extractUserId(out);
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes("already exists")) {
+      const id = findExistingUserId(email);
+      if (id !== -1) return id;
+    }
+    throw e;
+  }
 }
 
 export interface SeedResult {
@@ -45,19 +75,10 @@ export function createUsers(): {
   editorId: number;
   viewerId: number;
 } {
-  const adminOut = cli(
-    `create-user --email ${ADMIN.email} --password "${ADMIN.password}" --role admin`
-  );
-  const editorOut = cli(
-    `create-user --email ${EDITOR.email} --password "${EDITOR.password}" --role publisher`
-  );
-  const viewerOut = cli(
-    `create-user --email ${VIEWER.email} --password "${VIEWER.password}" --role user`
-  );
   return {
-    adminId: extractUserId(adminOut),
-    editorId: extractUserId(editorOut),
-    viewerId: extractUserId(viewerOut),
+    adminId: createUser(ADMIN.email, ADMIN.password, "admin"),
+    editorId: createUser(EDITOR.email, EDITOR.password, "publisher"),
+    viewerId: createUser(VIEWER.email, VIEWER.password, "user"),
   };
 }
 
@@ -71,7 +92,9 @@ export async function loginAs(
   await page.fill("#password", password);
   await page.waitForTimeout(3500);
   await page.click("#btn-login");
-  await page.waitForURL("**/", { timeout: 15_000 });
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+    timeout: 15_000,
+  });
 }
 
 export async function getTokenFromCookie(page: Page): Promise<string> {

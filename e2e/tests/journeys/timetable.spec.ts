@@ -30,7 +30,10 @@ test.describe("Timetable view", () => {
 
   test("workshop entries have distinct badge", async ({ page }) => {
     await page.goto(`${EVENT_HREF_PREFIX}${seed.eventIds[0]}`);
-    const wsBadge = page.locator(".tt-badge-ws");
+    // event.html renders each timetable entry twice — once in the compact
+    // list (.tt-title) and once in the detail panel (.tt-panel-title) — so
+    // one workshop entry legitimately produces two .tt-badge-ws elements.
+    const wsBadge = page.locator(".tt-badge-ws").first();
     await expect(wsBadge).toBeVisible();
   });
 });

@@ -86,7 +86,7 @@ export default class DansalReporter implements Reporter {
   onTestEnd(test: TestCase, result: TestResult) {
     this.testResults.push({
       title: test.title,
-      titlePath: test.titlePath,
+      titlePath: test.titlePath(),
       file: test.location.file,
       status: result.status,
       duration: result.duration,

@@ -20,7 +20,7 @@ test.describe("Event details page", () => {
     );
     await expect(page.locator("h1")).toContainText(seed.eventTitles[0]);
     await expect(page.locator(".evt-header")).toBeVisible();
-    await expect(page.locator(".col-venue")).toContainText("Testville");
+    await expect(page.locator(".evt-loc-name")).toContainText("Testville");
     // Title should be a single h1
     await expect(page.locator("h1")).toHaveCount(1);
     // Structured data present
@@ -37,7 +37,11 @@ test.describe("Event details page", () => {
 
   test("description renders HTML content", async ({ page }) => {
     await page.goto(`${EVENT_HREF_PREFIX}${seed.eventIds[0]}`);
-    const desc = page.locator(".md-content");
+    // .evt-description, not the bare .md-content class shared with the
+    // organizer bio/notes further down the page — that ambiguity made this
+    // a Playwright strict-mode violation once the org sidebar started
+    // rendering its own .md-content description too.
+    const desc = page.locator(".evt-description");
     await expect(desc).toBeVisible();
   });
 });

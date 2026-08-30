@@ -140,10 +140,10 @@ async function apiGet(page: Page, path: string): Promise<any> {
 }
 
 // seedOrg reuses an existing "Bal Test Association" org rather than creating
-// a fresh one every run — organizations aren't deduped server-side (unlike
-// locations/users), so against a pre-filled/persistent database (e.g. the
-// shared dev instance) repeated runs would otherwise pile up same-named
-// orgs and make create-event.spec.ts's label-based <select> pick ambiguous.
+// a fresh one every run — organizations aren't deduped server-side, so
+// against a pre-filled/persistent database (e.g. the shared dev instance)
+// repeated runs would otherwise pile up same-named orgs and make
+// create-event.spec.ts's label-based <select> pick ambiguous.
 export async function seedOrg(page: Page, token: string): Promise<number> {
   const existing = await apiGet(page, "/api/v1/organizations");
   const found = Array.isArray(existing)
@@ -154,10 +154,25 @@ export async function seedOrg(page: Page, token: string): Promise<number> {
   return data.id;
 }
 
+// seedLocation reuses an existing "Salle des Fêtes Testville" location
+// rather than creating a fresh one every run. The fixture's lat/lon are
+// fixed, and locations.geohash carries a UNIQUE index (see
+// cmd/dansal/locations.go) — a second POST with the same coordinates
+// against a pre-filled/persistent database 500s once a prior run has
+// already created that geohash, rather than deduping cleanly like
+// dansal_admin's create-user does.
 export async function seedLocation(
   page: Page,
   token: string
 ): Promise<number> {
+  const existing = await apiGet(
+    page,
+    `/api/v1/locations?name=${encodeURIComponent(LOCATION.location)}`
+  );
+  const found = Array.isArray(existing)
+    ? existing.find((l: any) => l.location === LOCATION.location)
+    : undefined;
+  if (found) return found.id;
   const data = await apiPost(page, "/api/v1/locations", token, LOCATION);
   return data.id;
 }

@@ -171,10 +171,14 @@ export async function seedOrg(page: Page, token: string): Promise<number> {
 //     exactly what happened before this fix (timetable.spec.ts read back
 //     timetable-management.spec.ts's replaced entries because both runs'
 //     "Bal de Testville" picked the same location + a close enough time).
-// ~0.01° (~1km) reliably lands in a different geohash cell while still
-// reading as "the same test venue" for anything the specs assert on.
+// A precision-7 geohash cell is only ~150m across, so a small jitter isn't
+// enough margin against the birthday paradox once dozens of prior runs
+// have already scattered locations nearby (confirmed in practice: a ~1km
+// jitter started colliding after ~50 runs in one session). ~0.5° (~50km)
+// keeps thousands of distinct cells in play while still reading as "the
+// same general area" for anything the specs assert on.
 function jitteredLocation() {
-  const jitter = () => (Math.random() - 0.5) * 0.02;
+  const jitter = () => (Math.random() - 0.5) * 1.0;
   return {
     ...LOCATION,
     latitude: LOCATION.latitude + jitter(),

@@ -286,6 +286,28 @@ export async function collectPageMetrics(
   };
 }
 
+// ── Lighthouse-equivalent throttling ────────────────────────────────────────
+
+/**
+ * Applies network + CPU throttling matching Lighthouse's/PageSpeed Insights'
+ * simulated mobile lab-data profile (a mid-tier Android device on "Slow 4G"):
+ * ~1.6 Mbps down / 750 Kbps up / 150ms RTT, 4x CPU slowdown. An unthrottled
+ * local Playwright run against a same-machine dev instance reads far better
+ * than PSI's own numbers largely because of this gap — a page can only be
+ * fairly compared against a PSI report once it's under equivalent
+ * conditions. Chromium-only (CDP).
+ */
+export async function applyLighthouseMobileThrottling(page: Page): Promise<void> {
+  const client = await page.context().newCDPSession(page);
+  await client.send("Network.emulateNetworkConditions", {
+    offline: false,
+    downloadThroughput: (1.6 * 1024 * 1024) / 8,
+    uploadThroughput: (750 * 1024) / 8,
+    latency: 150,
+  });
+  await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+}
+
 // ── Error context gatherer ───────────────────────────────────────────────────
 
 export async function gatherErrorContext(

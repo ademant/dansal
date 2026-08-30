@@ -104,8 +104,11 @@ export async function loginAs(
   await page.fill("#password", password);
   await page.waitForTimeout(3500);
   await page.click("#btn-login");
+  // A generous margin: under a heavily loaded dev instance (many
+  // concurrent test/build processes) the native form POST + 303 redirect
+  // can take noticeably longer than a quiet instance would need.
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 }
 

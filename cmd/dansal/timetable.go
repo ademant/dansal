@@ -254,7 +254,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -301,7 +301,7 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -366,7 +366,7 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/events/{id}/timetable — remove all entries for an event
 func deleteTimetable(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}

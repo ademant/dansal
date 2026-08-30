@@ -66,6 +66,11 @@ test.describe("Booking flow", () => {
     // persons is a plain number input, not a <select>.
     await form.locator('input[name="persons"]').fill("2");
     await form.locator('textarea[name="message"]').fill("Avec mon partenaire");
+    // guardFormSubmit rejects a form token younger than 1s (anti-bot
+    // min-age, same mechanism as the login form) — filling the form takes
+    // negligible time in a headless browser, so submitting immediately
+    // after page load would trip it.
+    await page.waitForTimeout(1500);
     await form.locator('button[type="submit"]').click();
     await expect(page.locator(".msg-ok")).toBeVisible({ timeout: 10_000 });
     await metrics.collect("booking_submit");

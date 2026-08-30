@@ -56,7 +56,7 @@ export interface PageMetrics {
   // Memory (Chromium only)
   memory: {
     jsHeapUsed: number | null;
-    jsHeapTotal: number | null;
+    jsHeapLimit: number | null;
     domNodes: number | null;
   };
 
@@ -100,12 +100,28 @@ export interface TestErrorContext {
 
 // ── Collector ────────────────────────────────────────────────────────────────
 
+export interface ObservedVitals {
+  lcp: number | null;
+  tbt: number | null;
+  inp: number | null;
+}
+
+/**
+ * Collect performance metrics for the current page. `projectName` is threaded
+ * in from the fixture's `testInfo.project.name` (Playwright does not expose it
+ * via an env var). `observedLcp`/`observedTbt`/`observedInp` come from
+ * PerformanceObserver callbacks set up in the fixture before navigation; the
+ * in-page read that follows would otherwise be too late (LCP entries already
+ * fired by `networkidle`).
+ */
 export async function collectPageMetrics(
   page: Page,
   testLabel: string,
-  startMs: number
+  startMs: number,
+  projectName?: string,
+  observedVitals?: ObservedVitals
 ): Promise<PageMetrics> {
-  const viewport = process.env.PLAYWRIGHT_PROJECT_NAME ?? "unknown";
+  const viewport = projectName || "unknown";
 
   const raw = await page.evaluate(() => {
     const nav = performance.getEntriesByType(
@@ -216,7 +232,7 @@ export async function collectPageMetrics(
     const perfMem = (performance as any).memory;
     const memory = {
       jsHeapUsed: perfMem?.usedJSHeapSize ?? null,
-      jsHeapTotal: perfMem?.jsHeapSizeLimit ?? null,
+      jsHeapLimit: perfMem?.jsHeapSizeLimit ?? null,
       domNodes: document.getElementsByTagName("*").length,
     };
 
@@ -256,10 +272,12 @@ export async function collectPageMetrics(
     vitals: {
       fp: raw.paint.fp,
       fcp: raw.paint.fcp,
-      lcp: raw.lcp,
+      // Prefer PerformanceObserver-captured values (recorded during the page's
+      // lifetime) over the post-hoc snapshot, which can miss them entirely.
+      lcp: observedVitals?.lcp ?? raw.lcp,
       cls: raw.cls,
-      tbt: raw.tbt,
-      inp: null, // populated by PerformanceObserver in fixture
+      tbt: observedVitals?.tbt ?? raw.tbt,
+      inp: observedVitals?.inp ?? null,
     },
     dom: raw.dom,
     resources: raw.resources,
@@ -277,9 +295,10 @@ export async function gatherErrorContext(
   error: unknown,
   consoleErrors: ConsoleEntry[],
   networkFailures: NetworkFailure[],
-  metrics: PageMetrics | null
+  metrics: PageMetrics | null,
+  projectName?: string
 ): Promise<TestErrorContext> {
-  const viewport = process.env.PLAYWRIGHT_PROJECT_NAME ?? "unknown";
+  const viewport = projectName || "unknown";
 
   let domSnapshot = "";
   try {

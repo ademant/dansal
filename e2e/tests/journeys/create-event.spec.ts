@@ -36,7 +36,9 @@ test.describe("Admin: create event", () => {
   test("creating a new event via admin form", async ({ page, metrics }) => {
     await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
     const m = await gotoAndMeasure(page, "/admin/events/new", metrics, "admin_create_event");
-    await expect(page.locator("#evt-form, form")).toBeVisible();
+    // Scoped to #evt-form: the "form" fallback also matches the page nav's
+    // own logout form, which is a Playwright strict-mode violation.
+    await expect(page.locator("#evt-form")).toBeVisible();
 
     // Random future date + a date-stamped title (not a fixed one) so
     // repeated runs against the shared/pre-filled dev database each create

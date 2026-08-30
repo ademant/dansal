@@ -18,7 +18,7 @@ test.describe("Event details page", () => {
       metrics,
       "event_details_load"
     );
-    await expect(page.locator("h1")).toContainText("Bal de Testville");
+    await expect(page.locator("h1")).toContainText(seed.eventTitles[0]);
     await expect(page.locator(".evt-header")).toBeVisible();
     await expect(page.locator(".col-venue")).toContainText("Testville");
     // Title should be a single h1

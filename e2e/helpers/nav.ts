@@ -4,13 +4,22 @@ const PAGE_SIZE = 25;
 
 export async function loadAllRows(page: Page): Promise<void> {
   const btn = page.locator("#load-more");
+  // Every row is rendered up front and merely hidden behind a
+  // .row-filtered class as pagination advances (see index.html's
+  // renderAll()), so tr.event-row's total count stays flat across clicks —
+  // only the *visible* (non-filtered) subset grows. Counting the wrong one
+  // makes this loop think the first click already did nothing and bail
+  // immediately. A click past the initial ~100-event page also kicks off a
+  // background fetch (ensureLoadedUntil) that can take longer than a
+  // fraction of a second to land, so give each click real room to resolve.
+  const visibleRows = () => page.locator("tr.event-row:not(.row-filtered)");
   for (let i = 0; i < 20; i++) {
     if (!(await btn.isVisible().catch(() => false))) break;
     if (await btn.isDisabled().catch(() => false)) break;
-    const prevCount = await page.locator("tr.event-row").count();
+    const prevCount = await visibleRows().count();
     await btn.click();
-    await page.waitForTimeout(600);
-    const newCount = await page.locator("tr.event-row").count();
+    await page.waitForTimeout(1500);
+    const newCount = await visibleRows().count();
     if (newCount <= prevCount) break;
   }
 }

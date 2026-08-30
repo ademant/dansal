@@ -37,9 +37,10 @@ test.describe("Discover events on index", () => {
 
   test("clicking event row opens detail page", async ({ page, metrics }) => {
     await page.goto("/");
-    goToAllView(page);
-    await clickEventInTable(page, "Bal de Testville");
-    await expect(page.locator("h1")).toContainText("Bal de Testville");
+    await goToAllView(page);
+    await loadAllRows(page);
+    await clickEventInTable(page, seed.eventTitles[0]);
+    await expect(page.locator("h1")).toContainText(seed.eventTitles[0]);
     await expect(page.locator(".evt-header")).toBeVisible();
     await metrics.collect("click-event-row");
   });

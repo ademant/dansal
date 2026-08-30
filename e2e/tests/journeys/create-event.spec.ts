@@ -1,5 +1,12 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult, loginAs } from "../../helpers/seed";
+import {
+  randomFutureDate,
+  titleWithDate,
+  datetimeLocalValue,
+  EVENT_DATE_MIN_DAYS,
+  EVENT_DATE_MAX_DAYS,
+} from "../../fixtures/data";
 
 let seed: SeedResult;
 
@@ -29,13 +36,18 @@ test.describe("Admin: create event", () => {
     const m = await gotoAndMeasure(page, "/admin/events/new", metrics, "admin_create_event");
     await expect(page.locator("#evt-form, form")).toBeVisible();
 
-    await page.fill('input[name="title"]', "Nouveau Bal E2E");
+    // Random future date + a date-stamped title (not a fixed one) so
+    // repeated runs against the shared/pre-filled dev database each create
+    // a distinct, identifiable event instead of colliding on one that
+    // dansal's dedup logic would silently merge into a stale prior run.
+    const eventDate = randomFutureDate(EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS);
+    await page.fill('input[name="title"]', titleWithDate("Nouveau Bal E2E", eventDate));
     await page.fill(
       'textarea[name="description"]',
       "Bal créé automatiquement par les tests E2E"
     );
-    await page.fill('input[name="start_time"]', "2026-09-15T20:30");
-    await page.fill('input[name="end_time"]', "2026-09-15T23:30");
+    await page.fill('input[name="start_time"]', datetimeLocalValue(eventDate, 20, 30));
+    await page.fill('input[name="end_time"]', datetimeLocalValue(eventDate, 23, 30));
 
     const orgSelect = page.locator('select[name="organization_id"]');
     if (await orgSelect.isVisible()) {

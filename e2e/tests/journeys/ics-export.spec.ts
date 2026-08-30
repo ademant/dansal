@@ -20,7 +20,7 @@ test.describe("ICS export", () => {
     const body = await resp.text();
     expect(body).toContain("BEGIN:VCALENDAR");
     expect(body).toContain("BEGIN:VEVENT");
-    expect(body).toContain("Bal de Testville");
+    expect(body).toContain(seed.eventTitles[0]);
     // ICS should be compact text, not huge
     expect(body.length).toBeLessThan(100_000);
     await metrics.collect("ics_download");

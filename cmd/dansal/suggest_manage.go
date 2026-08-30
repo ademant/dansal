@@ -308,10 +308,11 @@ func notifyReviewersPendingEdit(eventID int) {
 			return
 		}
 		seen[userID] = true
-		var email, chatID string
-		db.QueryRow("SELECT COALESCE(email,''), COALESCE(telegram_chat_id,'') FROM users WHERE id=?", userID).Scan(&email, &chatID)
+		var email, chatID, matrixID string
+		var matrixVerified bool
+		db.QueryRow("SELECT COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE id=?", userID).Scan(&email, &chatID, &matrixID, &matrixVerified)
 		msg := fmt.Sprintf("A suggested edit to %q is waiting for review — %s", title, adminReviewLink(userID, editPath))
-		notifyUser(chatID, email, "Event suggestion edit needs review", msg)
+		notifyUser(chatID, matrixID, matrixVerified, email, "Event suggestion edit needs review", msg)
 	}
 
 	rows, err := db.Query(`SELECT id FROM users WHERE role = 'admin'`)

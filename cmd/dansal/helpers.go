@@ -93,15 +93,27 @@ func adminReviewLink(adminID int, nextPath string) string {
 	return fmt.Sprintf("%s (valid till %s)", link, expiresAt.Local().Format("15:04"))
 }
 
-// notifyUser sends msg to the user via Telegram when chatID is set, or by
-// email when an SMTP host is configured. Errors are logged but do not
-// propagate — callers that need async delivery must wrap in a goroutine.
-func notifyUser(chatID, email, subject, body string) {
+// notifyUser sends msg to the user via every configured chat channel —
+// Telegram when chatID is set, and Matrix when matrixID is set and verified
+// — sent in parallel, not as a fallback chain, so an admin with both gets
+// both. Email is used only when neither chat channel is configured. Errors
+// are logged but do not propagate — callers that need async delivery must
+// wrap in a goroutine.
+func notifyUser(chatID, matrixID string, matrixVerified bool, email, subject, body string) {
+	hasChat := false
 	if chatID != "" {
+		hasChat = true
 		if err := sendTelegramMessage(chatID, body); err != nil {
 			log.Printf("notify: telegram to %s: %v", chatID, err)
 		}
-	} else if email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
+	}
+	if matrixVerified && matrixID != "" {
+		hasChat = true
+		if err := sendMatrixMessage(matrixID, body); err != nil {
+			log.Printf("notify: matrix to %s: %v", matrixID, err)
+		}
+	}
+	if !hasChat && email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
 		if _, err := SendEmail(email, subject, body, true); err != nil {
 			log.Printf("notify: email to %s: %v", email, err)
 		}

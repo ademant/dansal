@@ -207,7 +207,12 @@
 #load-more[disabled]{display:none}
 .empty-state{text-align:center;padding:2rem;color:var(--fg-muted)}
 .empty-state button{margin-left:.75rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;color:var(--fg)}
-#week-outer{display:flex;gap:1rem;align-items:flex-start;margin-top:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem}
+/* min-height is a CLS safety net (#1210): #week-main/#week-mini-cal are
+   empty until JS renders into them, so this bounds the empty->full jump for
+   the brief window before that script runs (it now runs eagerly rather than
+   waiting on DOMContentLoaded — see the script comment near the bottom of
+   this file — so in practice that window is short, but not zero). */
+#week-outer{display:flex;gap:1rem;align-items:flex-start;margin-top:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;min-height:340px}
 .week-divider{border:none;border-top:2px solid var(--border-mid);margin:1.5rem 0}
 #week-main{flex:1;min-width:0}
 #week-mini-cal{flex:0 0 210px;font-size:.82rem}
@@ -298,7 +303,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   .week-table-wrap{display:none}
   .week-mobile{display:block}
   .tmt{display:none}
-  #week-outer{padding:.6rem;overflow:hidden}
+  #week-outer{padding:.6rem;overflow:hidden;min-height:260px}
   .mobile-mode-bar{display:flex;justify-content:center;padding:.4rem 0}
 }
 </style>
@@ -308,14 +313,23 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
      the browser finish parsing the rest of the document instead of blocking
      on the Leaflet download at this exact point. `defer` has NO effect on an
      inline script without `src` (it always runs synchronously at its parse
-     position regardless of the attribute) — so the app-logic script below is
-     wrapped in a DOMContentLoaded listener instead, which is what actually
-     delays it until after the deferred external scripts have run and L is
-     defined. -->
+     position regardless of the attribute).
+
+     The app-logic script below runs as an IIFE at its parse position
+     (immediately, since it's the last thing in <body> — the elements it
+     touches already exist) rather than waiting for DOMContentLoaded (#1210):
+     week/mini-cal/table rendering has no dependency on Leaflet's global `L`
+     at all (pure DOM/date building from the JSON already embedded in the
+     page), so gating it behind the deferred Leaflet download was an
+     unnecessary CLS-causing delay under slow/throttled mobile networks —
+     `#week-outer` sat empty, then popped in once L happened to finish
+     loading, shifting everything below it. Only initMap()'s one-time
+     updateMapMarkers() call (bottom of this script) genuinely needs L, so
+     that alone still waits for DOMContentLoaded. -->
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
-document.addEventListener('DOMContentLoaded', function(){
+(function(){
   var PAGE = 25;
   var rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
   var visible = [];
@@ -1103,7 +1117,13 @@ document.addEventListener('DOMContentLoaded', function(){
     (data.geo||[]).forEach(function(e){
       geoById[e.id] = {lat:e.lat, lng:e.lng};
       eventsGeo.push(e);
-      if(!allMarkers[e.id]){
+      // Background pre-fetches can now resolve before Leaflet's global `L`
+      // is defined (#1210 made the surrounding script run eagerly instead
+      // of waiting for DOMContentLoaded). When that happens, skip building
+      // the marker here — eventsGeo already has the entry, so initMap()'s
+      // own forEach over eventsGeo (once L is ready) creates it instead;
+      // this just avoids a race that would otherwise throw.
+      if(!allMarkers[e.id] && window.L){
         var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
         m.bindPopup(buildPopup(e),{maxWidth:300});
         allMarkers[e.id] = m;
@@ -1362,8 +1382,17 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('tmt-week').classList.toggle('tmt-active', tableMode==='week');
   document.getElementById('tmt-all').classList.toggle('tmt-active',  tableMode==='all');
 
-  // Initialise map and first render
-  initMap();
+  // Map init needs Leaflet's global `L`, which may still be downloading
+  // (deferred script) at this point in the parse — unlike the week/table
+  // render below, this genuinely can't run any earlier (#1210). Once
+  // DOMContentLoaded confirms L is ready, initMap() populates allMarkers/
+  // clusterGroup and the one-time updateMapMarkers() call shows whichever
+  // are in the already-computed `visible` set (map var is guarded to no-op
+  // if called before this).
+  document.addEventListener('DOMContentLoaded', function(){
+    initMap();
+    updateMapMarkers();
+  });
   var _advanced = autoAdvanceToNextEventWeek();
   if(_advanced) syncMiniCalToWeek();
   // Record initial week in history so back-button works from within the page.
@@ -1392,6 +1421,6 @@ document.addEventListener('DOMContentLoaded', function(){
     syncMiniCalToWeek();
     shown=0; renderAll(); updateMapMarkers(false);
   });
-});
+})();
 </script>
 {{end}}

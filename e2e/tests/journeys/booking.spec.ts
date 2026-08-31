@@ -62,7 +62,14 @@ test.describe("Booking flow", () => {
     await page.locator(".booking-details summary").click();
     const form = page.locator(".booking-form");
     await form.locator('input[name="name"]').fill("Alice Testeur");
-    await form.locator('input[name="email"]').fill("alice@test.example.com");
+    // Randomized per run: a fixed address accumulates pending (unverified)
+    // bookings run over run against a shared/persistent dev DB until it
+    // trips the server's real anti-abuse cap on open verifications per
+    // address (#1206) — same category of fix as the event date/title/
+    // location jitter from #1194.
+    await form
+      .locator('input[name="email"]')
+      .fill(`alice+${Date.now()}@test.example.com`);
     // persons is a plain number input, not a <select>.
     await form.locator('input[name="persons"]').fill("2");
     await form.locator('textarea[name="message"]').fill("Avec mon partenaire");

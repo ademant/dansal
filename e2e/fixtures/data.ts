@@ -103,13 +103,21 @@ export function seedEvents(
   locationId: number,
   maxDays: number = EVENT_DATE_MAX_DAYS
 ) {
+  // Per-call nonce appended to every title (#1207): Tier 4 dedup
+  // (title + start_time ±3h) fires unconditionally when Tier 3 misses.
+  // Two concurrent fullSeed() calls that happen to pick the same random
+  // date produce identical title + start_time → Tier 4 merges them onto
+  // the same event row, then both POST-timetable calls append 3 entries
+  // each, accumulating over runs. A short random tag makes each call's
+  // titles unique, so Tier 4 can never match across runs.
+  const nonce = Math.random().toString(36).slice(2, 6);
   const balDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
   const workshopDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
   const festDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
 
   return [
     {
-      title: titleWithDate("Bal de Testville", balDate),
+      title: titleWithDate("Bal de Testville", balDate) + ` [${nonce}]`,
       description:
         "Un bal test avec musique live de Accordéon Trio",
       start_time: isoDateTime(balDate, 20, 30),
@@ -124,7 +132,7 @@ export function seedEvents(
       contact_email: "jean@test.example.com",
     },
     {
-      title: titleWithDate("Atelier Bourrée du Berry", workshopDate),
+      title: titleWithDate("Atelier Bourrée du Berry", workshopDate) + ` [${nonce}]`,
       description:
         "Atelier de bourrée pour débutants. Pas besoin d'expérience.",
       start_time: isoDateTime(workshopDate, 14, 0),
@@ -137,7 +145,7 @@ export function seedEvents(
       contact_email: "marie@test.example.com",
     },
     {
-      title: titleWithDate("Bal et Atelier Testville", festDate),
+      title: titleWithDate("Bal et Atelier Testville", festDate) + ` [${nonce}]`,
       description:
         "Un week-end complet avec bal le samedi et atelier le dimanche.",
       start_time: isoDateTime(festDate, 20, 0),

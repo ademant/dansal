@@ -241,10 +241,13 @@ export async function seedEventsAndTimetable(
   }
   if (events.length > 0) {
     const tt = seedTimetable(events[0].id);
+    // PUT (replace) rather than POST (append): belt-and-suspenders against
+    // timetable accumulation if dedup somehow still merges two runs' events —
+    // PUT resets the timetable to exactly the 3 seed entries (#1207).
     await page.request.fetch(
       `${API_BASE}/api/v1/events/${events[0].id}/timetable`,
       {
-        method: "POST",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,

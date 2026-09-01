@@ -1056,5 +1056,22 @@ function applyWizardData(data) {
     }
   });
 })();
+// Background form-token refresh (#1211). Absent when ManageToken is set.
+(function(){
+  var el = document.querySelector('#wiz-form input[name="_form_token"]');
+  if (!el) return;
+  var last = 0;
+  function refresh(){
+    var now = Date.now();
+    if (now - last < 10000) return;
+    last = now;
+    fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.token) el.value = d.token; })
+      .catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
+  setInterval(refresh, 10 * 60 * 1000);
+})();
 </script>
 {{end}}

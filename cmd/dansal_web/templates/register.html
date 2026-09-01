@@ -273,6 +273,25 @@ document.addEventListener('DOMContentLoaded', updateChannelFields);
   };
 })();
 {{end}}
+// Background form-token refresh (#1211): keeps the hidden _form_token alive
+// for visitors who spend >5 min on the form. Fires on tab-resume (catches
+// mobile lock/unlock) and every 10 min as a safety net. Fails soft.
+(function(){
+  var el = document.querySelector('form[action="/register"] input[name="_form_token"]');
+  if (!el) return;
+  var last = 0;
+  function refresh(){
+    var now = Date.now();
+    if (now - last < 10000) return;
+    last = now;
+    fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.token) el.value = d.token; })
+      .catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
+  setInterval(refresh, 10 * 60 * 1000);
+})();
 </script>
   {{end}}{{/* end with .Data */}}
 {{end}}{{/* end define "content" */}}

@@ -247,5 +247,26 @@ function bgcToggle(id, method){
   document.getElementById('bgc-em-'+id).style.display = method==='email' ? '' : 'none';
   document.getElementById('bgc-tg-'+id).style.display = method==='telegram' ? '' : 'none';
 }
+// Background form-token refresh (#1211): keeps all _form_token inputs on
+// this page alive for visitors who stay >5 min. Fires on tab-resume and
+// every 10 min. Each refresh issues a new token and updates one input per
+// call; multiple refreshes across the interval cover the multiple forms.
+(function(){
+  var inputs = Array.from(document.querySelectorAll('input[name="_form_token"]'));
+  if (!inputs.length) return;
+  var idx = 0, last = 0;
+  function refresh(){
+    var now = Date.now();
+    if (now - last < 10000) return;
+    last = now;
+    var el = inputs[idx % inputs.length]; idx++;
+    fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.token) el.value = d.token; })
+      .catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
+  setInterval(refresh, 10 * 60 * 1000);
+})();
 </script>
 {{end}}

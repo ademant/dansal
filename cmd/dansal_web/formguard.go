@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -293,6 +294,30 @@ func (t *emailSendThrottle) tier() int {
 }
 
 var globalEmailSendRate *emailSendThrottle // initialised in main()
+
+// GET /api-internal/refresh-form-token — silent background token refresh for
+// long-lived public forms (register, suggest, board, booking, contact).
+// The page JS calls this on visibilitychange→visible and on a periodic
+// foreground timer so the hidden _form_token field stays current without
+// the visitor taking any action (#1211).
+func refreshFormTokenHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		if tokenThrottle.isBlocked(ip) {
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		tokenThrottle.record(ip)
+		tok := issueFormToken(ip)
+		if tok == "" {
+			http.Error(w, `{"error":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": tok})
+	}
+}
 
 // applyEmailBackpressure checks the global email send rate and either:
 //   - tier 1: sleeps 500ms before the caller serves the page

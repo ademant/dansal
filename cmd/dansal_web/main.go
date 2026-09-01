@@ -252,6 +252,7 @@ func main() {
 		r.HandleFunc("POST /events/{id}/assign-org", adminRateLimit(eventAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))
 		r.HandleFunc("GET /events/{id}/board/form-token", boardFormTokenHandler(cfg))
+		r.HandleFunc("GET /api-internal/refresh-form-token", refreshFormTokenHandler(cfg))
 		r.HandleFunc("POST /events/{id}/board/{post_id}/delete", contactBoardDeleteHandler(cfg, client))
 		r.HandleFunc("POST /events/{id}/board/{post_id}/contact", contactBoardContactHandler(cfg, client))
 		r.HandleFunc("GET /contact-posts/verify/{token}", contactBoardVerifyRedirect)

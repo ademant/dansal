@@ -113,6 +113,27 @@ logo_height_sub: 32
 # Colour scheme: auto (follow OS preference), light, or dark.
 dark_mode: auto
 
+# --- External map overlay (#1220) ---
+#
+# Optional: show live map pins sourced from an external site (e.g.
+# folkbalbende.be) alongside dansal's own events, without ever importing or
+# storing them. Fetched periodically via dansal's own preview+dedup
+# endpoint (POST /api/v1/events/preview) — an event dansal already has
+# (imported or entered manually) is automatically skipped, never shown as a
+# duplicate pin. Off by default; leave external_overlay_sources empty (or
+# external_overlay_api_key unset) to disable entirely.
+#
+# external_overlay_api_key needs a dansal API key with the admin role (see
+# POST /api/v1/apikeys) so the preview call isn't scoped to a single
+# organisation.
+#
+# external_overlay_sources:
+#   - name: "folkbalbende.be"
+#     url: "https://folkbalbende.be/interface/spider_events.php"
+#     type: "json"
+# external_overlay_api_key: ""
+# external_overlay_poll_mins: 30
+
 # --- Telegram ---
 
 # Optional secret token to validate incoming Telegram webhook calls.

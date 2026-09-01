@@ -10,6 +10,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// ExternalOverlaySource is one configured "cached, not imported" event
+// source for the map (#1220) — e.g. folkbalbende.be.
+type ExternalOverlaySource struct {
+	Name string `yaml:"name"` // shown in the popup credit, e.g. "folkbalbende.be"
+	URL  string `yaml:"url"`
+	Type string `yaml:"type"` // a fetch type dansal's preview endpoint understands, e.g. "json"
+}
+
 type Config struct {
 	Listen    string `yaml:"listen"`
 	Domain    string `yaml:"domain"`
@@ -73,6 +81,17 @@ type Config struct {
 	LogoHeightSub    int    `yaml:"logo_height_sub"`    // px in nav on sub pages
 	DarkMode         string `yaml:"dark_mode"`          // "auto" (default), "light", "dark"
 	TimeFormat       string `yaml:"time_format"`        // "24h" (default), "12h"
+
+	// External event overlay (opt-in, #1220): live map pins sourced from
+	// external sites (e.g. folkbalbende.be), fetched periodically via
+	// dansal's own POST /api/v1/events/preview endpoint — reusing its
+	// parser + dedup logic (findExistingEvent) rather than a bespoke
+	// fetch/dedup path — and cached in memory. Never written to dansal's
+	// DB. Off by default (ExternalOverlaySources empty): folkbalbende only
+	// covers Belgium, so this isn't a sensible default for every instance.
+	ExternalOverlaySources  []ExternalOverlaySource `yaml:"external_overlay_sources"`
+	ExternalOverlayAPIKey   string                  `yaml:"external_overlay_api_key"`   // dansal API key (admin-scoped, see POST /api/v1/apikeys) sent as the Bearer token
+	ExternalOverlayPollMins int                     `yaml:"external_overlay_poll_mins"` // default 30
 
 	pagesContent *PagesContent
 	configPath   string // path from which config was loaded; used for reload
@@ -174,6 +193,7 @@ func loadConfig() *Config {
 		Listen:                    "127.0.0.1:8080",
 		DBPath:                    "web.db",
 		PollSecs:                  300,
+		ExternalOverlayPollMins:   30,
 		ImagesDir:                 "/var/lib/dansal-web",
 		BannerHeightMain:          200,
 		BannerHeightSub:           0,
@@ -282,6 +302,7 @@ func reloadConfig(path string) *Config {
 		Listen:                    "127.0.0.1:8080",
 		DBPath:                    "web.db",
 		PollSecs:                  300,
+		ExternalOverlayPollMins:   30,
 		ImagesDir:                 "/var/lib/dansal-web",
 		BannerHeightMain:          200,
 		BannerHeightSub:           0,

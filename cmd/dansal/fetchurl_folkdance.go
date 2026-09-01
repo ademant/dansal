@@ -328,6 +328,9 @@ func detectFetchType(rawURL string) string {
 	if tecJSONProbe(rawURL) {
 		return "json"
 	}
+	if folkbalbendeJSONProbe(rawURL) {
+		return "json"
+	}
 	lower := strings.ToLower(rawURL)
 	if strings.Contains(lower, "rss") || strings.Contains(lower, "atom") ||
 		strings.HasSuffix(lower, ".xml") || strings.Contains(lower, "/feed") {

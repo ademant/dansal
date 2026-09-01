@@ -560,6 +560,7 @@ func main() {
 		log.Printf("relay actor init: %v", err)
 	}
 	go startDelivery(cfg, db, client, relayActor)
+	go startExternalOverlay(cfg, client)
 	startFlashSweeper()
 
 	log.Printf("dansal-web %s (built %s) listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",

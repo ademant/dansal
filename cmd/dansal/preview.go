@@ -213,6 +213,9 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 		if tecJSONProbe(src.URL) {
 			return parseTECJSONToRequests(body, src)
 		}
+		if folkbalbendeJSONProbe(src.URL) {
+			return parseFolkbalbendeJSONToRequests(body, src)
+		}
 		return parseFolkdanceJSONToRequests(body, src)
 	case "folkdance-json":
 		return parseFolkdanceJSONToRequests(body, src)

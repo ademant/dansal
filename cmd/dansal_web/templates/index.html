@@ -119,6 +119,9 @@
 </p>
 
 <script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
+<!-- #1220: external map overlay (e.g. folkbalbende.be) — pins dansal
+     doesn't own, cached server-side, never imported. "[]" when unconfigured. -->
+<script type="application/json" id="events-geo-external">{{.ExternalOverlayJSON}}</script>
 
 <div class="feed-section">
   <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
@@ -895,6 +898,14 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   // ── Map ───────────────────────────────────────────────────────────────────
   var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);
+  // #1220: external overlay pins (e.g. folkbalbende.be) merge into the same
+  // eventsGeo array — eventIcon()/buildPopup() branch on e.ext, and
+  // updateMapMarkers() below lets them bypass the table-row visibility gate
+  // real dansal events go through, since they have no table row.
+  try {
+    var extGeoEl = document.getElementById('events-geo-external');
+    if (extGeoEl) eventsGeo = eventsGeo.concat(JSON.parse(extGeoEl.textContent || '[]'));
+  } catch(_) {}
   var geoById = {};
   eventsGeo.forEach(function(e){ geoById[e.id] = {lat:e.lat, lng:e.lng}; });
   var map = null, clusterGroup = null, allMarkers = {};
@@ -949,17 +960,21 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(e.drink==='soft')    extras+='<span class="food-icon" title="{{$.Strings.T "drink_soft"}}">🥤</span>';
     if(e.wc) extras+='<span class="food-icon" title="{{$.Strings.T "access_wheelchair"}}">♿</span>';
     if(e.hl) extras+='<span class="food-icon" title="{{$.Strings.T "access_hearing_loop"}}">🦻</span>';
-    var detailUrl='/events/'+e.id;
+    // #1220: an external pin has no dansal event page — link out to its own
+    // URL instead of /events/{id}, and credit the source.
+    var detailUrl=e.ext ? (e.url||'#') : ('/events/'+e.id);
+    var srcLine=(e.ext && e.src) ? '<div style="font-size:.78rem;margin-top:.2rem;color:var(--fg-hint,#888)">'+escHtml(I18N.mapExternalVia)+' '+escHtml(e.src)+'</div>' : '';
     var isMobile=window.matchMedia('(max-width:640px)').matches;
     var outerStyle='min-width:200px;max-width:280px';
     var outerClick='';
     if(isMobile){ outerStyle+=';cursor:pointer'; outerClick=' data-fn="navigateTo" data-args=\'["'+detailUrl.replace(/"/g,'\\"')+'"]\''; }
     return '<div style="'+outerStyle+'"'+outerClick+'>'+
-      '<a href="'+detailUrl+'" style="font-size:.95rem;display:block;margin-bottom:.25rem;font-weight:bold;color:inherit;text-decoration:none">'+escHtml(e.t)+'</a>'+
+      '<a href="'+detailUrl+'"'+(e.ext?' target="_blank" rel="noopener"':'')+' style="font-size:.95rem;display:block;margin-bottom:.25rem;font-weight:bold;color:inherit;text-decoration:none">'+escHtml(e.t)+'</a>'+
       (time?'<div style="font-size:.82rem;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+
       (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+place+'</div>':'')+
       (badges||feeHtml?'<div style="margin-bottom:.2rem">'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
       (extras?'<div style="margin-top:.1rem">'+extras+'</div>':'')+
+      srcLine+
       '</div>';
   }
 
@@ -1017,9 +1032,16 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // (tags.yaml's seed order — festival, ball, concert, workshop, session
     // for the default vocabulary, preserving the old hardcoded priority).
     var emoji='', color='#6b7280';
-    var flags=eventGroupFlags(e);
-    for(var i=0;i<HOME_GROUPS.length;i++){
-      if(flags[HOME_GROUPS[i].key]){ emoji=HOME_GROUPS[i].emoji; color=HOME_GROUPS[i].color; break; }
+    if(e.ext){
+      // #1220: external overlay pin (not a dansal event) — a distinct
+      // color/glyph, deliberately not one of HOME_GROUPS' own colors, so
+      // it reads as "not ours" at a glance.
+      emoji='🔗'; color='#0d9488';
+    } else {
+      var flags=eventGroupFlags(e);
+      for(var i=0;i<HOME_GROUPS.length;i++){
+        if(flags[HOME_GROUPS[i].key]){ emoji=HOME_GROUPS[i].emoji; color=HOME_GROUPS[i].color; break; }
+      }
     }
     if (e.x) color='#9e9e9e';
     var op=e.x?'0.65':'1';
@@ -1069,14 +1091,25 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       var s=r.dataset.date||'', e=r.dataset.endDate||s;
       if(s<=weekEnd && e>=weekStart) weekTotal++;
     });
+    // #1220: external overlay pins have no table row, so they can't pass
+    // the visIds gate real dansal events go through — they're shown purely
+    // by week date-range overlap instead. Counted separately from realShown
+    // so they don't skew the map-no-coords warning below, which is about
+    // real dansal events lacking coordinates, not about how many pins are
+    // on the map in total.
+    var realShown=0;
     eventsGeo.forEach(function(e){
-      if(!allMarkers[e.id] || !visIds[e.id]) return;
+      if(!allMarkers[e.id]) return;
       var eStart=(e.s||'').slice(0,10);
       var eEnd=e.e||eStart;
-      if(eStart<=weekEnd && eEnd>=weekStart) layers.push(allMarkers[e.id]);
+      if(eStart>weekEnd || eEnd<weekStart) return;
+      if(e.ext){ layers.push(allMarkers[e.id]); return; }
+      if(!visIds[e.id]) return;
+      layers.push(allMarkers[e.id]);
+      realShown++;
     });
     var noCoords = document.getElementById('map-no-coords');
-    noCoords.hidden = !(weekTotal > 0 && weekTotal > layers.length);
+    noCoords.hidden = !(weekTotal > 0 && weekTotal > realShown);
     if(layers.length > 0){
       layers.forEach(function(m){ clusterGroup.addLayer(m); });
       if(refit || !mapFitted){

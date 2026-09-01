@@ -232,6 +232,11 @@ type IndexData struct {
 	FederatedEvents []FederatedEvent
 	Dances          []Dance
 	HolidayDates    template.JS // JSON array of "YYYY-MM-DD" strings
+	// ExternalOverlayJSON (#1220) is the cached external map overlay (see
+	// external_overlay.go) as a JSON array of geoEvent-shaped pins with
+	// Ext=true — "[]" when the feature isn't configured, never empty/unset,
+	// so index.html's JSON.parse of it always succeeds.
+	ExternalOverlayJSON template.JS
 }
 
 type EventData struct {
@@ -471,6 +476,14 @@ type geoEvent struct {
 	Drink              string   `json:"drink,omitempty"`
 	Wheelchair         bool     `json:"wc,omitempty"`
 	HearingLoop        bool     `json:"hl,omitempty"`
+	// Ext/Src (#1220): set only for the external map overlay (see
+	// external_overlay.go) — a live pin sourced from a third-party site
+	// (e.g. folkbalbende.be), never a dansal event. index.html's JS uses
+	// Ext to give the pin a distinct icon, credit Src in the popup, and
+	// link out via URL instead of /events/{id}. Both are omitted (false/
+	// empty) for every normal dansal event.
+	Ext bool   `json:"ext,omitempty"`
+	Src string `json:"src,omitempty"`
 }
 
 // eventsToGeo projects events to geoEvent, skipping any without coordinates.
@@ -876,7 +889,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				holidayDates = template.JS("[" + strings.Join(dates, ",") + "]")
 			}
 		}
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates}))
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates, ExternalOverlayJSON: template.JS(currentExternalOverlayJSON())}))
 	}
 }
 

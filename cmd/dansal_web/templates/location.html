@@ -29,7 +29,6 @@
 </nav>
 {{end}}
 {{define "content"}}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 {{with .Data}}
 {{with .Location}}
 <div class="loc-page-header">
@@ -182,6 +181,7 @@
   if (!el) return;
   var lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
   if (isNaN(lat) || isNaN(lng)) return;
+  dansalLeafletCss();
   var map = L.map('loc-map').setView([lat, lng], 15);
   attachTileLayer(map);
   L.marker([lat, lng]).addTo(map);

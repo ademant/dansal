@@ -5,10 +5,7 @@
 {{with .Data}}
 {{$orgMap := .OrgMap}}
 
-<!-- Leaflet CSS loaded eagerly since map is always visible -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
-
+<!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
 <!-- Filters -->
 <p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
 <div class="type-selector">
@@ -1039,6 +1036,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   }
 
   function initMap(){
+    dansalLeafletCss(true);
     map = L.map('map-container').setView([50,10],5);
     attachTileLayer(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});

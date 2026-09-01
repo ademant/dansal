@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Strings.T "embed_title_calendar"}} — {{.SiteName}}</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="https://unpkg.com/flatpickr@4.6.13/dist/flatpickr.min.css" integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt" crossorigin="anonymous">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -144,7 +143,20 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     backdrop.classList.add('open');
   }
 
+  function dansalLeafletCss(){
+    // #1215: load Leaflet CSS non-blocking (was a render-blocking <link> in
+    // <head>); see base.html's helper for the comment and rationale.
+    if(dansalLeafletCss.done) return;
+    dansalLeafletCss.done=true;
+    var l=document.createElement('link');
+    l.rel='stylesheet';l.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    l.integrity='sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';
+    l.crossOrigin='anonymous';l.media='print';
+    l.onload=function(){l.media='all';};
+    document.head.appendChild(l);
+  }
   function initMap(){
+    dansalLeafletCss();
     map = L.map('cal-map',{scrollWheelZoom:false}).setView([50,10],5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

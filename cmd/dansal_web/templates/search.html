@@ -3,8 +3,7 @@
 <h1>{{.Strings.T "search_title"}}</h1>
 
 {{with .Data}}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
+<!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
 
 <!-- Filter bar -->
 <div class="search-filters">
@@ -200,6 +199,7 @@
   }
 
   function initMap(){
+    dansalLeafletCss(true);
     map = L.map('map-container').setView([50,10],5);
     attachTileLayer(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});

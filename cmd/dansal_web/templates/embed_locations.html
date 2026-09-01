@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Strings.T "embed_title_locations"}} — {{.SiteName}}</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff}
@@ -59,9 +57,27 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     });
   }
 
+  function dansalLeafletCss(){
+    // #1215: load Leaflet CSS non-blocking (was a render-blocking <link> in
+    // <head>); see base.html's helper for the comment and rationale.
+    if(dansalLeafletCss.done) return;
+    dansalLeafletCss.done=true;
+    var sheets=[
+      ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'],
+      ['https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css','sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+']
+    ];
+    sheets.forEach(function(s){
+      var l=document.createElement('link');
+      l.rel='stylesheet';l.href=s[0];l.integrity=s[1];l.crossOrigin='anonymous';l.media='print';
+      l.onload=function(){l.media='all';};
+      document.head.appendChild(l);
+    });
+  }
+
   function reportHeight(){window.parent.postMessage({type:'dansal-embed-height',height:document.body.scrollHeight},'*')}
 
   window.addEventListener('load',function(){
+    dansalLeafletCss();
     var map = L.map('loc-map',{scrollWheelZoom:false}).setView([50,10],5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

@@ -724,6 +724,24 @@ function attachTileLayer(map){
   // dark styling), so there's no swap-on-theme-change to observe any more.
   makeTileLayer().addTo(map);
 }
+function dansalLeafletCss(cluster){
+  // Pagespeed's "avoid chaining critical requests" audit: Leaflet's
+  // stylesheets used to be render-blocking <link>s in <head>, putting ~4KB of
+  // CDN CSS on the critical path of every map page and delaying first paint.
+  // Load them non-blocking instead — fetch with media="print", flip to "all"
+  // once loaded. CSP blocks an inline onload= on the <link>, so the flip
+  // happens here via the property (which the nonce'd script may set).
+  if(dansalLeafletCss.done) return;
+  dansalLeafletCss.done=true;
+  var sheets=[['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H']];
+  if(cluster) sheets.push(['https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css','sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+']);
+  sheets.forEach(function(s){
+    var l=document.createElement('link');
+    l.rel='stylesheet';l.href=s[0];l.integrity=s[1];l.crossOrigin='anonymous';l.media='print';
+    l.onload=function(){l.media='all';};
+    document.head.appendChild(l);
+  });
+}
 (function(){
   var btn=document.getElementById('back-to-top');
   var nav=document.querySelector('nav');

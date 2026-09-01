@@ -374,6 +374,9 @@ var aiBadgeDefault []byte
 //go:embed static/qrcode.min.js
 var qrcodeJS []byte
 
+//go:embed static/base.js
+var baseJS []byte
+
 func suggestAvailable(cfg *Config) bool {
 	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
 }

@@ -233,6 +233,23 @@ func main() {
 			}
 			w.Write(qrcodeJS)
 		})
+		r.HandleFunc("GET /static/base.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Cache-Control", "public, max-age=604800")
+			// No Save-Data stub here (unlike qrcode.min.js): this file carries
+			// the data-fn dispatcher, nav/menu toggles, and map-init helpers
+			// every page depends on for basic interactivity — a stub would
+			// break the page rather than just skip an optional feature.
+			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				w.Header().Set("Content-Encoding", "gzip")
+				gw := gzip.NewWriter(w)
+				defer gw.Close()
+				gw.Write(baseJS)
+				return
+			}
+			w.Write(baseJS)
+		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 		// Legacy Gancio URL patterns dansal doesn't support: 301 instead of
 		// silently falling through to the "/" catch-all with a 200 (issue #823).

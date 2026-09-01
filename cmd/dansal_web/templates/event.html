@@ -131,13 +131,13 @@
 {{if or .ImageURL $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}
 <div class="evt-hero" style="position:relative;display:inline-block;width:100%">
   {{if .ImageURL}}
-  <img src="{{.ImageURL}}" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  <img src="{{.ImageURL}}" fetchpriority="high" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
   {{if .ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{else}}
   {{/* No own image: a series-banner+date or org-banner+title overlay is generated server-side (#1082, #1083) rather than showing the plain, identical-across-every-event banner. */}}
   {{$bannerAI := $.Data.SeriesImageAIGenerated}}
   {{if and (not $.Data.SeriesImageURL) $.Data.Org}}{{$bannerAI = $.Data.Org.ImageAIGenerated}}{{end}}
-  <img src="/api/v1/event-banner/{{.ID}}" alt="{{.Title}}{{if $bannerAI}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  <img src="/api/v1/event-banner/{{.ID}}" fetchpriority="high" alt="{{.Title}}{{if $bannerAI}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
   {{if $bannerAI}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{end}}
 </div>

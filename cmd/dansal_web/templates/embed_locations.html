@@ -76,10 +76,10 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       if(l.town){ popup += '<div class="loc-town">'+escHtml(l.town)+'</div>'; }
       if(l.future > 0){ popup += '<div class="loc-count">'+escHtml("{{.Strings.T "embed_loc_upcoming_events"}}".replace('%d', l.future))+'</div>'; }
       popup += '</div>';
-      // alt gives the marker's <img role="button"> an accessible name
-      // (axe-core's aria-command-name rule) — Leaflet's marker icon is
+      // title gives the marker's <div role="button"> an accessible name
+      // (axe-core's aria-command-name rule) — Leaflet's divIcon marker is
       // otherwise unlabelled for screen readers.
-      L.marker([l.lat,l.lng], {icon: makeIcon(l.future), alt: l.name}).bindPopup(popup).addTo(cluster);
+      L.marker([l.lat,l.lng], {icon: makeIcon(l.future), title: l.name}).bindPopup(popup).addTo(cluster);
     });
 
     map.addLayer(cluster);

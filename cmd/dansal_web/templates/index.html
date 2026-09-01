@@ -1044,10 +1044,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){
-      // alt gives the marker's <img role="button"> an accessible name
-      // (axe-core's aria-command-name rule) — Leaflet's marker icon is
+      // title gives the marker's <div role="button"> an accessible name
+      // (axe-core's aria-command-name rule) — Leaflet's divIcon marker is
       // otherwise unlabelled for screen readers.
-      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });

@@ -223,7 +223,7 @@
     clusterGroup.clearLayers();
     allMarkers = {};
     eventsGeo.forEach(function(e){
-      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e)});
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
       clusterGroup.addLayer(m);

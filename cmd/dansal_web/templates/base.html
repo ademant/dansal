@@ -494,6 +494,20 @@ function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
 function clickElement(id) { document.getElementById(id).click(); }
 // hideParentElement: data-fn helper for onclick="this.parentElement.hidden=true".
 function hideParentElement(el) { el.parentElement.hidden = true; }
+// shareURL: data-fn helper for a share button — Web Share API where available
+// (opens the native OS share sheet), else copies the link to the clipboard
+// with a brief checkmark confirmation on the triggering button (same pattern
+// as the copy-link buttons on admin_series_edit.html/admin_fetchurl_edit.html).
+function shareURL(url, btn) {
+  if (navigator.share) { navigator.share({url: url}).catch(function(){}); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function(){
+      var orig = btn.textContent;
+      btn.textContent = '✓';
+      setTimeout(function(){ btn.textContent = orig; }, 1500);
+    });
+  }
+}
 // closeBulkAttrsDialog: shared by the admin events/locations/org bulk-attrs modal.
 function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
 // toggleKuferFields: shared by the fetchurl new/edit forms' "type" select.

@@ -161,6 +161,7 @@
   <h1>{{.Title}}</h1>
   <button type="button" class="btn-icon" data-fn="historyBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <a href="/events/{{.ID}}.ics" class="btn-icon" title="{{$.Strings.T "evt_add_to_calendar"}}" aria-label="{{$.Strings.T "evt_add_to_calendar"}}">📅</a>
+  <button type="button" class="btn-icon" data-fn="shareURL" data-args="{{dargs $.CanonicalURL "@this"}}" title="{{$.Strings.T "evt_share"}}" aria-label="{{$.Strings.T "evt_share"}}">🔗</button>
   {{$hasBall := or (hasTag .Tags "bal-folk") (hasTag .Tags "fest-noz")}}
   {{$hasWorkshop := or (hasTag .Tags "workshop") (or (hasTag .Tags "dance-workshop") (or (hasTag .Tags "musician-workshop") (hasTag .Tags "music-course")))}}
   {{$hasFestival := hasTag .Tags "festival"}}

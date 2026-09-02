@@ -342,6 +342,26 @@ function attachTileLayer(map){
   // #1169: light and dark now share one tile layer (CSS filter handles the
   // dark styling), so there's no swap-on-theme-change to observe any more.
   makeTileLayer().addTo(map);
+  fixDefaultMarkerIcon();
+}
+function fixDefaultMarkerIcon(){
+  // #1221: plain L.marker(...) calls (no explicit icon:) use Leaflet's
+  // built-in default pin, whose image path Leaflet detects at runtime by
+  // reading a `.leaflet-default-icon-path` background-image rule out of
+  // leaflet.css — and caches whatever it finds (even nothing) for the rest
+  // of the page's life. dansalLeafletCss() loads that CSS non-blocking
+  // (media="print" flipped to "all" on load), so a page that creates its
+  // first default marker synchronously right after calling it — before the
+  // stylesheet has actually applied — gets a failed detection and every
+  // default marker on the page renders as a broken-image glyph instead of
+  // a pin. Set the URLs explicitly once so there's nothing to race.
+  if(fixDefaultMarkerIcon.done) return;
+  fixDefaultMarkerIcon.done=true;
+  L.Icon.Default.mergeOptions({
+    iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+  });
 }
 function dansalLeafletCss(cluster){
   // Pagespeed's "avoid chaining critical requests" audit: Leaflet's

@@ -355,8 +355,21 @@ function fixDefaultMarkerIcon(){
   // stylesheet has actually applied — gets a failed detection and every
   // default marker on the page renders as a broken-image glyph instead of
   // a pin. Set the URLs explicitly once so there's nothing to race.
+  //
+  // IconDefault._getIconUrl() (Leaflet's internal, not overridden here)
+  // computes `(this.options.imagePath || IconDefault.imagePath) +
+  // <name>Url`, i.e. it PREPENDS a separately-detected `imagePath` in
+  // front of options.iconUrl -- mergeOptions() below only sets the latter.
+  // Left alone, imagePath detection still runs (and, since
+  // dansalLeafletCss() has already inserted the <link href=".../
+  // leaflet.css"> element by the time a marker is created, its
+  // querySelector('link[href$="leaflet.css"]') fallback finds it even
+  // while media="print"), so the absolute URLs below would get a bogus
+  // prefix concatenated onto them. Pin imagePath to '' too so detection
+  // is skipped and the absolute URLs are used as-is.
   if(fixDefaultMarkerIcon.done) return;
   fixDefaultMarkerIcon.done=true;
+  L.Icon.Default.imagePath='';
   L.Icon.Default.mergeOptions({
     iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
     iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',

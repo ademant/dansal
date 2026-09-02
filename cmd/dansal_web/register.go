@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -28,16 +29,17 @@ func loadRegisterFormData(ctx context.Context, client *DansalClient) ([]Organiza
 }
 
 type RegisterPageData struct {
-	Orgs              []Organization
-	Error             string
-	FormToken         string
-	PendingID         int    // set when cookie found and record still active
-	PendingVerified   bool   // true = verified, awaiting admin review
-	PendingApproved   bool   // true = admin approved; InviteURL holds the link
-	PendingToken      string // verification token for resend
-	PendingHasPasskey bool   // true = passkey already bound to this pending registration
-	InviteURL         string // set when approved without contact info
-	TelegramAvailable bool   // true = telegram channel is configured on the API
+	Orgs                 []Organization
+	Error                string
+	FormToken            string
+	PendingID            int    // set when cookie found and record still active
+	PendingVerified      bool   // true = verified, awaiting admin review
+	PendingApproved      bool   // true = admin approved; InviteURL holds the link
+	PendingToken         string // verification token for resend
+	PendingHasPasskey    bool   // true = passkey already bound to this pending registration
+	PendingHasAuthMethod bool   // true = onboarding complete (password set, or passkey bound) -- ready for admin review (#1223)
+	InviteURL            string // set when approved without contact info
+	TelegramAvailable    bool   // true = telegram channel is configured on the API
 }
 
 type RegisterDoneData struct {
@@ -69,12 +71,13 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 					if err == nil && status != nil && !status.Expired {
 						title := i18n.T(r, "register_title")
 						renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-							PendingID:         id,
-							PendingVerified:   status.Verified,
-							PendingApproved:   status.Approved,
-							PendingToken:      pendingToken,
-							PendingHasPasskey: status.HasPasskey,
-							InviteURL:         status.InviteURL,
+							PendingID:            id,
+							PendingVerified:      status.Verified,
+							PendingApproved:      status.Approved,
+							PendingToken:         pendingToken,
+							PendingHasPasskey:    status.HasPasskey,
+							PendingHasAuthMethod: status.HasAuthMethod,
+							InviteURL:            status.InviteURL,
 						}))
 						return
 					}
@@ -259,10 +262,80 @@ func registerDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.Handler
 func registerVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		err := client.VerifyRegistrationEmail(r.Context(), token)
-		success := err == nil
+		pendingID, err := client.VerifyRegistrationEmail(r.Context(), token)
+		if err == nil {
+			// Land the user straight in onboarding (#1223) -- set the
+			// pending_reg cookie here rather than relying on one already
+			// set by the original /register submission, since the verify
+			// link is very often opened on a different device/browser than
+			// the one that submitted the form.
+			http.SetCookie(w, &http.Cookie{
+				Name:     pendingRegCookie,
+				Value:    strconv.Itoa(pendingID) + ":" + token,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+				Expires:  time.Now().Add(7 * 24 * time.Hour),
+			})
+			http.Redirect(w, r, "/register", http.StatusSeeOther)
+			return
+		}
 		title := i18n.T(r, "register_verified_title")
-		renderTemplate(w, tmpls.registerVerified, tmplData(r, cfg, i18n, title, success))
+		renderTemplate(w, tmpls.registerVerified, tmplData(r, cfg, i18n, title, false))
+	}
+}
+
+// registerPasswordSubmitHandler handles POST /register/password: the
+// password track of onboarding (#1223), counterpart to the client-side
+// WebAuthn ceremony used for the passkey track. Unlike invitePasswordHandler,
+// it does not log the user in -- the account stays disabled until an admin
+// approves the pending registration.
+func registerPasswordSubmitHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(pendingRegCookie)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			return
+		}
+		parts := strings.SplitN(c.Value, ":", 2)
+		if len(parts) != 2 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			return
+		}
+		pendingID, err := strconv.Atoi(parts[0])
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			return
+		}
+		token := parts[1]
+
+		var req struct {
+			DisplayName string `json:"display_name"`
+			Password    string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			return
+		}
+
+		if err := client.RegisterSetPassword(r.Context(), pendingID, token, req.DisplayName, req.Password); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": apiErrUserMessage(err)})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "password_set"})
 	}
 }
 

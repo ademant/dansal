@@ -4228,6 +4228,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/register/verify/email/{token}", verifyEmailRegHandler)
 	smux.HandleFunc("POST /api/v1/register/passkey/begin", webauthnRegBegin)
 	smux.HandleFunc("POST /api/v1/register/passkey/finish", webauthnRegFinish)
+	smux.HandleFunc("POST /api/v1/register/password", registerPasswordHandler)
 	smux.Handle("GET /api/v1/pending-registrations", auth(listPendingRegsHandler))
 	smux.Handle("GET /api/v1/pending-registrations/count", auth(pendingRegCountHandler))
 	smux.Handle("GET /api/v1/dashboard/attention", auth(dashboardAttentionHandler))

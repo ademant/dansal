@@ -190,6 +190,7 @@ func main() {
 		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /register/done", registerDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /register/verify/email/{token}", registerVerifyHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /register/password", registerPasswordSubmitHandler(cfg, client))
 		r.HandleFunc("POST /register/resend", registerResendHandler(cfg, client))
 		r.HandleFunc("POST /register/cancel", registerCancelHandler(cfg, client))
 		r.HandleFunc("GET /admin/registrations", adminRegistrationsHandler(cfg, tmpls, client, i18n))

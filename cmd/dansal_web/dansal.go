@@ -3146,6 +3146,7 @@ type PendingRegistration struct {
 	Telegram            string `json:"telegram,omitempty"`
 	TelegramChatID      string `json:"telegram_chat_id,omitempty"`
 	Verified            bool   `json:"verified"`
+	HasAuthMethod       bool   `json:"has_auth_method"`
 	CreatedAt           string `json:"created_at"`
 	ExpiresAt           string `json:"expires_at"`
 }
@@ -3512,20 +3513,32 @@ func (c *DansalClient) Register(ctx context.Context, req RegisterReq, baseURL, b
 }
 
 // VerifyRegistrationEmail calls GET /api/v1/register/verify/email/{token}.
-func (c *DansalClient) VerifyRegistrationEmail(ctx context.Context, token string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/register/verify/email/"+token, nil)
-	if err != nil {
-		return err
+// Returns the pending registration id so the caller can set the pending_reg
+// cookie and route the user straight into onboarding (#1223), even when the
+// link is opened on a different device/browser than the one that submitted
+// the form.
+func (c *DansalClient) VerifyRegistrationEmail(ctx context.Context, token string) (int, error) {
+	var out struct {
+		PendingID string `json:"pending_id"`
 	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
+	if err := c.do(ctx, http.MethodGet, "/api/v1/register/verify/email/"+token, "", nil, &out); err != nil {
+		return 0, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
-	}
-	return nil
+	id, _ := strconv.Atoi(out.PendingID)
+	return id, nil
+}
+
+// RegisterSetPassword calls POST /api/v1/register/password. Password-track
+// counterpart to the passkey ceremony (#1223): binds a password to a
+// verified pending registration, creating its disabled placeholder user.
+func (c *DansalClient) RegisterSetPassword(ctx context.Context, pendingID int, verificationToken, displayName, password string) error {
+	body, _ := json.Marshal(map[string]any{
+		"pending_id":         pendingID,
+		"verification_token": verificationToken,
+		"display_name":       displayName,
+		"password":           password,
+	})
+	return c.do(ctx, http.MethodPost, "/api/v1/register/password", "", body, nil, http.StatusCreated)
 }
 
 // ListPendingRegistrations calls GET /api/v1/pending-registrations.
@@ -3616,12 +3629,13 @@ func (c *DansalClient) GetDashboardAttention(ctx context.Context, token string) 
 }
 
 type PendingRegStatus struct {
-	ID         int    `json:"id"`
-	Verified   bool   `json:"verified"`
-	Approved   bool   `json:"approved"`
-	Expired    bool   `json:"expired"`
-	HasPasskey bool   `json:"has_passkey"`
-	InviteURL  string `json:"invite_url,omitempty"`
+	ID            int    `json:"id"`
+	Verified      bool   `json:"verified"`
+	Approved      bool   `json:"approved"`
+	Expired       bool   `json:"expired"`
+	HasPasskey    bool   `json:"has_passkey"`
+	HasAuthMethod bool   `json:"has_auth_method"`
+	InviteURL     string `json:"invite_url,omitempty"`
 }
 
 func (c *DansalClient) GetRegistrationStatus(ctx context.Context, id int, token string) (*PendingRegStatus, error) {

@@ -55,9 +55,20 @@ type PendingRegistration struct {
 	Telegram            string `json:"telegram,omitempty"`
 	TelegramChatID      string `json:"telegram_chat_id,omitempty"`
 	Verified            bool   `json:"verified"`
+	HasAuthMethod       bool   `json:"has_auth_method"`
 	CreatedAt           string `json:"created_at"`
 	ExpiresAt           string `json:"expires_at"`
 }
+
+// hasAuthMethodClause is true once a pending registration's linked
+// placeholder user has a *working* credential -- a passkey bound, or a
+// password set (#1223). Not just "user_id IS NOT NULL": webauthnRegBegin
+// creates the placeholder before the WebAuthn ceremony finishes, so an
+// abandoned passkey attempt must not count as "ready for admin review".
+const hasAuthMethodClause = `pr.user_id IS NOT NULL AND (
+	EXISTS(SELECT 1 FROM webauthn_credentials wc WHERE wc.user_id = pr.user_id)
+	OR EXISTS(SELECT 1 FROM users u WHERE u.id = pr.user_id AND u.password_hash != '')
+)`
 
 // POST /api/v1/register — create a pending registration.
 func registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +267,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 
 	if contactFree || boardSessionVerified {
-		go notifyApprovers(int(pendingID))
+		// Admin notification now fires once onboarding (choosing an auth
+		// method) completes -- see webauthnRegFinish / registerPasswordHandler
+		// (#1223) -- not here. There's nothing for an admin to act on yet:
+		// the applicant hasn't even set up a way to sign in.
 		json.NewEncoder(w).Encode(map[string]string{
 			"status":             "pending_approval",
 			"pending_id":         strconv.FormatInt(pendingID, 10),
@@ -319,20 +333,26 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	exp, err := parseTokenExpiration(expiresAt)
 	expired := err != nil || time.Now().After(exp)
 
-	// Check if a passkey has been bound to this pending registration.
+	// Check if a passkey has been bound, or a password set, on this pending
+	// registration's placeholder user (#1223) -- onboarding complete either way.
 	hasPasskey := false
+	hasAuthMethod := false
 	if userID.Valid {
 		var credCount int
 		db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id=?", userID.Int64).Scan(&credCount)
 		hasPasskey = credCount > 0
+		var pwHash string
+		db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", userID.Int64).Scan(&pwHash)
+		hasAuthMethod = hasPasskey || pwHash != ""
 	}
 
 	resp := map[string]any{
-		"id":          id,
-		"verified":    verified == 1,
-		"approved":    approved == 1,
-		"expired":     expired,
-		"has_passkey": hasPasskey,
+		"id":              id,
+		"verified":        verified == 1,
+		"approved":        approved == 1,
+		"expired":         expired,
+		"has_passkey":     hasPasskey,
+		"has_auth_method": hasAuthMethod,
 	}
 	// Only return invite URL when the caller proves ownership via the verification token
 	// and the invite is still valid (not used, not expired). storedToken is the
@@ -459,8 +479,94 @@ func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.Exec("UPDATE pending_registrations SET verified=1 WHERE id=?", id)
-	go notifyApprovers(id)
-	w.WriteHeader(http.StatusOK)
+	// Admin notification now fires once onboarding (choosing an auth method)
+	// completes -- see webauthnRegFinish / registerPasswordHandler (#1223) --
+	// not here. The web frontend routes the user straight into that
+	// onboarding step on this response, using the id below.
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"pending_id": strconv.Itoa(id)})
+}
+
+// POST /api/v1/register/password
+// Body: {"pending_id":123,"verification_token":"...","display_name":"optional","password":"..."}
+// Password-track counterpart to webauthnRegBegin/Finish (#1223): creates a
+// disabled=1 placeholder user bound to the pending registration and sets its
+// password directly (no ceremony needed, unlike WebAuthn), then notifies
+// admins that the registration is ready for review. Account stays disabled
+// until an admin approves the pending registration.
+func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PendingID         int    `json:"pending_id"`
+		VerificationToken string `json:"verification_token"`
+		DisplayName       string `json:"display_name"`
+		Password          string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PendingID == 0 || req.VerificationToken == "" {
+		writeError(w, "pending_id and verification_token are required", http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 8 {
+		writeError(w, "Password must be at least 8 characters", http.StatusUnprocessableEntity)
+		return
+	}
+	if isPasswordPwned(r.Context(), req.Password) {
+		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusUnprocessableEntity)
+		return
+	}
+
+	var pr struct {
+		ID        int
+		Email     string
+		Verified  int
+		UserID    sql.NullInt64
+		ExpiresAt string
+	}
+	if err := db.QueryRow(
+		"SELECT id, COALESCE(email,''), verified, user_id, expires_at FROM pending_registrations WHERE id=? AND verification_token=?",
+		req.PendingID, sha256Hex(req.VerificationToken),
+	).Scan(&pr.ID, &pr.Email, &pr.Verified, &pr.UserID, &pr.ExpiresAt); err != nil {
+		writeError(w, "Pending registration not found", http.StatusNotFound)
+		return
+	}
+	if exp, err := parseTokenExpiration(pr.ExpiresAt); err != nil || time.Now().After(exp) {
+		writeError(w, "Registration has expired", http.StatusGone)
+		return
+	}
+	if pr.Verified == 0 {
+		writeError(w, "Email not yet verified", http.StatusConflict)
+		return
+	}
+	if pr.UserID.Valid {
+		writeError(w, "An auth method has already been set for this registration", http.StatusConflict)
+		return
+	}
+
+	passwordHash, err := hashPassword(req.Password)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	var emailVal interface{}
+	if pr.Email != "" {
+		emailVal = pr.Email
+	}
+	result, err := db.Exec(
+		"INSERT INTO users (email, display_name, password_hash, role, email_verified, disabled) VALUES (?, ?, ?, 'user', 0, 1)",
+		emailVal, req.DisplayName, passwordHash,
+	)
+	if err != nil {
+		writeError(w, "Could not create account", http.StatusInternalServerError)
+		return
+	}
+	userID, _ := result.LastInsertId()
+	db.Exec("UPDATE pending_registrations SET user_id=? WHERE id=?", userID, pr.ID)
+
+	log.Printf("register: password set for pending registration %d (user_id=%d)", pr.ID, userID)
+	go notifyApprovers(pr.ID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"status": "password_set"})
 }
 
 // GET /api/v1/pending-registrations
@@ -479,7 +585,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id,
 			 COALESCE(NULLIF(pr.org_name,''), o.name, ''), pr.org_description, pr.org_website,
 			 pr.org_contact_email, pr.verification_channel, pr.telegram, COALESCE(pr.telegram_chat_id,''),
-			 pr.verified, pr.created_at, pr.expires_at
+			 pr.verified, (` + hasAuthMethodClause + `), pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
 			 LEFT JOIN organizations o ON o.id = pr.org_id
 			 WHERE pr.approved=0
@@ -490,7 +596,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			`SELECT pr.id, pr.email, COALESCE(pr.description,''), pr.reg_type, pr.org_id,
 			 COALESCE(NULLIF(pr.org_name,''), o.name, ''), pr.org_description, pr.org_website,
 			 pr.org_contact_email, pr.verification_channel, pr.telegram,
-			 COALESCE(pr.telegram_chat_id,''), pr.verified, pr.created_at, pr.expires_at
+			 COALESCE(pr.telegram_chat_id,''), pr.verified, (`+hasAuthMethodClause+`), pr.created_at, pr.expires_at
 			 FROM pending_registrations pr
 			 LEFT JOIN organizations o ON o.id = pr.org_id
 			 JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
@@ -512,7 +618,7 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 			&pr.ID, &pr.Email, &pr.Description, &pr.RegType, &orgID,
 			&pr.OrgName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
 			&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID,
-			&pr.Verified, &pr.CreatedAt, &pr.ExpiresAt,
+			&pr.Verified, &pr.HasAuthMethod, &pr.CreatedAt, &pr.ExpiresAt,
 		); err != nil {
 			continue
 		}
@@ -590,9 +696,12 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Passkey path: user already has credentials bound — just enable the account.
+	// Onboarding-already-complete path (#1223): the applicant already bound a
+	// password or passkey during onboarding — just enable the account.
 	if pr.UserID.Valid {
 		userID := pr.UserID.Int64
+		var hasPasskey bool
+		db.QueryRow("SELECT COUNT(*) > 0 FROM webauthn_credentials WHERE user_id=?", userID).Scan(&hasPasskey)
 
 		// For new_org: create the org and assign the user.
 		if pr.RegType == "new_org" {
@@ -619,10 +728,14 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("register: approved pending registration %d — enabled passkey user %d (role=%s)", id, userID, role)
+		log.Printf("register: approved pending registration %d — enabled user %d (role=%s, passkey=%v)", id, userID, role, hasPasskey)
 
+		signInHint := "You can now sign in with the password you set."
+		if hasPasskey {
+			signInHint = "You can now sign in with the passkey you registered."
+		}
 		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
-			"Your registration has been approved. You can now sign in with the passkey you registered.")
+			"Your registration has been approved. "+signInHint)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -633,7 +746,14 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Standard path: create an invite link.
+	// Fallback path (#1223): every new self-registration now binds an auth
+	// method (password or passkey) during onboarding, right after email
+	// verification, before it ever reaches this handler -- so pr.UserID.Valid
+	// above is the normal case going forward. This branch remains only for
+	// rows that reach approval without a bound user: pre-#1223 pending
+	// registrations left over from before this change deployed, or an admin
+	// approving from the list before the applicant finished onboarding. It
+	// creates an invite link and emails a setup link, same as the old flow.
 	var orgID int64
 	if pr.RegType == "new_org" {
 		if err := tx.QueryRow(
@@ -825,13 +945,13 @@ func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
 	var count int
 	if callerRole == RoleAdmin {
 		db.QueryRow(
-			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
+			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
 		).Scan(&count)
 	} else {
 		db.QueryRow(`
 			SELECT COUNT(*) FROM pending_registrations pr
 			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now')`,
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
 			callerID,
 		).Scan(&count)
 	}
@@ -849,7 +969,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 	var regCount, suggestionCount, duplicateCount, pendingEditCount, notVerifiedCount int
 	if callerRole == RoleAdmin {
 		db.QueryRow(
-			"SELECT COUNT(*) FROM pending_registrations WHERE verified=1 AND expires_at > strftime('%s','now')",
+			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
 		).Scan(&regCount)
 		db.QueryRow(
 			"SELECT COUNT(*) FROM events WHERE is_published=0 AND email_verified=1",
@@ -867,7 +987,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 		db.QueryRow(`
 			SELECT COUNT(*) FROM pending_registrations pr
 			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now')`,
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
 			callerID,
 		).Scan(&regCount)
 

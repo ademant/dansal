@@ -939,6 +939,9 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("webauthn: passkey bound to pending registration %d (user_id=%d)", stored.PendingID, stored.UserID)
+	// Onboarding complete -- notify admins the registration is ready for
+	// review (#1223). Mirrors registerPasswordHandler's password-track call.
+	go notifyApprovers(stored.PendingID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "passkey_bound"})
 }

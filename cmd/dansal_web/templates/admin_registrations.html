@@ -31,7 +31,7 @@
     <td>{{.RegType}}</td>
     <td>{{if .OrgName}}{{.OrgName}}{{else if .OrgID}}org #{{.OrgID}}{{end}}</td>
     <td>{{if $noContact}}—{{else if eq .VerificationChannel "telegram"}}Telegram{{else if eq .VerificationChannel "none"}}—{{else}}{{$.Strings.T "register_email"}}{{end}}</td>
-    <td>{{if .Verified}}<span title="{{$.Strings.T "settings_email_verified"}}">✓</span>{{else}}<span class="unverified">pending</span>{{end}}</td>
+    <td>{{if not .Verified}}<span class="unverified">pending</span>{{else if not .HasAuthMethod}}<span class="unverified" title="{{$.Strings.T "pending_reg_choose_auth_title"}}">{{$.Strings.T "admin_reg_choosing_auth"}}</span>{{else}}<span title="{{$.Strings.T "settings_email_verified"}}">✓</span>{{end}}</td>
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td style="white-space:nowrap">
       {{$id := .ID}}

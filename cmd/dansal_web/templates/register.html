@@ -17,15 +17,48 @@
     <p style="font-size:.88rem;color:var(--fg-muted);margin:.5rem 0 0">{{$.Strings.T "pending_reg_invite_expired"}}</p>
     {{end}}
     {{else if .PendingVerified}}
+    {{if .PendingHasAuthMethod}}
     <p>{{$.Strings.T "pending_reg_awaiting_review"}}</p>
     {{if .PendingHasPasskey}}
     <p style="margin:.5rem 0 0;font-size:.88rem;color:var(--fg-muted)">✓ {{$.Strings.T "pending_reg_passkey_bound"}}</p>
+    {{end}}
     {{else}}
-    <div class="passkey-bind-box" id="passkey-bind-box" hidden>
-      <p style="font-weight:600;margin:0 0 .4rem">{{$.Strings.T "pending_reg_bind_passkey_title"}}</p>
-      <p style="font-size:.88rem;color:var(--fg-muted);margin:0 0 .75rem">{{$.Strings.T "pending_reg_bind_passkey_hint"}}</p>
-      <button type="button" class="btn-primary" id="btn-bind-passkey" data-fn="bindPasskey" data-args="[]">{{$.Strings.T "pending_reg_bind_passkey_btn"}}</button>
-      <div id="bind-msg" hidden class="bind-msg"></div>
+    {{/* Mandatory onboarding (#1223): the account is created here, disabled,
+         right after email verification -- admin approval later only enables
+         it. Two tracks, password (plain form POST, no ceremony needed) and
+         passkey (client-side WebAuthn ceremony, mirrors invite.html). */}}
+    <p style="font-weight:600;margin:0 0 .25rem">{{$.Strings.T "pending_reg_choose_auth_title"}}</p>
+    <p style="font-size:.88rem;color:var(--fg-muted);margin:0 0 .9rem">{{$.Strings.T "pending_reg_choose_auth_hint"}}</p>
+
+    <div class="tab-bar" style="margin-bottom:1rem">
+      <button type="button" class="tab-btn active" id="auth-tab-password" data-fn="switchAuthTab" data-args='["password"]'>{{$.Strings.T "invite_use_password"}}</button>
+      <button type="button" class="tab-btn" id="auth-tab-passkey" data-fn="switchAuthTab" data-args='["passkey"]'>{{$.Strings.T "invite_use_passkey"}}</button>
+    </div>
+
+    <div id="auth-panel-password">
+      <div id="password-auth-error" hidden class="form-error" role="alert"></div>
+      <div class="form-group">
+        <label for="field-auth-display-name">{{$.Strings.T "invite_display_name"}} <span class="hint">({{$.Strings.T "invite_display_name_hint"}})</span></label>
+        <input type="text" id="field-auth-display-name" class="form-input" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label for="field-auth-password">{{$.Strings.T "invite_password"}}</label>
+        <input type="password" id="field-auth-password" class="form-input" autocomplete="new-password" minlength="8">
+      </div>
+      <div class="form-group">
+        <label for="field-auth-password-confirm">{{$.Strings.T "invite_password_confirm"}}</label>
+        <input type="password" id="field-auth-password-confirm" class="form-input" autocomplete="new-password" minlength="8">
+      </div>
+      <button type="button" class="btn-primary" id="btn-set-password" data-fn="submitAuthPassword" data-args="[]">{{$.Strings.T "pending_reg_set_password_btn"}}</button>
+    </div>
+
+    <div id="auth-panel-passkey" hidden>
+      <div class="passkey-bind-box" id="passkey-bind-box" hidden>
+        <p style="font-weight:600;margin:0 0 .4rem">{{$.Strings.T "pending_reg_bind_passkey_title"}}</p>
+        <p style="font-size:.88rem;color:var(--fg-muted);margin:0 0 .75rem">{{$.Strings.T "pending_reg_bind_passkey_hint"}}</p>
+        <button type="button" class="btn-primary" id="btn-bind-passkey" data-fn="bindPasskey" data-args="[]">{{$.Strings.T "pending_reg_bind_passkey_btn"}}</button>
+        <div id="bind-msg" hidden class="bind-msg"></div>
+      </div>
     </div>
     {{end}}
     {{else}}
@@ -147,6 +180,7 @@
 .bind-msg{margin-top:.6rem;padding:.45rem .65rem;border-radius:4px;font-size:.88rem}
 .bind-ok{background:#d1fae5;color:#065f46}
 .bind-err{background:#fee2e2;color:#991b1b}
+.hint{font-size:.82rem;color:var(--fg-muted);font-weight:normal}
 </style>
 <script nonce="{{$.Nonce}}">
 function switchTab(tab) {
@@ -154,6 +188,15 @@ function switchTab(tab) {
   document.getElementById('new-fields').hidden = tab !== 'new';
   document.getElementById('field-reg-type').value = tab === 'join' ? 'join_org' : 'new_org';
   document.querySelectorAll('.tab-btn').forEach(function(b,i){b.classList.toggle('active', (i===0&&tab==='join')||(i===1&&tab==='new'));});
+}
+function switchAuthTab(tab) {
+  var pwPanel = document.getElementById('auth-panel-password');
+  var pkPanel = document.getElementById('auth-panel-passkey');
+  if (!pwPanel || !pkPanel) return;
+  pwPanel.hidden = tab !== 'password';
+  pkPanel.hidden = tab !== 'passkey';
+  document.getElementById('auth-tab-password').classList.toggle('active', tab === 'password');
+  document.getElementById('auth-tab-passkey').classList.toggle('active', tab === 'passkey');
 }
 function updateChannelFields() {
   var ch = document.querySelector('input[name="channel"]:checked').value;
@@ -205,11 +248,41 @@ document.addEventListener('DOMContentLoaded', updateChannelFields);
   if (box && window.PublicKeyCredential) box.hidden = false;
 })();
 
-// Passkey binding during pending registration.
-{{if and .PendingID .PendingVerified (not .PendingHasPasskey)}}
+// Onboarding (#1223): choose password or passkey right after email
+// verification, before admin approval.
+{{if and .PendingID .PendingVerified (not .PendingHasAuthMethod)}}
 (function(){
   var PENDING_ID = {{.PendingID}};
   var PENDING_TOKEN = {{jsStr .PendingToken}};
+
+  function pwMsg(text, isErr){
+    var el=document.getElementById('password-auth-error');
+    el.hidden=!isErr;
+    if(isErr){ el.textContent=text; el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  }
+
+  window.submitAuthPassword = async function(){
+    var dn = document.getElementById('field-auth-display-name').value.trim();
+    var pw = document.getElementById('field-auth-password').value;
+    var pwc = document.getElementById('field-auth-password-confirm').value;
+    if(!pw){ pwMsg('{{$.Strings.T "invite_password_required"}}', true); return; }
+    if(pw !== pwc){ pwMsg('{{$.Strings.T "invite_password_mismatch"}}', true); return; }
+    pwMsg('', false);
+    var btn=document.getElementById('btn-set-password');
+    btn.disabled=true; btn.textContent='…';
+    try{
+      var resp=await fetch('/register/password',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({display_name:dn,password:pw})
+      });
+      var data=await resp.json();
+      if(!resp.ok) throw new Error(data.error||resp.statusText);
+      window.location.href='/register';
+    }catch(err){
+      pwMsg(err.message||'{{$.Strings.T "register_error_other"}}', true);
+      btn.disabled=false; btn.textContent='{{$.Strings.T "pending_reg_set_password_btn"}}';
+    }
+  };
 
   function b64url(buf){
     return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)))
@@ -265,7 +338,7 @@ document.addEventListener('DOMContentLoaded', updateChannelFields);
 
       bindMsg('{{$.Strings.T "pending_reg_passkey_bound"}}', false);
       btn.hidden=true;
-      document.getElementById('passkey-bind-box').querySelector('p:nth-child(2)').hidden=true;
+      setTimeout(function(){ window.location.href='/register'; }, 900);
     }catch(err){
       bindMsg(err.message||'{{$.Strings.T "invite_passkey_error"}}', true);
       btn.disabled=false; btn.textContent='{{$.Strings.T "pending_reg_bind_passkey_btn"}}';

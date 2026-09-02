@@ -553,29 +553,31 @@
       {{$attrs := mergeAttrs $locAttrs $.Data.Event.Attributes}}
       {{if or (index $attrs "wheelchair") (index $attrs "hearing_loop") (index $attrs "visual_support") (index $attrs "bar") (index $attrs "kitchen") (ne (attrState $attrs "toilet") "") .Parking .NoStreetShoes}}
       <div class="evt-access">
-        {{if index $attrs "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿</span>{{end}}
-        {{if index $attrs "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊</span>{{end}}
-        {{if index $attrs "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁</span>{{end}}
-        {{if index $attrs "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺</span>{{end}}
-        {{if index $attrs "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️</span>{{end}}
-        {{if eq (attrState $attrs "toilet") "1"}}<span class="access-badge" title="{{$.Strings.T "attr_toilet"}}">🚻</span>{{end}}
-        {{if eq (attrState $attrs "toilet") "0"}}<span class="access-badge" title="{{$.Strings.T "access_no_toilet"}}">🚫🚻</span>{{end}}
-        {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿</span>{{end}}
-        {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€</span>{{end}}
-        {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿</span>{{end}}
-        {{if .NoStreetShoes}}<span class="access-badge" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫</span>{{end}}
+        {{if index $attrs "wheelchair"}}<span class="access-badge" title="{{$.Strings.T "access_wheelchair"}}">♿ <span class="access-badge-label">{{$.Strings.T "access_wheelchair"}}</span></span>{{end}}
+        {{if index $attrs "hearing_loop"}}<span class="access-badge" title="{{$.Strings.T "access_hearing_loop"}}">🔊 <span class="access-badge-label">{{$.Strings.T "access_hearing_loop"}}</span></span>{{end}}
+        {{if index $attrs "visual_support"}}<span class="access-badge" title="{{$.Strings.T "access_visual_support"}}">👁 <span class="access-badge-label">{{$.Strings.T "access_visual_support"}}</span></span>{{end}}
+        {{if index $attrs "bar"}}<span class="access-badge" title="{{$.Strings.T "attr_bar"}}">🍺 <span class="access-badge-label">{{$.Strings.T "attr_bar"}}</span></span>{{end}}
+        {{if index $attrs "kitchen"}}<span class="access-badge" title="{{$.Strings.T "attr_kitchen"}}">🍽️ <span class="access-badge-label">{{$.Strings.T "attr_kitchen"}}</span></span>{{end}}
+        {{if eq (attrState $attrs "toilet") "1"}}<span class="access-badge" title="{{$.Strings.T "attr_toilet"}}">🚻 <span class="access-badge-label">{{$.Strings.T "attr_toilet"}}</span></span>{{end}}
+        {{if eq (attrState $attrs "toilet") "0"}}<span class="access-badge" title="{{$.Strings.T "access_no_toilet"}}">🚫🚻 <span class="access-badge-label">{{$.Strings.T "access_no_toilet"}}</span></span>{{end}}
+        {{if eq .Parking "free"}}<span class="access-badge" title="{{$.Strings.T "parking_free"}}">🅿 <span class="access-badge-label">{{$.Strings.T "parking_free"}}</span></span>{{end}}
+        {{if eq .Parking "paid"}}<span class="access-badge" title="{{$.Strings.T "parking_paid"}}">🅿€ <span class="access-badge-label">{{$.Strings.T "parking_paid"}}</span></span>{{end}}
+        {{if eq .Parking "none"}}<span class="access-badge" title="{{$.Strings.T "parking_none"}}">🚫🅿 <span class="access-badge-label">{{$.Strings.T "parking_none"}}</span></span>{{end}}
+        {{if .NoStreetShoes}}<span class="access-badge" title="{{$.Strings.T "no_street_shoes_label"}}">👟🚫 <span class="access-badge-label">{{$.Strings.T "no_street_shoes_label"}}</span></span>{{end}}
       </div>
       {{end}}
       {{range $.Data.Event.Locations}}{{with .NotesMd}}<div class="evt-loc-notes">{{markdownHTML .}}</div>{{end}}{{end}}
       {{end}}
       {{end}}
 
-      {{/* Floor condition + food/drink: icon-only, event override takes precedence over location */}}
+      {{/* Floor condition + food/drink: icon + always-visible label (#1222 -- a
+           title= tooltip never fires on touch, so icon-only left mobile
+           visitors with no way to learn what these mean) */}}
       {{if or $floor .Food .Drink}}
       <div class="evt-access">
-        {{if eq $floor "parquet"}}<span class="access-badge" title="{{$.Strings.T "floor_parquet"}}">🪵</span>{{else if eq $floor "stone"}}<span class="access-badge" title="{{$.Strings.T "floor_stone"}}">🪨</span>{{else if eq $floor "tiles"}}<span class="access-badge" title="{{$.Strings.T "floor_tiles"}}">🔲</span>{{else if eq $floor "grass"}}<span class="access-badge" title="{{$.Strings.T "floor_grass"}}">🌿</span>{{else if eq $floor "sand"}}<span class="access-badge" title="{{$.Strings.T "floor_sand"}}">🏖</span>{{else if eq $floor "pavement"}}<span class="access-badge" title="{{$.Strings.T "floor_pavement"}}">🛣</span>{{else if eq $floor "carpet"}}<span class="access-badge" title="{{$.Strings.T "floor_carpet"}}">🧶</span>{{end}}
-        {{if eq .Food "sold"}}<span class="access-badge" title="{{$.Strings.T "food_sold"}}">🍽️</span>{{else if eq .Food "potluck"}}<span class="access-badge" title="{{$.Strings.T "food_potluck"}}">🥘</span>{{else if eq .Food "none"}}<span class="access-badge" title="{{$.Strings.T "food_none"}}">🚫🍽️</span>{{end}}
-        {{if eq .Drink "alcohol"}}<span class="access-badge" title="{{$.Strings.T "drink_alcohol"}}">🍺</span>{{else if eq .Drink "soft"}}<span class="access-badge" title="{{$.Strings.T "drink_soft"}}">🥤</span>{{else if eq .Drink "none"}}<span class="access-badge" title="{{$.Strings.T "drink_none"}}">💧</span>{{end}}
+        {{if eq $floor "parquet"}}<span class="access-badge" title="{{$.Strings.T "floor_parquet"}}">🪵 <span class="access-badge-label">{{$.Strings.T "floor_parquet"}}</span></span>{{else if eq $floor "stone"}}<span class="access-badge" title="{{$.Strings.T "floor_stone"}}">🪨 <span class="access-badge-label">{{$.Strings.T "floor_stone"}}</span></span>{{else if eq $floor "tiles"}}<span class="access-badge" title="{{$.Strings.T "floor_tiles"}}">🔲 <span class="access-badge-label">{{$.Strings.T "floor_tiles"}}</span></span>{{else if eq $floor "grass"}}<span class="access-badge" title="{{$.Strings.T "floor_grass"}}">🌿 <span class="access-badge-label">{{$.Strings.T "floor_grass"}}</span></span>{{else if eq $floor "sand"}}<span class="access-badge" title="{{$.Strings.T "floor_sand"}}">🏖 <span class="access-badge-label">{{$.Strings.T "floor_sand"}}</span></span>{{else if eq $floor "pavement"}}<span class="access-badge" title="{{$.Strings.T "floor_pavement"}}">🛣 <span class="access-badge-label">{{$.Strings.T "floor_pavement"}}</span></span>{{else if eq $floor "carpet"}}<span class="access-badge" title="{{$.Strings.T "floor_carpet"}}">🧶 <span class="access-badge-label">{{$.Strings.T "floor_carpet"}}</span></span>{{end}}
+        {{if eq .Food "sold"}}<span class="access-badge" title="{{$.Strings.T "food_sold"}}">🍽️ <span class="access-badge-label">{{$.Strings.T "food_sold"}}</span></span>{{else if eq .Food "potluck"}}<span class="access-badge" title="{{$.Strings.T "food_potluck"}}">🥘 <span class="access-badge-label">{{$.Strings.T "food_potluck"}}</span></span>{{else if eq .Food "none"}}<span class="access-badge" title="{{$.Strings.T "food_none"}}">🚫🍽️ <span class="access-badge-label">{{$.Strings.T "food_none"}}</span></span>{{end}}
+        {{if eq .Drink "alcohol"}}<span class="access-badge" title="{{$.Strings.T "drink_alcohol"}}">🍺 <span class="access-badge-label">{{$.Strings.T "drink_alcohol"}}</span></span>{{else if eq .Drink "soft"}}<span class="access-badge" title="{{$.Strings.T "drink_soft"}}">🥤 <span class="access-badge-label">{{$.Strings.T "drink_soft"}}</span></span>{{else if eq .Drink "none"}}<span class="access-badge" title="{{$.Strings.T "drink_none"}}">💧 <span class="access-badge-label">{{$.Strings.T "drink_none"}}</span></span>{{end}}
       </div>
       {{end}}
 
@@ -1024,7 +1026,10 @@
 .map-link:hover{color:var(--fg)}
 .map-link-nav{color:var(--link)}
 .evt-access{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
-.access-badge{font-size:1.1rem;opacity:.85;cursor:default}
+/* #1222: was icon-only (title= tooltip, invisible on touch) -- now icon +
+   always-visible text label, styled as a small pill. */
+.access-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem;opacity:.85;cursor:default;background:var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:.15rem .55rem .15rem .45rem}
+.access-badge-label{font-size:.8rem}
 .evt-admission{margin-top:.5rem;font-size:.9rem;color:var(--fg-2)}
 .evt-admission .sidebar-label{display:inline;margin-bottom:0;margin-right:.3rem}
 .evt-admission .evt-price-entry{display:block}

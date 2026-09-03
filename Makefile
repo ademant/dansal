@@ -86,7 +86,7 @@ install: build
 	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }
 	# system user
 	id -u $(SERVICE) >/dev/null 2>&1 || \
-		adduser --system --group --no-create-home --home-dir $(STATEDIR) \
+		adduser --system --group --no-create-home --home $(STATEDIR) \
 		        --shell /usr/sbin/nologin $(SERVICE)
 	# directories
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) $(SYSCONFDIR)
@@ -262,7 +262,7 @@ ifndef INSTANCE
 endif
 	# system user (may not exist yet if `make install` was never run)
 	id -u $(SERVICE) >/dev/null 2>&1 || \
-		adduser --system --group --no-create-home --home-dir $(STATEDIR) \
+		adduser --system --group --no-create-home --home $(STATEDIR) \
 		        --shell /usr/sbin/nologin $(SERVICE)
 	$(MAKE) install-units
 	# Allow dansal to submit mail via sendmail (needs postdrop group for maildrop write access)

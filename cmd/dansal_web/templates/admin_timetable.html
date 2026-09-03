@@ -898,7 +898,7 @@ function showCtxMenu(x, y, entry){
   m.innerHTML = '';
   var li = document.createElement('li');
   li.textContent = {{$.Strings.T "tt_clone_entry" | js}};
-  li.addEventListener('mousedown', function(ev){ ev.preventDefault(); hideCtxMenu(); ctxClone(); });
+  li.addEventListener('mousedown', function(ev){ ev.preventDefault(); ctxClone(); hideCtxMenu(); });
   m.appendChild(li);
   // clamp so the menu doesn't render off the right/bottom edge of the viewport
   m.style.left = Math.min(x, window.innerWidth - 150) + 'px';

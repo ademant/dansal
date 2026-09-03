@@ -81,7 +81,20 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			http.Error(w, "event not found", http.StatusNotFound)
 			return
 		}
+		// Normalize nil slices to empty ones: the API omits empty fields
+		// (json:",omitempty"), and json.Marshal of a nil Go slice produces the
+		// JS literal `null`, not `[]`, which crashes the template's unconditional
+		// _entries.forEach(...) etc. on first load for a brand-new event (#1225).
 		timetable := event.Timetable
+		if timetable == nil {
+			timetable = []TimetableEntry{}
+		}
+		if musicians == nil {
+			musicians = []Musician{}
+		}
+		if instructors == nil {
+			instructors = []Instructor{}
+		}
 
 		// Resolve building-level location IDs: primary + all extra locations.
 		// If a location is itself a room (child), use the parent as the building.
@@ -173,6 +186,10 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				}
 				rooms = append(rooms, TimetableRoom{ID: r.ID, Label: lbl})
 			}
+		}
+
+		if rooms == nil {
+			rooms = []TimetableRoom{}
 		}
 
 		topLocName := ""

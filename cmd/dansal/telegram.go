@@ -21,6 +21,10 @@ func sendTelegramMessage(chatID, text string) error {
 	payload, _ := json.Marshal(map[string]any{
 		"chat_id": chatID,
 		"text":    text,
+		// Disable link previews: Telegram's preview fetcher hits any URL in the
+		// message server-side, which for one-time links (e.g. magic-login) burns
+		// the token before the human recipient ever clicks it (#1224).
+		"link_preview_options": map[string]any{"is_disabled": true},
 	})
 	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
 	client := &http.Client{Timeout: 15 * time.Second}

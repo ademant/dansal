@@ -2571,6 +2571,24 @@ func migrateDB() {
 			db.Exec("ALTER TABLE invite_links ADD COLUMN target_user_id INTEGER")
 		}
 	}
+	// v35 (#1232): per-entry difficulty on timetable_entries, reusing the
+	// same beginner/advanced/profi enum as events.workshop_difficulty — a
+	// single event-wide difficulty was too coarse for multi-workshop
+	// timetables. '' means "not set" (the admin editor's 3-slot widget
+	// starts all-grey).
+	if !applied(35) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN difficulty TEXT NOT NULL DEFAULT '' CHECK(difficulty IN ('','beginner','advanced','profi'))")
+		mark(35)
+	}
+	// Safety net: ensure timetable_entries.difficulty exists even if v35 was
+	// pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name='difficulty'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN difficulty TEXT NOT NULL DEFAULT '' CHECK(difficulty IN ('','beginner','advanced','profi'))")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3690,6 +3708,7 @@ func createTables() error {
 		instructor_id INTEGER,
 		entry_type TEXT NOT NULL DEFAULT 'bal',
 		entry_date TEXT,
+		difficulty TEXT NOT NULL DEFAULT '' CHECK(difficulty IN ('','beginner','advanced','profi')),
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
@@ -3976,6 +3995,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(32)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(33)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(34)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(35)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

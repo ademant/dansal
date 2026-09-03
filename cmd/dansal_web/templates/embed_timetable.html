@@ -22,6 +22,10 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .tt-badge-ws{display:inline-block;font-size:.7rem;font-weight:700;background:#1a6eb5;color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-badge-bal{display:inline-block;font-size:.7rem;font-weight:700;background:#e2f2e6;color:#1a7a34;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
 .tt-badge-break{display:inline-block;font-size:.7rem;font-weight:700;background:#999;color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
+.tt-badge-diff{display:inline-block;font-size:.7rem;font-weight:700;color:#fff;border-radius:3px;padding:.05rem .35rem;margin-left:.5rem;vertical-align:middle}
+.tt-badge-diff-beginner{background:#2a9d3e}
+.tt-badge-diff-advanced{background:#c48800}
+.tt-badge-diff-profi{background:#c0392b}
 .tt-meta{font-size:.82rem;color:#999;margin-top:.15rem}
 .tt-desc{font-size:.88rem;color:#555;margin-top:.25rem}
 .tt-room-pills{display:none;gap:.4rem;overflow-x:auto;margin-bottom:.6rem;padding-bottom:.2rem}
@@ -110,7 +114,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
         {{range $col.Panels}}
         <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-entry-id="{{.Entry.ID}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-tt-detail data-has-time="0">
           <button type="button" class="tt-star-btn" data-entry-id="{{.Entry.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
-          <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+          <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}{{if .Entry.Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Entry.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Entry.Difficulty)}}</span>{{end}}</div>
           {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
           {{if .Entry.MusicianName}}<div class="tt-meta">{{.Entry.MusicianName}}</div>{{end}}
           {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
@@ -129,7 +133,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     <button type="button" class="tt-star-btn" data-entry-id="{{.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
     <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
     <div class="tt-body">
-      <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}</div>
+      <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}{{if .Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Difficulty)}}</span>{{end}}</div>
       {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
       {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
       {{if .MusicianName}}<div class="tt-meta">{{.MusicianName}}</div>{{end}}

@@ -456,6 +456,9 @@ type TimetableEntry struct {
 	MusicianName   string `json:"musician_name,omitempty"`
 	InstructorID   *int   `json:"instructor_id,omitempty"`
 	InstructorName string `json:"instructor_name,omitempty"`
+	// Difficulty (#1232): "", "beginner", "advanced", or "profi" — same enum
+	// as Event.WorkshopDifficulty, but scoped to this one timetable slot.
+	Difficulty string `json:"difficulty,omitempty"`
 }
 
 // TimetablePanel is one timetable entry positioned within a TimetableGrid

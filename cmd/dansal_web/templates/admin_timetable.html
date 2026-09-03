@@ -104,6 +104,12 @@
 .tt-ac-suggest li:hover,.tt-ac-suggest li.tt-ac-active{background:var(--bg-hover)}
 .tt-ac-suggest li.tt-opt-sep{height:1px;background:var(--border-mid);padding:0;margin:.2rem 0}
 .tt-ac-suggest li.tt-create{color:var(--primary)}
+/* difficulty widget (#1232) */
+.tt-difficulty-widget{display:flex;gap:.3rem;align-items:center;height:2rem}
+.tt-diff-slot{width:1.4rem;height:1.4rem;border-radius:50%;border:2px solid var(--border-mid);background:transparent;cursor:pointer;box-sizing:border-box}
+.tt-diff-slot[data-level="beginner"].active{background:#2a9d3e;border-color:#2a9d3e}
+.tt-diff-slot[data-level="advanced"].active{background:#e0a800;border-color:#e0a800}
+.tt-diff-slot[data-level="profi"].active{background:#c0392b;border-color:#c0392b}
 /* tile context menu (#1230) */
 .tt-ctx-menu{position:fixed;z-index:300;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;list-style:none;padding:.2rem 0;margin:0;min-width:130px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
 .tt-ctx-menu li{padding:.35rem .8rem;cursor:pointer;font-size:.85rem}
@@ -174,6 +180,21 @@
       <select id="pp-room-sel" data-on="change" data-fn="ppRoomSelChange" data-args="[]">
         <option value="">— none —</option>
       </select>
+    </div>
+  </div>
+  <div class="tt-popup-row full">
+    <!-- #1232: 3-slot difficulty widget, reusing the beginner/advanced/profi
+         enum shared with Event.WorkshopDifficulty. Clicking a slot activates
+         it and every slot to its left (traffic-light fill), matching the
+         issue's described interaction: left only = beginner, left+middle =
+         advanced, all three = profi. Clicking the already-topmost active
+         slot again clears back to "not set". -->
+    <div class="tt-popup-field"><label>{{$.Strings.T "workshop_difficulty_label"}}</label>
+      <div class="tt-difficulty-widget" id="pp-difficulty">
+        <span class="tt-diff-slot" data-level="beginner" data-fn="ppDifficultyClick" data-args='["beginner"]' title="{{$.Strings.T "workshop_difficulty_beginner"}}"></span>
+        <span class="tt-diff-slot" data-level="advanced" data-fn="ppDifficultyClick" data-args='["advanced"]' title="{{$.Strings.T "workshop_difficulty_advanced"}}"></span>
+        <span class="tt-diff-slot" data-level="profi" data-fn="ppDifficultyClick" data-args='["profi"]' title="{{$.Strings.T "workshop_difficulty_profi"}}"></span>
+      </div>
     </div>
   </div>
   <div class="tt-popup-row full">
@@ -922,7 +943,8 @@ function ctxClone(){
     title: src.title, entry_type: src.entry_type, description: src.description||'',
     location_id: src.location_id||null, location_name: src.location_name||'', room: src.room||'',
     musician_id: src.musician_id||null, musician_name: src.musician_name||'',
-    instructor_id: src.instructor_id||null, instructor_name: src.instructor_name||''
+    instructor_id: src.instructor_id||null, instructor_name: src.instructor_name||'',
+    difficulty: src.difficulty||''
   };
   _entries.push(clone);
   _markDirty(); renderAll();
@@ -1021,6 +1043,8 @@ function openPopup(entry, isNew){
     else if(!entry.location_id && r.id===null && entry.room===r.label) opt.selected=true;
     rSel.appendChild(opt);
   });
+  _popupDifficulty = entry.difficulty || '';
+  renderDifficultyWidget();
   document.getElementById('pp-del-btn').hidden = isNew;
   document.getElementById('pp-clone-btn').hidden = isNew;
   document.getElementById('tt-popup').showModal();
@@ -1029,6 +1053,21 @@ var _popupIsNew = false;
 
 function ppDirty(){}
 function ppRoomSelChange(){}
+
+// ─── difficulty widget (#1232) ─────────────────────────────────────────────
+var _diffLevels = ['beginner','advanced','profi'];
+var _popupDifficulty = '';
+function renderDifficultyWidget(){
+  var idx = _diffLevels.indexOf(_popupDifficulty);
+  document.querySelectorAll('#pp-difficulty .tt-diff-slot').forEach(function(el,i){
+    el.classList.toggle('active', i<=idx);
+  });
+}
+function ppDifficultyClick(level){
+  _popupDifficulty = (_popupDifficulty===level) ? '' : level;
+  renderDifficultyWidget();
+  ppDirty();
+}
 
 // ─── track palette (#1174) ─────────────────────────────────────────────────
 function trackColor(slug){
@@ -1116,6 +1155,7 @@ function ppSave(){
   e.end_time = document.getElementById('pp-end').value;
   e.title = document.getElementById('pp-title').value.trim();
   e.entry_type = document.getElementById('pp-type').value;
+  e.difficulty = _popupDifficulty;
   e.description = document.getElementById('pp-desc').value;
   var musId = document.getElementById('pp-mus-id').value;
   var musName = document.getElementById('pp-mus-text').value.trim();
@@ -1169,7 +1209,8 @@ function ppClone(){
     musician_id: document.getElementById('pp-mus-id').value ? parseInt(document.getElementById('pp-mus-id').value) : null,
     musician_name: document.getElementById('pp-mus-text').value.trim(),
     instructor_id: document.getElementById('pp-ins-id').value ? parseInt(document.getElementById('pp-ins-id').value) : null,
-    instructor_name: document.getElementById('pp-ins-text').value.trim()
+    instructor_name: document.getElementById('pp-ins-text').value.trim(),
+    difficulty: _popupDifficulty
   };
   document.getElementById('tt-popup').close();
   openPopup(clone, true);
@@ -1246,7 +1287,7 @@ function saveTimetable(){
   var btn = document.getElementById('save-btn'); btn.disabled=true;
   var status = document.getElementById('save-status'); status.hidden=false; status.textContent='Saving…';
   var payload = _entries.map(function(e){
-    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null};
+    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null,difficulty:e.difficulty||''};
   });
   fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(r){return r.ok?r.json():Promise.reject(r.statusText);})
@@ -1315,7 +1356,7 @@ function navModalDiscard(){ _formDirty=false; document.getElementById('tt-nav-mo
 function navModalSaveGo(){
   document.getElementById('tt-nav-modal').close();
   var payload = _entries.map(function(e){
-    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null};
+    return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null,difficulty:e.difficulty||''};
   });
   fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(){ _formDirty=false; doGoBack(); })

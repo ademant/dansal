@@ -260,6 +260,10 @@ setup-instance:
 ifndef INSTANCE
 	$(error INSTANCE is required: sudo make setup-instance INSTANCE=prod)
 endif
+	# system user (may not exist yet if `make install` was never run)
+	id -u $(SERVICE) >/dev/null 2>&1 || \
+		adduser --system --group --no-create-home --home-dir $(STATEDIR) \
+		        --shell /usr/sbin/nologin $(SERVICE)
 	$(MAKE) install-units
 	# Allow dansal to submit mail via sendmail (needs postdrop group for maildrop write access)
 	getent group postdrop >/dev/null && usermod -aG postdrop $(SERVICE) || true

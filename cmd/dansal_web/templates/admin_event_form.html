@@ -507,7 +507,12 @@
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" value="{{.Room}}" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
-          <select name="tt_type" class="tt-type-sel"><option value="bal"{{if or (eq .EntryType "") (eq .EntryType "bal")}} selected{{end}}>{{$.Strings.T "tt_type_bal"}}</option><option value="workshop"{{if eq .EntryType "workshop"}} selected{{end}}>{{$.Strings.T "tt_type_workshop"}}</option><option value="break"{{if eq .EntryType "break"}} selected{{end}}>{{$.Strings.T "tt_type_break"}}</option></select>
+          <!-- #1234: options populated client-side from the event's own
+               extensible track palette (TT_TRACKS, mirroring the dedicated
+               timetable editor), not a fixed 3-value list — see
+               _ttPopulateTypeSelect(). data-value carries the entry's
+               current type until that runs. -->
+          <select name="tt_type" class="tt-type-sel" data-value="{{.EntryType}}"></select>
           <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
@@ -525,7 +530,7 @@
           <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
-          <select name="tt_type" class="tt-type-sel"><option value="bal">{{$.Strings.T "tt_type_bal"}}</option><option value="workshop">{{$.Strings.T "tt_type_workshop"}}</option><option value="break">{{$.Strings.T "tt_type_break"}}</option></select>
+          <select name="tt_type" class="tt-type-sel" data-value=""></select>
           <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
@@ -1640,6 +1645,38 @@ function geocodeLocation(){
 // Timetable location picker: flat searchable list of every top-level venue
 // plus all of their rooms (not just the event's own building, #889).
 var _ttLocs={{timetableLocationOptionsJSON $.Data.Locations}};
+// #1234: this form's "Type" dropdown used to be a fixed 3-option list
+// (bal/workshop/break), independent of the event's own extensible track
+// palette used by the dedicated timetable editor (/admin/events/{id}/timetable,
+// admin_timetable.html's _tracks). Now built from the same per-event palette
+// (defaults to the standard slug set server-side when the event has no
+// custom tracks of its own — see defaultTimetableTracks / TimetableTracks).
+var TT_TRACKS=[{{range $.Data.Event.TimetableTracks}}{slug:{{.Slug | jsStr}},label:{{if trackI18nKey .Slug}}{{$.Strings.T (trackI18nKey .Slug) | jsStr}}{{else}}{{.Name | jsStr}}{{end}}},{{end}}];
+if(!TT_TRACKS.length){
+  TT_TRACKS=[{slug:'bal',label:{{$.Strings.T "tt_type_bal" | jsStr}}},{slug:'workshop',label:{{$.Strings.T "tt_type_workshop" | jsStr}}},{slug:'break',label:{{$.Strings.T "tt_type_break" | jsStr}}}];
+}
+function _ttPopulateTypeSelect(sel){
+  if(!sel) return;
+  var cur=sel.value||sel.dataset.value||'';
+  sel.innerHTML='';
+  TT_TRACKS.forEach(function(t){
+    var opt=document.createElement('option');
+    opt.value=t.slug; opt.textContent=t.label;
+    if(t.slug===cur) opt.selected=true;
+    sel.appendChild(opt);
+  });
+  // A legacy/custom slug no longer in the current palette (e.g. the event's
+  // own tracks were edited since this entry was saved) — keep it as an
+  // extra option rather than silently discarding the entry's actual value.
+  if(cur && !TT_TRACKS.some(function(t){ return t.slug===cur; })){
+    var opt=document.createElement('option'); opt.value=cur; opt.textContent=cur; opt.selected=true;
+    sel.appendChild(opt);
+  }
+}
+function _ttPopulateAllTypeSelects(){
+  document.querySelectorAll('#tt-body .tt-type-sel').forEach(_ttPopulateTypeSelect);
+}
+_ttPopulateAllTypeSelects();
 var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
 var _ttMusicians=[{{range $.Data.Musicians}}{id:{{.ID}},name:{{.Bandname | jsStr}}},{{end}}];
 var _ttInstructors=[{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsStr}}},{{end}}];
@@ -2049,7 +2086,6 @@ function addTTRow(){
   var entry=document.createElement('div');
   entry.className='tt-entry';
   var _tl='{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}';
-  var ttTypeOpts='<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option><option value="break">'+{{$.Strings.T "tt_type_break" | jsStr}}+'</option>';
   entry.innerHTML=
     '<div class="tt-line1">'+
       '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>'+
@@ -2057,13 +2093,14 @@ function addTTRow(){
       '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end"></span>'+
       _buildTTLocWidget()+
       '<input type="text" name="tt_room" class="tt-room-input" placeholder='+{{$.Strings.T "tt_room_placeholder" | jsStr}}+'>'+
-      '<select name="tt_type" class="tt-type-sel">'+ttTypeOpts+'</select>'+
+      '<select name="tt_type" class="tt-type-sel" data-value=""></select>'+
       '<button type="button" class="btn-del-row" data-fn="delRow" data-args=\'["@this"]\' title="Remove">×</button>'+
     '</div>'+
     '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args=\'["@this"]\'></div>'+
     '<div class="tt-line3">'+_buildTTMusWidget()+_buildTTInsWidget()+'</div>'+
     '<div class="tt-desc"><textarea name="tt_desc" rows="4" placeholder='+{{$.Strings.T "tt_desc_placeholder" | jsStr}}+' data-on="input" data-fn="_ttMarkEdited" data-args="[]"></textarea></div>';
   tbody.appendChild(entry);
+  _ttPopulateTypeSelect(entry.querySelector('.tt-type-sel'));
   _ttUpdateMultiDay();
 }
 function delRow(btn){

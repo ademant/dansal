@@ -113,6 +113,7 @@
 <div class="tt-action-bar evt-action-bar">
   <button type="button" class="btn-secondary" id="back-btn" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="button" class="btn-primary" id="save-btn" data-fn="saveTimetable" data-args="[]" disabled>{{$.Strings.T "admin_save"}}</button>
+  <button type="button" class="btn-secondary" id="new-entry-btn" data-fn="newEntry" data-args="[]">{{$.Strings.T "tt_new_entry"}}</button>
   <button type="button" class="btn-secondary" id="sync-btn" data-fn="syncEventTimes" data-args="[]" title="Set event start/end times from timetable entries">⇄ Sync event times</button>
   <button type="button" class="btn-del" data-fn="deleteTimetable" data-args="[]">Delete timetable</button>
   <span class="save-status" id="save-status" hidden></span>
@@ -341,6 +342,22 @@ function recomputeTimeRange(){
   // ensure at least 2h range
   if(mx-mn < 120) mx = mn+120;
   _gridMin = mn; _gridMax = mx;
+}
+
+// Widens (never narrows) the grid's visible time range so a manually-typed
+// popup time (from the "+ New entry" button, or hand-edited start/end fields)
+// that falls outside the current grid is still visible after saving, instead
+// of silently rendering off-screen. Companion to the fixed-range policy in
+// ppSave() (#1226) — recomputeTimeRange() is what would narrow it back down,
+// which is exactly what we're avoiding.
+function growTimeRangeIfNeeded(e){
+  var s = parseHHMM(e.start_time||'00:00');
+  var en = parseHHMM(e.end_time||'01:00');
+  if(en <= s) en += 1440;
+  var mn = Math.floor(s/60)*60;
+  var mx = Math.ceil(en/60)*60;
+  if(mn < _gridMin) _gridMin = mn;
+  if(mx > _gridMax) _gridMax = mx;
 }
 
 function parseHHMM(t){
@@ -858,6 +875,33 @@ function startNewDrag(ev, body, day, room){
   body.addEventListener('pointermove',onMove); body.addEventListener('pointerup',onUp);
 }
 
+// ─── new entry button (#1226) ─────────────────────────────────────────────────
+// Drag-to-create needs empty grid space to click on; this gives a way to add
+// an entry that doesn't depend on that — defaults to the currently visible
+// day, first room column, and the next free half-hour slot after the last
+// entry in that room (or the top of the grid if it's empty).
+function newEntry(){
+  var day = _days[_page * _daysPerPage] || _days[0];
+  var room = _rooms[0] || {id:-1,label:'Other'};
+  var roomEntries = _entries.filter(function(e){
+    if(effectiveDate(e) !== day) return false;
+    if(room.id===-1) return !e.location_id && !e.room;
+    return room.id!==null ? e.location_id===room.id : (!e.location_id && e.room===room.label);
+  });
+  var startMin = _gridMin;
+  roomEntries.forEach(function(e){
+    var en = parseHHMM(e.end_time||'00:00');
+    var s = parseHHMM(e.start_time||'00:00');
+    if(en<=s) en+=1440;
+    var enAbs = en < _gridMin ? en+1440 : en;
+    if(enAbs > startMin) startMin = enAbs;
+  });
+  startMin = Math.round(startMin/SNAP)*SNAP;
+  var newE = {_cid:_nextCid(), entry_date:day, start_time:minToHHMM(startMin), end_time:minToHHMM(startMin+60), title:'', entry_type:(_tracks[0]&&_tracks[0].slug)||'bal',
+    location_id: room.id!==null&&room.id!==-1?room.id:null, location_name: room.id!==null&&room.id!==-1?room.label:'', room: room.id===null&&room.id!==-1?room.label:''};
+  openPopup(newE, true);
+}
+
 // ─── popup ────────────────────────────────────────────────────────────────────
 function openPopup(entry, isNew){
   _popupEntry = entry; _popupIsNew = !!isNew;
@@ -995,14 +1039,21 @@ function ppSave(){
   if(!e.title){ document.getElementById('pp-title').focus(); return; }
   if(_popupIsNew) _entries.push(e);
   document.getElementById('tt-popup').close();
-  recomputeTimeRange(); recomputeRooms(); _markDirty(); renderAll();
+  // Note: intentionally NOT calling recomputeTimeRange() here (#1226) — it
+  // would re-tighten the grid to exactly wrap current entries, collapsing
+  // away the empty space needed to drag-create the *next* entry outside
+  // whatever window already exists. The grid's time range is fixed once at
+  // init() from the event's own start/end and never narrows afterward;
+  // growExtendRangeIfNeeded still widens it if an entry is placed near an edge.
+  growTimeRangeIfNeeded(e);
+  recomputeRooms(); _markDirty(); renderAll();
 }
 function ppCancel(){ document.getElementById('tt-popup').close(); }
 function ppDelete(){
   var cid = _popupEntry._cid;
   _entries = _entries.filter(function(e){ return e._cid!==cid; });
   document.getElementById('tt-popup').close();
-  recomputeTimeRange(); recomputeRooms(); _markDirty(); renderAll();
+  recomputeRooms(); _markDirty(); renderAll();
 }
 
 // ─── autocomplete: musician ───────────────────────────────────────────────────

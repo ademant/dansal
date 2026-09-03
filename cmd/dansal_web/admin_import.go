@@ -143,43 +143,43 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 
 		if len(events) == 1 {
 			e := events[0]
-			q := url.Values{}
-			q.Set("title", e.Title)
-			if e.Description != "" {
-				q.Set("description", e.Description)
+			// Render the new-event form directly, in-process, rather than
+			// redirecting to /admin/events/new?title=...&description=...: a
+			// redirect carries every field (including the full description)
+			// through the Location response header, and a long description
+			// (e.g. a multi-paragraph iCal DESCRIPTION) overflows nginx's
+			// header buffer and 502s before the admin ever sees the form
+			// (#1228). clone_from/tpl_id prefill the same way, in-process.
+			pf := &EventPrefill{
+				Title:       e.Title,
+				Description: e.Description,
+				URL:         e.URL,
+				Location:    e.Location.Location,
+				Address:     e.Location.Address,
+				Zipcode:     e.Location.Zipcode,
+				Town:        e.Location.Town,
+				Country:     e.Location.Country,
+				Tags:        e.Tags,
 			}
-			if e.URL != "" {
-				q.Set("url", e.URL)
+			if orgIDInt, err := strconv.Atoi(orgID); err == nil {
+				pf.OrgID = orgIDInt
 			}
 			if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
-				q.Set("date", t.Format("2006-01-02"))
-				q.Set("start_time", t.Format("15:04"))
+				pf.Date = t.Format("2006-01-02")
+				pf.StartTime = t.Format("15:04")
 			}
 			if e.EndTime != "" {
 				if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
-					q.Set("end_date", t.Format("2006-01-02"))
-					q.Set("end_time", t.Format("15:04"))
+					pf.EndDate = t.Format("2006-01-02")
+					pf.EndTime = t.Format("15:04")
 				}
 			}
-			if e.Location.Location != "" {
-				q.Set("location", e.Location.Location)
-			}
-			if e.Location.Address != "" {
-				q.Set("address", e.Location.Address)
-			}
-			if e.Location.Zipcode != "" {
-				q.Set("zipcode", e.Location.Zipcode)
-			}
-			if e.Location.Town != "" {
-				q.Set("town", e.Location.Town)
-			}
-			if e.Location.Country != "" {
-				q.Set("country", e.Location.Country)
-			}
-			for _, tag := range e.Tags {
-				q.Add("tags", tag)
-			}
-			http.Redirect(w, r, "/admin/events/new?"+q.Encode(), http.StatusSeeOther)
+
+			bundle := client.FetchRefBundle(r.Context())
+			userOrgs := userOrgsFor(r, client, su, bundle)
+			defaultDanceIDs := loadDefaultDanceIDs()
+			selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, bundle.Dances)
+			renderEventNewForm(w, r, cfg, tmpls, db, i18n, su, bundle, userOrgs, selected, pf)
 			return
 		}
 

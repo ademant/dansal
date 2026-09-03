@@ -1720,8 +1720,6 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
-		tmpls2, _ := listTemplates(db, su.ID, getUserOrgs())
-
 		var userOrgs []Organization
 		if su.Role == "admin" {
 			userOrgs = bundle.Orgs
@@ -1737,54 +1735,72 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
-		event := eventFromPrefill(prefill)
-		locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
-		var eventOrg *Organization
-		if event.OrganizationID != nil {
-			for i := range bundle.Orgs {
-				if bundle.Orgs[i].ID == *event.OrganizationID {
-					eventOrg = &bundle.Orgs[i]
-					break
-				}
-			}
-		}
-		// Pre-select the instructor/musician the "+ New event" button on their
-		// dashboard was launched from (mirrors org_id/loc_id prefill above).
-		if iid, _ := strconv.Atoi(r.URL.Query().Get("instructor_id")); iid > 0 {
-			for _, ins := range bundle.Instructors {
-				if ins.ID == iid {
-					event.Instructors = []Instructor{ins}
-					break
-				}
-			}
-		}
-		if mid, _ := strconv.Atoi(r.URL.Query().Get("musician_id")); mid > 0 {
-			for _, m := range bundle.Musicians {
-				if m.ID == mid {
-					event.Musicians = []Musician{m}
-					break
-				}
-			}
-		}
-
-		title := i18n.T(r, "admin_event_new_title")
-		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
-			IsNew:              true,
-			Event:              event,
-			Org:                eventOrg,
-			Organizations:      bundle.Orgs,
-			Locations:          topLevelLocations(bundle.Locations),
-			LocOrgFirst:        locOrgFirst,
-			LocOthers:          locOthers,
-			Musicians:          bundle.Musicians,
-			Instructors:        bundle.Instructors,
-			Dances:             bundle.Dances,
-			SelectedDanceNames: selected,
-			UserOrgs:           userOrgs,
-			Templates:          tmpls2,
-			Prefill:            prefill,
-		}))
+		renderEventNewForm(w, r, cfg, tmpls, db, i18n, su, bundle, userOrgs, selected, prefill)
 	}
+}
+
+// renderEventNewForm renders the /admin/events/new form once prefill data
+// and the caller's accessible orgs have already been resolved. Factored out
+// of adminEventNewPageHandler so a single-match feed import
+// (adminImportEventsHandler) can render this same form directly from the
+// already-fetched PreviewEvent, in-process via an *EventPrefill, instead of
+// round-tripping every field (including the full description) through a
+// redirect URL/query string — a long description there overflowed nginx's
+// response-header buffer and 502'd (#1228).
+func renderEventNewForm(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, db *sql.DB, i18n *I18n, su *SessionUser, bundle RefBundle, userOrgs []Organization, selected map[string]bool, prefill *EventPrefill) {
+	var userOrgIDs []int
+	for _, o := range userOrgs {
+		userOrgIDs = append(userOrgIDs, o.ID)
+	}
+	tmpls2, _ := listTemplates(db, su.ID, userOrgIDs)
+
+	event := eventFromPrefill(prefill)
+	locOrgFirst, locOthers := splitEventLocations(bundle.Locations, event)
+	var eventOrg *Organization
+	if event.OrganizationID != nil {
+		for i := range bundle.Orgs {
+			if bundle.Orgs[i].ID == *event.OrganizationID {
+				eventOrg = &bundle.Orgs[i]
+				break
+			}
+		}
+	}
+	// Pre-select the instructor/musician the "+ New event" button on their
+	// dashboard was launched from (mirrors org_id/loc_id prefill above).
+	if iid, _ := strconv.Atoi(r.URL.Query().Get("instructor_id")); iid > 0 {
+		for _, ins := range bundle.Instructors {
+			if ins.ID == iid {
+				event.Instructors = []Instructor{ins}
+				break
+			}
+		}
+	}
+	if mid, _ := strconv.Atoi(r.URL.Query().Get("musician_id")); mid > 0 {
+		for _, m := range bundle.Musicians {
+			if m.ID == mid {
+				event.Musicians = []Musician{m}
+				break
+			}
+		}
+	}
+
+	title := i18n.T(r, "admin_event_new_title")
+	renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
+		IsNew:              true,
+		Event:              event,
+		Org:                eventOrg,
+		Organizations:      bundle.Orgs,
+		Locations:          topLevelLocations(bundle.Locations),
+		LocOrgFirst:        locOrgFirst,
+		LocOthers:          locOthers,
+		Musicians:          bundle.Musicians,
+		Instructors:        bundle.Instructors,
+		Dances:             bundle.Dances,
+		SelectedDanceNames: selected,
+		UserOrgs:           userOrgs,
+		Templates:          tmpls2,
+		Prefill:            prefill,
+	}))
 }
 
 // ── Dedicated template-creation mode (#841) ──────────────────────────────────

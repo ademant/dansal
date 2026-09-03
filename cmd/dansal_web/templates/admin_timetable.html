@@ -123,6 +123,21 @@
 .tt-ctx-menu li{padding:.35rem .8rem;cursor:pointer;font-size:.85rem}
 .tt-ctx-menu li:hover{background:var(--bg-hover)}
 .tt-ctx-menu li.tt-ctx-danger{color:var(--danger);border-top:1px solid var(--border-mid);margin-top:.2rem;padding-top:.45rem}
+/* track management popup (#1238) */
+#tt-tracks-popup{border:1px solid var(--border-mid);border-radius:8px;padding:1rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:560px;width:95vw}
+#tt-tracks-popup::backdrop{background:rgba(0,0,0,.4)}
+#tt-tracks-popup h2{margin:0 0 .75rem;font-size:1rem}
+.tt-tracks-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.tt-tracks-table th{text-align:left;font-size:.72rem;color:var(--fg-dim);font-weight:600;padding:.2rem .4rem;border-bottom:1px solid var(--border-mid)}
+.tt-tracks-table td{padding:.3rem .4rem;border-bottom:1px solid var(--border-mid);vertical-align:middle}
+.tt-tracks-table tr:last-child td{border-bottom:none}
+.tt-tracks-table .tt-tr-usage{text-align:center;color:var(--fg-dim)}
+.tt-tracks-table input[type=text]{width:100%;box-sizing:border-box;background:var(--bg-input,var(--bg));border:1px solid var(--border-mid);border-radius:4px;padding:.3rem .4rem;color:var(--fg);font-size:.85rem}
+.tt-tr-handle{cursor:grab;color:var(--fg-dim);width:1.2rem;text-align:center;user-select:none}
+.tt-tracks-table tr.tt-drop-target td{background:rgba(74,127,203,.12);box-shadow:inset 0 2px 0 rgba(74,127,203,.6)}
+.tt-tr-del{background:none;border:none;cursor:pointer;color:var(--fg-dim);font-size:1rem;line-height:1;padding:.2rem}
+.tt-tr-del:hover{color:var(--danger)}
+.tt-tr-del:disabled{opacity:.3;cursor:default}
 </style>
 {{end}}
 {{define "content"}}
@@ -135,6 +150,7 @@
   <button type="button" class="btn-primary" id="save-btn" data-fn="saveTimetable" data-args="[]" disabled>{{$.Strings.T "admin_save"}}</button>
   <button type="button" class="btn-secondary" id="new-entry-btn" data-fn="newEntry" data-args="[]">{{$.Strings.T "tt_new_entry"}}</button>
   <button type="button" class="btn-secondary" id="sync-btn" data-fn="syncEventTimes" data-args="[]" title="Set event start/end times from timetable entries">⇄ Sync event times</button>
+  <button type="button" class="btn-secondary" id="tracks-btn" data-fn="openTracksPopup" data-args="[]">{{$.Strings.T "tt_manage_tracks"}}</button>
   <button type="button" class="btn-del" data-fn="deleteTimetable" data-args="[]">Delete timetable</button>
   <span class="save-status" id="save-status" hidden></span>
 </div>
@@ -240,6 +256,40 @@
     <button type="button" class="btn-secondary" data-fn="ppCancel" data-args="[]">Cancel</button>
     <button type="button" class="btn-secondary" id="pp-clone-btn" data-fn="ppClone" data-args="[]">{{$.Strings.T "tt_clone_entry"}}</button>
     <button type="button" class="btn-del tt-del-entry" id="pp-del-btn" data-fn="ppDelete" data-args="[]">Delete</button>
+  </div>
+</dialog>
+
+<!-- Track management popup (#1238): standalone rename/recolor/reorder/delete,
+     reachable without an entry open — unlike the entry popup's inline
+     add-track + color-tweak (left as-is above, still handy mid-edit), this
+     is the only place to rename an existing track or see them all at once. -->
+<dialog id="tt-tracks-popup">
+  <h2>{{$.Strings.T "tt_manage_tracks"}}</h2>
+  <table class="tt-tracks-table">
+    <thead>
+      <tr>
+        <th></th>
+        <th>{{$.Strings.T "col_name"}}</th>
+        <th>{{$.Strings.T "tt_track_color"}}</th>
+        <th>{{$.Strings.T "tt_track_usage"}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tm-tbody"></tbody>
+  </table>
+  <div class="tt-track-add-wrap" style="margin-top:.6rem">
+    <input type="text" class="tt-room-add-input" id="tm-add-name" placeholder="Track name…" autocomplete="off"
+      data-on="keydown" data-fn="tmAddKeydown" data-args='["@event"]'>
+    <input type="color" id="tm-add-color" class="tt-track-color" value="#4a7fcb" title="Track color">
+    <button type="button" class="btn-secondary" data-fn="tmAddTrack" data-args="[]">{{$.Strings.T "tt_add_track"}}</button>
+  </div>
+  <div class="tt-popup-actions">
+    <!-- Every edit here already persists immediately via saveTracks() (same
+         as the entry popup's existing inline color-tweak/add-track), so this
+         is a plain dismiss — reusing admin_magic_link_close's translated
+         "Close" rather than admin_save, which would wrongly imply something
+         is still pending. -->
+    <button type="button" class="btn-primary" data-fn="tmClose" data-args="[]">{{$.Strings.T "admin_magic_link_close"}}</button>
   </div>
 </dialog>
 
@@ -1288,6 +1338,154 @@ function addTrack(){
 function saveTracks(){
   fetch('/admin/events/'+EVT_ID+'/timetable/tracks',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_tracks)})
     .catch(function(err){ console.error('saveTracks failed', err); });
+}
+// pp-type's <option> list is otherwise only ever appended to (by addTrack()/
+// ensureTrackOption()), never fully rebuilt — fine for that popup's own
+// additions, but the tracks-management popup (#1238) below can rename,
+// reorder or delete tracks wholesale, so it needs a real rebuild to stay in
+// sync. Safe to call while the entry popup is closed (dialogs here are
+// modal/exclusive, so it's never visible mid-edit) — it just needs to be
+// correct by the next openPopup().
+function rebuildTypeSelect(){
+  var sel = document.getElementById('pp-type');
+  var cur = sel.value;
+  sel.innerHTML = '';
+  _tracks.forEach(function(t){
+    var opt = document.createElement('option');
+    opt.value = t.slug; opt.textContent = t.name; opt.dataset.color = t.color;
+    sel.appendChild(opt);
+  });
+  if(_tracks.some(function(t){return t.slug===cur;})) sel.value = cur;
+}
+
+// ─── track management popup (#1238) ─────────────────────────────────────────
+function openTracksPopup(){
+  renderTracksTable();
+  document.getElementById('tt-tracks-popup').showModal();
+}
+function tmClose(){ document.getElementById('tt-tracks-popup').close(); }
+var _trRowMap = new WeakMap(); // <tr> -> _tracks entry, same idea as _rhRoomMap (#1237)
+function renderTracksTable(){
+  var tbody = document.getElementById('tm-tbody');
+  tbody.innerHTML = '';
+  _tracks.forEach(function(t){
+    var tr = document.createElement('tr');
+    _trRowMap.set(tr, t);
+
+    var tdHandle = document.createElement('td'); tdHandle.className='tt-tr-handle'; tdHandle.textContent='⠿';
+    tr.appendChild(tdHandle);
+
+    var tdName = document.createElement('td');
+    var nameInput = document.createElement('input'); nameInput.type='text'; nameInput.value=t.name;
+    // slug stays immutable on rename — existing entries reference tracks by
+    // slug, so only the display name needs to change, no migration needed.
+    nameInput.addEventListener('change', function(){
+      var v = nameInput.value.trim();
+      if(!v){ nameInput.value = t.name; return; }
+      t.name = v;
+      saveTracks(); rebuildTypeSelect();
+    });
+    tdName.appendChild(nameInput);
+    tr.appendChild(tdName);
+
+    var tdColor = document.createElement('td');
+    var colorInput = document.createElement('input'); colorInput.type='color'; colorInput.className='tt-track-color';
+    colorInput.value = colorToHex(t.color); colorInput.title = t.name;
+    colorInput.addEventListener('change', function(){
+      t.color = colorInput.value;
+      saveTracks(); rebuildTypeSelect(); renderAll();
+    });
+    tdColor.appendChild(colorInput);
+    tr.appendChild(tdColor);
+
+    var tdUsage = document.createElement('td'); tdUsage.className='tt-tr-usage';
+    tdUsage.textContent = _entries.filter(function(e){ return e.entry_type===t.slug; }).length;
+    tr.appendChild(tdUsage);
+
+    var tdDel = document.createElement('td');
+    var delBtn = document.createElement('button'); delBtn.type='button'; delBtn.className='tt-tr-del'; delBtn.textContent='×';
+    delBtn.title = {{$.Strings.T "admin_delete" | js}};
+    delBtn.disabled = _tracks.length<=1; // keep the Type dropdown from ever going empty
+    delBtn.addEventListener('click', function(){ tmDeleteTrack(t); });
+    tdDel.appendChild(delBtn);
+    tr.appendChild(tdDel);
+
+    setupTrackRowDrag(tr, t, tdHandle);
+    tbody.appendChild(tr);
+  });
+}
+function tmDeleteTrack(t){
+  if(_tracks.length<=1) return;
+  // same fallback the room-column equivalent (removeRoom()) relies on:
+  // entries keep the now-orphaned slug and fall back to a default color via
+  // trackColor()/ensureTrackOption() the next time they're touched — no new
+  // fallback machinery needed here.
+  _tracks = _tracks.filter(function(tr){ return tr!==t; });
+  saveTracks(); rebuildTypeSelect(); renderTracksTable(); renderAll();
+}
+function tmAddKeydown(ev){
+  if(ev.key==='Enter'){ ev.preventDefault(); tmAddTrack(); }
+}
+function tmAddTrack(){
+  var nameInput = document.getElementById('tm-add-name');
+  var colorInput = document.getElementById('tm-add-color');
+  var name = nameInput.value.trim();
+  if(!name) return;
+  var track = {slug: slugify(name), name: name, color: colorInput.value};
+  _tracks.push(track);
+  nameInput.value = '';
+  saveTracks(); rebuildTypeSelect(); renderTracksTable(); renderAll();
+}
+// Row drag: same pointer-based mechanic as #1237's column-header drag
+// (pointerdown/move/up + pointer capture, not native HTML5 DnD) — adapted to
+// a vertical list, so "which side of the target" is measured on the Y axis
+// (top half of the row vs bottom half) instead of X.
+function setupTrackRowDrag(tr, track, handle){
+  handle.addEventListener('pointerdown', function(ev){
+    if(ev.button!==0) return;
+    ev.preventDefault();
+    var startX=ev.clientX, startY=ev.clientY, dragging=false, target=null;
+    handle.setPointerCapture(ev.pointerId);
+
+    function onMove(e){
+      if(!dragging){
+        if(Math.abs(e.clientX-startX)<4 && Math.abs(e.clientY-startY)<4) return;
+        dragging = true;
+        tr.style.opacity = '0.4';
+      }
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      var row = el && el.closest('#tm-tbody tr');
+      var rowTrack = row ? _trRowMap.get(row) : null;
+      if(target && target!==row) target.classList.remove('tt-drop-target');
+      if(rowTrack && rowTrack!==track){ row.classList.add('tt-drop-target'); target=row; }
+      else target=null;
+    }
+    function onUp(e){
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      tr.style.opacity = '';
+      if(target){
+        target.classList.remove('tt-drop-target');
+        var destTrack = _trRowMap.get(target);
+        if(dragging && destTrack && destTrack!==track){
+          var rect = target.getBoundingClientRect();
+          var after = (e.clientY - rect.top) > rect.height/2;
+          reorderTrack(track, destTrack, after);
+        }
+      }
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+}
+function reorderTrack(src, dest, after){
+  var srcIdx = _tracks.indexOf(src);
+  if(srcIdx < 0) return;
+  _tracks.splice(srcIdx, 1);
+  var destIdx = _tracks.indexOf(dest);
+  if(destIdx < 0){ _tracks.push(src); }
+  else { _tracks.splice(destIdx + (after?1:0), 0, src); }
+  saveTracks(); rebuildTypeSelect(); renderTracksTable();
 }
 
 function ppSave(){

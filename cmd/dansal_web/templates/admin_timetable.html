@@ -85,6 +85,7 @@
 #tt-popup h2{margin:0 0 .75rem;font-size:1rem}
 .tt-popup-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem}
 .tt-popup-row.full{grid-template-columns:1fr}
+.tt-popup-row.tri{grid-template-columns:1fr 1fr 1fr}
 .tt-popup-field{display:flex;flex-direction:column;gap:.2rem}
 .tt-popup-field label{font-size:.78rem;color:var(--fg-dim);font-weight:600}
 .tt-popup-field input,.tt-popup-field select,.tt-popup-field textarea{background:var(--bg-input,var(--bg));border:1px solid var(--border-mid);border-radius:4px;padding:.35rem .5rem;color:var(--fg);font-size:.88rem;width:100%;box-sizing:border-box}
@@ -143,7 +144,8 @@
 <!-- Entry edit popup -->
 <dialog id="tt-popup">
   <h2 id="tt-popup-title">Entry</h2>
-  <div class="tt-popup-row">
+  <div class="tt-popup-row tri">
+    <div class="tt-popup-field"><label>Day</label><select id="pp-day" data-on="change" data-fn="ppDirty" data-args="[]"></select></div>
     <div class="tt-popup-field"><label>Start</label><input type="time" id="pp-start" data-on="input" data-fn="ppDirty" data-args="[]"></div>
     <div class="tt-popup-field"><label>End</label><input type="time" id="pp-end" data-on="input" data-fn="ppDirty" data-args="[]"></div>
   </div>
@@ -908,6 +910,19 @@ function newEntry(){
 function openPopup(entry, isNew){
   _popupEntry = entry; _popupIsNew = !!isNew;
   document.getElementById('tt-popup-title').textContent = isNew ? 'New entry' : 'Edit entry';
+  // #1230: day is a real, editable field — not just whatever column the
+  // entry happened to be created/cloned in. ppClone() in particular used to
+  // leave the clone hardcoded to the source entry's day with no way to
+  // retarget it, so "clone to the next day" silently cloned onto the same
+  // day every time.
+  var daySel = document.getElementById('pp-day'); daySel.innerHTML = '';
+  var wantDay = entry.entry_date || (_days.length ? _days[0] : '');
+  if(wantDay && _days.indexOf(wantDay) < 0) _days = _days.concat([wantDay]).sort();
+  _days.forEach(function(d){
+    var opt = document.createElement('option'); opt.value = d; opt.textContent = d;
+    if(d === wantDay) opt.selected = true;
+    daySel.appendChild(opt);
+  });
   document.getElementById('pp-start').value = entry.start_time||'';
   document.getElementById('pp-end').value = entry.end_time||'';
   document.getElementById('pp-title').value = entry.title||'';
@@ -1018,6 +1033,7 @@ function saveTracks(){
 
 function ppSave(){
   var e = _popupEntry;
+  e.entry_date = document.getElementById('pp-day').value || e.entry_date;
   e.start_time = document.getElementById('pp-start').value;
   e.end_time = document.getElementById('pp-end').value;
   e.title = document.getElementById('pp-title').value.trim();
@@ -1054,11 +1070,14 @@ function ppSave(){
 }
 function ppCancel(){ document.getElementById('tt-popup').close(); }
 // ppClone (#1227): duplicates the entry currently open in the popup — title,
-// track, room, musician, instructor, description — onto the same day, but
-// with start/end left blank. The admin must type the new time explicitly
-// (ppSave's validation below rejects a blank start/end) rather than the
-// clone guessing a slot, since same-shape repeats (meals being the main
-// case) commonly land at a different time each day.
+// track, room, musician, instructor, description — onto the same day by
+// default, but with start/end left blank. The admin must type the new time
+// explicitly (ppSave's validation below rejects a blank start/end) rather
+// than the clone guessing a slot, since same-shape repeats (meals being the
+// main case) commonly land at a different time each day. The Day field
+// openPopup() populates (#1230) is a real, editable dropdown, so cloning to
+// a *different* day — e.g. "same meal, next day" — is just picking the
+// other day there before saving, not a separate flow.
 function ppClone(){
   var src = _popupEntry;
   var clone = {

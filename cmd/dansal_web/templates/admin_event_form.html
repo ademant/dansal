@@ -64,6 +64,7 @@
 <div class="evt-main">
 
 <form id="evt-form" method="post" enctype="multipart/form-data" class="evt-form"
+  action="{{if .IsTemplateMode}}{{if .TplID}}/admin/templates/{{.TplID}}/edit{{else}}/admin/templates/new{{end}}{{else if .IsNew}}/admin/events/new{{else}}/admin/events/{{.Event.ID}}/edit{{end}}"
   {{if .Prefill}}
   data-prefill-org="{{.Prefill.OrgID}}"
   data-prefill-loc="{{.Prefill.LocID}}"

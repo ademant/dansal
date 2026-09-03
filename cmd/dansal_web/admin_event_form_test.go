@@ -78,6 +78,33 @@ func TestSmokeRenderAdminEventForm(t *testing.T) {
 		Series:        []EventSeries{{ID: 5, Title: "Some series"}},
 	})
 
+	// evt-form has no fallback action (it relies on being rendered at the
+	// matching page URL) — assert each mode gets the right explicit one, so
+	// "Save" never silently posts to whatever handler happened to render the
+	// form (see the /admin/events/import regression in admin_import_test.go).
+	t.Run("action-attribute", func(t *testing.T) {
+		cases := []struct {
+			name string
+			data AdminEventFormData
+			want string
+		}{
+			{"new", AdminEventFormData{IsNew: true}, `action="/admin/events/new"`},
+			{"edit", AdminEventFormData{IsNew: false, Event: Event{ID: 42}}, `action="/admin/events/42/edit"`},
+			{"template-new", AdminEventFormData{IsNew: true, IsTemplateMode: true}, `action="/admin/templates/new"`},
+			{"template-edit", AdminEventFormData{IsNew: true, IsTemplateMode: true, TplID: 7}, `action="/admin/templates/7/edit"`},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				rec := httptest.NewRecorder()
+				renderTemplate(rec, tmpls.adminEventForm, tmplData(req, cfg, i18n, "test", tc.data))
+				body, _ := io.ReadAll(rec.Body)
+				if !strings.Contains(string(body), tc.want) {
+					t.Errorf("expected %s in rendered form, not found", tc.want)
+				}
+			})
+		}
+	})
+
 	render("edit-with-current-series", AdminEventFormData{
 		IsNew:         false,
 		Event:         Event{ID: 43, Title: "Series event"},

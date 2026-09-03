@@ -74,6 +74,15 @@ func TestAdminImportSingleMatchLongDescriptionDoesNotRedirect(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "marker-needle") {
 		t.Errorf("rendered form does not contain the imported description")
 	}
+	// Regression check for the follow-up bug: evt-form has no explicit
+	// action, so when rendered in-process from a POST it used to default to
+	// the current document URL (/admin/events/import) instead of
+	// /admin/events/new, sending "Save" back into the import handler
+	// ("Datei hochladen (.ics / .json): required" instead of creating the
+	// event).
+	if !strings.Contains(rec.Body.String(), `action="/admin/events/new"`) {
+		t.Errorf("rendered form's action does not point at /admin/events/new; Save would post back to the import handler")
+	}
 }
 
 func jsonQuote(s string) string {

@@ -202,6 +202,7 @@
   <div class="tt-popup-actions">
     <button type="button" class="btn-primary" data-fn="ppSave" data-args="[]">Save entry</button>
     <button type="button" class="btn-secondary" data-fn="ppCancel" data-args="[]">Cancel</button>
+    <button type="button" class="btn-secondary" id="pp-clone-btn" data-fn="ppClone" data-args="[]">{{$.Strings.T "tt_clone_entry"}}</button>
     <button type="button" class="btn-del tt-del-entry" id="pp-del-btn" data-fn="ppDelete" data-args="[]">Delete</button>
   </div>
 </dialog>
@@ -240,7 +241,8 @@ if(!_tracks || !_tracks.length){
     {slug:'dance-workshop',name:'Dance workshop',color:'rgba(201,80,10,.78)'},
     {slug:'musician-workshop',name:'Musician workshop',color:'rgba(138,42,176,.78)'},
     {slug:'break',name:'Break',color:'rgba(102,102,102,.78)'},
-    {slug:'session',name:'Session',color:'rgba(42,138,74,.78)'}
+    {slug:'session',name:'Session',color:'rgba(42,138,74,.78)'},
+    {slug:'meal',name:'Meal',color:'rgba(196,158,20,.78)'}
   ];
 }
 var _allMusicians = (function(){
@@ -927,6 +929,7 @@ function openPopup(entry, isNew){
     rSel.appendChild(opt);
   });
   document.getElementById('pp-del-btn').hidden = isNew;
+  document.getElementById('pp-clone-btn').hidden = isNew;
   document.getElementById('tt-popup').showModal();
 }
 var _popupIsNew = false;
@@ -1036,6 +1039,7 @@ function ppSave(){
   } else if(rSel.startsWith('lbl:')){
     e.room = rSel.slice(4);
   }
+  if(!e.start_time || !e.end_time){ document.getElementById(e.start_time?'pp-end':'pp-start').focus(); return; }
   if(!e.title){ document.getElementById('pp-title').focus(); return; }
   if(_popupIsNew) _entries.push(e);
   document.getElementById('tt-popup').close();
@@ -1049,6 +1053,30 @@ function ppSave(){
   recomputeRooms(); _markDirty(); renderAll();
 }
 function ppCancel(){ document.getElementById('tt-popup').close(); }
+// ppClone (#1227): duplicates the entry currently open in the popup — title,
+// track, room, musician, instructor, description — onto the same day, but
+// with start/end left blank. The admin must type the new time explicitly
+// (ppSave's validation below rejects a blank start/end) rather than the
+// clone guessing a slot, since same-shape repeats (meals being the main
+// case) commonly land at a different time each day.
+function ppClone(){
+  var src = _popupEntry;
+  var clone = {
+    _cid: _nextCid(),
+    entry_date: src.entry_date,
+    start_time: '', end_time: '',
+    title: document.getElementById('pp-title').value.trim(),
+    entry_type: document.getElementById('pp-type').value,
+    description: document.getElementById('pp-desc').value,
+    location_id: src.location_id||null, location_name: src.location_name||'', room: src.room||'',
+    musician_id: document.getElementById('pp-mus-id').value ? parseInt(document.getElementById('pp-mus-id').value) : null,
+    musician_name: document.getElementById('pp-mus-text').value.trim(),
+    instructor_id: document.getElementById('pp-ins-id').value ? parseInt(document.getElementById('pp-ins-id').value) : null,
+    instructor_name: document.getElementById('pp-ins-text').value.trim()
+  };
+  document.getElementById('tt-popup').close();
+  openPopup(clone, true);
+}
 function ppDelete(){
   var cid = _popupEntry._cid;
   _entries = _entries.filter(function(e){ return e._cid!==cid; });

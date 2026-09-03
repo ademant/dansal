@@ -532,7 +532,7 @@ func timetableEntriesForNextUpJSON(entries []TimetableEntry, eventStartTime stri
 	return template.JS(b)
 }
 
-// defaultTrackI18nKeys maps the 8 slugs in the shipped default
+// defaultTrackI18nKeys maps the 9 slugs in the shipped default
 // timetable-track palette (see defaultTimetableTracks on the API side) to
 // their existing i18n keys.
 var defaultTrackI18nKeys = map[string]string{
@@ -544,6 +544,7 @@ var defaultTrackI18nKeys = map[string]string{
 	"musician-workshop": "tt_type_musician_workshop",
 	"break":             "tt_type_break",
 	"session":           "tt_type_session",
+	"meal":              "tt_type_meal",
 }
 
 func trackI18nKey(slug string) string { return defaultTrackI18nKeys[slug] }

@@ -255,6 +255,7 @@ var defaultTimetableTracks = []TimetableTrack{
 	{Slug: "musician-workshop", Name: "Musician workshop", Color: "rgba(138,42,176,.78)"},
 	{Slug: "break", Name: "Break", Color: "rgba(102,102,102,.78)"},
 	{Slug: "session", Name: "Session", Color: "rgba(42,138,74,.78)"},
+	{Slug: "meal", Name: "Meal", Color: "rgba(196,158,20,.78)"},
 }
 
 // VocabEntry describes one allowed value in a closed vocabulary, pairing the

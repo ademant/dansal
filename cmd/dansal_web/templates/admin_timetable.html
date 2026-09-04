@@ -57,7 +57,6 @@
 .tt-room-col-h2{font-size:.66rem;color:var(--fg-faint,var(--fg-dim));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 /* column drag: reorder room columns (#1237) */
 .tt-room-col-header.tt-col-draggable{cursor:grab}
-.tt-room-col-header.tt-drop-target{background:rgba(74,127,203,.15);outline:2px dashed rgba(74,127,203,.6);outline-offset:-2px}
 .tt-room-col+.tt-room-col{border-left:1px solid var(--border-mid)}
 .tt-room-body{position:relative;cursor:crosshair}
 .tt-gridline{position:absolute;left:0;right:0;pointer-events:none}
@@ -85,8 +84,10 @@
 .tt-ghost{position:absolute;left:2px;right:2px;background:rgba(74,127,203,.3);border:2px dashed rgba(74,127,203,.7);border-radius:5px;pointer-events:none;box-sizing:border-box}
 /* floating ghost while moving an existing tile across rooms */
 .tt-move-ghost{position:fixed;pointer-events:none;z-index:1000;box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:.88;border-radius:5px}
-/* drop-target highlight on a room body */
-.tt-room-body.tt-drop-target{background:rgba(74,127,203,.08);outline:2px dashed rgba(74,127,203,.5);outline-offset:-2px}
+/* drop-target highlight — shared by tile-drop room bodies and #1237's
+   column-header drag; the tracks-table row drag (#1238, below) needs its
+   own variant since outline doesn't render cleanly around a <tr>. */
+.tt-room-body.tt-drop-target,.tt-room-col-header.tt-drop-target{background:rgba(74,127,203,.08);outline:2px dashed rgba(74,127,203,.5);outline-offset:-2px}
 /* popup */
 #tt-popup{border:1px solid var(--border-mid);border-radius:8px;padding:1rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:480px;width:95vw}
 #tt-popup::backdrop{background:rgba(0,0,0,.4)}
@@ -794,47 +795,57 @@ function renderGrid(){
   });
 }
 
-// ─── column drag: reorder room columns (#1237) ─────────────────────────────────
-// Every visible day's header row and body columns are both derived from the
-// single shared _rooms array at render time (roomList = _rooms.concat(Other)
-// above), so reordering _rooms once and calling renderAll() re-syncs every
-// day's columns in one go — no per-day state to touch.
-function setupColumnDrag(rh, r){
-  rh.classList.add('tt-col-draggable');
-  rh.addEventListener('pointerdown', function(ev){
+// ─── generic pointer-based drag-to-reorder (#1237, #1238) ─────────────────────
+// Shared by the room-column-header drag (#1237) and the track-row drag
+// (#1238) below — same mechanic either way: pointerdown/move/up + pointer
+// capture (not native HTML5 DnD, for touch parity with the rest of this
+// file's drag code), a 4px movement threshold before a drag "counts",
+// opacity-dimming the dragged element, and — on drop — inserting before or
+// after the target depending on which half of its bounding rect (left/right
+// for axis 'x', top/bottom for 'y') the pointer landed on.
+//   handle     — element that starts the drag on pointerdown
+//   dragEl     — element to opacity-dim while dragging (same as handle for
+//                the column header; the whole <tr> for a track row, whose
+//                own handle is just its grip cell)
+//   item       — the _rooms/_tracks entry this handle/row represents
+//   itemMap    — WeakMap<element, item> used to resolve whatever element is
+//                currently under the pointer back to its item
+//   targetSel  — selector identifying a valid drop-target element
+//   axis       — 'x' or 'y'
+//   onDrop(item, destItem, after) — called once, only on a real drop
+function setupDragReorder(handle, dragEl, item, itemMap, targetSel, axis, onDrop){
+  handle.addEventListener('pointerdown', function(ev){
     if(ev.button!==0) return;
     ev.preventDefault();
     var startX=ev.clientX, startY=ev.clientY, dragging=false, target=null;
-    rh.setPointerCapture(ev.pointerId);
+    handle.setPointerCapture(ev.pointerId);
 
     function onMove(e){
       if(!dragging){
         if(Math.abs(e.clientX-startX)<4 && Math.abs(e.clientY-startY)<4) return;
         dragging = true;
-        rh.style.opacity = '0.4';
+        dragEl.style.opacity = '0.4';
       }
       var el = document.elementFromPoint(e.clientX, e.clientY);
-      var hdr = el && el.closest('.tt-room-col-header');
-      var room = hdr ? _rhRoomMap.get(hdr) : null;
-      if(target && target!==hdr) target.classList.remove('tt-drop-target');
-      if(room && room!==r){ hdr.classList.add('tt-drop-target'); target=hdr; }
+      var hit = el && el.closest(targetSel);
+      var hitItem = hit ? itemMap.get(hit) : null;
+      if(target && target!==hit) target.classList.remove('tt-drop-target');
+      if(hitItem && hitItem!==item){ hit.classList.add('tt-drop-target'); target=hit; }
       else target=null;
     }
     function onUp(e){
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
-      rh.style.opacity = '';
+      dragEl.style.opacity = '';
       if(target){
         target.classList.remove('tt-drop-target');
-        var destRoom = _rhRoomMap.get(target);
-        if(dragging && destRoom && destRoom!==r){
-          // drop on the left half of the target header inserts before it,
-          // the right half inserts after — same "which side of the midpoint"
-          // rule from the issue, so a drag reads as landing where it visibly
-          // stopped rather than always snapping to one fixed side.
+        var destItem = itemMap.get(target);
+        if(dragging && destItem && destItem!==item){
           var rect = target.getBoundingClientRect();
-          var after = (e.clientX - rect.left) > rect.width/2;
-          reorderRoom(r, destRoom, after);
+          var after = axis==='x'
+            ? (e.clientX - rect.left) > rect.width/2
+            : (e.clientY - rect.top) > rect.height/2;
+          onDrop(item, destItem, after);
         }
       }
     }
@@ -842,13 +853,29 @@ function setupColumnDrag(rh, r){
     document.addEventListener('pointerup', onUp);
   });
 }
-function reorderRoom(src, dest, after){
-  var srcIdx = _rooms.indexOf(src);
+// Splice src out of arr and back in next to dest — shared by reorderRoom and
+// reorderTrack below, which differ only in which array and what happens
+// after (renderAll() vs. saveTracks()+rebuildTypeSelect()+renderTracksTable()).
+function moveInArray(arr, src, dest, after){
+  var srcIdx = arr.indexOf(src);
   if(srcIdx < 0) return;
-  _rooms.splice(srcIdx, 1);
-  var destIdx = _rooms.indexOf(dest);
-  if(destIdx < 0){ _rooms.push(src); }
-  else { _rooms.splice(destIdx + (after?1:0), 0, src); }
+  arr.splice(srcIdx, 1);
+  var destIdx = arr.indexOf(dest);
+  if(destIdx < 0){ arr.push(src); }
+  else { arr.splice(destIdx + (after?1:0), 0, src); }
+}
+
+// ─── column drag: reorder room columns (#1237) ─────────────────────────────────
+// Every visible day's header row and body columns are both derived from the
+// single shared _rooms array at render time (roomList = _rooms.concat(Other)
+// above), so reordering _rooms once and calling renderAll() re-syncs every
+// day's columns in one go — no per-day state to touch.
+function setupColumnDrag(rh, r){
+  rh.classList.add('tt-col-draggable');
+  setupDragReorder(rh, rh, r, _rhRoomMap, '.tt-room-col-header', 'x', reorderRoom);
+}
+function reorderRoom(src, dest, after){
+  moveInArray(_rooms, src, dest, after);
   _markDirty(); renderAll();
 }
 
@@ -1289,11 +1316,11 @@ function colorToHex(c){
 function ensureTrackOption(slug){
   if(!slug) return;
   if(_tracks.some(function(t){return t.slug===slug;})) return;
-  var track = {slug: slug, name: slug, color: '#4a7fcb'};
-  _tracks.push(track);
-  var opt = document.createElement('option');
-  opt.value = track.slug; opt.textContent = track.name; opt.dataset.color = track.color;
-  document.getElementById('pp-type').appendChild(opt);
+  _tracks.push({slug: slug, name: slug, color: '#4a7fcb'});
+  // openPopup() sets pp-type's value to this same slug right after calling
+  // us, so which option rebuildTypeSelect() leaves selected doesn't matter —
+  // passing slug here just avoids a redundant/wrong intermediate selection.
+  rebuildTypeSelect(slug);
 }
 function ppTypeChange(){
   document.getElementById('pp-type-color').value = trackColor(document.getElementById('pp-type').value);
@@ -1326,11 +1353,7 @@ function addTrack(){
   if(!name) return;
   var track = {slug: slugify(name), name: name, color: colorInput.value};
   _tracks.push(track);
-  var sel = document.getElementById('pp-type');
-  var opt = document.createElement('option');
-  opt.value = track.slug; opt.textContent = track.name; opt.dataset.color = track.color;
-  sel.appendChild(opt);
-  sel.value = track.slug;
+  rebuildTypeSelect(track.slug);
   document.getElementById('pp-type-color').value = track.color;
   nameInput.value = '';
   saveTracks();
@@ -1339,23 +1362,26 @@ function saveTracks(){
   fetch('/admin/events/'+EVT_ID+'/timetable/tracks',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_tracks)})
     .catch(function(err){ console.error('saveTracks failed', err); });
 }
-// pp-type's <option> list is otherwise only ever appended to (by addTrack()/
-// ensureTrackOption()), never fully rebuilt — fine for that popup's own
-// additions, but the tracks-management popup (#1238) below can rename,
-// reorder or delete tracks wholesale, so it needs a real rebuild to stay in
-// sync. Safe to call while the entry popup is closed (dialogs here are
-// modal/exclusive, so it's never visible mid-edit) — it just needs to be
-// correct by the next openPopup().
-function rebuildTypeSelect(){
+// Single source of truth for pp-type's <option> list, called after every
+// _tracks mutation (add/rename/recolor's slug set stays same so this isn't
+// strictly needed there, but delete and reorder both need a real rebuild,
+// not an incremental append — addTrack()/ensureTrackOption() above use it
+// too rather than hand-building their own <option> the way earlier versions
+// of this file did). Safe to call while the entry popup is closed (dialogs
+// here are modal/exclusive, so it's never visible mid-edit) — it just needs
+// to be correct by the next openPopup(). Pass selectSlug to select a
+// specific option afterward (e.g. a track just added); omit it to keep
+// whatever was already selected, when still present.
+function rebuildTypeSelect(selectSlug){
   var sel = document.getElementById('pp-type');
-  var cur = sel.value;
+  var want = selectSlug || sel.value;
   sel.innerHTML = '';
   _tracks.forEach(function(t){
     var opt = document.createElement('option');
     opt.value = t.slug; opt.textContent = t.name; opt.dataset.color = t.color;
     sel.appendChild(opt);
   });
-  if(_tracks.some(function(t){return t.slug===cur;})) sel.value = cur;
+  if(_tracks.some(function(t){return t.slug===want;})) sel.value = want;
 }
 
 // ─── track management popup (#1238) ─────────────────────────────────────────
@@ -1434,57 +1460,19 @@ function tmAddTrack(){
   var track = {slug: slugify(name), name: name, color: colorInput.value};
   _tracks.push(track);
   nameInput.value = '';
-  saveTracks(); rebuildTypeSelect(); renderTracksTable(); renderAll();
+  // no renderAll() here — a brand-new track has no entries referencing its
+  // slug yet, so there's nothing in the grid for a re-render to change.
+  saveTracks(); rebuildTypeSelect(); renderTracksTable();
 }
-// Row drag: same pointer-based mechanic as #1237's column-header drag
-// (pointerdown/move/up + pointer capture, not native HTML5 DnD) — adapted to
-// a vertical list, so "which side of the target" is measured on the Y axis
-// (top half of the row vs bottom half) instead of X.
+// Row drag: setupDragReorder (above) adapted to a vertical list — 'y' axis,
+// so "which side of the target" is the row's top half vs bottom half. The
+// drag handle is the row's own grip cell, but the whole <tr> is what's
+// opacity-dimmed while dragging.
 function setupTrackRowDrag(tr, track, handle){
-  handle.addEventListener('pointerdown', function(ev){
-    if(ev.button!==0) return;
-    ev.preventDefault();
-    var startX=ev.clientX, startY=ev.clientY, dragging=false, target=null;
-    handle.setPointerCapture(ev.pointerId);
-
-    function onMove(e){
-      if(!dragging){
-        if(Math.abs(e.clientX-startX)<4 && Math.abs(e.clientY-startY)<4) return;
-        dragging = true;
-        tr.style.opacity = '0.4';
-      }
-      var el = document.elementFromPoint(e.clientX, e.clientY);
-      var row = el && el.closest('#tm-tbody tr');
-      var rowTrack = row ? _trRowMap.get(row) : null;
-      if(target && target!==row) target.classList.remove('tt-drop-target');
-      if(rowTrack && rowTrack!==track){ row.classList.add('tt-drop-target'); target=row; }
-      else target=null;
-    }
-    function onUp(e){
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      tr.style.opacity = '';
-      if(target){
-        target.classList.remove('tt-drop-target');
-        var destTrack = _trRowMap.get(target);
-        if(dragging && destTrack && destTrack!==track){
-          var rect = target.getBoundingClientRect();
-          var after = (e.clientY - rect.top) > rect.height/2;
-          reorderTrack(track, destTrack, after);
-        }
-      }
-    }
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-  });
+  setupDragReorder(handle, tr, track, _trRowMap, '#tm-tbody tr', 'y', reorderTrack);
 }
 function reorderTrack(src, dest, after){
-  var srcIdx = _tracks.indexOf(src);
-  if(srcIdx < 0) return;
-  _tracks.splice(srcIdx, 1);
-  var destIdx = _tracks.indexOf(dest);
-  if(destIdx < 0){ _tracks.push(src); }
-  else { _tracks.splice(destIdx + (after?1:0), 0, src); }
+  moveInArray(_tracks, src, dest, after);
   saveTracks(); rebuildTypeSelect(); renderTracksTable();
 }
 

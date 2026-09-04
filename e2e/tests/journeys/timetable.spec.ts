@@ -1,14 +1,16 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
 
 let seed: SeedResult;
 
 test.describe("Timetable view", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
   test("timetable section shows entries for seeded event", async ({

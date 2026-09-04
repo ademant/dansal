@@ -1,5 +1,6 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
-import { fullSeed, SeedResult, loginAs } from "../../helpers/seed";
+import { fullSeed, SeedResult } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import {
   randomFutureDate,
   titleWithDate,
@@ -13,20 +14,15 @@ let seed: SeedResult;
 
 test.describe("Admin: create event", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
-    // fullSeed() already logs setupPage in as admin — no need to log in
-    // again here. (A second loginAs() on an already-authenticated page
-    // navigates to /login, which redirects straight to /dashboard without
-    // rendering the form — see loginPageHandler — hanging the next fill()
-    // forever.) Each test() below gets its own fresh, unauthenticated page
-    // from the fixture, so it still needs its own loginAs() call.
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
   test("admin events list loads", async ({ page, metrics }) => {
-    // Login on this test's page
-    await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
+    // `page` loads pre-authenticated as admin via playwright.config.ts's
+    // use.storageState (#1252) — no explicit login needed here.
     const m = await gotoAndMeasure(page, "/admin/events", metrics, "admin_events_list");
     await expect(page.locator("h1, .admin-title")).toBeVisible();
     // Admin page should have a table of events. Scoped to .event-table:
@@ -36,7 +32,6 @@ test.describe("Admin: create event", () => {
   });
 
   test("creating a new event via admin form", async ({ page, metrics }) => {
-    await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
     const m = await gotoAndMeasure(page, "/admin/events/new", metrics, "admin_create_event");
     // Scoped to #evt-form: the "form" fallback also matches the page nav's
     // own logout form, which is a Playwright strict-mode violation.

@@ -1,5 +1,6 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
-import { fullSeed, SeedResult, loginAs, getTokenFromCookie } from "../../helpers/seed";
+import { fullSeed, SeedResult, getTokenFromCookie } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -8,13 +9,15 @@ let seed: SeedResult;
 
 test.describe("Admin: manage timetable", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
+  // `page` loads pre-authenticated as admin via playwright.config.ts's
+  // use.storageState (#1252) — just read the token off its cookies.
   test("timetable API add and replace entries", async ({ page, metrics }) => {
-    await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
     const token = await getTokenFromCookie(page);
     const eventId = seed.eventIds[0];
 

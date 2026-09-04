@@ -283,7 +283,12 @@ export async function seedInstructor(
 
 export async function fullSeed(page: Page): Promise<SeedResult> {
   const users = createUsers();
-  await loginAs(page, ADMIN.email, ADMIN.password);
+  // No login here (#1252) — `page`'s context is expected to already carry
+  // the admin session, either via playwright.config.ts's use.storageState
+  // (the `page` fixture) or an explicit
+  // browser.newContext({ storageState: AUTH_FILE }) (a beforeAll's
+  // setupPage). Both load global-setup.ts's one real login instead of each
+  // fullSeed() call submitting the form itself.
   const token = await getTokenFromCookie(page);
   const orgId = await seedOrg(page, token);
   const locationId = await seedLocation(page, token);

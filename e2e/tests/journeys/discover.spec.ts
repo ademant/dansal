@@ -1,5 +1,6 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import {
   loadAllRows,
   clickEventInTable,
@@ -13,9 +14,10 @@ let seed: SeedResult;
 
 test.describe("Discover events on index", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
   test("index loads with event table visible", async ({ page, metrics }) => {

@@ -1,5 +1,6 @@
 import { test, expect } from "../../helpers/fixtures";
-import { fullSeed, loginAs } from "../../helpers/seed";
+import { fullSeed } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 
@@ -72,13 +73,15 @@ async function locationIdByName(
 
 test.describe("Admin: location lifecycle", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
+  // `page` loads pre-authenticated as admin via playwright.config.ts's
+  // use.storageState (#1252) — no explicit login needed here.
   test("create, merge, modify and delete locations", async ({ page }) => {
-    await loginAs(page, "e2e-admin@dansal.test", "E2e-Admin-2026!");
 
     const minName = unique("E2E Loc Min"); // A (minimal)
     const fullName = unique("E2E Loc Full"); // B (fully featured)

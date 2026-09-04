@@ -1,5 +1,6 @@
 import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -8,13 +9,12 @@ let seed: SeedResult;
 
 test.describe("Booking flow", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    // Enable internal booking on the first event via PATCH. fullSeed()
-    // already left setupPage logged in as admin — a second loginAs() here
-    // would navigate to /login while already authenticated, which redirects
-    // straight to /dashboard without ever rendering the form (see
-    // loginPageHandler) and hangs the subsequent #identifier fill forever.
+    // Enable internal booking on the first event via PATCH. setupPage's
+    // context already carries the admin session via AUTH_FILE (#1252) — no
+    // loginAs() needed, just read the token off its cookies.
     const cookies = await setupPage.context().cookies();
     const token = cookies.find((c) => c.name === "dsw_token")?.value ?? "";
     await setupPage.request.fetch(
@@ -31,7 +31,7 @@ test.describe("Booking flow", () => {
         }),
       }
     );
-    await setupPage.context().close();
+    await context.close();
   });
 
   test("event page shows booking form when enabled", async ({

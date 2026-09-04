@@ -1,5 +1,6 @@
 import { test, expect } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
+import { AUTH_FILE } from "../../helpers/auth";
 import AxeBuilder from "@axe-core/playwright";
 import * as fs from "fs";
 import * as path from "path";
@@ -77,9 +78,10 @@ let seed: SeedResult;
 
 test.describe("WCAG 2.1 AA accessibility sweep", () => {
   test.beforeAll(async ({ browser }) => {
-    const setupPage = await browser.newPage();
+    const context = await browser.newContext({ storageState: AUTH_FILE });
+    const setupPage = await context.newPage();
     seed = await fullSeed(setupPage);
-    await setupPage.context().close();
+    await context.close();
   });
 
   test.describe("public routes", () => {

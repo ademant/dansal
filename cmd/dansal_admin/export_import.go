@@ -194,7 +194,7 @@ func exportFetchSources(db *sql.DB, output string) {
 		}
 		json.Unmarshal([]byte(tagsJSON), &s.Tags)
 		if danceCSV != "" {
-			for _, p := range strings.Split(danceCSV, ",") {
+			for p := range strings.SplitSeq(danceCSV, ",") {
 				if id, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
 					s.DanceIDs = append(s.DanceIDs, id)
 				}

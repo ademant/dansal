@@ -884,26 +884,26 @@ func adminMailBounces() adminResponse {
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Format: "<timestamp> <host> postfix/SERVICE[PID]: QUEUEID: message"
-		pidEnd := strings.Index(line, "]: ")
-		if pidEnd < 0 {
+		_, after, ok := strings.Cut(line, "]: ")
+		if !ok {
 			continue
 		}
-		rest := line[pidEnd+3:]
-		colonIdx := strings.Index(rest, ": ")
-		if colonIdx < 0 {
+		rest := after
+		before0, after0, ok0 := strings.Cut(rest, ": ")
+		if !ok0 {
 			continue
 		}
-		queueID := rest[:colonIdx]
-		msg := rest[colonIdx+2:]
+		queueID := before0
+		msg := after0
 
-		if strings.HasPrefix(msg, "message-id=") {
-			queueToMsgID[queueID] = strings.TrimSpace(strings.TrimPrefix(msg, "message-id="))
+		if after, ok := strings.CutPrefix(msg, "message-id="); ok {
+			queueToMsgID[queueID] = strings.TrimSpace(after)
 			continue
 		}
 		if strings.Contains(msg, "status=bounced") || strings.Contains(msg, "status=expired") {
 			reason := ""
-			if idx := strings.Index(msg, " ("); idx >= 0 {
-				reason = msg[idx+2:]
+			if _, after, ok := strings.Cut(msg, " ("); ok {
+				reason = after
 				if end := strings.LastIndex(reason, ")"); end >= 0 {
 					reason = reason[:end]
 				}

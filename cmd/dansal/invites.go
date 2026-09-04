@@ -462,7 +462,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	if invite.PresetEmail != "" {
 		emailVerified = 1
 	}
-	var emailVal interface{} = nil
+	var emailVal any = nil
 	if req.Email != "" {
 		emailVal = req.Email
 	}

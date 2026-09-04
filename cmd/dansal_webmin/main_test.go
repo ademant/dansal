@@ -22,8 +22,8 @@ func scriptSrcDirective(csp string) string {
 		return ""
 	}
 	rest := csp[i:]
-	if j := strings.Index(rest, ";"); j != -1 {
-		return rest[:j]
+	if before, _, ok := strings.Cut(rest, ";"); ok {
+		return before
 	}
 	return rest
 }

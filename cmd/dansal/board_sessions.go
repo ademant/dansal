@@ -36,10 +36,7 @@ func lookupBoardSession(r *http.Request) (id int, email, nickname string, ok boo
 		return
 	}
 	// Slide the expiry forward, capped by the absolute limit.
-	newExpiry := now + int64(bsSliding.Seconds())
-	if newExpiry > absoluteExpiry {
-		newExpiry = absoluteExpiry
-	}
+	newExpiry := min(now+int64(bsSliding.Seconds()), absoluteExpiry)
 	db.Exec("UPDATE verified_email_sessions SET expires_at=?, last_seen_at=? WHERE id=?", newExpiry, now, id)
 	ok = true
 	return
@@ -85,10 +82,7 @@ func createBoardSessionHandler(w http.ResponseWriter, r *http.Request) {
 
 	created := now
 	absoluteExpiry := created + int64(bsAbsolute.Seconds())
-	expiresAt := created + int64(bsSliding.Seconds())
-	if expiresAt > absoluteExpiry {
-		expiresAt = absoluteExpiry
-	}
+	expiresAt := min(created+int64(bsSliding.Seconds()), absoluteExpiry)
 
 	// Upsert: if the same email already has a session, replace its token so
 	// the old cookie is invalidated and the consent page issues a fresh one.
@@ -247,10 +241,7 @@ func useBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionHash := sha256Hex(sessionRaw)
 	absolute := now + int64(bsAbsolute.Seconds())
-	sliding := now + int64(bsSliding.Seconds())
-	if sliding > absolute {
-		sliding = absolute
-	}
+	sliding := min(now+int64(bsSliding.Seconds()), absolute)
 	if _, err := db.Exec(
 		`INSERT INTO verified_email_sessions
 		 (token_hash, email, nickname, created_at, absolute_expiry, expires_at, last_seen_at)

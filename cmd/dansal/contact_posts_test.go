@@ -284,7 +284,7 @@ func TestBoardPostCapLostFound(t *testing.T) {
 	eventID, userID := postCapTestSetup(t)
 
 	// Five posts (mix of lost and found) → all 201.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		typ := "lost_item"
 		if i%2 == 1 {
 			typ = "found_item"

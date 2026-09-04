@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -109,8 +110,8 @@ func MetricsMiddleware(smux *http.ServeMux) func(http.Handler) http.Handler {
 			route := "unknown"
 			if _, pattern := smux.Handler(r); pattern != "" {
 				// Strip leading method prefix added by Go 1.22+ patterns ("GET /path").
-				if i := strings.Index(pattern, " "); i >= 0 {
-					route = pattern[i+1:]
+				if _, after, ok := strings.Cut(pattern, " "); ok {
+					route = after
 				} else {
 					route = pattern
 				}
@@ -154,11 +155,9 @@ func startMetricsServer() {
 func metricsIPGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
-		for _, allowed := range config.Server.MetricsAllowedIPs {
-			if allowed == ip {
-				next.ServeHTTP(w, r)
-				return
-			}
+		if slices.Contains(config.Server.MetricsAllowedIPs, ip) {
+			next.ServeHTTP(w, r)
+			return
 		}
 		writeError(w, "Forbidden", http.StatusForbidden)
 	})

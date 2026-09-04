@@ -26,7 +26,7 @@ func TestGetEventsTotalCountIgnoresPagination(t *testing.T) {
 	// dedup (same location + start_time ±3h, no title check) doesn't collapse
 	// them into one event.
 	const day = 24 * 3600
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, _, _, err := insertEvent(db, EventInput{
 			Title: "Event", StartTime: 2000000000 + int64(i)*day, EndTime: 2000003600 + int64(i)*day,
 			IsPublished: true, LocationID: int64(locID),

@@ -231,13 +231,7 @@ func dialSMTPConn(host, port string, timeout time.Duration) (net.Conn, error) {
 	if err != nil || len(ips) == 0 {
 		return net.DialTimeout("tcp", net.JoinHostPort(host, port), timeout)
 	}
-	perAddr := timeout / time.Duration(len(ips))
-	if perAddr > 10*time.Second {
-		perAddr = 10 * time.Second
-	}
-	if perAddr < 5*time.Second {
-		perAddr = 5 * time.Second
-	}
+	perAddr := max(min(timeout/time.Duration(len(ips)), 10*time.Second), 5*time.Second)
 	var lastErr error
 	for _, ip := range ips {
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), perAddr)

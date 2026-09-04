@@ -160,7 +160,7 @@ func getServiceStatus(name string) ServiceStatus {
 		s.SubState = "systemctl error"
 		return s
 	}
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		k, v, ok := strings.Cut(line, "=")
 		if !ok {
 			continue

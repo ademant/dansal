@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1455,12 +1456,7 @@ func attachMusiciansToEvents(events []Event) {
 // present, enabling a single ?tag=workshop filter later.
 func syncEventTypeTags(w *EventWriteRequest) {
 	has := func(slug string) bool {
-		for _, t := range w.Tags {
-			if t == slug {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(w.Tags, slug)
 	}
 	add := func(slug string) {
 		if !has(slug) {

@@ -48,8 +48,8 @@ func TestSaveImageToDirGenThumbs(t *testing.T) {
 
 	// Minimal valid JPEG source image.
 	src := image.NewRGBA(image.Rect(0, 0, 800, 400))
-	for y := 0; y < 400; y++ {
-		for x := 0; x < 800; x++ {
+	for y := range 400 {
+		for x := range 800 {
 			src.Set(x, y, color.RGBA{R: 200, G: 100, B: 50, A: 255})
 		}
 	}

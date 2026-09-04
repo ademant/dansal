@@ -947,7 +947,7 @@ func patchSeriesEventDescription(w http.ResponseWriter, r *http.Request) {
 }
 
 // optionalInt returns nil if p is nil, otherwise the dereferenced value as interface{}.
-func optionalInt(p *int) interface{} {
+func optionalInt(p *int) any {
 	if p == nil {
 		return nil
 	}

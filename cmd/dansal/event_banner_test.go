@@ -19,8 +19,8 @@ func writeTestBannerSource(t *testing.T, dir string, id int) {
 		t.Fatalf("mkdir %s: %v", dir, err)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, 1200, 600))
-	for y := 0; y < 600; y++ {
-		for x := 0; x < 1200; x++ {
+	for y := range 600 {
+		for x := range 1200 {
 			img.Set(x, y, color.RGBA{100, 120, 200, 255})
 		}
 	}

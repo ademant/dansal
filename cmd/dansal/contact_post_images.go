@@ -171,8 +171,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			writeError(w, fmt.Sprintf("image too large (max %d MB)", config.Server.MaxBodyBytes>>20), http.StatusRequestEntityTooLarge)
 		} else {
 			writeError(w, "failed to parse form", http.StatusBadRequest)

@@ -299,12 +299,12 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 
 // parseICalGeo splits a GEO property value ("lat;lon") into its components.
 func parseICalGeo(s string) (lat, lon *float64) {
-	if i := strings.IndexByte(s, ';'); i >= 0 {
-		if f, err := strconv.ParseFloat(strings.TrimSpace(s[:i]), 64); err == nil {
+	if before, after, ok := strings.Cut(s, ";"); ok {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(before), 64); err == nil {
 			v := f
 			lat = &v
 		}
-		if f, err := strconv.ParseFloat(strings.TrimSpace(s[i+1:]), 64); err == nil {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(after), 64); err == nil {
 			v := f
 			lon = &v
 		}
@@ -530,7 +530,7 @@ func parseICalCategories(event *ics.VEvent) []string {
 	seen := make(map[string]bool)
 	var tags []string
 	for _, prop := range event.GetProperties(ics.ComponentPropertyCategories) {
-		for _, cat := range strings.Split(prop.Value, ",") {
+		for cat := range strings.SplitSeq(prop.Value, ",") {
 			cat = strings.TrimSpace(cat)
 			if cat != "" && !seen[cat] {
 				seen[cat] = true
@@ -577,7 +577,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 		json.Unmarshal([]byte(categoryFilterJSON), &src.CategoryFilter)
 	}
 	if danceIDsCSV != "" {
-		for _, part := range strings.Split(danceIDsCSV, ",") {
+		for part := range strings.SplitSeq(danceIDsCSV, ",") {
 			if id, err := strconv.Atoi(strings.TrimSpace(part)); err == nil {
 				src.DanceIDs = append(src.DanceIDs, id)
 			}
@@ -896,7 +896,7 @@ func normalizeLocStr(s string) string {
 
 func wordSet(s string) map[string]bool {
 	m := make(map[string]bool)
-	for _, w := range strings.Fields(s) {
+	for w := range strings.FieldsSeq(s) {
 		if w != "" {
 			m[w] = true
 		}

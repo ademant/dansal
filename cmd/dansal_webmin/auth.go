@@ -41,7 +41,7 @@ func getSessionUser(r *http.Request) *SessionUser {
 
 // extractCN parses the CN value from a DN string like "CN=alice,O=dansal"
 func extractCN(dn string) string {
-	for _, part := range strings.Split(dn, ",") {
+	for part := range strings.SplitSeq(dn, ",") {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(strings.ToUpper(part), "CN=") {
 			return part[3:]

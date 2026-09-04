@@ -26,14 +26,13 @@ func writeSchema(w http.ResponseWriter, v any) {
 }
 
 func collectFields(t reflect.Type, fields map[string]FieldSchema) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
 		return
 	}
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		if f.Anonymous {
 			collectFields(f.Type, fields)
 			continue
@@ -65,7 +64,7 @@ func collectFields(t reflect.Type, fields map[string]FieldSchema) {
 }
 
 func jsonKind(t reflect.Type) string {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	switch t.Kind() {

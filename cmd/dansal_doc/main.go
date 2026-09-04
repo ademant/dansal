@@ -67,12 +67,12 @@ func splitFrontMatter(data []byte) (frontMatter, []byte) {
 		return frontMatter{}, data
 	}
 	rest := text[len(delim)+1:]
-	end := strings.Index(rest, "\n"+delim)
-	if end == -1 {
+	before, after, ok := strings.Cut(rest, "\n"+delim)
+	if !ok {
 		return frontMatter{}, data
 	}
-	block := rest[:end]
-	body := rest[end+len("\n"+delim):]
+	block := before
+	body := after
 	body = strings.TrimPrefix(body, "\n")
 
 	var fm frontMatter
@@ -266,8 +266,8 @@ func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {
 	if slug == "" {
 		slug = app.cfg.IndexPage
 	}
-	if strings.HasSuffix(slug, ".md") {
-		http.Redirect(w, r, "/"+strings.TrimSuffix(slug, ".md"), http.StatusMovedPermanently)
+	if before, ok := strings.CutSuffix(slug, ".md"); ok {
+		http.Redirect(w, r, "/"+before, http.StatusMovedPermanently)
 		return
 	}
 	if strings.Contains(slug, "/") || strings.Contains(slug, "\\") || slug == "." || slug == ".." {
@@ -324,10 +324,10 @@ func duration(seconds, fallback int) time.Duration {
 }
 
 func firstHeading(data []byte, fallback string) string {
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		if after, ok := strings.CutPrefix(line, "# "); ok {
+			return strings.TrimSpace(after)
 		}
 	}
 	return strings.ReplaceAll(fallback, "-", " ")

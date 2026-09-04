@@ -85,19 +85,13 @@ func detectAssetMIME(data []byte) string {
 	if len(data) == 0 {
 		return ""
 	}
-	peek := len(data)
-	if peek > 512 {
-		peek = 512
-	}
+	peek := min(len(data), 512)
 	s := strings.TrimSpace(string(data[:peek]))
 	if strings.HasPrefix(s, "<svg") || strings.HasPrefix(s, "<?xml") || strings.Contains(s, "<svg") {
 		return "image/svg+xml"
 	}
 	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
-		end := len(data)
-		if end > 128 {
-			end = 128
-		}
+		end := min(len(data), 128)
 		for i := 8; i+4 <= end; i += 4 {
 			if i == 12 {
 				continue

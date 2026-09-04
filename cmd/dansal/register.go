@@ -546,7 +546,7 @@ func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	var emailVal interface{}
+	var emailVal any
 	if pr.Email != "" {
 		emailVal = pr.Email
 	}

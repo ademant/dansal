@@ -82,7 +82,7 @@ func geohashBBox(hash string) (minLat, maxLat, minLng, maxLng float64) {
 }
 
 func indexInBase32(c byte) int {
-	for i := 0; i < len(geohashBase32); i++ {
+	for i := range len(geohashBase32) {
 		if geohashBase32[i] == c {
 			return i
 		}

@@ -216,7 +216,7 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	if invite.PresetEmail != "" {
 		emailVerified = 1
 	}
-	var emailVal interface{} = nil
+	var emailVal any = nil
 	if req.Email != "" {
 		emailVal = req.Email
 	}
@@ -818,7 +818,7 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a disabled placeholder user.
-	var emailVal interface{} = nil
+	var emailVal any = nil
 	if pr.Email != "" {
 		emailVal = pr.Email
 	}

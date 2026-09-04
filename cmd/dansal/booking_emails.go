@@ -94,7 +94,7 @@ func bookingMailStringsFor(lang string) bookingMailStrings {
 // parseLang extracts a normalized primary language tag from an Accept-Language
 // value and returns it if supported, else defaultBookingLang.
 func parseLang(acceptLang string) string {
-	for _, part := range strings.Split(acceptLang, ",") {
+	for part := range strings.SplitSeq(acceptLang, ",") {
 		tag := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
 		primary := strings.ToLower(strings.SplitN(tag, "-", 2)[0])
 		if supportedBookingLangs[primary] {

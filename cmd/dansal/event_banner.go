@@ -261,10 +261,7 @@ func drawBannerOverlay(canvas *image.RGBA, lines []string, boldFirst bool) error
 
 	boxH := int(bannerBoxPadding*2 + bannerLineHeight*float64(len(lines)))
 	b := canvas.Bounds()
-	boxTop := b.Max.Y - boxH
-	if boxTop < b.Min.Y {
-		boxTop = b.Min.Y
-	}
+	boxTop := max(b.Max.Y-boxH, b.Min.Y)
 	box := image.Rect(b.Min.X, boxTop, b.Max.X, b.Max.Y)
 	draw.Draw(canvas, box, image.NewUniform(color.RGBA{0, 0, 0, 165}), image.Point{}, draw.Over)
 
@@ -294,10 +291,7 @@ func bannerFace(f *opentype.Font, size float64) (font.Face, error) {
 func drawCenteredLine(dst *image.RGBA, face font.Face, text string, y int, col color.Color) {
 	d := &font.Drawer{Dst: dst, Src: image.NewUniform(col), Face: face}
 	w := d.MeasureString(text).Ceil()
-	x := (dst.Bounds().Dx() - w) / 2
-	if x < 8 {
-		x = 8
-	}
+	x := max((dst.Bounds().Dx()-w)/2, 8)
 	d.Dot = fixed.Point26_6{X: fixed.I(x), Y: fixed.I(y)}
 	d.DrawString(text)
 }

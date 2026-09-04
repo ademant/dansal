@@ -636,7 +636,7 @@ func isPasswordPwned(ctx context.Context, password string) bool {
 		return false
 	}
 
-	for _, line := range strings.Split(string(body), "\n") {
+	for line := range strings.SplitSeq(string(body), "\n") {
 		parts := strings.SplitN(strings.TrimSpace(line), ":", 2)
 		if len(parts) == 2 && strings.EqualFold(parts[0], suffix) {
 			return true

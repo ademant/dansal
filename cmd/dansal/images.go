@@ -133,10 +133,7 @@ func isAVIF(head []byte) bool {
 	if string(head[4:8]) != "ftyp" {
 		return false
 	}
-	end := len(head)
-	if end > 128 {
-		end = 128
-	}
+	end := min(len(head), 128)
 	for i := 8; i+4 <= end; i += 4 {
 		if i == 12 {
 			continue // minor version, not a brand

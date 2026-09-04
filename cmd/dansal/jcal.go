@@ -98,12 +98,12 @@ func icalTextToJCal(icsText string) ([]byte, error) {
 		}
 		params := map[string][]string{}
 		for _, seg := range segs[1:] {
-			eq := strings.IndexByte(seg, '=')
-			if eq < 0 {
+			before, after, ok := strings.Cut(seg, "=")
+			if !ok {
 				continue
 			}
-			pname := strings.ToUpper(seg[:eq])
-			for _, pv := range splitOutsideQuotes(seg[eq+1:], ',') {
+			pname := strings.ToUpper(before)
+			for _, pv := range splitOutsideQuotes(after, ',') {
 				params[pname] = append(params[pname], strings.Trim(pv, `"`))
 			}
 		}
@@ -238,7 +238,7 @@ func icalDateToJCal(v string) string {
 // deliberate simplification, documented above.
 func icalRecurToJCal(v string) map[string]any {
 	out := map[string]any{}
-	for _, pair := range strings.Split(v, ";") {
+	for pair := range strings.SplitSeq(v, ";") {
 		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) != 2 || kv[0] == "" {
 			continue
@@ -525,7 +525,7 @@ func jcalRecurToICal(obj map[string]any) string {
 func unfoldICalLines(text string) []string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	var lines []string
-	for _, l := range strings.Split(text, "\n") {
+	for l := range strings.SplitSeq(text, "\n") {
 		if l == "" {
 			continue
 		}

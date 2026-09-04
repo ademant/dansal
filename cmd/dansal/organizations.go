@@ -677,7 +677,7 @@ func getOrganizationMembersBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requested := map[int]bool{}
-	for _, s := range strings.Split(raw, ",") {
+	for s := range strings.SplitSeq(raw, ",") {
 		s = strings.TrimSpace(s)
 		if id, err := strconv.Atoi(s); err == nil && id > 0 {
 			requested[id] = true

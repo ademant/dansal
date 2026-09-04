@@ -143,6 +143,13 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 				pricingArg = string(b)
 			}
 		}
+		// Reconcile has_ball/has_workshop/has_festival with req.Tags before
+		// writing either — the sibling initial-creation path (suggest.go)
+		// already does this via syncEventTypeTags; this edit path didn't,
+		// letting the two drift apart on a re-edit (#1241).
+		tmp := EventWriteRequest{HasBall: req.HasBall, HasWorkshop: req.HasWorkshop, HasFestival: req.HasFestival, Tags: req.Tags}
+		syncEventTypeTags(&tmp)
+		req.HasBall, req.HasWorkshop, req.HasFestival, req.Tags = tmp.HasBall, tmp.HasWorkshop, tmp.HasFestival, tmp.Tags
 		if _, err := tx.Exec(
 			`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 			 has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?, url=?, food=?, drink=?,

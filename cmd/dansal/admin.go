@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -301,21 +302,33 @@ func adminFetchAll() adminResponse {
 		Events int    `json:"events"`
 		Error  string `json:"error,omitempty"`
 	}
-	results := make([]sourceResult, 0, len(sources))
-	for _, src := range sources {
-		events, _, fetchErr := importFromSource(context.Background(), src)
-		r := sourceResult{ID: src.ID, URL: src.URL}
-		if fetchErr != nil {
-			r.Error = fetchErr.Error()
-			recordFetchResult(src, 0, fetchErr)
-			log.Printf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
-		} else {
-			r.Events = len(events)
-			recordFetchResult(src, len(events), nil)
-			log.Printf("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
-		}
-		results = append(results, r)
+	// Fetch every source in parallel — each is an independent outbound HTTP
+	// fetch to a different remote feed plus its own parse/import, same as
+	// bulkFetchURLsByIDs (the equivalent HTTP-triggered bulk refresh, which
+	// already did this). A plain sequential loop here made the CLI's
+	// periodic refresh take roughly N times longer than it needs to (#1249).
+	// Indexed writes into a pre-sized slice need no mutex — each goroutine
+	// owns a distinct index.
+	results := make([]sourceResult, len(sources))
+	var wg sync.WaitGroup
+	ctx := context.Background()
+	for i, src := range sources {
+		wg.Go(func() {
+			events, _, fetchErr := importFromSource(ctx, src)
+			r := sourceResult{ID: src.ID, URL: src.URL}
+			if fetchErr != nil {
+				r.Error = fetchErr.Error()
+				recordFetchResult(src, 0, fetchErr)
+				log.Printf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
+			} else {
+				r.Events = len(events)
+				recordFetchResult(src, len(events), nil)
+				log.Printf("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
+			}
+			results[i] = r
+		})
 	}
+	wg.Wait()
 	return adminResponse{OK: true, Data: results}
 }
 

@@ -81,7 +81,9 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(text, "/register") {
 		parts := strings.Fields(text)
 		if len(parts) < 2 {
-			_ = sendTelegramMessage(chatIDStr, "Send /register <token> with the token from the registration page.")
+			go func() {
+				_ = sendTelegramMessage(chatIDStr, "Send /register <token> with the token from the registration page.")
+			}()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -94,25 +96,29 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			sha256Hex(regToken),
 		).Scan(&regID, &regExpires, &regVerified)
 		if regErr != nil {
-			_ = sendTelegramMessage(chatIDStr, "This registration token is invalid or has already been used.")
+			go func() {
+				_ = sendTelegramMessage(chatIDStr, "This registration token is invalid or has already been used.")
+			}()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		regExp, err := parseTokenExpiration(regExpires)
 		if err != nil || time.Now().After(regExp) {
 			db.Exec("DELETE FROM pending_registrations WHERE id=?", regID)
-			_ = sendTelegramMessage(chatIDStr, "This registration token has expired.")
+			go func() { _ = sendTelegramMessage(chatIDStr, "This registration token has expired.") }()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		if regVerified == 1 {
-			_ = sendTelegramMessage(chatIDStr, "This registration has already been verified.")
+			go func() { _ = sendTelegramMessage(chatIDStr, "This registration has already been verified.") }()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		db.Exec("UPDATE pending_registrations SET verified=1, telegram_chat_id=? WHERE id=?", chatIDStr, regID)
 		log.Printf("telegram webhook: verified pending registration %d via Telegram", regID)
-		_ = sendTelegramMessage(chatIDStr, "✓ Verified! Your registration is now awaiting admin approval.")
+		go func() {
+			_ = sendTelegramMessage(chatIDStr, "✓ Verified! Your registration is now awaiting admin approval.")
+		}()
 		go notifyApprovers(regID)
 		w.WriteHeader(http.StatusOK)
 		return
@@ -127,7 +133,9 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Fields(text)
 	if len(parts) < 2 {
 		// /start without a token — generic greeting
-		_ = sendTelegramMessage(chatIDStr, "Hi! Send me a /start link from the dansal website to verify your account.")
+		go func() {
+			_ = sendTelegramMessage(chatIDStr, "Hi! Send me a /start link from the dansal website to verify your account.")
+		}()
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -152,13 +160,15 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			exp, err3 := parseTokenExpiration(postExpires)
 			if err3 != nil || time.Now().After(exp) {
 				db.Exec("DELETE FROM contact_posts WHERE id=?", postID)
-				_ = sendTelegramMessage(chatIDStr, "This verification link has expired.")
+				go func() { _ = sendTelegramMessage(chatIDStr, "This verification link has expired.") }()
 				w.WriteHeader(http.StatusOK)
 				return
 			}
 			db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL, poster_telegram_chat_id=? WHERE id=?", chatIDStr, postID)
 			log.Printf("telegram webhook: verified contact post %d", postID)
-			_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
+			go func() {
+				_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
+			}()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -176,7 +186,9 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			token,
 		).Scan(&crID, &crPostID, &crExpires, &crSenderEmail, &crSenderTelegram, &crMessage)
 		if err3 == sql.ErrNoRows {
-			_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+			go func() {
+				_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+			}()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -188,7 +200,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		crExp, err4 := parseTokenExpiration(crExpires)
 		if err4 != nil || time.Now().After(crExp) {
 			db.Exec("DELETE FROM contact_requests WHERE id=?", crID)
-			_ = sendTelegramMessage(chatIDStr, "This verification link has expired.")
+			go func() { _ = sendTelegramMessage(chatIDStr, "This verification link has expired.") }()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -212,7 +224,9 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			)
 			go func() { _, _ = SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body, true) }()
 		}
-		_ = sendTelegramMessage(chatIDStr, "✓ Your message has been confirmed and forwarded to the poster!")
+		go func() {
+			_ = sendTelegramMessage(chatIDStr, "✓ Your message has been confirmed and forwarded to the poster!")
+		}()
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -226,7 +240,9 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		db.Exec("DELETE FROM verification_tokens WHERE id=?", tokenID)
-		_ = sendTelegramMessage(chatIDStr, "This verification link has expired. Please request a new one.")
+		go func() {
+			_ = sendTelegramMessage(chatIDStr, "This verification link has expired. Please request a new one.")
+		}()
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -236,7 +252,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM verification_tokens WHERE id=?", tokenID)
 	log.Printf("telegram webhook: verified user %d, chat_id=%s", userID, chatIDStr)
 
-	_ = sendTelegramMessage(chatIDStr, "✓ Your Telegram account has been verified!")
+	go func() { _ = sendTelegramMessage(chatIDStr, "✓ Your Telegram account has been verified!") }()
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
+
+	"github.com/ademant/dansal/internal/strutil"
 )
 
 // EventSeries represents a recurring event series.
@@ -78,6 +78,13 @@ func applySeriesTemplate(q querier, eventID int, td seriesTemplateData) error {
 			pricingArg = string(b)
 		}
 	}
+	// Reconcile has_ball/has_workshop/has_festival with td.Tags before writing
+	// either — td comes verbatim from client-supplied template_data JSON, so
+	// without this the two can disagree (#1240), same risk syncEventTypeTags
+	// already guards against at every other event-write path.
+	tmp := EventWriteRequest{HasBall: td.HasBall, HasWorkshop: td.HasWorkshop, HasFestival: td.HasFestival, Tags: td.Tags}
+	syncEventTypeTags(&tmp)
+	td.HasBall, td.HasWorkshop, td.HasFestival, td.Tags = tmp.HasBall, tmp.HasWorkshop, tmp.HasFestival, tmp.Tags
 	if _, err := q.Exec(
 		`UPDATE events SET has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?,
 		 url=?, booking_url=?, pricing=jsonb(?), tickets_total=?, booking_enabled=?,
@@ -126,30 +133,6 @@ type SeriesEvent struct {
 	LocationName string `json:"location_name,omitempty"`
 	IsCancelled  bool   `json:"is_cancelled"`
 	IsPublished  bool   `json:"is_published"`
-}
-
-// slugify converts a title to a URL-safe slug.
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	prevHyphen := false
-	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			prevHyphen = false
-		} else if !prevHyphen {
-			b.WriteRune('-')
-			prevHyphen = true
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	// Remove non-ASCII
-	re := regexp.MustCompile(`[^a-z0-9-]`)
-	slug = re.ReplaceAllString(slug, "")
-	// Deduplicate hyphens
-	re2 := regexp.MustCompile(`-{2,}`)
-	slug = re2.ReplaceAllString(slug, "-")
-	return strings.Trim(slug, "-")
 }
 
 // uniqueSlug generates a unique slug, appending -2, -3 etc. if needed.
@@ -513,7 +496,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build slug
-	baseSlug := slugify(req.Title)
+	baseSlug := strutil.Slugify(req.Title)
 	if baseSlug == "" {
 		baseSlug = "series"
 	}

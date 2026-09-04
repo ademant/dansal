@@ -48,6 +48,14 @@
 .tt-day-col:last-child{border-right:none}
 .tt-day-header{height:32px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:600;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);white-space:nowrap;padding:0 .5rem;position:sticky;top:0;z-index:4}
 .tt-rooms-header{display:flex;height:0}
+/* building super-header (#1233): one cell per contiguous run of same-
+   building rooms, flex:N (N=rooms in that group) so it spans exactly as
+   wide as its N room columns below it — the flexbox equivalent of a
+   merged/colspan header cell. Rooms with no known building (freeform
+   text rooms, the "Other" sentinel) get an empty cell here instead of a
+   spanned one, since there's nothing to group them with. */
+.tt-building-hdr{background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);font-size:.7rem;font-weight:600;color:var(--fg);padding:.15rem .4rem;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.tt-building-hdr+.tt-building-hdr{border-left:1px solid var(--border-mid)}
 .tt-room-col{flex:1;position:relative;min-width:60px}
 .tt-room-col-header{position:sticky;top:32px;z-index:3;background:var(--bg-subtle);border-bottom:1px solid var(--border-mid);font-size:.72rem;color:var(--fg-dim);padding:.2rem .4rem;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
 /* "Room — Building" is too wide for a narrow column on one line (small
@@ -480,7 +488,15 @@ function recomputeRooms(){
   _entries.forEach(function(e){
     if(e.location_id){
       var k='id:'+e.location_id;
-      if(!seen[k]){ seen[k]=true; out.push({id:e.location_id,label:e.location_name||('Room '+e.location_id)}); }
+      if(!seen[k]){
+        seen[k]=true;
+        // Building identity (#1233) isn't carried on the entry itself —
+        // look it up from the full room list so a room discovered only via
+        // an existing entry (not yet in _rooms) still groups correctly.
+        var known=_allRooms.find(function(x){ return x.id===e.location_id; });
+        out.push({id:e.location_id,label:e.location_name||('Room '+e.location_id),
+          buildingId:known?known.buildingId:null, buildingName:known?known.buildingName:null});
+      }
     } else if(e.room){
       var k2='lbl:'+e.room;
       if(!seen[k2]){ seen[k2]=true; out.push({id:null,label:e.room}); }
@@ -546,7 +562,9 @@ function roomAddInput(inp){
     li.textContent=n;
     li.addEventListener('mousedown',function(e){
       e.preventDefault(); inp.value=''; sug.hidden=true;
-      addRoom({id:r.id,label:n});
+      // Carry the building identity (#1233) along from _allRooms so the
+      // added column groups under its building's super-header right away.
+      addRoom({id:r.id,label:n,buildingId:r.buildingId,buildingName:r.buildingName});
     });
     sug.appendChild(li);
   });
@@ -577,8 +595,13 @@ function roomQuickCreate(name){
     if(!res.ok) throw new Error('HTTP '+res.status);
     return res.json();
   }).then(function(room){
-    _allRooms.push({id:room.id,label:room.name});
-    addRoom({id:room.id,label:room.name});
+    // Quick-created rooms are always created inside the primary building
+    // (_topLocID), so their building identity is already known here —
+    // needed so the new column groups under that building's super-header
+    // (#1233) immediately, without waiting for a full page reload.
+    var newRoom = {id:room.id,label:room.name,buildingId:_topLocID,buildingName:_topLocName};
+    _allRooms.push(newRoom);
+    addRoom(newRoom);
   }).catch(function(err){
     alert('Could not create room: '+err.message);
   });
@@ -677,20 +700,42 @@ function renderGrid(){
   var el = document.getElementById('tt-editor-grid'); el.innerHTML='';
 
   var roomList = _rooms.concat([{id:-1,label:'Other'}]); // -1=other sentinel
-  // If any column needs a two-line "Room — Building" header, give every
-  // header in the row the same (taller) height, so a mix of one-line and
-  // two-line labels doesn't leave some cells shorter than their neighbors.
-  var anyTwoLineHdr = roomList.some(function(r){ return r.label.indexOf(' — ')!==-1; });
+
+  // #1233: group contiguous same-building rooms under one super-header
+  // spanning their columns, e.g. two rooms in the same building next to
+  // each other in column order collapse into a single "Aalen" header over
+  // both, instead of repeating the building name in each room's own
+  // header. Grouping follows current column order (not a fixed venue
+  // order) so it stays correct through drag-reorder (#1237) and room
+  // add/remove — if reordering interleaves two buildings' rooms, the
+  // header naturally splits into more (single-room) groups, which is the
+  // expected spreadsheet-merged-cell behavior, not a bug.
+  var buildingGroups = [];
+  roomList.forEach(function(r){
+    var last = buildingGroups[buildingGroups.length-1];
+    if(r.buildingId && last && last.buildingId===r.buildingId){ last.rooms.push(r); }
+    else { buildingGroups.push({buildingId:r.buildingId||null, buildingName:r.buildingName||'', rooms:[r]}); }
+  });
+  var anyBuildingGroup = buildingGroups.some(function(g){ return g.buildingId; });
+  var groupHdrH = anyBuildingGroup ? 20 : 0; // must match .tt-building-hdr CSS
+
+  // If any *ungrouped* column needs a two-line "Room — Building" header,
+  // give every header in the row the same (taller) height, so a mix of
+  // one-line and two-line labels doesn't leave some cells shorter than
+  // their neighbors. Grouped rooms never need this: their building name
+  // is already shown once in the super-header above, so their own header
+  // shows just the short room name (see roomsHdr loop below).
+  var anyTwoLineHdr = roomList.some(function(r){ return !r.buildingId && r.label.indexOf(' — ')!==-1; });
   var roomHdrH = anyTwoLineHdr ? 32 : 20; // must match .tt-room-col-header(.tt-room-col-header-2l) CSS
 
   // time axis
   var axis = document.createElement('div'); axis.className='tt-time-axis';
   var axisHdr = document.createElement('div'); axisHdr.className='tt-axis-header'; axis.appendChild(axisHdr);
-  // Spacer matching the room-header row's height (below) — the axis has no
-  // room-header row of its own, so without this its hour marks/gridlines
-  // would sit roomHdrH px higher than the actual grid content they're
-  // meant to line up with.
-  var axisRoomHdrSpacer = document.createElement('div'); axisRoomHdrSpacer.style.height=roomHdrH+'px'; axis.appendChild(axisRoomHdrSpacer);
+  // Spacer matching the building-group row (if any) + room-header row's
+  // combined height (below) — the axis has no header rows of its own, so
+  // without this its hour marks/gridlines would sit that many px higher
+  // than the actual grid content they're meant to line up with.
+  var axisRoomHdrSpacer = document.createElement('div'); axisRoomHdrSpacer.style.height=(groupHdrH+roomHdrH)+'px'; axis.appendChild(axisRoomHdrSpacer);
   var axisBody = document.createElement('div'); axisBody.className='tt-axis-body'; axisBody.style.height=gridH+'px';
   // marks every 30 min
   for(var m=0; m<=_gridMax-_gridMin; m+=30){
@@ -714,17 +759,47 @@ function renderGrid(){
     var dayCol = document.createElement('div'); dayCol.className='tt-day-col';
     var dayHdr = document.createElement('div'); dayHdr.className='tt-day-header'; dayHdr.textContent=day; dayCol.appendChild(dayHdr);
 
+    // Building super-header row (#1233) — one cell per contiguous run of
+    // same-building rooms, using flex:N (N = rooms in that group) so it
+    // spans exactly as wide as its N room columns below, the flexbox
+    // equivalent of a spreadsheet's merged/colspan header cell. Skipped
+    // entirely (zero height, via groupHdrH above) when no room in this
+    // event has a known building — nothing to show, no point reserving
+    // the row.
+    if(anyBuildingGroup){
+      var groupHdr = document.createElement('div'); groupHdr.style.display='flex'; groupHdr.style.position='sticky'; groupHdr.style.top='32px'; groupHdr.style.zIndex='3';
+      buildingGroups.forEach(function(g){
+        var gh = document.createElement('div'); gh.className='tt-building-hdr'; gh.style.flex=String(g.rooms.length);
+        if(g.buildingId){ gh.textContent=g.buildingName; gh.title=g.buildingName; }
+        groupHdr.appendChild(gh);
+      });
+      dayCol.appendChild(groupHdr);
+    }
+
     // Room-column headers row
-    var roomsHdr = document.createElement('div'); roomsHdr.style.display='flex'; roomsHdr.style.position='sticky'; roomsHdr.style.top='32px'; roomsHdr.style.zIndex='3';
+    var roomsHdr = document.createElement('div'); roomsHdr.style.display='flex'; roomsHdr.style.position='sticky'; roomsHdr.style.top=(32+groupHdrH)+'px'; roomsHdr.style.zIndex='3';
     roomList.forEach(function(r){
       var rh = document.createElement('div'); rh.className='tt-room-col-header'; rh.style.flex='1'; rh.title=r.label;
+      // Explicit height (rather than relying on the base/-2l CSS heights)
+      // so a grouped column's short one-line header still matches a
+      // neighboring ungrouped column's two-line height in the same row —
+      // otherwise the shorter cell's own CSS height would win and its
+      // border-bottom wouldn't line up with the rest of the row.
+      rh.style.height = roomHdrH+'px';
       // Disambiguated labels are "Room — Building" (see roomLabel() server-side
       // and addRoom()'s room-suggest picks) — too wide for a narrow column on
       // one line, so split it across two: room name, then building name
       // smaller/muted underneath. Plain (non-disambiguated) labels render as
       // a single centered line same as before.
+      //
+      // When the room belongs to a known building, its name is already
+      // shown once in the group super-header above — showing just the
+      // room's own short name here (parts[0], dropping the " — Building"
+      // suffix) instead of repeating it, same idea as #1233's grouping.
       var parts = r.label.split(' — ');
-      if(parts.length===2){
+      if(r.buildingId && parts.length===2){
+        rh.textContent=parts[0];
+      } else if(parts.length===2){
         rh.classList.add('tt-room-col-header-2l');
         var l1=document.createElement('div'); l1.className='tt-room-col-h1'; l1.textContent=parts[0];
         var l2=document.createElement('div'); l2.className='tt-room-col-h2'; l2.textContent=parts[1];

@@ -11,10 +11,16 @@ import (
 
 // TimetableRoom is a room option for the timetable editor's room picker.
 // Label is pre-disambiguated (includes building name when two buildings share
-// a room name, e.g. "305 — Aal2" vs "305 — Aalen").
+// a room name, e.g. "305 — Aal2" vs "305 — Aalen"). BuildingID/BuildingName
+// identify the room's actual parent location (not derived from the label,
+// which is only suffixed on a name collision) so the grid can group room
+// columns under a shared building super-header (#1233) regardless of
+// whether disambiguation happened to kick in for this particular room.
 type TimetableRoom struct {
-	ID    int    `json:"id"`
-	Label string `json:"label"`
+	ID           int    `json:"id"`
+	Label        string `json:"label"`
+	BuildingID   int    `json:"buildingId,omitempty"`
+	BuildingName string `json:"buildingName,omitempty"`
 }
 
 // TimetablePageData holds everything the admin timetable editor template needs.
@@ -140,6 +146,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		// Group rooms by building and detect name conflicts so we can
 		// disambiguate labels (e.g. "305 — Aal2" vs "305 — Aalen").
 		type buildingGroup struct {
+			id    int
 			name  string
 			rooms []Location
 		}
@@ -156,7 +163,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 					children = append(children, l)
 				}
 			}
-			buildings = append(buildings, buildingGroup{name: name, rooms: children})
+			buildings = append(buildings, buildingGroup{id: bid, name: name, rooms: children})
 		}
 
 		roomLabel := func(l Location) string {
@@ -184,7 +191,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				if nameCounts[lbl] > 1 {
 					lbl = lbl + " — " + b.name
 				}
-				rooms = append(rooms, TimetableRoom{ID: r.ID, Label: lbl})
+				rooms = append(rooms, TimetableRoom{ID: r.ID, Label: lbl, BuildingID: b.id, BuildingName: b.name})
 			}
 		}
 

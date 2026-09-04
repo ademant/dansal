@@ -633,9 +633,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 		if err != nil {
 			return err
 		}
-		placeholders := strings.Repeat("?,", len(codes))
-		placeholders = placeholders[:len(placeholders)-1]
-		*query += " AND l.country_code IN (" + placeholders + ")"
+		*query += " AND l.country_code IN (" + sqlPlaceholders(len(codes)) + ")"
 		for _, c := range codes {
 			*args = append(*args, c)
 		}
@@ -744,9 +742,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 			}
 		}
 		if len(ids) > 0 {
-			placeholders := strings.Repeat("?,", len(ids))
-			placeholders = placeholders[:len(placeholders)-1]
-			*query += " AND e.location_id IN (" + placeholders + ")"
+			*query += " AND e.location_id IN (" + sqlPlaceholders(len(ids)) + ")"
 			for _, n := range ids {
 				*args = append(*args, n)
 			}
@@ -3911,169 +3907,69 @@ func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/v1/events/{id}/musicians/{musician_id} — add one musician to the event.
-func addEventMusician(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
+// addEventJoinRow/removeEventJoinRow back the six PUT/DELETE
+// /api/v1/events/{id}/{musicians,instructors,dances}/{ref_id} endpoints —
+// previously six near-identical handlers (add/remove x musician/instructor/
+// dance) differing only in which ref table, join table, and path param name.
+// refParam doubles as both the path value name (e.g. "musician_id") and the
+// join table's column for that reference, which happens to hold for all
+// three entities. refTable/joinTable/refLabel are always hardcoded literals
+// from the route registrations in main.go, never request-derived, so the
+// string-built SQL below carries no injection risk despite the concatenation.
+func addEventJoinRow(refParam, refTable, refLabel, joinTable string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		callerID, userRole := callerFromRequest(r)
+		if userRole != RoleAdmin && userRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		eventID, err := intPathValue(r, "id")
+		if err != nil {
+			writeError(w, "invalid event id", http.StatusBadRequest)
+			return
+		}
+		refID, err := intPathValue(r, refParam)
+		if err != nil {
+			writeError(w, "invalid "+strings.TrimSuffix(refParam, "_id")+" id", http.StatusBadRequest)
+			return
+		}
+		if !timetableAuthCheck(w, userRole, callerID, eventID) {
+			return
+		}
+		var exists int
+		db.QueryRow("SELECT COUNT(*) FROM "+refTable+" WHERE id=?", refID).Scan(&exists)
+		if exists == 0 {
+			writeError(w, refLabel+" not found", http.StatusNotFound)
+			return
+		}
+		db.Exec("INSERT OR IGNORE INTO "+joinTable+" (event_id, "+refParam+") VALUES (?,?)", eventID, refID)
+		touchEvent(eventID, callerID)
+		w.WriteHeader(http.StatusNoContent)
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	musicianID, err := intPathValue(r, "musician_id")
-	if err != nil {
-		writeError(w, "invalid musician id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM musicians WHERE id=?", musicianID).Scan(&exists)
-	if exists == 0 {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	}
-	db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", eventID, musicianID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/v1/events/{id}/musicians/{musician_id} — remove one musician from the event.
-func removeEventMusician(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
+func removeEventJoinRow(refParam, joinTable string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		callerID, userRole := callerFromRequest(r)
+		if userRole != RoleAdmin && userRole != RoleUser {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		eventID, err := intPathValue(r, "id")
+		if err != nil {
+			writeError(w, "invalid event id", http.StatusBadRequest)
+			return
+		}
+		refID, err := intPathValue(r, refParam)
+		if err != nil {
+			writeError(w, "invalid "+strings.TrimSuffix(refParam, "_id")+" id", http.StatusBadRequest)
+			return
+		}
+		if !timetableAuthCheck(w, userRole, callerID, eventID) {
+			return
+		}
+		db.Exec("DELETE FROM "+joinTable+" WHERE event_id=? AND "+refParam+"=?", eventID, refID)
+		touchEvent(eventID, callerID)
+		w.WriteHeader(http.StatusNoContent)
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	musicianID, err := intPathValue(r, "musician_id")
-	if err != nil {
-		writeError(w, "invalid musician id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	db.Exec("DELETE FROM event_musicians WHERE event_id=? AND musician_id=?", eventID, musicianID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// PUT /api/v1/events/{id}/instructors/{instructor_id} — add one instructor to the event.
-func addEventInstructor(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	instructorID, err := intPathValue(r, "instructor_id")
-	if err != nil {
-		writeError(w, "invalid instructor id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM instructors WHERE id=?", instructorID).Scan(&exists)
-	if exists == 0 {
-		writeError(w, "Instructor not found", http.StatusNotFound)
-		return
-	}
-	db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", eventID, instructorID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// DELETE /api/v1/events/{id}/instructors/{instructor_id} — remove one instructor from the event.
-func removeEventInstructor(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	instructorID, err := intPathValue(r, "instructor_id")
-	if err != nil {
-		writeError(w, "invalid instructor id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	db.Exec("DELETE FROM event_instructors WHERE event_id=? AND instructor_id=?", eventID, instructorID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// PUT /api/v1/events/{id}/dances/{dance_id} — add one dance to the event.
-func addEventDance(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	danceID, err := intPathValue(r, "dance_id")
-	if err != nil {
-		writeError(w, "invalid dance id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM dances WHERE id=?", danceID).Scan(&exists)
-	if exists == 0 {
-		writeError(w, "Dance not found", http.StatusNotFound)
-		return
-	}
-	db.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?,?)", eventID, danceID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// DELETE /api/v1/events/{id}/dances/{dance_id} — remove one dance from the event.
-func removeEventDance(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
-		return
-	}
-	danceID, err := intPathValue(r, "dance_id")
-	if err != nil {
-		writeError(w, "invalid dance id", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-	db.Exec("DELETE FROM event_dances WHERE event_id=? AND dance_id=?", eventID, danceID)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
 }

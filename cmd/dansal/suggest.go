@@ -477,21 +477,9 @@ func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 // a possible duplicate pair needing manual merge review.
 func notifyAdminsDuplicateReview(title string) {
 	msg := fmt.Sprintf("Possible duplicate event detected: %q — review and merge if needed in the admin panel (Events, \"flagged\" filter).", title)
-
-	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
-	if err != nil {
-		log.Printf("duplicate review: notify admins: %v", err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var email, chatID, matrixID string
-		var matrixVerified bool
-		if err := rows.Scan(&email, &chatID, &matrixID, &matrixVerified); err != nil {
-			continue
-		}
+	forEachAdmin(func(id int, email, chatID, matrixID string, matrixVerified bool) {
 		notifyUser(chatID, matrixID, matrixVerified, email, "Possible duplicate event", msg)
-	}
+	})
 }
 
 // notifyAdminsSuggestion sends a notification to admin users via every
@@ -501,20 +489,7 @@ func notifyAdminsSuggestion(title, startTime string) {
 	if title != "" {
 		msg = fmt.Sprintf("New event suggestion: %q (%s) — review it.", title, startTime)
 	}
-
-	rows, err := db.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
-	if err != nil {
-		log.Printf("suggest: notify admins: %v", err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var adminID int
-		var email, chatID, matrixID string
-		var matrixVerified bool
-		if err := rows.Scan(&adminID, &email, &chatID, &matrixID, &matrixVerified); err != nil {
-			continue
-		}
-		notifyUser(chatID, matrixID, matrixVerified, email, "New event suggestion", msg+" — "+adminReviewLink(adminID, "/admin/events?unpublished=1&include_past=1"))
-	}
+	forEachAdmin(func(id int, email, chatID, matrixID string, matrixVerified bool) {
+		notifyUser(chatID, matrixID, matrixVerified, email, "New event suggestion", msg+" — "+adminReviewLink(id, "/admin/events?unpublished=1&include_past=1"))
+	})
 }

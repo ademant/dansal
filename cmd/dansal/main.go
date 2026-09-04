@@ -4295,12 +4295,12 @@ func main() {
 	smux.Handle("PUT /api/v1/events/{id}/organization", auth(http.HandlerFunc(setEventOrganizationRef)))
 	smux.Handle("DELETE /api/v1/events/{id}/organization", auth(http.HandlerFunc(unsetEventOrganizationRef)))
 	smux.HandleFunc("OPTIONS /api/v1/events/{id}/organization", optionsSchema[EventOrganizationRefRequest])
-	smux.Handle("PUT /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(addEventMusician)))
-	smux.Handle("DELETE /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(removeEventMusician)))
-	smux.Handle("PUT /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(addEventInstructor)))
-	smux.Handle("DELETE /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(removeEventInstructor)))
-	smux.Handle("PUT /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(addEventDance)))
-	smux.Handle("DELETE /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(removeEventDance)))
+	smux.Handle("PUT /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(addEventJoinRow("musician_id", "musicians", "Musician", "event_musicians"))))
+	smux.Handle("DELETE /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(removeEventJoinRow("musician_id", "event_musicians"))))
+	smux.Handle("PUT /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(addEventJoinRow("instructor_id", "instructors", "Instructor", "event_instructors"))))
+	smux.Handle("DELETE /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(removeEventJoinRow("instructor_id", "event_instructors"))))
+	smux.Handle("PUT /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(addEventJoinRow("dance_id", "dances", "Dance", "event_dances"))))
+	smux.Handle("DELETE /api/v1/events/{id}/dances/{dance_id}", auth(http.HandlerFunc(removeEventJoinRow("dance_id", "event_dances"))))
 
 	// Protected location writes
 	smux.Handle("POST /api/v1/locations", auth(accountMutationLimit(createLocation)))

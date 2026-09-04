@@ -31,11 +31,8 @@ func musicianImageURL(id int) string {
 // GET /api/v1/musician-images/{id}
 func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid musician ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "musician") {
+		return
 	}
 	// Grid-thumbnail variant (#1158): ?thumb=sq for the musician grid's
 	// square crop. Falls back to the canonical full-size image (and the
@@ -83,11 +80,8 @@ func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid musician ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "musician") {
+		return
 	}
 	id, _ := strconv.Atoi(idStr)
 	imgPath, _, found := imagePathForID(musicianImagesDir, idStr)

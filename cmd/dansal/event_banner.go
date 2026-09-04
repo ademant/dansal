@@ -117,11 +117,8 @@ func eventBannerFileStillValid(id int, tier string) bool {
 // GET /api/v1/event-banner/{event_id}
 func getEventBannerImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("event_id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid event ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "event") {
+		return
 	}
 	id, _ := strconv.Atoi(idStr)
 	event, err := fetchEventByID(db, id)

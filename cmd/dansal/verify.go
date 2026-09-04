@@ -218,36 +218,6 @@ func sendEmailVerification(user User, verifyURL string) (string, error) {
 	return SendEmail(user.Email, "Verify your email address", body, false)
 }
 
-func sendTelegramVerification(user User, verifyURL string) error {
-	botToken := config.Server.TelegramBotToken
-	if botToken == "" {
-		return fmt.Errorf("telegram_bot_token not configured")
-	}
-	text := fmt.Sprintf(
-		"Hello %s, please verify your Telegram account:\n\n%s\n\nThis link expires in %d hours.",
-		user.DisplayOrEmail(), verifyURL, config.Server.VerificationExpiryHours,
-	)
-	payload, _ := json.Marshal(map[string]any{
-		"chat_id": user.Telegram,
-		"text":    text,
-	})
-	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
-	resp, err := http.Post(apiURL, "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("Telegram API: %w", err)
-	}
-	defer resp.Body.Close()
-	var result struct {
-		OK          bool   `json:"ok"`
-		Description string `json:"description"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	if !result.OK {
-		return fmt.Errorf("Telegram API: %s", result.Description)
-	}
-	return nil
-}
-
 // sendMatrixMessage opens a DM room with matrixID and sends text.
 func sendMatrixMessage(matrixID, text string) error {
 	homeserver := strings.TrimRight(config.Server.MatrixHomeserver, "/")

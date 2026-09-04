@@ -702,8 +702,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if callerRole != RoleAdmin {
-		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
-			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
 			return
 		}
 	}
@@ -731,8 +730,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if callerRole != RoleAdmin {
-		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
-			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
 			return
 		}
 	}
@@ -825,21 +823,9 @@ func recordFetchResult(src FetchSource, events int, fetchErr error) {
 // fetchFailureAlertThreshold times in a row.
 func notifyAdminsFetchFailure(src FetchSource, failures int, fetchErr error) {
 	msg := fmt.Sprintf("Fetch source #%d (%s) has failed %d times in a row: %v — check /admin/fetchurls.", src.ID, src.URL, failures, fetchErr)
-
-	rows, err := db.Query(`SELECT COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
-	if err != nil {
-		log.Printf("fetchurl: notify admins: %v", err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var email, chatID, matrixID string
-		var matrixVerified bool
-		if err := rows.Scan(&email, &chatID, &matrixID, &matrixVerified); err != nil {
-			continue
-		}
+	forEachAdmin(func(id int, email, chatID, matrixID string, matrixVerified bool) {
 		notifyUser(chatID, matrixID, matrixVerified, email, "Fetch source failing", msg)
-	}
+	})
 }
 
 // importFromSource dispatches to the correct importer based on src.Type.
@@ -1530,8 +1516,7 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
-			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
 			return
 		}
 	}
@@ -1597,13 +1582,11 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	placeholders := make([]string, len(req.IDs))
 	args := make([]any, len(req.IDs))
 	for i, id := range req.IDs {
-		placeholders[i] = "?"
 		args[i] = id
 	}
-	query := "SELECT " + fetchSourceCols + " FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	query := "SELECT " + fetchSourceCols + " FROM fetch_sources WHERE id IN (" + sqlPlaceholders(len(req.IDs)) + ")"
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
@@ -1693,8 +1676,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if callerRole != RoleAdmin {
-		if src.OrganizationID == nil || !isOrgMember(callerID, *src.OrganizationID) {
-			writeError(w, "Forbidden: not a member of this source's organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
 			return
 		}
 	}

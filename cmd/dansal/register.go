@@ -905,19 +905,9 @@ func notifyApprovers(pendingID int) {
 		msg += fmt.Sprintf(" (join org: %q)", oName)
 	}
 	// Always notify admins, each with their own one-time direct-login link.
-	rows, err := db.Query(
-		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role='admin'",
-	)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var adminID int
-			var email, chatID, matrixID string
-			var matrixVerified bool
-			rows.Scan(&adminID, &email, &chatID, &matrixID, &matrixVerified)
-			notifyUser(chatID, matrixID, matrixVerified, email, "New registration request", msg+" — "+adminReviewLink(adminID, "/admin/registrations"))
-		}
-	}
+	forEachAdmin(func(id int, email, chatID, matrixID string, matrixVerified bool) {
+		notifyUser(chatID, matrixID, matrixVerified, email, "New registration request", msg+" — "+adminReviewLink(id, "/admin/registrations"))
+	})
 
 	// For join_org, also notify org members.
 	if regType == "join_org" && orgID.Valid {

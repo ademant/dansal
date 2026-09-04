@@ -105,11 +105,8 @@ func deleteContactPostImageFiles(postID int) {
 // when included in a verified post's public JSON).
 func getContactPostImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("img_id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid image ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "image") {
+		return
 	}
 	imgPath, contentType, found := imagePathForID(contactPostImagesDir(), idStr)
 	if !found {

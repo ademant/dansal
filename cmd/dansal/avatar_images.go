@@ -135,11 +135,8 @@ func avatarDeleteHandler(s *avatarSet, entityLabel string, checkAccess func(call
 func avatarGetHandler(s *avatarSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
-		for _, c := range idStr {
-			if c < '0' || c > '9' {
-				writeError(w, "Invalid ID", http.StatusBadRequest)
-				return
-			}
+		if !validNumericPathID(w, idStr, "") {
+			return
 		}
 		p, found := s.path(idStr)
 		if !found {

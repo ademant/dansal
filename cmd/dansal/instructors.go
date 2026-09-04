@@ -182,6 +182,30 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/v1/instructors/{id}
+// checkInstructorOwnership enforces "non-admin caller must be the instructor's
+// creator" — updateInstructor, patchInstructor, and deleteInstructor all need
+// this identically, differing only in whether the error says "edit" or
+// "delete". Writes the appropriate 404/403 and returns false on failure,
+// same convention as checkLocationWriteAccess in locations.go.
+func checkInstructorOwnership(w http.ResponseWriter, callerID int, callerRole, id, action string) bool {
+	if callerRole == RoleAdmin {
+		return true
+	}
+	var createdBy sql.NullInt64
+	if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
+		writeError(w, "Instructor not found", http.StatusNotFound)
+		return false
+	} else if err != nil {
+		writeInternalError(w, err)
+		return false
+	}
+	if !createdBy.Valid || int(createdBy.Int64) != callerID {
+		writeError(w, "Forbidden: you can only "+action+" instructors you created", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	callerID, callerRole := callerFromRequest(r)
@@ -191,19 +215,8 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 
-	if callerRole != RoleAdmin {
-		var createdBy sql.NullInt64
-		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
-			writeError(w, "Instructor not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		if !createdBy.Valid || int(createdBy.Int64) != callerID {
-			writeError(w, "Forbidden: you can only edit instructors you created", http.StatusForbidden)
-			return
-		}
+	if !checkInstructorOwnership(w, callerID, callerRole, id, "edit") {
+		return
 	}
 
 	var req InstructorRequest
@@ -246,19 +259,8 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 
-	if callerRole != RoleAdmin {
-		var createdBy sql.NullInt64
-		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
-			writeError(w, "Instructor not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		if !createdBy.Valid || int(createdBy.Int64) != callerID {
-			writeError(w, "Forbidden: you can only edit instructors you created", http.StatusForbidden)
-			return
-		}
+	if !checkInstructorOwnership(w, callerID, callerRole, id, "edit") {
+		return
 	}
 
 	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
@@ -331,19 +333,8 @@ func deleteInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 
-	if callerRole != RoleAdmin {
-		var createdBy sql.NullInt64
-		if err := db.QueryRow("SELECT created_by_id FROM instructors WHERE id = ?", id).Scan(&createdBy); err == sql.ErrNoRows {
-			writeError(w, "Instructor not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		if !createdBy.Valid || int(createdBy.Int64) != callerID {
-			writeError(w, "Forbidden: you can only delete instructors you created", http.StatusForbidden)
-			return
-		}
+	if !checkInstructorOwnership(w, callerID, callerRole, id, "delete") {
+		return
 	}
 
 	result, err := db.Exec("DELETE FROM instructors WHERE id=?", id)

@@ -471,8 +471,7 @@ func deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			writeError(w, "Forbidden: you may only delete OIDC providers for your own organization", http.StatusForbidden)
+		if !requireExistingOrgMember(w, callerID, orgID) {
 			return
 		}
 	}

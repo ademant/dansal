@@ -360,13 +360,8 @@ func maybeServePrecompressed(w http.ResponseWriter, r *http.Request, path, conte
 
 func getEventImage(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("event_id")
-
-	// Validate event_id is a plain integer to prevent path traversal
-	for _, c := range eventID {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid event ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, eventID, "event") {
+		return
 	}
 
 	// Grid-thumbnail variant (#1158): ?thumb=sq for the musician-grid-style
@@ -523,11 +518,8 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	eventID := r.PathValue("event_id")
-	for _, c := range eventID {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid event ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, eventID, "event") {
+		return
 	}
 
 	if userRole != RoleAdmin {

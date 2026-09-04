@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -18,6 +19,51 @@ import (
 func sha256Hex(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+// sqlPlaceholders returns "?,?,...,?" (n placeholders) for a SQL IN (...)
+// clause — shared by every filter/lookup that builds one from a variable-length
+// list of args, instead of each hand-rolling strings.Repeat("?,", n)[:len-1].
+func sqlPlaceholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+// forEachAdmin calls fn once per admin user with their notification-relevant
+// fields — shared by every notifyAdmins*/notifyApprovers-style function
+// instead of each hand-rolling the same SELECT+scan+loop. Query errors are
+// logged and otherwise swallowed (an admin-notification failure shouldn't
+// itself become a request error) — note this actually improves on
+// notifyApprovers' prior behavior, which silently ignored the query error.
+func forEachAdmin(fn func(id int, email, chatID, matrixID string, matrixVerified bool)) {
+	rows, err := db.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
+	if err != nil {
+		log.Printf("forEachAdmin: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var email, chatID, matrixID string
+		var matrixVerified bool
+		if err := rows.Scan(&id, &email, &chatID, &matrixID, &matrixVerified); err != nil {
+			continue
+		}
+		fn(id, email, chatID, matrixID, matrixVerified)
+	}
+}
+
+// nullIntFromPtr converts a *int (nil = absent) to the sql.NullInt64 shape
+// requireExistingOrgMember/requireEventOrg expect — for call sites (like
+// FetchSource.OrganizationID) whose org id is stored as *int rather than
+// sql.NullInt64.
+func nullIntFromPtr(p *int) sql.NullInt64 {
+	if p == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*p), Valid: true}
 }
 
 // truncateUTF8 truncates s to at most max bytes without splitting a

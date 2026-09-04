@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -273,14 +272,4 @@ func useBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 func cleanExpiredBoardSessions(now int64) {
 	db.Exec("DELETE FROM verified_email_sessions WHERE expires_at < ? AND absolute_expiry < ?", now, now)
 	db.Exec("DELETE FROM verified_email_session_renew_tokens WHERE expires_at < ?", now)
-}
-
-// boardSessionEmailNormalized returns the lower-cased email for a board session
-// header in the request. Empty string if absent or invalid.
-func boardSessionEmail(r *http.Request) string {
-	_, email, _, ok := lookupBoardSession(r)
-	if !ok {
-		return ""
-	}
-	return strings.ToLower(email)
 }

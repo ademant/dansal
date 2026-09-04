@@ -40,13 +40,6 @@ func hasSeriesImage(id int) bool {
 	return ok
 }
 
-func seriesImageMediaType(id int) string {
-	seriesImgCache.mu.RLock()
-	mt := seriesImgCache.mimeType[id]
-	seriesImgCache.mu.RUnlock()
-	return mt
-}
-
 func seriesImageURL(id int) string {
 	if hasSeriesImage(id) {
 		return "/api/v1/series-images/" + strconv.Itoa(id)
@@ -98,11 +91,8 @@ func checkSeriesImageAccess(w http.ResponseWriter, callerID int, userRole string
 // GET /api/v1/series-images/{id}
 func getSeriesImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid series ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "series") {
+		return
 	}
 	imgPath, contentType, found := imagePathForID(seriesImagesDir, idStr)
 	if !found {
@@ -135,11 +125,8 @@ func deleteSeriesImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid series ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "series") {
+		return
 	}
 	id, _ := strconv.Atoi(idStr)
 	if !checkSeriesImageAccess(w, callerID, userRole, id) {

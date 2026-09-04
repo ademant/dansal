@@ -397,9 +397,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		placeholders := strings.Repeat("?,", len(codes))
-		placeholders = placeholders[:len(placeholders)-1]
-		addWhere("l.country_code IN (" + placeholders + ")")
+		addWhere("l.country_code IN (" + sqlPlaceholders(len(codes)) + ")")
 		for _, c := range codes {
 			args = append(args, c)
 		}

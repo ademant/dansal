@@ -2,10 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,8 +38,7 @@ func generateAPIKey() (string, error) {
 // what's stored in api_keys.api_key — the raw key is never persisted, only
 // returned once in the HTTP response at creation/renewal time.
 func hashAPIKey(key string) string {
-	h := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(h[:])
+	return sha256Hex(key)
 }
 
 // validateAPIKey checks an API key and returns the associated user.

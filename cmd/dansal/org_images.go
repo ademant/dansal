@@ -72,11 +72,8 @@ func (c *orgImageCache) remove(id int) {
 // GET /api/v1/org-images/{id}
 func getOrgImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid organization ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "organization") {
+		return
 	}
 	imgPath, contentType, found := imagePathForID(orgImagesDir, idStr)
 	if !found {
@@ -121,11 +118,8 @@ func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid organization ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "organization") {
+		return
 	}
 	id, _ := strconv.Atoi(idStr)
 	if userRole != RoleAdmin {

@@ -1,11 +1,31 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+// validNumericPathID rejects a path-value id that isn't a plain non-negative
+// integer, writing a 400 with "Invalid <label> ID" and returning false — the
+// path-traversal guard every id-keyed image handler needs before using idStr
+// directly in a filename lookup (#1010). label is e.g. "event"/"series"; pass
+// "" for the bare "Invalid ID" wording avatar images uses.
+func validNumericPathID(w http.ResponseWriter, idStr, label string) bool {
+	for _, c := range idStr {
+		if c < '0' || c > '9' {
+			msg := "Invalid ID"
+			if label != "" {
+				msg = "Invalid " + label + " ID"
+			}
+			writeError(w, msg, http.StatusBadRequest)
+			return false
+		}
+	}
+	return true
+}
 
 // scanIDFiles scans dir for files named "{id}{suffix}" and calls fn for each
 // numeric id found. Shared by every id-keyed image/avatar cache's startup

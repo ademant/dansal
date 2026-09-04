@@ -27,11 +27,8 @@ func hasLocationImage(id int) bool {
 // GET /api/v1/location-images/{id}
 func getLocationImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	for _, c := range idStr {
-		if c < '0' || c > '9' {
-			writeError(w, "Invalid location ID", http.StatusBadRequest)
-			return
-		}
+	if !validNumericPathID(w, idStr, "location") {
+		return
 	}
 	imgPath, contentType, found := imagePathForID(locationImagesDir, idStr)
 	if !found {

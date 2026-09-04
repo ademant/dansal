@@ -7,6 +7,31 @@ import (
 	"time"
 )
 
+// requireSharedOrgPublisher enforces "non-admin caller must share an org
+// with the target publisher" — the check regeneratePublisherKey,
+// createPublisherReconnectInvite, and deletePublisher all need identically.
+// Writes the appropriate 403 and returns false on failure, same convention
+// as requireExistingOrgMember/requireEventOrg in events.go.
+func requireSharedOrgPublisher(w http.ResponseWriter, callerID int, callerRole string, targetID int) bool {
+	if callerRole == RoleAdmin {
+		return true
+	}
+	if callerRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	var shared int
+	db.QueryRow(`
+		SELECT COUNT(*) FROM organization_members om1
+		JOIN organization_members om2 ON om1.organization_id = om2.organization_id
+		WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
+	if shared == 0 {
+		writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 type CreatePublisherRequest struct {
 	Name      string `json:"name"`
 	OrgID     *int   `json:"org_id"`
@@ -181,21 +206,8 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-admins must share an org with the publisher.
-	if callerRole != RoleAdmin {
-		if callerRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		var shared int
-		db.QueryRow(`
-			SELECT COUNT(*) FROM organization_members om1
-			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
-			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
-		if shared == 0 {
-			writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
-			return
-		}
+	if !requireSharedOrgPublisher(w, callerID, callerRole, targetID) {
+		return
 	}
 
 	var req struct {
@@ -285,22 +297,8 @@ func createPublisherReconnectInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-admins must share an org with the publisher (same check as
-	// regeneratePublisherKey).
-	if callerRole != RoleAdmin {
-		if callerRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		var shared int
-		db.QueryRow(`
-			SELECT COUNT(*) FROM organization_members om1
-			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
-			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
-		if shared == 0 {
-			writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
-			return
-		}
+	if !requireSharedOrgPublisher(w, callerID, callerRole, targetID) {
+		return
 	}
 
 	var orgID *int
@@ -345,20 +343,8 @@ func deletePublisher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if callerRole != RoleAdmin {
-		if callerRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		var shared int
-		db.QueryRow(`
-			SELECT COUNT(*) FROM organization_members om1
-			JOIN organization_members om2 ON om1.organization_id = om2.organization_id
-			WHERE om1.user_id = ? AND om2.user_id = ?`, callerID, targetID).Scan(&shared)
-		if shared == 0 {
-			writeError(w, "Forbidden: publisher is not in your organisation", http.StatusForbidden)
-			return
-		}
+	if !requireSharedOrgPublisher(w, callerID, callerRole, targetID) {
+		return
 	}
 
 	if _, err := db.Exec("DELETE FROM users WHERE id=?", targetID); err != nil {

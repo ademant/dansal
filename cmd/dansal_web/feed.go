@@ -630,36 +630,36 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 				icsH.ServeHTTP(w, r)
 			case strings.HasPrefix(p, "/feed/org/"):
 				rest := strings.TrimPrefix(p, "/feed/org/")
-				if i := strings.LastIndex(rest, evDot); i >= 0 {
-					r.SetPathValue("slug", rest[:i])
-					r.SetPathValue("format", rest[i+len(evDot):])
+				if slug, format, ok := strings.CutLast(rest, evDot); ok {
+					r.SetPathValue("slug", slug)
+					r.SetPathValue("format", format)
 					orgH.ServeHTTP(w, r)
 				} else {
 					next.ServeHTTP(w, r)
 				}
 			case strings.HasPrefix(p, "/feed/musician/"):
 				rest := strings.TrimPrefix(p, "/feed/musician/")
-				if i := strings.LastIndex(rest, evDot); i >= 0 {
-					r.SetPathValue("slug", rest[:i])
-					r.SetPathValue("format", rest[i+len(evDot):])
+				if slug, format, ok := strings.CutLast(rest, evDot); ok {
+					r.SetPathValue("slug", slug)
+					r.SetPathValue("format", format)
 					musicianH.ServeHTTP(w, r)
 				} else {
 					next.ServeHTTP(w, r)
 				}
 			case strings.HasPrefix(p, "/feed/instructor/"):
 				rest := strings.TrimPrefix(p, "/feed/instructor/")
-				if i := strings.LastIndex(rest, evDot); i >= 0 {
-					r.SetPathValue("id", rest[:i])
-					r.SetPathValue("format", rest[i+len(evDot):])
+				if id, format, ok := strings.CutLast(rest, evDot); ok {
+					r.SetPathValue("id", id)
+					r.SetPathValue("format", format)
 					instructorH.ServeHTTP(w, r)
 				} else {
 					next.ServeHTTP(w, r)
 				}
 			case strings.HasPrefix(p, "/feed/location/"):
 				rest := strings.TrimPrefix(p, "/feed/location/")
-				if i := strings.LastIndex(rest, evDot); i >= 0 {
-					r.SetPathValue("slug", rest[:i])
-					r.SetPathValue("format", rest[i+len(evDot):])
+				if slug, format, ok := strings.CutLast(rest, evDot); ok {
+					r.SetPathValue("slug", slug)
+					r.SetPathValue("format", format)
 					locationH.ServeHTTP(w, r)
 				} else {
 					next.ServeHTTP(w, r)

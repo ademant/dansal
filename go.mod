@@ -1,6 +1,6 @@
 module github.com/ademant/dansal
 
-go 1.26.6
+go 1.27
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.45
@@ -11,7 +11,6 @@ require (
 	github.com/arran4/golang-ical v0.3.5
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/oauth2 v0.36.0

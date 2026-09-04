@@ -15,8 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"uuid"
+
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 // Invite links are signed as JWTs so that clients (e.g. the WordPress
@@ -107,7 +108,7 @@ func signInviteJWT(role string, orgID *int, tokenType string, expiresAt time.Tim
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
-			ID:        uuid.NewString(),
+			ID:        uuid.New().String(),
 		},
 		OrgID:     orgID,
 		TokenType: tokenType,

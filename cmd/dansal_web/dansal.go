@@ -3803,6 +3803,10 @@ func (c *DansalClient) RemoveEventFromSeries(ctx context.Context, eventID int, t
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/remove-from-series", eventID), token, nil, nil, http.StatusNoContent)
 }
 
+func (c *DansalClient) ApplySeriesToEvents(ctx context.Context, seriesID int, token string) error {
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/apply-to-events", seriesID), token, nil, nil, http.StatusNoContent)
+}
+
 func (c *DansalClient) AssignEventsToSeries(ctx context.Context, seriesID int, eventIDs []int, token string) error {
 	b, _ := json.Marshal(map[string]any{"ids": eventIDs})
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/assign-events", seriesID), token, b, nil, http.StatusNoContent)

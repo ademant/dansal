@@ -68,6 +68,7 @@ type AdminSeriesEditData struct {
 	TplDefaults seriesDefaults
 	Dances      []Dance
 	DanceIDSet  map[int]bool
+	Applied     bool // set when redirected back after a successful apply-to-events
 }
 
 type PrefillDate struct {
@@ -360,6 +361,7 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			TplDefaults: td,
 			Dances:      dances,
 			DanceIDSet:  danceIDSet,
+			Applied:     r.URL.Query().Get("applied") == "1",
 		}))
 	}
 }
@@ -654,6 +656,30 @@ func adminSeriesImageDeleteHandler(cfg *Config, client *DansalClient) http.Handl
 			log.Printf("delete series image %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
+	}
+}
+
+// adminSeriesApplyToEventsHandler handles POST /admin/series/{id}/apply-to-events —
+// propagates series org/location/musician/instructor and template defaults to
+// all already-attached events, then redirects back with ?applied=1.
+func adminSeriesApplyToEventsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		if err := client.ApplySeriesToEvents(r.Context(), id, token); err != nil {
+			log.Printf("apply series %d to events: %v", id, err)
+			http.Error(w, "failed: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d?applied=1", id), http.StatusSeeOther)
 	}
 }
 

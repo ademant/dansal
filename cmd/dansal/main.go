@@ -4393,6 +4393,7 @@ func main() {
 	smux.Handle("PUT /api/v1/series/{id}", auth(updateSeries))
 	smux.Handle("DELETE /api/v1/series/{id}", auth(deleteSeries))
 	smux.Handle("POST /api/v1/series/{id}/add-date", auth(addSeriesDate))
+	smux.Handle("POST /api/v1/series/{id}/apply-to-events", auth(http.HandlerFunc(applySeriesEventsHandler)))
 	smux.Handle("POST /api/v1/series/{id}/descriptions", auth(http.HandlerFunc(updateSeriesDescriptions)))
 	smux.Handle("POST /api/v1/series/{id}/assign-events", auth(http.HandlerFunc(assignSeriesEvents)))
 	smux.Handle("POST /api/v1/series/{id}/token/regenerate", auth(regenerateSeriesToken))

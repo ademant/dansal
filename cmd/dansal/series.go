@@ -621,6 +621,66 @@ func getSeriesByID(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(series)
 }
 
+// POST /api/v1/series/{id}/apply-to-events — propagates series header fields
+// (org, default location) and template defaults (tags, URL, pricing, etc.) to
+// all events already assigned to the series. Musician and instructor are
+// replaced on each event when the series has a value set; they are left alone
+// when the series field is nil. Timetable entries are intentionally skipped —
+// they are created once at occurrence-creation time and adding them again would
+// duplicate entries on existing events.
+func applySeriesEventsHandler(w http.ResponseWriter, r *http.Request) {
+	series, ok := checkSeriesAccess(w, r)
+	if !ok {
+		return
+	}
+
+	rows, err := db.Query("SELECT id FROM events WHERE series_id=?", series.ID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	var eventIDs []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		eventIDs = append(eventIDs, id)
+	}
+	rows.Close()
+
+	if len(eventIDs) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	td := parseSeriesTemplateData(series.TemplateData)
+	td.Timetable = nil // do not add timetable entries to already-existing events
+
+	for _, evID := range eventIDs {
+		if _, err := db.Exec(
+			`UPDATE events SET organization_id=?, location_id=? WHERE id=?`,
+			optionalInt(series.OrganizationID),
+			optionalInt(series.DefaultLocationID),
+			evID,
+		); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		if series.MusicianID != nil {
+			db.Exec("DELETE FROM event_musicians WHERE event_id=?", evID)
+			db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", evID, *series.MusicianID)
+		}
+		if series.InstructorID != nil {
+			db.Exec("DELETE FROM event_instructors WHERE event_id=?", evID)
+			db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *series.InstructorID)
+		}
+		if err := applySeriesTemplate(db, evID, td); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // PUT /api/v1/series/{id}
 func updateSeries(w http.ResponseWriter, r *http.Request) {
 	series, ok := checkSeriesAccess(w, r)

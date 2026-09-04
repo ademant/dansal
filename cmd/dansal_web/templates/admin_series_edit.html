@@ -4,10 +4,15 @@
 
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .Applied}}<p class="form-saved" role="status">{{$.Strings.T "series_applied_to_events"}}</p>{{end}}
 
 <div class="evt-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
+  <form method="post" action="/admin/series/{{.Series.ID}}/apply-to-events" style="margin:0"
+        data-on="submit" data-confirm="{{$.Strings.T "series_apply_to_events_confirm"}}">
+    <button class="btn-sm btn-assign">{{$.Strings.T "series_apply_to_events"}}</button>
+  </form>
   <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
         data-on="submit" data-confirm="{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?">
     <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
@@ -388,6 +393,7 @@ input[type=text],input[type=time],input[type=date],select,textarea{
 .btn-del:hover{background:#800016}
 .loc-filter-wrap{position:relative}
 .form-error{color:#b00020;background:#fff0f0;border:1px solid #f5c6cb;padding:.5rem .75rem;border-radius:4px;margin-bottom:1rem}
+.form-saved{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .evt-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1.25rem}
 .btn-secondary{padding:.4rem .8rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:.95rem}
 .btn-secondary:hover{background:#f0f0f0}

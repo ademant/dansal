@@ -94,6 +94,10 @@ type Event struct {
 	TagsJSON               string `json:"-"`
 	PricingJSON            string `json:"-"`
 	TimetableTracksJSON    string `json:"-"`
+	// ChangedAtEpoch is the raw changed_at scanEventRow already reads (ChangedAt
+	// is the formatted-for-display string derived from it) — getEvent uses this
+	// for its ETag instead of a second query for the same column (#1248).
+	ChangedAtEpoch int64 `json:"-"`
 }
 
 type EventDate struct {
@@ -327,7 +331,7 @@ func parseTimeToUnix(s string) (int64, error) {
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(l.parking,''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(l.geohash,''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(NULLIF(l.zipcode,''), lp.zipcode, ''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(NULLIF(l.parking,''), lp.parking, ''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(NULLIF(l.geohash,''), lp.geohash, ''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {
@@ -420,6 +424,7 @@ func scanEventRow(s scanner) (Event, error) {
 		v := int(createdByID.Int64)
 		event.CreatedByID = &v
 	}
+	event.ChangedAtEpoch = changedAtEpoch
 	if changedAtEpoch > 0 {
 		event.ChangedAt = epochToLocal(changedAtEpoch)
 	}
@@ -1629,7 +1634,13 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := eventListSelect + " WHERE e.email_verified = 1"
+	// Built as a bare WHERE clause (not eventListSelect+WHERE) so the count
+	// query below can reuse it without pulling in eventListSelect's
+	// correlated subqueries/dance-name join, which COUNT(*) never needs
+	// (#1247) — applyEventFilters only ever appends to *query as an opaque
+	// string, so it works identically whether that prefix is the full SELECT
+	// or just "WHERE ...".
+	where := "WHERE e.email_verified = 1"
 	args := []any{}
 
 	// Admin-only escape hatch (#982): email-unverified events (e.g. events
@@ -1638,12 +1649,12 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	// requires email_verified=1.
 	if isAuthorizedAdmin {
 		if v := r.URL.Query().Get("email_verified"); v == "false" {
-			query = eventListSelect + " WHERE e.email_verified = 0"
+			where = "WHERE e.email_verified = 0"
 		}
 	}
 
 	if !isAuthorizedAdmin {
-		query += " AND e.is_published = 1"
+		where += " AND e.is_published = 1"
 		// Cache fingerprint for public clients: count + latest creation time.
 		if !strings.Contains(accept, "text/calendar") {
 			if checkPublicCacheHeaders(w, r, "SELECT COUNT(*), MAX(COALESCE(datetime(changed_at,'unixepoch'), created_at)) FROM events WHERE is_published = 1") {
@@ -1651,39 +1662,39 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if v := r.URL.Query().Get("is_published"); v != "" {
-		query += " AND e.is_published = ?"
+		where += " AND e.is_published = ?"
 		args = append(args, boolParam(v))
 		// Publisher may only see unpublished events belonging to their own org.
 		if userRole == RolePublisher && boolParam(v) == 0 {
-			query += " AND e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)"
+			where += " AND e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)"
 			args = append(args, callerID)
 		}
 	} else if userRole == RolePublisher {
 		// No is_published filter supplied: restrict publisher's view of unpublished events to their org.
-		query += " AND (e.is_published = 1 OR e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?))"
+		where += " AND (e.is_published = 1 OR e.organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?))"
 		args = append(args, callerID)
 	}
 
 	// Exclude past events by default; authorized users can opt in with include_past=true.
 	if r.URL.Query().Get("include_past") != "true" {
-		query += " AND e.end_time >= ?"
+		where += " AND e.end_time >= ?"
 		args = append(args, time.Now().Unix())
 	}
 
 	if v := r.URL.Query().Get("end_time_after"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			query += " AND e.end_time > ?"
+			where += " AND e.end_time > ?"
 			args = append(args, n)
 		}
 	}
 	if v := r.URL.Query().Get("end_time_before"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			query += " AND e.end_time < ?"
+			where += " AND e.end_time < ?"
 			args = append(args, n)
 		}
 	}
 
-	if err := applyEventFilters(r, &query, &args); err != nil {
+	if err := applyEventFilters(r, &where, &args); err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1691,9 +1702,14 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	// Total count ignoring LIMIT/OFFSET, so clients (e.g. the index page) can tell
 	// pagination truncated the result. Doesn't account for the in-Go geo radius
 	// post-filter below, since that can't be expressed in the count query.
+	// Only events/locations are joined — applyEventFilters and the WHERE
+	// clauses above only ever reference e.*/l.* columns, never the parent
+	// location (lp), organizations (o), or dance-name (dn) joins that
+	// eventListSelect's full column list needs.
 	var totalCount int
-	db.QueryRow("SELECT COUNT(*) FROM ("+query+")", args...).Scan(&totalCount)
+	db.QueryRow("SELECT COUNT(*) FROM events e LEFT JOIN locations l ON e.location_id = l.id "+where, args...).Scan(&totalCount)
 
+	query := eventListSelect + " " + where
 	applyListPagination(r, "e.start_time ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -1884,30 +1900,13 @@ func veventsToEventRequests(events []*ics.VEvent, icalOrgID *int) ([]EventCreate
 					Tags:           parseICalCategories(event),
 					URL:            attachURL(event),
 					OrganizationID: orgID,
-					Location: func() EventLocationRequest {
-						if apple := parseAppleStructuredLocation(event); apple != nil {
-							if apple.Location == "" {
-								if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-									apple.Location = p.Value
-								}
-							}
-							if apple.Latitude == nil {
-								if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-									apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
-								}
-							}
-							return *apple
-						}
-						var loc string
-						var lat, lon *float64
-						if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
-							loc = p.Value
-						}
-						if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
-							lat, lon = parseICalGeo(p.Value)
-						}
-						return EventLocationRequest{Location: loc, Latitude: lat, Longitude: lon}
-					}(),
+					// parseICalLocation is the same "Apple structured location,
+					// else plain LOCATION+GEO" logic this used to reimplement
+					// inline — but that copy had drifted from it (missing the
+					// X-STREET-ADDRESS/X-POSTAL-CODE/X-LOCALITY extraction,
+					// and the LOCATION value wasn't run through
+					// icalUnescapeText), #1243.
+					Location: parseICalLocation(event),
 				},
 			})
 			vevents = append(vevents, event)
@@ -2118,9 +2117,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		event.Instructors = instructors
 	}
 
-	var changedAtEpoch int64
-	db.QueryRow("SELECT COALESCE(changed_at,0) FROM events WHERE id=?", event.ID).Scan(&changedAtEpoch)
-	w.Header().Set("ETag", weakEtag(changedAtEpoch))
+	w.Header().Set("ETag", weakEtag(event.ChangedAtEpoch))
 
 	if r.URL.Query().Get("format") == "openactive" {
 		w.Header().Set("Content-Type", "application/json")
@@ -3859,7 +3856,18 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+	// requireEventOrg(..., &req.OrganizationID, true) covers both "existing
+	// org" and "target org" in one call — timetableAuthCheck was built for
+	// timetable edits specifically (no target-org concept, see its own doc
+	// comment), so borrowing it here plus a hand-rolled target-org check
+	// below was reimplementing exactly what this call already expresses
+	// (#1245).
+	var existingOrgID sql.NullInt64
+	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&existingOrgID); err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeInternalError(w, err)
 		return
 	}
 	var req EventOrganizationRefRequest
@@ -3867,8 +3875,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "organization_id is required", http.StatusBadRequest)
 		return
 	}
-	if userRole != RoleAdmin && !isOrgMember(callerID, req.OrganizationID) {
-		writeError(w, "Forbidden: not a member of the target organisation", http.StatusForbidden)
+	if !requireEventOrg(w, userRole, callerID, existingOrgID, &req.OrganizationID, true) {
 		return
 	}
 	var exists int

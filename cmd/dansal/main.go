@@ -2589,6 +2589,17 @@ func migrateDB() {
 			db.Exec("ALTER TABLE timetable_entries ADD COLUMN difficulty TEXT NOT NULL DEFAULT '' CHECK(difficulty IN ('','beginner','advanced','profi'))")
 		}
 	}
+	// v36 (#1246): index events.fetch_source_id — findExistingEvent's tier-5
+	// fuzzy-review fallback (dedup.go) filters on it, and with no index that
+	// was a full table scan on every dedup-tier-1-4 miss during import.
+	// Retrofitted onto an existing column (not paired with a new one), so no
+	// ALTER TABLE / pragma_table_info check is needed here — just the index.
+	if !applied(36) {
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_events_fetch_source_id ON events(fetch_source_id)")
+		mark(36)
+	}
+	// Safety net: ensure the index exists even if v36 was pre-marked.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_fetch_source_id ON events(fetch_source_id)")
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3870,6 +3881,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_events_series_id                  ON events(series_id);
 	CREATE INDEX IF NOT EXISTS idx_events_created_by_id              ON events(created_by_id);
 	CREATE INDEX IF NOT EXISTS idx_events_changed_by_id              ON events(changed_by_id);
+	CREATE INDEX IF NOT EXISTS idx_events_fetch_source_id            ON events(fetch_source_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_user_id             ON contact_posts(user_id);
 	CREATE INDEX IF NOT EXISTS idx_verification_tokens_user_id       ON verification_tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_user_id        ON magic_login_tokens(user_id);
@@ -3996,6 +4008,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(33)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(34)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(35)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(36)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

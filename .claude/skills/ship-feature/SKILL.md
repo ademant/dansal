@@ -14,6 +14,7 @@ This skill encodes the standing dansal workflow from `CLAUDE.md`. Follow it in o
 - Explore the relevant code before proposing anything (read the actual files involved — don't guess at current behavior).
 - Lay out the approach and tradeoffs in plain terms. If there's a real design choice (e.g. layout numbers, i18n scope, which files to touch), ask via `AskUserQuestion` rather than picking silently.
 - **Wait for explicit confirmation** ("seems valid", "go ahead", etc.) before creating the issue or touching code. Skip this step only for obvious typos or single-line fixes.
+- **When a proposal bundles multiple distinct actions** (e.g. "I'll open issues for these bugs, *and* apply this other batch of safe fixes directly"), a reply confirming one part is not consent for the rest — confirm each part gets its own explicit go-ahead, even within the same message. Concretely: after a review surfaces a mix of findings, the user saying "create issues for all of them" authorizes exactly that (the issue-creation half of a two-part plan), not a follow-on implementation step you also described — don't infer the second half from silence or from the conversation's general direction. If it's unclear which parts were actually approved, ask.
 
 ## 2. Create the issue
 
@@ -49,10 +50,12 @@ Closes #NNN
 
 <optional body explaining why>
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Co-Authored-By: <current model, per the session's attribution instructions> <noreply@anthropic.com>
 EOF
 )"
 ```
+
+(Don't hardcode a model name/version here — it goes stale. Use whatever attribution block the active session's own instructions specify.)
 
 Note: the issue only actually auto-closes once this commit is **pushed**. Don't push proactively — confirm with the user first, per the standing rule on actions visible to others. If the user has already told you to push in this conversation, you don't need to ask again for the same change. "Push it" pushes whatever is currently unpushed on the branch, not just the most recent commit — multiple shipped features commonly stack up before a push.
 
@@ -61,7 +64,7 @@ Small follow-up tweaks to a feature you just shipped (e.g. a one-line display fi
 ## 5. Build and deploy — dev by default
 
 ```bash
-make build   # builds all four binaries, as the regular user
+make build   # builds all five binaries, as the regular user
 sudo make deploy INSTANCE=dev
 ```
 

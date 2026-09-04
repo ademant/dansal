@@ -11,8 +11,10 @@ The repo builds **five binaries** from one monorepo: `dansal` (REST API), `dansa
 
 ## Prerequisites
 
-- Go **1.26+** (go.mod pins `go 1.26.4`) — verify with `go version` first.
+- Go **1.26+** (check `go.mod`'s `go` directive for the exact minimum — it drifts upward over time, e.g. it read `1.26.4` when this line was written and `1.26.6` shortly after; don't hardcode a patch version here). Verify with `go version` first.
 - Deploy needs **root**; builds run as the regular user.
+
+**If `go` isn't found at all** (fresh machine, no prior install): installing it needs **no root** — download the tarball from `https://go.dev/dl/` (get the exact sha256 from `https://go.dev/dl/?mode=json&include=all` rather than trusting a scraped page, since a summarized fetch can mis-render a 64-char hex digest), extract to e.g. `~/go1.27.0` (`tar --strip-components=1`), then `export PATH="$HOME/go1.27.0/bin:$PATH"` (append to `~/.bashrc` to persist). This sidesteps the sudo/non-interactive gotcha below entirely — `sudo apt-get install golang-go` hits the exact same interactive-terminal wall as `sudo make deploy` does, but a per-user tarball install doesn't need `sudo` at all. Go's toolchain-switching means a newer `go` binary than `go.mod`'s directive is always fine — installing the current release rather than matching the pin exactly is normal.
 
 ## The flow
 

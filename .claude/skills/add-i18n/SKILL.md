@@ -43,7 +43,7 @@ languages:
 
 ## Procedure
 
-1. **Pick a unique key** following existing naming (`nav_`, `evt_`, `admin_`, `loc_`, `org_`, `musician_`, `btn_go_back`, …).
+1. **Pick a unique key** following existing naming (`nav_`, `evt_`, `admin_`, `loc_`, `org_`, `musician_`, `btn_go_back`, …). **Grep for a reusable existing key first** — a generic word/phrase you need (e.g. "Name", "Delete", "Close") may already exist under a differently-scoped key name (`col_name` for a generic table-column "Name" header, `admin_delete` for a generic "Delete" action, `admin_magic_link_close` happens to hold the generic "Close" translation despite its feature-specific name). Search by the *English value*, not just the key name, since the existing key's prefix won't necessarily hint at your new use case. Only add a new key when nothing already carries the exact phrase you need.
 2. **Insert the key into all 12 sections, in document order.** Hand-editing 12 places is error-prone; use an anchor-key approach. Pick an existing key known to exist in all 12 sections (e.g. `evt_description`), and run a small Python script that inserts your new key after that anchor in each section — anchored on indentation so it lands inside the right `strings:` map:
 
 ```python

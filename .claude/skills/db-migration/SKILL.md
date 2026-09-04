@@ -54,6 +54,8 @@ After each version block, add a structural check so the column/table exists even
 - One `pragma_table_info` check per new column; the index creation goes in this block too (see real example: v18, `timetable_entries.instructor_id`, `cmd/dansal/main.go:1611-1628`).
 - This is the rule AGENTS.md calls the "safety-net structural check" — **never skip it**, even if the version block looks complete.
 
+**Retrofitting an index onto an existing column** (no new column involved — e.g. a column that's had no index since it was first added) is simpler: just `CREATE INDEX IF NOT EXISTS idx_... ON table(column)` in its own new version block, no `pragma_table_info` check needed since there's no column existence to verify, and no `ALTER TABLE`. Still needs the version bump + `createTables()` catch-all mark, same as any other migration — `createTables()`'s own `CREATE TABLE` for that table should already define the index going forward too, for fresh installs.
+
 ## `createTables()` — keep fresh installs identical
 
 Fresh installs must end up with the same final schema as migrated instances, or the catch-all breaks:

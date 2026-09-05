@@ -79,7 +79,12 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   window.addEventListener('load',function(){
     dansalLeafletCss();
     var map = L.map('loc-map',{scrollWheelZoom:false}).setView([50,10],5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    // #1269: routed through dansal's own tile proxy (never a direct OSM
+    // URL — OSM's tile usage policy forbids that kind of unmetered
+    // third-party use), carrying the instance's public tile token. Relative
+    // path: this embed page and the tile proxy are the same origin, same
+    // as base.js's makeTileLayer() for the main site.
+    L.tileLayer('/tiles/osm/{z}/{x}/{y}.png?t={{.TileToken}}',{
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom:18
     }).addTo(map);

@@ -64,6 +64,7 @@ type TemplateData struct {
 	LogoAIGenerated        bool
 	RelayActorURL          string // absolute ActivityPub actor URL of the relay actor, for a site-wide discovery link (#951)
 	Nonce                  string // per-request CSP nonce; every inline <script> must carry nonce="{{$.Nonce}}" (#1141)
+	TileToken              string // #1269: instance's public tile-proxy token, appended to /tiles/... URLs by base.js's makeTileLayer
 }
 
 // attentionCache serves the scoped "needs attention" counts from a short-TTL
@@ -221,6 +222,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		LogoAIGenerated:        siteCfg.LogoAIGenerated(),
 		RelayActorURL:          relayActorURL,
 		Nonce:                  nonceFromRequest(r),
+		TileToken:              siteCfg.TileToken(),
 	}
 }
 

@@ -29,6 +29,7 @@ type siteSettingsCache struct {
 	logoAIGenerated      bool
 	dateFormat           string // "de" → DD.MM.YYYY; "" → locale-based
 	timeFormatSite       string // "24h" or "12h" override (empty = use web.yaml)
+	tileToken            string // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -57,13 +58,14 @@ func (c *siteSettingsCache) load() {
 	defaultDanceIDs := parseDanceIDs(getSiteSetting(c.db, "default_dance_ids"))
 	dateFormat := getSiteSetting(c.db, "date_format")
 	timeFormatSite := getSiteSetting(c.db, "time_format")
+	tileToken := getSiteSetting(c.db, "tile_token")
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
-		c.dateFormat, c.timeFormatSite, c.at =
+		c.dateFormat, c.timeFormatSite, c.tileToken, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
-		dateFormat, timeFormatSite, time.Now()
+		dateFormat, timeFormatSite, tileToken, time.Now()
 	c.mu.Unlock()
 }
 
@@ -116,6 +118,13 @@ func (c *siteSettingsCache) HolidayCountry() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.holidayCountry
+}
+
+func (c *siteSettingsCache) TileToken() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tileToken
 }
 
 // DefaultDanceIDs returns the admin-configured dance presets for the event

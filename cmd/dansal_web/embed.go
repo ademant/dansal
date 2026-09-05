@@ -389,12 +389,13 @@ func embedLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 		strs := i18n.Strings(lang)
 		renderEmbed(w, tmpls.embedLocations, map[string]any{
-			"Lang":     lang,
-			"Nonce":    nonceFromRequest(r),
-			"LocData":  template.JS(locJSON),
-			"Strings":  strs,
-			"BaseURL":  cfg.BaseURL,
-			"SiteName": embedSiteName(cfg),
+			"Lang":      lang,
+			"Nonce":     nonceFromRequest(r),
+			"LocData":   template.JS(locJSON),
+			"Strings":   strs,
+			"BaseURL":   cfg.BaseURL,
+			"SiteName":  embedSiteName(cfg),
+			"TileToken": siteCfg.TileToken(),
 		})
 	}
 }
@@ -535,6 +536,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"Strings":     strs,
 			"BaseURL":     cfg.BaseURL,
 			"SiteName":    embedSiteName(cfg),
+			"TileToken":   siteCfg.TileToken(),
 		})
 	}
 }

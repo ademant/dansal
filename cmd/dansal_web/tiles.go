@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,6 +52,114 @@ const tileCacheMaxBytes = 2 << 20 // 2MB
 // sweep, a tile just quietly refreshes itself next time it's requested.
 const tileCacheMaxAge = 30 * 24 * time.Hour
 
+// getOrCreateTileToken returns the instance's public tile-proxy token,
+// generating and persisting a random one on first use (#1269) so a fresh
+// install works immediately with no manual setup — the main site's own map
+// and the embed pages all read it back via site_settings/siteSettingsCache
+// and append it to their tile URLs. There's no webmin control to rotate it
+// yet (deliberately out of scope for the initial fix); an admin who needs
+// to invalidate a leaked token can update the "tile_token" row directly.
+func getOrCreateTileToken(db *sql.DB) string {
+	if tok := getSiteSetting(db, "tile_token"); tok != "" {
+		return tok
+	}
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		log.Printf("getOrCreateTileToken: rand.Read: %v", err)
+		return ""
+	}
+	tok := hex.EncodeToString(buf)
+	if err := setSiteSetting(db, "tile_token", tok); err != nil {
+		log.Printf("getOrCreateTileToken: persist: %v", err)
+	}
+	return tok
+}
+
+// tileAPIKeyCache remembers a bearer token's recent validity against
+// dansal's own API (dansal_web has no local copy of api_keys — that table
+// lives in dansal's own database) so a programmatic caller (#1269's
+// "wp-dansal" case) fetching many tiles doesn't trigger one cross-service
+// call per tile. Valid results cache longer than invalid ones; a crude size
+// cap resets the whole cache instead of growing unbounded if something
+// floods the endpoint with unique garbage tokens — this is a courtesy
+// cache, not a hardened rate limiter.
+type tileAPIKeyCache struct {
+	mu      sync.Mutex
+	entries map[string]tileAPIKeyCacheEntry
+}
+type tileAPIKeyCacheEntry struct {
+	valid   bool
+	expires time.Time
+}
+
+var apiKeyTileCache = &tileAPIKeyCache{entries: map[string]tileAPIKeyCacheEntry{}}
+
+const (
+	tileAPIKeyValidTTL   = 5 * time.Minute
+	tileAPIKeyInvalidTTL = 30 * time.Second
+	tileAPIKeyCacheMax   = 10_000
+)
+
+func (c *tileAPIKeyCache) check(ctx context.Context, client *DansalClient, token string) bool {
+	c.mu.Lock()
+	if e, ok := c.entries[token]; ok && time.Now().Before(e.expires) {
+		c.mu.Unlock()
+		return e.valid
+	}
+	if len(c.entries) > tileAPIKeyCacheMax {
+		c.entries = map[string]tileAPIKeyCacheEntry{}
+	}
+	c.mu.Unlock()
+
+	// GET /api/v1/apikeys is a self-service "list my own keys" endpoint —
+	// reusing it here as a validity probe (any 200 response means auth()
+	// on the dansal side accepted the bearer token) avoids inventing a new
+	// dansal-side endpoint just for this.
+	_, err := client.ListAPIKeys(ctx, token)
+	valid := err == nil
+	ttl := tileAPIKeyInvalidTTL
+	if valid {
+		ttl = tileAPIKeyValidTTL
+	}
+
+	c.mu.Lock()
+	c.entries[token] = tileAPIKeyCacheEntry{valid: valid, expires: time.Now().Add(ttl)}
+	c.mu.Unlock()
+	return valid
+}
+
+// tileRequestAuthorized implements #1269's "Option B": the tile proxy used
+// to be completely open, letting anyone use a dansal instance as a free OSM
+// tile mirror (bandwidth cost, and a policy violation of OSM's tile usage
+// policy, which forbids that kind of unmetered third-party use). Two ways
+// in, checked cheapest-first:
+//  1. The instance's own public tile token as a "t" query parameter — used
+//     by the main site's own map (base.js's makeTileLayer) and by the embed
+//     pages, both of which inject it server-side into the tile URL
+//     template. A plain URL query param is the only mechanism available at
+//     all here: Leaflet's default tile layer requests tiles as plain <img>
+//     loads, which cannot carry a custom Authorization header.
+//  2. A real dansal API key via "Authorization: Bearer" — for a
+//     programmatic caller (e.g. wp-dansal) that can attach real headers,
+//     checked (with caching) against dansal's own API.
+//
+// This is deliberately not hardened, unbreakable security — the public
+// token is visible in anyone's page source the moment they view it. The
+// goal is stopping casual/automated hotlinking of an open endpoint, not
+// protecting sensitive data (map tiles aren't sensitive).
+func tileRequestAuthorized(r *http.Request, client *DansalClient) bool {
+	if siteCfg != nil {
+		if t := r.URL.Query().Get("t"); t != "" && t == siteCfg.TileToken() {
+			return true
+		}
+	}
+	if authz := r.Header.Get("Authorization"); strings.HasPrefix(authz, "Bearer ") {
+		token := strings.TrimPrefix(authz, "Bearer ")
+		return apiKeyTileCache.check(r.Context(), client, token)
+	}
+	return false
+}
+
 // tileProxyHandler serves GET /tiles/{scheme}/{z}/{x}/{yfile}, proxying and
 // disk-caching OSM map tiles (#1079) so visitor browsers only ever talk to
 // dansal_web — never a third-party tile server directly. This both brings
@@ -57,8 +169,12 @@ const tileCacheMaxAge = 30 * 24 * time.Hour
 // latter only ever requested if a caller enables Leaflet's detectRetina,
 // which dansal_web's own tile layers currently don't, but the proxy handles
 // it anyway for forward compatibility.
-func tileProxyHandler(cfg *Config) http.HandlerFunc {
+func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !tileRequestAuthorized(r, client) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		scheme := r.PathValue("scheme")
 		tpl, ok := tileUpstreams[scheme]
 		if !ok {

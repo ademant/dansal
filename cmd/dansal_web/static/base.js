@@ -213,7 +213,15 @@ function cycleTheme(){
 // .leaflet-tile-pane rule) — no second upstream, no swap needed on theme
 // change.
 function makeTileLayer(){
-  return L.tileLayer('/tiles/osm/{z}/{x}/{y}.png',{
+  // #1269: the tile proxy requires the instance's public token (query
+  // param — Leaflet's default tile layer loads tiles as plain <img>
+  // requests, which can't carry a custom Authorization header) or a real
+  // API key, to stop the endpoint being used as an open, unmetered OSM
+  // tile mirror by anyone else. DANSAL_TILE_TOKEN is emitted by base.html
+  // just above this script's own <script src> tag.
+  var tileURL = '/tiles/osm/{z}/{x}/{y}.png';
+  if(typeof DANSAL_TILE_TOKEN !== 'undefined' && DANSAL_TILE_TOKEN) tileURL += '?t=' + encodeURIComponent(DANSAL_TILE_TOKEN);
+  return L.tileLayer(tileURL,{
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom:18});
 }

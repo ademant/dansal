@@ -163,7 +163,7 @@ GET /tiles/osm/{z}/{x}/{y}.png         # standard OSM tiles
 GET /tiles/osm/{z}/{x}/{y}@2x.png     # retina (@2x) OSM tiles
 ```
 
-A **proxy endpoint for OpenStreetMap tile images**, served by `dansal_web`. 
+A **proxy endpoint for OpenStreetMap tile images**, served by `dansal_web`.
 This allows third-party integrations (e.g., the [wp-dansal](https://github.com/ademant/wp-dansal) WordPress plugin) to embed OSM-based maps without violating OSM's [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/), which forbids heavy direct use by distributed applications.
 
 **Features:**
@@ -172,9 +172,16 @@ This allows third-party integrations (e.g., the [wp-dansal](https://github.com/a
 - **Simple URL pattern** – compatible with Leaflet's `L.tileLayer()`
 - **Retina support** – `@2x.png` variant for high-DPI displays
 
+**Authentication (#1269):** every request needs one of the following, or it's rejected with `401`. The endpoint used to be completely open, which meant anyone could use a dansal instance as a free, unmetered OSM tile mirror — this is deliberately not hardened, unbreakable security (a query-param token embedded in public page source is inherently readable by anyone viewing that page); the goal is stopping casual/automated hotlinking of the endpoint, not protecting sensitive data.
+
+1. **The instance's public tile token**, as a `?t=` query parameter. This is the *only* mechanism a browser-rendered Leaflet map can use at all — `L.tileLayer` requests tiles as plain `<img>` loads, which cannot carry a custom `Authorization` header. dansal_web's own pages and its `/embed/*` widgets inject this token into their own tile URLs server-side; there's no endpoint yet to hand it to an external integration, and no webmin control to rotate it — an admin who needs to invalidate a leaked value updates the `tile_token` row in `site_settings` directly.
+2. **A real dansal API key**, via `Authorization: Bearer <key>` — checked (with a short-lived cache) against dansal's own `GET /api/v1/apikeys`. This only works for a server-side/programmatic caller that can set custom headers; it is **not** usable for a plain client-side `L.tileLayer()` call for the same reason the token above exists.
+
+**wp-dansal and other third-party integrations:** the plain Leaflet usage below (a direct browser-rendered map, same as dansal_web's own pages) will get `401` until it also supplies the public token — which today means the plugin needs the instance's `tile_token` value from somewhere (currently: an admin reading it out of `site_settings` and configuring it in the plugin), since there is no cross-instance token-lookup endpoint yet. An integration that already has a real API key and can proxy tile requests through its own backend can use the Bearer path instead, entirely avoiding the token question.
+
 **Usage with Leaflet:**
 ```javascript
-L.tileLayer('https://balfolk.jetzt/tiles/osm/{z}/{x}/{y}.png', {
+L.tileLayer('https://balfolk.jetzt/tiles/osm/{z}/{x}/{y}.png?t=' + TILE_TOKEN, {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 18
 }).addTo(map);

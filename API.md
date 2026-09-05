@@ -897,11 +897,22 @@ The `.../events/{event_id}` pair is the single-item counterpart to `assign-event
 ## Timetable
 
 ```
-POST   /api/v1/events/{id}/timetable    # append entries to the existing timetable
-PUT    /api/v1/events/{id}/timetable    # replace the entire timetable
+POST   /api/v1/events/{id}/timetable                # append entries to the existing timetable
+PUT    /api/v1/events/{id}/timetable                # replace the entire timetable
+DELETE /api/v1/events/{id}/timetable                # remove all entries
+GET    /api/v1/events/{id}/timetable/history        # recent full-snapshot journal entries, newest first
+
+PUT    /api/v1/events/{id}/timetable/{entry_id}     # update one entry (optimistic concurrency)
+DELETE /api/v1/events/{id}/timetable/{entry_id}     # remove one entry
 ```
 
-Authentication required (admin or a member of the event's organization). Multi-slot workshop/festival schedules.
+Authentication required (admin or a member of the event's organization) except `GET .../history`, which is public for a published, email-verified event. Multi-slot workshop/festival schedules.
+
+**Bulk vs. per-entry:** `POST`/`PUT`/`DELETE` on the bare `.../timetable` path operate on the whole timetable at once — `PUT` in particular deletes every row and re-inserts the request body, so two people saving concurrently silently clobber each other with no way to detect it. The per-entry `{entry_id}` endpoints (#1270) exist for exactly that case: several organizers editing one event's schedule at the same time.
+
+**Per-entry versioning and conflicts:** every entry carries a `version` (starts at `1`) alongside `updated_at`/`updated_by`, which are only set once an entry has been through a per-entry `PUT` — an entry that has only ever been touched by the bulk endpoints keeps `updated_at`/`updated_by` empty. `PUT /api/v1/events/{id}/timetable/{entry_id}` requires the request body to include the `version` last read for that entry (same fields as the bulk request shape, e.g. `{"start_time":"...", "end_time":"...", "title":"...", "version":2}`); if the entry's current version doesn't match, the request is rejected with `409 Conflict` and the entry is left untouched — read it again to get the current version and data before retrying. A successful update bumps `version` by 1. `DELETE .../timetable/{entry_id}` does not check a version — it just removes that one row, leaving the rest of the timetable as-is.
+
+Both per-entry endpoints journal a full-timetable snapshot to `GET .../timetable/history` after every change, same as the bulk endpoints — a granular edit doesn't get its own diff format, just a normal snapshot row recorded more often.
 
 ## Images
 

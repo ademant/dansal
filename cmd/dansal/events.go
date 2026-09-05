@@ -2095,7 +2095,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		wg          sync.WaitGroup
 	)
 	wg.Add(4)
-	go func() { defer wg.Done(); timetable, _ = fetchTimetable(event.ID) }()
+	go func() { defer wg.Done(); timetable, _ = fetchTimetable(db, event.ID) }()
 	go func() { defer wg.Done(); locs, _ = fetchEventLocations(event.ID) }()
 	go func() { defer wg.Done(); musicians, _ = fetchEventMusicians(event.ID) }()
 	go func() { defer wg.Done(); instructors, _ = fetchEventInstructors(event.ID) }()
@@ -2368,7 +2368,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if instructors, err := fetchEventInstructors(id); err == nil {
 		event.Instructors = instructors
 	}
-	if timetable, err := fetchTimetable(id); err == nil {
+	if timetable, err := fetchTimetable(db, id); err == nil {
 		event.Timetable = timetable
 	}
 
@@ -2695,7 +2695,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	if instructors, err := fetchEventInstructors(id); err == nil {
 		event.Instructors = instructors
 	}
-	if timetable, err := fetchTimetable(id); err == nil {
+	if timetable, err := fetchTimetable(db, id); err == nil {
 		event.Timetable = timetable
 	}
 

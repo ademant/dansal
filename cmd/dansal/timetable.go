@@ -32,6 +32,18 @@ type TimetableEntry struct {
 	// level rather than only the event as a whole.
 	Difficulty string `json:"difficulty,omitempty" enum:"beginner,advanced,profi"`
 	CreatedAt  string `json:"created_at"`
+	// Per-row optimistic-concurrency fields (#1270). Version starts at 1 and
+	// increments on every successful PUT .../timetable/{entry_id} — a
+	// request carrying a stale version returns 409 Conflict instead of
+	// silently overwriting a concurrent editor's change, which is what the
+	// wholesale-replace PUT can't do safely with several people editing the
+	// same event's schedule at once. UpdatedAt/UpdatedBy stay unset for
+	// entries only ever touched by the bulk endpoints (add/replace-all/
+	// delete-all), which don't carry per-row attribution the way a granular
+	// edit does.
+	UpdatedAt string `json:"updated_at,omitempty"`
+	UpdatedBy string `json:"updated_by,omitempty"`
+	Version   int    `json:"version"`
 }
 
 type TimetableEntryRequest struct {
@@ -46,6 +58,17 @@ type TimetableEntryRequest struct {
 	MusicianID   *int   `json:"musician_id"`
 	InstructorID *int   `json:"instructor_id"`
 	Difficulty   string `json:"difficulty" enum:"beginner,advanced,profi"`
+}
+
+// TimetableEntryUpdateRequest is the body for PUT .../timetable/{entry_id}
+// (#1270): the same fields as a bulk entry, plus the version the caller last
+// read. Embedding (not a separate flat struct) keeps the entry fields
+// identical to TimetableEntryRequest's validation and column mapping —
+// there's only one shape for "what an entry's fields are", per-entry PUT
+// just also carries a version to detect a concurrent edit.
+type TimetableEntryUpdateRequest struct {
+	TimetableEntryRequest
+	Version int `json:"version"`
 }
 
 // TimetableHistoryEntry is one journal entry (#1176): a full snapshot of an
@@ -98,8 +121,12 @@ func validTimeSlot(s string) bool { return timeSlotRe.MatchString(s) }
 func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	var e TimetableEntry
 	var locID, musID, insID sql.NullInt64
-	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &musID, &insID, &e.CreatedAt, &e.Difficulty); err != nil {
+	var updatedAtEpoch int64
+	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &musID, &insID, &e.CreatedAt, &e.Difficulty, &updatedAtEpoch, &e.UpdatedBy, &e.Version); err != nil {
 		return TimetableEntry{}, err
+	}
+	if updatedAtEpoch > 0 {
+		e.UpdatedAt = epochToLocal(updatedAtEpoch)
 	}
 	if locID.Valid {
 		v := int(locID.Int64)
@@ -116,16 +143,20 @@ func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	return e, nil
 }
 
-const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), COALESCE(entry_date,''), location_id, musician_id, instructor_id, created_at, COALESCE(difficulty,'')"
+const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), COALESCE(entry_type,'bal'), COALESCE(entry_date,''), location_id, musician_id, instructor_id, created_at, COALESCE(difficulty,''), updated_at, COALESCE(updated_by,''), version"
 
 // fetchTimetable returns all entries for an event ordered by start_time,
 // including the location, musician, and instructor names via LEFT JOINs.
-func fetchTimetable(eventID int) ([]TimetableEntry, error) {
-	rows, err := db.Query(
+// Takes a querier (not the package-level db directly) so callers recording a
+// full-snapshot journal entry after a per-row edit (#1270) can read the
+// resulting timetable within the same transaction as the edit itself.
+func fetchTimetable(q querier, eventID int) ([]TimetableEntry, error) {
+	rows, err := q.Query(
 		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
 		        COALESCE(t.room,''), COALESCE(t.entry_type,'bal'), COALESCE(t.entry_date,''), t.location_id,
 		        COALESCE(l.location,''), COALESCE(l.short_name,''), l.parent_id, COALESCE(pl.location,''), COALESCE(pl.short_name,''),
-		        t.musician_id, COALESCE(m.bandname,''), t.instructor_id, COALESCE(i.name,''), t.created_at, COALESCE(t.difficulty,'')
+		        t.musician_id, COALESCE(m.bandname,''), t.instructor_id, COALESCE(i.name,''), t.created_at, COALESCE(t.difficulty,''),
+		        t.updated_at, COALESCE(t.updated_by,''), t.version
 		 FROM timetable_entries t
 		 LEFT JOIN locations l ON t.location_id = l.id
 		 LEFT JOIN locations pl ON l.parent_id = pl.id
@@ -143,10 +174,15 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 		var e TimetableEntry
 		var locID, musID, insID, parentID sql.NullInt64
 		var locName, locShortName, parentName, parentShortName string
+		var updatedAtEpoch int64
 		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
 			&e.Description, &e.Room, &e.EntryType, &e.EntryDate, &locID, &locName, &locShortName, &parentID, &parentName, &parentShortName,
-			&musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt, &e.Difficulty); err != nil {
+			&musID, &e.MusicianName, &insID, &e.InstructorName, &e.CreatedAt, &e.Difficulty,
+			&updatedAtEpoch, &e.UpdatedBy, &e.Version); err != nil {
 			return nil, err
+		}
+		if updatedAtEpoch > 0 {
+			e.UpdatedAt = epochToLocal(updatedAtEpoch)
 		}
 		if locID.Valid {
 			v := int(locID.Int64)
@@ -299,7 +335,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 
 	// #1176: journal the resulting full timetable, not just the entries this
 	// call added — addTimetableEntries appends to whatever already existed.
-	if full, err := fetchTimetable(eventID); err == nil {
+	if full, err := fetchTimetable(db, eventID); err == nil {
 		recordTimetableHistory(db, eventID, callerID, full)
 	}
 
@@ -395,6 +431,185 @@ func deleteTimetable(w http.ResponseWriter, r *http.Request) {
 	}
 	// #1176: journal the now-empty timetable.
 	recordTimetableHistory(db, eventID, callerID, nil)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// timetableEntryEventID looks up which event a timetable entry belongs to,
+// for the per-entry endpoints' "does entry {entry_id} actually belong to
+// event {id}" check — a stale/mismatched pair should read as 404, not leak
+// whether the entry_id exists under a different event.
+func timetableEntryEventID(q querier, entryID int) (int, error) {
+	var eventID int
+	err := q.QueryRow("SELECT event_id FROM timetable_entries WHERE id = ?", entryID).Scan(&eventID)
+	return eventID, err
+}
+
+// PUT /api/v1/events/{id}/timetable/{entry_id} — update one row (#1270).
+//
+// This is the piece the bulk PUT can't do safely with several people editing
+// the same event's timetable at once: the request body carries the version
+// last read, and a stale version (someone else saved in between) returns 409
+// Conflict instead of silently overwriting their change. Successful or not,
+// nothing about the *other* rows is touched — unlike replaceTimetable, which
+// deletes and re-inserts everything.
+func updateTimetableEntry(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+	entryID, err := intPathValue(r, "entry_id")
+	if err != nil {
+		writeError(w, "Invalid entry ID", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+
+	body, ok := readBodyOrError(w, r)
+	if !ok {
+		return
+	}
+	var req TimetableEntryUpdateRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := validateTimetableRequests([]TimetableEntryRequest{req.TimetableEntryRequest}); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer tx.Rollback()
+
+	var currentVersion int
+	var rowEventID int
+	err = tx.QueryRow("SELECT event_id, version FROM timetable_entries WHERE id = ?", entryID).Scan(&rowEventID, &currentVersion)
+	if err == sql.ErrNoRows || (err == nil && rowEventID != eventID) {
+		writeError(w, "Timetable entry not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if req.Version != currentVersion {
+		writeError(w, fmt.Sprintf("version mismatch: this entry was changed since you last read it (current version %d)", currentVersion), http.StatusConflict)
+		return
+	}
+
+	var locIDArg, musIDArg, insIDArg any
+	if req.LocationID != nil {
+		locIDArg = *req.LocationID
+	}
+	if req.MusicianID != nil {
+		musIDArg = *req.MusicianID
+	}
+	if req.InstructorID != nil {
+		insIDArg = *req.InstructorID
+	}
+	entryType := req.EntryType
+	if entryType == "" {
+		entryType = "bal"
+	}
+	var entryDateArg any
+	if req.EntryDate != "" {
+		entryDateArg = req.EntryDate
+	}
+
+	e, err := scanTimetableRow(tx.QueryRow(
+		`UPDATE timetable_entries SET start_time=?, end_time=?, title=?, description=?, room=?, entry_type=?, entry_date=?,
+		 location_id=?, musician_id=?, instructor_id=?, difficulty=?, updated_at=?, updated_by=?, version=version+1
+		 WHERE id=? `+timetableReturning,
+		req.StartTime, req.EndTime, req.Title, req.Description, req.Room, entryType, entryDateArg,
+		locIDArg, musIDArg, insIDArg, req.Difficulty, time.Now().UTC().Unix(), resolveDisplayName(callerID), entryID,
+	))
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	// #1176: journal the full resulting timetable, same as the bulk
+	// endpoints — a granular edit doesn't get its own diff format, just a
+	// normal snapshot row recorded more often.
+	if full, ferr := fetchTimetable(tx, eventID); ferr == nil {
+		recordTimetableHistory(tx, eventID, callerID, full)
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	json.NewEncoder(w).Encode(e)
+}
+
+// DELETE /api/v1/events/{id}/timetable/{entry_id} — remove one row (#1270),
+// leaving the rest of the timetable untouched (unlike deleteTimetable, which
+// clears everything for the event).
+func deleteTimetableEntry(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	eventID, err := intPathValue(r, "id")
+	if err != nil {
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+	entryID, err := intPathValue(r, "entry_id")
+	if err != nil {
+		writeError(w, "Invalid entry ID", http.StatusBadRequest)
+		return
+	}
+	if !timetableAuthCheck(w, userRole, callerID, eventID) {
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	defer tx.Rollback()
+
+	rowEventID, err := timetableEntryEventID(tx, entryID)
+	if err == sql.ErrNoRows || (err == nil && rowEventID != eventID) {
+		writeError(w, "Timetable entry not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	if _, err := tx.Exec("DELETE FROM timetable_entries WHERE id = ?", entryID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	// #1176: journal the resulting (one row shorter) timetable.
+	if full, ferr := fetchTimetable(tx, eventID); ferr == nil {
+		recordTimetableHistory(tx, eventID, callerID, full)
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

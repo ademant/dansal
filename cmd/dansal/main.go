@@ -2601,6 +2601,36 @@ func migrateDB() {
 	}
 	// Safety net: ensure the index exists even if v36 was pre-marked.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_fetch_source_id ON events(fetch_source_id)")
+
+	// v37 (#1270): per-entry timetable CRUD + optimistic-concurrency
+	// versioning — the server-side foundation for a planned collaborative
+	// festival timetable editor (several org members editing the same
+	// event's schedule at once). The existing bulk endpoints (add/replace-
+	// all/delete-all) can't support that safely: two editors' overlapping
+	// PUTs silently clobber each other with no way to detect it. version
+	// starts at 1 and increments on every successful per-entry PUT; a
+	// request carrying a stale version gets 409 Conflict instead of
+	// overwriting. updated_at/updated_by stay at their zero values for rows
+	// only ever touched by the bulk endpoints, which don't carry per-row
+	// attribution the way a granular edit does.
+	if !applied(37) {
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE timetable_entries ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+		mark(37)
+	}
+	// Safety net: ensure all three columns exist even if v37 was pre-marked.
+	for _, col := range []struct{ name, def string }{
+		{"updated_at", "INTEGER NOT NULL DEFAULT 0"},
+		{"updated_by", "TEXT NOT NULL DEFAULT ''"},
+		{"version", "INTEGER NOT NULL DEFAULT 1"},
+	} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('timetable_entries') WHERE name=?", col.name).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE timetable_entries ADD COLUMN " + col.name + " " + col.def)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3721,6 +3751,9 @@ func createTables() error {
 		entry_type TEXT NOT NULL DEFAULT 'bal',
 		entry_date TEXT,
 		difficulty TEXT NOT NULL DEFAULT '' CHECK(difficulty IN ('','beginner','advanced','profi')),
+		updated_at INTEGER NOT NULL DEFAULT 0,
+		updated_by TEXT NOT NULL DEFAULT '',
+		version INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
 		FOREIGN KEY (location_id) REFERENCES locations(id),
@@ -4010,6 +4043,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(34)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(35)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(36)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(37)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4292,6 +4326,8 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/enrich", auth(http.HandlerFunc(enrichEvent)))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
 	smux.Handle("DELETE /api/v1/events/{id}/timetable", auth(deleteTimetable))
+	smux.Handle("PUT /api/v1/events/{id}/timetable/{entry_id}", auth(updateTimetableEntry))
+	smux.Handle("DELETE /api/v1/events/{id}/timetable/{entry_id}", auth(deleteTimetableEntry))
 	smux.Handle("GET /api/v1/events/{id}/timetable/history", optAuth(http.HandlerFunc(getTimetableHistory)))
 	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 	// Syndication (#971, #953)

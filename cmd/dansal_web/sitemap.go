@@ -217,7 +217,12 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		NS:   "http://www.sitemaps.org/schemas/sitemap/0.9",
 		URLs: urls,
 	}
-	out, err := xml.MarshalIndent(sm, "", "  ")
+	// No indentation: sitemaps are machine-only, and pretty-printing adds
+	// ~16% pure whitespace to the raw response for zero benefit (gzip already
+	// compresses the indentation away almost for free, so the wire size barely
+	// moves — this mainly helps clients that don't request gzip, plus a little
+	// server-side CPU/memory on every cache rebuild).
+	out, err := xml.Marshal(sm)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ For the `dansal` REST API (`/api/v1/...`), see [API.md](API.md).
 - [Content Pages](#content-pages)
 - [Feeds](#feeds)
 - [Discovery Files](#discovery-files)
+- [Map Tile Proxy](#map-tile-proxy)
 - [Embeds](#embeds)
 
 ## Content Pages
@@ -154,6 +155,34 @@ of waiting for their next crawl.
 organizations (at their `effectiveSlug()`), all musicians, and all instructors.
 It does not include feed URLs, embeds, or the internal web-app flows excluded
 from this document.
+
+## Map Tile Proxy
+
+```
+GET /tiles/osm/{z}/{x}/{y}.png         # standard OSM tiles
+GET /tiles/osm/{z}/{x}/{y}@2x.png     # retina (@2x) OSM tiles
+```
+
+A **proxy endpoint for OpenStreetMap tile images**, served by `dansal_web`. 
+This allows third-party integrations (e.g., the [wp-dansal](https://github.com/ademant/wp-dansal) WordPress plugin) to embed OSM-based maps without violating OSM's [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/), which forbids heavy direct use by distributed applications.
+
+**Features:**
+- **Disk-cached** – tiles are cached locally (30-day TTL) to avoid repeated upstream fetches
+- **Compliant** – hides visitor IPs from OSM servers; identifies dansal_web as the client via User-Agent
+- **Simple URL pattern** – compatible with Leaflet's `L.tileLayer()`
+- **Retina support** – `@2x.png` variant for high-DPI displays
+
+**Usage with Leaflet:**
+```javascript
+L.tileLayer('https://balfolk.jetzt/tiles/osm/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 18
+}).addTo(map);
+```
+
+**Configuration:**
+- Cache directory can be set via `web.yaml`'s `tile_cache_dir` (defaults to `<db_path>/tiles`)
+- Currently supports only the `osm` scheme (OpenStreetMap standard tiles)
 
 ## Embeds
 

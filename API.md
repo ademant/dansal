@@ -2,7 +2,7 @@
 
 REST API served by the `dansal` binary. All endpoints are under the base URL configured as `server.base_url` in `config.yaml`.
 
-For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widgets), see [WEB.md](WEB.md).
+For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widgets, **OSM tile proxy**), see [WEB.md](WEB.md).
 
 ## Table of Contents
 

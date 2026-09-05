@@ -118,7 +118,10 @@ export async function getTokenFromCookie(page: Page): Promise<string> {
   return tok?.value ?? "";
 }
 
-async function apiPost(
+// Exported (not just used internally) so other fixture helpers — e.g.
+// helpers/indexFixture.ts's ensureIndexWeekFixture() — can reuse the same
+// request + auth + JSON-decode plumbing instead of hand-rolling it again.
+export async function apiPost(
   page: Page,
   path: string,
   token: string,
@@ -135,7 +138,7 @@ async function apiPost(
   return resp.json();
 }
 
-async function apiGet(page: Page, path: string): Promise<any> {
+export async function apiGet(page: Page, path: string): Promise<any> {
   const resp = await page.request.fetch(`${API_BASE}${path}`, {
     method: "GET",
   });

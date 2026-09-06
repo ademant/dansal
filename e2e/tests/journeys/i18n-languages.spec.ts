@@ -149,4 +149,30 @@ test.describe("Internationalisation (web)", () => {
     expect(cookies.some((c) => c.name === "dsw_lang")).toBe(false);
     await context.close();
   });
+
+  test("denying the consent prompt does not change the language", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await context.newPage();
+
+    await page.goto("/");
+    await expect(page.locator("h1")).toHaveText(EVENTS_TITLE.en);
+
+    await page.click('button[aria-label="User menu"]');
+    await page.selectOption("#lang-select", "fr");
+    await page.click('button[data-fn="langConsentDeny"]');
+
+    // Deny never navigates and never writes a cookie (base.js langConsentDeny
+    // only hides the modal and snaps the select back to its default).
+    await expect(page.locator("#lang-consent-modal")).toBeHidden();
+    await expect(page.locator("#lang-select")).toHaveValue("en");
+    expect((await context.cookies()).some((c) => c.name === "dsw_lang")).toBe(
+      false
+    );
+    await expect(page.locator("h1")).toHaveText(EVENTS_TITLE.en);
+    await context.close();
+  });
 });

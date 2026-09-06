@@ -202,6 +202,16 @@ type EventCreateRequest struct {
 	SourceLastModified int64       `json:"source_last_modified,omitempty"`
 	FetchSourceID      int         `json:"fetch_source_id,omitempty"`
 	DuplicateStatus    string      `json:"duplicate_status,omitempty"`
+	// IsPublished, when present, overrides createEvent's default "any
+	// authenticated caller ⇒ published immediately" behavior (#1254), so an
+	// admin/publisher can save a new event as an unpublished draft in one
+	// step. A pointer — rather than reusing EventWriteRequest's own plain
+	// bool IsPublished field below, which this shadows for both marshaling
+	// and unmarshaling since Go resolves same-JSON-name fields by shallowest
+	// depth — is required to distinguish "omitted" (every existing caller
+	// that never sends this on create: feed imports, wp-dansal, etc., which
+	// must keep defaulting to published) from an explicit false.
+	IsPublished *bool `json:"is_published,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -2026,7 +2036,11 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		createdEvents, counts, err := createEventFromRequest(tx, req, locationID, isPublished, &callerID)
+		reqIsPublished := isPublished
+		if req.IsPublished != nil {
+			reqIsPublished = *req.IsPublished
+		}
+		createdEvents, counts, err := createEventFromRequest(tx, req, locationID, reqIsPublished, &callerID)
 		if err != nil {
 			writeInternalError(w, err)
 			return

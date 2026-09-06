@@ -1816,6 +1816,10 @@ type EventCreateReq struct {
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
 	ImageAIGenerated   bool            `json:"image_ai_generated,omitempty"`
+	// IsPublished lets the admin create form save a new event as an
+	// unpublished draft (#1254) — nil means "not specified", matching the
+	// API's EventCreateRequest.IsPublished semantics (defaults to published).
+	IsPublished *bool `json:"is_published,omitempty"`
 }
 
 type EventUpdateReq struct {

@@ -2489,6 +2489,11 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		// location_id straight at it, taking precedence over the venue-name
 		// match derived from locReq below.
 		createLocationID := roomIDFromForm(r)
+		// #1254: the "Published" checkbox is meaningful on create too — an
+		// admin can save a brand-new event as an unpublished draft in one
+		// step, rather than having to create it (always published before
+		// this) and then immediately edit it to uncheck the box.
+		createIsPublished := r.FormValue("is_published") == "on"
 		req := EventCreateReq{
 			Title:            strings.TrimSpace(r.FormValue("title")),
 			Description:      strings.TrimSpace(r.FormValue("description")),
@@ -2514,6 +2519,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Dances:           danceIDs,
 			LocationID:       createLocationID,
 			ImageAIGenerated: r.FormValue("image_ai_generated") == "1",
+			IsPublished:      &createIsPublished,
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).

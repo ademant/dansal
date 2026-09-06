@@ -61,6 +61,7 @@ jobs:
           API_URL: http://localhost:18000
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
+          WEB_DB_PATH: /var/lib/dansal-web/web.db
 
       - name: Upload test results
         if: always()

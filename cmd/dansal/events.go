@@ -2171,20 +2171,32 @@ func requireExistingOrgMember(w http.ResponseWriter, callerID int, existingOrgID
 
 // requireEventOrg enforces the standard event-mutation access rule that
 // recurred, copy-pasted, across updateEvent/patchEvent and others (#1007):
-// admin is unrestricted; publisher/user must belong to the event's current
-// org (requireExistingOrgMember), and must also belong to targetOrgID — the
-// org the caller wants the event to end up in after this request.
-// requireTarget controls whether targetOrgID == nil itself is a denial
-// (PUT: yes, an org must always be specified by non-admins; PATCH: no, a
-// caller resolves targetOrgID to the existing org before calling when the
-// request omits organization_id, so nil there only means "event has no
-// org", already caught by requireExistingOrgMember above).
+// admin is unrestricted; a publisher/user who belongs to the event's
+// current org may keep editing it, and — unless requireTarget is false —
+// must also belong to targetOrgID, the org they want the event to end up
+// in after this request.
+//
+// An event with no current org at all is treated as unclaimed rather than
+// admin-only (#1275), but *only* when the caller is actively naming a
+// target org to claim it into (targetOrgID != nil): the current-org
+// membership check is skipped and the caller only needs to belong to
+// targetOrgID, so an org member can self-serve claim one of "their"
+// unassigned feed-imported events instead of needing an admin for every
+// single one. When no target org is named at all — timetableAuthCheck's
+// call, which has no target-org concept and always passes targetOrgID =
+// nil; or a PUT that simply omits organization_id — an org-less event
+// stays untouchable by non-admins exactly as before #1275: there's
+// nothing to claim it into, so nothing to check membership of. An event
+// that already belongs to a *different* org is unaffected either way —
+// that still denies exactly as before.
 func requireEventOrg(w http.ResponseWriter, role string, callerID int, existingOrgID sql.NullInt64, targetOrgID *int, requireTarget bool) bool {
 	if role == RoleAdmin {
 		return true
 	}
-	if !requireExistingOrgMember(w, callerID, existingOrgID) {
-		return false
+	if existingOrgID.Valid || targetOrgID == nil {
+		if !requireExistingOrgMember(w, callerID, existingOrgID) {
+			return false
+		}
 	}
 	if targetOrgID == nil {
 		if !requireTarget {
@@ -2485,8 +2497,9 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	// requireTarget=true unconditionally: newOrgIDArg already resolves to the
 	// existing org when the request omits organization_id, so it's only nil
-	// when the event has no org at all — already caught by
-	// requireExistingOrgMember before the target check runs.
+	// when the event has no org at all — in which case requireEventOrg
+	// (#1275) still denies here too, since with no organization_id in the
+	// PATCH body there's nothing for a non-admin to claim the event into.
 	if !requireEventOrg(w, userRole, callerID, existingOrgID, newOrgIDArg, true) {
 		return
 	}

@@ -251,6 +251,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				log.Printf("upload org avatar error: %v", uerr)
 			}
 		}
+		client.invalidateOrgs()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(created)})
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
@@ -629,6 +630,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			}
 		}
 
+		client.invalidateOrgs()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(org)})
 
 		// Handle actor rename if actor name changed
@@ -672,6 +674,7 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if err := client.DeleteOrganization(r.Context(), id, getSessionToken(r)); err != nil {
 			log.Printf("delete organization %d: %v", id, err)
 		}
+		client.invalidateOrgs()
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
 }

@@ -373,6 +373,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
+		client.invalidateLocations()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", created.ID)})
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}
@@ -518,6 +519,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
 		}
+		client.invalidateLocations()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", id)})
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit?saved=1", id), http.StatusSeeOther)
 	}
@@ -537,6 +539,7 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if err := client.DeleteLocation(r.Context(), id, getSessionToken(r)); err != nil {
 			log.Printf("delete location %d: %v", id, err)
 		}
+		client.invalidateLocations()
 		target := safeLocationsReturnURL(r.FormValue("return"))
 		if p := safeReturnPath(target); p != "" {
 			target = p

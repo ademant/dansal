@@ -987,10 +987,10 @@ DELETE /api/v1/bookings/{id}                # auth required
 ```
 POST   /api/v1/events/suggest-preview       # preview a suggestion before submitting
 POST   /api/v1/events/suggest               # submit a suggestion
-GET    /api/v1/events/suggest/verify/{token}  # verify suggestion via email link
+GET    /api/v1/events/suggest/verify/{token}  # legacy confirmation link (#1272 — see below)
 ```
 
-Public. Suggestions are routed to admins via Telegram or email (configured in `web.yaml`). The preview endpoint validates the suggestion and resolves the location without saving anything.
+Public. Suggestions are visible to admins for review immediately on submit — routed via Telegram, Matrix, or email (configured in `web.yaml`) — regardless of whether the submitter's email address is ever confirmed. `#1272` retired email confirmation as a gate: the honeypot field and IP rate limiting on `/api/v1/events/suggest` have proven sufficient anti-abuse on their own. The submitter's email now serves only to deliver a standing edit link (`/events/suggest/manage/{token}`), which they can also use to attach an image or amend details later. `GET /api/v1/events/suggest/verify/{token}` still exists purely to handle any confirmation links from before this change; nothing new points at it. The preview endpoint validates the suggestion and resolves the location without saving anything.
 
 ## Invites
 

@@ -1616,7 +1616,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		if shortCode := r.URL.Query().Get("code"); shortCode != "" {
 			w.Header().Set("Content-Type", "application/json")
 			event, err := scanEventRow(db.QueryRow(
-				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1 AND e.email_verified = 1", shortCode,
+				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
 			))
 			if err == sql.ErrNoRows {
 				writeError(w, "Event not found", http.StatusNotFound)
@@ -1636,16 +1636,20 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	// (#1247) — applyEventFilters only ever appends to *query as an opaque
 	// string, so it works identically whether that prefix is the full SELECT
 	// or just "WHERE ...".
-	where := "WHERE e.email_verified = 1"
+	// #1272: is_published is the sole visibility gate now — email_verified no
+	// longer restricts anything by default. It's still tracked (and still
+	// flipped by a suggester confirming, or by the #982 startup backfill for
+	// feed-imported events), just no longer required to see or publish an
+	// event; admins can still narrow to just one state via ?email_verified=.
+	where := "WHERE 1=1"
 	args := []any{}
 
-	// Admin-only escape hatch (#982): email-unverified events (e.g. events
-	// imported between two server restarts, before the startup backfill runs)
-	// are otherwise invisible to every admin view since the base guard above
-	// requires email_verified=1.
 	if isAuthorizedAdmin {
-		if v := r.URL.Query().Get("email_verified"); v == "false" {
-			where = "WHERE e.email_verified = 0"
+		switch r.URL.Query().Get("email_verified") {
+		case "false":
+			where += " AND e.email_verified = 0"
+		case "true":
+			where += " AND e.email_verified = 1"
 		}
 	}
 
@@ -2063,7 +2067,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	if userRole != "" {
 		query = eventListSelect + " WHERE e.id = ?"
 	} else {
-		query = eventListSelect + " WHERE e.id = ? AND e.is_published = 1 AND e.email_verified = 1"
+		query = eventListSelect + " WHERE e.id = ? AND e.is_published = 1"
 	}
 	event, err := scanEventRow(db.QueryRow(query, id))
 	if err == sql.ErrNoRows {

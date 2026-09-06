@@ -615,8 +615,7 @@ func deleteTimetableEntry(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}/timetable/history — recent timetable-journal
 // entries (#1176), newest first. Same visibility rule as the timetable
-// itself: unauthenticated callers only see history for published,
-// email-verified events.
+// itself: unauthenticated callers only see history for published events.
 func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -627,8 +626,8 @@ func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var isPublished, emailVerified int
-	err = db.QueryRow("SELECT is_published, email_verified FROM events WHERE id = ?", eventID).Scan(&isPublished, &emailVerified)
+	var isPublished int
+	err = db.QueryRow("SELECT is_published FROM events WHERE id = ?", eventID).Scan(&isPublished)
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
@@ -636,7 +635,7 @@ func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	if userRole == "" && (isPublished == 0 || emailVerified == 0) {
+	if userRole == "" && isPublished == 0 {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}

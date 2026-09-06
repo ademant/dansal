@@ -263,7 +263,7 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch event and its org.
-	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=? AND e.email_verified=1", id))
+	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=?", id))
 	if err != nil {
 		writeError(w, "event not found", http.StatusNotFound)
 		return
@@ -311,7 +311,7 @@ func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=? AND e.email_verified=1", id))
+	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=?", id))
 	if err != nil {
 		writeError(w, "event not found", http.StatusNotFound)
 		return

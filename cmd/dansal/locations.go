@@ -1627,7 +1627,6 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN events e ON e.location_id = l.id
 		    AND e.is_published = 1
 		    AND e.end_time >= ?
-		    AND e.email_verified = 1
 		WHERE l.town IS NOT NULL AND l.town != ''
 		  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
 		GROUP BY l.town
@@ -1669,7 +1668,7 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 				       ROW_NUMBER() OVER (PARTITION BY l.town ORDER BY e.start_time) AS rn
 				FROM events e
 				JOIN locations l ON e.location_id = l.id
-				WHERE e.is_published = 1 AND e.email_verified = 1 AND e.end_time >= ?
+				WHERE e.is_published = 1 AND e.end_time >= ?
 				  AND l.town IS NOT NULL AND l.town != ''
 			) WHERE rn = 1
 		`, now)

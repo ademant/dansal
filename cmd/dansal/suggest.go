@@ -207,13 +207,19 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
 			return
 		}
+		// #1272: this used to key on email_verified=0 ("how many unconfirmed
+		// suggestions are open"), back when confirming was a real step. Now
+		// that every suggestion is admin-visible immediately, the same
+		// protection this was guarding — someone repeatedly attributing
+		// garbage suggestions to a third party's address — is expressed as
+		// "how many of this address's suggestions are still unpublished".
 		var open int
 		db.QueryRow(
-			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND email_verified = 0",
+			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND is_published = 0",
 			req.Email,
 		).Scan(&open)
 		if open >= config.Server.MaxOpenTokensPerAddress {
-			writeError(w, "Too many pending verifications for this address. Please complete or expire existing ones first.", http.StatusTooManyRequests)
+			writeError(w, "Too many pending suggestions for this address. Please wait for existing ones to be reviewed first.", http.StatusTooManyRequests)
 			return
 		}
 	}
@@ -260,7 +266,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Every suggestion gets a standing manage token (#1050): anonymous
-	// submitters receive it via the verification email when SMTP is configured,
+	// submitters receive it via the edit-link email when SMTP is configured,
 	// while an authenticated submitter uses the token returned in the response
 	// to attach an event image right away through the token-gated image endpoint.
 	suggestionToken, err := generateToken(32)
@@ -271,19 +277,13 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 
 	var tokenArg any
 	var tokenExpiryArg any
-	// No SMTP configured: there's no verification step at all, so the
-	// suggestion is immediately visible to admins for review, same as
-	// before this token became a standing link.
-	emailVerified := !smtpConfigured
-	// Board session shortcut (#1047): if caller has a valid board session for
-	// the same email, skip email verification and notify admins immediately.
-	boardSessionVerified := false
-	if smtpConfigured && req.Email != "" {
-		if _, bsEmail, _, bsOk := lookupBoardSession(r); bsOk && strings.EqualFold(bsEmail, req.Email) {
-			emailVerified = true
-			boardSessionVerified = true
-		}
-	}
+	// #1272: email confirmation is no longer a gate on anything — the
+	// honeypot + IP rate limiting have proven sufficient anti-abuse on their
+	// own, so every suggestion is admin-visible immediately regardless of
+	// whether (or whether ever) the submitter opens the email. The token
+	// remains a standing edit-access link (#928), just no longer tied to a
+	// "confirm" step first.
+	emailVerified := true
 	tokenArg = suggestionToken
 	// Token is a standing edit link valid until 3 days after the event ends.
 	// No 30-day cap: events scheduled far in advance keep a valid manage link
@@ -374,8 +374,10 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if smtpConfigured && boardSessionVerified {
-		// Board session verified the email — send manage link only; no verify step.
+	// #1272: one path for everyone now — send the edit-link mail (when SMTP
+	// is configured) and notify admins immediately, rather than delaying the
+	// admin alert until a since-removed confirm step.
+	if smtpConfigured && req.Email != "" {
 		base := buildBaseURL(r)
 		manageURL := base + "/events/suggest/manage/" + suggestionToken
 		subject := "Your event suggestion"
@@ -384,50 +386,32 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		go func() {
 			msg := fmt.Sprintf(
-				"Thank you for suggesting an event! Your submission has been received.\n\n"+
+				"Thank you for suggesting an event! Your submission has been received and is now waiting for review.\n\n"+
 					"Use this link to review or edit it at any time:\n\n%s\n",
 				manageURL,
 			)
 			if _, err := SendEmail(req.Email, subject, msg, false); err != nil {
-				log.Printf("suggest: send manage email (board-session path): %v", err)
+				log.Printf("suggest: send manage email: %v", err)
 			}
 		}()
-		go notifyAdminsSuggestion(req.Title, req.StartTime)
-	} else if smtpConfigured {
-		base := buildBaseURL(r)
-		verifyURL := base + "/events/suggest/verify/" + suggestionToken
-		manageURL := base + "/events/suggest/manage/" + suggestionToken
-		subject := "Confirm your event suggestion"
-		if req.Title != "" {
-			subject = fmt.Sprintf("Confirm your event suggestion: %s, %s", req.Title, time.Unix(startTime, 0).UTC().Format("2 Jan 2006"))
-		}
-		go func() {
-			msg := fmt.Sprintf(
-				"Thank you for suggesting an event!\n\nPlease confirm your submission:\n\n%s\n\n"+
-					"After confirming, you can use this same link at any time to review or edit your suggestion:\n\n%s\n\n"+
-					"If you did not submit this suggestion, you can ignore this email.",
-				verifyURL, manageURL,
-			)
-			if _, err := SendEmail(req.Email, subject, msg, false); err != nil {
-				log.Printf("suggest: send verify email: %v", err)
-			}
-		}()
-	} else {
-		go notifyAdminsSuggestion(req.Title, req.StartTime)
 	}
+	go notifyAdminsSuggestion(req.Title, req.StartTime)
 
 	// Return the standing manage token so an authenticated submitter can
 	// attach an event image right away (#1050); the anonymous web flow ignores
-	// it and only receives the token via the verification email.
+	// it and only receives the token via the edit-link email.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{"token": suggestionToken})
 }
 
-// GET /api/v1/events/suggest/verify/{token} — confirm an email-verified suggestion.
-// The token itself is no longer destroyed (#928): it becomes a standing
-// edit-access link, mirroring contact_posts.manage_token. First visit just
-// flips email_verified, same as getContactPostByToken does for the board.
+// GET /api/v1/events/suggest/verify/{token} — legacy confirmation endpoint.
+// #1272 stopped sending new suggestions through a confirm step (every new
+// suggestion is inserted with email_verified already true), so this only
+// still matters for suggestion_token values from emails sent before that
+// change went out; visiting it is harmless either way. The token itself is
+// not destroyed (#928): it's a standing edit-access link, mirroring
+// contact_posts.manage_token.
 func suggestVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {

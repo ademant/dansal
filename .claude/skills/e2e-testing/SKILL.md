@@ -1,0 +1,124 @@
+---
+name: e2e-testing
+description: Write or debug dansal's Playwright e2e tests (e2e/tests/journeys/*.spec.ts). Use when adding a new journey spec, driving the admin UI with Playwright, seeding org/location/event fixtures, or diagnosing a flaky/hanging e2e test against the dev instance. Encodes the admin-picker cache gotcha (#1276), the mobile long-press-drawer pattern, dedup-safe fixture spacing, the feed-import SSRF constraint, and the loginAs() hang workaround.
+---
+
+# dansal e2e testing (Playwright)
+
+Specs live in `e2e/tests/journeys/*.spec.ts`. Two projects — `desktop` and `mobile` (Pixel 7 viewport) — run every spec; **always verify both**, not just desktop. A spec that only works on one project isn't done.
+
+## Running a spec against the dev instance
+
+```bash
+cd e2e
+export NVM_DIR="$HOME/.config/nvm"; source "$NVM_DIR/nvm.sh"; nvm use default
+export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin
+export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock
+npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 --reporter=line --workers=1
+```
+
+- `ADMIN_CLI`/`ADMIN_SOCKET` are needed because `dansal_admin` isn't on `PATH` and the dev instance's admin socket requires them explicitly.
+- `--workers=1 --retries=0` while iterating: a failing test's worker restart re-runs a shared `beforeAll` and muddies traces otherwise.
+- Runs print recurring `error: email already exists` lines to stderr — background noise from `createUsers()`/other concurrent activity, not a test failure signal. Ignore it; look at the actual pass/fail summary line.
+- **Any product code change under test must already be deployed to `dev`** (`make build && sudo make deploy INSTANCE=dev` — see the `deploy` skill) before running against it. `go build`/`go test` passing locally does not mean the running dev instance has the fix.
+- A single test run commonly takes 15–60s; background it (`run_in_background`/Monitor) rather than blocking on a foreground `Bash` call, especially when iterating repeatedly.
+
+## Auth: storageState, not per-test logins
+
+`playwright.config.ts` + `global-setup.ts` log in **once** for the whole suite (admin) and save `.auth/admin.json` (`AUTH_FILE` from `helpers/auth.ts`). Every spec's `page` fixture and `beforeAll`'s `browser.newContext({ storageState: AUTH_FILE })` load pre-authenticated — never call `loginAs()` for the admin role.
+
+**A second, non-admin login inside a test is a real trap.** `loginAs()` (the actual `/login` form) has reproducibly hung indefinitely for a second login in a test — reproduced in complete isolation, cause never root-caused (the login page itself is fine when checked manually; global-setup's own one real login always works). Workaround, not a fix — **sidestep the form entirely**:
+
+```ts
+const loginResp = await viewerPage.request.fetch(`${API_BASE}/api/v1/login`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  data: JSON.stringify({ email: VIEWER.email, password: VIEWER.password }),
+});
+const { token } = await loginResp.json();
+await viewerContext.addCookies([{ name: "dsw_token", value: token, url: BASE_URL }]);
+```
+
+No need to also forge the signed `dsw_user` cookie — `authRefreshMiddleware` (`cmd/dansal_web/session.go`) sees a valid `dsw_token` with no/invalid `dsw_user` and transparently re-establishes the full session (via `GET /api/v1/me`) on the very next request.
+
+For read-only API calls against a specific user's data, a lighter option than a full second browser context: just call the raw API directly with `Authorization: Bearer <token>` — `getTokenFromCookie(page)` reads the current session's token straight off cookies.
+
+## Admin-picker caches: create org/location fixtures through the UI, not raw API (#1276)
+
+`dansal_web`'s `DansalClient` caches `GetOrganizations`/`GetLocations` in memory (~1 minute TTL) for admin pickers (event edit form's org/location assignment, the events-list bulk quick-assign tool, the import preview's location-mapping table, series-new/series-edit selects). **Only the web layer's own create/edit/delete handlers invalidate that cache.** An org/location created by POSTing straight to the raw API server is invisible to every one of those pickers for up to the TTL — the fixture exists, but no dropdown/table shows it, and a `selectOption`/row-filter that expects it will time out.
+
+Always create org/location fixtures through the real admin form:
+
+```ts
+async function createOrg(page: Page, name: string): Promise<number> {
+  await page.goto("/admin/organizations/new");
+  await page.fill("#name", name);
+  await page.locator("#save-btn").click();
+  await page.waitForURL("**/admin/organizations");
+  // then look the id up by name via the raw (uncached) API — reads aren't cached
+}
+```
+
+Same reasoning for locations (`#location`, `#town` under the `sec-address` nav section, `#loc-nav-toggle` opens it on mobile — see `locations.spec.ts`'s `openSection` helper). A location created via raw API is fine to use *once you have its ID*, as long as nothing later needs to find it by name in a cached picker.
+
+If a spec needs an org page's "recurring events" or similar upcoming-events listing (`GetAllEventsByOrg`), prefer a **freshly created, dedicated org** over the shared seeded one (`seed.orgId`) — that endpoint fetches only the 100 oldest events for the org (no `limit=` passed, ascending `start_time`, `include_past=true`), and the shared seed org accumulates real event rows across every spec file's run. Past a few hundred events it can push brand-new future instances out of that window entirely — this already happened once (`series-lifecycle.spec.ts`).
+
+## Fixture dates must dodge dedup, not just each other
+
+`insertEvent`'s tier hierarchy (see the `event-import` skill) runs on *every* create, including a plain admin-form create — not just feed imports. Two fixture events can silently merge into one row if they land within tier 3/4's ±3h window at the same location (tier 3) or with the same title (tier 4, no location). Symptoms look like a missing/wrong event, not an error.
+
+- Space same-location fixture events by **more than 3 hours**, or give them genuinely distinct locations.
+- When two events *should* look like duplicates on purpose (e.g. testing manual merge), make sure at least one dedup signal differs by construction — e.g. one has a real location and the other doesn't, so tier 3 can never fire between them regardless of title (`event-lifecycle.spec.ts`'s merge-tool test relies on exactly this).
+- `SeriesEvent.StartTime`/`Event`'s time fields come back as RFC3339 **strings** from the JSON API — sort with `new Date(a.start_time).getTime() - new Date(b.start_time).getTime()`, not bare subtraction (silently produces `NaN`/stable-no-op ordering on strings).
+- A synthetic iCal `DTSTART`/`DTEND` only carries second precision — compare a server-echoed timestamp at second granularity (`Math.floor(ms / 1000)`), not exact milliseconds.
+
+## Feed import testing: file upload, not a hosted test feed
+
+The real fetch-URL import path (`cmd/dansal/fetchurl.go`'s `safeClient`) deliberately blocks loopback/private-IP addresses (SSRF protection) — there is no way to point it at a locally-hosted synthetic feed server from a test. The admin import form has a second ingestion path that doesn't touch the network at all: a file upload (`#file`), which runs through the *identical* parse → preview → confirm pipeline. Use that:
+
+```ts
+await page.goto("/admin/events/import");
+await page.locator("#file").setInputFiles({
+  name: "feed.ics",
+  mimeType: "text/calendar",
+  buffer: Buffer.from(icsText, "utf-8"),
+});
+await page.selectOption("#feed-type", "ical");
+await page.locator('form.import-form button[type="submit"]').click();
+```
+
+A single-VEVENT feed renders the pre-filled "new event" form **in-process** (no URL change — `adminImportEventsHandler`'s `len(events) == 1` branch), not the preview table; wait for the form field value, not a `waitForURL`. Only 2+ events trigger the real preview/duplicate-status table.
+
+The import-confirm step's `PreviewEvent` JSON (the hidden `event_N` fields the preview table round-trips) carries no `source`/`uid`/`fetch_source_id` — a confirmed "duplicate" merge therefore takes `insertEvent`'s plain (non-source) update branch, which refreshes `start_time`/`end_time`/`description` but leaves `title` untouched by design. Assert on those fields, not title, when checking a merge took effect.
+
+## Mobile-only interaction patterns: reproduce the end state, don't simulate the gesture
+
+Several admin list/table pages (`admin_events.html`, `admin_series_edit.html`) put their bulk-actions bar behind a mobile-only drawer that a **real long-press** (`touchstart` + `setTimeout`, not a tap) opens — Playwright has no built-in long-press simulation. Don't fight it: reproduce the JS end state directly via `page.evaluate`, matching what the real gesture handler does (check the template's own `enterMultiSelect()`/equivalent for the exact classes/attributes):
+
+```ts
+await page.evaluate(() => {
+  document.body.classList.add("ms-active", "actions-open"); // names vary per page
+  const btn = document.getElementById("mt-actions-btn");
+  if (btn) (btn as HTMLButtonElement).hidden = false;
+});
+```
+
+Checkbox selection itself (`.event-cb`, `.series-event-cb`, etc.) is also mobile-hidden by CSS but not gated behind the drawer — set `.checked = true` and dispatch a real `change` event directly rather than trying to click a hidden native input:
+
+```ts
+await page.locator(`tr[data-evt-id="${id}"] .event-cb`).evaluate((el) => {
+  (el as HTMLInputElement).checked = true;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+});
+```
+
+Separately, per-row inline edit controls (e.g. `series-lifecycle.spec.ts`'s description textareas) are sometimes CSS-hidden below 640px in favour of a tap-to-open quick-edit popup — check `.isVisible()` on the desktop control first and branch to the mobile popup flow when it's not, rather than assuming one UI exists on both viewports.
+
+A long scrollable table can also leave a submit button genuinely obstructed mid-retry on mobile (Playwright's scroll-and-click retry loop bouncing between intercepting elements) even though it's plainly visible in a screenshot. `scrollIntoViewIfNeeded()` then `.click({ force: true })` rather than chasing the animation.
+
+## Everything else
+
+- `unique(name)` (`` `${name} ${Date.now()}` ``) on every fixture title/org/location name — keeps repeated runs against the shared, persistent dev DB from colliding, and doubles as a readable marker for manual cleanup.
+- `authedGet`/`authedJSON` helpers (`page.request.fetch` with `Authorization: Bearer <token>`) for API-level assertions after a UI flow — most specs duplicate a small local copy rather than importing a shared one; match that convention.
+- No cleanup step is expected for events/orgs/locations created by a spec (unlike `locations.spec.ts`'s location deletes, which exist only because of the geohash `UNIQUE` index forcing it) — leaving fixtures in the shared dev DB is accepted precedent, not an oversight.
+- The account-level API rate limiter (`cmd/dansal/account_rate_limit.go`, 30 req/min) self-clears within ~60–90s; a burst of failures across many concurrent spec files that look like generic `seedLocation`/API errors is often this, not a real regression — confirm via a direct curl probe before concluding otherwise.

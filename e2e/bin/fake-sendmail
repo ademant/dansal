@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fake sendmail for e2e tests.
+#
+# Usage: set smtp.sendmail to the path of this script in config.yaml
+# (and smtp.from to any address so SendEmail's from-check passes).
+#
+# The raw email is appended to $DANSAL_MAIL_FILE
+# (default /tmp/dansal-e2e-mail.mbox).  waitForManageToken() in
+# e2e/helpers/mailbox.ts polls that file for the manage URL.
+MAIL_FILE="${DANSAL_MAIL_FILE:-/tmp/dansal-e2e-mail.mbox}"
+cat >> "$MAIL_FILE"
+printf '\n----DANSAL-E2E-BOUNDARY----\n' >> "$MAIL_FILE"

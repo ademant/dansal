@@ -72,6 +72,11 @@ var tmplFuncsMisc = template.FuncMap{
 		b, _ := json.Marshal(s)
 		return template.JS(b)
 	},
+	// plainTextDesc (#1280) strips markdown syntax and decodes stray
+	// leftover HTML entities (e.g. a pasted "&nbsp;") — used by event.html's
+	// JSON-LD "description" so schema.org/AI-engine consumers get clean
+	// plain text instead of raw markdown source.
+	"plainTextDesc": plainTextDesc,
 	"joinInts": func(ids []int) string {
 		parts := make([]string, len(ids))
 		for i, id := range ids {

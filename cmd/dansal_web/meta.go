@@ -1,6 +1,7 @@
 package main
 
 import (
+	"html"
 	"regexp"
 	"strings"
 )
@@ -31,11 +32,33 @@ func truncate(s string, maxLen int) string {
 // metaDesc returns the first maxLen chars of s with markdown syntax stripped,
 // suitable for use as a meta description or OG description.
 func metaDesc(s string, maxLen int) string {
-	// strip markdown: links, bold/italic, headings, list markers
+	return truncate(plainTextDesc(s), maxLen)
+}
+
+// plainTextDesc strips markdown syntax and decodes stray leftover HTML
+// entities from s, collapsing the result to single-spaced plain text.
+// Descriptions are stored as markdown, which sometimes carries a literal
+// "&nbsp;" left over from pasting out of a rich-text editor (e.g. a lone
+// "&nbsp;" on its own paragraph) — harmless on the rendered page (goldmark
+// passes raw HTML through, so a browser shows a plain space), but every
+// text-only consumer (meta/OG description, schema.org JSON-LD description,
+// #1280) needs it decoded rather than surfaced as literal entity text.
+// html.UnescapeString turns "&nbsp;" into an actual U+00A0 NBSP rune, which
+// unicode.IsSpace (and so strings.Fields) does not treat as whitespace by
+// design (it's non-*breaking*) — replaced with a plain space explicitly so
+// it collapses like any other stray whitespace instead of surviving as an
+// invisible character. Unlike metaDesc, this does not truncate — used
+// directly by callers (like the JSON-LD description) that want the full
+// plain-text description.
+func plainTextDesc(s string) string {
+	// Decode entities before stripping markdown: reMetaMD treats a bare '#'
+	// as a markdown heading marker, which would otherwise mangle a numeric
+	// entity like "&#8211;" into "&8211;" before UnescapeString ever sees it.
+	s = html.UnescapeString(s)
 	s = reMetaMD.ReplaceAllString(s, "$1")
+	s = strings.ReplaceAll(s, " ", " ")
 	s = strings.Join(strings.Fields(s), " ")
-	s = strings.TrimSpace(s)
-	return truncate(s, maxLen)
+	return strings.TrimSpace(s)
 }
 
 var reMetaMD = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)|[*_~` + "`" + `#>]+`)

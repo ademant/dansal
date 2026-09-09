@@ -34,7 +34,7 @@
   {{- if not $img}}{{$img = $.OGImage}}{{end}}
   {{- if and $img (hasPrefix $img "/")}}{{$img = printf "https://%s%s" $.Domain $img}}{{end}}
   {{- if $img}}, "image": "{{$img | js}}"{{end}}
-  {{- if .Description}}, "description": "{{.Description | js}}"
+  {{- if .Description}}, "description": "{{.Description | plainTextDesc | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
   {{- end}}
   {{- if or .Musicians .Instructors}}, "performer": [
@@ -533,6 +533,12 @@
       {{with .Location}}
       {{if or .Location .Town}}
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
+      {{/* #1280: <address> wraps the venue name + postal address so a
+           crawler/AI engine can lift the same fact straight from the
+           rendered page, not only from the JSON-LD PostalAddress above.
+           evt-address resets the default browser italic so it keeps
+           matching evt-loc-name/evt-loc-addr's existing look. */}}
+      <address class="evt-address">
       {{if or .ShortName .Location}}<div class="evt-loc-name">{{if .ParentID}}{{if .ParentShortName}}{{.ParentShortName}}{{else}}{{.ParentName}}{{end}} — {{end}}{{if .ID}}<a href="/location/{{.ID}}" class="evt-loc-link">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</a>{{else}}{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{end}}</div>{{end}}
       {{if .ParentID}}<p class="evt-loc-room"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>{{end}}
       {{if or .Address .Zipcode .Town}}
@@ -542,6 +548,7 @@
         {{if .Country}}<br><span>{{.Country}}</span>{{end}}
       </div>
       {{end}}
+      </address>
       {{if and .Latitude .Longitude}}
       <div id="evt-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="evt-map"></div>
       <div class="map-links">
@@ -1021,6 +1028,7 @@
 .m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
 .m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
+.evt-address{font-style:normal;display:block;margin:0}
 .evt-loc-name{font-weight:600;font-size:.92rem;color:var(--heading);margin-bottom:.25rem}
 .evt-loc-link{color:var(--heading);text-decoration:none}
 .evt-loc-link:hover{text-decoration:underline}

@@ -64,6 +64,30 @@ func computeContactPostExpiry(eventID int, postType string) time.Time {
 	return ceiling
 }
 
+// latestBoardActivity returns the newest created_at (epoch) across eventID's
+// currently-visible board posts and their images — "visible" meaning the
+// same email_verified=1 AND expires_at>now filter listContactPosts already
+// applies, so this can't report activity a visitor wouldn't actually see.
+// Used by getEvent (#1279) to fold board changes into the event's freshness
+// signal: the event row's own changed_at never moves when a board post or
+// image is added, so an anonymous visitor's conditional-GET cache (#1129)
+// would otherwise miss new board content indefinitely.
+func latestBoardActivity(eventID int) int64 {
+	var latest int64
+	db.QueryRow(
+		`SELECT COALESCE(MAX(ts), 0) FROM (
+			SELECT cp.created_at AS ts FROM contact_posts cp
+			 WHERE cp.event_id=? AND cp.email_verified=1 AND cp.expires_at>?
+			UNION ALL
+			SELECT cpi.created_at FROM contact_post_images cpi
+			 JOIN contact_posts cp ON cp.id = cpi.contact_post_id
+			 WHERE cp.event_id=? AND cp.email_verified=1 AND cp.expires_at>?
+		)`,
+		eventID, time.Now().UTC().Unix(), eventID, time.Now().UTC().Unix(),
+	).Scan(&latest)
+	return latest
+}
+
 // isFirstLiveBoardPost returns true when postID is the only live, verified post for eventID.
 func isFirstLiveBoardPost(eventID, postID int) bool {
 	var count int

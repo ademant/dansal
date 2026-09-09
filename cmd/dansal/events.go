@@ -88,7 +88,14 @@ type Event struct {
 	// response the same way SeriesImageURL already is, so consumers (the
 	// event detail page, the org page's recurring-events section) don't
 	// need a separate series lookup.
-	SeriesCadence          string `json:"series_cadence,omitempty"`
+	SeriesCadence string `json:"series_cadence,omitempty"`
+	// BoardUpdatedAt (#1279) is the newest created_at across this event's
+	// currently-visible board posts and their images — set only by getEvent
+	// (single-event fetch), never by the list endpoints. dansal_web's
+	// conditional-GET check (#1129) takes max(ChangedAt, BoardUpdatedAt) so a
+	// new board post/image busts an anonymous visitor's cached page even
+	// though it never touches the event row's own changed_at.
+	BoardUpdatedAt         string `json:"board_updated_at,omitempty"`
 	NeedsDuplicateReview   bool   `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID          *int   `json:"duplicate_of_id,omitempty"`
 	PreviousStartTime      string `json:"previous_start_time,omitempty"`
@@ -2120,17 +2127,19 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	event.Deletable = &deletable
 
 	var (
-		timetable   []TimetableEntry
-		locs        []Location
-		musicians   []Musician
-		instructors []Instructor
-		wg          sync.WaitGroup
+		timetable      []TimetableEntry
+		locs           []Location
+		musicians      []Musician
+		instructors    []Instructor
+		boardUpdatedAt int64
+		wg             sync.WaitGroup
 	)
-	wg.Add(4)
+	wg.Add(5)
 	go func() { defer wg.Done(); timetable, _ = fetchTimetable(db, event.ID) }()
 	go func() { defer wg.Done(); locs, _ = fetchEventLocations(event.ID) }()
 	go func() { defer wg.Done(); musicians, _ = fetchEventMusicians(event.ID) }()
 	go func() { defer wg.Done(); instructors, _ = fetchEventInstructors(event.ID) }()
+	go func() { defer wg.Done(); boardUpdatedAt = latestBoardActivity(event.ID) }()
 	wg.Wait()
 	if len(timetable) > 0 {
 		event.Timetable = timetable
@@ -2143,6 +2152,9 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(instructors) > 0 {
 		event.Instructors = instructors
+	}
+	if boardUpdatedAt > 0 {
+		event.BoardUpdatedAt = epochToLocal(boardUpdatedAt)
 	}
 
 	w.Header().Set("ETag", weakEtag(event.ChangedAtEpoch))

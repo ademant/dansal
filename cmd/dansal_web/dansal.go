@@ -389,7 +389,11 @@ type Event struct {
 	// TimetableRoomOrder (#1278) persists the admin timetable editor's
 	// room-column drag order (#1237) — a list of location IDs in display
 	// order. Empty means no custom order saved yet.
-	TimetableRoomOrder     []int  `json:"timetable_room_order,omitempty"`
+	TimetableRoomOrder []int `json:"timetable_room_order,omitempty"`
+	// BoardUpdatedAt (#1279): newest created_at across this event's visible
+	// board posts/images, set only by the single-event GET. See
+	// eventHandler's conditional-GET check in frontend.go.
+	BoardUpdatedAt         string `json:"board_updated_at,omitempty"`
 	CreatedAt              string `json:"created_at"`
 	Source                 string `json:"source,omitempty"`
 	SourceURL              string `json:"source_url,omitempty"`

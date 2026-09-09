@@ -935,7 +935,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// don't move with ChangedAt, so skip it for them — mirrors the
 		// admin-skips-cache-headers convention in getEvents (cmd/dansal).
 		if su == nil {
-			if changedAt := parseChangedAt(event.ChangedAt); changedAt > 0 {
+			// #1279: event.ChangedAt only tracks edits to the event row
+			// itself — the same page also renders the bulletin board
+			// (contact posts + images), which never touches ChangedAt. Take
+			// the newer of the two so a visitor's cached page gets busted
+			// the moment a new board post/image appears, not just when the
+			// event's own metadata changes.
+			changedAt := parseChangedAt(event.ChangedAt)
+			if boardAt := parseChangedAt(event.BoardUpdatedAt); boardAt > changedAt {
+				changedAt = boardAt
+			}
+			if changedAt > 0 {
 				if checkLastModified(w, r, time.Unix(changedAt, 0)) {
 					return
 				}

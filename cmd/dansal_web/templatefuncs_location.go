@@ -12,16 +12,20 @@ import (
 // locationOption is the flattened option entry shared by locationsJSON and
 // timetableLocationOptionsJSON.
 type locationOption struct {
-	ID     int    `json:"id"`
-	Label  string `json:"label"`
-	Town   string `json:"town,omitempty"`
-	OrgIDs []int  `json:"orgIDs"`
+	ID          int    `json:"id"`
+	Label       string `json:"label"`
+	Town        string `json:"town,omitempty"`
+	OrgIDs      []int  `json:"orgIDs"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"countryCode,omitempty"`
+	Region      string `json:"region,omitempty"`
 }
 
 // flattenLocationOptions flattens top-level locations and their room children
 // into one JS option list. Rooms are labelled "RoomName — BuildingName" to
 // disambiguate when two buildings share a room name. Rooms inherit the
 // parent's orgIDs for org-based filtering unless they carry their own.
+// Country/region fields are also inherited by child rooms from their parent.
 func flattenLocationOptions(locs []Location) []locationOption {
 	items := make([]locationOption, 0, len(locs))
 	for _, l := range locs {
@@ -40,7 +44,10 @@ func flattenLocationOptions(locs []Location) []locationOption {
 		if orgIDs == nil {
 			orgIDs = []int{}
 		}
-		items = append(items, locationOption{ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs})
+		items = append(items, locationOption{
+			ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs,
+			Country: l.Country, CountryCode: l.CountryCode, Region: l.Region,
+		})
 		for _, c := range l.Children {
 			clabel := c.Location
 			if c.ShortName != "" {
@@ -50,7 +57,10 @@ func flattenLocationOptions(locs []Location) []locationOption {
 			if len(childOrgIDs) == 0 {
 				childOrgIDs = orgIDs
 			}
-			items = append(items, locationOption{ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs})
+			items = append(items, locationOption{
+				ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs,
+				Country: l.Country, CountryCode: l.CountryCode, Region: l.Region,
+			})
 		}
 	}
 	return items

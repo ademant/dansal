@@ -28,6 +28,19 @@
 
   <div class="sf-field">
     <label>&nbsp;</label>
+    <select id="sf-country" aria-label="{{$.Strings.T "filter_all_countries"}}">
+      <option value="">{{$.Strings.T "filter_all_countries"}}</option>
+    </select>
+  </div>
+  <div class="sf-field" id="sf-region-field" hidden>
+    <label>&nbsp;</label>
+    <select id="sf-region" aria-label="{{$.Strings.T "filter_all_states"}}">
+      <option value="">{{$.Strings.T "filter_all_states"}}</option>
+    </select>
+  </div>
+
+  <div class="sf-field">
+    <label>&nbsp;</label>
     <div class="sf-geo-row">
       <button type="button" id="sf-geo-btn" class="sf-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
       <select id="sf-radius" aria-label="{{$.Strings.T "filter_radius"}}">
@@ -144,16 +157,82 @@
   var locs = JSON.parse(document.getElementById('sf-locations').textContent || '[]');
   var allTowns = Array.from(new Set(locs.map(function(l){ return l.town; }).filter(Boolean))).sort();
 
+  // i18n strings needed at runtime to rebuild the region <select> header option.
+  var SF_REGION_ALL = {{$.Strings.T "filter_all_states" | jsStr}};
+
   var dateFrom = {{.Data.DateFrom | jsStr}};
   var dateTo   = {{.Data.DateTo | jsStr}};
   var typeFilter = {ball:true, workshop:true, festival:true};
   var townFilter = '';
   var geoFilter = null; // {lat,lng,radiusKm}
+  var countryFilter = ''; // country name string matching data-country
+  var regionFilter  = ''; // region string matching data-region
   var rows = [];
   var eventsGeo = [];
   var geoById = {};
   var map = null, clusterGroup = null, allMarkers = {};
   var mapBoundsActive = false;
+
+  // ── Country → Region cascading filter ────────────────────────────────────
+  // Built client-side from the already-fetched locs array (same as allTowns).
+  // Values match data-country / data-region on event rows directly.
+  (function(){
+    var cSelect = document.getElementById('sf-country');
+    var rField  = document.getElementById('sf-region-field');
+    var rSelect = document.getElementById('sf-region');
+
+    // Unique country names from locs, sorted alphabetically.
+    var seen = {};
+    var countryNames = [];
+    locs.forEach(function(l){
+      if(l.country && !seen[l.country]){ seen[l.country] = true; countryNames.push(l.country); }
+    });
+    countryNames.sort();
+    countryNames.forEach(function(name){
+      var opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      cSelect.appendChild(opt);
+    });
+
+    function buildRegions(countryName){
+      rSelect.innerHTML = '<option value="">' + SF_REGION_ALL + '</option>';
+      var seenR = {}, regionNames = [];
+      locs.forEach(function(l){
+        if(l.country === countryName && l.region && !seenR[l.region]){
+          seenR[l.region] = true; regionNames.push(l.region);
+        }
+      });
+      regionNames.sort();
+      if(!regionNames.length){ rField.hidden = true; return; }
+      regionNames.forEach(function(r){
+        var opt = document.createElement('option');
+        opt.value = r; opt.textContent = r;
+        rSelect.appendChild(opt);
+      });
+      rField.hidden = false;
+    }
+
+    cSelect.addEventListener('change', function(){
+      countryFilter = this.value;
+      regionFilter = '';
+      rSelect.value = '';
+      if(countryFilter){
+        buildRegions(countryFilter);
+        // Mutual exclusivity: selecting a country clears the town-text and
+        // geo-radius filters (mirrors the existing town-text vs. geo convention).
+        townFilter = ''; geoFilter = null;
+        document.getElementById('sf-town').value = '';
+      } else {
+        rField.hidden = true;
+      }
+      render();
+    });
+
+    rSelect.addEventListener('change', function(){
+      regionFilter = this.value;
+      render();
+    });
+  })();
 
   function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function pad(n){ return n<10?'0'+n:''+n; }
@@ -208,6 +287,11 @@
       geoFilter = {lat:pos.coords.latitude, lng:pos.coords.longitude, radiusKm:parseInt(document.getElementById('sf-radius').value,10)};
       townFilter = '';
       document.getElementById('sf-town').value = '';
+      // Geo is mutually exclusive with the country/region cascade.
+      countryFilter = ''; regionFilter = '';
+      document.getElementById('sf-country').value = '';
+      document.getElementById('sf-region').value = '';
+      document.getElementById('sf-region-field').hidden = true;
       map.setView([geoFilter.lat, geoFilter.lng], 9);
       render();
     });
@@ -363,6 +447,8 @@
     input.addEventListener('input', function(){
       townFilter = this.value.trim();
       geoFilter = null;
+      // Town text is mutually exclusive with the country/region cascade.
+      if(townFilter){ countryFilter = ''; regionFilter = ''; document.getElementById('sf-country').value = ''; document.getElementById('sf-region').value = ''; document.getElementById('sf-region-field').hidden = true; }
       clearTimeout(geocodeTimer);
       geocodeReqToken++; // invalidate any in-flight online lookup
       var q = townFilter.toLowerCase();
@@ -401,6 +487,10 @@
         input.value = res.name;
         townFilter = '';
         geoFilter = {lat:res.lat, lng:res.lng, radiusKm:parseInt(document.getElementById('sf-radius').value,10)};
+        countryFilter = ''; regionFilter = '';
+        document.getElementById('sf-country').value = '';
+        document.getElementById('sf-region').value = '';
+        document.getElementById('sf-region-field').hidden = true;
         box.hidden = true;
         if(map) map.setView([res.lat,res.lng], 9);
         render();
@@ -426,7 +516,10 @@
     ['ball','workshop','festival'].forEach(function(t){ document.getElementById('sf-type-'+t).checked = true; });
     document.getElementById('sf-dance').value = '';
     document.getElementById('sf-town').value = '';
-    townFilter = ''; geoFilter = null; mapBoundsActive = false;
+    document.getElementById('sf-country').value = '';
+    document.getElementById('sf-region').value = '';
+    document.getElementById('sf-region-field').hidden = true;
+    townFilter = ''; geoFilter = null; countryFilter = ''; regionFilter = ''; mapBoundsActive = false;
     render();
   });
 
@@ -447,6 +540,8 @@
       var town=(r.dataset.town||'').toLowerCase();
       if(town.indexOf(townFilter.toLowerCase())<0) return false;
     }
+    if(countryFilter && (r.dataset.country||'') !== countryFilter) return false;
+    if(regionFilter  && (r.dataset.region||'')  !== regionFilter)  return false;
     var g = geoById[r.dataset.id];
     if(geoFilter){
       if(!g || haversineKm(geoFilter.lat,geoFilter.lng,g.lat,g.lng) > geoFilter.radiusKm) return false;

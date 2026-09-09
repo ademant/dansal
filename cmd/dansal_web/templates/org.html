@@ -10,7 +10,7 @@
   "name": "{{.Name | js}}"
   {{- with .Website}}, "url": "{{. | js}}"{{end}}
   {{- with .ImageURL}}, "logo": "{{. | js}}"{{end}}
-  {{- with .Description}}, "description": "{{. | js}}"{{end}}
+  {{- with .Description}}, "description": "{{. | plainTextDesc | js}}"{{end}}
   {{- if or .Website .Mastodon .Instagram .Facebook}}, "sameAs": [
     {{- $first := true}}
     {{- with .Website}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{end}}

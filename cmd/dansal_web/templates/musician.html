@@ -7,7 +7,7 @@
   "@id": "https://{{$.Domain}}/musicians/{{.ID}}",
   "name": "{{.Bandname | js}}"
   {{- with .ImageURL}}, "image": "https://{{$.Domain}}{{. | js}}"{{end}}
-  {{- with .Biography}}, "description": "{{. | js}}"{{else}}{{with .Description}}, "description": "{{. | js}}"{{end}}{{end}}
+  {{- with .Biography}}, "description": "{{. | plainTextDesc | js}}"{{else}}{{with .Description}}, "description": "{{. | plainTextDesc | js}}"{{end}}{{end}}
   {{- with .Genre}}, "genre": "{{. | js}}"{{end}}
   {{- if or .Internetsite .Mastodon .Instagram .Facebook .Soundcloud .Spotify .Deezer .MBID}}, "sameAs": [
     {{- $first := true}}

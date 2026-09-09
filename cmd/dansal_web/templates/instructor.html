@@ -6,7 +6,7 @@
   "@type": "Person",
   "@id": "https://{{$.Domain}}/instructors/{{.ID}}",
   "name": "{{.Name | js}}"
-  {{- with .Bio}}, "description": "{{. | js}}"{{end}}
+  {{- with .Bio}}, "description": "{{. | plainTextDesc | js}}"{{end}}
   {{- if or .Website .Mastodon .Instagram .Facebook}}, "sameAs": [
     {{- $first := true}}
     {{- with .Website}}"{{. | js}}"{{$first = false}}{{end}}

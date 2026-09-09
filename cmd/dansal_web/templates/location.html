@@ -41,11 +41,15 @@
 
 <div class="loc-meta">
   {{if or .Address .Town}}
-  <div class="loc-addr">
+  {{/* #1281: <address> wraps the postal address so a crawler/AI engine can
+       lift the same fact straight from the rendered page, not only from
+       the JSON-LD PostalAddress above — same pattern as event.html's
+       evt-address (#1280). */}}
+  <address class="loc-addr">
     {{if .Address}}<span>{{.Address}}</span><br>{{end}}
     {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
     {{if .Country}}<br><span>{{.Country}}</span>{{end}}
-  </div>
+  </address>
   {{end}}
   {{if .Internetsite}}
   <div class="loc-website"><a href="{{.Internetsite}}" target="_blank" rel="noopener">{{.Internetsite}}</a></div>
@@ -145,7 +149,7 @@
 .loc-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
 .loc-page-header h1{margin:0}
 .loc-meta{margin-bottom:1rem;display:flex;flex-direction:column;gap:.35rem}
-.loc-addr{font-size:.92rem;color:var(--fg-dim);line-height:1.5}
+.loc-addr{font-style:normal;display:block;font-size:.92rem;color:var(--fg-dim);line-height:1.5}
 .loc-website{font-size:.88rem}
 .loc-website a{color:var(--link)}
 .loc-attrs{display:flex;flex-wrap:wrap;gap:.4rem}

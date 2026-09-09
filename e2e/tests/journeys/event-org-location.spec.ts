@@ -5,12 +5,12 @@ import {
   SeedResult,
   getTokenFromCookie,
   apiPost,
+  loginViaApi,
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { VIEWER, randomFutureDate, isoDate, hhmm, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080";
 
 let seed: SeedResult;
 
@@ -263,27 +263,13 @@ test.describe("Org membership rules on create/assign (#1273, #1275)", () => {
     const orglessId = await createMinimalEvent(page, orglessTitle);
 
     // loginAs() (the real /login form) reproducibly hung indefinitely here
-    // even in complete isolation, for reasons unrelated to this test (see
-    // the session's own login-form investigation) — sidestep the form
-    // entirely: log in through the raw API (POST /api/v1/login) and inject
-    // the resulting session token as the dsw_token cookie directly.
-    // dansal_web has no way to verify the signed dsw_user cookie without
-    // its server-side secret, but authRefreshMiddleware
-    // (cmd/dansal_web/session.go) already handles exactly this — a valid
-    // dsw_token with no/invalid dsw_user gets the session transparently
-    // re-established (via GET /api/v1/me) on the very next request.
-    const viewerContext = await browser.newContext({ baseURL: BASE_URL });
-    const viewerPage = await viewerContext.newPage();
-    const viewerLoginResp = await viewerPage.request.fetch(`${API_BASE}/api/v1/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      data: JSON.stringify({ email: VIEWER.email, password: VIEWER.password }),
-    });
-    const viewerLogin = await viewerLoginResp.json();
-    await viewerContext.addCookies([
-      { name: "dsw_token", value: viewerLogin.token, url: BASE_URL },
-    ]);
-    const viewerToken = await getTokenFromCookie(viewerPage);
+    // even in complete isolation — sidestep the form entirely (see
+    // loginViaApi's own doc comment).
+    const { context: viewerContext, page: viewerPage, token: viewerToken } = await loginViaApi(
+      browser,
+      VIEWER.email,
+      VIEWER.password
+    );
 
     // #1273/create-time rule: a non-admin must name an org they belong to.
     const eventDate = randomFutureDate(EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS);

@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { Page } from "@playwright/test";
+import { Browser, BrowserContext, Page } from "@playwright/test";
 import {
   ADMIN,
   EDITOR,
@@ -24,6 +24,7 @@ const INDEX_EVENT_CAP = 100;
 const INDEX_SAFETY_MARGIN = 40; // stay clear of the cap even mid-run
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080";
 const ADMIN_CLI = process.env.ADMIN_CLI ?? "dansal_admin";
 const ADMIN_SOCKET =
   process.env.ADMIN_SOCKET ?? "/var/lib/dansal/dev/dansal.sock";
@@ -110,6 +111,55 @@ export async function loginAs(
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
     timeout: 30_000,
   });
+}
+
+// loginViaApi logs a *second* (non-admin) role into a fresh context/page
+// without ever touching the real /login form. loginAs() (the form) has
+// reproducibly hung indefinitely for a second login inside a test — root
+// cause never found (the login page itself is fine when checked manually;
+// global-setup's own one real admin login always works) — so route around
+// it entirely: log in through the raw API and inject the resulting token
+// as the dsw_token cookie directly.
+//
+// Takes `browser`, not an already-created context, and always creates its
+// own context here with an *explicit* empty storageState — this matters:
+// playwright.config.ts's use.storageState (AUTH_FILE, the admin's saved
+// session) is a per-project default that browser.newContext() silently
+// inherits unless every key is overridden, including from a plain
+// `browser.newContext({ baseURL: ... })` call that never mentions
+// storageState at all. Such a context starts with the admin's already-
+// *signed* dsw_user cookie present and valid — and authRefreshMiddleware
+// (cmd/dansal_web/session.go) only ever re-derives dsw_user when none is
+// already present, so it never looks at the dsw_token this function sets
+// at all. The result isn't a login failure you'd notice — every request
+// silently succeeds, just as admin, regardless of whose token is in
+// dsw_token (confirmed happening: an admin-only POST returned 200 instead
+// of the expected 403 for a "viewer" context built this way). Passing an
+// explicit empty storageState is what makes injecting only dsw_token
+// sufficient — with no dsw_user at all, authRefreshMiddleware's condition
+// is met and it re-derives the session from dsw_token on the next request,
+// exactly as intended.
+export async function loginViaApi(
+  browser: Browser,
+  email: string,
+  password: string
+): Promise<{ context: BrowserContext; page: Page; token: string }> {
+  const context = await browser.newContext({
+    baseURL: BASE_URL,
+    storageState: { cookies: [], origins: [] },
+  });
+  const page = await context.newPage();
+  const resp = await page.request.fetch(`${API_BASE}/api/v1/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: JSON.stringify({ email, password }),
+  });
+  const body = await resp.json();
+  if (!body.token) {
+    throw new Error(`loginViaApi: no token in response for ${email}: ${JSON.stringify(body)}`);
+  }
+  await context.addCookies([{ name: "dsw_token", value: body.token, url: BASE_URL }]);
+  return { context, page, token: body.token as string };
 }
 
 export async function getTokenFromCookie(page: Page): Promise<string> {

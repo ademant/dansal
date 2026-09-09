@@ -27,19 +27,18 @@ npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 
 
 `playwright.config.ts` + `global-setup.ts` log in **once** for the whole suite (admin) and save `.auth/admin.json` (`AUTH_FILE` from `helpers/auth.ts`). Every spec's `page` fixture and `beforeAll`'s `browser.newContext({ storageState: AUTH_FILE })` load pre-authenticated — never call `loginAs()` for the admin role.
 
-**A second, non-admin login inside a test is a real trap.** `loginAs()` (the actual `/login` form) has reproducibly hung indefinitely for a second login in a test — reproduced in complete isolation, cause never root-caused (the login page itself is fine when checked manually; global-setup's own one real login always works). Workaround, not a fix — **sidestep the form entirely**:
+**A second, non-admin login inside a test is a real trap.** `loginAs()` (the actual `/login` form) has reproducibly hung indefinitely for a second login in a test — reproduced in complete isolation, cause never root-caused (the login page itself is fine when checked manually; global-setup's own one real login always works). Workaround, not a fix — **sidestep the form entirely** with the shared `loginViaApi` helper (`helpers/seed.ts`):
 
 ```ts
-const loginResp = await viewerPage.request.fetch(`${API_BASE}/api/v1/login`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  data: JSON.stringify({ email: VIEWER.email, password: VIEWER.password }),
-});
-const { token } = await loginResp.json();
-await viewerContext.addCookies([{ name: "dsw_token", value: token, url: BASE_URL }]);
+const { context: viewerContext, page: viewerPage, token: viewerToken } =
+  await loginViaApi(browser, VIEWER.email, VIEWER.password);
+// ... use viewerPage / viewerToken ...
+await viewerContext.close();
 ```
 
-No need to also forge the signed `dsw_user` cookie — `authRefreshMiddleware` (`cmd/dansal_web/session.go`) sees a valid `dsw_token` with no/invalid `dsw_user` and transparently re-establishes the full session (via `GET /api/v1/me`) on the very next request.
+It logs in through the raw API and injects the resulting token as the `dsw_token` cookie — no need to also forge the signed `dsw_user` cookie, since `authRefreshMiddleware` (`cmd/dansal_web/session.go`) sees a valid `dsw_token` with no `dsw_user` and transparently re-establishes the full session (via `GET /api/v1/me`) on the very next request.
+
+**Always get the context from `loginViaApi` itself — never call `browser.newContext(...)` yourself for this.** `playwright.config.ts`'s `use.storageState` (`AUTH_FILE`, the admin's saved session) is a per-project default that `browser.newContext()` silently inherits unless *every* key is overridden — a context created as `browser.newContext({ baseURL: BASE_URL })` still starts with the admin's already-*signed* `dsw_user` cookie present and valid, and `authRefreshMiddleware` only ever re-derives `dsw_user` when none is already present — so it never looks at the freshly-injected `dsw_token` at all. This doesn't look like a login failure: every request just silently succeeds as admin regardless of whose token is in `dsw_token` (an admin-only endpoint returning 200 instead of the expected 403 is the symptom). `loginViaApi` creates its context with an explicit empty `storageState` for exactly this reason — don't reintroduce the bug by passing your own context in.
 
 For read-only API calls against a specific user's data, a lighter option than a full second browser context: just call the raw API directly with `Authorization: Bearer <token>` — `getTokenFromCookie(page)` reads the current session's token straight off cookies.
 

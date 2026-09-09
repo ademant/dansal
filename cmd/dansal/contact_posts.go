@@ -74,9 +74,18 @@ func computeContactPostExpiry(eventID int, postType string) time.Time {
 // would otherwise miss new board content indefinitely.
 func latestBoardActivity(eventID int) int64 {
 	var latest int64
+	// contact_posts.created_at is a DATETIME column (SQLite stores it as the
+	// TEXT CURRENT_TIMESTAMP string), while contact_post_images.created_at is
+	// a plain epoch INTEGER (unixepoch()) — the two must be normalized to the
+	// same epoch representation before MAX() can compare them. Left as a bare
+	// UNION ALL, cp.created_at's TEXT value fails to Scan into the int64
+	// dest, that error is silently swallowed by the single Scan call below,
+	// and latest is left at its zero value — board activity then never
+	// bumps the event's freshness signal, so an anonymous visitor's
+	// conditional-GET cache (#1129) never picks up new/newly-verified posts.
 	db.QueryRow(
 		`SELECT COALESCE(MAX(ts), 0) FROM (
-			SELECT cp.created_at AS ts FROM contact_posts cp
+			SELECT CAST(strftime('%s', cp.created_at) AS INTEGER) AS ts FROM contact_posts cp
 			 WHERE cp.event_id=? AND cp.email_verified=1 AND cp.expires_at>?
 			UNION ALL
 			SELECT cpi.created_at FROM contact_post_images cpi

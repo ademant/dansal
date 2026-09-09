@@ -302,6 +302,18 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The location step is optional in the suggest wizard (no `required` on
+	// its city input) — ensureLocation's "no location given" sentinel is 0,
+	// which must be bound as SQL NULL rather than the literal integer 0:
+	// events.location_id is nullable but still FOREIGN KEY REFERENCES
+	// locations(id), and no location row has id=0. insertEvent/updateEvent
+	// (events.go) already follow this locID!=0-means-nil pattern; this path
+	// had drifted from it.
+	var locIDArg any
+	if locID != 0 {
+		locIDArg = locID
+	}
+
 	var eventID int64
 	var shortCode string
 	var insertErr error
@@ -318,7 +330,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 			  is_published, url, food, drink, pricing, contact_name, contact_email,
 			  suggester_email, suggester_name, suggestion_token, suggestion_token_expires_at, email_verified, short_code)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, ?)`,
-			req.Title, req.Description, startTime, endTime, locID,
+			req.Title, req.Description, startTime, endTime, locIDArg,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
 			urlVal(req.URL), req.Food, req.Drink, pricingArg, req.ContactName, req.ContactEmail,
 			req.Email, req.SuggesterName, tokenArg, tokenExpiryArg, emailVerified, shortCode,

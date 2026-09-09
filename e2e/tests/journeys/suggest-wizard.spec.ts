@@ -9,9 +9,13 @@
  *   C  Suggester uses the manage-link (from the confirmation email) to update
  *      the event description before it is published.  The update is applied
  *      directly (no pending-edit queue needed while still unpublished).
- *   D  After publish, the suggester submits a change via the manage-link.
- *      This creates a pending edit (pending_edit_json) that an admin must
- *      approve; the description only updates after approval.
+ *   D  After publish, the suggester submits a change via the manage-link,
+ *      touching both a "safe" field (description, applied immediately —
+ *      patchSuggestManageEvent treats a plain-text edit from the event's
+ *      own suggester as low-risk) and a "pending-review" field
+ *      (contact_email, deferred to pending_edit_json) in one submit, so
+ *      both halves of that split get exercised; the contact email only
+ *      updates once an admin approves the pending edit.
  *
  * The test skips automatically when suggest is not configured on the running
  * instance (GET /events/suggest → 404).  A one-time dev setup is required:
@@ -85,6 +89,15 @@ async function submitSuggestWizard(
     await emailInput.fill(email);
   }
 
+  // /events/suggest/submit runs through the shared guardFormSubmit prologue
+  // (formguard.go), whose consumeFormToken enforces a 1s *minimum* age on
+  // the page's _form_token — an anti-bot check a real visitor clears
+  // naturally while filling six steps, but this wizard has no per-step
+  // network round trip to slow Playwright down, so the whole goto→submit
+  // flow can complete in well under a second and get rejected as "too
+  // fast" ("Submission failed. Please try again."). Same class of gotcha
+  // as board.spec.ts's #1260 form-token wait.
+  await page.waitForTimeout(1100);
   // Submit (the form's onsubmit listener reads sg-date-from / sg-start-time
   // and writes the combined ISO datetime into sg-start / name="start_time")
   await page.locator('.wiz-step[data-step="6"] button[type="submit"]').click();
@@ -92,18 +105,30 @@ async function submitSuggestWizard(
 }
 
 /**
- * Submit the manage form (pre- or post-publish) to update the description.
+ * Submit the manage form (pre- or post-publish) to update the description
+ * and, optionally, the contact email (same step 4 as description).
  *
  * On the manage page the form is pre-filled via applyWizardData() (an IIFE
  * at page load), so title, date, and time are already set.  We only need to
- * navigate to step 4, change the description, then continue to the submit
- * button on step 6.  The email field is NOT rendered on manage pages
- * ({{if not .ManageToken}}) so no email input is needed here.
+ * navigate to step 4, change the description (and contact email, if given),
+ * then continue to the submit button on step 6.  The email field on step 6
+ * is NOT rendered on manage pages ({{if not .ManageToken}}) so no email
+ * input is needed here — that's a different field from step 4's
+ * contact_email (the event's own public contact address).
+ *
+ * description and contact_email sit on opposite sides of
+ * patchSuggestManageEvent's safe/pending-review split (suggest_manage.go):
+ * description auto-applies immediately (unless it contains a link) since a
+ * plain-text edit from the event's own suggester is low-risk, while
+ * contact_email always goes through pending_edit_json review once the event
+ * is published. Passing contactEmail is how callers opt into exercising the
+ * review path instead of (or alongside) the always-safe description edit.
  */
 async function submitManageUpdate(
   page: import("@playwright/test").Page,
   manageToken: string,
-  description: string
+  description: string,
+  contactEmail?: string
 ): Promise<void> {
   await page.goto(`${WEB_BASE}/events/suggest/manage/${manageToken}`);
   // Wait for the prefill script to have populated wiz-title
@@ -116,6 +141,9 @@ async function submitManageUpdate(
     await page.locator("#wiz-next").click();
   }
   await page.fill('textarea[name="description"]', description);
+  if (contactEmail !== undefined) {
+    await page.fill('input[name="contact_email"]', contactEmail);
+  }
 
   // Navigate to step 6 — 2 more Next clicks
   for (let i = 0; i < 2; i++) {
@@ -150,7 +178,20 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   clearMailbox();
 
   // ── Scenario A: unauthenticated submission ─────────────────────────────
-  const anonCtx = await browser.newContext(); // no storageState → public visitor
+  // playwright.config.ts's use.storageState (AUTH_FILE, the admin's saved
+  // session) is a per-project default that browser.newContext() silently
+  // inherits unless explicitly overridden — an unqualified newContext()
+  // here still carries the admin's session, not the anonymous visitor this
+  // scenario is meant to be (see helpers/seed.ts's loginViaApi doc comment
+  // for the full story; caught while building board.spec.ts's #1260 work).
+  // suggestSubmitHandler also shares publicThrottle (ip+user-agent,
+  // 10 requests / 10 min by default) with every other public form handler
+  // (booking, board) — a per-run UA sidesteps repeated-local-run collisions
+  // the same way board.spec.ts's own UA fix does for its own throttle.
+  const anonCtx = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+    userAgent: `Mozilla/5.0 (E2E suggest-wizard test ${Date.now()})`,
+  });
   const anonPage = await anonCtx.newPage();
   try {
     await submitSuggestWizard(anonPage, title, SUBMITTER_EMAIL);
@@ -224,14 +265,37 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
     expect(publishedEvent, "event must be publicly visible after publish").toBeDefined();
 
     // ── Scenario D: post-publish pending edit ──────────────────────────
-    // Same manage token, same page — but now the event is published, so the
-    // API stores the change as pending_edit_json instead of applying it.
+    // Same manage token, same page — but now the event is published.
+    // patchSuggestManageEvent (suggest_manage.go) splits the submitted
+    // fields: description is a "safe" field (a plain-text edit from the
+    // event's own suggester) and applies immediately regardless of
+    // publish state, while contact_email is always deferred to
+    // pending_edit_json once published, since it's a higher-risk field an
+    // admin should see before it goes live. Changing both in one submit
+    // exercises both halves of that split in a single flow.
     const pendingDesc = `Post-publish pending description ${Date.now()}`;
-    await submitManageUpdate(anonPage, manageToken, pendingDesc);
+    const pendingContactEmail = `e2e-suggest-pending-${Date.now()}@example.com`;
+    await submitManageUpdate(anonPage, manageToken, pendingDesc, pendingContactEmail);
     // The manage-submit handler redirects to /events/suggest/done?review=1
     // when a pending edit was created.  waitForURL already matched the done
     // page; verify the ?review=1 query param was set.
     expect(anonPage.url()).toContain("review=1");
+
+    // The description (a safe field) is already live on the public event —
+    // no admin action needed — while contact_email (pending review) is not.
+    const preApproveResp = await page.request.fetch(
+      `${API_BASE}/api/v1/events/${eventId}`
+    );
+    expect(preApproveResp.status()).toBe(200);
+    const preApproveEvent = await preApproveResp.json();
+    expect(
+      preApproveEvent.description,
+      "description is a safe field and must apply immediately, even pre-approval"
+    ).toBe(pendingDesc);
+    expect(
+      preApproveEvent.contact_email,
+      "contact_email must NOT apply until the pending edit is approved"
+    ).not.toBe(pendingContactEmail);
 
     // Admin sees the ✏ badge (pending_edit_json set) in the not_verified list.
     await page.goto(`${WEB_BASE}/admin/events?not_verified=1`);
@@ -256,12 +320,13 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
       `pending-edit approve should succeed (got ${approveResp.status()})`
     ).toBe(true);
 
-    // After approval the description on the public event matches the pending edit.
+    // After approval the contact email on the public event matches the pending edit.
     const finalResp = await page.request.fetch(
       `${API_BASE}/api/v1/events/${eventId}`
     );
     expect(finalResp.status()).toBe(200);
     const finalEvent = await finalResp.json();
+    expect(finalEvent.contact_email).toBe(pendingContactEmail);
     expect(finalEvent.description).toBe(pendingDesc);
   } finally {
     await anonCtx.close();

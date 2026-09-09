@@ -26,22 +26,28 @@ export function clearMailbox(): void {
 }
 
 /**
- * Poll the mbox file until a manage-link URL appears, then return the token.
+ * Poll the mbox file until a URL matching `pathPrefix` (a literal path
+ * segment, e.g. "/events/suggest/manage/" or "/contact-posts/manage/")
+ * appears, then return the token that follows it.
  *
- * The suggest API sends the email in a goroutine, so there is a short delay
- * between form submission and the file appearing.  The default 15 s timeout
- * gives ample margin even under CI load.
+ * Both the suggest wizard and the board-post flow send their manage-link
+ * emails in a goroutine, so there is a short delay between form submission
+ * and the file appearing. The default 15 s timeout gives ample margin even
+ * under CI load.
  *
  * Throws if no token appears within `timeoutMs`.
  */
-export async function waitForManageToken(timeoutMs = 15_000): Promise<string> {
+export async function waitForMailboxURL(
+  pathPrefix: string,
+  timeoutMs = 15_000
+): Promise<string> {
+  const escaped = pathPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`${escaped}([A-Za-z0-9_-]{20,})`);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const content = fs.readFileSync(MAIL_FILE, "utf-8");
-      // The email body contains the manage URL:
-      //   http://localhost:8080/events/suggest/manage/<token>
-      const m = content.match(/\/events\/suggest\/manage\/([A-Za-z0-9_-]{20,})/);
+      const m = content.match(pattern);
       if (m) return m[1];
     } catch {
       // file not written yet — keep polling
@@ -49,6 +55,18 @@ export async function waitForManageToken(timeoutMs = 15_000): Promise<string> {
     await new Promise((r) => setTimeout(r, 250));
   }
   throw new Error(
-    `waitForManageToken: no token found in ${MAIL_FILE} after ${timeoutMs} ms`
+    `waitForMailboxURL: no match for ${pathPrefix} in ${MAIL_FILE} after ${timeoutMs} ms`
   );
+}
+
+/** The suggest wizard's manage-link token — e.g.
+ *  http://localhost:8080/events/suggest/manage/<token> */
+export async function waitForManageToken(timeoutMs = 15_000): Promise<string> {
+  return waitForMailboxURL("/events/suggest/manage/", timeoutMs);
+}
+
+/** The bulletin board's combined verify+manage-link token — e.g.
+ *  http://localhost:8080/contact-posts/manage/<token> */
+export async function waitForBoardManageToken(timeoutMs = 15_000): Promise<string> {
+  return waitForMailboxURL("/contact-posts/manage/", timeoutMs);
 }

@@ -137,6 +137,15 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "location: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		// ensureLocation's "no location given" sentinel is 0, which must be
+		// bound as SQL NULL, not the literal integer 0 — location_id is
+		// nullable but still FK-checked against locations(id), and no
+		// location row has id=0 (same fix as suggest.go's initial-create
+		// path; this free-edit path had the identical drift).
+		var locIDArg any
+		if locID != 0 {
+			locIDArg = locID
+		}
 		var pricingArg any
 		if req.Pricing != nil {
 			if b, err := json.Marshal(req.Pricing); err == nil {
@@ -154,7 +163,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 			`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 			 has_ball=?, has_workshop=?, has_festival=?, workshop_difficulty=?, url=?, food=?, drink=?,
 			 pricing=jsonb(?), contact_name=?, contact_email=?, changed_by='anonymous', changed_at=unixepoch() WHERE id=?`,
-			req.Title, req.Description, startTime, endTime, locID,
+			req.Title, req.Description, startTime, endTime, locIDArg,
 			req.HasBall, req.HasWorkshop, req.HasFestival, req.WorkshopDifficulty, urlVal(req.URL), req.Food, req.Drink,
 			pricingArg, req.ContactName, req.ContactEmail, eventID,
 		); err != nil {

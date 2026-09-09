@@ -199,6 +199,31 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			rooms = []TimetableRoom{}
 		}
 
+		// #1278: apply the saved room-column drag order (#1237), if any.
+		// Rooms not mentioned in the saved order (new rooms, or an order
+		// saved before they existed) keep their default building→room
+		// relative order, appended after every room the order does name.
+		if len(event.TimetableRoomOrder) > 0 {
+			byID := make(map[int]TimetableRoom, len(rooms))
+			for _, rm := range rooms {
+				byID[rm.ID] = rm
+			}
+			ordered := make([]TimetableRoom, 0, len(rooms))
+			seen := make(map[int]bool, len(rooms))
+			for _, id := range event.TimetableRoomOrder {
+				if rm, ok := byID[id]; ok && !seen[id] {
+					ordered = append(ordered, rm)
+					seen[id] = true
+				}
+			}
+			for _, rm := range rooms {
+				if !seen[rm.ID] {
+					ordered = append(ordered, rm)
+				}
+			}
+			rooms = ordered
+		}
+
 		topLocName := ""
 		if bl, ok := locByID[topLocID]; ok {
 			topLocName = bl.ShortName
@@ -309,6 +334,38 @@ func adminTimetableTracksSaveHandler(client *DansalClient) http.HandlerFunc {
 			tracks = []TimetableTrack{}
 		}
 		if err := client.PatchEventTimetableTracks(r.Context(), id, tracks, tok); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}
+}
+
+// PUT /admin/events/{id}/timetable/room-order — persist the room-column
+// drag order (#1237/#1278; proxy to a merge-patch on the API).
+func adminTimetableRoomOrderSaveHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "invalid event id", http.StatusBadRequest)
+			return
+		}
+		tok := getSessionToken(r)
+
+		var order []int
+		if err := json.NewDecoder(io.LimitReader(r.Body, maxInboundJSONBody)).Decode(&order); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if order == nil {
+			order = []int{}
+		}
+		if err := client.PatchEventTimetableRoomOrder(r.Context(), id, order, tok); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

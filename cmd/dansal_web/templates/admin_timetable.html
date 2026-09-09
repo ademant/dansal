@@ -951,7 +951,17 @@ function setupColumnDrag(rh, r){
 }
 function reorderRoom(src, dest, after){
   moveInArray(_rooms, src, dest, after);
-  _markDirty(); renderAll();
+  renderAll();
+  saveRoomOrder();
+}
+// #1278: persist the drag order immediately (same pattern as saveTracks()),
+// rather than folding it into the entries payload of the main Save button —
+// a reorder is a layout preference, not timetable content, and previously
+// wasn't sent to the server at all, so it silently reset on every reload.
+function saveRoomOrder(){
+  var order = _rooms.filter(function(r){ return r.id !== null && r.id !== -1; }).map(function(r){ return r.id; });
+  fetch('/admin/events/'+EVT_ID+'/timetable/room-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(order)})
+    .catch(function(err){ console.error('saveRoomOrder failed', err); });
 }
 
 // ─── tile creation ────────────────────────────────────────────────────────────

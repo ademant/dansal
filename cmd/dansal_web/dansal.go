@@ -350,55 +350,59 @@ func (c *DansalClient) do(ctx context.Context, method, path, token string, body 
 }
 
 type Event struct {
-	ID                     int              `json:"id"`
-	Title                  string           `json:"title"`
-	Description            string           `json:"description"`
-	StartTime              string           `json:"start_time"`
-	EndTime                string           `json:"end_time"`
-	HasBall                bool             `json:"has_ball"`
-	HasWorkshop            bool             `json:"has_workshop"`
-	HasFestival            bool             `json:"has_festival"`
-	WorkshopDifficulty     string           `json:"workshop_difficulty,omitempty"`
-	IsCancelled            bool             `json:"is_cancelled"`
-	Tags                   []string         `json:"tags"`
-	IsPublished            bool             `json:"is_published"`
-	ShortCode              string           `json:"short_code"`
-	URL                    string           `json:"url,omitempty"`
-	ImageURL               string           `json:"image_url,omitempty"`
-	ImageAIGenerated       bool             `json:"image_ai_generated,omitempty"`
-	OrganizationID         *int             `json:"organization_id,omitempty"`
-	LocationID             *int             `json:"location_id,omitempty"`
-	Location               *Location        `json:"location,omitempty"`
-	Attributes             map[string]bool  `json:"attributes,omitempty"`
-	FloorCondition         string           `json:"floor_condition,omitempty"`
-	ContactName            string           `json:"contact_name,omitempty"`
-	ContactEmail           string           `json:"contact_email,omitempty"`
-	BookingURL             string           `json:"booking_url,omitempty"`
-	Availability           string           `json:"availability,omitempty"`
-	TicketsTotal           int              `json:"tickets_total,omitempty"`
-	BookingEnabled         bool             `json:"booking_enabled,omitempty"`
-	Food                   string           `json:"food,omitempty"`
-	Drink                  string           `json:"drink,omitempty"`
-	Pricing                *Pricing         `json:"pricing,omitempty"`
-	Locations              []Location       `json:"locations,omitempty"`
-	Musicians              []Musician       `json:"musicians,omitempty"`
-	Instructors            []Instructor     `json:"instructors,omitempty"`
-	DanceNames             []string         `json:"dance_names,omitempty"`
-	Timetable              []TimetableEntry `json:"timetable,omitempty"`
-	TimetableTracks        []TimetableTrack `json:"timetable_tracks,omitempty"`
-	CreatedAt              string           `json:"created_at"`
-	Source                 string           `json:"source,omitempty"`
-	SourceURL              string           `json:"source_url,omitempty"`
-	ChangedAt              string           `json:"changed_at,omitempty"`
-	ChangedBy              string           `json:"changed_by,omitempty"`
-	FetchSourceID          int              `json:"fetch_source_id,omitempty"`
-	Editable               bool             `json:"editable,omitempty"`
-	Cancelable             bool             `json:"cancelable,omitempty"`
-	Deletable              bool             `json:"deletable,omitempty"`
-	CreatedByID            *int             `json:"created_by_id,omitempty"`
-	SeriesID               *int             `json:"series_id,omitempty"`
-	SeriesImageURL         string           `json:"series_image_url,omitempty"`
-	SeriesImageAIGenerated bool             `json:"series_image_ai_generated,omitempty"`
+	ID                 int              `json:"id"`
+	Title              string           `json:"title"`
+	Description        string           `json:"description"`
+	StartTime          string           `json:"start_time"`
+	EndTime            string           `json:"end_time"`
+	HasBall            bool             `json:"has_ball"`
+	HasWorkshop        bool             `json:"has_workshop"`
+	HasFestival        bool             `json:"has_festival"`
+	WorkshopDifficulty string           `json:"workshop_difficulty,omitempty"`
+	IsCancelled        bool             `json:"is_cancelled"`
+	Tags               []string         `json:"tags"`
+	IsPublished        bool             `json:"is_published"`
+	ShortCode          string           `json:"short_code"`
+	URL                string           `json:"url,omitempty"`
+	ImageURL           string           `json:"image_url,omitempty"`
+	ImageAIGenerated   bool             `json:"image_ai_generated,omitempty"`
+	OrganizationID     *int             `json:"organization_id,omitempty"`
+	LocationID         *int             `json:"location_id,omitempty"`
+	Location           *Location        `json:"location,omitempty"`
+	Attributes         map[string]bool  `json:"attributes,omitempty"`
+	FloorCondition     string           `json:"floor_condition,omitempty"`
+	ContactName        string           `json:"contact_name,omitempty"`
+	ContactEmail       string           `json:"contact_email,omitempty"`
+	BookingURL         string           `json:"booking_url,omitempty"`
+	Availability       string           `json:"availability,omitempty"`
+	TicketsTotal       int              `json:"tickets_total,omitempty"`
+	BookingEnabled     bool             `json:"booking_enabled,omitempty"`
+	Food               string           `json:"food,omitempty"`
+	Drink              string           `json:"drink,omitempty"`
+	Pricing            *Pricing         `json:"pricing,omitempty"`
+	Locations          []Location       `json:"locations,omitempty"`
+	Musicians          []Musician       `json:"musicians,omitempty"`
+	Instructors        []Instructor     `json:"instructors,omitempty"`
+	DanceNames         []string         `json:"dance_names,omitempty"`
+	Timetable          []TimetableEntry `json:"timetable,omitempty"`
+	TimetableTracks    []TimetableTrack `json:"timetable_tracks,omitempty"`
+	// TimetableRoomOrder (#1278) persists the admin timetable editor's
+	// room-column drag order (#1237) — a list of location IDs in display
+	// order. Empty means no custom order saved yet.
+	TimetableRoomOrder     []int  `json:"timetable_room_order,omitempty"`
+	CreatedAt              string `json:"created_at"`
+	Source                 string `json:"source,omitempty"`
+	SourceURL              string `json:"source_url,omitempty"`
+	ChangedAt              string `json:"changed_at,omitempty"`
+	ChangedBy              string `json:"changed_by,omitempty"`
+	FetchSourceID          int    `json:"fetch_source_id,omitempty"`
+	Editable               bool   `json:"editable,omitempty"`
+	Cancelable             bool   `json:"cancelable,omitempty"`
+	Deletable              bool   `json:"deletable,omitempty"`
+	CreatedByID            *int   `json:"created_by_id,omitempty"`
+	SeriesID               *int   `json:"series_id,omitempty"`
+	SeriesImageURL         string `json:"series_image_url,omitempty"`
+	SeriesImageAIGenerated bool   `json:"series_image_ai_generated,omitempty"`
 	// SeriesCadence (#1185) mirrors event_series.cadence for this event's
 	// series — see cmd/dansal's Event.SeriesCadence doc comment.
 	SeriesCadence          string `json:"series_cadence,omitempty"`
@@ -2131,6 +2135,31 @@ func (c *DansalClient) PatchEventTimetableTracks(ctx context.Context, eventID in
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("patch event timetable tracks: %s: %s", resp.Status, apiErrorMessage(resp))
+	}
+	return nil
+}
+
+// PatchEventTimetableRoomOrder persists the admin timetable editor's
+// room-column drag order (#1237/#1278) via merge-patch. order is a list of
+// room location IDs in display order; may be empty (but non-nil) to
+// explicitly reset back to the default derivation.
+func (c *DansalClient) PatchEventTimetableRoomOrder(ctx context.Context, eventID int, order []int, token string) error {
+	body, _ := json.Marshal(map[string][]int{"timetable_room_order": order})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("patch event timetable room order: %s: %s", resp.Status, apiErrorMessage(resp))
 	}
 	return nil
 }

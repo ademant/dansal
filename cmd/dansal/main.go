@@ -2631,6 +2631,23 @@ func migrateDB() {
 			db.Exec("ALTER TABLE timetable_entries ADD COLUMN " + col.name + " " + col.def)
 		}
 	}
+
+	// v38 (#1278): persist the admin timetable editor's room-column drag
+	// order (#1237). JSON array of location IDs in display order; NULL/empty
+	// means "derive the default building→room order server-side" (same as
+	// timetable_tracks' NULL/empty meaning "use the default palette").
+	if !applied(38) {
+		db.Exec("ALTER TABLE events ADD COLUMN timetable_room_order TEXT")
+		mark(38)
+	}
+	// Safety net: ensure events.timetable_room_order exists even if v38 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='timetable_room_order'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN timetable_room_order TEXT")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3513,6 +3530,7 @@ func createTables() error {
 		previous_start_time INTEGER,
 		image_ai_generated INTEGER DEFAULT 0,
 		timetable_tracks TEXT,
+		timetable_room_order TEXT,
 		-- location_id and organization_id are intentionally nullable (#736):
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import
@@ -4044,6 +4062,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(35)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(36)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(37)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(38)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

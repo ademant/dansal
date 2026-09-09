@@ -14,10 +14,12 @@ cd e2e
 export NVM_DIR="$HOME/.config/nvm"; source "$NVM_DIR/nvm.sh"; nvm use default
 export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin
 export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock
+export DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox
 npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 --reporter=line --workers=1
 ```
 
 - `ADMIN_CLI`/`ADMIN_SOCKET` are needed because `dansal_admin` isn't on `PATH` and the dev instance's admin socket requires them explicitly.
+- `DANSAL_MAIL_FILE` is only actually needed by specs using the fake-sendmail mailbox helpers (`board.spec.ts`, `suggest-wizard.spec.ts`) but is harmless to export always — see "Public forms" below for why the helper's own default doesn't work against dev.
 - `--workers=1 --retries=0` while iterating: a failing test's worker restart re-runs a shared `beforeAll` and muddies traces otherwise.
 - Runs print recurring `error: email already exists` lines to stderr — background noise from `createUsers()`/other concurrent activity, not a test failure signal. Ignore it; look at the actual pass/fail summary line.
 - **Any product code change under test must already be deployed to `dev`** (`make build && sudo make deploy INSTANCE=dev` — see the `deploy` skill) before running against it. `go build`/`go test` passing locally does not mean the running dev instance has the fix.
@@ -114,6 +116,26 @@ await page.locator(`tr[data-evt-id="${id}"] .event-cb`).evaluate((el) => {
 Separately, per-row inline edit controls (e.g. `series-lifecycle.spec.ts`'s description textareas) are sometimes CSS-hidden below 640px in favour of a tap-to-open quick-edit popup — check `.isVisible()` on the desktop control first and branch to the mobile popup flow when it's not, rather than assuming one UI exists on both viewports.
 
 A long scrollable table can also leave a submit button genuinely obstructed mid-retry on mobile (Playwright's scroll-and-click retry loop bouncing between intercepting elements) even though it's plainly visible in a screenshot. `scrollIntoViewIfNeeded()` then `.click({ force: true })` rather than chasing the animation.
+
+## Public forms (board, suggest wizard, booking): mailbox path, token timing, throttles
+
+Specs that drive an anonymous/public form (`board.spec.ts`, `suggest-wizard.spec.ts`) hit a cluster of anti-abuse mechanisms shared across `contactBoardPostHandler`, `suggestSubmitHandler`, and `bookingSubmitHandler` (`cmd/dansal_web`). All three surfaced as real failures while building #1260 — check this section first before treating one of these as a product bug.
+
+- **`DANSAL_MAIL_FILE` must point at the dev instance's actual mbox, not the helper's default.** `helpers/mailbox.ts` defaults to `/tmp/dansal-e2e-mail.mbox`, but the `dansal@dev` systemd unit runs with `PrivateTmp=true` and its own `Environment=DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox` — completely different, non-overlapping files. Any spec using `waitForManageToken`/`waitForBoardManageToken`/`waitForMailboxURL` needs:
+  ```bash
+  export DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox
+  ```
+  added to the run command in this skill's "Running a spec" section above. Without it the wait just times out ("no match... after 15000 ms") with no hint that the mail was ever sent. `clearMailbox()`/`waitForMailboxURL` both honor this env var (via the same `MAIL_FILE` constant), so setting it once per shell covers the whole run.
+
+- **`consumeFormToken`'s 1-second *minimum* age** (`formguard.go`) rejects a token used less than 1s after it was issued — an anti-bot check a real visitor clears naturally while filling a form, but Playwright's fill-and-submit can beat. Symptom: a generic "Form data invalid"/"Submission failed" error on first submit. Add a short wait (`page.waitForTimeout(1100)`) right before the final submit click, after confirming the submit button is enabled — see `board.spec.ts` and `submitSuggestWizard` in `suggest-wizard.spec.ts`.
+
+- **Per-IP+User-Agent throttles block repeated local runs, not just real abuse.** `contactBoardPostHandler`'s `hasPendingSubmission`/`setPendingSubmission` and `suggestSubmitHandler`'s shared `publicThrottle` (also used by booking) both key on `sha256(ip+"|"+user-agent)` or `ip+"|"+user-agent` directly, with a multi-minute window (`FormTokenMaxAgeMins`, default 30; `PublicRateWindowMins`, default 10, limit 10 requests). Every Playwright run from the same machine shares one IP and, by default, one User-Agent — so a few reruns in a row of `board.spec.ts` or `suggest-wizard.spec.ts` (or a mix of both, since `publicThrottle` is shared across handlers) can trip "Too many submissions"/"Too many requests" even though each run uses a fresh browser context. Give the anonymous context a unique per-run `userAgent` so it fingerprints as a different visitor each time:
+  ```ts
+  const anonCtx = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+    userAgent: `Mozilla/5.0 (E2E <name> test ${Date.now()})`,
+  });
+  ```
 
 ## Everything else
 

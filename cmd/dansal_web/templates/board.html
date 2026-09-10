@@ -170,7 +170,9 @@
 {{if $hasGeoPosts}}
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
-(function(){
+// #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+// plain top-level script reaches this point — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('board-map');
   if(!el) return;
   var posts=window._boardMapPosts||[];
@@ -205,7 +207,7 @@
     var link=pel&&pel.querySelector('.board-map-goto');
     if(link) link.addEventListener('click',function(ev){ ev.preventDefault(); goToBoardPost(link.dataset.postId); });
   });
-})();
+});
 </script>
 {{end}}
 {{end}}

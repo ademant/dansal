@@ -22,6 +22,43 @@ import (
 // left it running before the deferred external Leaflet <script src> tags had
 // executed, silently breaking the map. Fixed by wrapping the script body in
 // a DOMContentLoaded listener instead, which is what this test guards.
+// checkInlineJS extracts every <script> block from a rendered page and
+// syntax-checks each with `node --check`. A pure template-parse test
+// wouldn't catch a JS syntax error since html/template treats script bodies
+// as opaque text. Shared by TestInlineJSSyntax and any other smoke-render
+// test that wants the same check on a page it already renders — no need to
+// duplicate a page's render fixtures into this file just to cover its JS.
+// Skips (does not fail) when node isn't on PATH.
+func checkInlineJS(t *testing.T, body string) {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not available")
+	}
+	scriptRe := regexp.MustCompile(`(?is)<script([^>]*)>(.*?)</script>`)
+	for i, m := range scriptRe.FindAllStringSubmatch(body, -1) {
+		attrs, src := m[1], m[2]
+		if src == "" {
+			continue
+		}
+		// Skip non-JS payloads (JSON-LD structured data, the events-geo
+		// JSON data island) — only classic/module script bodies are JS.
+		if regexp.MustCompile(`type\s*=\s*["'](application/ld\+json|application/json)["']`).MatchString(attrs) {
+			continue
+		}
+		f, err := os.CreateTemp("", "smoke*.js")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+		f.WriteString(src)
+		f.Close()
+		out, err := exec.Command("node", "--check", f.Name()).CombinedOutput()
+		if err != nil {
+			t.Errorf("script block %d: node --check failed: %v\n%s\n--- source ---\n%s", i, err, out, src)
+		}
+	}
+}
+
 func TestInlineJSSyntax(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not available")
@@ -40,31 +77,7 @@ func TestInlineJSSyntax(t *testing.T) {
 	cfg := &Config{Domain: "example.test"}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	scriptRe := regexp.MustCompile(`(?is)<script([^>]*)>(.*?)</script>`)
-	checkJS := func(t *testing.T, body string) {
-		for i, m := range scriptRe.FindAllStringSubmatch(body, -1) {
-			attrs, src := m[1], m[2]
-			if src == "" {
-				continue
-			}
-			// Skip non-JS payloads (JSON-LD structured data, the events-geo
-			// JSON data island) — only classic/module script bodies are JS.
-			if regexp.MustCompile(`type\s*=\s*["'](application/ld\+json|application/json)["']`).MatchString(attrs) {
-				continue
-			}
-			f, err := os.CreateTemp("", "smoke*.js")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.Remove(f.Name())
-			f.WriteString(src)
-			f.Close()
-			out, err := exec.Command("node", "--check", f.Name()).CombinedOutput()
-			if err != nil {
-				t.Errorf("script block %d: node --check failed: %v\n%s\n--- source ---\n%s", i, err, out, src)
-			}
-		}
-	}
+	checkJS := checkInlineJS
 
 	t.Run("index", func(t *testing.T) {
 		lat, lng := 48.1, 11.5

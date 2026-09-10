@@ -41,6 +41,12 @@ func TestSmokeRenderBoardPage(t *testing.T) {
 			if !strings.Contains(string(body), "</html>") {
 				t.Fatalf("truncated render (no closing </html>), body tail: %s", body[max(0, len(body)-300):])
 			}
+			// Syntax-only (node --check) — see admin_location_edit_test.go's
+			// "with-coords" case comment for why this can't catch #1283's
+			// actual runtime "L is not defined" bug on its own. The
+			// "geocoded-posts" case below already exercises the L.map(...)
+			// branch (hasGeoPosts), unlike any case here before #1283.
+			checkInlineJS(t, string(body))
 		})
 	}
 

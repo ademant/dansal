@@ -39,10 +39,28 @@ func TestSmokeRenderAdminLocationEdit(t *testing.T) {
 			if !strings.Contains(string(body), "</html>") {
 				t.Fatalf("truncated render (no closing </html>), body tail: %s", body[max(0, len(body)-300):])
 			}
+			// Syntax-only (node --check): catches a template interpolation
+			// producing invalid JS, not a runtime ReferenceError like
+			// #1283's "L is not defined" (leaflet.js loading with `defer`,
+			// L.map(...) called before it's ready) — that class of bug needs
+			// an actual browser executing the script, which is what the
+			// "with-coords" case below exists to make it possible to add
+			// later (a real e2e assertion that #map actually renders a
+			// Leaflet map, not just that the page contains valid JS).
+			checkInlineJS(t, string(body))
 		})
 	}
 
 	render("new-blank", AdminLocationEditData{})
+
+	// #1283: the reported-live regression — a location that already has
+	// saved coordinates hits the hasCoords branch in the inline script,
+	// which calls L.map(...). No case here exercised that branch before.
+	lat, lon := 50.9375, 6.9603
+	render("with-coords", AdminLocationEditData{
+		Location: Location{ID: 260, Location: "Bürgerhaus Stollwerck", ShortName: "Stollwerck",
+			Latitude: &lat, Longitude: &lon},
+	})
 
 	render("building", AdminLocationEditData{
 		Location: Location{ID: 4, Location: "Bürgerhaus Stollwerck", Address: "Dillenburger Str.", Town: "Köln",

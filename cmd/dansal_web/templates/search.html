@@ -628,7 +628,13 @@
       });
   }
 
-  initMap();
+  // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+  // plain top-level script reaches this point — same DOMContentLoaded-
+  // wrapped initMap() pattern as index.html's own map init (#1210).
+  // fetchResults() doesn't touch L, so it stays outside, unaffected.
+  document.addEventListener('DOMContentLoaded', function(){
+    initMap();
+  });
   fetchResults();
 })();
 </script>

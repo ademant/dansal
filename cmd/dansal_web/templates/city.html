@@ -52,20 +52,28 @@
 <script nonce="{{$.Nonce}}">
 (function(){
 {{if .GeoJSON}}
-  var points = {{.GeoJSON}};
-  if(points && points.length){
-    dansalLeafletCss();
-    var map = L.map('city-map');
-    attachTileLayer(map);
-    var bounds = [];
-    points.forEach(function(p){
-      var mk = L.marker([p.lat,p.lng]).addTo(map);
-      mk.bindPopup('<a href="/events/'+p.id+'">'+p.title+'</a><br><small>'+p.venue+'</small>');
-      bounds.push([p.lat,p.lng]);
-    });
-    if(bounds.length===1){map.setView(bounds[0],13);}
-    else if(bounds.length>1){map.fitBounds(bounds,{padding:[20,20]});}
-  }
+  // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+  // plain top-level script reaches this point — wait for DOMContentLoaded.
+  // Scoped to just the map init (not the whole IIFE) so the past-events
+  // button wiring below still attaches immediately either way — an
+  // uncaught exception here previously would have aborted it too, same
+  // class of bug as admin_location_edit.html's nav-menu regression.
+  document.addEventListener('DOMContentLoaded', function(){
+    var points = {{.GeoJSON}};
+    if(points && points.length){
+      dansalLeafletCss();
+      var map = L.map('city-map');
+      attachTileLayer(map);
+      var bounds = [];
+      points.forEach(function(p){
+        var mk = L.marker([p.lat,p.lng]).addTo(map);
+        mk.bindPopup('<a href="/events/'+p.id+'">'+p.title+'</a><br><small>'+p.venue+'</small>');
+        bounds.push([p.lat,p.lng]);
+      });
+      if(bounds.length===1){map.setView(bounds[0],13);}
+      else if(bounds.length>1){map.fitBounds(bounds,{padding:[20,20]});}
+    }
+  });
 {{end}}
 
   var pastBtn = document.getElementById('city-past-btn');

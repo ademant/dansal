@@ -180,7 +180,9 @@
 
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
-(function(){
+// #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+// plain top-level script reaches this point — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var el = document.getElementById('loc-map');
   if (!el) return;
   var lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
@@ -189,6 +191,6 @@
   var map = L.map('loc-map').setView([lat, lng], 15);
   attachTileLayer(map);
   L.marker([lat, lng]).addTo(map);
-})();
+});
 </script>
 {{end}}

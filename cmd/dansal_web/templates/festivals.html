@@ -89,25 +89,31 @@ table.fest-folded{opacity:.75}
   var year = window.__festYear;
 
   // ── Map ──────────────────────────────────────────────────────────────────
-  if (geo.length) {
-    dansalLeafletCss();
-    var map = L.map('map-container');
-    attachTileLayer(map);
-    var bounds = [];
-    geo.forEach(function(e){
-      var m = L.marker([e.lat, e.lng]).addTo(map);
-      var start = (e.s||'').slice(0,10);
-      var end = e.e || '';
-      var when = end && end !== start ? (start+' – '+end) : start;
-      m.bindPopup('<a href="/events/'+e.id+'" style="font-weight:bold;color:inherit;text-decoration:none">'+
-        e.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</a><div style="font-size:.82rem;margin-top:.2rem">'+when+'</div>');
-      bounds.push([e.lat, e.lng]);
-    });
-    try { map.fitBounds(bounds, {padding:[30,30], maxZoom:9}); } catch(_) { map.setView([50,10],5); }
-  } else {
-    var mc = document.getElementById('map-container');
-    if (mc) mc.hidden = true;
-  }
+  // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+  // plain top-level script reaches this point — wait for DOMContentLoaded.
+  // Scoped to just the map (not the whole IIFE) so the calendar render
+  // below still runs immediately either way.
+  document.addEventListener('DOMContentLoaded', function(){
+    if (geo.length) {
+      dansalLeafletCss();
+      var map = L.map('map-container');
+      attachTileLayer(map);
+      var bounds = [];
+      geo.forEach(function(e){
+        var m = L.marker([e.lat, e.lng]).addTo(map);
+        var start = (e.s||'').slice(0,10);
+        var end = e.e || '';
+        var when = end && end !== start ? (start+' – '+end) : start;
+        m.bindPopup('<a href="/events/'+e.id+'" style="font-weight:bold;color:inherit;text-decoration:none">'+
+          e.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</a><div style="font-size:.82rem;margin-top:.2rem">'+when+'</div>');
+        bounds.push([e.lat, e.lng]);
+      });
+      try { map.fitBounds(bounds, {padding:[30,30], maxZoom:9}); } catch(_) { map.setView([50,10],5); }
+    } else {
+      var mc = document.getElementById('map-container');
+      if (mc) mc.hidden = true;
+    }
+  });
 
   // ── Calendar ─────────────────────────────────────────────────────────────
   // #1161: rendering itself now lives in renderMiniCalendar (base.html),

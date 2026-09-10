@@ -650,7 +650,16 @@
 
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
-(function(){
+// #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+// plain top-level script reaches this point — wait for DOMContentLoaded.
+// This also matters beyond the map itself: this IIFE, the country_code
+// blur-validation IIFE, and the loc-nav click-handler wiring IIFE below
+// are all one <script> block, and an uncaught exception at the top level
+// of a script aborts the rest of that same block — a location that
+// already has saved coordinates hit the hasCoords branch below, which
+// called L.map(...) synchronously and threw before ever reaching the
+// nav-menu wiring, silently leaving it unattached.
+document.addEventListener('DOMContentLoaded', function(){
   var btn     = document.getElementById('geo-btn');
   var input   = document.getElementById('geo-search');
   var results = document.getElementById('geo-results');
@@ -881,7 +890,7 @@
   geoToggleBtn.addEventListener('click', function(){
     setGeoVisible(geoCollapsible.style.display === 'none');
   });
-})();
+});
 
 /* ── country_code blur validation ── */
 (function(){

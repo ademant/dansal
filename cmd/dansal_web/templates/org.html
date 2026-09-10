@@ -100,7 +100,9 @@
 <div id="org-map" style="height:280px;border-radius:6px;margin:1.25rem 0;border:1px solid #ddd"></div>
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
-(function(){
+// #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
+// plain top-level script reaches this point — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var geo = {{$geo}};
   if (!geo.length) return;
   dansalLeafletCss();
@@ -117,7 +119,7 @@
   });
   if (bounds.length === 1) map.setView(bounds[0], 12);
   else if (bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
-})();
+});
 </script>
 {{end}}
 

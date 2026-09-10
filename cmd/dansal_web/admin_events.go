@@ -155,6 +155,11 @@ type AdminEventFormData struct {
 	TplID              int           // #1086: non-zero when editing an existing template (vs. /admin/templates/new)
 	TplName            string        // #1086: prefills the template name field when editing
 	TplOrgID           *int          // #1086: prefills the template's owning-org field when editing
+
+	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
+	// failed image upload — the event itself saved fine either way.
+	ImageUploadError  string
+	ImageUploadWidget string
 }
 
 // eventFromPrefill synthesizes an Event from prefill data so the unified
@@ -2611,12 +2616,19 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 		}
 
+		// #1285: the event itself already saved successfully at this point,
+		// so an image upload failure rides along as a scoped flash rather
+		// than being silently discarded — but it does take priority over
+		// intent's usual redirect target (clone/create-series), since the
+		// user needs to see and retry it before doing anything else.
+		var flash FlashMsg
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			defer file.Close()
 			data, rerr := io.ReadAll(file)
 			if rerr == nil {
 				if uerr := client.UploadEventImage(r.Context(), event.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
 					log.Printf("upload image error: %v", uerr)
+					flash = imageUploadErrorFlash("image", uerr)
 				}
 			}
 		}
@@ -2630,6 +2642,11 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 
 		if event.IsPublished {
 			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{event.ID})
+		}
+
+		if flash.ImageUploadError != "" {
+			flashRedirect(w, r, fmt.Sprintf("/admin/events/%d/edit", event.ID), newErrorID(), flash)
+			return
 		}
 
 		switch intent {
@@ -2904,6 +2921,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			}
 		}
 		title := i18n.T(r, "admin_event_edit_title")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
 			IsNew:              false,
 			Event:              event,
@@ -2922,6 +2940,8 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			CurrentSeries:      currentSeries,
 			CanDelete:          event.Deletable,
 			TimetableError:     r.URL.Query().Get("tt_error"),
+			ImageUploadError:   flash.ImageUploadError,
+			ImageUploadWidget:  flash.ImageUploadWidget,
 		}))
 	}
 }
@@ -3086,12 +3106,17 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			return
 		}
 
+		// #1285: the event itself already saved successfully at this point,
+		// so an image upload failure rides along as a scoped flash rather
+		// than being silently discarded.
+		var imgFlash FlashMsg
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			defer file.Close()
 			data, rerr := io.ReadAll(file)
 			if rerr == nil {
 				if uerr := client.UploadEventImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
 					log.Printf("upload image error: %v", uerr)
+					imgFlash = imageUploadErrorFlash("image", uerr)
 				}
 			}
 		}
@@ -3139,6 +3164,14 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		editRedirect := fmt.Sprintf("/admin/events/%d/edit", id)
 		if ttError != "" {
 			editRedirect += "?tt_error=" + url.QueryEscape(ttError)
+		}
+
+		if imgFlash.ImageUploadError != "" {
+			// Takes priority over intent's usual redirect target
+			// (clone/create-series) — the user needs to see and retry the
+			// image before doing anything else.
+			flashRedirect(w, r, editRedirect, newErrorID(), imgFlash)
+			return
 		}
 
 		switch intent {

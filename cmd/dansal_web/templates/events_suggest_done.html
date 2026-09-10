@@ -6,6 +6,7 @@
     <p class="suggest-done-icon">{{if .NeedsReview}}🔔{{else}}✉{{end}}</p>
     <h2>{{$.Strings.T "suggest_done_title"}}</h2>
     <p>{{if .NeedsReview}}{{$.Strings.T "suggest_manage_done_review_body"}}{{else}}{{$.Strings.T "suggest_done_body"}}{{end}}</p>
+    {{if .ImageUploadError}}<p class="suggest-done-image-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     <a href="/">{{$.Strings.T "suggest_done_back"}}</a>
   </div>
 </div>
@@ -19,5 +20,6 @@
 .suggest-done-box h2{margin:0 0 .75rem}
 .suggest-done-box p{font-size:1rem;margin-bottom:1.25rem}
 .suggest-done-box a{color:inherit;font-weight:600}
+.suggest-done-image-error{font-size:.85rem;background:rgba(0,0,0,.06);border-radius:4px;padding:.5rem .75rem}
 </style>
 {{end}}

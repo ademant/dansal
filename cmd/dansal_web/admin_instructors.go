@@ -20,6 +20,11 @@ type AdminInstructorEditData struct {
 	IsNew      bool
 	ErrorKey   string
 	From       string
+
+	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
+	// failed avatar upload — the instructor itself saved fine either way.
+	ImageUploadError  string
+	ImageUploadWidget string
 }
 
 func instructorFromForm(r *http.Request) Instructor {
@@ -44,8 +49,11 @@ var instructorEntity = adminEntity[Instructor]{
 	listData: func(items []Instructor) any {
 		return AdminInstructorsData{Instructors: items}
 	},
-	editData: func(i Instructor, isNew bool, errKey, from string) any {
-		return AdminInstructorEditData{Instructor: i, IsNew: isNew, ErrorKey: errKey, From: from}
+	editData: func(i Instructor, isNew bool, errKey, from string, imgFlash editFlash) any {
+		return AdminInstructorEditData{
+			Instructor: i, IsNew: isNew, ErrorKey: errKey, From: from,
+			ImageUploadError: imgFlash.Key, ImageUploadWidget: imgFlash.Widget,
+		}
 	},
 	listFn: func(ctx context.Context, client *DansalClient) ([]Instructor, error) {
 		return client.GetInstructors(ctx)
@@ -63,11 +71,11 @@ var instructorEntity = adminEntity[Instructor]{
 		return client.DeleteInstructor(ctx, id, token)
 	},
 	fromForm: instructorFromForm,
-	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Instructor) {
-		uploadInstructorAvatar(cfg, client, r, created.ID)
+	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Instructor) FlashMsg {
+		return uploadInstructorAvatar(cfg, client, r, created.ID)
 	},
-	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) {
-		uploadInstructorAvatar(cfg, client, r, id)
+	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) FlashMsg {
+		return uploadInstructorAvatar(cfg, client, r, id)
 	},
 	loadErrMsg: "could not load instructors",
 	name:       "instructor",
@@ -79,16 +87,21 @@ func instructorEditPath(id int) string {
 
 // uploadInstructorAvatar pushes the avatar from the create/save form and pings
 // IndexNow for the instructor page. Runs after the entity is saved so the
-// backend has an ID to attach the file to.
-func uploadInstructorAvatar(cfg *Config, client *DansalClient, r *http.Request, id int) {
+// backend has an ID to attach the file to. Returns a FlashMsg (#1285) when
+// the upload fails, so Create/Save can surface a scoped notice instead of
+// silently discarding it.
+func uploadInstructorAvatar(cfg *Config, client *DansalClient, r *http.Request, id int) FlashMsg {
+	var flash FlashMsg
 	if file, header, ferr := r.FormFile("avatar"); ferr == nil {
 		data, _ := io.ReadAll(file)
 		file.Close()
 		if uerr := client.UploadInstructorAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
 			log.Printf("upload instructor avatar error: %v", uerr)
+			flash = imageUploadErrorFlash("avatar", uerr)
 		}
 	}
 	go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/instructors/%d", id)})
+	return flash
 }
 
 func adminInstructorAvatarDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {

@@ -37,6 +37,11 @@ type SuggestPageData struct {
 
 type SuggestDoneData struct {
 	NeedsReview bool
+
+	// ImageUploadError (#1285): set when the suggestion itself went through
+	// fine but the attached image could not be uploaded — the submission is
+	// not in error, this is just a heads-up.
+	ImageUploadError string
 }
 type SuggestVerifiedData struct {
 	Error string
@@ -383,19 +388,26 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 
 		// #1050: an authenticated submitter attaches the image right away via
-		// the standing manage token returned by the suggest API. Errors are
-		// logged but never block the redirect.
+		// the standing manage token returned by the suggest API. The
+		// suggestion itself already went through, so an upload failure rides
+		// along as a flash (#1285) rather than blocking the redirect.
+		var flash FlashMsg
 		if suggestCanUploadImage(r) && token != "" {
 			if file, header, ferr := r.FormFile("image"); ferr == nil {
 				defer file.Close()
 				if data, rerr := io.ReadAll(file); rerr == nil {
 					if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
 						log.Printf("suggest: upload image: %v", uerr)
+						flash = imageUploadErrorFlash("image", uerr)
 					}
 				}
 			}
 		}
 
+		if flash.ImageUploadError != "" {
+			flashRedirect(w, r, "/events/suggest/done", newErrorID(), flash)
+			return
+		}
 		http.Redirect(w, r, "/events/suggest/done", http.StatusSeeOther)
 	}
 }
@@ -403,8 +415,10 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := i18n.T(r, "suggest_done_title")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, SuggestDoneData{
-			NeedsReview: r.URL.Query().Get("review") == "1",
+			NeedsReview:      r.URL.Query().Get("review") == "1",
+			ImageUploadError: flash.ImageUploadError,
 		}))
 	}
 }
@@ -659,17 +673,23 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			}))
 			return
 		}
+		var flash FlashMsg
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			defer file.Close()
 			if data, rerr := io.ReadAll(file); rerr == nil {
 				if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
 					log.Printf("suggest manage: upload image: %v", uerr)
+					flash = imageUploadErrorFlash("image", uerr)
 				}
 			}
 		}
 		dest := "/events/suggest/done"
 		if needsReview {
 			dest += "?review=1"
+		}
+		if flash.ImageUploadError != "" {
+			flashRedirect(w, r, dest, newErrorID(), flash)
+			return
 		}
 		http.Redirect(w, r, dest, http.StatusSeeOther)
 	}

@@ -897,7 +897,12 @@ func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.
 		token := getSessionToken(r)
 		if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
 			log.Printf("upload location site plan %d: %v", id, uerr)
-			writeJSONError(w, r, http.StatusBadGateway, "upload failed")
+			// error_key (#1285) lets the JS show a specific, localized message
+			// ("too large"/"wrong format") instead of the generic fallback it
+			// already had; see imageUploadErrorKey for the classification.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": "upload failed", "error_key": imageUploadErrorKey(uerr)})
 			return
 		}
 		// Return the new URL so the JS can update the preview immediately.

@@ -264,6 +264,10 @@ type ContactManageData struct {
 	NotFound     bool
 	BoardSession *BoardSessionInfo // non-nil when a valid board session cookie is present
 	ShowRemember bool              // true when post is live+verified and no session exists
+
+	// ImageUploadError (#1285): set when an image attach failed — the post
+	// itself is unaffected either way.
+	ImageUploadError string
 }
 
 // GET /contact-posts/manage/{token}
@@ -298,13 +302,14 @@ func contactManageGetHandler(cfg *Config, db *sql.DB, tmpls *Templates, client *
 		showRemember := !post.Expired && post.EmailVerified && boardSession == nil
 
 		data := ContactManageData{
-			Token:        token,
-			Post:         post,
-			FormToken:    issueFormToken(ip),
-			Updated:      flash.ManageUpdated,
-			Deleted:      flash.ManageDeleted,
-			BoardSession: boardSession,
-			ShowRemember: showRemember,
+			Token:            token,
+			Post:             post,
+			FormToken:        issueFormToken(ip),
+			Updated:          flash.ManageUpdated,
+			Deleted:          flash.ManageDeleted,
+			BoardSession:     boardSession,
+			ShowRemember:     showRemember,
+			ImageUploadError: flash.ImageUploadError,
 		}
 		renderTemplate(w, tmpls.contactManage, tmplData(r, cfg, i18n, title, data))
 	}
@@ -393,8 +398,10 @@ func contactManageImageUploadHandler(client *DansalClient) http.HandlerFunc {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
-		if _, err := client.UploadContactPostImage(r.Context(), post.ID, token, imgData, fh.Filename); err != nil {
-			log.Printf("dansal-web: manage image upload failed post_id=%d err=%v", post.ID, err)
+		if _, uerr := client.UploadContactPostImage(r.Context(), post.ID, token, imgData, fh.Filename); uerr != nil {
+			log.Printf("dansal-web: manage image upload failed post_id=%d err=%v", post.ID, uerr)
+			manageRedirect(w, r, token, flashToken(uerr), imageUploadErrorFlash("image", uerr))
+			return
 		}
 		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 	}

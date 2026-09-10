@@ -163,6 +163,7 @@
 
   <section class="form-section optional-section" id="sec-image">
     <h2>{{$.Strings.T "musician_image"}}</h2>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "image")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/musicians/%d/image/delete" $.Data.Musician.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>
     <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;font-weight:normal;font-size:.9rem">
@@ -181,6 +182,7 @@
 
   <section class="form-section optional-section" id="sec-avatar">
     <h2>{{$.Strings.T "avatar_section"}}</h2>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "avatar")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Musician.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/musicians/%d/avatar/delete" $.Data.Musician.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div class="drop-zone">

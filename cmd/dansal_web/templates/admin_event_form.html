@@ -407,6 +407,7 @@
   <!-- Image -->
   <section class="form-section optional-section" id="sec-image">
     <h2>{{$.Strings.T "evt_image"}}</h2>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "image")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Event.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/events/%d/image/delete" $.Data.Event.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">

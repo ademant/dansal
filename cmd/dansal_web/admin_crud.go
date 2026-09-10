@@ -28,7 +28,7 @@ type adminEntity[E any] struct {
 
 	// Data builders → the concrete per-entity page structs.
 	listData func(items []E) any
-	editData func(e E, isNew bool, errKey, from string) any
+	editData func(e E, isNew bool, errKey, from string, imgFlash editFlash) any
 
 	// Client operations.
 	listFn   func(ctx context.Context, client *DansalClient) ([]E, error)
@@ -38,12 +38,24 @@ type adminEntity[E any] struct {
 	deleteFn func(ctx context.Context, client *DansalClient, id int, token string) error
 	fromForm func(r *http.Request) E
 
-	// Per-entity behaviour.
-	afterCreate  func(cfg *Config, client *DansalClient, r *http.Request, created E)
-	afterSave    func(cfg *Config, client *DansalClient, r *http.Request, id int)
+	// Per-entity behaviour. afterCreate/afterSave return an optional FlashMsg
+	// (#1285) — used when they upload a file that can fail independently of
+	// the entity save that already succeeded (e.g. an oversized avatar);
+	// Create/Save attach it to their redirect instead of the bare redirect,
+	// so the failure is a small scoped notice rather than a whole-page error.
+	afterCreate  func(cfg *Config, client *DansalClient, r *http.Request, created E) FlashMsg
+	afterSave    func(cfg *Config, client *DansalClient, r *http.Request, id int) FlashMsg
 	needDeadline bool   // extend write deadline (slow AVIF re-encode on photo upload)
 	loadErrMsg   string // e.g. "could not load musicians"
 	name         string // for delete logs
+}
+
+// editFlash carries an optional image-upload notice (#1285) into editData,
+// read back from the one-time ?msg= flash on EditPage — separate from errKey,
+// which marks the whole save as failed.
+type editFlash struct {
+	Key    string
+	Widget string
 }
 
 // List renders the entity's admin index page.
@@ -72,7 +84,7 @@ func (e *adminEntity[E]) NewPage(cfg *Config, tmpls *Templates, i18n *I18n) http
 		}
 		var zero E
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(zero, true, "", "")))
+		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(zero, true, "", "", editFlash{})))
 	}
 }
 
@@ -91,11 +103,18 @@ func (e *adminEntity[E]) Create(cfg *Config, tmpls *Templates, client *DansalCli
 		created, err := e.createFn(r.Context(), client, item, getSessionToken(r))
 		if err != nil {
 			title := i18n.T(r, "admin_new")
-			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, true, "admin_save_error", "")))
+			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, true, "admin_save_error", "", editFlash{})))
 			return
 		}
+		var flash FlashMsg
 		if e.afterCreate != nil {
-			e.afterCreate(cfg, client, r, created)
+			flash = e.afterCreate(cfg, client, r, created)
+		}
+		if flash.ImageUploadError != "" {
+			// #1285: the entity itself saved fine, so this rides along as a
+			// scoped notice on the normal redirect rather than a save error.
+			flashRedirect(w, r, e.listPath, newErrorID(), flash)
+			return
 		}
 		http.Redirect(w, r, e.listPath, http.StatusSeeOther)
 	}
@@ -119,7 +138,8 @@ func (e *adminEntity[E]) EditPage(cfg *Config, tmpls *Templates, client *DansalC
 			return
 		}
 		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "", safeReturnPath(r.URL.Query().Get("from")))))
+		flash := flashTake(r.URL.Query().Get("msg"))
+		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "", safeReturnPath(r.URL.Query().Get("from")), editFlash{Key: flash.ImageUploadError, Widget: flash.ImageUploadWidget})))
 	}
 }
 
@@ -146,11 +166,19 @@ func (e *adminEntity[E]) Save(cfg *Config, tmpls *Templates, client *DansalClien
 		item := e.fromForm(r)
 		if err := e.updateFn(r.Context(), client, id, item, getSessionToken(r)); err != nil {
 			title := i18n.T(r, "admin_edit")
-			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "admin_save_error", from)))
+			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "admin_save_error", from, editFlash{})))
 			return
 		}
+		var flash FlashMsg
 		if e.afterSave != nil {
-			e.afterSave(cfg, client, r, id)
+			flash = e.afterSave(cfg, client, r, id)
+		}
+		if flash.ImageUploadError != "" {
+			// #1285: land back on this entity's own edit page (not the usual
+			// listPath/from target) — that's where the failed widget and a
+			// retry actually are. The entity itself saved fine either way.
+			flashRedirect(w, r, e.editPath(id), newErrorID(), flash)
+			return
 		}
 		target := e.listPath
 		if from != "" {

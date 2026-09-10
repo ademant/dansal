@@ -298,6 +298,17 @@
       var rmBtn   = document.getElementById('siteplan-remove-btn');
       var hint    = document.getElementById('siteplan-upload-first-hint');
       var label   = document.getElementById('siteplan-file-label');
+      // #1285: server classifies the failure into error_key so the message
+      // is specific ("too large"/"wrong format") and localized, instead of
+      // the generic loc_siteplan_save_error fallback used when it can't be
+      // classified (e.g. a network-level failure with no error_key at all).
+      var uploadErrMsgs = {
+        image_too_large: '{{$.Strings.T "image_too_large"}}',
+        image_invalid_format: '{{$.Strings.T "image_invalid_format"}}'
+      };
+      function siteplanErrorText(data) {
+        return (data && data.error_key && uploadErrMsgs[data.error_key]) || '{{$.Strings.T "loc_siteplan_save_error"}}';
+      }
 
       input.addEventListener('change', function(){
         if (!input.files || !input.files[0]) return;
@@ -312,7 +323,7 @@
             spinner.hidden = true;
             label.removeAttribute('aria-disabled');
             input.value = '';
-            if (!data.ok) { errEl.textContent = data.error || '{{$.Strings.T "loc_siteplan_save_error"}}'; errEl.hidden = false; return; }
+            if (!data.ok) { errEl.textContent = siteplanErrorText(data); errEl.hidden = false; return; }
             if (img && data.url) { img.src = data.url + '?t=' + Date.now(); }
             if (hint) hint.hidden = true;
             preview.hidden = false;

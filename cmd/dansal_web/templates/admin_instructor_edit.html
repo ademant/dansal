@@ -56,7 +56,8 @@
   </div>
 
   <div class="sec-head"><h3>{{$.Strings.T "avatar_section"}}</h3><button type="button" class="btn-sec-edit" data-fn="toggleSec" data-args='["@this"]'>✎</button></div>
-  <div class="sec-body" hidden>
+  <div class="sec-body"{{if not (eq .ImageUploadWidget "avatar")}} hidden{{end}}>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "avatar")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Instructor.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/instructors/%d/avatar/delete" $.Data.Instructor.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png">

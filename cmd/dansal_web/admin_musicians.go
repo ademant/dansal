@@ -23,6 +23,11 @@ type AdminMusicianEditData struct {
 	IsNew    bool
 	ErrorKey string
 	From     string
+
+	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
+	// failed image/avatar upload — the musician itself saved fine either way.
+	ImageUploadError  string
+	ImageUploadWidget string
 }
 
 func musicianFromForm(r *http.Request) Musician {
@@ -78,8 +83,11 @@ var musicianEntity = adminEntity[Musician]{
 	listData: func(items []Musician) any {
 		return AdminMusiciansData{Musicians: items}
 	},
-	editData: func(m Musician, isNew bool, errKey, from string) any {
-		return AdminMusicianEditData{Musician: m, IsNew: isNew, ErrorKey: errKey, From: from}
+	editData: func(m Musician, isNew bool, errKey, from string, imgFlash editFlash) any {
+		return AdminMusicianEditData{
+			Musician: m, IsNew: isNew, ErrorKey: errKey, From: from,
+			ImageUploadError: imgFlash.Key, ImageUploadWidget: imgFlash.Widget,
+		}
 	},
 	listFn: func(ctx context.Context, client *DansalClient) ([]Musician, error) {
 		return client.GetMusicians(ctx)
@@ -97,11 +105,11 @@ var musicianEntity = adminEntity[Musician]{
 		return client.DeleteMusician(ctx, id, token)
 	},
 	fromForm: musicianFromForm,
-	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Musician) {
-		uploadMusicianFiles(cfg, client, r, created.ID)
+	afterCreate: func(cfg *Config, client *DansalClient, r *http.Request, created Musician) FlashMsg {
+		return uploadMusicianFiles(cfg, client, r, created.ID)
 	},
-	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) {
-		uploadMusicianFiles(cfg, client, r, id)
+	afterSave: func(cfg *Config, client *DansalClient, r *http.Request, id int) FlashMsg {
+		return uploadMusicianFiles(cfg, client, r, id)
 	},
 	needDeadline: true,
 	loadErrMsg:   "could not load musicians",
@@ -114,14 +122,19 @@ func musicianEditPath(id int) string {
 
 // uploadMusicianFiles pushes the image/avatar files from the create/save form
 // and pings IndexNow for the musician page. Runs after the entity is saved so
-// the backend has an ID to attach the files to.
-func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id int) {
+// the backend has an ID to attach the files to. Returns a FlashMsg (#1285)
+// when either upload fails, so Create/Save can surface a scoped notice
+// instead of silently discarding it; image is checked first, so if both
+// somehow fail in the same request the image message wins.
+func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id int) FlashMsg {
+	var flash FlashMsg
 	token := getSessionToken(r)
 	if file, header, ferr := r.FormFile("image"); ferr == nil {
 		data, _ := io.ReadAll(file)
 		file.Close()
 		if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, token); uerr != nil {
 			log.Printf("upload musician image error: %v", uerr)
+			flash = imageUploadErrorFlash("image", uerr)
 		}
 	}
 	if file, header, ferr := r.FormFile("avatar"); ferr == nil {
@@ -129,9 +142,13 @@ func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id 
 		file.Close()
 		if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
 			log.Printf("upload musician avatar error: %v", uerr)
+			if flash.ImageUploadError == "" {
+				flash = imageUploadErrorFlash("avatar", uerr)
+			}
 		}
 	}
 	go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", id)})
+	return flash
 }
 
 func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {

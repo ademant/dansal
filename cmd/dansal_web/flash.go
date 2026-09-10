@@ -32,7 +32,44 @@ type FlashMsg struct {
 	BookingErrorID    string
 	ManageUpdated     bool
 	ManageDeleted     bool
+	// ImageUploadError/ImageUploadWidget (#1285) carry a scoped notice for a
+	// single image/avatar upload control that failed *after* its owning
+	// entity was already saved successfully — the save itself is not in
+	// error, so this rides along on the normal success redirect rather than
+	// being folded into a whole-page save-error state. ImageUploadError is
+	// an i18n key ("image_too_large", "image_invalid_format", or the generic
+	// "admin_save_error"); ImageUploadWidget names which control failed
+	// ("image", "avatar", "site_plan", …) for pages with more than one.
+	ImageUploadError  string
+	ImageUploadWidget string
 	expires           time.Time
+}
+
+// imageUploadErrorKey classifies err (from a DansalClient image/avatar
+// upload) into an i18n key, using the API's HTTP status when available
+// (#1285): 413 (too large) and 415 (unsupported format) get their own
+// specific message; anything else — including a network-level error with no
+// apiHTTPError at all — falls back to the generic admin_save_error key.
+// Shared by imageUploadErrorFlash (full-page redirect flows) and the
+// location site-plan AJAX handler (JSON response flow).
+func imageUploadErrorKey(err error) string {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) {
+		switch ae.StatusCode {
+		case http.StatusRequestEntityTooLarge:
+			return "image_too_large"
+		case http.StatusUnsupportedMediaType:
+			return "image_invalid_format"
+		}
+	}
+	return "admin_save_error"
+}
+
+// imageUploadErrorFlash builds a FlashMsg reporting that the widget-named
+// upload control (e.g. "image", "avatar") failed with err — see
+// imageUploadErrorKey for the classification.
+func imageUploadErrorFlash(widget string, err error) FlashMsg {
+	return FlashMsg{ImageUploadError: imageUploadErrorKey(err), ImageUploadWidget: widget}
 }
 
 const flashTTL = 5 * time.Minute

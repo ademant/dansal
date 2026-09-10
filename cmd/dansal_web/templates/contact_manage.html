@@ -70,6 +70,7 @@
   {{if or (eq .Post.Type "lost_item") (eq .Post.Type "found_item")}}
   <div class="manage-images">
     <h3 class="manage-images-title">{{$.Strings.T "board_images_title"}}</h3>
+    {{if .ImageUploadError}}<p class="manage-inline-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{if .Post.Images}}
     <div class="manage-img-grid">
       {{range .Post.Images}}
@@ -131,6 +132,7 @@
 .manage-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
 .manage-info{background:#fff3cd;color:#856404;border:1px solid #ffc107}
 .manage-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.manage-inline-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.5rem .75rem;font-size:.9rem;margin:0 0 .5rem}
 .manage-form .form-row{margin-bottom:.75rem}
 .manage-form label{display:block;margin-bottom:.25rem;font-size:.9rem;color:var(--fg-2)}
 .manage-form input,.manage-form textarea,.manage-form select{width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.95rem;background:var(--bg-card);color:var(--fg)}

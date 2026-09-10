@@ -75,6 +75,11 @@ type AdminOrgEditData struct {
 	HasActorWithFollowers bool // True if organization has an actor that has followers
 	IsAdmin               bool
 	From                  string
+
+	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
+	// failed image/avatar upload — the org itself saved fine either way.
+	ImageUploadError  string
+	ImageUploadWidget string
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -226,22 +231,17 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}))
 			return
 		}
+		// #1285: the org itself is already created at this point, so an image/
+		// avatar upload failure rides along as a scoped flash on the normal
+		// redirect rather than re-rendering the "new org" form as if the
+		// whole save had failed (it hadn't — only the image didn't take).
+		var flash FlashMsg
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org image error: %v", uerr)
-				errKey := "admin_save_error"
-				if strings.Contains(uerr.Error(), "too large") {
-					errKey = "image_too_large"
-				}
-				title := i18n.T(r, "admin_new")
-				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-					Org:      created,
-					ErrorKey: errKey,
-					IsAdmin:  user.Role == "admin",
-				}))
-				return
+				flash = imageUploadErrorFlash("image", uerr)
 			}
 		}
 		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
@@ -249,10 +249,17 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			file.Close()
 			if uerr := client.UploadOrgAvatar(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org avatar error: %v", uerr)
+				if flash.ImageUploadError == "" {
+					flash = imageUploadErrorFlash("avatar", uerr)
+				}
 			}
 		}
 		client.invalidateOrgs()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{"/org/" + effectiveSlug(created)})
+		if flash.ImageUploadError != "" {
+			flashRedirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", created.ID), newErrorID(), flash)
+			return
+		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
 }
@@ -354,6 +361,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			return ni < nj
 		})
 		title := i18n.T(r, "admin_edit")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 			Org:                   org,
 			Follows:               follows,
@@ -364,6 +372,8 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			HasActorWithFollowers: hasActorWithFollowers,
 			IsAdmin:               user.Role == "admin",
 			From:                  safeReturnPath(r.URL.Query().Get("from")),
+			ImageUploadError:      flash.ImageUploadError,
+			ImageUploadWidget:     flash.ImageUploadWidget,
 		}))
 	}
 }
@@ -603,23 +613,17 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			}))
 			return
 		}
+		// #1285: the org itself already saved successfully at this point, so
+		// an image/avatar upload failure rides along as a scoped flash on the
+		// normal redirect rather than re-rendering the edit form as if the
+		// whole save had failed.
+		var flash FlashMsg
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), id, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org image error: %v", uerr)
-				errKey := "admin_save_error"
-				if strings.Contains(uerr.Error(), "too large") {
-					errKey = "image_too_large"
-				}
-				title := i18n.T(r, "admin_edit")
-				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-					Org:      org,
-					ErrorKey: errKey,
-					IsAdmin:  user.Role == "admin",
-					From:     from,
-				}))
-				return
+				flash = imageUploadErrorFlash("image", uerr)
 			}
 		}
 		if file, header, ferr := r.FormFile("avatar"); ferr == nil {
@@ -627,6 +631,9 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			file.Close()
 			if uerr := client.UploadOrgAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org avatar error: %v", uerr)
+				if flash.ImageUploadError == "" {
+					flash = imageUploadErrorFlash("avatar", uerr)
+				}
 			}
 		}
 
@@ -641,6 +648,11 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 					log.Printf("actor rename for org %d: %v", id, err)
 				}
 			}
+		}
+
+		if flash.ImageUploadError != "" {
+			flashRedirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), newErrorID(), flash)
+			return
 		}
 
 		target := "/admin/organizations"

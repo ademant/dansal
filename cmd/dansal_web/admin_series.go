@@ -69,6 +69,12 @@ type AdminSeriesEditData struct {
 	Dances      []Dance
 	DanceIDSet  map[int]bool
 	Applied     bool // set when redirected back after a successful apply-to-events
+
+	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
+	// failed image upload, read from the one-time ?msg= flash rather than
+	// folded into ErrorKey — the series itself saved fine either way.
+	ImageUploadError  string
+	ImageUploadWidget string
 }
 
 type PrefillDate struct {
@@ -350,18 +356,21 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			danceIDSet[id] = true
 		}
 		title := i18n.T(r, "series_edit")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.adminSeriesEdit, tmplData(r, cfg, i18n, title, AdminSeriesEditData{
-			Series:      series,
-			Locations:   locs,
-			Orgs:        orgs,
-			Musicians:   musicians,
-			Instructors: instructors,
-			IsAdmin:     user.Role == "admin",
-			BaseURL:     cfg.publicBaseURL(),
-			TplDefaults: td,
-			Dances:      dances,
-			DanceIDSet:  danceIDSet,
-			Applied:     r.URL.Query().Get("applied") == "1",
+			Series:            series,
+			Locations:         locs,
+			Orgs:              orgs,
+			Musicians:         musicians,
+			Instructors:       instructors,
+			IsAdmin:           user.Role == "admin",
+			BaseURL:           cfg.publicBaseURL(),
+			TplDefaults:       td,
+			Dances:            dances,
+			DanceIDSet:        danceIDSet,
+			Applied:           r.URL.Query().Get("applied") == "1",
+			ImageUploadError:  flash.ImageUploadError,
+			ImageUploadWidget: flash.ImageUploadWidget,
 		}))
 	}
 }
@@ -628,14 +637,17 @@ func adminSeriesImageUploadHandler(cfg *Config, client *DansalClient) http.Handl
 			return
 		}
 		token := getSessionToken(r)
+		path := fmt.Sprintf("/admin/series/%d", id)
 		if file, header, ferr := r.FormFile("image"); ferr == nil {
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadSeriesImage(r.Context(), id, data, header.Filename, token); uerr != nil {
 				log.Printf("upload series image %d: %v", id, uerr)
+				flashRedirect(w, r, path, flashToken(uerr), imageUploadErrorFlash("image", uerr))
+				return
 			}
 		}
-		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, path, http.StatusSeeOther)
 	}
 }
 

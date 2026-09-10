@@ -15,6 +15,7 @@
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "image")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="width:100%;max-height:320px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/organizations/%d/image/delete" $.Data.Org.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>
     <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;font-weight:normal;font-size:.9rem">
@@ -33,6 +34,7 @@
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "avatar_section"}}</legend>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "avatar")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
     {{with .Org.AvatarURL}}<img src="{{.}}" alt="" id="existing-avatar" style="width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:.5rem;display:block">
     <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" data-confirm="{{$.Strings.T "admin_image_confirm_remove"}}" data-fn="removeImage" data-args="{{dargs (printf "/admin/organizations/%d/avatar/delete" $.Data.Org.ID)}}">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div class="drop-zone">

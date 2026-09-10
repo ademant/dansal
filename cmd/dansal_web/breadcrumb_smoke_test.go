@@ -210,6 +210,119 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		}
 	})
 
+	// eventNodeOf renders ev and returns the Event node from its @graph, for
+	// tests that need to inspect offers/isAccessibleForFree directly.
+	eventNodeOf := func(t *testing.T, body string) map[string]any {
+		t.Helper()
+		matches := reJSONLDBlocks.FindAllStringSubmatch(body, -1)
+		for _, m := range matches {
+			var v map[string]any
+			json.Unmarshal([]byte(m[1]), &v)
+			graph, ok := v["@graph"].([]any)
+			if !ok {
+				continue
+			}
+			for _, node := range graph {
+				n := node.(map[string]any)
+				if n["@type"] == "Event" {
+					return n
+				}
+			}
+		}
+		t.Fatal("no Event node found in @graph")
+		return nil
+	}
+
+	t.Run("event page offers (#1293)", func(t *testing.T) {
+		t.Run("no Pricing, BookingURL set: Offer with url, no price", func(t *testing.T) {
+			body := renderEvent(Event{
+				ID: 5, Title: "Fest Noz Cinq", StartTime: "2026-08-09T20:00:00Z", EndTime: "2026-08-10T01:00:00Z",
+				BookingURL: "https://tickets.example.com/event",
+			}, nil, "")
+			checkBlocks(t, body, true)
+			ev := eventNodeOf(t, body)
+			offers, ok := ev["offers"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected an offers object, got %v", ev["offers"])
+			}
+			if offers["url"] != "https://tickets.example.com/event" {
+				t.Errorf("offers.url = %v, want the booking URL", offers["url"])
+			}
+			if offers["availability"] != "https://schema.org/InStock" {
+				t.Errorf("offers.availability = %v, want InStock", offers["availability"])
+			}
+			if _, hasPrice := offers["price"]; hasPrice {
+				t.Errorf("offers.price should be absent (no known price), got %v", offers["price"])
+			}
+			if _, ok := ev["isAccessibleForFree"]; ok {
+				t.Errorf("isAccessibleForFree should be absent, got %v", ev["isAccessibleForFree"])
+			}
+		})
+
+		t.Run("no Pricing, no BookingURL: offers omitted entirely", func(t *testing.T) {
+			body := renderEvent(Event{
+				ID: 6, Title: "Fest Noz Six", StartTime: "2026-08-11T20:00:00Z", EndTime: "2026-08-12T01:00:00Z",
+			}, nil, "")
+			checkBlocks(t, body, true)
+			ev := eventNodeOf(t, body)
+			if _, ok := ev["offers"]; ok {
+				t.Errorf("offers should be absent when there's no Pricing and no BookingURL, got %v", ev["offers"])
+			}
+			if _, ok := ev["isAccessibleForFree"]; ok {
+				t.Errorf("isAccessibleForFree should be absent, got %v", ev["isAccessibleForFree"])
+			}
+		})
+
+		t.Run("donation with no amount: neither offers nor isAccessibleForFree", func(t *testing.T) {
+			body := renderEvent(Event{
+				ID: 7, Title: "Fest Noz Sept", StartTime: "2026-08-13T20:00:00Z", EndTime: "2026-08-14T01:00:00Z",
+				Pricing: &Pricing{Type: "donation"},
+			}, nil, "")
+			checkBlocks(t, body, true)
+			ev := eventNodeOf(t, body)
+			if _, ok := ev["offers"]; ok {
+				t.Errorf("offers should be absent for an amountless donation, got %v", ev["offers"])
+			}
+			if _, ok := ev["isAccessibleForFree"]; ok {
+				t.Errorf("isAccessibleForFree should be absent for an amountless donation (ambiguous, not asserted either way), got %v", ev["isAccessibleForFree"])
+			}
+		})
+
+		t.Run("donation with a suggested amount: Offer with that price, still no isAccessibleForFree", func(t *testing.T) {
+			body := renderEvent(Event{
+				ID: 8, Title: "Fest Noz Huit", StartTime: "2026-08-15T20:00:00Z", EndTime: "2026-08-16T01:00:00Z",
+				Pricing: &Pricing{Type: "donation", Amount: 5},
+			}, nil, "")
+			checkBlocks(t, body, true)
+			ev := eventNodeOf(t, body)
+			offers, ok := ev["offers"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected an offers object, got %v", ev["offers"])
+			}
+			if offers["price"] != 5.0 {
+				t.Errorf("offers.price = %v, want 5", offers["price"])
+			}
+			if _, ok := ev["isAccessibleForFree"]; ok {
+				t.Errorf("isAccessibleForFree should still be absent even with a suggested amount, got %v", ev["isAccessibleForFree"])
+			}
+		})
+
+		t.Run("free type unaffected: isAccessibleForFree true and an Offer", func(t *testing.T) {
+			body := renderEvent(Event{
+				ID: 9, Title: "Fest Noz Neuf", StartTime: "2026-08-17T20:00:00Z", EndTime: "2026-08-18T01:00:00Z",
+				Pricing: &Pricing{Type: "free"},
+			}, nil, "")
+			checkBlocks(t, body, true)
+			ev := eventNodeOf(t, body)
+			if ev["isAccessibleForFree"] != true {
+				t.Errorf("isAccessibleForFree = %v, want true", ev["isAccessibleForFree"])
+			}
+			if _, ok := ev["offers"].(map[string]any); !ok {
+				t.Errorf("expected an offers object for a free event, got %v", ev["offers"])
+			}
+		})
+	})
+
 	t.Run("event page own image", func(t *testing.T) {
 		body := renderEvent(Event{
 			ID:        2,

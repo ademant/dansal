@@ -52,7 +52,13 @@
   {{- $curr := .Currency}}{{if not $curr}}{{$curr = "EUR"}}{{end}}
   {{- $validFrom := isoDate $.Data.Event.CreatedAt}}
   {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}
-  {{- else if eq .Type "donation"}}{{if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{else}}, "isAccessibleForFree": false{{end}}
+  {{- else if eq .Type "donation"}}
+    {{- /* #1293: never assert isAccessibleForFree either way for a
+         donation event — no one checks payment at the door (so "false" is
+         wrong), but badging it "free" risks an in-person donation ask
+         reading as a bait-and-switch (so "true" is equally wrong). Only
+         emit an Offer when there's an actual suggested amount to report. */}}
+    {{- if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{end}}
   {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}
   {{- else if eq .Type "multiple"}}
     {{- $low := 0.0}}{{$high := 0.0}}{{$first := true}}
@@ -65,6 +71,11 @@
     {{- end}}
     {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{end}}
   {{- end}}
+  {{- else}}
+  {{- /* #1293: no structured Pricing at all, but a real ticket/registration
+       link exists — surface it without fabricating a price or availability
+       the site doesn't actually know. */}}
+  {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL | js}}", "availability": "https://schema.org/InStock"}{{end}}
   {{- end}}
   }
   {{- if and .Location .ID}}, {

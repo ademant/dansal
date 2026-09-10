@@ -221,6 +221,9 @@ var tmplFuncsTags = template.FuncMap{
 	// JSON-LD from a controlled tag mapping (#1063): events with a
 	// musician-oriented tag address musicians as well as dancers.
 	"eventAudienceType": eventAudienceType,
+	// eventKeywords derives the schema.org "keywords" list for an event's
+	// JSON-LD (#1295) from data already on the page.
+	"eventKeywords": eventKeywords,
 }
 
 // eventAudienceType maps an event's tags to a schema.org audienceType. The
@@ -234,4 +237,43 @@ func eventAudienceType(tags []string) string {
 		}
 	}
 	return "dancers"
+}
+
+// eventKeywords derives the JSON-LD "keywords" list for ev's event page
+// (#1295): dance style names, translated tag labels (via tagLabel — a
+// custom instance's own tags.yaml vocabulary translates the same way,
+// falling back to the DB name/slug), the event's town/region/country, and
+// musician names — everything already known about the event, rather than a
+// fixed "balfolk"/"bal-folk" pair repeated on every event regardless of this
+// instance's actual dance genre (this codebase ships a white-label
+// tags.yaml mechanism for non-balfolk instances; hardcoding a balfolk-
+// specific term here would undermine that). Deduplicates and drops blanks;
+// returns nil (not an empty slice) when nothing is known, so the caller can
+// omit "keywords" entirely rather than emit an empty array.
+func eventKeywords(strs I18nStrings, tagMap map[string]Tag, ev Event) []string {
+	var kw []string
+	seen := make(map[string]bool)
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			return
+		}
+		seen[s] = true
+		kw = append(kw, s)
+	}
+	for _, d := range ev.DanceNames {
+		add(d)
+	}
+	for _, slug := range ev.Tags {
+		add(tagLabel(strs, slug, tagMap[slug].Name))
+	}
+	if ev.Location != nil {
+		add(ev.Location.Town)
+		add(ev.Location.DisplayRegion())
+		add(ev.Location.DisplayCountry())
+	}
+	for _, m := range ev.Musicians {
+		add(m.Bandname)
+	}
+	return kw
 }

@@ -43,7 +43,8 @@
     {{- range .Instructors}}{{if not $pfirst}}, {{end}}{{$iurl := printf "https://%s/instructors/%d" $.Domain .ID}}{"@type": "Person", "@id": "{{$iurl | js}}", "name": "{{.Name | js}}", "url": "{{$iurl | js}}"{{with .Website}}, "sameAs": ["{{. | js}}"]{{end}}}{{$pfirst = false}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
-  {{- if or .DanceNames .Tags}}, "keywords": [{{- $first := true}}{{- range .DanceNames}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}{{- range .Tags}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}]{{end}}
+  {{- $keywords := eventKeywords $.Strings $.Data.TagMap .}}
+  {{- if $keywords}}, "keywords": [{{range $i, $k := $keywords}}{{if $i}}, {{end}}"{{$k | js}}"{{end}}]{{end}}
   , "audience": {"@type": "Audience", "audienceType": "{{eventAudienceType .Tags | js}}"}
   {{- $offersURL := $.CanonicalURL}}
   {{- if .URL}}{{$offersURL = .URL}}{{end}}

@@ -106,9 +106,13 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 				t.Errorf("event @graph missing %s", want)
 			}
 		}
-		// #1063: keywords is a JSON array, audienceType from a deterministic tag check.
-		if !strings.Contains(body, `"keywords": ["An Dro", "Hanter Dro", "bal-folk", "musician-workshop"]`) {
-			t.Errorf("event keywords should be a JSON array (#1063)")
+		// #1063: keywords is a JSON array. #1295: tags are translated via
+		// tagLabel ("bal-folk" -> "Ball" in German, the test's default
+		// language, since no TagMap is passed so there's no DB name to fall
+		// back to for the untranslated "musician-workshop" slug), and the
+		// location's town ("Rennes") is appended.
+		if !strings.Contains(body, `"keywords": ["An Dro", "Hanter Dro", "Ball", "musician-workshop", "Rennes"]`) {
+			t.Errorf("event keywords should be a JSON array with translated tags and location (#1063, #1295)")
 		}
 		if !strings.Contains(body, `"audienceType": "dancers, musicians"`) {
 			t.Errorf("musician-workshop tag should yield audienceType \"dancers, musicians\" (#1063)")

@@ -35,6 +35,58 @@ func TestTagLabel(t *testing.T) {
 	}
 }
 
+// TestEventKeywords covers #1295: dance names, translated tags, location
+// town/region/country, and musician names combine into one deduplicated
+// list, with blanks dropped and nil (not []) returned when nothing at all
+// is known.
+func TestEventKeywords(t *testing.T) {
+	strs := I18nStrings{"tag_ball": "Ball"}
+	tagMap := map[string]Tag{"tango": {Slug: "tango", Name: "Tango Argentino"}}
+
+	t.Run("combines and translates every source", func(t *testing.T) {
+		ev := Event{
+			DanceNames: []string{"An Dro"},
+			Tags:       []string{"bal-folk", "tango"},
+			Location:   &Location{Town: "Rennes", Region: "Bretagne", CountryCode: "FR", Country: "France"},
+			Musicians:  []Musician{{Bandname: "Duo Vague"}},
+		}
+		got := eventKeywords(strs, tagMap, ev)
+		want := []string{"An Dro", "Ball", "Tango Argentino", "Rennes", "Bretagne", "France"}
+		// Musician name is appended last.
+		want = append(want, "Duo Vague")
+		if len(got) != len(want) {
+			t.Fatalf("eventKeywords() = %v, want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("eventKeywords()[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+			}
+		}
+	})
+
+	t.Run("nothing known returns nil, not empty slice", func(t *testing.T) {
+		if got := eventKeywords(strs, tagMap, Event{}); got != nil {
+			t.Errorf("eventKeywords(empty event) = %v, want nil", got)
+		}
+	})
+
+	t.Run("blank/duplicate location fields are dropped", func(t *testing.T) {
+		// A location with an empty town/region/country (and no alias) must
+		// not inject blank entries; a dance name identical to a tag label
+		// must not be duplicated.
+		ev := Event{
+			DanceNames: []string{"Ball"},
+			Tags:       []string{"bal-folk"},
+			Location:   &Location{},
+		}
+		got := eventKeywords(strs, tagMap, ev)
+		want := []string{"Ball"}
+		if len(got) != 1 || got[0] != want[0] {
+			t.Errorf("eventKeywords() = %v, want %v (dedup + blank location fields dropped)", got, want)
+		}
+	})
+}
+
 // TestHomeGroups verifies the default balfolk vocabulary's grouping
 // (bal-folk+fest-noz -> one "ball" button, the 4 workshop variants -> one
 // "workshop" button, festival/session/concert each solo), that a tag

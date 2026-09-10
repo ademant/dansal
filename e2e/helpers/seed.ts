@@ -55,7 +55,10 @@ function findExistingUserId(email: string): number {
   return -1;
 }
 
-function createUser(email: string, password: string, role: string): number {
+// Exported so specs needing a one-off dedicated user (e.g. TOTP/magic-link
+// coverage, #1262) can create one directly rather than going through
+// createUsers()'s hardcoded ADMIN/EDITOR/VIEWER trio.
+export function createUser(email: string, password: string, role: string): number {
   try {
     const out = cli(
       `create-user --email ${email} --password "${password}" --role ${role}`

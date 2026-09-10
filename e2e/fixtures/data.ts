@@ -19,6 +19,31 @@ export const VIEWER = {
   role: "user",
 };
 
+// A dedicated, stable user for TOTP e2e coverage (#1262) — never the shared
+// ADMIN account. TOTP is enabled and disabled again within the same test run
+// (mandatory cleanup), so reusing one stable identity across runs is safe,
+// same as ADMIN/EDITOR/VIEWER above; unlike them, it must never gain a
+// second factor that survives past its own test, since that would break
+// global-setup.ts's password-only login for every *other* spec on the next
+// run if this account were ever reused for anything else.
+export const TOTP_USER = {
+  email: "e2e-totp@dansal.test",
+  password: "E2e-Totp-2026!",
+  name: "E2E Totp",
+  role: "user",
+};
+
+// A dedicated, stable user for magic-link e2e coverage (#1262). Its email
+// is verified once (self-service, via the same POST /api/v1/users/{id}/verify
+// + mbox flow real users use from /settings) and stays verified across runs
+// — magic-link requests are non-destructive, so no cleanup is needed.
+export const MAGIC_USER = {
+  email: "e2e-magic@dansal.test",
+  password: "E2e-Magic-2026!",
+  name: "E2E Magic",
+  role: "user",
+};
+
 export const ORG = {
   name: "Bal Test Association",
   website: "https://bta.example.com",

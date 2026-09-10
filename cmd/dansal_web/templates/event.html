@@ -39,8 +39,8 @@
   {{- end}}
   {{- if or .Musicians .Instructors}}, "performer": [
     {{- $pfirst := true}}
-    {{- range .Musicians}}{{if not $pfirst}}, {{end}}{"@type": "MusicGroup", "name": "{{.Bandname | js}}", "url": "https://{{$.Domain}}/musicians/{{.ID}}"}{{$pfirst = false}}{{end}}
-    {{- range .Instructors}}{{if not $pfirst}}, {{end}}{"@type": "Person", "name": "{{.Name | js}}"{{with .Website}}, "url": "{{. | js}}"{{end}}}{{$pfirst = false}}{{end}}
+    {{- range .Musicians}}{{if not $pfirst}}, {{end}}{{$murl := printf "https://%s/musicians/%d" $.Domain .ID}}{"@type": "MusicGroup", "@id": "{{$murl | js}}", "name": "{{.Bandname | js}}", "url": "{{$murl | js}}"{{with .Internetsite}}, "sameAs": ["{{. | js}}"]{{end}}}{{$pfirst = false}}{{end}}
+    {{- range .Instructors}}{{if not $pfirst}}, {{end}}{{$iurl := printf "https://%s/instructors/%d" $.Domain .ID}}{"@type": "Person", "@id": "{{$iurl | js}}", "name": "{{.Name | js}}", "url": "{{$iurl | js}}"{{with .Website}}, "sameAs": ["{{. | js}}"]{{end}}}{{$pfirst = false}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
   {{- if or .DanceNames .Tags}}, "keywords": [{{- $first := true}}{{- range .DanceNames}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}{{- range .Tags}}{{if not $first}}, {{end}}"{{. | js}}"{{$first = false}}{{- end}}]{{end}}

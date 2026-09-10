@@ -122,6 +122,94 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		}
 	})
 
+	t.Run("event page performer @id/sameAs", func(t *testing.T) {
+		// #1292: performer entries need a stable @id (their own dansal page)
+		// distinct from an optional sameAs (their external website) — a
+		// musician with no Internetsite/instructor with no Website must omit
+		// sameAs entirely rather than emit an empty/null value.
+		body := renderEvent(Event{
+			ID:        4,
+			Title:     "Fest Noz Quatre",
+			StartTime: "2026-08-07T20:00:00Z",
+			EndTime:   "2026-08-08T01:00:00Z",
+			Musicians: []Musician{
+				{ID: 48, Bandname: "Duo Vague", Internetsite: "https://duovague.example.com"},
+				{ID: 49, Bandname: "No Website Band"},
+			},
+			Instructors: []Instructor{
+				{ID: 12, Name: "Instructor With Site", Website: "https://instructor-site.example.com"},
+				{ID: 13, Name: "Instructor Without Site"},
+			},
+		}, nil, "")
+		checkBlocks(t, body, true)
+
+		matches := reJSONLDBlocks.FindAllStringSubmatch(body, -1)
+		var graphDoc map[string]any
+		for _, m := range matches {
+			var v map[string]any
+			json.Unmarshal([]byte(m[1]), &v)
+			if _, ok := v["@graph"]; ok {
+				graphDoc = v
+				break
+			}
+		}
+		if graphDoc == nil {
+			t.Fatal("no @graph document found")
+		}
+		var eventNode map[string]any
+		for _, node := range graphDoc["@graph"].([]any) {
+			n := node.(map[string]any)
+			if n["@type"] == "Event" {
+				eventNode = n
+				break
+			}
+		}
+		if eventNode == nil {
+			t.Fatal("no Event node in @graph")
+		}
+		performers, ok := eventNode["performer"].([]any)
+		if !ok || len(performers) != 4 {
+			t.Fatalf("expected 4 performer entries, got %v", eventNode["performer"])
+		}
+		byName := map[string]map[string]any{}
+		for _, p := range performers {
+			pm := p.(map[string]any)
+			byName[pm["name"].(string)] = pm
+		}
+
+		duo := byName["Duo Vague"]
+		if duo["@id"] != "https://example.test/musicians/48" {
+			t.Errorf("Duo Vague @id = %v, want musician page URL", duo["@id"])
+		}
+		if duo["url"] != "https://example.test/musicians/48" {
+			t.Errorf("Duo Vague url = %v, want musician page URL", duo["url"])
+		}
+		if same, _ := duo["sameAs"].([]any); len(same) != 1 || same[0] != "https://duovague.example.com" {
+			t.Errorf("Duo Vague sameAs = %v, want [\"https://duovague.example.com\"]", duo["sameAs"])
+		}
+
+		noSiteBand := byName["No Website Band"]
+		if _, ok := noSiteBand["sameAs"]; ok {
+			t.Errorf("No Website Band should omit sameAs entirely, got %v", noSiteBand["sameAs"])
+		}
+
+		instrWithSite := byName["Instructor With Site"]
+		if instrWithSite["@id"] != "https://example.test/instructors/12" {
+			t.Errorf("Instructor With Site @id = %v, want instructor page URL", instrWithSite["@id"])
+		}
+		if same, _ := instrWithSite["sameAs"].([]any); len(same) != 1 || same[0] != "https://instructor-site.example.com" {
+			t.Errorf("Instructor With Site sameAs = %v, want [\"https://instructor-site.example.com\"]", instrWithSite["sameAs"])
+		}
+
+		instrNoSite := byName["Instructor Without Site"]
+		if instrNoSite["@id"] != "https://example.test/instructors/13" {
+			t.Errorf("Instructor Without Site @id = %v, want instructor page URL", instrNoSite["@id"])
+		}
+		if _, ok := instrNoSite["sameAs"]; ok {
+			t.Errorf("Instructor Without Site should omit sameAs entirely, got %v", instrNoSite["sameAs"])
+		}
+	})
+
 	t.Run("event page own image", func(t *testing.T) {
 		body := renderEvent(Event{
 			ID:        2,

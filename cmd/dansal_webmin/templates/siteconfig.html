@@ -132,6 +132,14 @@
 </div>
 
 <div class="card">
+  <div class="card-title">External profile links (sameAs)</div>
+  <div class="form-group">
+    <textarea name="same_as" rows="4" placeholder="https://github.com/…&#10;https://mas.to/@…&#10;https://www.wikidata.org/wiki/Q…" style="width:100%;resize:vertical;font-family:inherit;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem">{{.SameAs}}</textarea>
+    <div class="hint">One URL per line — Mastodon, GitHub, Wikidata, etc. Linked from the site-wide <code>WebSite</code> structured-data block as <code>sameAs</code>, so AI/knowledge-graph engines can connect this instance to its external identities. Leave blank to omit.</div>
+  </div>
+</div>
+
+<div class="card">
   <div class="card-title">Impressum / Legal notice</div>
   <div class="hint" style="margin-bottom:.75rem">One text per language. Shown at <code>/impressum</code>. Leave blank to use the default from <code>pages_file</code> (web.yaml).</div>
   {{range .ImpressumLangs}}

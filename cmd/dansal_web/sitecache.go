@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,9 +28,10 @@ type siteSettingsCache struct {
 	defaultDanceIDs      []int
 	bannerAIGenerated    bool
 	logoAIGenerated      bool
-	dateFormat           string // "de" → DD.MM.YYYY; "" → locale-based
-	timeFormatSite       string // "24h" or "12h" override (empty = use web.yaml)
-	tileToken            string // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
+	dateFormat           string   // "de" → DD.MM.YYYY; "" → locale-based
+	timeFormatSite       string   // "24h" or "12h" override (empty = use web.yaml)
+	tileToken            string   // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
+	sameAs               []string // #1296: external profile URLs for the site-wide WebSite JSON-LD's sameAs
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -59,14 +61,29 @@ func (c *siteSettingsCache) load() {
 	dateFormat := getSiteSetting(c.db, "date_format")
 	timeFormatSite := getSiteSetting(c.db, "time_format")
 	tileToken := getSiteSetting(c.db, "tile_token")
+	sameAs := parseSameAs(getSiteSetting(c.db, "same_as"))
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
-		c.dateFormat, c.timeFormatSite, c.tileToken, c.at =
+		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
-		dateFormat, timeFormatSite, tileToken, time.Now()
+		dateFormat, timeFormatSite, tileToken, sameAs, time.Now()
 	c.mu.Unlock()
+}
+
+// parseSameAs splits the webmin-managed same_as setting (one URL per line)
+// into a clean list — trimmed, blank lines dropped. Returns nil (not an
+// empty slice) when nothing is configured, so callers can treat "no sameAs"
+// and "not yet loaded" the same way.
+func parseSameAs(raw string) []string {
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // parseDanceIDs decodes the JSON array stored in the default_dance_ids site
@@ -125,6 +142,15 @@ func (c *siteSettingsCache) TileToken() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.tileToken
+}
+
+// SameAs returns the webmin-configured external profile URLs (#1296) for
+// the site-wide WebSite JSON-LD's sameAs, or nil when none are configured.
+func (c *siteSettingsCache) SameAs() []string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.sameAs
 }
 
 // DefaultDanceIDs returns the admin-configured dance presets for the event

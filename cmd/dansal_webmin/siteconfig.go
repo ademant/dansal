@@ -215,6 +215,7 @@ type siteConfigData struct {
 	RescheduledBadgeDays string
 	DateFormat           string // "" locale-based, "de" DD.MM.YYYY
 	TimeFormatSite       string // "" web.yaml default, "24h", "12h"
+	SameAs               string // one external profile URL per line (#1296)
 	NoDB                 bool
 	NoImagesDir          bool
 }
@@ -255,6 +256,7 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.DefaultDanceIDs = loadDefaultDanceIDs(db)
 		data.DateFormat = getSiteSetting(db, "date_format")
 		data.TimeFormatSite = getSiteSetting(db, "time_format")
+		data.SameAs = getSiteSetting(db, "same_as")
 
 		if cfg.ImagesDir == "" {
 			data.NoImagesDir = true
@@ -308,6 +310,12 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			setSiteSetting(db, "impressum_"+lang, strings.TrimSpace(r.FormValue("impressum_"+lang)))
 		}
 
+		// #1296: one external profile URL per line, for the site-wide WebSite
+		// JSON-LD's sameAs. Stored as-is (whole-textarea trim only) — split,
+		// per-line trim, and blank-dropping happen at render time
+		// (siteSettingsCache.SameAs) in dansal_web.
+		setSiteSetting(db, "same_as", strings.TrimSpace(r.FormValue("same_as")))
+
 		var defaultDanceIDs []int
 		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -336,7 +344,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

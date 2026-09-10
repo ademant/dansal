@@ -96,7 +96,11 @@ table.fest-folded{opacity:.75}
   document.addEventListener('DOMContentLoaded', function(){
     if (geo.length) {
       dansalLeafletCss();
-      var map = L.map('map-container');
+      // #1286: give the map a default view before any marker is added —
+      // Leaflet throws "Set map center and zoom first" on the first
+      // addTo(map) otherwise, aborting the rest of this block (including the
+      // fitBounds below, which refines this default once bounds are known).
+      var map = L.map('map-container').setView([50,10], 5);
       attachTileLayer(map);
       var bounds = [];
       geo.forEach(function(e){

@@ -155,6 +155,23 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     l.onload=function(){l.media='all';};
     document.head.appendChild(l);
   }
+  function fixDefaultMarkerIcon(){
+    // #1221 (see base.js's own copy for the full rationale): dansalLeafletCss()
+    // loads leaflet.css non-blocking, so a default (no explicit icon:) marker
+    // created before it's actually applied gets a failed icon-path
+    // auto-detection and renders as a broken-image glyph. Pin the URLs (and
+    // imagePath, so detection is skipped entirely) explicitly instead. Kept
+    // as an inline duplicate of base.js's copy rather than pulling that
+    // script in — this embed page is deliberately self-contained (#1288).
+    if(fixDefaultMarkerIcon.done) return;
+    fixDefaultMarkerIcon.done=true;
+    L.Icon.Default.imagePath='';
+    L.Icon.Default.mergeOptions({
+      iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+    });
+  }
   function initMap(){
     dansalLeafletCss();
     map = L.map('cal-map',{scrollWheelZoom:false}).setView([50,10],5);
@@ -167,6 +184,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom:18
     }).addTo(map);
+    fixDefaultMarkerIcon();
     markerLayer = L.layerGroup().addTo(map);
     calData.forEach(function(e){
       if(!e.lat && !e.lng) return;

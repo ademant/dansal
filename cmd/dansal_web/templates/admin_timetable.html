@@ -431,13 +431,17 @@ function effectiveDate(e){
 // ─── time range ──────────────────────────────────────────────────────────────
 function recomputeTimeRange(){
   if(!_entries.length){ _gridMin=18*60; _gridMax=28*60; return; }
-  var mn=999, mx=0;
+  // mn's sentinel must start above any real minute-of-day value (max 1439)
+  // for Math.min to ever actually update it — 999 (16:39) doesn't clear
+  // that bar, so any entries all starting later than 16:39 (the common
+  // case: this is an evening-event app) left mn stuck at 999 forever,
+  // silently widening the grid down to a wrong, too-early 16:00 minimum
+  // regardless of the entries' real start times.
+  var mn=99999, mx=0;
   _entries.forEach(function(e){
     var s=parseHHMM(e.start_time||'18:00');
     var en=parseHHMM(e.end_time||'19:00');
     if(en<s) en+=1440; // crosses midnight
-    // convert to absolute minutes
-    var sa = s < _gridMin ? s+1440-_gridMin : s-_gridMin; // not exact yet, just gather raw
     mn = Math.min(mn, s);
     mx = Math.max(mx, en);
   });
@@ -485,6 +489,13 @@ function recomputeRooms(){
   var out = [];
   // rooms already in _rooms
   _rooms.forEach(function(r){ seen[r.id !== null ? 'id:'+r.id : 'lbl:'+r.label] = true; out.push(r); });
+  // Rooms newly discovered from entries are collected separately so they
+  // can be appended in _allRooms' order (the server's persisted drag order,
+  // #1278) rather than whatever order their first-referencing entry
+  // happens to appear in — entry order has no relation to column order, so
+  // without this a page reload would silently undo a saved column
+  // reorder the moment any entry actually exists in those rooms.
+  var discovered = [];
   _entries.forEach(function(e){
     if(e.location_id){
       var k='id:'+e.location_id;
@@ -494,15 +505,23 @@ function recomputeRooms(){
         // look it up from the full room list so a room discovered only via
         // an existing entry (not yet in _rooms) still groups correctly.
         var known=_allRooms.find(function(x){ return x.id===e.location_id; });
-        out.push({id:e.location_id,label:e.location_name||('Room '+e.location_id),
+        discovered.push({id:e.location_id,label:e.location_name||('Room '+e.location_id),
           buildingId:known?known.buildingId:null, buildingName:known?known.buildingName:null});
       }
     } else if(e.room){
       var k2='lbl:'+e.room;
-      if(!seen[k2]){ seen[k2]=true; out.push({id:null,label:e.room}); }
+      if(!seen[k2]){ seen[k2]=true; discovered.push({id:null,label:e.room}); }
     }
   });
-  _rooms = out;
+  discovered.sort(function(a,b){
+    var ia = a.id!==null ? _allRooms.findIndex(function(r){ return r.id===a.id; }) : -1;
+    var ib = b.id!==null ? _allRooms.findIndex(function(r){ return r.id===b.id; }) : -1;
+    if(ia===-1 && ib===-1) return 0; // both free-text/unknown: keep discovery order (stable sort)
+    if(ia===-1) return 1;
+    if(ib===-1) return -1;
+    return ia-ib;
+  });
+  _rooms = out.concat(discovered);
 }
 
 // ─── render all ──────────────────────────────────────────────────────────────

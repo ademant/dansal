@@ -1887,6 +1887,13 @@ type TimetableEntryReq struct {
 	LocationID   *int   `json:"location_id,omitempty"`
 	MusicianID   *int   `json:"musician_id,omitempty"`
 	InstructorID *int   `json:"instructor_id,omitempty"`
+	// Difficulty (#1232) was missing here even though the response struct
+	// (TimetableEntry above) and the API's own request type both have it —
+	// adminTimetableSaveHandler unmarshals the admin UI's PUT body into
+	// this struct before re-marshaling it for the API, so every save
+	// silently dropped whatever difficulty the editor's widget had set,
+	// regardless of what the browser actually sent.
+	Difficulty string `json:"difficulty,omitempty"`
 }
 
 func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {

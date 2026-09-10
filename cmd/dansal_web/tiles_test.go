@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -274,6 +275,34 @@ func TestTileProxyRejectsWrongToken(t *testing.T) {
 	h(w, tileTestRequest("osm", "not-the-real-token", ""))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)
+	}
+}
+
+// TestTileTokenHandler covers #1287: GET /tiles/token is public (no auth
+// required, unlike the tile proxy itself) and simply hands back the same
+// token an external integration would otherwise have to get from an admin
+// reading site_settings directly.
+func TestTileTokenHandler(t *testing.T) {
+	token := setupTileAuthTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/tiles/token", nil)
+	w := httptest.NewRecorder()
+	tileTokenHandler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("could not decode response body %q: %v", w.Body.String(), err)
+	}
+	if body.Token != token {
+		t.Fatalf("token = %q, want the instance's actual tile token %q", body.Token, token)
 	}
 }
 

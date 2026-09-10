@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -158,6 +159,19 @@ func tileRequestAuthorized(r *http.Request, client *DansalClient) bool {
 		return apiKeyTileCache.check(r.Context(), client, token)
 	}
 	return false
+}
+
+// tileTokenHandler serves GET /tiles/token (#1287): a public, unauthenticated
+// endpoint handing out the instance's tile-proxy token as JSON, for an
+// external integration (e.g. wp-dansal) with no dansal API key configured to
+// use as the "?t=" fallback auth on the tile proxy instead of falling back to
+// a raw OSM fetch. This isn't a secret being exposed — the same token is
+// already embedded in plain page HTML on every dansal_web page (see
+// tileRequestAuthorized); this just gives a non-browser caller a way to fetch
+// it too, closing the gap WEB.md's tile-proxy section documents.
+func tileTokenHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": siteCfg.TileToken()})
 }
 
 // tileProxyHandler serves GET /tiles/{scheme}/{z}/{x}/{yfile}, proxying and

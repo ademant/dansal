@@ -140,6 +140,74 @@
   </form>
 </div>
 
+<div class="enrich-section" style="margin-top:2.5rem">
+  <h2>Country name aliases</h2>
+  <p class="enrich-desc">Normalizes free-text location country spellings ("Deutschland", "de") to one canonical display name ("Germany") everywhere it's shown — the /search filter included.</p>
+  <table class="event-table alias-table">
+    <thead>
+      <tr><th>Raw spelling</th><th>Canonical name</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{if .CountryAliases}}
+      {{range .CountryAliases}}
+      <tr>
+        <td>{{.Alias}}</td>
+        <td>{{.Canonical}}</td>
+        <td class="col-actions">
+          <form method="post" action="/admin/enrich/country-aliases/{{.ID}}/delete" style="display:inline">
+            <button type="submit" class="btn-icon btn-del" title="Delete alias" aria-label="Delete alias">🗑️</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="3" class="muted">No aliases yet.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  <form method="post" action="/admin/enrich/country-aliases/new" class="alias-add-form">
+    <input name="alias" placeholder="Raw spelling (e.g. Deutschland)" required class="alias-input">
+    <span class="alias-arrow">→</span>
+    <input name="canonical" placeholder="Canonical name (e.g. Germany)" required class="alias-input">
+    <button type="submit" class="btn-primary">Add</button>
+  </form>
+</div>
+
+<div class="enrich-section" style="margin-top:2.5rem">
+  <h2>Region name aliases</h2>
+  <p class="enrich-desc">Same as country aliases, scoped to a country code since region names can repeat across countries.</p>
+  <table class="event-table alias-table">
+    <thead>
+      <tr><th>Country</th><th>Raw spelling</th><th>Canonical name</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{if .RegionAliases}}
+      {{range .RegionAliases}}
+      <tr>
+        <td>{{.CountryCode}}</td>
+        <td>{{.Alias}}</td>
+        <td>{{.Canonical}}</td>
+        <td class="col-actions">
+          <form method="post" action="/admin/enrich/region-aliases/{{.ID}}/delete" style="display:inline">
+            <button type="submit" class="btn-icon btn-del" title="Delete alias" aria-label="Delete alias">🗑️</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="4" class="muted">No aliases yet.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  <form method="post" action="/admin/enrich/region-aliases/new" class="alias-add-form">
+    <input name="country_code" placeholder="Country code (e.g. DE)" required class="alias-input" style="width:8rem">
+    <input name="alias" placeholder="Raw spelling (e.g. Bayern)" required class="alias-input">
+    <span class="alias-arrow">→</span>
+    <input name="canonical" placeholder="Canonical name (e.g. Bavaria)" required class="alias-input">
+    <button type="submit" class="btn-primary">Add</button>
+  </form>
+</div>
+
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:1rem}
 .page-header h1{margin:0}

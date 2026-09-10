@@ -67,6 +67,26 @@ func aliasMap(aliases []CityAlias) map[string]string {
 	return m
 }
 
+// loadEnrichAliases loads all three alias lists (city/country/region) shown
+// on /admin/enrich, logging (not failing) on error like listCityAliases'
+// existing call sites.
+func loadEnrichAliases(db *sql.DB) (city []CityAlias, country []CountryAlias, region []RegionAlias) {
+	var err error
+	city, err = listCityAliases(db)
+	if err != nil {
+		log.Printf("admin enrich: could not load city aliases: %v", err)
+	}
+	country, err = listCountryAliases(db)
+	if err != nil {
+		log.Printf("admin enrich: could not load country aliases: %v", err)
+	}
+	region, err = listRegionAliases(db)
+	if err != nil {
+		log.Printf("admin enrich: could not load region aliases: %v", err)
+	}
+	return city, country, region
+}
+
 func translateCity(city string, m map[string]string) string {
 	if c, ok := m[strings.ToLower(city)]; ok {
 		return c
@@ -267,11 +287,13 @@ type EnrichRow struct {
 }
 
 type AdminEnrichData struct {
-	CityAliases  []CityAlias
-	AllMusicians []Musician
-	Rows         []EnrichRow
-	Error        string
-	FeedFetched  bool
+	CityAliases    []CityAlias
+	CountryAliases []CountryAlias
+	RegionAliases  []RegionAlias
+	AllMusicians   []Musician
+	Rows           []EnrichRow
+	Error          string
+	FeedFetched    bool
 }
 
 // ── handlers ──────────────────────────────────────────────────────────────────
@@ -282,12 +304,11 @@ func adminEnrichPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 		if !ok {
 			return
 		}
-		aliases, err := listCityAliases(db)
-		if err != nil {
-			log.Printf("admin enrich: could not load city aliases: %v", err)
-		}
+		cityAliases, countryAliases, regionAliases := loadEnrichAliases(db)
 		renderTemplate(w, tmpls.adminEnrich, tmplData(r, cfg, i18n, "Enrich from folkdance.page", AdminEnrichData{
-			CityAliases: aliases,
+			CityAliases:    cityAliases,
+			CountryAliases: countryAliases,
+			RegionAliases:  regionAliases,
 		}))
 	}
 }
@@ -299,10 +320,7 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 			return
 		}
 
-		aliases, err := listCityAliases(db)
-		if err != nil {
-			log.Printf("admin enrich: could not load city aliases: %v", err)
-		}
+		aliases, countryAliases, regionAliases := loadEnrichAliases(db)
 		cityMap := aliasMap(aliases)
 		musicians, err := client.GetMusicians(r.Context())
 		if err != nil {
@@ -317,10 +335,12 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 
 		renderErr := func(msg string) {
 			renderTemplate(w, tmpls.adminEnrich, tmplData(r, cfg, i18n, "Enrich from folkdance.page", AdminEnrichData{
-				CityAliases:  aliases,
-				AllMusicians: musicians,
-				Error:        msg,
-				FeedFetched:  true,
+				CityAliases:    aliases,
+				CountryAliases: countryAliases,
+				RegionAliases:  regionAliases,
+				AllMusicians:   musicians,
+				Error:          msg,
+				FeedFetched:    true,
 			}))
 		}
 
@@ -451,10 +471,12 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 		}
 
 		renderTemplate(w, tmpls.adminEnrich, tmplData(r, cfg, i18n, "Enrich from folkdance.page", AdminEnrichData{
-			CityAliases:  aliases,
-			AllMusicians: musicians,
-			Rows:         rows,
-			FeedFetched:  true,
+			CityAliases:    aliases,
+			CountryAliases: countryAliases,
+			RegionAliases:  regionAliases,
+			AllMusicians:   musicians,
+			Rows:           rows,
+			FeedFetched:    true,
 		}))
 	}
 }

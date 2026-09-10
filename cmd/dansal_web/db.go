@@ -281,7 +281,89 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 		}
 	}
 
+	// Migration v6: country_aliases/region_aliases — normalize free-text
+	// country/region name variants ("Germany"/"Deutschland"/"de") to one
+	// canonical display string, extending the city_aliases concept (#1284,
+	// follow-up to #1282). Seeded from the #214 migration's hardcoded
+	// country/country_code variant list (cmd/dansal/main.go), since that's
+	// the only prior evidence of which spellings actually occur in the wild.
+	// region_aliases starts empty — #214 never covered regions.
+	if !migrationApplied(db, 6) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS country_aliases (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			alias     TEXT    NOT NULL COLLATE NOCASE,
+			canonical TEXT    NOT NULL,
+			UNIQUE(alias)
+		)`)
+		db.Exec(`CREATE TABLE IF NOT EXISTS region_aliases (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			country_code TEXT    NOT NULL,
+			alias        TEXT    NOT NULL COLLATE NOCASE,
+			canonical    TEXT    NOT NULL,
+			UNIQUE(country_code, alias)
+		)`)
+		for _, s := range countryAliasSeeds {
+			db.Exec("INSERT OR IGNORE INTO country_aliases(alias, canonical) VALUES(?,?)", s[0], s[1])
+		}
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (6)")
+	}
+	// Safety net: ensure both tables exist even if v6 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='country_aliases'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS country_aliases (
+				id        INTEGER PRIMARY KEY AUTOINCREMENT,
+				alias     TEXT    NOT NULL COLLATE NOCASE,
+				canonical TEXT    NOT NULL,
+				UNIQUE(alias)
+			)`)
+		}
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='region_aliases'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS region_aliases (
+				id           INTEGER PRIMARY KEY AUTOINCREMENT,
+				country_code TEXT    NOT NULL,
+				alias        TEXT    NOT NULL COLLATE NOCASE,
+				canonical    TEXT    NOT NULL,
+				UNIQUE(country_code, alias)
+			)`)
+		}
+	}
+
 	return db
+}
+
+// countryAliasSeeds are {alias, canonical} pairs carried over from the #214
+// migration's hardcoded country-name-variant list (cmd/dansal/main.go) — the
+// only variants with actual prior evidence of occurring in production data.
+// Case-only variants ("germany" vs "Germany") are omitted here since
+// country_aliases.alias is COLLATE NOCASE: one row already matches every
+// casing of a given spelling.
+var countryAliasSeeds = [][2]string{
+	{"Österreich", "Austria"}, {"Oesterreich", "Austria"},
+	{"Belgique", "Belgium"}, {"België", "Belgium"},
+	{"Schweiz", "Switzerland"}, {"Suisse", "Switzerland"}, {"Svizzera", "Switzerland"},
+	{"Czechia", "Czech Republic"}, {"Tschechien", "Czech Republic"},
+	{"Deutschland", "Germany"}, {"germany", "Germany"}, {"de", "Germany"},
+	{"Dänemark", "Denmark"}, {"Danmark", "Denmark"},
+	{"España", "Spain"}, {"Spanien", "Spain"},
+	{"Finnland", "Finland"},
+	{"france", "France"}, {"fr", "France"},
+	{"UK", "United Kingdom"}, {"Great Britain", "United Kingdom"},
+	{"Kroatien", "Croatia"},
+	{"Ungarn", "Hungary"}, {"Magyarország", "Hungary"},
+	{"Irland", "Ireland"},
+	{"Italien", "Italy"}, {"Italia", "Italy"},
+	{"Luxemburg", "Luxembourg"},
+	{"Niederlande", "Netherlands"}, {"Nederland", "Netherlands"},
+	{"Norwegen", "Norway"}, {"Norge", "Norway"},
+	{"Polen", "Poland"},
+	{"Rumänien", "Romania"},
+	{"Schweden", "Sweden"}, {"Sverige", "Sweden"},
+	{"Slowenien", "Slovenia"},
+	{"Slowakei", "Slovakia"},
+	{"USA", "United States"},
 }
 
 func addTagFollower(db *sql.DB, slug, actorURI, inboxURL, followActivityID string) error {

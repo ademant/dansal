@@ -700,6 +700,20 @@ type Location struct {
 	PastEventCount   int `json:"past_event_count,omitempty"`
 }
 
+// DisplayCountry/DisplayRegion resolve Country/Region through
+// country_aliases/region_aliases (#1284) so every public page shows one
+// normalized name regardless of which raw spelling ("Germany"/"Deutschland"/
+// "de") got stored on this particular location. The raw Country/Region
+// fields are left untouched — admin_location_edit.html reads them directly
+// so admins still see/edit the actual stored text.
+func (l Location) DisplayCountry() string {
+	return canonicalCountry(l.Country)
+}
+
+func (l Location) DisplayRegion() string {
+	return canonicalRegion(l.Region, l.CountryCode)
+}
+
 type FetchSource struct {
 	ID             int      `json:"id"`
 	URL            string   `json:"url"`

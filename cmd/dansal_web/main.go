@@ -119,6 +119,7 @@ func main() {
 	db := initDB(cfg.DBPath)
 	migrateActorKeyEncryption(db)
 	siteCfg = newSiteSettingsCache(db)
+	locAliasCache = newLocationAliasCache(db)
 	getOrCreateTileToken(db) // #1269: ensure the public tile token exists before the cache's first read
 	if cfg.InternalSharedSecret == "" {
 		log.Printf("warning: internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
@@ -519,6 +520,10 @@ func main() {
 		r.HandleFunc("POST /admin/enrich/apply", adminRateLimit(adminEnrichApplyHandler(cfg, client)))
 		r.HandleFunc("POST /admin/enrich/city-aliases/new", adminRateLimit(adminEnrichAliasNewHandler(db)))
 		r.HandleFunc("POST /admin/enrich/city-aliases/{id}/delete", adminRateLimit(adminEnrichAliasDeleteHandler(db)))
+		r.HandleFunc("POST /admin/enrich/country-aliases/new", adminRateLimit(genericAliasNewHandler(db, "country_aliases", []string{"alias", "canonical"})))
+		r.HandleFunc("POST /admin/enrich/country-aliases/{id}/delete", adminRateLimit(genericAliasDeleteHandler(db, "country_aliases")))
+		r.HandleFunc("POST /admin/enrich/region-aliases/new", adminRateLimit(genericAliasNewHandler(db, "region_aliases", []string{"country_code", "alias", "canonical"})))
+		r.HandleFunc("POST /admin/enrich/region-aliases/{id}/delete", adminRateLimit(genericAliasDeleteHandler(db, "region_aliases")))
 
 		// Syndication (#971, #953)
 		r.HandleFunc("GET /admin/orgs/{id}/syndication", adminSyndicationGetHandler(cfg, client))

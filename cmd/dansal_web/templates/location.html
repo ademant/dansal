@@ -6,7 +6,7 @@
   "@type": "Place",
   "@id": "https://{{$.Domain}}/location/{{.ID}}",
   "name": "{{.Location | js}}"
-  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.Country}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
   {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
 }
 </script>
@@ -48,7 +48,7 @@
   <address class="loc-addr">
     {{if .Address}}<span>{{.Address}}</span><br>{{end}}
     {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
-    {{if .Country}}<br><span>{{.Country}}</span>{{end}}
+    {{if .DisplayCountry}}<br><span>{{.DisplayCountry}}</span>{{end}}
   </address>
   {{end}}
   {{if .Internetsite}}

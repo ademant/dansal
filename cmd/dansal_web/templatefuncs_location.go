@@ -26,6 +26,12 @@ type locationOption struct {
 // disambiguate when two buildings share a room name. Rooms inherit the
 // parent's orgIDs for org-based filtering unless they carry their own.
 // Country/region fields are also inherited by child rooms from their parent.
+//
+// Country/Region go through DisplayCountry/DisplayRegion (#1284) rather than
+// the raw fields: this is the JSON search.html's Country→Region cascade
+// filter builds its dropdown from (see the "locs" var in search.html), so
+// normalizing here is what makes "Germany"/"Deutschland"/"de" collapse into
+// one dropdown entry instead of three.
 func flattenLocationOptions(locs []Location) []locationOption {
 	items := make([]locationOption, 0, len(locs))
 	for _, l := range locs {
@@ -44,9 +50,10 @@ func flattenLocationOptions(locs []Location) []locationOption {
 		if orgIDs == nil {
 			orgIDs = []int{}
 		}
+		country, region := l.DisplayCountry(), l.DisplayRegion()
 		items = append(items, locationOption{
 			ID: l.ID, Label: label, Town: l.Town, OrgIDs: orgIDs,
-			Country: l.Country, CountryCode: l.CountryCode, Region: l.Region,
+			Country: country, CountryCode: l.CountryCode, Region: region,
 		})
 		for _, c := range l.Children {
 			clabel := c.Location
@@ -59,7 +66,7 @@ func flattenLocationOptions(locs []Location) []locationOption {
 			}
 			items = append(items, locationOption{
 				ID: c.ID, Label: clabel + " — " + bname, Town: l.Town, OrgIDs: childOrgIDs,
-				Country: l.Country, CountryCode: l.CountryCode, Region: l.Region,
+				Country: country, CountryCode: l.CountryCode, Region: region,
 			})
 		}
 	}

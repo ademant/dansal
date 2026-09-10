@@ -918,19 +918,51 @@ Both per-entry endpoints journal a full-timetable snapshot to `GET .../timetable
 
 ```
 GET    /api/v1/images/{event_id}
-POST   /api/v1/images/{event_id}    # upload event image (multipart/form-data)
-DELETE /api/v1/images/{event_id}    # auth required
+POST   /api/v1/images/{event_id}          # upload event image (multipart/form-data, field "image"), auth required
+DELETE /api/v1/images/{event_id}          # auth required
 
 GET    /api/v1/musician-images/{id}
-POST   /api/v1/musician-images/{id} # auth required
-DELETE /api/v1/musician-images/{id} # auth required
+POST   /api/v1/musician-images/{id}       # auth required
+DELETE /api/v1/musician-images/{id}       # auth required
 
 GET    /api/v1/org-images/{id}
-POST   /api/v1/org-images/{id}      # auth required
-DELETE /api/v1/org-images/{id}      # auth required
+POST   /api/v1/org-images/{id}            # auth required
+DELETE /api/v1/org-images/{id}            # auth required
+
+GET    /api/v1/series-images/{id}
+POST   /api/v1/series-images/{id}         # auth required
+DELETE /api/v1/series-images/{id}         # auth required
+
+GET    /api/v1/location-images/{id}       # a location's site-plan image
+POST   /api/v1/locations/{id}/site-plan   # auth required (location write access)
+DELETE /api/v1/locations/{id}/site-plan   # auth required (location write access)
 ```
 
 Images are stored as AVIF (or JPEG fallback) and resized on upload to fit within 1024×1024 pixels. Served directly via `http.ServeFile`.
+
+### Avatars
+
+A smaller, separate image slot from the main image above — square, JPEG, served with a longer cache lifetime. Org avatar upload/delete is allowed for an admin or a member of that org; musician/instructor avatar upload/delete is admin-only (there's no "musician/instructor member" concept to check against).
+
+```
+GET    /api/v1/org-avatars/{id}
+POST   /api/v1/org-avatars/{id}           # auth required (admin or org member)
+DELETE /api/v1/org-avatars/{id}           # auth required (admin or org member)
+
+GET    /api/v1/musician-avatars/{id}
+POST   /api/v1/musician-avatars/{id}      # auth required (admin only)
+DELETE /api/v1/musician-avatars/{id}      # auth required (admin only)
+
+GET    /api/v1/instructor-avatars/{id}
+POST   /api/v1/instructor-avatars/{id}    # auth required (admin only)
+DELETE /api/v1/instructor-avatars/{id}    # auth required (admin only)
+```
+
+### Upload errors
+
+Every `POST` above shares the same validation, in this order: `413` if the file exceeds `server.max_body_bytes` (default 1MB — see [Request body size limit](#request-body-size-limit)), `400` for a missing/unreadable `image` field, `415 Unsupported Media Type` ("File is not an image") if the upload doesn't decode as a valid image format.
+
+See also [Contact Posts](#contact-posts) for `contact-post-images`, a fourth image type scoped to a board post rather than to an event/musician/org/series/location.
 
 ## Fetch Sources
 
@@ -965,11 +997,17 @@ DELETE /api/v1/contact-posts/{id}               # delete (admin)
 DELETE /api/v1/contact-posts/token/{token}      # delete by management token
 POST   /api/v1/contact-posts/{id}/contact       # contact the poster (public)
 GET    /api/v1/contact-requests/verify/{token}  # verify a contact request
+
+GET    /api/v1/contact-post-images/{img_id}          # serve one image (public)
+POST   /api/v1/contact-posts/{id}/images             # attach an image (multipart/form-data, field "image"; ?token={manage_token})
+DELETE /api/v1/contact-posts/{id}/images/{img_id}    # remove one image (?token={manage_token})
 ```
 
 Public posts require email or Telegram verification before appearing.
 
 **Authorization for `PUT`/`PATCH` is different from every other resource in this API**: board posts have no user account backing them, so instead of `auth()`/Bearer, both are gated by the `?token={manage_token}` query parameter issued at creation time (the same token used by `DELETE .../token/{token}`) — an admin Bearer token does not grant access to these two endpoints. `PUT` (`Content-Type: application/json`) replaces `type`, `city`, `persons`, `message`, `nickname` wholesale — any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396, 415 otherwise) and only changes fields present in the body. Neither endpoint can change `email`/`telegram`, which stay fixed to the value used at creation for verification purposes.
+
+**Images** are gated by the same `?token={manage_token}` model, only supported for `lost_item`/`found_item` posts (`400` otherwise), capped at 5 per post (`409` past the cap), and follow the same upload validation as every other image endpoint — see [Upload errors](#upload-errors) under Images.
 
 ## Bookings
 
@@ -1045,6 +1083,7 @@ Public (Telegram calls directly). Optional validation via `telegram_webhook_secr
 | 409 | Conflict (e.g., duplicate display name) |
 | 410 | Gone or expired token |
 | 413 | Request entity too large |
+| 415 | Unsupported media type (wrong `Content-Type` on a `PATCH`, or a file upload that isn't a valid image) |
 | 429 | Rate limit exceeded |
 | 500 | Internal server error |
 

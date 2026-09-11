@@ -2648,6 +2648,22 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN timetable_room_order TEXT")
 		}
 	}
+
+	// v39 (#1290): free-text description of a dance style, admin-editable via
+	// /admin/dances, used to build a default event description when the
+	// event itself has none.
+	if !applied(39) {
+		db.Exec("ALTER TABLE dances ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+		mark(39)
+	}
+	// Safety net: ensure dances.description exists even if v39 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('dances') WHERE name='description'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE dances ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3646,6 +3662,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,
@@ -4063,6 +4080,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(36)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(37)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(38)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(39)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4390,6 +4408,7 @@ func main() {
 
 	// Dance endpoints (protected writes)
 	smux.Handle("POST /api/v1/dances", auth(createDance))
+	smux.Handle("PUT /api/v1/dances/{id}", auth(updateDance))
 	smux.Handle("DELETE /api/v1/dances/{id}", auth(deleteDance))
 
 	// Protected musician writes

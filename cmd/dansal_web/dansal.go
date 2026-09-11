@@ -421,8 +421,9 @@ type Event struct {
 }
 
 type Dance struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type Tag struct {
@@ -2906,6 +2907,19 @@ func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dan
 	body, _ := json.Marshal(map[string]string{"name": name})
 	var d Dance
 	if err := c.do(ctx, http.MethodPost, "/api/v1/dances", token, body, &d, http.StatusCreated); err != nil {
+		return Dance{}, err
+	}
+	c.invalidateDances()
+	return d, nil
+}
+
+// UpdateDance replaces a dance's name and description (#1290) — full
+// replace, matching the API's PUT semantics; there's no partial-update
+// PATCH for this small an entity.
+func (c *DansalClient) UpdateDance(ctx context.Context, id int, name, description, token string) (Dance, error) {
+	body, _ := json.Marshal(Dance{Name: name, Description: description})
+	var d Dance
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/dances/%d", id), token, body, &d, http.StatusOK); err != nil {
 		return Dance{}, err
 	}
 	c.invalidateDances()

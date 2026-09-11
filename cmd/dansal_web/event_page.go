@@ -25,6 +25,7 @@ type eventPageData struct {
 	seriesImageURL         string // populated from event.SeriesImageURL (already in event response)
 	seriesImageAIGenerated bool
 	timetableHistory       []TimetableHistoryEntry
+	danceDescByName        map[string]string // #1290: dance name -> its own admin-entered description, for the auto-composed default event description
 }
 
 // fetchEventWithFallback fetches event id, preferring the authed endpoint when
@@ -138,6 +139,27 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 			h, err := client.GetTimetableHistory(r.Context(), event.ID)
 			addErr("GetTimetableHistory", err)
 			data.timetableHistory = h
+		}()
+	}
+	// #1290: only needed to compose a default description, so skip the call
+	// entirely when the event already has its own (the common case once
+	// organizers have written real ones) or has no dances to describe.
+	if event.Description == "" && len(event.DanceNames) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dances, err := client.GetDances(r.Context())
+			if err != nil {
+				addErr("GetDances", err)
+				return
+			}
+			m := make(map[string]string, len(dances))
+			for _, d := range dances {
+				if d.Description != "" {
+					m[d.Name] = d.Description
+				}
+			}
+			data.danceDescByName = m
 		}()
 	}
 	// For logged-in users: fetch their orgs (for assign/publish flow and save-as-template).

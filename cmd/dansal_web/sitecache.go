@@ -36,6 +36,9 @@ type siteSettingsCache struct {
 	tileToken            string            // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
 	sameAs               []string          // #1296: external profile URLs for the site-wide WebSite JSON-LD's sameAs
 	homeIntro            map[string]string // #1298: lang -> homepage intro paragraph ("%s" placeholder for site name)
+	descBall             map[string]string // #1290: lang -> default event description sentence for a ball/fest-noz-tagged event
+	descWorkshop         map[string]string // #1290: lang -> default event description sentence for a workshop-tagged event
+	descFestival         map[string]string // #1290: lang -> default event description sentence for a festival-tagged event
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -66,33 +69,39 @@ func (c *siteSettingsCache) load() {
 	timeFormatSite := getSiteSetting(c.db, "time_format")
 	tileToken := getSiteSetting(c.db, "tile_token")
 	sameAs := parseSameAs(getSiteSetting(c.db, "same_as"))
-	homeIntro := parseHomeIntro(getSiteSetting(c.db, "home_intro"))
+	homeIntro := parseLangYAML(getSiteSetting(c.db, "home_intro"), webcommon.DefaultHomeIntroYAML, "home_intro")
+	descBall := parseLangYAML(getSiteSetting(c.db, "default_desc_ball"), webcommon.DefaultDescBallYAML, "default_desc_ball")
+	descWorkshop := parseLangYAML(getSiteSetting(c.db, "default_desc_workshop"), webcommon.DefaultDescWorkshopYAML, "default_desc_workshop")
+	descFestival := parseLangYAML(getSiteSetting(c.db, "default_desc_festival"), webcommon.DefaultDescFestivalYAML, "default_desc_festival")
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
-		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.homeIntro, c.at =
+		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.homeIntro,
+		c.descBall, c.descWorkshop, c.descFestival, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
-		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro, time.Now()
+		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro,
+		descBall, descWorkshop, descFestival, time.Now()
 	c.mu.Unlock()
 }
 
-// parseHomeIntro parses the webmin-managed home_intro setting — YAML text
-// mapping language code to the homepage intro paragraph (#1298) — merged
-// ON TOP OF webcommon.DefaultHomeIntroYAML rather than replacing it, so an
+// parseLangYAML parses a webmin-managed lang->text site setting (YAML text)
+// — home_intro (#1298) and the default_desc_* buckets (#1290) all use this
+// same shape — merged ON TOP OF defaultYAML rather than replacing it, so an
 // admin who only edits (or only ever fills in) a subset of languages still
 // gets working default text for every language they didn't touch, instead
-// of that language silently going blank. A malformed edit is logged and
-// ignored entirely, leaving the shipped default in place for every language.
-func parseHomeIntro(raw string) map[string]string {
+// of that language silently going blank. A malformed edit is logged
+// (naming which setting, since several share this parser) and ignored
+// entirely, leaving the shipped default in place for every language.
+func parseLangYAML(raw, defaultYAML, settingName string) map[string]string {
 	m := map[string]string{}
-	yaml.Unmarshal([]byte(webcommon.DefaultHomeIntroYAML), &m)
+	yaml.Unmarshal([]byte(defaultYAML), &m)
 	if raw == "" {
 		return m
 	}
 	var override map[string]string
 	if err := yaml.Unmarshal([]byte(raw), &override); err != nil {
-		log.Printf("could not parse home_intro YAML, using default for every language: %v", err)
+		log.Printf("could not parse %s YAML, using default for every language: %v", settingName, err)
 		return m
 	}
 	for lang, text := range override {
@@ -101,6 +110,11 @@ func parseHomeIntro(raw string) map[string]string {
 		}
 	}
 	return m
+}
+
+// parseHomeIntro is parseLangYAML pinned to home_intro's own default (#1298).
+func parseHomeIntro(raw string) map[string]string {
+	return parseLangYAML(raw, webcommon.DefaultHomeIntroYAML, "home_intro")
 }
 
 // parseSameAs splits the webmin-managed same_as setting (one URL per line)
@@ -198,6 +212,39 @@ func (c *siteSettingsCache) HomeIntro(lang string) string {
 		return v
 	}
 	return c.homeIntro["de"]
+}
+
+// DescBall/DescWorkshop/DescFestival return the webmin-editable default
+// event-description sentence for lang (#1290), falling back to "de" when
+// lang isn't present — same convention as HomeIntro.
+func (c *siteSettingsCache) DescBall(lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if v, ok := c.descBall[lang]; ok {
+		return v
+	}
+	return c.descBall["de"]
+}
+
+func (c *siteSettingsCache) DescWorkshop(lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if v, ok := c.descWorkshop[lang]; ok {
+		return v
+	}
+	return c.descWorkshop["de"]
+}
+
+func (c *siteSettingsCache) DescFestival(lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if v, ok := c.descFestival[lang]; ok {
+		return v
+	}
+	return c.descFestival["de"]
 }
 
 // DefaultDanceIDs returns the admin-configured dance presets for the event

@@ -291,6 +291,14 @@ type EventData struct {
 	// TimetableHistory (#1176) is the timetable's change journal, newest
 	// first; empty when the event has no timetable or no saves yet.
 	TimetableHistory []TimetableHistoryEntry
+	// DefaultDescription (#1290) is the auto-composed description used when
+	// Event.Description is empty — from the event's type (tags), its
+	// dances' own descriptions, and its pricing. "" when Event.Description
+	// is already set, or when nothing could be composed (untagged event, no
+	// dances, no pricing). event.html uses this same value for both the
+	// JSON-LD description and the visible "Description" section, so a
+	// crawler and a human visitor always see identical text.
+	DefaultDescription string
 }
 
 type OrgData struct {
@@ -996,6 +1004,14 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			}
 		}
 
+		// #1290: only composed when the event has no description of its
+		// own — loadEventPageData already skipped fetching danceDescByName
+		// in that same case, so this is a pure computation, no extra I/O.
+		var defaultDesc string
+		if event.Description == "" {
+			defaultDesc = defaultEventDescription(i18n.Strings(lang), lang, event, epd.danceDescByName)
+		}
+
 		td := tmplData(r, cfg, i18n, pageTitle, EventData{
 			Event:                  event,
 			Org:                    epd.org,
@@ -1004,6 +1020,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ContactPosts:           epd.posts,
 			CanManageBoard:         canManage,
 			BoardPosted:            flash.BoardPosted,
+			DefaultDescription:     defaultDesc,
 			BoardTelegramURL:       flash.BoardTelegramURL,
 			BoardContacted:         flash.BoardContacted,
 			BoardContactTgURL:      flash.BoardContactTgURL,

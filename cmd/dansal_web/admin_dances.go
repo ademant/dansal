@@ -54,6 +54,40 @@ func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 	}
 }
 
+// adminDanceEditHandler handles POST /admin/dances/{id}/edit — saves a
+// dance's name+description together (#1290; the API's PUT is a full
+// replace, so the form always submits both, even though only description
+// is editable in the UI today).
+func adminDanceEditHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			forbidden(w, r)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(r.FormValue("name"))
+		description := strings.TrimSpace(r.FormValue("description"))
+		if name != "" {
+			if _, err := client.UpdateDance(r.Context(), id, name, description, getSessionToken(r)); err != nil {
+				log.Printf("update dance %d: %v", id, err)
+			}
+		}
+		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
+	}
+}
+
 func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)

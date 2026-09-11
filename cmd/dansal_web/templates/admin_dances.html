@@ -10,6 +10,7 @@
   <thead>
     <tr>
       <th data-sort="str">{{$.Strings.T "col_name"}}</th>
+      <th>{{$.Strings.T "admin_dance_description"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -17,6 +18,13 @@
   {{range .Dances}}
   <tr>
     <td>{{.Name}}</td>
+    <td class="col-dance-desc">
+      <form method="post" action="/admin/dances/{{.ID}}/edit" class="dance-desc-form">
+        <input type="hidden" name="name" value="{{.Name}}">
+        <textarea name="description" rows="2" placeholder="{{$.Strings.T "admin_dance_description_placeholder"}}">{{.Description}}</textarea>
+        <button type="submit" class="btn-sm-secondary">{{$.Strings.T "admin_save"}}</button>
+      </form>
+    </td>
     <td class="col-actions">
       <button type="button" class="btn-icon btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
               data-confirm="{{$.Strings.T "admin_dance_confirm_delete"}}" data-fn="deleteDance" data-args="{{dargs .ID}}">🗑️</button>
@@ -40,6 +48,11 @@
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
 .col-actions{white-space:nowrap}
+.col-dance-desc{min-width:20rem}
+.dance-desc-form{display:flex;gap:.4rem;align-items:flex-start}
+.dance-desc-form textarea{flex:1;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem;font-family:inherit;resize:vertical}
+.btn-sm-secondary{padding:.3rem .7rem;background:var(--btn-bg,#eee);color:var(--fg,#333);border:1px solid #ccc;border-radius:4px;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.btn-sm-secondary:hover{background:var(--btn-bg-h,#ddd)}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
 .add-section{margin-top:2rem}

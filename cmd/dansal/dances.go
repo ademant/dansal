@@ -7,13 +7,14 @@ import (
 )
 
 type Dance struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // GET /api/v1/dances
 func getDances(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, name FROM dances ORDER BY name")
+	rows, err := db.Query("SELECT id, name, description FROM dances ORDER BY name")
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -22,7 +23,7 @@ func getDances(w http.ResponseWriter, r *http.Request) {
 	dances := []Dance{}
 	for rows.Next() {
 		var d Dance
-		if err := rows.Scan(&d.ID, &d.Name); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &d.Description); err != nil {
 			writeInternalError(w, err)
 			return
 		}
@@ -39,14 +40,15 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
 	var d Dance
-	if err := db.QueryRow("INSERT INTO dances (name, created_by_id) VALUES (?, ?) RETURNING id, name", req.Name, callerID).Scan(&d.ID, &d.Name); err != nil {
+	if err := db.QueryRow("INSERT INTO dances (name, description, created_by_id) VALUES (?, ?, ?) RETURNING id, name, description", req.Name, req.Description, callerID).Scan(&d.ID, &d.Name, &d.Description); err != nil {
 		writeError(w, "Failed to create dance", http.StatusInternalServerError)
 		return
 	}
@@ -54,6 +56,42 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/dances/%d", d.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(d)
+}
+
+// PUT /api/v1/dances/{id} — full replace of name+description (#1290).
+func updateDance(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole != RoleAdmin {
+		writeError(w, "Forbidden: only admins may edit dances", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeError(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	result, err := db.Exec(
+		"UPDATE dances SET name=?, description=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
+		req.Name, req.Description, resolveDisplayName(callerID), id,
+	)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		writeError(w, "Dance not found", http.StatusNotFound)
+		return
+	}
+	var d Dance
+	if err := db.QueryRow("SELECT id, name, description FROM dances WHERE id = ?", id).Scan(&d.ID, &d.Name, &d.Description); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	writeJSON(w, d)
 }
 
 // DELETE /api/v1/dances/{id}

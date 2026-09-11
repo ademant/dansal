@@ -453,6 +453,7 @@ func main() {
 
 		r.HandleFunc("GET /admin/dances", adminDancesHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/dances", adminRateLimit(adminDanceCreateHandler(cfg, client)))
+		r.HandleFunc("POST /admin/dances/{id}/edit", adminRateLimit(adminDanceEditHandler(cfg, client)))
 		r.HandleFunc("POST /admin/dances/{id}/delete", adminRateLimit(adminDanceDeleteHandler(cfg, client)))
 
 		r.HandleFunc("GET /admin/category-mappings", adminCategoryMappingsHandler(cfg, tmpls, client, i18n))

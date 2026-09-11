@@ -218,6 +218,9 @@ type siteConfigData struct {
 	TimeFormatSite       string // "" web.yaml default, "24h", "12h"
 	SameAs               string // one external profile URL per line (#1296)
 	HomeIntroYAML        string // #1298: lang -> homepage intro paragraph, as YAML text
+	DescBallYAML         string // #1290: lang -> default event description for a ball/fest-noz-tagged event, as YAML text
+	DescWorkshopYAML     string // #1290: lang -> default event description for a workshop-tagged event, as YAML text
+	DescFestivalYAML     string // #1290: lang -> default event description for a festival-tagged event, as YAML text
 	NoDB                 bool
 	NoImagesDir          bool
 }
@@ -266,6 +269,23 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.HomeIntroYAML = v
 		} else {
 			data.HomeIntroYAML = webcommon.DefaultHomeIntroYAML
+		}
+		// #1290: same pre-fill-with-shipped-default treatment for each of
+		// the three default-event-description buckets.
+		if v := getSiteSetting(db, "default_desc_ball"); v != "" {
+			data.DescBallYAML = v
+		} else {
+			data.DescBallYAML = webcommon.DefaultDescBallYAML
+		}
+		if v := getSiteSetting(db, "default_desc_workshop"); v != "" {
+			data.DescWorkshopYAML = v
+		} else {
+			data.DescWorkshopYAML = webcommon.DefaultDescWorkshopYAML
+		}
+		if v := getSiteSetting(db, "default_desc_festival"); v != "" {
+			data.DescFestivalYAML = v
+		} else {
+			data.DescFestivalYAML = webcommon.DefaultDescFestivalYAML
 		}
 
 		if cfg.ImagesDir == "" {
@@ -333,6 +353,12 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		// here never blanks the homepage.
 		setSiteSetting(db, "home_intro", strings.TrimSpace(r.FormValue("home_intro")))
 
+		// #1290: default event-description sentences, one YAML text per tag
+		// bucket. Same storage convention as home_intro above.
+		setSiteSetting(db, "default_desc_ball", strings.TrimSpace(r.FormValue("default_desc_ball")))
+		setSiteSetting(db, "default_desc_workshop", strings.TrimSpace(r.FormValue("default_desc_workshop")))
+		setSiteSetting(db, "default_desc_festival", strings.TrimSpace(r.FormValue("default_desc_festival")))
+
 		var defaultDanceIDs []int
 		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -361,7 +387,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro,default_desc_ball,default_desc_workshop,default_desc_festival] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

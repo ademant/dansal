@@ -741,11 +741,12 @@ Musicians are performers linked to events; instructors are teachers linked to wo
 ```
 GET    /api/v1/tags
 GET    /api/v1/dances
-POST   /api/v1/dances   # admin only
+POST   /api/v1/dances       # admin only
+PUT    /api/v1/dances/{id}  # admin only — full replace (name + description)
 DELETE /api/v1/dances/{id}  # admin only
 ```
 
-Both list endpoints are public. Tags have three categories: `format`, `level`, `type`. See the vocabulary endpoint for valid slugs.
+Both list endpoints are public. Tags have three categories: `format`, `level`, `type`. See the vocabulary endpoint for valid slugs. A dance's `description` (#1290) is a free-text field, admin-editable via `/admin/dances`, used to build a default event description when the event itself has none.
 
 ## Events
 

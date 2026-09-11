@@ -34,7 +34,14 @@
   {{- if not $img}}{{$img = $.OGImage}}{{end}}
   {{- if and $img (hasPrefix $img "/")}}{{$img = printf "https://%s%s" $.Domain $img}}{{end}}
   {{- if $img}}, "image": "{{$img | js}}"{{end}}
+  {{- /* #1290: auto-composed default (type + dance styles + admission) when
+       the organizer left no description, computed once in Go and reused
+       verbatim for the visible "Description" section below — a crawler and
+       a human visitor always see the same text. Only when that composition
+       itself produced nothing (untagged, no dances, no pricing) does this
+       fall back to the old title/location/date placeholder. */}}
   {{- if .Description}}, "description": "{{.Description | plainTextDesc | js}}"
+  {{- else if $.Data.DefaultDescription}}, "description": "{{$.Data.DefaultDescription | plainTextDesc | js}}"
   {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
   {{- end}}
   {{- if or .Musicians .Instructors}}, "performer": [
@@ -279,6 +286,13 @@
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_description"}}</h2>
       <div class="evt-description md-content">{{markdownHTML .Description}}</div>
+    </section>
+    {{else if $.Data.DefaultDescription}}
+    {{/* #1290: same text as the JSON-LD description above — plain text, no
+         markdown, so a plain paragraph rather than markdownHTML. */}}
+    <section class="evt-section">
+      <h2>{{$.Strings.T "evt_description"}}</h2>
+      <p class="evt-description">{{$.Data.DefaultDescription}}</p>
     </section>
     {{end}}
 

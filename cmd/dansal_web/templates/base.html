@@ -346,7 +346,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
       </select>
     </div>
     <div class="user-section">
-      <button data-fn="cycleTheme" data-args="[]" class="user-menu-btn" title="Toggle colour scheme">Toggle Theme</button>
+      <button data-fn="cycleTheme" data-args="[]" class="user-menu-btn" title="{{.Strings.T "nav_theme_title"}}">{{.Strings.T "nav_theme"}}</button>
       <button data-fn="openHelpModal" data-args="[]" class="user-menu-btn" title="Help">Help</button>
       <button data-fn="toggleInfoPopup" data-args='["@this"]' class="user-menu-btn" title="About dansal">About</button>
       <div class="nav-info-popup" id="info-popup" hidden>

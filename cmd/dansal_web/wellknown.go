@@ -87,12 +87,23 @@ Contact the instance administrator for privacy inquiries.
 }
 
 // robotsTxtHandler serves /robots.txt.
+//
+// #1297: previously also emitted "Content-Signal: search=yes, ai-train=yes,
+// use=full" — a Cloudflare-only proposal (Sept 2025) with no real adoption;
+// Google's John Mueller confirmed in July 2026 that no crawler or LLM
+// consumes it. Removed rather than replaced: every major AI crawler
+// (OpenAI, Anthropic, Google, Meta, Perplexity, Common Crawl) already
+// supports the standard Disallow/Sitemap directives below via their own
+// user-agent tokens, which is the one mechanism here with confirmed,
+// universal support — an equally-unadopted replacement (e.g. ai.txt, itself
+// several competing non-endorsed drafts) would just repeat the same false
+// sense of communicated permissions.
 func robotsTxtHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		base := cfg.publicBaseURL()
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nContent-Signal: search=yes, ai-train=yes, use=full\n\nSitemap: %s/sitemap.xml\n", base)
+		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nSitemap: %s/sitemap.xml\n", base)
 	}
 }
 

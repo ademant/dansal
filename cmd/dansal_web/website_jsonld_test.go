@@ -12,12 +12,11 @@ import (
 
 var reWebsiteJSONLD = regexp.MustCompile(`(?s)<script type="application/ld\+json">(\{"@context".*?"@type":"WebSite".*?)</script>`)
 
-// TestSiteWideWebsiteJSONLDSameAs covers #1296: the site-wide WebSite
-// JSON-LD block in base.html (present on every page) gains a "sameAs" array
-// from webmin's same_as site setting, as a sibling of "audience" on the
-// WebSite object itself — not nested inside "audience", and omitted
-// entirely when nothing is configured (matching this file's own established
-// "no empty array" convention for optional JSON-LD properties elsewhere).
+// TestSiteWideWebsiteJSONLDSameAs covers #1296 (sameAs from webmin's
+// same_as site setting, as a sibling of "audience" — not nested inside it —
+// omitted entirely when unconfigured) and #1299 (description reusing the
+// site-wide meta_description i18n key) for the site-wide WebSite JSON-LD
+// block in base.html, present on every page.
 func TestSiteWideWebsiteJSONLDSameAs(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -75,6 +74,21 @@ func TestSiteWideWebsiteJSONLDSameAs(t *testing.T) {
 		}
 		if _, ok := aud["sameAs"]; ok {
 			t.Errorf("sameAs must be a sibling of audience on the WebSite object, not nested inside it")
+		}
+	})
+
+	// #1299: description reuses the existing site-wide meta_description i18n
+	// key — not the homepage-only, webmin-editable home_intro text — since
+	// the WebSite node describes the site itself and must read the same
+	// regardless of which page it happens to render on.
+	t.Run("description is the site-wide meta_description, present unconditionally", func(t *testing.T) {
+		v := render(t)
+		desc, ok := v["description"].(string)
+		if !ok || desc == "" {
+			t.Fatalf("expected a non-empty description, got %v", v["description"])
+		}
+		if desc != i18n.Strings("de").T("meta_description") {
+			t.Errorf("description = %q, want the meta_description i18n string %q", desc, i18n.Strings("de").T("meta_description"))
 		}
 	})
 }

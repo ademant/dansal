@@ -73,7 +73,13 @@
 
 <p id="sf-too-many" class="sf-too-many" hidden>{{$.Strings.T "search_too_many_results"}}</p>
 
-<div id="map-container"></div>
+{{/* #1299: same reasoning as index.html — the results table below already
+     carries this same event data as accessible text, so the map is a
+     supplementary visual view. aria-hidden + zoomControl:false/keyboard:false
+     on the map/markers (below) keep a non-operable widget out of the
+     accessibility tree and out of the Tab order; sighted/mouse users see no
+     change at all. */}}
+<div id="map-container" aria-hidden="true"></div>
 <div class="map-toolbar">
   <span id="sf-info" class="filter-info" aria-live="polite"></span>
 </div>
@@ -279,7 +285,9 @@
 
   function initMap(){
     dansalLeafletCss(true);
-    map = L.map('map-container').setView([50,10],5);
+    // #1299: zoomControl:false — see the aria-hidden comment on
+    // #map-container above.
+    map = L.map('map-container',{zoomControl:false}).setView([50,10],5);
     attachTileLayer(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
@@ -307,7 +315,10 @@
     clusterGroup.clearLayers();
     allMarkers = {};
     eventsGeo.forEach(function(e){
-      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t});
+      // #1299: keyboard:false — see the aria-hidden comment on
+      // #map-container above; without it each marker keeps tabindex="0"
+      // despite the container being hidden from the accessibility tree.
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t, keyboard: false});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
       clusterGroup.addLayer(m);

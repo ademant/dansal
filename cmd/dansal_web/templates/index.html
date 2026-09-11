@@ -5,12 +5,21 @@
 {{with .Data}}
 {{$orgMap := .OrgMap}}
 
-{{/* #1298: webmin-editable introductory paragraph, above the event list so
-     a single-crawl AI/screen-reader visitor sees a clear description before
-     the data table. Absent entirely if home_intro somehow resolves empty
-     (shouldn't happen — HomeIntro always falls back to the shipped default
-     in Go — but the page must still render fine if it ever does). */}}
-{{with .HomeIntro}}<p class="home-intro">{{.}}</p>{{end}}
+{{/* #1298/#1299: webmin-editable introductory paragraph. Collapsed by
+     default via native <details> — a real disclosure widget, not
+     display:none, so the text stays in the raw HTML for any crawler that
+     doesn't even run JS, while the homepage itself stays visually minimal.
+     No JS/ARIA wiring needed: <details> already has correct built-in
+     semantics every screen reader understands. Absent entirely if
+     home_intro somehow resolves empty (shouldn't happen — HomeIntro always
+     falls back to the shipped default in Go — but the page must still
+     render fine if it ever does). */}}
+{{with .HomeIntro}}
+<details class="home-intro">
+  <summary>{{$.Strings.T "index_about_summary"}}</summary>
+  <p>{{.}}</p>
+</details>
+{{end}}
 
 <!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
 <!-- Filters -->
@@ -22,7 +31,15 @@
 </div>
 
 <!-- Map -->
-<div id="map-container"></div>
+{{/* #1299: the same events already render as accessible text further down
+     this page (the weekly table / future list), so the map is a
+     supplementary visual view, not the only way to reach that information.
+     aria-hidden removes the non-operable widget from the accessibility tree
+     entirely; zoomControl:false (in the JS below) keeps its only focusable
+     control from staying reachable via Tab once hidden from that tree —
+     aria-hidden alone doesn't affect tab order. Sighted/mouse users see and
+     use the map exactly as before. */}}
+<div id="map-container" aria-hidden="true"></div>
 <div class="map-toolbar">
   <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
   <span id="map-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
@@ -151,7 +168,9 @@
 .feed-hint{color:var(--fg-hint)}
 .fed-source{font-size:.75rem;color:var(--fg-muted);margin-left:.35rem;white-space:nowrap}
 .federated-event td{color:var(--fg-2)}
-.home-intro{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem;max-width:60rem}
+.home-intro{border:1px solid var(--border-mid);border-radius:6px;padding:0 .9rem;margin:0 0 .75rem;max-width:60rem}
+.home-intro summary{cursor:pointer;font-size:.9rem;font-weight:600;padding:.5rem 0;color:var(--fg-2)}
+.home-intro p{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem}
 .travel-notice{font-size:.82rem;color:var(--fg-muted);margin:0 0 .4rem}
 .type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
 .type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}
@@ -1067,15 +1086,23 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   function initMap(){
     dansalLeafletCss(true);
-    map = L.map('map-container').setView([50,10],5);
+    // #1299: zoomControl:false — the map-container div is aria-hidden (see
+    // the template comment above it), so its zoom buttons would otherwise
+    // be the one focusable thing left reachable by Tab inside a widget
+    // that's supposed to be invisible to the accessibility tree entirely.
+    map = L.map('map-container',{zoomControl:false}).setView([50,10],5);
     attachTileLayer(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){
       // title gives the marker's <div role="button"> an accessible name
       // (axe-core's aria-command-name rule) — Leaflet's divIcon marker is
-      // otherwise unlabelled for screen readers.
-      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t});
+      // otherwise unlabelled for screen readers. #1299: keyboard:false since
+      // the whole map is aria-hidden now — without it each marker still
+      // gets tabindex="0" (Leaflet's own keyboard-pan-to-marker feature),
+      // which would leave hundreds of focusable-but-invisible-to-AT stops
+      // in the Tab order despite the container being hidden from it.
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), title: e.t, keyboard: false});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });

@@ -5,8 +5,9 @@
   "@context": "https://schema.org",
   "@type": "Place",
   "@id": "https://{{$.Domain}}/location/{{.ID}}",
-  "name": "{{.Location | js}}"
-  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+  "name": "{{.Location | js}}",
+  "url": "https://{{$.Domain}}/location/{{.ID}}"
+  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
   {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
 }
 </script>

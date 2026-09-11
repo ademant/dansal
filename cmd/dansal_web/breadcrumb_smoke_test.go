@@ -86,7 +86,7 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			Title:      "Fest Noz",
 			StartTime:  "2026-08-01T20:00:00Z",
 			EndTime:    "2026-08-02T01:00:00Z",
-			Location:   &Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Town: "Rennes"},
+			Location:   &Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Zipcode: "35000", Town: "Rennes"},
 			DanceNames: []string{"An Dro", "Hanter Dro"},
 			Tags:       []string{"bal-folk", "musician-workshop"},
 		}, &Organization{ID: 2, Name: "Test Org", ImageURL: "/api/v1/org-images/2"}, "test-org")
@@ -101,6 +101,10 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			`"organizer": {"@id": "https://example.test/org/test-org"}`,
 			`"@id": "https://example.test/location/5"`,
 			`"@id": "https://example.test/org/test-org"`,
+			// #1289: the full Place node gets its own "url" (not just @id)
+			// and the address carries postalCode from Location.Zipcode.
+			`"url": "https://example.test/location/5"`,
+			`"postalCode": "35000"`,
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("event @graph missing %s", want)
@@ -365,7 +369,7 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/location/5", nil)
 		rec := httptest.NewRecorder()
 		td := tmplData(req, cfg, i18n, "test", LocationPageData{
-			Location: Location{ID: 5, Location: "Salle des Fêtes"},
+			Location: Location{ID: 5, Location: "Salle des Fêtes", Address: "1 Rue de la Mairie", Zipcode: "35000", Town: "Rennes"},
 		})
 		renderTemplate(rec, tmpls.location, td)
 		body, _ := io.ReadAll(rec.Body)
@@ -373,6 +377,16 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, body)
 		}
 		checkBlocks(t, string(body), true)
+		// #1289: the location's own Place node gets a "url" property and its
+		// address carries postalCode.
+		for _, want := range []string{
+			`"url": "https://example.test/location/5"`,
+			`"postalCode": "35000"`,
+		} {
+			if !strings.Contains(string(body), want) {
+				t.Errorf("location page missing %s", want)
+			}
+		}
 	})
 
 	t.Run("org page", func(t *testing.T) {

@@ -24,7 +24,7 @@
   {{- else}}, "location": {
     "@type": "Place",
     "name": "{{.Location | js}}"
-    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
     {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
   }{{end}}
   {{- end}}
@@ -82,8 +82,9 @@
   {{- if and .Location .ID}}, {
     "@id": "https://{{$.Domain}}/location/{{.Location.ID}}",
     "@type": "Place",
-    "name": "{{.Location.Location | js}}"
-    {{- with .Location.Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    "name": "{{.Location.Location | js}}",
+    "url": "https://{{$.Domain}}/location/{{.Location.ID}}"
+    {{- with .Location.Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
     {{- if and .Location.Latitude .Location.Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Location.Latitude}}, "longitude": {{.Location.Longitude}}}{{end}}
   }{{- end}}
   {{- if $.Data.Org}}, {

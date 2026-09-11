@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ademant/dansal/internal/webcommon"
+	"gopkg.in/yaml.v2"
 )
 
 // siteSettingsCache reads contact, site_name and impressum_* from web.db at
@@ -28,10 +31,11 @@ type siteSettingsCache struct {
 	defaultDanceIDs      []int
 	bannerAIGenerated    bool
 	logoAIGenerated      bool
-	dateFormat           string   // "de" → DD.MM.YYYY; "" → locale-based
-	timeFormatSite       string   // "24h" or "12h" override (empty = use web.yaml)
-	tileToken            string   // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
-	sameAs               []string // #1296: external profile URLs for the site-wide WebSite JSON-LD's sameAs
+	dateFormat           string            // "de" → DD.MM.YYYY; "" → locale-based
+	timeFormatSite       string            // "24h" or "12h" override (empty = use web.yaml)
+	tileToken            string            // #1269: public tile-proxy token, see getOrCreateTileToken in tiles.go
+	sameAs               []string          // #1296: external profile URLs for the site-wide WebSite JSON-LD's sameAs
+	homeIntro            map[string]string // #1298: lang -> homepage intro paragraph ("%s" placeholder for site name)
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -62,14 +66,41 @@ func (c *siteSettingsCache) load() {
 	timeFormatSite := getSiteSetting(c.db, "time_format")
 	tileToken := getSiteSetting(c.db, "tile_token")
 	sameAs := parseSameAs(getSiteSetting(c.db, "same_as"))
+	homeIntro := parseHomeIntro(getSiteSetting(c.db, "home_intro"))
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
-		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.at =
+		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.homeIntro, c.at =
 		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
-		dateFormat, timeFormatSite, tileToken, sameAs, time.Now()
+		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro, time.Now()
 	c.mu.Unlock()
+}
+
+// parseHomeIntro parses the webmin-managed home_intro setting — YAML text
+// mapping language code to the homepage intro paragraph (#1298) — merged
+// ON TOP OF webcommon.DefaultHomeIntroYAML rather than replacing it, so an
+// admin who only edits (or only ever fills in) a subset of languages still
+// gets working default text for every language they didn't touch, instead
+// of that language silently going blank. A malformed edit is logged and
+// ignored entirely, leaving the shipped default in place for every language.
+func parseHomeIntro(raw string) map[string]string {
+	m := map[string]string{}
+	yaml.Unmarshal([]byte(webcommon.DefaultHomeIntroYAML), &m)
+	if raw == "" {
+		return m
+	}
+	var override map[string]string
+	if err := yaml.Unmarshal([]byte(raw), &override); err != nil {
+		log.Printf("could not parse home_intro YAML, using default for every language: %v", err)
+		return m
+	}
+	for lang, text := range override {
+		if text != "" {
+			m[lang] = text
+		}
+	}
+	return m
 }
 
 // parseSameAs splits the webmin-managed same_as setting (one URL per line)
@@ -151,6 +182,22 @@ func (c *siteSettingsCache) SameAs() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.sameAs
+}
+
+// HomeIntro returns the "%s"-templated homepage intro paragraph for lang
+// (#1298), falling back to "de" when lang isn't present — matching
+// pages.go's existing fallback convention for this kind of admin-editable
+// site text — or "" if neither is set (home_intro's own parse failure
+// already falls back to the shipped default before this is ever reached,
+// so "" here only happens for a lang genuinely absent from both).
+func (c *siteSettingsCache) HomeIntro(lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if v, ok := c.homeIntro[lang]; ok {
+		return v
+	}
+	return c.homeIntro["de"]
 }
 
 // DefaultDanceIDs returns the admin-configured dance presets for the event

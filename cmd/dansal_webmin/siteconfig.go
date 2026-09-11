@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ademant/dansal/internal/webcommon"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -216,6 +217,7 @@ type siteConfigData struct {
 	DateFormat           string // "" locale-based, "de" DD.MM.YYYY
 	TimeFormatSite       string // "" web.yaml default, "24h", "12h"
 	SameAs               string // one external profile URL per line (#1296)
+	HomeIntroYAML        string // #1298: lang -> homepage intro paragraph, as YAML text
 	NoDB                 bool
 	NoImagesDir          bool
 }
@@ -257,6 +259,14 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.DateFormat = getSiteSetting(db, "date_format")
 		data.TimeFormatSite = getSiteSetting(db, "time_format")
 		data.SameAs = getSiteSetting(db, "same_as")
+		// #1298: pre-fill with the shipped default when nothing's been saved
+		// yet, so the admin sees working, correctly-formatted content to
+		// edit rather than a blank field of unclear expected shape.
+		if v := getSiteSetting(db, "home_intro"); v != "" {
+			data.HomeIntroYAML = v
+		} else {
+			data.HomeIntroYAML = webcommon.DefaultHomeIntroYAML
+		}
 
 		if cfg.ImagesDir == "" {
 			data.NoImagesDir = true
@@ -316,6 +326,13 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		// (siteSettingsCache.SameAs) in dansal_web.
 		setSiteSetting(db, "same_as", strings.TrimSpace(r.FormValue("same_as")))
 
+		// #1298: homepage intro paragraph, YAML text (lang -> text). Stored
+		// as-is (whole-textarea trim only) — YAML parsing and per-language
+		// fallback to the shipped default happen at render time
+		// (siteSettingsCache.HomeIntro) in dansal_web, so a malformed edit
+		// here never blanks the homepage.
+		setSiteSetting(db, "home_intro", strings.TrimSpace(r.FormValue("home_intro")))
+
 		var defaultDanceIDs []int
 		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -344,7 +361,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

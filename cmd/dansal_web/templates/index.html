@@ -5,6 +5,13 @@
 {{with .Data}}
 {{$orgMap := .OrgMap}}
 
+{{/* #1298: webmin-editable introductory paragraph, above the event list so
+     a single-crawl AI/screen-reader visitor sees a clear description before
+     the data table. Absent entirely if home_intro somehow resolves empty
+     (shouldn't happen — HomeIntro always falls back to the shipped default
+     in Go — but the page must still render fine if it ever does). */}}
+{{with .HomeIntro}}<p class="home-intro">{{.}}</p>{{end}}
+
 <!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
 <!-- Filters -->
 <p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
@@ -144,6 +151,7 @@
 .feed-hint{color:var(--fg-hint)}
 .fed-source{font-size:.75rem;color:var(--fg-muted);margin-left:.35rem;white-space:nowrap}
 .federated-event td{color:var(--fg-2)}
+.home-intro{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem;max-width:60rem}
 .travel-notice{font-size:.82rem;color:var(--fg-muted);margin:0 0 .4rem}
 .type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
 .type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}

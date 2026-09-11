@@ -138,6 +138,21 @@ func dashAttention(r *http.Request) DashboardAttention {
 	return DashboardAttention{}
 }
 
+// effectiveSiteName resolves the display name shown site-wide: the
+// webmin-configured site_settings value, else web.yaml's own SiteName,
+// else the bare domain — shared by tmplData and indexHandler (#1298's
+// HomeIntro needs it before IndexData is built, ahead of tmplData's own
+// TemplateData.SiteName field).
+func effectiveSiteName(cfg *Config) string {
+	if v := siteCfg.SiteName(); v != "" {
+		return v
+	}
+	if cfg.SiteName != "" {
+		return cfg.SiteName
+	}
+	return cfg.Domain
+}
+
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
 	lang := i18n.detectLang(r)
 	contact := siteCfg.Contact()
@@ -156,13 +171,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		bannerHeight = cfg.BannerHeightMain
 		logoHeight = cfg.LogoHeightMain
 	}
-	siteName := siteCfg.SiteName()
-	if siteName == "" {
-		siteName = cfg.SiteName // YAML fallback
-	}
-	if siteName == "" {
-		siteName = cfg.Domain
-	}
+	siteName := effectiveSiteName(cfg)
 	strs := i18n.Strings(lang)
 
 	hreflangBase := "https://" + cfg.Domain + r.URL.Path // never has ?lang=
@@ -241,6 +250,12 @@ type IndexData struct {
 	// Ext=true — "[]" when the feature isn't configured, never empty/unset,
 	// so index.html's JSON.parse of it always succeeds.
 	ExternalOverlayJSON template.JS
+	// HomeIntro (#1298) is the webmin-editable introductory paragraph shown
+	// above the event list, already resolved to the current page language
+	// and with "%s" filled in with the site name — index-page-only (unlike
+	// TemplateData's site-wide fields), since it has no relevance to any
+	// other page.
+	HomeIntro string
 }
 
 type EventData struct {
@@ -893,7 +908,11 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				holidayDates = template.JS("[" + strings.Join(dates, ",") + "]")
 			}
 		}
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates, ExternalOverlayJSON: template.JS(currentExternalOverlayJSON())}))
+		homeIntro := ""
+		if tpl := siteCfg.HomeIntro(i18n.detectLang(r)); tpl != "" {
+			homeIntro = fmt.Sprintf(tpl, effectiveSiteName(cfg))
+		}
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates, ExternalOverlayJSON: template.JS(currentExternalOverlayJSON()), HomeIntro: homeIntro}))
 	}
 }
 

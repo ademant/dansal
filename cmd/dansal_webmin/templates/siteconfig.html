@@ -140,6 +140,14 @@
 </div>
 
 <div class="card">
+  <div class="card-title">Homepage introduction</div>
+  <div class="form-group">
+    <textarea name="home_intro" rows="10" style="width:100%;resize:vertical;font-family:inherit;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem;font-family:monospace">{{.HomeIntroYAML}}</textarea>
+    <div class="hint">YAML text: one line per language (<code>en: "..."</code>), shown as a paragraph above the event list on the homepage. <code>%s</code> is replaced with the site name. Pre-filled with the shipped default — edit any subset of languages; a language you don't touch keeps using the default. Leave a language out entirely (or leave the whole field blank) to fall back to the default for it.</div>
+  </div>
+</div>
+
+<div class="card">
   <div class="card-title">Impressum / Legal notice</div>
   <div class="hint" style="margin-bottom:.75rem">One text per language. Shown at <code>/impressum</code>. Leave blank to use the default from <code>pages_file</code> (web.yaml).</div>
   {{range .ImpressumLangs}}

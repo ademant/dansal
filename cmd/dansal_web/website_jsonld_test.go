@@ -91,4 +91,14 @@ func TestSiteWideWebsiteJSONLDSameAs(t *testing.T) {
 			t.Errorf("description = %q, want the meta_description i18n string %q", desc, i18n.Strings("de").T("meta_description"))
 		}
 	})
+
+	// Debug aid: "version" (AppVersion, git describe's output — includes the
+	// short commit hash) is on the WebSite JSON-LD, deliberately not the
+	// meta description, so it never shows up in a search result snippet.
+	t.Run("version is present (debug aid, deliberately not in meta description)", func(t *testing.T) {
+		v := render(t)
+		if v["version"] != Version {
+			t.Errorf("version = %v, want %q", v["version"], Version)
+		}
+	})
 }

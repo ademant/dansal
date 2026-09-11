@@ -265,7 +265,13 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .dpr-range-end{background:var(--heading);color:#fff!important;border-radius:0 50% 50% 0}
 .dpr-range-start.dpr-range-end{border-radius:50%}
 </style>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://{{.Domain}}/#website","url":"https://{{.Domain}}/","name":"{{.SiteName}}","description":"{{.Strings.T "meta_description" | js}}","inLanguage":"{{.LangCode}}","audience":{"@type":"PeopleAudience","typicalAgeRange":"12-"}{{if .SiteSameAs}},"sameAs":[{{range $i, $u := .SiteSameAs}}{{if $i}},{{end}}"{{$u | js}}"{{end}}]{{end}}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://{{.Domain}}/#website","url":"https://{{.Domain}}/","name":"{{.SiteName}}","description":"{{.Strings.T "meta_description" | js}}","inLanguage":"{{.LangCode}}","version":"{{.AppVersion | js}}","audience":{"@type":"PeopleAudience","typicalAgeRange":"12-"}{{if .SiteSameAs}},"sameAs":[{{range $i, $u := .SiteSameAs}}{{if $i}},{{end}}"{{$u | js}}"{{end}}]{{end}}}</script>
+{{/* Debug aid: "version" is non-standard for WebSite, deliberately not
+     surfaced in the meta description (a real, user/crawler-facing SEO
+     field several other issues this session cleaned up) — AppVersion is
+     git describe's output (e.g. "v1.7.0-986-gc461b24"), already including
+     the short commit hash, so a deployed instance's exact build is checkable
+     from view-source without shell access. */}}
 </head>
 <body>
 <nav>

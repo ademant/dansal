@@ -44,12 +44,12 @@
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
   {{if $.User}}
+  {{/* #1302: feed-source (fetchurl) edit/run icons used to live here on the
+       public org page — moved to /admin/organization/{slug}'s "assigned
+       fetch sources" section, alongside assigned locations/templates/series,
+       which is where every other admin-only org management action lives. */}}
   <a href="/admin/organization/{{.Slug}}" class="btn-icon" title="{{$.Strings.T "admin_dashboard"}}" aria-label="{{$.Strings.T "admin_dashboard"}}">📋</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit?from={{urlquery $.Path}}" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
-  {{range .Org.FetchSourceIDs}}
-  <a href="/admin/fetchurls/{{.}}/edit" class="btn-icon" title="{{$.Strings.T "org_edit_feed_source"}} #{{.}}" aria-label="{{$.Strings.T "org_edit_feed_source"}} #{{.}}">⚙️</a>
-  <button type="button" class="btn-icon" title="{{$.Strings.T "org_run_feeds"}} #{{.}}" aria-label="{{$.Strings.T "org_run_feeds"}} #{{.}}" data-fn="orgFetchNow" data-args="{{dargs . "@this"}}">🔄</button>
-  {{end}}
   {{end}}
 </div>
 
@@ -266,17 +266,6 @@ function togglePastList(btn) {
   var l = document.getElementById('past-list');
   l.hidden = !l.hidden;
   btn.classList.toggle('btn-toggle-active');
-}
-function orgFetchNow(id, btn) {
-  btn.disabled = true;
-  btn.textContent = 'Fetching…';
-  fetch('/admin/fetchurls/' + id + '/run', {method: 'POST', credentials: 'same-origin', headers: {'Accept': 'application/json'}})
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      btn.textContent = d.error ? '✗ ' + d.error : '✓ ' + d.count + ' events';
-      btn.disabled = false;
-    })
-    .catch(function() { btn.textContent = '✗ Error'; btn.disabled = false; });
 }
 </script>
 {{end}}

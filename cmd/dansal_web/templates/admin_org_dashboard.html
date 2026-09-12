@@ -101,11 +101,17 @@
       <div class="dash-org-actions">
         <button type="button" class="btn-sm" title="{{$.Strings.T "org_run_feeds"}}" data-fn="orgFetchNow" data-args="{{dargs .ID "@this"}}">🔄</button>
         <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm" title="{{$.Strings.T "org_edit_feed_source"}}">⚙️</a>
+        <button type="button" class="btn-sm btn-del" title="{{$.Strings.T "admin_delete"}}" aria-label="{{$.Strings.T "admin_delete"}}"
+                data-confirm="{{$.Strings.T "fetch_confirm_delete"}}" data-fn="deleteFetchSource" data-args="{{dargs .ID}}">🗑️</button>
       </div>
     </div>
     {{end}}
   </div>
 </details>
+{{else}}
+<div class="dash-actions">
+  <a href="/admin/fetchurls/new?org_id={{.Org.ID}}" class="dash-btn">+ {{$.Strings.T "fetch_add"}}</a>
+</div>
 {{end}}
 
 {{if .NewEventOrgID}}
@@ -506,5 +512,6 @@ function orgFetchNow(id,btn){
     .then(function(d){btn.textContent=d.error?'✗ '+d.error:'✓ '+d.count+' events';btn.disabled=false;})
     .catch(function(){btn.textContent='✗ Error';btn.disabled=false;});
 }
+function deleteFetchSource(id){var f=document.createElement('form');f.method='post';f.action='/admin/fetchurls/'+id+'/delete';document.body.appendChild(f);f.submit();}
 </script>
 {{end}}

@@ -1459,10 +1459,12 @@ type BoardData struct {
 	ShowSleep     bool
 	ShowTickets   bool
 	ShowLostFound bool
-	FormToken     string
-	ResendSent    bool // true when redirected back from POST /board/resend-manage
-	RenewSent     bool // true when redirected back from POST /board/renew-session
-	RenewDone     bool // true when redirected back from GET /board/renew-session/{token} (session set)
+	FormToken    string // shared token for the per-post contact forms (one per page)
+	ResendToken  string // dedicated token for POST /board/resend-manage (#1303)
+	RenewToken   string // dedicated token for POST /board/renew-session (#1303)
+	ResendSent   bool   // true when redirected back from POST /board/resend-manage
+	RenewSent    bool   // true when redirected back from POST /board/renew-session
+	RenewDone    bool   // true when redirected back from GET /board/renew-session/{token} (session set)
 }
 
 func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1550,6 +1552,7 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		sort.Strings(towns)
 
 		title := i18n.T(r, "nav_board")
+		ip := getClientIP(r)
 		data := BoardData{
 			Posts:         posts,
 			TownFilter:    townFilter,
@@ -1559,7 +1562,9 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowSleep:     showSleep,
 			ShowTickets:   showTickets,
 			ShowLostFound: showLostFound,
-			FormToken:     issueFormToken(getClientIP(r)),
+			FormToken:     issueFormToken(ip), // contact forms
+			ResendToken:   issueFormToken(ip), // resend-manage form (#1303)
+			RenewToken:    issueFormToken(ip), // renew-session form (#1303)
 			ResendSent:    q.Get("resend") == "1",
 			RenewSent:     q.Get("renew") == "1",
 			RenewDone:     q.Get("renewed") == "1",

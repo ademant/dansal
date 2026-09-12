@@ -22,10 +22,6 @@
     <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
     {{end}}
 
-    <button type="button" id="btn-passkey-instant" data-fn="passkeyLoginDiscoverable" data-args="[]" class="btn-passkey-instant">{{$.Strings.T "login_passkey_instant"}}</button>
-
-    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
-
     {{if .TotpRequired}}
     <form method="post" action="/login" autocomplete="off">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
@@ -40,6 +36,8 @@
       <button type="submit">{{$.Strings.T "login_submit"}}</button>
     </form>
     {{else}}
+    {{/* #1304: password form is primary — appears first so it's the browser's
+         default Enter target and the visual default for returning users. */}}
     <form id="pw-form" method="post" action="/login" autocomplete="on">
       {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
       <input type="hidden" name="_form_token" value="{{.FormToken}}">
@@ -53,7 +51,12 @@
       <button type="submit" id="btn-login" class="btn-login" disabled>{{$.Strings.T "login_submit"}}</button>
     </form>
 
+    <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
+
+    {{/* #1304: passkey-instant demoted from standalone primary button to the
+         alt row so password login reads as the default without burying passkey. */}}
     <div class="alt-btns">
+      <button type="button" id="btn-passkey-instant" data-fn="passkeyLoginDiscoverable" data-args="[]" class="btn-alt btn-passkey-instant-alt">{{$.Strings.T "login_passkey_instant"}}</button>
       <button type="button" data-fn="doPasskeyFromShared" data-args="[]" class="btn-alt btn-passkey-alt">{{$.Strings.T "login_passkey_submit"}}</button>
       <button type="button" data-fn="submitMagic" data-args='["email"]' class="btn-alt">{{$.Strings.T "login_magic_submit"}}</button>
       <button type="button" data-fn="submitMagic" data-args='["telegram"]' class="btn-alt btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
@@ -182,6 +185,15 @@
     if(pwd && btn) btn.disabled = !pwd.value;
   };
 
+  // #1304: re-enable btn-login on submit so pressing Enter after a
+  // password-manager autofill (which may not fire 'input') still works.
+  var pwForm = document.getElementById('pw-form');
+  if(pwForm) pwForm.addEventListener('submit', function(){
+    var pwd = document.getElementById('password');
+    var btn = document.getElementById('btn-login');
+    if(pwd && btn && pwd.value) btn.disabled = false;
+  });
+
   window.submitMagic = function(channel) {
     var idEl = document.getElementById('identifier');
     document.getElementById('magic-identifier').value = idEl ? idEl.value.trim() : '';
@@ -200,8 +212,8 @@
 .login-form input:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .login-form button{margin-top:.2rem;padding:.5rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
 .login-form button:hover:not(:disabled){background:#0d4a80}
-.btn-passkey-instant{background:#0a7c4a!important;font-weight:600;font-size:1rem!important;padding:.6rem!important}
-.btn-passkey-instant:hover:not(:disabled){background:#065e37!important}
+.btn-passkey-instant-alt{background:#0a7c4a!important;color:#fff!important;border-color:#065e37!important;font-weight:600}
+.btn-passkey-instant-alt:hover{background:#065e37!important}
 .btn-login:disabled{opacity:.45;cursor:default}
 .passkey-or{display:flex;align-items:center;gap:.5rem;color:var(--fg-hint);font-size:.8rem;margin:.1rem 0}
 .passkey-or::before,.passkey-or::after{content:'';flex:1;border-top:1px solid var(--border)}

@@ -7,8 +7,9 @@
   "@id": "https://{{$.Domain}}/location/{{.ID}}",
   "name": "{{.Location | js}}",
   "url": "https://{{$.Domain}}/location/{{.ID}}"
-  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayRegion}}, "addressRegion": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
   {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
+  {{- with locationSameAsJSON .}}, "sameAs": {{.}}{{end}}
 }
 </script>
 <script type="application/ld+json">

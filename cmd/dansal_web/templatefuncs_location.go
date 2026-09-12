@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"strconv"
+	"strings"
 )
 
 // Location template functions — one slice of the merged tmplFuncMap, split
@@ -161,6 +163,38 @@ var tmplFuncsLocation = template.FuncMap{
 			return *e.Location.ParentID
 		}
 		return e.Location.ID
+	},
+	// locationSameAsJSON builds a JSON array of sameAs URLs for a Place node
+	// from the location's external identifiers: OSM (osm_type + osm_id),
+	// Wikidata, and MusicBrainz Place. Returns empty string when none are set
+	// so the template can gate on it with {{with locationSameAsJSON .}}.
+	"locationSameAsJSON": func(loc Location) template.JS {
+		var urls []string
+		if loc.OsmID != nil {
+			osmKind := ""
+			switch strings.ToUpper(loc.OsmType) {
+			case "N":
+				osmKind = "node"
+			case "W":
+				osmKind = "way"
+			case "R":
+				osmKind = "relation"
+			}
+			if osmKind != "" {
+				urls = append(urls, fmt.Sprintf("https://www.openstreetmap.org/%s/%d", osmKind, *loc.OsmID))
+			}
+		}
+		if loc.WikidataID != "" {
+			urls = append(urls, "https://www.wikidata.org/wiki/"+loc.WikidataID)
+		}
+		if loc.MBPlaceID != "" {
+			urls = append(urls, "https://musicbrainz.org/place/"+loc.MBPlaceID)
+		}
+		if len(urls) == 0 {
+			return ""
+		}
+		b, _ := json.Marshal(urls)
+		return template.JS(b)
 	},
 	// locationsJSON flattens top-level locations and their room children into
 	// one JS array (see flattenLocationOptions).

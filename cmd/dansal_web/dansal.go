@@ -666,6 +666,8 @@ type Location struct {
 	Internetsite    string          `json:"internetsite"`
 	OsmID           *int64          `json:"osm_id,omitempty"`
 	OsmType         string          `json:"osm_type,omitempty"`
+	WikidataID      string          `json:"wikidata_id,omitempty"`
+	MBPlaceID       string          `json:"mb_place_id,omitempty"`
 	Geohash         string          `json:"geohash,omitempty"`
 	CreatedAt       string          `json:"created_at"`
 	OrganizationIDs []int           `json:"organization_ids,omitempty"`

@@ -1092,6 +1092,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // that's supposed to be invisible to the accessibility tree entirely.
     map = L.map('map-container',{zoomControl:false}).setView([50,10],5);
     attachTileLayer(map);
+    // #1299 follow-up: the tile layer's attribution control renders real
+    // <a href> links — zoomControl:false and each marker's keyboard:false
+    // don't cover those, so they were the one thing axe's aria-hidden-focus
+    // check still caught as focusable inside the aria-hidden map. Same fix
+    // as the others: pull them out of the tab order, not out of the page.
+    map.attributionControl.getContainer().querySelectorAll('a').forEach(function(a){ a.tabIndex=-1; });
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){

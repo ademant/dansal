@@ -619,6 +619,9 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		if req.Latitude != nil && req.Longitude != nil {
 			insertGH = geohashEncode(*req.Latitude, *req.Longitude, 7)
 		}
+		if !checkGeohashAvailable(w, insertGH, req.ParentID, "0") {
+			return
+		}
 		result, err := db.Exec(
 			"INSERT INTO locations (location, short_name, address, zipcode, town, country, country_code, region, latitude, longitude, internetsite, osm_id, osm_type, geohash, wikidata_id, mb_place_id, notes_md, attributes, parking, floor_condition, no_street_shoes, parent_id, capacity, size_sqm, plan_x, plan_y, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))",
 			// nullIfEmpty(insertGH): the partial UNIQUE index on geohash only
@@ -873,6 +876,26 @@ func checkOsmIDAvailable(w http.ResponseWriter, osmType string, osmID *int64, se
 	return true
 }
 
+// checkGeohashAvailable enforces the same top-level-geohash uniqueness that
+// idx_locations_geohash_toplevel (#687) already enforces at the DB level,
+// but with a friendly 409+existing_id response instead of a raw constraint
+// failure — mirroring checkOsmIDAvailable, used the same way by
+// createLocations, putLocation (PUT), and patchLocation (PATCH). Only
+// applies to top-level locations: a room's coordinates are always inherited
+// from its parent at read time (never stored), so a room can't collide.
+func checkGeohashAvailable(w http.ResponseWriter, geohash string, parentID *int, selfID string) bool {
+	if geohash == "" || parentID != nil {
+		return true
+	}
+	var existingID int
+	if db.QueryRow("SELECT id FROM locations WHERE geohash=? AND parent_id IS NULL AND id!=?", geohash, selfID).Scan(&existingID) == nil {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{"error": "location already exists", "existing_id": existingID})
+		return false
+	}
+	return true
+}
+
 // locationUpdateFields holds the columns shared by putLocation (PUT) and
 // patchLocation (PATCH)'s otherwise-identical final UPDATE (#1012).
 type locationUpdateFields struct {
@@ -967,6 +990,9 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 	gh := ""
 	if req.Latitude != nil && req.Longitude != nil {
 		gh = geohashEncode(*req.Latitude, *req.Longitude, 7)
+	}
+	if !checkGeohashAvailable(w, gh, req.ParentID, id) {
+		return
 	}
 	if err := writeLocationFields(id, locationUpdateFields{
 		Location: req.Location, ShortName: req.ShortName, Address: req.Address, Zipcode: req.Zipcode,
@@ -1140,6 +1166,9 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	gh := loc.Geohash
 	if loc.Latitude != nil && loc.Longitude != nil {
 		gh = geohashEncode(*loc.Latitude, *loc.Longitude, 7)
+	}
+	if !checkGeohashAvailable(w, gh, loc.ParentID, id) {
+		return
 	}
 	if err := writeLocationFields(id, locationUpdateFields{
 		Location: loc.Location, ShortName: loc.ShortName, Address: loc.Address, Zipcode: loc.Zipcode,

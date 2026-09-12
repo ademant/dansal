@@ -26,17 +26,19 @@ type AdminLocationsData struct {
 }
 
 type AdminLocationEditData struct {
-	Location      Location
-	Parent        *Location // set when Location.ParentID is set — the building this room belongs to
-	UserOrgs      []Organization
-	AssignedOrgs  []Organization
-	AvailableOrgs []Organization
-	ReadOnly      bool
-	ErrorKey      string
-	ConflictID    int // set when API returns 409: location with same OSM ID already exists
-	ReturnURL     string
-	From          string
-	Saved         bool
+	Location         Location
+	Parent           *Location // set when Location.ParentID is set — the building this room belongs to
+	UserOrgs         []Organization
+	PreselectOrgID   int // pre-checks this org's checkbox in UserOrgs on the "new location" form (?org_id=, #1302)
+	AssignedOrgs     []Organization
+	AvailableOrgs    []Organization
+	ReadOnly         bool
+	ErrorKey         string
+	ConflictID       int      // set when API returns 409: location with same OSM ID or geohash already exists
+	ConflictLocation Location // best-effort lookup of ConflictID, for showing its name (#1302)
+	ReturnURL        string
+	From             string
+	Saved            bool
 }
 
 // safeLocationsReturnURL validates that raw is a same-site path under
@@ -300,9 +302,11 @@ func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalCl
 		if !ok {
 			return
 		}
+		orgID, _ := strconv.Atoi(r.URL.Query().Get("org_id"))
 		title := i18n.T(r, "admin_new")
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
-			UserOrgs: newLocationUserOrgs(r, user, client),
+			UserOrgs:       newLocationUserOrgs(r, user, client),
+			PreselectOrgID: orgID,
 		}))
 	}
 }
@@ -369,6 +373,9 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			if errors.As(err, &conflictErr) {
 				data.ErrorKey = ""
 				data.ConflictID = conflictErr.ExistingID
+				if existing, gerr := client.GetLocation(r.Context(), conflictErr.ExistingID); gerr == nil {
+					data.ConflictLocation = existing
+				}
 			}
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
@@ -515,6 +522,9 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			if errors.As(err, &conflictErr) {
 				data.ErrorKey = ""
 				data.ConflictID = conflictErr.ExistingID
+				if existing, gerr := client.GetLocation(r.Context(), conflictErr.ExistingID); gerr == nil {
+					data.ConflictLocation = existing
+				}
 			}
 			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, data))
 			return
@@ -761,10 +771,56 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		token := getSessionToken(r)
 		capacity := parseFormOptionalInt(r.Form, "capacity")
 		sizeSqm := parseFormOptionalInt(r.Form, "size_sqm")
-		if _, err := client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token); err != nil {
+		child, err := client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token)
+		if err != nil {
 			log.Printf("create child location under %d: %v", id, err)
+		} else {
+			// organization_ids: only sent by the "add as a room instead" action
+			// on the create-conflict prompt (#1302) — a room has no org
+			// checkboxes of its own on this quick-add form, so a plain "add
+			// room" submit never carries this field.
+			for _, idStr := range r.Form["organization_ids"] {
+				if orgID, oerr := strconv.Atoi(idStr); oerr == nil && orgID > 0 {
+					if aerr := client.BulkAssignLocationOrg(r.Context(), []int{child.ID}, &orgID, token); aerr != nil {
+						log.Printf("assign org %d to new room %d: %v", orgID, child.ID, aerr)
+					}
+				}
+			}
 		}
 		client.invalidateLocations()
+		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+// adminLocationConflictAssignOrgsHandler is POST /admin/locations/{id}/assign-orgs
+// — one of the two resolution actions on the "location already exists"
+// create-conflict prompt (#1302): assign every org the admin had checked on
+// the abandoned new-location form to the existing location at {id} instead
+// of creating a duplicate. Loops BulkAssignLocationOrg once per org since it
+// bulk-assigns one org to many locations, not many orgs to one location.
+func adminLocationConflictAssignOrgsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		for _, idStr := range r.Form["organization_ids"] {
+			if orgID, oerr := strconv.Atoi(idStr); oerr == nil && orgID > 0 {
+				if aerr := client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token); aerr != nil {
+					log.Printf("assign org %d to location %d: %v", orgID, id, aerr)
+				}
+			}
+		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
 	}
 }

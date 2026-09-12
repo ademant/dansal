@@ -1595,6 +1595,18 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("forbidden")
 	}
+	if resp.StatusCode == http.StatusConflict {
+		// #1302: same shape as CreateLocation's 409 — an OSM-ID or (since
+		// #1302) geohash collision with a different location. Previously
+		// unhandled here, so adminLocationSaveHandler's ConflictID/merge UI
+		// was silently unreachable from the edit form; only create hit it.
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBody))
+		var body struct {
+			ExistingID int `json:"existing_id"`
+		}
+		json.Unmarshal(b, &body)
+		return &LocationConflictError{ExistingID: body.ExistingID}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}

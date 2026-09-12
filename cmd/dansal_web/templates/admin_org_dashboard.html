@@ -23,6 +23,9 @@
 <details class="dash-orgs">
   <summary>{{$.Strings.T "org_assigned_locations"}} ({{len .OrgLocations}})</summary>
   <div class="dash-orgs-list">
+    <div class="dash-org-row">
+      <a href="/admin/locations/new?org_id={{.Org.ID}}" class="btn-sm">+ {{$.Strings.T "admin_location_new_title"}}</a>
+    </div>
     {{range .OrgLocations}}
     <div class="dash-org-row">
       <a href="/admin/location/{{.ID}}" class="dash-org-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</a>
@@ -37,6 +40,10 @@
     {{end}}
   </div>
 </details>
+{{else}}
+<div class="dash-actions">
+  <a href="/admin/locations/new?org_id={{.Org.ID}}" class="dash-btn">+ {{$.Strings.T "admin_location_new_title"}}</a>
+</div>
 {{end}}
 
 {{if .OrgTemplates}}

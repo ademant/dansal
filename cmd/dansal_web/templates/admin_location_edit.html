@@ -7,12 +7,32 @@
 {{if .Saved}}<p class="form-saved" role="status">{{$.Strings.T "admin_saved"}}</p>{{end}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 {{if .ConflictID}}<div class="form-error" role="alert">
-  <p>{{$.Strings.T "loc_conflict_exists"}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
-  {{if .Location.ID}}<form method="post" action="/admin/locations/merge" style="margin-top:.5rem" data-on="submit" data-confirm="{{$.Strings.T "loc_merge_confirm"}}">
+  <p>{{$.Strings.T "loc_conflict_exists"}}{{if .ConflictLocation.ID}} — <strong>{{if .ConflictLocation.ShortName}}{{.ConflictLocation.ShortName}}{{else}}{{.ConflictLocation.Location}}{{end}}</strong>{{end}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
+  {{if .Location.ID}}
+  <form method="post" action="/admin/locations/merge" style="margin-top:.5rem" data-on="submit" data-confirm="{{$.Strings.T "loc_merge_confirm"}}">
     <input type="hidden" name="loc_ids" value="{{.Location.ID}}">
     <input type="hidden" name="loc_ids" value="{{.ConflictID}}">
     <button type="submit" class="btn-merge">{{$.Strings.T "loc_conflict_merge"}}</button>
-  </form>{{end}}
+  </form>
+  {{else}}
+  <!-- #1302: creating a new location hit an existing top-level location at
+       the same geohash (or OSM place) — there's nothing to merge yet since
+       the new one was never created, so offer the two real next steps
+       instead: use the existing location, or add this as a room in it. -->
+  <div class="loc-conflict-actions">
+    {{if .Location.OrganizationIDs}}
+    <form method="post" action="/admin/locations/{{.ConflictID}}/assign-orgs">
+      {{range .Location.OrganizationIDs}}<input type="hidden" name="organization_ids" value="{{.}}">{{end}}
+      <button type="submit" class="btn-secondary">{{$.Strings.T "loc_conflict_assign_org"}}</button>
+    </form>
+    {{end}}
+    <form method="post" action="/admin/locations/{{.ConflictID}}/rooms/new" class="room-add-form">
+      <input type="text" name="name" value="{{.Location.Location}}" class="room-add-input" required>
+      {{range .Location.OrganizationIDs}}<input type="hidden" name="organization_ids" value="{{.}}">{{end}}
+      <button type="submit" class="btn-secondary">{{$.Strings.T "loc_conflict_create_room"}}</button>
+    </form>
+  </div>
+  {{end}}
 </div>{{end}}
 {{if .ReadOnly}}<div class="readonly-notice">{{$.Strings.T "loc_readonly_notice"}}</div>{{end}}
 {{if .Location.ParentID}}
@@ -100,7 +120,7 @@
     <fieldset class="org-assign-new">
       <legend>{{$.Strings.T "fetch_org"}}</legend>
       {{range .UserOrgs}}
-      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"{{if eq (len $.Data.UserOrgs) 1}} checked{{end}}> {{.Name}}</label>
+      <label class="check-label"><input type="checkbox" name="organization_ids" value="{{.ID}}"{{if or (eq (len $.Data.UserOrgs) 1) (eq .ID $.Data.PreselectOrgID) (intInSlice $.Data.Location.OrganizationIDs .ID)}} checked{{end}}> {{.Name}}</label>
       {{end}}
     </fieldset>
     {{end}}
@@ -523,6 +543,7 @@
 .readonly-notice{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .room-edit-notice{background:#f0f7ff;color:#1a5f8a;border:1px solid #b3d4f5;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
 .room-edit-notice a{color:#1a6eb5;font-weight:600}
+.loc-conflict-actions{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;margin-top:.5rem}
 .loc-action-bar{position:sticky;top:0;z-index:40;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;padding:.6rem 0;margin-bottom:1rem}
 .geo-toggle-btn{display:block;width:100%;text-align:left;padding:.5rem .75rem;background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;font-size:.9rem;color:#1a6eb5;cursor:pointer;margin-bottom:.75rem}
 .geo-toggle-btn:hover{background:#e3f0ff}

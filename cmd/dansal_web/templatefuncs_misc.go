@@ -304,6 +304,17 @@ var tmplFuncsMisc = template.FuncMap{
 		return m
 	},
 	"add": func(a, b int) int { return a + b },
+	// intInSlice reports whether id appears in list — used to pre-check a
+	// multi-select org checkbox against either a previously-submitted
+	// OrganizationIDs or a query-param preselection (#1302).
+	"intInSlice": func(list []int, id int) bool {
+		for _, v := range list {
+			if v == id {
+				return true
+			}
+		}
+		return false
+	},
 	// dargs JSON-encodes its arguments as an array, for use in a
 	// data-args="{{dargs ...}}" attribute consumed by the delegated event
 	// dispatcher in base.html (#1149). Returning a plain string (not

@@ -15,6 +15,7 @@ type ServerConfig struct {
 	TokenExpirationHours          int      `yaml:"token_expiration_hours"`
 	PublisherTokenExpirationHours int      `yaml:"publisher_token_expiration_hours"`
 	RateLimit                     int      `yaml:"rate_limit"`
+	AccountMutationRateLimit      int      `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
 	MaxBodyBytes                  int64    `yaml:"max_body_bytes"`
 	ReadHeaderTimeoutSecs         int      `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs               int      `yaml:"read_timeout_secs"`
@@ -224,6 +225,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5
+	}
+	if cfg.Server.AccountMutationRateLimit == 0 {
+		// Same self-DoS guard as RateLimit above: an unset value must default
+		// to something usable, not newAccountLimiter(0, ...)'s effective
+		// one-request-per-window lockout.
+		cfg.Server.AccountMutationRateLimit = 30
 	}
 	if cfg.Server.LoginMaxFailures == 0 {
 		cfg.Server.LoginMaxFailures = 10

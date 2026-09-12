@@ -6,6 +6,7 @@ server:
     - "::1"
   rate_limit: 100
   login_rate_limit: 5
+  account_mutation_rate_limit: 0  # 0 = default 30/min per account; raise on a dev/test instance running automated tests
   max_body_bytes: 1048576  # 1 MiB
   read_timeout_secs: 10
   write_timeout_secs: 30

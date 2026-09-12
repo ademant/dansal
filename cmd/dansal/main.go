@@ -4104,6 +4104,7 @@ func reloadConfig(path string) {
 	config = newCfg
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
+	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
 	initRegisterRateLimiter()
@@ -4190,6 +4191,7 @@ func main() {
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
+	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
 	initRegisterRateLimiter()

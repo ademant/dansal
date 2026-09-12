@@ -85,6 +85,14 @@ server:
   # Login attempts per minute per IP.
   login_rate_limit: 5
 
+  # Create/update mutations per minute per account (events, locations,
+  # musicians, instructors, organizations) — independent of rate_limit
+  # (per-IP) above, this applies per authenticated account regardless of
+  # source IP. 0/unset defaults to 30. Raise this on a dev/test instance
+  # that runs an automated test suite hammering the same seed account with
+  # many creates in quick succession; leave it at the default in production.
+  account_mutation_rate_limit: 0
+
   # Failed logins within login_failure_window_secs before the account is locked.
   login_max_failures: 10
 

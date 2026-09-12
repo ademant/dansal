@@ -43,7 +43,13 @@ func (l *accountLimiter) Allow(userID int) bool {
 
 // createUpdateLimiter caps authenticated create/update mutations per account
 // per minute. Bulk import and fetch-source paths are excluded — they have
-// separate, already-reviewed flows.
+// separate, already-reviewed flows. The 30 default here only covers tests
+// and any other path that never calls main(): real startup and config
+// reload both immediately overwrite it from config.Server
+// .AccountMutationRateLimit (applyDefaults fills in 30 when that's unset
+// too), the same way rateLimiter/loginRateLimiter are rebuilt from their own
+// config values in main() and reloadConfig() — so a dev/test instance can
+// raise this independently of prod without a code change.
 var createUpdateLimiter = newAccountLimiter(30, time.Minute)
 
 // accountMutationLimit rejects create/update requests once the per-account

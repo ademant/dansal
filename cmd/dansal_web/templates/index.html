@@ -1086,18 +1086,16 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   function initMap(){
     dansalLeafletCss(true);
-    // #1299: zoomControl:false — the map-container div is aria-hidden (see
-    // the template comment above it), so its zoom buttons would otherwise
-    // be the one focusable thing left reachable by Tab inside a widget
-    // that's supposed to be invisible to the accessibility tree entirely.
-    map = L.map('map-container',{zoomControl:false}).setView([50,10],5);
+    // #1299: zoomControl:false/keyboard:false — the map-container div is
+    // aria-hidden (see the template comment above it), so its zoom buttons
+    // and the container's own keyboard-pan handling would otherwise be
+    // focusable inside a widget that's supposed to be invisible to the
+    // accessibility tree entirely. detabifyHiddenMap (base.js) mops up the
+    // rest — attribution links and marker-cluster icons, neither of which
+    // either option above covers.
+    map = L.map('map-container',{zoomControl:false,keyboard:false}).setView([50,10],5);
     attachTileLayer(map);
-    // #1299 follow-up: the tile layer's attribution control renders real
-    // <a href> links — zoomControl:false and each marker's keyboard:false
-    // don't cover those, so they were the one thing axe's aria-hidden-focus
-    // check still caught as focusable inside the aria-hidden map. Same fix
-    // as the others: pull them out of the tab order, not out of the page.
-    map.attributionControl.getContainer().querySelectorAll('a').forEach(function(a){ a.tabIndex=-1; });
+    detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){

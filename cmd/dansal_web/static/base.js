@@ -352,6 +352,40 @@ function attachTileLayer(map){
   makeTileLayer().addTo(map);
   fixDefaultMarkerIcon();
 }
+// detabifyHiddenMap: for a decorative map whose container is aria-hidden
+// (index.html/search.html — #1299), keeps every focusable descendant out of
+// the tab order. zoomControl:false and each marker's own keyboard:false
+// cover the zoom buttons and individual event markers, but miss three more
+// things axe's aria-hidden-focus rule still catches: the container div
+// itself (Leaflet's keyboard-pan handler sets its tabindex, silenced by the
+// map's own keyboard:false option — set that too, this only mops up
+// anything still marked focusable), the tile layer's attribution links, and
+// — the reason this can't be a one-time sweep — marker-cluster icons, which
+// Leaflet.markercluster creates and destroys on the fly as the view is
+// panned/zoomed and which have no keyboard:false option of their own to
+// pass through addLayer(). A MutationObserver catches those as they appear.
+function detabifyHiddenMap(map){
+  // '[tabindex]' alone only matches elements carrying an *explicit*
+  // tabindex attribute (the container div, cluster icons — Leaflet sets
+  // those via JS) — it misses natively-focusable elements that never had
+  // one, like the attribution control's plain <a href> links. Match both.
+  var FOCUSABLE = 'a[href],area[href],button,input,select,textarea,iframe,[tabindex]';
+  function detab(el){
+    if (el.nodeType !== 1) return;
+    if (el.matches && el.matches(FOCUSABLE) && el.tabIndex >= 0) el.tabIndex = -1;
+    if (el.querySelectorAll) el.querySelectorAll(FOCUSABLE).forEach(function(child){
+      if (child.tabIndex >= 0) child.tabIndex = -1;
+    });
+  }
+  var container = map.getContainer();
+  detab(container);
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      if (m.type === 'attributes') { detab(m.target); return; }
+      m.addedNodes.forEach(detab);
+    });
+  }).observe(container, {childList:true, subtree:true, attributes:true, attributeFilter:['tabindex']});
+}
 function fixDefaultMarkerIcon(){
   // #1221: plain L.marker(...) calls (no explicit icon:) use Leaflet's
   // built-in default pin, whose image path Leaflet detects at runtime by

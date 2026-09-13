@@ -37,3 +37,25 @@ func TestTruncateUTF8(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateTokenNoTrailingDashOrUnderscore asserts generateToken never
+// returns a token ending in '-' or '_' (#1305): link auto-detection in chat
+// and email clients commonly treats those as trailing punctuation and drops
+// them when linkifying plain text, silently truncating the clickable
+// verification/invite link by one character before the recipient ever sees
+// it. Runs many iterations since the bug only manifests for the ~1-in-32
+// tokens that would otherwise end that way.
+func TestGenerateTokenNoTrailingDashOrUnderscore(t *testing.T) {
+	for i := 0; i < 2000; i++ {
+		tok, err := generateToken(24)
+		if err != nil {
+			t.Fatalf("generateToken: %v", err)
+		}
+		if tok == "" {
+			t.Fatal("generateToken returned an empty token")
+		}
+		if last := tok[len(tok)-1]; last == '-' || last == '_' {
+			t.Fatalf("generateToken returned %q, ending in %q", tok, last)
+		}
+	}
+}

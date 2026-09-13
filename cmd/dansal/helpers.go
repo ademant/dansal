@@ -183,7 +183,11 @@ func generateToken(n int) (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	// Trim trailing -/_ : link auto-detection in chat/email clients commonly
+	// treats them as trailing punctuation and drops them when linkifying
+	// plain text, silently truncating the clickable URL by one character
+	// (#1305). Negligible entropy cost, removes the failure mode entirely.
+	return strings.TrimRight(base64.RawURLEncoding.EncodeToString(b), "-_"), nil
 }
 
 // getUserTOTPSecret returns the user's active TOTP secret, or "" if unset —

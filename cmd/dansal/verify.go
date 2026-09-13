@@ -218,7 +218,10 @@ func sendEmailVerification(user User, verifyURL string) (string, error) {
 	return SendEmail(user.Email, "Verify your email address", body, false)
 }
 
-// sendMatrixMessage opens a DM room with matrixID and sends text.
+// sendMatrixMessage sends text to matrixID, reusing the DM room from any
+// previous send to the same recipient (#1306) instead of createRoom-ing a
+// fresh one — mirrors Telegram's stable chat_id, the closest Matrix has to
+// offer being a persisted room rather than a persisted chat handle.
 func sendMatrixMessage(matrixID, text string) error {
 	homeserver := strings.TrimRight(config.Server.MatrixHomeserver, "/")
 	accessToken := config.Server.MatrixAccessToken
@@ -228,9 +231,32 @@ func sendMatrixMessage(matrixID, text string) error {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Create a minimal private room — no preset, no inline invite.
-	// "trusted_private_chat" is not recognised by all Conduit versions and
-	// triggers M_BAD_JSON; splitting create + invite avoids the issue.
+	var roomID string
+	db.QueryRow("SELECT room_id FROM matrix_rooms WHERE matrix_id=?", matrixID).Scan(&roomID)
+
+	if roomID != "" {
+		if err := matrixSendToRoom(client, homeserver, accessToken, roomID, text); err == nil {
+			return nil
+		}
+		// Stale mapping (e.g. the recipient left/rejected the room) — fall
+		// through and create a fresh one below, same as a first-ever send.
+		db.Exec("DELETE FROM matrix_rooms WHERE matrix_id=?", matrixID)
+	}
+
+	roomID, err := matrixCreateAndInviteRoom(client, homeserver, accessToken, matrixID)
+	if err != nil {
+		return err
+	}
+	db.Exec("INSERT OR REPLACE INTO matrix_rooms (matrix_id, room_id) VALUES (?, ?)", matrixID, roomID)
+
+	return matrixSendToRoom(client, homeserver, accessToken, roomID, text)
+}
+
+// matrixCreateAndInviteRoom creates a minimal private DM room and invites
+// matrixID into it. No preset, no inline invite — "trusted_private_chat" is
+// not recognised by all Conduit versions and triggers M_BAD_JSON, so create
+// and invite are kept as separate calls.
+func matrixCreateAndInviteRoom(client *http.Client, homeserver, accessToken, matrixID string) (string, error) {
 	createBody, _ := json.Marshal(map[string]any{
 		"is_direct":  true,
 		"visibility": "private",
@@ -241,7 +267,7 @@ func sendMatrixMessage(matrixID, text string) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Matrix createRoom: %w", err)
+		return "", fmt.Errorf("Matrix createRoom: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -252,10 +278,9 @@ func sendMatrixMessage(matrixID, text string) error {
 	}
 	json.NewDecoder(resp.Body).Decode(&roomResult)
 	if roomResult.RoomID == "" {
-		return fmt.Errorf("Matrix createRoom failed: %s: %s", roomResult.ErrCode, roomResult.Error)
+		return "", fmt.Errorf("Matrix createRoom failed: %s: %s", roomResult.ErrCode, roomResult.Error)
 	}
 
-	// Invite the target user into the room.
 	inviteBody, _ := json.Marshal(map[string]string{"user_id": matrixID})
 	inviteURL := fmt.Sprintf("%s/_matrix/client/v3/rooms/%s/invite",
 		homeserver, url.PathEscape(roomResult.RoomID))
@@ -264,7 +289,7 @@ func sendMatrixMessage(matrixID, text string) error {
 	req3.Header.Set("Content-Type", "application/json")
 	resp3, err := client.Do(req3)
 	if err != nil {
-		return fmt.Errorf("Matrix invite: %w", err)
+		return "", fmt.Errorf("Matrix invite: %w", err)
 	}
 	defer resp3.Body.Close()
 	if resp3.StatusCode >= 300 {
@@ -273,24 +298,30 @@ func sendMatrixMessage(matrixID, text string) error {
 			Error   string `json:"error"`
 		}
 		json.NewDecoder(resp3.Body).Decode(&invErr)
-		return fmt.Errorf("Matrix invite failed: %s: %s", invErr.ErrCode, invErr.Error)
+		return "", fmt.Errorf("Matrix invite failed: %s: %s", invErr.ErrCode, invErr.Error)
 	}
 
+	return roomResult.RoomID, nil
+}
+
+// matrixSendToRoom sends text as an m.room.message into an already-joined
+// room.
+func matrixSendToRoom(client *http.Client, homeserver, accessToken, roomID, text string) error {
 	txnID := strconv.FormatInt(time.Now().UnixNano(), 10)
 	sendURL := fmt.Sprintf("%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
-		homeserver, url.PathEscape(roomResult.RoomID), txnID)
+		homeserver, url.PathEscape(roomID), txnID)
 	msgBody, _ := json.Marshal(map[string]any{"msgtype": "m.text", "body": text})
-	req2, _ := http.NewRequest("PUT", sendURL, bytes.NewReader(msgBody))
-	req2.Header.Set("Authorization", "Bearer "+accessToken)
-	req2.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequest("PUT", sendURL, bytes.NewReader(msgBody))
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
 
-	resp2, err := client.Do(req2)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Matrix send message: %w", err)
 	}
-	defer resp2.Body.Close()
-	if resp2.StatusCode >= 300 {
-		return fmt.Errorf("Matrix send message: HTTP %d", resp2.StatusCode)
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("Matrix send message: HTTP %d", resp.StatusCode)
 	}
 	return nil
 }

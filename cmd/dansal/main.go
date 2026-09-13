@@ -2664,6 +2664,30 @@ func migrateDB() {
 			db.Exec("ALTER TABLE dances ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 		}
 	}
+
+	// v40 (#1306): matrix_rooms maps a Matrix user ID to the DM room
+	// sendMatrixMessage already created for them, so repeat sends reuse it
+	// instead of createRoom-ing a fresh room (and a fresh invite) every time.
+	if !applied(40) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS matrix_rooms (
+			matrix_id  TEXT    PRIMARY KEY,
+			room_id    TEXT    NOT NULL,
+			created_at INTEGER NOT NULL DEFAULT (unixepoch())
+		)`)
+		mark(40)
+	}
+	// Safety net: ensure matrix_rooms table exists even if v40 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='matrix_rooms'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS matrix_rooms (
+				matrix_id  TEXT    PRIMARY KEY,
+				room_id    TEXT    NOT NULL,
+				created_at INTEGER NOT NULL DEFAULT (unixepoch())
+			)`)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4038,6 +4062,11 @@ func createTables() error {
 		email      TEXT    NOT NULL,
 		expires_at INTEGER NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS matrix_rooms (
+		matrix_id  TEXT    PRIMARY KEY,
+		room_id    TEXT    NOT NULL,
+		created_at INTEGER NOT NULL DEFAULT (unixepoch())
+	);
 	`
 	_, err := db.Exec(schema)
 	if err != nil {
@@ -4081,6 +4110,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(37)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(38)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(39)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(40)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

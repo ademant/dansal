@@ -10,6 +10,27 @@ import (
 // Tag template functions — one slice of the merged tmplFuncMap, split out of
 // frontend.go (#1031).
 
+// nonGroupTags returns tags minus any tag that's a member of one of groups
+// — those already get their own home-page-format-selector badge rendered
+// separately (event-row in base.html), so leaving them in here would show
+// the same tag twice: once as that badge, once again as a plain tag link.
+func nonGroupTags(tags []string, groups []HomeGroup) []string {
+	out := make([]string, 0, len(tags))
+	for _, t := range tags {
+		member := false
+		for _, g := range groups {
+			if tagsAnyOf([]string{t}, g.Members) {
+				member = true
+				break
+			}
+		}
+		if !member {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // tagDisplayLimit is the number of non-type tags shown before "+N more"
 // truncation: 5 total slots minus one slot per home-page format-selector
 // badge that will also be shown for this event (#1173 — previously a fixed
@@ -169,19 +190,29 @@ func tagsAnyOf(tags, members []string) bool {
 	return false
 }
 
+// limitTagsFn returns the tags not already covered by one of groups' own
+// badges (see nonGroupTags), capped at tagDisplayLimit's reserved-slot
+// count.
+func limitTagsFn(tags []string, groups []HomeGroup) []string {
+	rest := nonGroupTags(tags, groups)
+	if limit := tagDisplayLimit(tags, groups); len(rest) > limit {
+		return rest[:limit]
+	}
+	return rest
+}
+
+// hiddenTagCountFn is the "+N more" companion to limitTagsFn.
+func hiddenTagCountFn(tags []string, groups []HomeGroup) int {
+	rest := nonGroupTags(tags, groups)
+	if limit := tagDisplayLimit(tags, groups); len(rest) > limit {
+		return len(rest) - limit
+	}
+	return 0
+}
+
 var tmplFuncsTags = template.FuncMap{
-	"limitTags": func(tags []string, groups []HomeGroup) []string {
-		if limit := tagDisplayLimit(tags, groups); len(tags) > limit {
-			return tags[:limit]
-		}
-		return tags
-	},
-	"hiddenTagCount": func(tags []string, groups []HomeGroup) int {
-		if limit := tagDisplayLimit(tags, groups); len(tags) > limit {
-			return len(tags) - limit
-		}
-		return 0
-	},
+	"limitTags":      limitTagsFn,
+	"hiddenTagCount": hiddenTagCountFn,
 	"tagName": func(tagMap map[string]Tag, slug string) string {
 		if t, ok := tagMap[slug]; ok {
 			return t.Name

@@ -120,6 +120,54 @@ func TestHomeGroups(t *testing.T) {
 	}
 }
 
+// TestLimitTagsExcludesGroupMembers is a regression test for the "double
+// Ball badge" bug: event-row (base.html) renders one badge per matching
+// HomeGroup, then separately renders limitTags(.Tags, $groups) as plain
+// tag links meant to cover only the *leftover* tags beyond that — but
+// limitTags used to just slice tags[:limit] without ever excluding the
+// tags that already got a group badge, so an event tagged "bal-folk"
+// showed "Ball" twice: once as the group badge, once again as a plain
+// tag link for the same slug.
+func TestLimitTagsExcludesGroupMembers(t *testing.T) {
+	groups := []HomeGroup{
+		{Key: "ball", Members: []string{"bal-folk", "fest-noz"}},
+		{Key: "workshop", Members: []string{"workshop", "dance-workshop"}},
+	}
+
+	t.Run("a tag already covered by a group badge is not repeated", func(t *testing.T) {
+		tags := []string{"bal-folk", "beginners"}
+		got := limitTagsFn(tags, groups)
+		for _, g := range got {
+			if g == "bal-folk" {
+				t.Fatalf("limitTags(%v) = %v still contains bal-folk, which already has its own group badge", tags, got)
+			}
+		}
+		if len(got) != 1 || got[0] != "beginners" {
+			t.Fatalf("limitTags(%v) = %v, want [beginners]", tags, got)
+		}
+	})
+
+	t.Run("hiddenTagCount matches the same exclusion", func(t *testing.T) {
+		// 5 slots - 1 (ball) - 1 (workshop) = 3 reserved for the rest; only
+		// "beginners" and "advanced" are non-group tags, so nothing hidden.
+		tags := []string{"bal-folk", "workshop", "beginners", "advanced"}
+		if got := hiddenTagCountFn(tags, groups); got != 0 {
+			t.Fatalf("hiddenTagCount(%v) = %d, want 0", tags, got)
+		}
+		if got := limitTagsFn(tags, groups); len(got) != 2 || got[0] != "beginners" || got[1] != "advanced" {
+			t.Fatalf("limitTags(%v) = %v, want [beginners advanced]", tags, got)
+		}
+	})
+
+	t.Run("no group membership leaves tags untouched (besides the normal count cap)", func(t *testing.T) {
+		tags := []string{"beginners"}
+		got := limitTagsFn(tags, nil)
+		if len(got) != 1 || got[0] != "beginners" {
+			t.Fatalf("limitTags(%v, no groups) = %v, want [beginners]", tags, got)
+		}
+	})
+}
+
 func TestTagsAnyOf(t *testing.T) {
 	if !tagsAnyOf([]string{"a", "b"}, []string{"b", "c"}) {
 		t.Error("expected an overlap to be found")

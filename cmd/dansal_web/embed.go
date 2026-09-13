@@ -417,8 +417,19 @@ type calEvent struct {
 	Cancelled bool     `json:"x,omitempty"`
 }
 
+// embedOrgOption is one entry in the embed's org-checkbox filter, shown only
+// when the embed was itself scoped to 2+ orgs via repeated ?org= params —
+// lets a page embedding several organizers' events (e.g. a regional
+// aggregator) let the viewer toggle which of *those* orgs to show, without
+// exposing every org on the instance.
+type embedOrgOption struct {
+	ID   int
+	Name string
+}
+
 // embedCalendarHandler serves GET /embed/calendar — map + filterable event list
-// with a client-side date-range and event-type (tag) filter.
+// with a client-side date-range, event-type (tag), and (when the embed itself
+// is scoped to 2+ orgs) per-org checkbox filter.
 func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := embedLang(r, i18n)
@@ -461,6 +472,15 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		orgNames := make(map[int]string, len(allOrgs))
 		for _, o := range allOrgs {
 			orgNames[o.ID] = o.Name
+		}
+		var orgOptions []embedOrgOption
+		if len(orgFilter) > 1 {
+			for _, o := range allOrgs {
+				if orgFilter[o.ID] {
+					orgOptions = append(orgOptions, embedOrgOption{ID: o.ID, Name: o.Name})
+				}
+			}
+			sort.Slice(orgOptions, func(i, j int) bool { return orgOptions[i].Name < orgOptions[j].Name })
 		}
 
 		events := make([]Event, 0, len(allEvents))
@@ -528,6 +548,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			"CalData":     template.JS(calJSON),
 			"Tags":        allTags,
 			"OrgNames":    orgNames,
+			"OrgOptions":  orgOptions,
 			"From":        from.Format("2006-01-02"),
 			"To":          to.Format("2006-01-02"),
 			"SelectedTag": q.Get("tag"),
@@ -613,7 +634,7 @@ var embedManifest = map[string]embedWidget{
 	},
 	"calendar": {
 		Path:        "/embed/calendar",
-		Description: "Combined map + filterable event list with client-side date-range and tag filter",
+		Description: "Combined map + filterable event list with client-side date-range and tag filter. When org is given 2+ times, the embed also shows one checkbox per configured org so the viewer can toggle which of them to display.",
 		Params: map[string]embedParam{
 			"org":      {Type: "string", Repeatable: true, Description: "org slug filter; repeatable"},
 			"location": {Type: "number", Repeatable: true, Description: "location ID filter; repeatable"},

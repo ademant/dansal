@@ -11,6 +11,9 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 .filters{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.6rem;font-size:.85rem}
 .filters label{display:flex;flex-direction:column;gap:.15rem;color:#666;font-size:.78rem}
 .filters input,.filters select{font-size:.85rem;padding:.2rem .35rem}
+.org-filters{gap:.9rem}
+.org-check-label{flex-direction:row!important;align-items:center;gap:.3rem!important;color:#444!important;font-size:.82rem!important;cursor:pointer}
+.org-check{margin:0}
 #cal-daterange{cursor:pointer;min-width:14rem;background:#fff}
 #cal-map{height:300px;border-radius:4px;margin-bottom:.6rem}
 .ev-list{list-style:none}
@@ -56,11 +59,18 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     </select>
   </label>
 </div>
+{{if .OrgOptions}}
+<div class="filters org-filters">
+  {{range .OrgOptions}}
+  <label class="org-check-label"><input type="checkbox" class="org-check" value="{{.ID}}" checked> {{.Name}}</label>
+  {{end}}
+</div>
+{{end}}
 <div id="cal-map"></div>
 {{if .Events}}
 <ul class="ev-list" id="cal-list">
 {{range .Events}}
-<li class="ev-item" data-id="{{.ID}}" data-start="{{.StartTime}}" data-tags="{{range .Tags}}{{.}} {{end}}">
+<li class="ev-item" data-id="{{.ID}}" data-start="{{.StartTime}}" data-tags="{{range .Tags}}{{.}} {{end}}" data-org="{{if .OrganizationID}}{{derefInt .OrganizationID}}{{end}}">
   <div>
     <div class="ev-date">{{formatDate $.Lang .StartTime}}</div>
     <div class="ev-time">{{isoTime .StartTime}}{{if .EndTime}} – {{isoTime .EndTime}}{{end}}</div>
@@ -196,8 +206,19 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     });
   }
 
+  // Org checkboxes (only rendered when the embed itself was scoped to 2+
+  // orgs via repeated ?org= — see embedOrgOption in embed.go). checkedOrgs
+  // stays null (org filter inactive) when the checkbox row isn't present at
+  // all, so this is a no-op for every other embed configuration.
+  var orgChecks = document.querySelectorAll('.org-check');
+
   function apply(){
     var tag = document.getElementById('cal-tag').value;
+    var checkedOrgs = null;
+    if(orgChecks.length){
+      checkedOrgs = {};
+      orgChecks.forEach(function(c){ if(c.checked) checkedOrgs[c.value] = true; });
+    }
     markerLayer.clearLayers();
     var bounds = [];
     var visible = 0;
@@ -209,6 +230,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       if(calFrom && date < calFrom) show = false;
       if(calTo   && date > calTo)   show = false;
       if(tag && tags.indexOf(' '+tag+' ') === -1) show = false;
+      if(checkedOrgs && !checkedOrgs[d.org||'']) show = false;
       li.hidden = !show;
       if(show){
         visible++;
@@ -222,6 +244,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   }
 
   document.getElementById('cal-tag').addEventListener('change',apply);
+  orgChecks.forEach(function(c){ c.addEventListener('change',apply); });
 
   // Intercept list-item clicks to open overlay instead of navigating
   document.addEventListener('click',function(ev){

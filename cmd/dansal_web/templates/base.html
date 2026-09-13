@@ -422,7 +422,7 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
      already exist. A deferred load would execute after those call sites run
      (defer scripts run after the whole document parses, regardless of source
      position) and break every one of them (#1217). -->
-<script nonce="{{$.Nonce}}" src="/static/base.js"></script>
+<script nonce="{{$.Nonce}}" src="/static/base.js?v={{.AppVersion}}"></script>
 <main>
 {{block "breadcrumb" .}}{{end}}
 {{block "content" .}}{{end}}

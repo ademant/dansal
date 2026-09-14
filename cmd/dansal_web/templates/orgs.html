@@ -49,6 +49,7 @@
 
 {{if .Data.MapPins}}
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
 // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a
 // plain top-level script reaches this point — wait for DOMContentLoaded.
@@ -59,9 +60,13 @@ document.addEventListener('DOMContentLoaded', function(){
   try { pins = JSON.parse(raw.textContent); } catch(_){ return; }
   if(!pins || !pins.length) return;
 
-  dansalLeafletCss();
+  dansalLeafletCss(true);
   var map = L.map('omap');
   attachTileLayer(map);
+  // Nearby orgs merge into a numbered cluster that expands as you zoom in,
+  // same plugin/radius as /cities and the homepage map, for consistency.
+  var cluster = L.markerClusterGroup({maxClusterRadius:40});
+  map.addLayer(cluster);
 
   var bounds = [];
   pins.forEach(function(p){
@@ -69,13 +74,13 @@ document.addEventListener('DOMContentLoaded', function(){
     bounds.push(ll);
     var popup = '<b><a href="/org/'+escHtml(p.slug)+'">'+escHtml(p.org)+'</a></b>'+
       (p.loc ? '<br><small>'+escHtml(p.loc)+'</small>' : '');
-    L.marker(ll).bindPopup(popup,{maxWidth:220}).addTo(map);
+    cluster.addLayer(L.marker(ll).bindPopup(popup,{maxWidth:220}));
   });
 
   if(bounds.length === 1){
     map.setView(bounds[0], 12);
   } else {
-    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:10}); } catch(_){}
+    try { map.fitBounds(cluster.getBounds(), {padding:[30,30], maxZoom:10}); } catch(_){}
   }
 
   function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

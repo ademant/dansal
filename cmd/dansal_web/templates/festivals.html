@@ -79,6 +79,7 @@ table.fest-folded{opacity:.75}
 </style>
 
 <script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 <script nonce="{{$.Nonce}}">
 (function(){
   var geoEl = document.getElementById('fest-map-geo');
@@ -95,24 +96,29 @@ table.fest-folded{opacity:.75}
   // below still runs immediately either way.
   document.addEventListener('DOMContentLoaded', function(){
     if (geo.length) {
-      dansalLeafletCss();
+      dansalLeafletCss(true);
       // #1286: give the map a default view before any marker is added —
       // Leaflet throws "Set map center and zoom first" on the first
       // addTo(map) otherwise, aborting the rest of this block (including the
       // fitBounds below, which refines this default once bounds are known).
       var map = L.map('map-container').setView([50,10], 5);
       attachTileLayer(map);
+      // Nearby festivals merge into a numbered cluster that expands as you
+      // zoom in, same plugin/radius as /cities and the homepage map.
+      var cluster = L.markerClusterGroup({maxClusterRadius:40});
+      map.addLayer(cluster);
       var bounds = [];
       geo.forEach(function(e){
-        var m = L.marker([e.lat, e.lng]).addTo(map);
+        var m = L.marker([e.lat, e.lng]);
         var start = (e.s||'').slice(0,10);
         var end = e.e || '';
         var when = end && end !== start ? (start+' – '+end) : start;
         m.bindPopup('<a href="/events/'+e.id+'" style="font-weight:bold;color:inherit;text-decoration:none">'+
           e.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</a><div style="font-size:.82rem;margin-top:.2rem">'+when+'</div>');
+        cluster.addLayer(m);
         bounds.push([e.lat, e.lng]);
       });
-      try { map.fitBounds(bounds, {padding:[30,30], maxZoom:9}); } catch(_) { map.setView([50,10],5); }
+      try { map.fitBounds(cluster.getBounds(), {padding:[30,30], maxZoom:9}); } catch(_) { map.setView([50,10],5); }
     } else {
       var mc = document.getElementById('map-container');
       if (mc) mc.hidden = true;

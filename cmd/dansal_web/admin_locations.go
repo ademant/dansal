@@ -709,7 +709,18 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 
 		client.invalidateLocations()
 		client.invalidateEvents()
-		http.Redirect(w, r, safeReferer(r, "/admin/locations"), http.StatusSeeOther)
+		// The two bulk-select-and-merge callers (admin_locations.html,
+		// admin_locations_maintenance.html) stay on their own list page via
+		// Referer, same as before -- they don't submit a return field. The
+		// single-location edit page's conflict-banner merge form does submit
+		// one, and must: its Referer is the edit URL for the location this
+		// merge is about to delete, which would otherwise send the admin
+		// straight back to editing a now-gone location.
+		target := safeReferer(r, "/admin/locations")
+		if ret := r.FormValue("return"); ret != "" {
+			target = safeLocationsReturnURL(ret)
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }
 

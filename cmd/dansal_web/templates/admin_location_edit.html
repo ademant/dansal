@@ -12,6 +12,11 @@
   <form method="post" action="/admin/locations/merge" style="margin-top:.5rem" data-on="submit" data-confirm="{{$.Strings.T "loc_merge_confirm"}}">
     <input type="hidden" name="loc_ids" value="{{.Location.ID}}">
     <input type="hidden" name="loc_ids" value="{{.ConflictID}}">
+    {{/* Without this, the merge handler's Referer-based redirect sends the
+         admin back to this very page -- editing the location that merge is
+         about to delete -- since the browser's Referer on this submit is
+         literally this edit URL. */}}
+    <input type="hidden" name="return" value="{{.ReturnURL}}">
     <button type="submit" class="btn-merge">{{$.Strings.T "loc_conflict_merge"}}</button>
   </form>
   {{else}}

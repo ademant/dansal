@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -170,4 +171,70 @@ func TestAdminLocationRoomCreateHandlerAssignsOrgs(t *testing.T) {
 	if assignedOrg != 5 {
 		t.Errorf("assigned org id = %d, want 5", assignedOrg)
 	}
+}
+
+// TestAdminLocationMergeHandlerRedirect covers a real prod bug: merging from
+// the edit page's duplicate-conflict banner used to redirect via the Referer
+// header, whose value is the edit URL for the location merge just deleted —
+// sending the admin straight back to "editing" a now-gone location. The
+// conflict-banner merge form now submits a return field (carrying the edit
+// page's own ?return=, same one admin_locations_maintenance.html links with)
+// which must take priority; the two bulk-select-and-merge list pages don't
+// submit one and must keep working exactly as before (Referer-based).
+func TestAdminLocationMergeHandlerRedirect(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/locations/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.PathValue("id"))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"id": id})
+	})
+	mux.HandleFunc("PATCH /api/v1/locations/{id}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{}"))
+	})
+	mux.HandleFunc("DELETE /api/v1/locations/{id}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := &Config{Domain: "example.test"}
+	client := &DansalClient{BaseURL: srv.URL, HTTP: srv.Client()}
+	handler := adminLocationMergeHandler(cfg, client)
+
+	newReq := func(body string) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/admin/locations/merge", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})
+	}
+
+	t.Run("edit page's conflict-merge form: return field wins over Referer", func(t *testing.T) {
+		req := newReq("loc_ids=257&loc_ids=42&return=%2Fadmin%2Flocations%2Fmaintenance")
+		req.Header.Set("Referer", "https://example.test/admin/locations/257/edit?return=%2Fadmin%2Flocations%2Fmaintenance")
+
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d, want 303; body=%s", rec.Code, rec.Body.String())
+		}
+		if loc := rec.Header().Get("Location"); loc != "/admin/locations/maintenance" {
+			t.Errorf("redirect target = %q, want /admin/locations/maintenance (not the deleted location's own edit page)", loc)
+		}
+	})
+
+	t.Run("bulk-select merge from a list page: no return field, falls back to Referer", func(t *testing.T) {
+		req := newReq("loc_ids=257&loc_ids=42")
+		req.Header.Set("Referer", "https://example.test/admin/locations")
+
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d, want 303; body=%s", rec.Code, rec.Body.String())
+		}
+		if loc := rec.Header().Get("Location"); loc != "/admin/locations" {
+			t.Errorf("redirect target = %q, want /admin/locations (existing Referer-based behavior)", loc)
+		}
+	})
 }

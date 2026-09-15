@@ -3,6 +3,7 @@ module github.com/ademant/dansal
 go 1.27
 
 require (
+	github.com/andybalholm/brotli v1.2.4
 	github.com/arran4/golang-ical v0.3.5
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/gen2brain/avif v0.4.4
@@ -10,6 +11,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/mattn/go-sqlite3 v1.14.45
 	github.com/prometheus/client_golang v1.23.2
+	github.com/tdewolff/minify/v2 v2.24.17
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/crypto v0.55.0
 	golang.org/x/image v0.45.0
@@ -35,6 +37,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/tdewolff/parse/v2 v2.8.16 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

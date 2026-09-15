@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -235,15 +234,18 @@ func main() {
 				w.Write([]byte("/* Save-Data: on - script omitted */"))
 				return
 			}
-			// If client supports gzip, compress on-the-fly to save bandwidth.
-			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			// br/gzip versions are precomputed at startup (#1323), not
+			// compressed on the fly per request.
+			switch ae := r.Header.Get("Accept-Encoding"); {
+			case strings.Contains(ae, "br"):
+				w.Header().Set("Content-Encoding", "br")
+				w.Write(qrcodeJSBrotli)
+			case strings.Contains(ae, "gzip"):
 				w.Header().Set("Content-Encoding", "gzip")
-				gw := gzip.NewWriter(w)
-				defer gw.Close()
-				gw.Write(qrcodeJS)
-				return
+				w.Write(qrcodeJSGzip)
+			default:
+				w.Write(qrcodeJS)
 			}
-			w.Write(qrcodeJS)
 		})
 		r.HandleFunc("GET /static/base.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Vary", "Accept-Encoding")
@@ -253,14 +255,18 @@ func main() {
 			// the data-fn dispatcher, nav/menu toggles, and map-init helpers
 			// every page depends on for basic interactivity — a stub would
 			// break the page rather than just skip an optional feature.
-			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			// Minified + br/gzip versions are precomputed at startup (#1323),
+			// not minified/compressed on the fly per request.
+			switch ae := r.Header.Get("Accept-Encoding"); {
+			case strings.Contains(ae, "br"):
+				w.Header().Set("Content-Encoding", "br")
+				w.Write(baseJSMinBrotli)
+			case strings.Contains(ae, "gzip"):
 				w.Header().Set("Content-Encoding", "gzip")
-				gw := gzip.NewWriter(w)
-				defer gw.Close()
-				gw.Write(baseJS)
-				return
+				w.Write(baseJSMinGzip)
+			default:
+				w.Write(baseJSMin)
 			}
-			w.Write(baseJS)
 		})
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 		// Legacy Gancio URL patterns dansal doesn't support: 301 instead of

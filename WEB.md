@@ -33,6 +33,9 @@ GET /organizations          # organization directory
 GET /board                  # community ride-share/ticket/lost-and-found board
 GET /search                 # search form
 GET /search/results         # search results (same query params as GET /api/v1/events, proxied)
+GET /festivals              # year-scoped festival planning view (map + calendar + list); ?year=YYYY, default current year
+GET /cities                 # city directory: every town with at least one geo-tagged venue with upcoming events
+GET /city/{slug}            # per-city hub: map + upcoming events in that town; "show past events" loads GET /city/{slug}/past-events on demand
 ```
 
 All public. Each event/org/location/musician/instructor page carries `schema.org`
@@ -78,6 +81,20 @@ page. The HTML page also carries `<link rel="alternate">` tags to the
 Atom/JSON Feed/ActivityPub variants below, and every tag chip shown anywhere
 on the site (event/org/location/musician/instructor pages, the weekly table)
 links to its `/tags/{slug}` page.
+
+`/cities` and `/city/{slug}` (#965) are SEO-oriented city hub pages, distinct
+from `/search`'s free-text town filter: `/cities` only lists towns that
+currently have at least one geo-tagged venue with an upcoming event —
+`townSlug()` (shared with the API's `/api/v1/locations/cities` slugs) decides
+`{slug}`. `/city/{slug}/past-events` is a separate on-demand endpoint rather
+than a query param on the hub page itself, so past events aren't loaded (or
+indexed) unless a visitor actually asks for them.
+
+`/festivals` (#1144) is a year-scoped planning view over festival-tagged
+events specifically (not every event) — one map/calendar/list dataset per
+year, `?year=YYYY` (defaults to the current year), meant for an organizer
+scoping a new festival date to see the whole year's existing landscape at a
+glance.
 
 ## Feeds
 

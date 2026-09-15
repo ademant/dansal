@@ -650,6 +650,7 @@ POST   /api/v1/locations/bulk-assign-org
 POST   /api/v1/locations/unassign-org
 POST   /api/v1/locations/{id}/assign-org  # admin/user (member of the target org)/publisher (member of the target org)
 GET    /api/v1/locations/event-counts # auth required
+GET    /api/v1/locations/cities       # public — towns with an upcoming event, for dansal-web's /cities and /city/{slug}
 
 GET    /api/v1/locations/{id}/children            # list a location's rooms (child locations)
 POST   /api/v1/locations/{id}/children            # auth required — create a room under this location
@@ -697,6 +698,19 @@ POST /api/v1/locations/42/children
 - `lat=` + `lng=` + `radius=` (km) — proximity search; adds `distance_km` to each result
 - `bbox=minLng,minLat,maxLng,maxLat` — bounding-box search
 - `with_event_counts=true` — adds future/past published event counts per location
+
+**`GET /api/v1/locations/cities`** — public. Lists every town with at least one geo-tagged location (`latitude`/`longitude` set) and at least one published, still-upcoming event — the dataset behind dansal-web's `/cities` directory and `/city/{slug}` hub pages (see [WEB.md](WEB.md)). Each entry: `town`, `slug` (matches dansal-web's own `{slug}` routing, both derived from the same `townSlug()` logic), `location_count`, `event_count` (future published events only, same convention as `GET /api/v1/locations/event-counts` above), and an averaged `latitude`/`longitude` across the town's locations for map placement. A town drops out of this list entirely once its last upcoming event passes — there is no separate flag for "was listed before"; a client wanting a stable directory of towns regardless of current events should use `GET /api/v1/locations` and derive it from `town` itself instead.
+
+**Conflict on create/update (`409`).** `POST /api/v1/locations`, `PUT /api/v1/locations/{id}`, and `PATCH /api/v1/locations/{id}` reject a write that would duplicate an existing **top-level** location (one with `parent_id: null` — a room's own coordinates are always inherited from its parent, so this never applies to a room) in either of two ways, both returning `409` with the same body shape:
+
+```json
+{ "error": "location already exists", "existing_id": 42 }
+```
+
+- Same `osm_id` + `osm_type` as an existing location (see the query-parameter note above for checking this proactively before writing).
+- Same geohash-7 cell (~±76m) as an existing location's coordinates — i.e. `latitude`/`longitude` round to the same ~150m×150m cell as one already on file. This is deliberately exact-cell matching, not a wider proximity radius: two venues a few hundred meters apart are unaffected, only an effective coordinate duplicate is rejected.
+
+Either check is skipped when the location being written has `parent_id` set (a room), and (on update) excludes the location's own current row, so re-saving a location's own unchanged coordinates never conflicts with itself.
 
 ## Musicians and Instructors
 

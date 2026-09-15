@@ -62,6 +62,7 @@ func (lh *liveHandler) store(h http.Handler) {
 func main() {
 	// Register --version before loadConfig() calls flag.Parse().
 	printVersion := flag.Bool("version", false, "print version and build date then exit")
+	backfillTileAVIFFlag := flag.Bool("backfill-tile-avif", false, "convert cached PNG map tiles to AVIF in place (no upstream fetch) then exit")
 
 	tag := "dansal-web"
 	if inst := instance.FromConfigArg(); inst != "" {
@@ -73,6 +74,12 @@ func main() {
 	}
 
 	cfg := loadConfig()
+
+	if *backfillTileAVIFFlag {
+		converted, skipped, failed := backfillTileAVIF(cfg.TileCacheDir)
+		fmt.Printf("tile AVIF backfill (%s): converted=%d skipped=%d failed=%d\n", cfg.TileCacheDir, converted, skipped, failed)
+		os.Exit(0)
+	}
 
 	authThrottle = newSubmissionThrottle(
 		cfg.AuthRateLimit,

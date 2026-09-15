@@ -340,3 +340,53 @@ func writeTileResponse(w http.ResponseWriter, contentType string, data []byte) {
 	w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
 	w.Write(data)
 }
+
+// backfillTileAVIF walks dir for cached .png tiles with no .avif sibling yet
+// and encodes one locally from the already-on-disk PNG bytes -- no upstream
+// fetch, so it never touches OSM's tile servers (#1327). Lets an existing
+// instance's tile cache (populated before AVIF re-encoding shipped, or an
+// instance where a backfill just wasn't run yet) get the smaller format
+// immediately instead of waiting on tileCacheMaxAge's 30-day natural
+// refresh. Safe to interrupt and re-run: already-converted tiles are
+// skipped. Invoked via `dansal-web --backfill-tile-avif -config <path>`
+// (main.go), which exits after this returns instead of starting the server.
+func backfillTileAVIF(dir string) (converted, skipped, failed int) {
+	warmAVIFEncoder()
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("tiles backfill: walk error at %s: %v", path, err)
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".png") {
+			return nil
+		}
+		avifPath := strings.TrimSuffix(path, ".png") + ".avif"
+		if _, err := os.Stat(avifPath); err == nil {
+			skipped++
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("tiles backfill: read %s: %v", path, err)
+			failed++
+			return nil
+		}
+		avifData, err := encodeTileAVIF(data)
+		if err != nil {
+			log.Printf("tiles backfill: encode %s: %v", path, err)
+			failed++
+			return nil
+		}
+		if err := os.WriteFile(avifPath, avifData, 0644); err != nil {
+			log.Printf("tiles backfill: write %s: %v", avifPath, err)
+			failed++
+			return nil
+		}
+		converted++
+		return nil
+	})
+	if err != nil {
+		log.Printf("tiles backfill: %v", err)
+	}
+	return converted, skipped, failed
+}

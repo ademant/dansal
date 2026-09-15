@@ -474,3 +474,49 @@ func TestTileProxyServesAVIFToAVIFCapableClient(t *testing.T) {
 		t.Fatalf("upstreamHits after cached AVIF request = %d, want still 1", upstreamHits)
 	}
 }
+
+// TestBackfillTileAVIF covers the `dansal-web --backfill-tile-avif` one-shot
+// mode (#1327): a pre-existing cache of PNG-only tiles gets a .avif sibling
+// for each one, purely locally (no upstream involved at all -- unlike the
+// rest of this file's tests, this one doesn't even spin up an httptest
+// server), is idempotent on a second run, and leaves an already-decodable
+// non-PNG file alone (counted as failed, not silently skipped or corrupting
+// anything).
+func TestBackfillTileAVIF(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "osm", "5", "10")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "20.png"), realPNGFixture(t), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "21.png"), realPNGFixture(t), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "22.png"), []byte("not a real png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	converted, skipped, failed := backfillTileAVIF(dir)
+	if converted != 2 || skipped != 0 || failed != 1 {
+		t.Fatalf("first run: converted=%d skipped=%d failed=%d, want 2/0/1", converted, skipped, failed)
+	}
+	if _, err := os.Stat(filepath.Join(sub, "20.avif")); err != nil {
+		t.Errorf("expected 20.avif: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sub, "21.avif")); err != nil {
+		t.Errorf("expected 21.avif: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sub, "22.avif")); err == nil {
+		t.Errorf("22.avif should not exist (source wasn't a decodable image)")
+	}
+
+	// Re-running must skip everything already converted (idempotent) and
+	// still report the same failure for the undecodable file, not retry it
+	// silently forever.
+	converted2, skipped2, failed2 := backfillTileAVIF(dir)
+	if converted2 != 0 || skipped2 != 2 || failed2 != 1 {
+		t.Fatalf("second run: converted=%d skipped=%d failed=%d, want 0/2/1", converted2, skipped2, failed2)
+	}
+}

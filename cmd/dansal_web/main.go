@@ -120,6 +120,7 @@ func main() {
 	siteCfg = newSiteSettingsCache(db)
 	locAliasCache = newLocationAliasCache(db)
 	getOrCreateTileToken(db) // #1269: ensure the public tile token exists before the cache's first read
+	go warmAVIFEncoder()     // #1327: pay the WASM encoder's ~2s init cost here, not on a visitor's first tile/image request
 	if cfg.InternalSharedSecret == "" {
 		log.Printf("warning: internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
 	}

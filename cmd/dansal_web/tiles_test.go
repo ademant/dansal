@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +14,24 @@ import (
 	"testing"
 	"time"
 )
+
+// realPNGFixture returns a tiny, real, decodable PNG (unlike the other
+// tests' placeholder "fake-png-bytes" strings), so AVIF conversion actually
+// has something to decode.
+func realPNGFixture(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 30), G: uint8(y * 30), B: 100, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode fixture png: %v", err)
+	}
+	return buf.Bytes()
+}
 
 // withTestTileUpstream registers a temporary scheme in tileUpstreams pointing
 // at ts (a local httptest.Server) and removes it on cleanup, so tests never
@@ -359,5 +381,96 @@ func TestTileProxyBearerAPIKey(t *testing.T) {
 	}
 	if apikeysHits != 2 {
 		t.Fatalf("expected the second identical key to be served from cache (still 2 calls), got %d", apikeysHits)
+	}
+}
+
+// TestTileProxyServesAVIFToAVIFCapableClient covers #1327: a request whose
+// Accept header advertises image/avif gets the AVIF-encoded tile (smaller,
+// correct Content-Type), and both representations end up cached on disk so
+// either kind of client is served from cache next time without re-hitting
+// upstream.
+func TestTileProxyServesAVIFToAVIFCapableClient(t *testing.T) {
+	token := setupTileAuthTest(t)
+	pngFixture := realPNGFixture(t)
+	upstreamHits := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(pngFixture)
+	}))
+	defer ts.Close()
+	scheme := withTestTileUpstream(t, ts)
+
+	cfg := &Config{TileCacheDir: t.TempDir()}
+	h := tileProxyHandler(cfg, nil)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/tiles/%s/5/10/20.png?t=%s", scheme, token), nil)
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,*/*;q=0.8")
+	req.SetPathValue("scheme", scheme)
+	req.SetPathValue("z", "5")
+	req.SetPathValue("x", "10")
+	req.SetPathValue("yfile", "20.png")
+	w := httptest.NewRecorder()
+	h(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body len=%d)", w.Code, w.Body.Len())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "image/avif" {
+		t.Errorf("Content-Type = %q, want image/avif", ct)
+	}
+	if w.Body.Len() == 0 || bytes.Equal(w.Body.Bytes(), pngFixture) {
+		t.Errorf("body looks like it wasn't AVIF-encoded (len=%d)", w.Body.Len())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstreamHits = %d, want 1", upstreamHits)
+	}
+
+	pngPath := filepath.Join(cfg.TileCacheDir, scheme, "5", "10", "20.png")
+	avifPath := filepath.Join(cfg.TileCacheDir, scheme, "5", "10", "20.avif")
+	if _, err := os.Stat(pngPath); err != nil {
+		t.Errorf("expected PNG also cached at %s: %v", pngPath, err)
+	}
+	if _, err := os.Stat(avifPath); err != nil {
+		t.Errorf("expected AVIF cached at %s: %v", avifPath, err)
+	}
+
+	// A client that does NOT advertise AVIF support must still get the PNG,
+	// served from the cache written above (no new upstream hit).
+	req2 := httptest.NewRequest("GET", fmt.Sprintf("/tiles/%s/5/10/20.png?t=%s", scheme, token), nil)
+	req2.Header.Set("Accept", "image/png,image/*,*/*;q=0.8")
+	req2.SetPathValue("scheme", scheme)
+	req2.SetPathValue("z", "5")
+	req2.SetPathValue("x", "10")
+	req2.SetPathValue("yfile", "20.png")
+	w2 := httptest.NewRecorder()
+	h(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("non-AVIF client: status = %d, want 200", w2.Code)
+	}
+	if ct := w2.Header().Get("Content-Type"); ct != "image/png" {
+		t.Errorf("non-AVIF client: Content-Type = %q, want image/png", ct)
+	}
+	if !bytes.Equal(w2.Body.Bytes(), pngFixture) {
+		t.Errorf("non-AVIF client: body does not match original PNG fixture")
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstreamHits after cached non-AVIF request = %d, want still 1", upstreamHits)
+	}
+
+	// A repeat AVIF-capable request must also be served from cache.
+	req3 := httptest.NewRequest("GET", fmt.Sprintf("/tiles/%s/5/10/20.png?t=%s", scheme, token), nil)
+	req3.Header.Set("Accept", "image/avif,*/*;q=0.8")
+	req3.SetPathValue("scheme", scheme)
+	req3.SetPathValue("z", "5")
+	req3.SetPathValue("x", "10")
+	req3.SetPathValue("yfile", "20.png")
+	w3 := httptest.NewRecorder()
+	h(w3, req3)
+	if w3.Code != http.StatusOK || w3.Header().Get("Content-Type") != "image/avif" {
+		t.Fatalf("repeat AVIF request: status=%d contentType=%q", w3.Code, w3.Header().Get("Content-Type"))
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstreamHits after cached AVIF request = %d, want still 1", upstreamHits)
 	}
 }

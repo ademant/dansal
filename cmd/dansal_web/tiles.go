@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"image"
+	_ "image/png"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gen2brain/avif"
 )
 
 // tileUpstreams maps the client-supplied scheme segment to a printf template
@@ -221,11 +226,32 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if cacheDir == "" {
 			cacheDir = defaultTileCacheDir(cfg)
 		}
-		cachePath := filepath.Join(cacheDir, scheme, strconv.Itoa(z), strconv.Itoa(x), strconv.Itoa(y)+retina+".png")
+		basePath := filepath.Join(cacheDir, scheme, strconv.Itoa(z), strconv.Itoa(x), strconv.Itoa(y)+retina)
+		pngPath := basePath + ".png"
+		avifPath := basePath + ".avif"
 
-		if fi, err := os.Stat(cachePath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
-			if data, err := os.ReadFile(cachePath); err == nil {
-				writeTileResponse(w, data)
+		// Content-negotiated (#1327), same pattern as base.js's br/gzip
+		// negotiation (#1323): only a client that actually advertises AVIF
+		// support in its own Accept header (a plain <img> tile load still
+		// carries the browser's real image Accept list) is offered the
+		// smaller AVIF cache file. Leaflet's tile URL template is untouched —
+		// it still requests a ".png"-suffixed URL regardless of which
+		// representation actually comes back, the same "real format doesn't
+		// match the URL extension" pattern some real-world tile providers
+		// already use; the browser decodes by Content-Type, not the URL.
+		wantsAVIF := strings.Contains(r.Header.Get("Accept"), "image/avif")
+
+		if wantsAVIF {
+			if fi, err := os.Stat(avifPath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
+				if data, err := os.ReadFile(avifPath); err == nil {
+					writeTileResponse(w, "image/avif", data)
+					return
+				}
+			}
+		}
+		if fi, err := os.Stat(pngPath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
+			if data, err := os.ReadFile(pngPath); err == nil {
+				writeTileResponse(w, "image/png", data)
 				return
 			}
 		}
@@ -257,20 +283,60 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 
-		if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
-			log.Printf("tiles: mkdir cache dir failed path=%s err=%v", filepath.Dir(cachePath), err)
-		} else if err := os.WriteFile(cachePath, data, 0644); err != nil {
-			log.Printf("tiles: write cache failed path=%s err=%v", cachePath, err)
+		if err := os.MkdirAll(filepath.Dir(pngPath), 0755); err != nil {
+			log.Printf("tiles: mkdir cache dir failed path=%s err=%v", filepath.Dir(pngPath), err)
+		} else if err := os.WriteFile(pngPath, data, 0644); err != nil {
+			log.Printf("tiles: write cache failed path=%s err=%v", pngPath, err)
 		}
 
-		writeTileResponse(w, data)
+		// AVIF conversion is best-effort: any failure (corrupt/unexpected
+		// upstream response, encoder trouble) just falls back to the
+		// original PNG bytes already cached and about to be served below --
+		// never blocks the response.
+		avifData, encErr := encodeTileAVIF(data)
+		if encErr != nil {
+			log.Printf("tiles: avif encode failed url=%s err=%v -- serving PNG", upstreamURL, encErr)
+		} else if err := os.WriteFile(avifPath, avifData, 0644); err != nil {
+			log.Printf("tiles: write avif cache failed path=%s err=%v", avifPath, err)
+		}
+
+		if wantsAVIF && encErr == nil {
+			writeTileResponse(w, "image/avif", avifData)
+			return
+		}
+		writeTileResponse(w, "image/png", data)
 	}
+}
+
+// encodeTileAVIF decodes a PNG tile and re-encodes it as AVIF. Real OSM
+// tiles are small (256x256) so a warm encode is on the order of tens of
+// milliseconds (see warmAVIFEncoder) -- only the very first encode of the
+// process's lifetime pays the WASM runtime's ~2s init cost, which
+// warmAVIFEncoder pays at startup instead of on a visitor's request.
+func encodeTileAVIF(pngData []byte) ([]byte, error) {
+	img, _, err := image.Decode(bytes.NewReader(pngData))
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := avif.Encode(&buf, img); err != nil {
+		return nil, fmt.Errorf("encode: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// warmAVIFEncoder pays the AVIF WASM runtime's one-time init cost (~2s,
+// measured) at server startup instead of inline on whichever visitor's
+// request happens to trigger the process's first tile (or image upload)
+// AVIF encode. Safe to call even if no tile/image ever needs AVIF.
+func warmAVIFEncoder() {
+	avif.InitEncoder()
 }
 
 // writeTileResponse sends a cached or freshly-fetched tile image. Tiles for
 // a given z/x/y are immutable in practice, so a long max-age is safe.
-func writeTileResponse(w http.ResponseWriter, data []byte) {
-	w.Header().Set("Content-Type", "image/png")
+func writeTileResponse(w http.ResponseWriter, contentType string, data []byte) {
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
 	w.Write(data)
 }

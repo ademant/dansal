@@ -1208,13 +1208,20 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // covered by what's loaded, or the server reports no more events left.
   // Pass Infinity to mean "just fetch one more batch, whatever it covers"
   // (used by Load More, which doesn't know a target date in advance).
+  // For a real target, the server itself now loops toward it in one round
+  // trip (?target=, #1325) instead of the client chaining one round trip per
+  // 100-event batch over what can be a slow connection -- step() below only
+  // recurses client-side for Infinity, or in the rare case the server's own
+  // safety cap cut off before reaching the target.
   function ensureLoadedUntil(targetMs){
     function step(){
       if(allLoaded || !targetMs || targetMs <= maxLoadedStartMs()){
         return Promise.resolve();
       }
       var afterUnix = Math.floor(maxLoadedStartMs()/1000);
-      return fetch('/events-more?after='+afterUnix, {credentials:'same-origin'})
+      var url = '/events-more?after='+afterUnix;
+      if(targetMs !== Infinity) url += '&target='+Math.floor(targetMs/1000);
+      return fetch(url, {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
         .then(function(data){
           mergeMoreEvents(data);

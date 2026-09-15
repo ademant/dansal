@@ -399,6 +399,19 @@ func startTokenCleanup() {
 				}
 			}
 			lastSeenMu.Unlock()
+
+			// #1316: SQLite's query planner relies on ANALYZE-collected
+			// statistics (sqlite_stat1) to pick good plans for anything
+			// beyond a simple indexed lookup; this was never run at all
+			// before. PRAGMA optimize is the lightweight, self-tuning
+			// alternative SQLite's own docs recommend calling periodically
+			// for a long-running application like this one — piggybacking
+			// on this existing hourly ticker rather than adding a second
+			// one, and running after the DELETEs above so it sees the
+			// table shapes those just changed.
+			if _, err := db.Exec("PRAGMA optimize"); err != nil {
+				log.Printf("PRAGMA optimize: %v", err)
+			}
 		}
 	}()
 }

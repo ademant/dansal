@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -105,5 +106,106 @@ func TestAssignSeriesEventsTouchesChangedAt(t *testing.T) {
 	}
 	if changedBy == "" {
 		t.Error("changed_by was not set")
+	}
+}
+
+// TestUpdateSeriesDescriptionsSkipsOthers covers #1316: batching the
+// per-update series-membership check into one WHERE id IN (...) query must
+// not change which updates are accepted — an event belonging to a
+// *different* series, and a nonexistent event id, are both still silently
+// skipped (no error), while the matching event is still updated.
+func TestUpdateSeriesDescriptionsSkipsOthers(t *testing.T) {
+	setupDedupTestDB(t)
+	db.Exec("INSERT INTO users (id, email, display_name, role) VALUES (1, 'admin@example.test', 'Admin', 'admin')")
+
+	res, _ := db.Exec(`INSERT INTO event_series (slug, title) VALUES ('own-series', 'Own Series')`)
+	seriesID64, _ := res.LastInsertId()
+	seriesID := int(seriesID64)
+	res, _ = db.Exec(`INSERT INTO event_series (slug, title) VALUES ('other-series', 'Other Series')`)
+	otherSeriesID64, _ := res.LastInsertId()
+	otherSeriesID := int(otherSeriesID64)
+
+	ownEventID, _, _, err := insertEvent(db, EventInput{Title: "Own", StartTime: 2000000000, EndTime: 2000003600, IsPublished: true})
+	if err != nil {
+		t.Fatalf("insert own event: %v", err)
+	}
+	db.Exec("UPDATE events SET series_id=? WHERE id=?", seriesID, ownEventID)
+
+	otherEventID, _, _, err := insertEvent(db, EventInput{Title: "Other", StartTime: 2000010000, EndTime: 2000013600, IsPublished: true})
+	if err != nil {
+		t.Fatalf("insert other event: %v", err)
+	}
+	db.Exec("UPDATE events SET series_id=? WHERE id=?", otherSeriesID, otherEventID)
+
+	const missingEventID = 999999
+	body, _ := json.Marshal(map[string]any{
+		"updates": []map[string]any{
+			{"event_id": ownEventID, "description": "updated"},
+			{"event_id": otherEventID, "description": "should not apply"},
+			{"event_id": missingEventID, "description": "should not error"},
+		},
+	})
+	req := adminReq("POST", "/api/v1/series/"+strconv.Itoa(seriesID)+"/descriptions", body)
+	req.SetPathValue("id", strconv.Itoa(seriesID))
+	w := httptest.NewRecorder()
+	updateSeriesDescriptions(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204 (body=%s)", w.Code, w.Body.String())
+	}
+
+	var ownDesc, otherDesc string
+	db.QueryRow("SELECT description FROM events WHERE id=?", ownEventID).Scan(&ownDesc)
+	db.QueryRow("SELECT description FROM events WHERE id=?", otherEventID).Scan(&otherDesc)
+	if ownDesc != "updated" {
+		t.Errorf("own event description = %q, want %q", ownDesc, "updated")
+	}
+	if otherDesc == "should not apply" {
+		t.Error("an update for an event in a different series was applied")
+	}
+}
+
+// TestAssignSeriesEventsSkipsOrgMismatchAndMissing covers #1316: batching
+// the per-id org-compatibility check must not change which events are
+// assigned — an event whose organization_id conflicts with the series' own,
+// and a nonexistent event id, are both still silently skipped.
+func TestAssignSeriesEventsSkipsOrgMismatchAndMissing(t *testing.T) {
+	setupDedupTestDB(t)
+	db.Exec("INSERT INTO users (id, email, display_name, role) VALUES (1, 'admin@example.test', 'Admin', 'admin')")
+	db.Exec("INSERT INTO organizations (id, name) VALUES (1, 'Series Org'), (2, 'Other Org')")
+
+	res, _ := db.Exec(`INSERT INTO event_series (slug, title, organization_id) VALUES ('org-series', 'Org Series', 1)`)
+	seriesID64, _ := res.LastInsertId()
+	seriesID := int(seriesID64)
+
+	orgID1 := 1
+	compatibleEventID, _, _, err := insertEvent(db, EventInput{Title: "Compatible", StartTime: 2000000000, EndTime: 2000003600, IsPublished: true, OrganizationID: &orgID1})
+	if err != nil {
+		t.Fatalf("insert compatible event: %v", err)
+	}
+	orgID2 := 2
+	mismatchEventID, _, _, err := insertEvent(db, EventInput{Title: "Mismatched org", StartTime: 2000010000, EndTime: 2000013600, IsPublished: true, OrganizationID: &orgID2})
+	if err != nil {
+		t.Fatalf("insert mismatched event: %v", err)
+	}
+
+	const missingEventID = 999999
+	body, _ := json.Marshal(map[string]any{"ids": []int{compatibleEventID, mismatchEventID, missingEventID}})
+	req := adminReq("POST", "/api/v1/series/"+strconv.Itoa(seriesID)+"/assign-events", body)
+	req.SetPathValue("id", strconv.Itoa(seriesID))
+	w := httptest.NewRecorder()
+	assignSeriesEvents(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204 (body=%s)", w.Code, w.Body.String())
+	}
+
+	var compatibleSeriesID sql.NullInt64
+	var mismatchSeriesID sql.NullInt64
+	db.QueryRow("SELECT series_id FROM events WHERE id=?", compatibleEventID).Scan(&compatibleSeriesID)
+	db.QueryRow("SELECT series_id FROM events WHERE id=?", mismatchEventID).Scan(&mismatchSeriesID)
+	if !compatibleSeriesID.Valid || int(compatibleSeriesID.Int64) != seriesID {
+		t.Errorf("compatible event series_id = %v, want %d", compatibleSeriesID, seriesID)
+	}
+	if mismatchSeriesID.Valid {
+		t.Errorf("mismatched-org event was assigned to the series (series_id=%v), want left alone", mismatchSeriesID)
 	}
 }

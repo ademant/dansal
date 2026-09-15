@@ -984,13 +984,31 @@ func updateSeriesDescriptions(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	// #1316: was one SELECT per update to verify series membership; batched
+	// into a single WHERE id IN (...) lookup instead.
+	ids := make([]any, len(req.Updates))
+	for i, u := range req.Updates {
+		ids[i] = u.EventID
+	}
+	eventSeriesID := map[int]int64{} // event id -> series_id; absent/0 means "not this series"
+	if len(ids) > 0 {
+		rows, err := db.Query("SELECT id, series_id FROM events WHERE id IN ("+sqlPlaceholders(len(ids))+")", ids...)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		for rows.Next() {
+			var id int
+			var sid sql.NullInt64
+			if rows.Scan(&id, &sid) == nil && sid.Valid {
+				eventSeriesID[id] = sid.Int64
+			}
+		}
+		rows.Close()
+	}
 	for _, u := range req.Updates {
 		// Verify the event belongs to this series before updating.
-		var sid sql.NullInt64
-		if err := db.QueryRow("SELECT series_id FROM events WHERE id=?", u.EventID).Scan(&sid); err != nil {
-			continue
-		}
-		if !sid.Valid || int(sid.Int64) != series.ID {
+		if eventSeriesID[u.EventID] != int64(series.ID) {
 			continue
 		}
 		db.Exec("UPDATE events SET description=? WHERE id=?", u.Description, u.EventID)
@@ -1018,15 +1036,36 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
-	for _, id := range req.IDs {
-		var evOrgID *int
+	// #1316: was one SELECT per id to check org compatibility; batched into
+	// a single WHERE id IN (...) lookup instead.
+	args := make([]any, len(req.IDs))
+	for i, id := range req.IDs {
+		args[i] = id
+	}
+	eventOrgID := map[int]*int{} // event id -> organization_id (nil entry means NULL; absent means the event doesn't exist)
+	rows, err := db.Query("SELECT id, organization_id FROM events WHERE id IN ("+sqlPlaceholders(len(req.IDs))+")", args...)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	for rows.Next() {
+		var id int
 		var tmp sql.NullInt64
-		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&tmp); err != nil {
+		if rows.Scan(&id, &tmp) != nil {
 			continue
 		}
 		if tmp.Valid {
 			v := int(tmp.Int64)
-			evOrgID = &v
+			eventOrgID[id] = &v
+		} else {
+			eventOrgID[id] = nil
+		}
+	}
+	rows.Close()
+	for _, id := range req.IDs {
+		evOrgID, found := eventOrgID[id]
+		if !found {
+			continue // event doesn't exist
 		}
 		if evOrgID != nil && series.OrganizationID != nil && *evOrgID != *series.OrganizationID {
 			continue // org mismatch — skip silently

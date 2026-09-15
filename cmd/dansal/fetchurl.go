@@ -1550,14 +1550,35 @@ func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
-	memberOrgs := userOrgSet(callerID)
-	for _, id := range req.IDs {
-		if callerRole != RoleAdmin {
-			src, err := scanFetchSource(db.QueryRow("SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id))
-			if err != nil || src.OrganizationID == nil || !memberOrgs[*src.OrganizationID] {
+	// #1316: was one SELECT per id to check org membership; batched into a
+	// single WHERE id IN (...) lookup instead, same shape bulkFetchURLsByIDs
+	// below already uses.
+	toDelete := req.IDs
+	if callerRole != RoleAdmin {
+		memberOrgs := userOrgSet(callerID)
+		args := make([]any, len(req.IDs))
+		for i, id := range req.IDs {
+			args[i] = id
+		}
+		query := "SELECT " + fetchSourceCols + " FROM fetch_sources WHERE id IN (" + sqlPlaceholders(len(req.IDs)) + ")"
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		toDelete = nil
+		for rows.Next() {
+			src, err := scanFetchSource(rows)
+			if err != nil {
 				continue
 			}
+			if src.OrganizationID != nil && memberOrgs[*src.OrganizationID] {
+				toDelete = append(toDelete, src.ID)
+			}
 		}
+		rows.Close()
+	}
+	for _, id := range toDelete {
 		db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	}
 	w.WriteHeader(http.StatusNoContent)

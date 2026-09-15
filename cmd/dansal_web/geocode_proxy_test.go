@@ -112,7 +112,9 @@ func TestNominatimGeocodeSearchHandlerRequiresQuery(t *testing.T) {
 	}
 }
 
-// TestNominatimGeocodeReverseHandler covers the reverse-geocode proxy.
+// TestNominatimGeocodeReverseHandler covers the reverse-geocode proxy: it
+// requires a login (every current caller is an admin-only page, unlike the
+// public search proxy) and, once authenticated, proxies through correctly.
 func TestNominatimGeocodeReverseHandler(t *testing.T) {
 	oldBase := nominatimBaseURL
 	t.Cleanup(func() { nominatimBaseURL = oldBase })
@@ -131,22 +133,34 @@ func TestNominatimGeocodeReverseHandler(t *testing.T) {
 	cfg := &Config{Domain: "example.test"}
 	handler := nominatimGeocodeReverseHandler(cfg)
 
-	req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1&lon=-1.6", nil)
-	rec := httptest.NewRecorder()
-	handler(rec, req)
+	t.Run("without login: rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1&lon=-1.6", nil)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code == http.StatusOK {
+			t.Errorf("expected non-200 without a session, got 200")
+		}
+	})
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	if gotPath != "/reverse" {
-		t.Errorf("upstream path = %q, want /reverse", gotPath)
-	}
-	if !strings.Contains(gotQuery, "lat=48.1") || !strings.Contains(gotQuery, "lon=-1.6") {
-		t.Errorf("upstream query = %q, missing lat/lon", gotQuery)
-	}
-	if !strings.Contains(rec.Body.String(), "Testville") {
-		t.Errorf("response body not passed through: %s", rec.Body.String())
-	}
+	t.Run("with login: proxies through", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1&lon=-1.6", nil)
+		req = withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		if gotPath != "/reverse" {
+			t.Errorf("upstream path = %q, want /reverse", gotPath)
+		}
+		if !strings.Contains(gotQuery, "lat=48.1") || !strings.Contains(gotQuery, "lon=-1.6") {
+			t.Errorf("upstream query = %q, missing lat/lon", gotQuery)
+		}
+		if !strings.Contains(rec.Body.String(), "Testville") {
+			t.Errorf("response body not passed through: %s", rec.Body.String())
+		}
+	})
 }
 
 func TestNominatimGeocodeReverseHandlerRequiresCoords(t *testing.T) {
@@ -155,6 +169,7 @@ func TestNominatimGeocodeReverseHandlerRequiresCoords(t *testing.T) {
 	handler := nominatimGeocodeReverseHandler(cfg)
 
 	req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1", nil)
+	req = withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 

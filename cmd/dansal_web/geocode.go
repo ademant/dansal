@@ -249,9 +249,16 @@ func nominatimGeocodeSearchHandler(cfg *Config) http.HandlerFunc {
 
 // nominatimGeocodeReverseHandler is GET /search/geocode/reverse — see
 // nominatimGeocodeSearchHandler above for why this is proxied server-side
-// rather than called from the browser directly.
+// rather than called from the browser directly. Unlike search, every
+// current caller (admin_location_edit.html, admin_event_form.html,
+// admin_locations_maintenance.html) is an admin-only page — no public form
+// does reverse geocoding — so this stays behind requireLogin rather than
+// being reachable by anyone the way the public search proxy has to be.
 func nominatimGeocodeReverseHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
 		ip := getClientIP(r)
 		w.Header().Set("Content-Type", "application/json")
 		if geocodeThrottle.isBlocked(ip) {

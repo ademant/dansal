@@ -250,7 +250,7 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
 	)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
+		deleteUserByID(db, userID)
 		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 		return
 	}
@@ -264,12 +264,12 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 	})
 	sessionID, err := generateToken(32)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
+		deleteUserByID(db, userID)
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
 		return
 	}
 	if err := saveWASession(sessionID, blob); err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
+		deleteUserByID(db, userID)
 		writeError(w, "Could not store session", http.StatusInternalServerError)
 		return
 	}
@@ -340,14 +340,14 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 
 	credential, err := wauthn.FinishRegistration(regUser, stored.Session, r)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		deleteUserByID(db, stored.UserID)
 		writeError(w, "WebAuthn verification failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		deleteUserByID(db, stored.UserID)
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -357,21 +357,18 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
 		stored.UserID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
 	); err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		deleteUserByID(db, stored.UserID)
 		writeError(w, "Could not store credential", http.StatusInternalServerError)
 		return
 	}
 
 	if invite.OrgID.Valid {
-		tx.Exec(
-			"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-			invite.OrgID.Int64, stored.UserID,
-		)
+		addOrgMember(tx, invite.OrgID.Int64, stored.UserID)
 	}
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 
 	if err := tx.Commit(); err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		deleteUserByID(db, stored.UserID)
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -814,7 +811,7 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 	// start fresh (handles retries after a failed ceremony).
 	if pr.UserID.Valid {
 		db.Exec("DELETE FROM users WHERE id=? AND password_hash='' AND disabled=1", pr.UserID.Int64)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		clearPendingRegistrationUser(db, pr.ID)
 	}
 
 	// Create a disabled placeholder user.
@@ -850,8 +847,8 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
 	)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		deleteUserByID(db, userID)
+		clearPendingRegistrationUser(db, pr.ID)
 		writeError(w, "WebAuthn begin failed", http.StatusInternalServerError)
 		return
 	}
@@ -864,14 +861,14 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 	})
 	sessionID, err := generateToken(32)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		deleteUserByID(db, userID)
+		clearPendingRegistrationUser(db, pr.ID)
 		writeError(w, "Could not generate session", http.StatusInternalServerError)
 		return
 	}
 	if err := saveWASession(sessionID, blob); err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", userID)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", pr.ID)
+		deleteUserByID(db, userID)
+		clearPendingRegistrationUser(db, pr.ID)
 		writeError(w, "Could not store session", http.StatusInternalServerError)
 		return
 	}
@@ -914,7 +911,7 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT COUNT(*) FROM pending_registrations WHERE id=? AND user_id=? AND approved=0",
 		stored.PendingID, stored.UserID).Scan(&pendingExists)
 	if pendingExists == 0 {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
+		deleteUserByID(db, stored.UserID)
 		writeError(w, "Pending registration not found or already processed", http.StatusConflict)
 		return
 	}
@@ -922,8 +919,8 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 	regUser := loadWebAuthnUser(stored.UserID, stored.Email)
 	credential, err := wauthn.FinishRegistration(regUser, stored.Session, r)
 	if err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", stored.PendingID)
+		deleteUserByID(db, stored.UserID)
+		clearPendingRegistrationUser(db, stored.PendingID)
 		writeError(w, "WebAuthn verification failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -932,8 +929,8 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, aaguid, flags) VALUES (?, ?, ?, ?, ?, ?)",
 		stored.UserID, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, credential.Authenticator.AAGUID, byte(credential.Flags.ProtocolValue()),
 	); err != nil {
-		db.Exec("DELETE FROM users WHERE id=?", stored.UserID)
-		db.Exec("UPDATE pending_registrations SET user_id=NULL WHERE id=?", stored.PendingID)
+		deleteUserByID(db, stored.UserID)
+		clearPendingRegistrationUser(db, stored.PendingID)
 		writeError(w, "Could not store credential", http.StatusInternalServerError)
 		return
 	}

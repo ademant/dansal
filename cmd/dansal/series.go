@@ -560,7 +560,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 			tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", evID, *req.MusicianID)
 		}
 		if req.InstructorID != nil {
-			tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *req.InstructorID)
+			insertJunctionRow(tx, "event_instructors", "event_id", "instructor_id", evID, *req.InstructorID)
 		}
 		if err := applySeriesTemplate(tx, evID, td); err != nil {
 			writeError(w, "failed to apply series defaults: "+err.Error(), http.StatusInternalServerError)
@@ -654,7 +654,7 @@ func applySeriesEventsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if series.InstructorID != nil {
 			db.Exec("DELETE FROM event_instructors WHERE event_id=?", evID)
-			db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *series.InstructorID)
+			insertJunctionRow(db, "event_instructors", "event_id", "instructor_id", evID, *series.InstructorID)
 		}
 		if err := applySeriesTemplate(db, evID, td); err != nil {
 			writeInternalError(w, err)
@@ -836,7 +836,7 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		db.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?,?)", evID, *series.MusicianID)
 	}
 	if series.InstructorID != nil {
-		db.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", evID, *series.InstructorID)
+		insertJunctionRow(db, "event_instructors", "event_id", "instructor_id", evID, *series.InstructorID)
 	}
 	if err := applySeriesTemplate(db, evID, parseSeriesTemplateData(series.TemplateData)); err != nil {
 		writeInternalError(w, err)
@@ -1108,8 +1108,8 @@ func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
-	var evOrgID sql.NullInt64
-	if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", eventID).Scan(&evOrgID); err == sql.ErrNoRows {
+	evOrgID, err := eventOrgID(db, eventID)
+	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {

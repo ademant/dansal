@@ -83,8 +83,7 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify org exists.
-	var exists int
-	if err := db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *req.OrgID).Scan(&exists); err != nil || exists == 0 {
+	if !orgExists(db, *req.OrgID) {
 		writeError(w, "Organisation not found", http.StatusBadRequest)
 		return
 	}
@@ -347,7 +346,7 @@ func deletePublisher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := db.Exec("DELETE FROM users WHERE id=?", targetID); err != nil {
+	if err := deleteUserByID(db, targetID); err != nil {
 		writeError(w, "failed to delete publisher", http.StatusInternalServerError)
 		return
 	}

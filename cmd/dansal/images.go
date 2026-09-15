@@ -520,8 +520,8 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userRole != RoleAdmin {
-		var orgID sql.NullInt64
-		if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
+		orgID, err := eventOrgID(db, eventID)
+		if err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -553,8 +553,7 @@ var uploadEventImage = imageUploadHandler(imageUploadSpec{
 	idLabel:   "event ID",
 	roles:     []string{RoleAdmin, RoleUser, RolePublisher},
 	checkAccess: func(w http.ResponseWriter, r *http.Request, callerID int, userRole string, id int) bool {
-		var orgID sql.NullInt64
-		err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
+		orgID, err := eventOrgID(db, id)
 		if err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return false

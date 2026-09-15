@@ -868,10 +868,7 @@ func oidcRedeemInvite(w http.ResponseWriter, r *http.Request, inviteToken, issue
 	}
 
 	if invite.OrgID.Valid {
-		tx.Exec(
-			"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-			invite.OrgID.Int64, userID,
-		)
+		addOrgMember(tx, invite.OrgID.Int64, userID)
 	}
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 

@@ -240,8 +240,7 @@ func validateTimetableRequests(reqs []TimetableEntryRequest) error {
 // target org for a timetable edit, so targetOrgID/requireTarget are the
 // "no target to validate" values.
 func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventID int) bool {
-	var orgID sql.NullInt64
-	err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID)
+	orgID, err := eventOrgID(db, eventID)
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return false

@@ -495,7 +495,7 @@ func deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Admin accounts cannot be self-deleted", http.StatusForbidden)
 		return
 	}
-	db.Exec("DELETE FROM users WHERE id=?", callerID)
+	deleteUserByID(db, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

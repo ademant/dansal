@@ -210,8 +210,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate org_id for join_org.
 	if req.RegType == "join_org" {
-		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *req.OrgID).Scan(&c)
-		if c == 0 {
+		if !orgExists(db, *req.OrgID) {
 			writeError(w, "Organization not found", http.StatusNotFound)
 			return
 		}
@@ -407,7 +406,7 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
-		db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+		deletePendingRegistration(db, id)
 		writeError(w, "registration expired", http.StatusGone)
 		return
 	}
@@ -449,7 +448,7 @@ func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	deletePendingRegistration(db, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -473,7 +472,7 @@ func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
-		db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+		deletePendingRegistration(db, id)
 		writeError(w, "token expired", http.StatusGone)
 		return
 	}
@@ -713,15 +712,15 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 				writeError(w, "failed to create organization", http.StatusInternalServerError)
 				return
 			}
-			tx.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", orgID, userID)
+			addOrgMember(tx, orgID, userID)
 			tx.Exec("UPDATE users SET role=? WHERE id=?", role, userID)
 		} else if pr.OrgID.Valid {
-			tx.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", pr.OrgID.Int64, userID)
+			addOrgMember(tx, pr.OrgID.Int64, userID)
 			tx.Exec("UPDATE users SET role=? WHERE id=?", role, userID)
 		}
 
 		tx.Exec("UPDATE users SET disabled=0 WHERE id=?", userID)
-		tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+		deletePendingRegistration(tx, id)
 
 		if err := tx.Commit(); err != nil {
 			writeError(w, "db error", http.StatusInternalServerError)
@@ -798,7 +797,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		// can discover the invite URL by visiting /register with their cookie.
 		tx.Exec("UPDATE pending_registrations SET approved=1, approved_invite_url=? WHERE id=?", setupURL, id)
 	} else {
-		tx.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+		deletePendingRegistration(tx, id)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -863,9 +862,9 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Exec("DELETE FROM pending_registrations WHERE id=?", id)
+	deletePendingRegistration(db, id)
 	if pr.UserID.Valid {
-		db.Exec("DELETE FROM users WHERE id=?", pr.UserID.Int64)
+		deleteUserByID(db, pr.UserID.Int64)
 	}
 	log.Printf("register: rejected pending registration %d", id)
 
@@ -1062,9 +1061,9 @@ func processExpiredRegistrations() {
 				"Your registration request was not approved within the review period. Your contact information has been deleted.",
 			)
 		}
-		db.Exec("DELETE FROM pending_registrations WHERE id=?", e.id)
+		deletePendingRegistration(db, e.id)
 		if e.userID.Valid {
-			db.Exec("DELETE FROM users WHERE id=?", e.userID.Int64)
+			deleteUserByID(db, e.userID.Int64)
 		}
 	}
 }

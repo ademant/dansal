@@ -27,13 +27,11 @@ func addEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
 		return
 	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", locationID).Scan(&exists)
-	if exists == 0 {
+	if !locationExists(db, locationID) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
-	if _, err := db.Exec("INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?,?)", eventID, locationID); err != nil {
+	if err := insertJunctionRow(db, "event_locations", "event_id", "location_id", eventID, locationID); err != nil {
 		writeInternalError(w, err)
 		return
 	}

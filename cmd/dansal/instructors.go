@@ -416,7 +416,7 @@ func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 
 	tx.Exec("DELETE FROM event_instructors WHERE event_id=?", eventID)
 	for _, id := range ids {
-		tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?,?)", eventID, id)
+		insertJunctionRow(tx, "event_instructors", "event_id", "instructor_id", eventID, id)
 	}
 	if err := tx.Commit(); err != nil {
 		writeInternalError(w, err)

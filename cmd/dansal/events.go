@@ -1223,7 +1223,7 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 	id, _ := result.LastInsertId()
 	syncEventLocationGeohash(int(id))
 	if locationID != 0 {
-		q.Exec("INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?,?)", int(id), locationID)
+		insertJunctionRow(q, "event_locations", "event_id", "location_id", int(id), locationID)
 	}
 	if duplicateReviewCandidateID > 0 {
 		flagDuplicateReview(q, int(id), duplicateReviewCandidateID, title)
@@ -2965,8 +2965,8 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 	case RoleAdmin:
 		// unrestricted
 	case RoleUser, RolePublisher:
-		var orgID sql.NullInt64
-		if err := db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&orgID); err == sql.ErrNoRows {
+		orgID, err := eventOrgID(db, id)
+		if err == sql.ErrNoRows {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -3880,9 +3880,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "location_id is required", http.StatusBadRequest)
 		return
 	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", req.LocationID).Scan(&exists)
-	if exists == 0 {
+	if !locationExists(db, req.LocationID) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
@@ -3890,7 +3888,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	db.Exec("INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?,?)", eventID, req.LocationID)
+	insertJunctionRow(db, "event_locations", "event_id", "location_id", eventID, req.LocationID)
 	syncEventLocationGeohash(eventID)
 	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
@@ -3935,8 +3933,8 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	// comment), so borrowing it here plus a hand-rolled target-org check
 	// below was reimplementing exactly what this call already expresses
 	// (#1245).
-	var existingOrgID sql.NullInt64
-	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&existingOrgID); err == sql.ErrNoRows {
+	existingOrgID, err := eventOrgID(db, eventID)
+	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -3951,9 +3949,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	if !requireEventOrg(w, userRole, callerID, existingOrgID, &req.OrganizationID, true) {
 		return
 	}
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", req.OrganizationID).Scan(&exists)
-	if exists == 0 {
+	if !orgExists(db, req.OrganizationID) {
 		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}

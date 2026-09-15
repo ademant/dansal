@@ -287,8 +287,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Verify the org exists.
-	var exists int
-	if err := db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *orgID).Scan(&exists); err != nil || exists == 0 {
+	if !orgExists(db, *orgID) {
 		writeError(w, "Organization not found", http.StatusBadRequest)
 		return
 	}
@@ -486,10 +485,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	userID, _ := result.LastInsertId()
 
 	if invite.OrgID.Valid {
-		tx.Exec(
-			"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-			invite.OrgID.Int64, userID,
-		)
+		addOrgMember(tx, invite.OrgID.Int64, userID)
 	}
 
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)

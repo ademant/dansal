@@ -104,7 +104,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		regExp, err := parseTokenExpiration(regExpires)
 		if err != nil || time.Now().After(regExp) {
-			db.Exec("DELETE FROM pending_registrations WHERE id=?", regID)
+			deletePendingRegistration(db, regID)
 			go func() { _ = sendTelegramMessage(chatIDStr, "This registration token has expired.") }()
 			w.WriteHeader(http.StatusOK)
 			return

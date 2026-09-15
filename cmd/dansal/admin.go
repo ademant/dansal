@@ -691,10 +691,7 @@ func adminAddMember(req adminRequest) adminResponse {
 	if err != nil {
 		return adminResponse{OK: false, Error: "user not found"}
 	}
-	if _, err := db.Exec(
-		"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-		req.OrgID, userID,
-	); err != nil {
+	if err := addOrgMember(db, req.OrgID, userID); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}

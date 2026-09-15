@@ -549,8 +549,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if req.ParentID != nil {
-			var parentParentID sql.NullInt64
-			if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *req.ParentID).Scan(&parentParentID); err == sql.ErrNoRows {
+			parentParentID, err := locationParentID(db, *req.ParentID)
+			if err == sql.ErrNoRows {
 				writeError(w, "parent_id not found", http.StatusBadRequest)
 				return
 			} else if err != nil {
@@ -819,8 +819,7 @@ func checkLocationWriteAccess(w http.ResponseWriter, callerID int, requesterRole
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return false
 	}
-	var exists int
-	if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
+	if !locationExists(db, id) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return false
 	}
@@ -844,8 +843,8 @@ func checkParentIDValid(w http.ResponseWriter, parentID *int, selfID int) bool {
 		writeError(w, "a location cannot be its own parent", http.StatusBadRequest)
 		return false
 	}
-	var parentParentID sql.NullInt64
-	if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", *parentID).Scan(&parentParentID); err == sql.ErrNoRows {
+	parentParentID, err := locationParentID(db, *parentID)
+	if err == sql.ErrNoRows {
 		writeError(w, "parent_id not found", http.StatusBadRequest)
 		return false
 	} else if err != nil {
@@ -1225,7 +1224,7 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, locID := range req.IDs {
 		if req.OrganizationID != nil {
-			db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locID, *req.OrganizationID)
+			insertJunctionRow(db, "location_organizations", "location_id", "organization_id", locID, *req.OrganizationID)
 		} else {
 			db.Exec("DELETE FROM location_organizations WHERE location_id=?", locID)
 		}
@@ -1271,8 +1270,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		var exists int
-		if err := db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", id).Scan(&exists); err != nil || exists == 0 {
+		if !locationExists(db, id) {
 			writeError(w, "Location not found", http.StatusNotFound)
 			return
 		}
@@ -1359,17 +1357,16 @@ func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var exists int
-	if db.QueryRow("SELECT COUNT(*) FROM locations WHERE id=?", locID).Scan(&exists); exists == 0 {
+	if !locationExists(db, locID) {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
-	if db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", req.OrganizationID).Scan(&exists); exists == 0 {
+	if !orgExists(db, req.OrganizationID) {
 		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
 
-	if _, err := db.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", locID, req.OrganizationID); err != nil {
+	if err := insertJunctionRow(db, "location_organizations", "location_id", "organization_id", locID, req.OrganizationID); err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -1489,7 +1486,7 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 		for _, oid := range orgIDs {
-			tx.Exec("INSERT OR IGNORE INTO location_organizations (location_id, organization_id) VALUES (?, ?)", keep.ID, oid)
+			insertJunctionRow(tx, "location_organizations", "location_id", "organization_id", keep.ID, oid)
 		}
 	}
 
@@ -1577,8 +1574,8 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	locID, _ := strconv.Atoi(id)
-	var parentOfParent sql.NullInt64
-	if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", locID).Scan(&parentOfParent); err != nil {
+	parentOfParent, err := locationParentID(db, locID)
+	if err != nil {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}

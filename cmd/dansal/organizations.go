@@ -408,7 +408,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to create organization", http.StatusInternalServerError)
 		return
 	}
-	db.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)", o.ID, callerID)
+	addOrgMember(db, o.ID, callerID)
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/organizations/%d", o.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(o)
@@ -813,10 +813,7 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, err := db.Exec(
-		"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
-		orgID, req.UserID,
-	); err != nil {
+	if err := addOrgMember(db, orgID, req.UserID); err != nil {
 		writeError(w, "Failed to add member", http.StatusInternalServerError)
 		return
 	}

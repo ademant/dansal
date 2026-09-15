@@ -349,7 +349,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	syncEventTags(tx, int(eventID), req.Tags)
 	for _, danceID := range req.DanceIDs {
-		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
+		insertJunctionRow(tx, "event_dances", "event_id", "dance_id", eventID, danceID)
 	}
 
 	musicianIDs := make([]int, 0, len(req.Musicians))

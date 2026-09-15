@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"io"
 	"net/http"
 	"os"
@@ -53,8 +52,8 @@ var uploadLocationSitePlan = imageUploadHandler(imageUploadSpec{
 		if !checkLocationWriteAccess(w, callerID, userRole, idStr) {
 			return false
 		}
-		var parentID sql.NullInt64
-		if err := db.QueryRow("SELECT parent_id FROM locations WHERE id=?", id).Scan(&parentID); err != nil {
+		parentID, err := locationParentID(db, id)
+		if err != nil {
 			writeError(w, "Location not found", http.StatusNotFound)
 			return false
 		}

@@ -173,7 +173,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		syncEventTags(tx, eventID, req.Tags)
 		tx.Exec("DELETE FROM event_dances WHERE event_id = ?", eventID)
 		for _, danceID := range req.DanceIDs {
-			tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", eventID, danceID)
+			insertJunctionRow(tx, "event_dances", "event_id", "dance_id", eventID, danceID)
 		}
 		tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", eventID)
 		for _, name := range req.Musicians {
@@ -184,7 +184,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 		tx.Exec("DELETE FROM event_instructors WHERE event_id = ?", eventID)
 		for _, name := range req.Instructors {
 			if id, err := findOrCreateInstructorID(tx, name); err == nil && id > 0 {
-				tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", eventID, id)
+				insertJunctionRow(tx, "event_instructors", "event_id", "instructor_id", eventID, id)
 			}
 		}
 		if err := tx.Commit(); err != nil {
@@ -461,7 +461,7 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 		if len(p.DanceIDs) > 0 {
 			tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
 			for _, danceID := range p.DanceIDs {
-				tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
+				insertJunctionRow(tx, "event_dances", "event_id", "dance_id", id, danceID)
 			}
 		}
 		for _, name := range p.Musicians {
@@ -471,7 +471,7 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 		}
 		for _, name := range p.Instructors {
 			if iid, err := findOrCreateInstructorID(tx, name); err == nil && iid > 0 {
-				tx.Exec("INSERT OR IGNORE INTO event_instructors (event_id, instructor_id) VALUES (?, ?)", id, iid)
+				insertJunctionRow(tx, "event_instructors", "event_id", "instructor_id", id, iid)
 			}
 		}
 		for _, ttReq := range p.Timetable {

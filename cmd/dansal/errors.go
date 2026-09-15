@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"strconv"
 )
 
@@ -58,6 +59,14 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// writeJSONStatus is writeJSON with an explicit non-200 status code, for the
+// handful of endpoints returning 201/202 on success.
+func writeJSONStatus(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
+}
+
 // decodeJSONBody decodes r.Body's JSON into dst, writing a uniform error
 // response and returning false on failure — a 413 (via readBodyOrError's
 // wording) when the body exceeds config.Server.MaxBodyBytes, a plain 400
@@ -90,6 +99,34 @@ func intPathValue(r *http.Request, key string) (int, error) {
 		return 0, fmt.Errorf("missing path value %s", key)
 	}
 	return strconv.Atoi(v)
+}
+
+// requireIntPathValue parses the named path value as an integer, writing a
+// uniform 400 with errMsg and returning ok=false on failure. Callers should
+// `return` immediately when this returns false. Consolidates the ~63
+// hand-rolled `id, err := intPathValue(...); if err != nil { writeError(...) }`
+// sites (#1318) — errMsg is kept per-caller since messages vary ("invalid id",
+// "invalid event id", "Invalid user ID", ...).
+func requireIntPathValue(w http.ResponseWriter, r *http.Request, key, errMsg string) (int, bool) {
+	v, err := intPathValue(r, key)
+	if err != nil {
+		writeError(w, errMsg, http.StatusBadRequest)
+		return 0, false
+	}
+	return v, true
+}
+
+// requireRole writes a 403 and returns false unless userRole is one of
+// allowed. Consolidates the ~23 hand-rolled
+// `if userRole != RoleAdmin && userRole != RoleUser { writeError(w, "Forbidden", ...) }`
+// sites (#1318) — mirrors requireExistingOrgMember/requireEventOrg's
+// write-and-return-bool shape.
+func requireRole(w http.ResponseWriter, userRole string, allowed ...string) bool {
+	if !slices.Contains(allowed, userRole) {
+		writeError(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 // newErrorID returns a short random hex string suitable for use as an error ID.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -125,9 +124,8 @@ const contactPostImageCap = 5
 // Only allowed for lost_item / found_item posts.
 // Rejects uploads once the cap of contactPostImageCap images per post is reached.
 func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
 	token := r.URL.Query().Get("token")
@@ -139,7 +137,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 	var storedToken sql.NullString
 	var postType string
 	var expiresAt int64
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT COALESCE(manage_token,''), type, expires_at FROM contact_posts WHERE id=?", postID,
 	).Scan(&storedToken, &postType, &expiresAt)
 	if err == sql.ErrNoRows {
@@ -206,9 +204,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSONStatus(w, http.StatusCreated, map[string]any{
 		"id":  imgID,
 		"url": contactPostImageURL(int(imgID)),
 	})
@@ -217,14 +213,12 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/contact-posts/{id}/images/{img_id}?token={manage_token}
 // Authorized by manage_token query param.
 func deleteContactPostImage(w http.ResponseWriter, r *http.Request) {
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
-	imgID, err := intPathValue(r, "img_id")
-	if err != nil {
-		writeError(w, "invalid image id", http.StatusBadRequest)
+	imgID, ok := requireIntPathValue(w, r, "img_id", "invalid image id")
+	if !ok {
 		return
 	}
 	token := r.URL.Query().Get("token")
@@ -235,7 +229,7 @@ func deleteContactPostImage(w http.ResponseWriter, r *http.Request) {
 
 	var storedToken sql.NullString
 	var expiresAt int64
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT COALESCE(manage_token,''), expires_at FROM contact_posts WHERE id=?", postID,
 	).Scan(&storedToken, &expiresAt)
 	if err == sql.ErrNoRows {

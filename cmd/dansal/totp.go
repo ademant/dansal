@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -141,8 +140,7 @@ func totpSetupHandler(w http.ResponseWriter, r *http.Request) {
 		accountName = fmt.Sprintf("user-%d", userID)
 	}
 	uri := totpURI(secret, accountName, totpIssuer())
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"secret": secret, "uri": uri})
+	writeJSON(w, map[string]string{"secret": secret, "uri": uri})
 }
 
 // POST /api/v1/auth/totp/confirm — verify a TOTP code and activate the pending secret.
@@ -177,8 +175,7 @@ func totpConfirmHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 // DELETE /api/v1/auth/totp — disable TOTP for the current user; requires current TOTP code.
@@ -212,6 +209,5 @@ func totpDisableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	writeJSON(w, map[string]bool{"ok": true})
 }

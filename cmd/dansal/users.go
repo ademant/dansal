@@ -251,9 +251,8 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "Invalid user ID")
+	if !ok {
 		return
 	}
 	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", targetID))
@@ -276,9 +275,8 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 func getUserOrganizations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "Invalid user ID")
+	if !ok {
 		return
 	}
 
@@ -506,9 +504,8 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := callerFromRequest(r)
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -555,8 +552,7 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 	go notifyUser("", "", false, presetEmail, "Your account setup link has been renewed",
 		fmt.Sprintf("A new account setup link has been generated for you.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"invite_url": setupURL})
+	writeJSON(w, map[string]string{"invite_url": setupURL})
 }
 
 // GET /api/v1/pending-invites — admin; lists unused invite_links with preset_email set.

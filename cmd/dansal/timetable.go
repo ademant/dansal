@@ -300,13 +300,11 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -347,13 +345,11 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -412,13 +408,11 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/events/{id}/timetable — remove all entries for an event
 func deleteTimetable(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -455,18 +449,15 @@ func updateTimetableEntry(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
-	entryID, err := intPathValue(r, "entry_id")
-	if err != nil {
-		writeError(w, "Invalid entry ID", http.StatusBadRequest)
+	entryID, ok := requireIntPathValue(w, r, "entry_id", "Invalid entry ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -560,18 +551,15 @@ func updateTimetableEntry(w http.ResponseWriter, r *http.Request) {
 // clears everything for the event).
 func deleteTimetableEntry(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
-	entryID, err := intPathValue(r, "entry_id")
-	if err != nil {
-		writeError(w, "Invalid entry ID", http.StatusBadRequest)
+	entryID, ok := requireIntPathValue(w, r, "entry_id", "Invalid entry ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -619,14 +607,13 @@ func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	_, userRole := callerFromRequest(r)
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 
 	var isPublished int
-	err = db.QueryRow("SELECT is_published FROM events WHERE id = ?", eventID).Scan(&isPublished)
+	err := db.QueryRow("SELECT is_published FROM events WHERE id = ?", eventID).Scan(&isPublished)
 	if err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return

@@ -35,15 +35,14 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "Invalid user ID")
+	if !ok {
 		return
 	}
 	var userID int
 	var userEmail, telegramChatID, matrixID string
 	var telegramVerified, matrixVerified int
-	err = db.QueryRow(
+	err := db.QueryRow(
 		`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(telegram_verified,0),
 		 COALESCE(matrix,''), COALESCE(matrix_verified,0)
 		 FROM users WHERE id=? AND disabled=0`, targetID,

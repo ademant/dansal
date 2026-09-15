@@ -17,7 +17,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,9 +26,8 @@ import (
 // POST /api/v1/events/{id}/recheck-source
 func recheckEventSource(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -66,8 +64,7 @@ func recheckEventSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "recheck failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"outcome": outcome})
+	writeJSON(w, map[string]string{"outcome": outcome})
 }
 
 // doRecheckEventSource fetches source, parses it with the same feed

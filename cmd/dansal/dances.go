@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -43,7 +42,10 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.Name == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
@@ -52,10 +54,8 @@ func createDance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to create dance", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/dances/%d", d.ID))
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(d)
+	writeJSONStatus(w, http.StatusCreated, d)
 }
 
 // PUT /api/v1/dances/{id} — full replace of name+description (#1290).
@@ -70,7 +70,10 @@ func updateDance(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.Name == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}

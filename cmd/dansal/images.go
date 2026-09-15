@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -509,8 +508,7 @@ func cropToAspect(img image.Image, targetW, targetH int) image.Image {
 // DELETE /api/v1/images/{event_id}
 func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
 
@@ -571,8 +569,6 @@ var uploadEventImage = imageUploadHandler(imageUploadSpec{
 	respond: func(w http.ResponseWriter, id int) {
 		ext, _ := imageExtFromConfig()
 		outPath := filepath.Join(config.Server.ImagesDir, fmt.Sprintf("%d%s", id, ext))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"path": outPath})
+		writeJSONStatus(w, http.StatusCreated, map[string]string{"path": outPath})
 	},
 })

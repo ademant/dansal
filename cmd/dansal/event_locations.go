@@ -10,18 +10,15 @@ import (
 // also promotes it to primary (events.location_id).
 func addEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
-	locationID, err := intPathValue(r, "location_id")
-	if err != nil {
-		writeError(w, "invalid location_id", http.StatusBadRequest)
+	locationID, ok := requireIntPathValue(w, r, "location_id", "invalid location_id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -50,18 +47,15 @@ func addEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 // Refuses to remove the primary location; use /primary to promote another first.
 func removeEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
-	locationID, err := intPathValue(r, "location_id")
-	if err != nil {
-		writeError(w, "invalid location_id", http.StatusBadRequest)
+	locationID, ok := requireIntPathValue(w, r, "location_id", "invalid location_id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -82,18 +76,15 @@ func removeEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 // Promotes an already-assigned location to primary (updates events.location_id).
 func setEventExtraLocationPrimary(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
-	locationID, err := intPathValue(r, "location_id")
-	if err != nil {
-		writeError(w, "invalid location_id", http.StatusBadRequest)
+	locationID, ok := requireIntPathValue(w, r, "location_id", "invalid location_id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {

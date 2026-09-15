@@ -145,9 +145,7 @@ func createPublisher(w http.ResponseWriter, r *http.Request) {
 		displayName = fmt.Sprintf("publisher#%d", userID)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(PublisherCreatedResponse{
+	writeJSONStatus(w, http.StatusCreated, PublisherCreatedResponse{
 		UserID:    int(userID),
 		Name:      displayName,
 		KeyID:     keyID,
@@ -188,9 +186,8 @@ func publisherToken(w http.ResponseWriter, r *http.Request) {
 func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -279,9 +276,8 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 func createPublisherReconnectInvite(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -316,9 +312,7 @@ func createPublisherReconnectInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(link)
+	writeJSONStatus(w, http.StatusCreated, link)
 }
 
 // DELETE /api/v1/publishers/{id} — delete a publisher service account.
@@ -326,9 +320,8 @@ func createPublisherReconnectInvite(w http.ResponseWriter, r *http.Request) {
 func deletePublisher(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 

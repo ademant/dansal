@@ -115,9 +115,8 @@ func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMember(callerID, id) {
@@ -158,8 +157,7 @@ func getSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 			OrgSlug: cfg.SocialDanceToday.OrgSlug,
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(o)
+	writeJSON(w, o)
 }
 
 // PUT /api/v1/organizations/{id}/syndication
@@ -169,9 +167,8 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMember(callerID, id) {
@@ -216,8 +213,7 @@ func putSyndicationConfig(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
+	writeJSON(w, map[string]string{"status": "saved"})
 }
 
 // GET /api/v1/events/{id}/syndication
@@ -227,9 +223,8 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
@@ -241,8 +236,7 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s)
+	writeJSON(w, s)
 }
 
 // POST /api/v1/events/{id}/syndicate/eventbrite
@@ -252,9 +246,8 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
@@ -290,8 +283,7 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 
 	go publishToEventbrite(id, event, eb)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "pending"})
+	writeJSON(w, map[string]string{"status": "pending"})
 }
 
 // POST /api/v1/events/{id}/syndicate/social-dance-today
@@ -301,9 +293,8 @@ func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
@@ -337,8 +328,7 @@ func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
 
 	go pushToSocialDanceToday(id, event, sdt)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "pending"})
+	writeJSON(w, map[string]string{"status": "pending"})
 }
 
 // ── Eventbrite integration ────────────────────────────────────────────────────

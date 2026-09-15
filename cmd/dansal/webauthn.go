@@ -654,8 +654,7 @@ func webauthnUserCredentialsList(w http.ResponseWriter, r *http.Request) {
 			items = append(items, item)
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	writeJSON(w, items)
 }
 
 // POST /api/v1/user/webauthn/register/begin
@@ -688,8 +687,7 @@ func webauthnUserRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Could not store session", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"session_id": sessionID, "options": options})
+	writeJSON(w, map[string]any{"session_id": sessionID, "options": options})
 }
 
 // POST /api/v1/user/webauthn/register/finish?session_id=…
@@ -733,17 +731,14 @@ func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("webauthn: user %d added a new passkey", callerID)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"status": "created"})
+	writeJSONStatus(w, http.StatusCreated, map[string]any{"status": "created"})
 }
 
 // DELETE /api/v1/user/webauthn/credentials/{id}
 func webauthnUserCredentialDelete(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := callerFromRequest(r)
-	credID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	credID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	// Prevent locking out a user who has no other login method (password or
@@ -779,7 +774,10 @@ func webauthnRegBegin(w http.ResponseWriter, r *http.Request) {
 		VerificationToken string `json:"verification_token"`
 		DisplayName       string `json:"display_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PendingID == 0 || req.VerificationToken == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.PendingID == 0 || req.VerificationToken == "" {
 		writeError(w, "pending_id and verification_token are required", http.StatusBadRequest)
 		return
 	}
@@ -939,6 +937,5 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 	// Onboarding complete -- notify admins the registration is ready for
 	// review (#1223). Mirrors registerPasswordHandler's password-track call.
 	go notifyApprovers(stored.PendingID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"status": "passkey_bound"})
+	writeJSON(w, map[string]any{"status": "passkey_bound"})
 }

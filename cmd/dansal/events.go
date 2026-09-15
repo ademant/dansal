@@ -1793,8 +1793,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		for i, e := range events {
 			out[i] = buildOpenActiveEvent(e, base)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out)
+		writeJSON(w, out)
 	} else if strings.Contains(accept, "text/calendar") {
 		w.Header().Set("Content-Type", "text/calendar")
 		w.Write([]byte(buildEventsCalendar(events).Serialize()))
@@ -1810,8 +1809,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		writeEventsAtom(w, r, events)
 	} else {
 		w.Header().Set("X-Total-Count", strconv.Itoa(totalCount))
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(events)
+		writeJSON(w, events)
 	}
 }
 
@@ -2160,8 +2158,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", weakEtag(event.ChangedAtEpoch))
 
 	if r.URL.Query().Get("format") == "openactive" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(buildOpenActiveEvent(event, "https://"+r.Host))
+		writeJSON(w, buildOpenActiveEvent(event, "https://"+r.Host))
 	} else if strings.Contains(accept, "text/calendar") {
 		w.Header().Set("Content-Type", "text/calendar")
 		w.Write([]byte(buildEventsCalendar([]Event{event}).Serialize()))
@@ -2176,8 +2173,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeEventsAtom(w, r, []Event{event})
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(event)
+		writeJSON(w, event)
 	}
 }
 
@@ -2241,13 +2237,11 @@ func requireEventOrg(w http.ResponseWriter, role string, callerID int, existingO
 // PUT /api/v1/events/{id} — full event update
 func updateEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -2438,8 +2432,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		event.Timetable = timetable
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	writeJSON(w, event)
 }
 
 // PATCH /api/v1/events/{id} — partial event update (RFC 7396 JSON Merge Patch)
@@ -2449,13 +2442,11 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -2500,7 +2491,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		ttRoomOrderRaw                                                        sql.NullString
 		existingChangedAt                                                     int64
 	)
-	err = db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
+	err := db.QueryRow(`SELECT title, description, start_time, end_time, location_id, organization_id,
 		has_ball, has_workshop, has_festival, is_cancelled, is_published, COALESCE(url,''), json(pricing),
 		COALESCE(workshop_difficulty,''), COALESCE(booking_url,''), COALESCE(availability,''), tickets_total, booking_enabled,
 		COALESCE(food,''), COALESCE(drink,''), COALESCE(floor_condition,''), COALESCE(json(attributes),'{}'),
@@ -2776,8 +2767,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		event.Timetable = timetable
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	writeJSON(w, event)
 }
 
 // POST /api/v1/events/{id}/publish — set is_published=1.
@@ -2828,8 +2818,7 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 // (organization_id IS NULL). Admin: any event. User/publisher: only orgs they belong to.
 func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RolePublisher && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RolePublisher, RoleUser) {
 		return
 	}
 
@@ -2837,7 +2826,10 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrgID int `json:"org_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrgID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.OrgID == 0 {
 		writeError(w, "org_id required", http.StatusBadRequest)
 		return
 	}
@@ -2870,9 +2862,8 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 // window after creation — see eventDeletionDeadline.
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -2955,9 +2946,8 @@ func eventDeletionDeadline(createdAt, startTime time.Time) time.Time {
 // admin: any event. user/publisher: own orgs.
 func cancelEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -2999,14 +2989,12 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 // start_time and end_time are cleared (user fills before publishing).
 func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
 
-	srcID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	srcID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -3160,9 +3148,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	event.ShortCode = shortCode
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(event)
+	writeJSONStatus(w, http.StatusCreated, event)
 }
 
 // GET /api/v1/events.ics — public iCal feed of future published events, filterable by tag and location
@@ -3640,7 +3626,10 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		Kitchen        *bool    `json:"kitchen"`         // nil = skip
 		PricingType    *string  `json:"pricing_type"`    // nil = skip; "free"/"donation"
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
@@ -3759,7 +3748,10 @@ func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
 		IDs        []int `json:"ids"`
 		LocationID int   `json:"location_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 || req.LocationID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 || req.LocationID == 0 {
 		writeError(w, "ids and location_id are required", http.StatusBadRequest)
 		return
 	}
@@ -3789,7 +3781,10 @@ func bulkSetEventTime(w http.ResponseWriter, r *http.Request) {
 		StartTime string `json:"start_time"` // "HH:MM"; empty = leave unchanged
 		EndTime   string `json:"end_time"`   // "HH:MM"; empty = leave unchanged
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
@@ -3829,9 +3824,8 @@ func removeEventFromSeries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
@@ -3863,20 +3857,21 @@ type EventOrganizationRefRequest struct {
 // PUT /api/v1/events/{id}/location — set the event's location.
 func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
 		return
 	}
 	var req EventLocationRefRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID <= 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.LocationID <= 0 {
 		writeError(w, "location_id is required", http.StatusBadRequest)
 		return
 	}
@@ -3897,13 +3892,11 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/events/{id}/location — clear the event's location.
 func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -3918,13 +3911,11 @@ func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
 // Requires the caller to be a member of the target organization (unless admin).
 func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 	// requireEventOrg(..., &req.OrganizationID, true) covers both "existing
@@ -3942,7 +3933,10 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req EventOrganizationRefRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrganizationID <= 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.OrganizationID <= 0 {
 		writeError(w, "organization_id is required", http.StatusBadRequest)
 		return
 	}
@@ -3965,13 +3959,11 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 // (event becomes orphaned; see assignEventOrg to reassign).
 func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -3995,18 +3987,15 @@ func unsetEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 func addEventJoinRow(refParam, refTable, refLabel, joinTable string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		callerID, userRole := callerFromRequest(r)
-		if userRole != RoleAdmin && userRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 			return
 		}
-		eventID, err := intPathValue(r, "id")
-		if err != nil {
-			writeError(w, "invalid event id", http.StatusBadRequest)
+		eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
-		refID, err := intPathValue(r, refParam)
-		if err != nil {
-			writeError(w, "invalid "+strings.TrimSuffix(refParam, "_id")+" id", http.StatusBadRequest)
+		refID, ok := requireIntPathValue(w, r, refParam, "invalid "+strings.TrimSuffix(refParam, "_id")+" id")
+		if !ok {
 			return
 		}
 		if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -4027,18 +4016,15 @@ func addEventJoinRow(refParam, refTable, refLabel, joinTable string) http.Handle
 func removeEventJoinRow(refParam, joinTable string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		callerID, userRole := callerFromRequest(r)
-		if userRole != RoleAdmin && userRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 			return
 		}
-		eventID, err := intPathValue(r, "id")
-		if err != nil {
-			writeError(w, "invalid event id", http.StatusBadRequest)
+		eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
-		refID, err := intPathValue(r, refParam)
-		if err != nil {
-			writeError(w, "invalid "+strings.TrimSuffix(refParam, "_id")+" id", http.StatusBadRequest)
+		refID, ok := requireIntPathValue(w, r, refParam, "invalid "+strings.TrimSuffix(refParam, "_id")+" id")
+		if !ok {
 			return
 		}
 		if !timetableAuthCheck(w, userRole, callerID, eventID) {

@@ -75,8 +75,7 @@ var uploadMusicianImage = imageUploadHandler(imageUploadSpec{
 // DELETE /api/v1/musician-images/{id}
 func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
 	idStr := r.PathValue("id")

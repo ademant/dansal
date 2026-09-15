@@ -220,8 +220,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req InstructorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	result, err := db.Exec(
@@ -273,8 +272,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req InstructorMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Name != nil {
@@ -352,9 +350,8 @@ func deleteInstructor(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}/instructors
 func getEventInstructors(w http.ResponseWriter, r *http.Request) {
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 	instructors, err := fetchEventInstructors(eventID)
@@ -389,13 +386,11 @@ func fetchEventInstructors(eventID int) ([]Instructor, error) {
 func setEventInstructors(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid event ID", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "Invalid event ID")
+	if !ok {
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {

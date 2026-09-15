@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
@@ -80,8 +79,7 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 		TelegramChannelAvailable: config.Server.TelegramBotToken != "",
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
+	writeJSON(w, info)
 }
 
 func now() int64 {

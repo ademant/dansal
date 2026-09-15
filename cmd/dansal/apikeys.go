@@ -127,9 +127,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
 	var req CreateAPIKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -199,15 +197,13 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	callerID, callerRole := callerFromRequest(r)
 
-	keyID, err := intPathValue(r, "id")
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid API key ID"})
+	keyID, ok := requireIntPathValue(w, r, "id", "Invalid API key ID")
+	if !ok {
 		return
 	}
 
 	var ownerID int
-	err = db.QueryRow("SELECT user_id FROM api_keys WHERE id = ?", keyID).Scan(&ownerID)
+	err := db.QueryRow("SELECT user_id FROM api_keys WHERE id = ?", keyID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "API key not found"})

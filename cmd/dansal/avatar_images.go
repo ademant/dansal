@@ -104,8 +104,7 @@ func avatarUploadHandler(s *avatarSet, entityTable, entityLabel string, checkAcc
 func avatarDeleteHandler(s *avatarSet, entityLabel string, checkAccess func(callerID int, entityID int) bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		callerID, userRole := callerFromRequest(r)
-		if userRole != RoleAdmin && userRole != RoleUser {
-			writeError(w, "Forbidden", http.StatusForbidden)
+		if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 			return
 		}
 		idStr := r.PathValue("id")

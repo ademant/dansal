@@ -374,8 +374,7 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 		s.EventCount = eventCount
 		result = append(result, s)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, result)
 }
 
 // POST /api/v1/series
@@ -402,8 +401,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 		TemplateData      json.RawMessage `json:"template_data,omitempty"`
 		Cadence           string          `json:"cadence,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.Title) == "" {
@@ -600,8 +598,7 @@ func getSeriesByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	series.Events = events
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(series)
+	writeJSON(w, series)
 }
 
 // POST /api/v1/series/{id}/apply-to-events — propagates series header fields
@@ -862,8 +859,7 @@ func regenerateSeriesToken(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"invite_token": tok})
+	writeJSON(w, map[string]string{"invite_token": tok})
 }
 
 // POST /api/v1/series/{id}/token/revoke
@@ -902,8 +898,7 @@ func getSeriesByToken(w http.ResponseWriter, r *http.Request) {
 	s.Events = events
 	// Strip the token from the public response
 	s.InviteToken = ""
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s)
+	writeJSON(w, s)
 }
 
 // PATCH /api/v1/series-by-token/{token}/events/{eventID}
@@ -1032,7 +1027,10 @@ func assignSeriesEvents(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []int `json:"ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
@@ -1103,9 +1101,8 @@ func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	eventID, err := intPathValue(r, "event_id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "event_id", "invalid event id")
+	if !ok {
 		return
 	}
 	evOrgID, err := eventOrgID(db, eventID)
@@ -1135,9 +1132,8 @@ func removeSeriesEvent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	eventID, err := intPathValue(r, "event_id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "event_id", "invalid event id")
+	if !ok {
 		return
 	}
 	db.Exec("UPDATE events SET series_id=NULL WHERE id=? AND series_id=?", eventID, series.ID)

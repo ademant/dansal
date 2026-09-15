@@ -113,8 +113,7 @@ var uploadOrgImage = imageUploadHandler(imageUploadSpec{
 // DELETE /api/v1/org-images/{id}
 func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if userRole != RoleAdmin && userRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
 		return
 	}
 	idStr := r.PathValue("id")

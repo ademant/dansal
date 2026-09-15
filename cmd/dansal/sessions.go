@@ -65,15 +65,14 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 func deleteSession(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	sessionID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid session ID", http.StatusBadRequest)
+	sessionID, ok := requireIntPathValue(w, r, "id", "Invalid session ID")
+	if !ok {
 		return
 	}
 
 	var ownerID int
 	var token string
-	err = db.QueryRow("SELECT user_id, token FROM tokens WHERE id=?", sessionID).Scan(&ownerID, &token)
+	err := db.QueryRow("SELECT user_id, token FROM tokens WHERE id=?", sessionID).Scan(&ownerID, &token)
 	if err == sql.ErrNoRows {
 		writeError(w, "Session not found", http.StatusNotFound)
 		return

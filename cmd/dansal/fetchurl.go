@@ -679,8 +679,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 		sources = append(sources, src)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sources)
+	writeJSON(w, sources)
 }
 
 // GET /api/v1/fetchurl/{id}
@@ -707,8 +706,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(src)
+	writeJSON(w, src)
 }
 
 // PATCH /api/v1/fetchurl/{id}
@@ -789,8 +787,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(src)
+	writeJSON(w, src)
 }
 
 // fetchFailureAlertThreshold is the number of consecutive failed runs a fetch
@@ -1546,7 +1543,10 @@ func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []int `json:"ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
@@ -1598,7 +1598,10 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []int `json:"ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
@@ -1648,8 +1651,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	}
 	wg.Wait()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	writeJSON(w, results)
 }
 
 // POST /api/v1/fetchurl/bulk-assign-org
@@ -1663,7 +1665,10 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 		IDs            []int `json:"ids"`
 		OrganizationID *int  `json:"organization_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}

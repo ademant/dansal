@@ -334,8 +334,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var req MusicianCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -393,8 +392,7 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req MusicianMergePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Bandname != nil {

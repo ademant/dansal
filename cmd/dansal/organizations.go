@@ -313,8 +313,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 		writeOrgsAtom(w, r, orgs)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(orgs)
+	writeJSON(w, orgs)
 }
 
 func writeOrgsAtom(w http.ResponseWriter, r *http.Request, orgs []Organization) {
@@ -452,8 +451,7 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 		writeOrgsAtom(w, r, []Organization{o})
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(o)
+	writeJSON(w, o)
 }
 
 // checkActorNameAvailable enforces the actor_name uniqueness/reserved-word
@@ -773,9 +771,8 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/organizations/{id}/members
 func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	orgID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := requireIntPathValue(w, r, "id", "Invalid organization ID")
+	if !ok {
 		return
 	}
 	callerID, callerRole := callerFromRequest(r)
@@ -788,7 +785,10 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req AddMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.UserID == 0 {
 		writeError(w, "user_id is required", http.StatusBadRequest)
 		return
 	}
@@ -830,9 +830,8 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/organizations/{id}/members/{user_id}
 func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
-	orgID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := requireIntPathValue(w, r, "id", "Invalid organization ID")
+	if !ok {
 		return
 	}
 	callerID, callerRole := callerFromRequest(r)

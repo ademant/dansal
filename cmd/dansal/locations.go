@@ -500,8 +500,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeLocationsAtom(w, r, locations)
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(locations)
+		writeJSON(w, locations)
 	}
 }
 
@@ -744,8 +743,7 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(accept, "application/atom+xml") {
 		writeLocationsAtom(w, r, []Location{location})
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(location)
+		writeJSON(w, location)
 	}
 }
 
@@ -1204,7 +1202,10 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		IDs            []int `json:"ids"`
 		OrganizationID *int  `json:"organization_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
@@ -1241,7 +1242,10 @@ func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		LocationID     int `json:"location_id"`
 		OrganizationID int `json:"organization_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == 0 || req.OrganizationID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.LocationID == 0 || req.OrganizationID == 0 {
 		writeError(w, "location_id and organization_id are required", http.StatusBadRequest)
 		return
 	}
@@ -1333,15 +1337,17 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 // admin: any org. user: own orgs only.
 func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	callerID, requesterRole := callerFromRequest(r)
-	locID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	locID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	var req struct {
 		OrganizationID int `json:"organization_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OrganizationID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.OrganizationID == 0 {
 		writeError(w, "organization_id is required", http.StatusBadRequest)
 		return
 	}
@@ -1387,7 +1393,10 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 		KeepID  int `json:"keep_id"`
 		MergeID int `json:"merge_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.KeepID == 0 || req.MergeID == 0 {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.KeepID == 0 || req.MergeID == 0 {
 		writeError(w, "keep_id and merge_id are required", http.StatusBadRequest)
 		return
 	}
@@ -1502,20 +1511,18 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := keep
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, result)
 }
 
 // GET /api/v1/locations/{id}/children — list a location's child locations
 // (rooms), with address/coordinates inherited from this location.
 func getLocationChildren(w http.ResponseWriter, r *http.Request) {
-	locID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	locID, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	var parent Location
-	err = scanLocation(db.QueryRow(`SELECT `+locationCols+`
+	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
 		WHERE l.id=? GROUP BY l.id`, locID), &parent)
 	if err == sql.ErrNoRows {
@@ -1542,8 +1549,7 @@ func getLocationChildren(w http.ResponseWriter, r *http.Request) {
 		childRows.Close()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(children)
+	writeJSON(w, children)
 }
 
 // POST /api/v1/locations/{id}/children — create a child location (room)
@@ -1565,7 +1571,10 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 		Capacity       *int            `json:"capacity,omitempty"`
 		SizeSqm        *int            `json:"size_sqm,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
@@ -1593,9 +1602,7 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 	}
 	childID, _ := result.LastInsertId()
 	child := Location{ID: int(childID), Location: strings.TrimSpace(req.Name), FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID, Capacity: req.Capacity, SizeSqm: req.SizeSqm}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(child)
+	writeJSONStatus(w, http.StatusCreated, child)
 }
 
 // GET /api/v1/locations/event-counts — returns a map of location_id → future event count.
@@ -1613,8 +1620,7 @@ func locationEventCounts(w http.ResponseWriter, r *http.Request) {
 			counts[id] = n
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(counts)
+	writeJSON(w, counts)
 }
 
 // CityInfo represents a town that has at least one geo-tagged venue with
@@ -1719,6 +1725,5 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 	if cities == nil {
 		cities = []CityInfo{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cities)
+	writeJSON(w, cities)
 }

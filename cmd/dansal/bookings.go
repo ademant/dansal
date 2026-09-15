@@ -92,9 +92,8 @@ func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole
 func listBookings(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
@@ -121,22 +120,20 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, b)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	writeJSON(w, out)
 }
 
 // POST /api/v1/events/{id}/bookings
 // Public. Creates a pending booking and sends an email verification link.
 func createBooking(w http.ResponseWriter, r *http.Request) {
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 
 	// Check event exists and booking is enabled.
 	var bookingEnabled int
-	err = db.QueryRow("SELECT COALESCE(booking_enabled,0) FROM events WHERE id=?", eventID).Scan(&bookingEnabled)
+	err := db.QueryRow("SELECT COALESCE(booking_enabled,0) FROM events WHERE id=?", eventID).Scan(&bookingEnabled)
 	if err == sql.ErrNoRows {
 		writeError(w, "event not found", http.StatusNotFound)
 		return
@@ -220,9 +217,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSONStatus(w, http.StatusCreated, map[string]any{
 		"id":      id,
 		"message": "A confirmation email has been sent. Your booking will be registered once verified.",
 	})
@@ -283,9 +278,8 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	bookingID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid booking id", http.StatusBadRequest)
+	bookingID, ok := requireIntPathValue(w, r, "id", "invalid booking id")
+	if !ok {
 		return
 	}
 
@@ -360,8 +354,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		updateEventAvailability(b.EventID)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(b)
+	writeJSON(w, b)
 }
 
 // DELETE /api/v1/bookings/{id}
@@ -369,9 +362,8 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 func deleteBooking(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	bookingID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid booking id", http.StatusBadRequest)
+	bookingID, ok := requireIntPathValue(w, r, "id", "invalid booking id")
+	if !ok {
 		return
 	}
 

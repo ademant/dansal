@@ -292,9 +292,8 @@ type ContactPostMergePatchRequest struct {
 // Public. Returns only email-verified posts; email field is never returned.
 func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 
@@ -341,9 +340,8 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 // Anonymous users: post is unverified; a confirmation email with the manage link is sent.
 func createContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid event id", http.StatusBadRequest)
+	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
 		return
 	}
 
@@ -730,9 +728,8 @@ func writeContactPostFields(postID int, typ, city, message, nickname string, per
 // auth()/Bearer — see #726.
 func putContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
 	if !checkContactPostManageToken(w, postID, r.URL.Query().Get("token")) {
@@ -795,9 +792,8 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "PATCH requires Content-Type: application/merge-patch+json", http.StatusUnsupportedMediaType)
 		return
 	}
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
 	if !checkContactPostManageToken(w, postID, r.URL.Query().Get("token")) {
@@ -904,14 +900,13 @@ func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
 
 	var eventID int
-	err = db.QueryRow("SELECT event_id FROM contact_posts WHERE id=?", postID).Scan(&eventID)
+	err := db.QueryRow("SELECT event_id FROM contact_posts WHERE id=?", postID).Scan(&eventID)
 	if err == sql.ErrNoRows {
 		writeError(w, "post not found", http.StatusNotFound)
 		return
@@ -940,9 +935,8 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 // Anonymous users: creates a pending contact_request and sends a verification email/Telegram link.
 func contactPoster(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	postID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid post id", http.StatusBadRequest)
+	postID, ok := requireIntPathValue(w, r, "id", "invalid post id")
+	if !ok {
 		return
 	}
 
@@ -970,7 +964,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	var posterEmail, posterNick, posterChatID string
 	var emailVerified int
 	var expiresAt string
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT email, nickname, email_verified, expires_at, COALESCE(poster_telegram_chat_id,'') FROM contact_posts WHERE id=?", postID,
 	).Scan(&posterEmail, &posterNick, &emailVerified, &expiresAt, &posterChatID)
 	if err == sql.ErrNoRows {

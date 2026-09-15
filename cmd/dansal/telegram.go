@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// telegramClient is package-level (like fetchClient/safeClient in fetchurl.go)
+// so repeated sends reuse pooled connections/TLS sessions to the Telegram API
+// instead of paying a fresh handshake on every notification (#1319).
+var telegramClient = &http.Client{Timeout: 15 * time.Second}
+
 // sendTelegramMessage sends a plain-text message to a Telegram chat.
 // chatID is the numeric Telegram chat/user ID stored as a string.
 func sendTelegramMessage(chatID, text string) error {
@@ -27,8 +32,7 @@ func sendTelegramMessage(chatID, text string) error {
 		"link_preview_options": map[string]any{"is_disabled": true},
 	})
 	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Post(apiURL, "application/json", bytes.NewReader(payload))
+	resp, err := telegramClient.Post(apiURL, "application/json", bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("telegram API: %w", err)
 	}
@@ -262,22 +266,24 @@ func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid user ID", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid user ID")
+	if !ok {
 		return
 	}
 
 	var req struct {
 		Text string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if strings.TrimSpace(req.Text) == "" {
 		writeError(w, "text is required", http.StatusBadRequest)
 		return
 	}
 
 	var chatID string
-	err = db.QueryRow("SELECT COALESCE(telegram_chat_id,'') FROM users WHERE id=?", id).Scan(&chatID)
+	err := db.QueryRow("SELECT COALESCE(telegram_chat_id,'') FROM users WHERE id=?", id).Scan(&chatID)
 	if err == sql.ErrNoRows {
 		writeError(w, "user not found", http.StatusNotFound)
 		return

@@ -46,8 +46,7 @@ func getSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	event.Musicians, _ = fetchEventMusicians(eventID)
 	event.Instructors, _ = fetchEventInstructors(eventID)
 	event.Timetable, _ = fetchTimetable(db, eventID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	writeJSON(w, event)
 }
 
 // pendingEditFields holds the "always needs review" subset of a manage-token
@@ -191,8 +190,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "db error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"needs_review": false})
+		writeJSON(w, map[string]bool{"needs_review": false})
 		return
 	}
 
@@ -302,8 +300,7 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	if needsReview {
 		go notifyReviewersPendingEdit(eventID)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"needs_review": needsReview})
+	writeJSON(w, map[string]bool{"needs_review": needsReview})
 }
 
 // notifyReviewersPendingEdit alerts admins (and, when the event has an
@@ -368,9 +365,8 @@ func rejectPendingEdit(w http.ResponseWriter, r *http.Request) {
 
 func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 	callerID, userRole := callerFromRequest(r)
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 

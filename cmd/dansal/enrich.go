@@ -19,8 +19,11 @@ func enrichEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := intPathValue(r, "id")
-	if err != nil || id <= 0 {
+	id, ok := requireIntPathValue(w, r, "id", "invalid event id")
+	if !ok {
+		return
+	}
+	if id <= 0 {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
@@ -36,6 +39,5 @@ func enrichEvent(w http.ResponseWriter, r *http.Request) {
 			db.Exec("UPDATE events SET pricing=jsonb(?) WHERE id=? AND pricing IS NULL", string(b), id)
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	writeJSON(w, map[string]any{"ok": true})
 }

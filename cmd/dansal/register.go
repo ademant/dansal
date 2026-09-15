@@ -308,9 +308,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/register/status/{id} — return the status of a pending registration for cookie-based resumption.
 // The verification_token query param is required for approved registrations to return the invite URL.
 func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	token := r.URL.Query().Get("token")
@@ -318,7 +317,7 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	var verified, approved int
 	var expiresAt, approvedInviteURL, storedToken string
 	var userID sql.NullInt64
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT verified, approved, COALESCE(approved_invite_url,''), expires_at, verification_token, user_id FROM pending_registrations WHERE id=?", id,
 	).Scan(&verified, &approved, &approvedInviteURL, &expiresAt, &storedToken, &userID)
 	if err == sql.ErrNoRows {
@@ -366,8 +365,7 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 		// No invite_url in response when expired/used — the web page shows the approved
 		// state without an actionable link, prompting the user to contact the admin.
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, resp)
 }
 
 // POST /api/v1/register/resend/{token} — resend verification message (rate-limited).
@@ -482,8 +480,7 @@ func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
 	// completes -- see webauthnRegFinish / registerPasswordHandler (#1223) --
 	// not here. The web frontend routes the user straight into that
 	// onboarding step on this response, using the id below.
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"pending_id": strconv.Itoa(id)})
+	writeJSON(w, map[string]string{"pending_id": strconv.Itoa(id)})
 }
 
 // POST /api/v1/register/password
@@ -500,7 +497,10 @@ func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		DisplayName       string `json:"display_name"`
 		Password          string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PendingID == 0 || req.VerificationToken == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.PendingID == 0 || req.VerificationToken == "" {
 		writeError(w, "pending_id and verification_token are required", http.StatusBadRequest)
 		return
 	}
@@ -563,9 +563,7 @@ func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("register: password set for pending registration %d (user_id=%d)", pr.ID, userID)
 	go notifyApprovers(pr.ID)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "password_set"})
+	writeJSONStatus(w, http.StatusCreated, map[string]string{"status": "password_set"})
 }
 
 // GET /api/v1/pending-registrations
@@ -638,9 +636,8 @@ func listPendingRegsHandler(w http.ResponseWriter, r *http.Request) {
 func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -654,7 +651,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		VerificationChannel, Telegram, TelegramChatID                      string
 		Verified                                                           int
 	}
-	err = db.QueryRow(
+	err := db.QueryRow(
 		`SELECT id, COALESCE(email,''), reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
 		 org_website, org_contact_email, verification_channel, COALESCE(telegram,''), COALESCE(telegram_chat_id,''), verified, user_id
 		 FROM pending_registrations WHERE id=?`, id,
@@ -736,9 +733,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
 			"Your registration has been approved. "+signInHint)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSONStatus(w, http.StatusCreated, map[string]any{
 			"status":  "user_enabled",
 			"user_id": userID,
 		})
@@ -810,9 +805,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 	go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
 		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSONStatus(w, http.StatusCreated, map[string]any{
 		"status":     "invite_sent",
 		"email":      pr.Email,
 		"invite_url": setupURL,
@@ -823,9 +816,8 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	id, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 
@@ -835,7 +827,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		OrgID                          sql.NullInt64
 		UserID                         sql.NullInt64
 	}
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id, user_id FROM pending_registrations WHERE id=?", id,
 	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID, &pr.UserID)
 	if err != nil {
@@ -944,8 +936,7 @@ func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
 			callerID,
 		).Scan(&count)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"count": count})
+	writeJSON(w, map[string]int{"count": count})
 }
 
 // GET /api/v1/dashboard/attention — scoped counts of items needing review.

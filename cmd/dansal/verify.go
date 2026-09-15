@@ -45,9 +45,8 @@ func generateVerificationToken() (string, error) {
 func sendVerification(w http.ResponseWriter, r *http.Request) {
 	callerID, callerRole := callerFromRequest(r)
 
-	targetID, err := intPathValue(r, "id")
-	if err != nil {
-		writeError(w, "Invalid user ID", http.StatusBadRequest)
+	targetID, ok := requireIntPathValue(w, r, "id", "Invalid user ID")
+	if !ok {
 		return
 	}
 	if callerID != targetID && callerRole != RoleAdmin {
@@ -59,7 +58,10 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		Channel string `json:"channel"`
 		BaseURL string `json:"base_url"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Channel == "" {
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.Channel == "" {
 		writeError(w, "channel is required (email, telegram, matrix)", http.StatusBadRequest)
 		return
 	}
@@ -136,8 +138,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		}
 		deepLink := "https://t.me/" + botName + "?start=" + token
 		log.Printf("verify: generated telegram deep link for user %d (%s)", targetID, user.Email)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"deep_link": deepLink})
+		writeJSON(w, map[string]string{"deep_link": deepLink})
 		return
 	}
 
@@ -218,6 +219,11 @@ func sendEmailVerification(user User, verifyURL string) (string, error) {
 	return SendEmail(user.Email, "Verify your email address", body, false)
 }
 
+// matrixClient is package-level (like fetchClient/safeClient in fetchurl.go)
+// so repeated sends reuse pooled connections/TLS sessions to the Matrix
+// homeserver instead of paying a fresh handshake on every notification (#1319).
+var matrixClient = &http.Client{Timeout: 30 * time.Second}
+
 // sendMatrixMessage sends text to matrixID, reusing the DM room from any
 // previous send to the same recipient (#1306) instead of createRoom-ing a
 // fresh one — mirrors Telegram's stable chat_id, the closest Matrix has to
@@ -229,7 +235,7 @@ func sendMatrixMessage(matrixID, text string) error {
 		return fmt.Errorf("matrix_homeserver or matrix_access_token not configured")
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := matrixClient
 
 	var roomID string
 	db.QueryRow("SELECT room_id FROM matrix_rooms WHERE matrix_id=?", matrixID).Scan(&roomID)

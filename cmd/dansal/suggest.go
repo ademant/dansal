@@ -412,9 +412,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	// Return the standing manage token so an authenticated submitter can
 	// attach an event image right away (#1050); the anonymous web flow ignores
 	// it and only receives the token via the edit-link email.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"token": suggestionToken})
+	writeJSONStatus(w, http.StatusAccepted, map[string]string{"token": suggestionToken})
 }
 
 // GET /api/v1/events/suggest/verify/{token} — legacy confirmation endpoint.

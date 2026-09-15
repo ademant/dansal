@@ -62,6 +62,11 @@ func runHeartbeat() {
 	}
 }
 
+// heartbeatClient is package-level (like fetchClient/safeClient in
+// fetchurl.go) so repeated probes reuse pooled connections instead of a
+// fresh one every heartbeat tick (#1319).
+var heartbeatClient = &http.Client{Timeout: 10 * time.Second}
+
 func probeEmail() ChannelStatus {
 	cfg := config.SMTP
 	if cfg.Host == "" {
@@ -85,8 +90,7 @@ func probeTelegram() ChannelStatus {
 	if token == "" {
 		return ChannelStatus{Configured: false}
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("https://api.telegram.org/bot" + token + "/getMe")
+	resp, err := heartbeatClient.Get("https://api.telegram.org/bot" + token + "/getMe")
 	if err != nil {
 		return ChannelStatus{Configured: true, OK: false, LastChecked: time.Now(), Error: err.Error()}
 	}
@@ -108,10 +112,9 @@ func probeMatrix() ChannelStatus {
 	if homeserver == "" || accessToken == "" {
 		return ChannelStatus{Configured: false}
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", homeserver+"/_matrix/client/v3/account/whoami", nil)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := client.Do(req)
+	resp, err := heartbeatClient.Do(req)
 	if err != nil {
 		return ChannelStatus{Configured: true, OK: false, LastChecked: time.Now(), Error: err.Error()}
 	}

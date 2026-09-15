@@ -587,6 +587,205 @@ function initDateRangePicker(opts){
   return opts;
 }
 
+// --- Markdown mini-editor + image drop-zone (#1322) ---
+// Extracted from 5 admin edit forms (event/instructor/location/musician/org)
+// that each carried a byte-identical copy of this widget as inline <script>.
+// Page-specific bits (which textarea/field ids to bind) stay in each
+// template as a one-line call, same as _bindMdAutosize('description') below.
+
+// removeImage: data-fn target for the "remove image" button (admin_*_edit.html).
+function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
+
+// _bindMdPaste: pasting rich-text (e.g. from Word/Google Docs) into a
+// markdown textarea converts it to markdown instead of dumping raw HTML/
+// plain text, with a brief hint shown confirming the conversion happened.
+function _bindMdPaste(taId,hintId){
+  var ta=document.getElementById(taId),hint=document.getElementById(hintId);
+  if(!ta||!hint) return;
+  function hasRich(h){return /<(b|strong|i|em|h[1-6]|ul|ol|blockquote|code|pre|hr)[\s>\/]/i.test(h)||/<a\s/i.test(h);}
+  function n2m(n){
+    if(n.nodeType===3) return n.textContent;
+    if(n.nodeType!==1) return '';
+    var tag=n.tagName.toLowerCase(),inner=Array.from(n.childNodes).map(n2m).join('');
+    switch(tag){
+      case 'b':case 'strong':{var t=inner.trim();return t?'**'+t+'**':'';}
+      case 'i':case 'em':{var t=inner.trim();return t?'*'+t+'*':'';}
+      case 'h1':return '\n\n# '+inner.trim()+'\n\n';
+      case 'h2':return '\n\n## '+inner.trim()+'\n\n';
+      case 'h3':return '\n\n### '+inner.trim()+'\n\n';
+      case 'h4':case 'h5':case 'h6':return '\n\n#### '+inner.trim()+'\n\n';
+      case 'p':return '\n\n'+inner.trim()+'\n\n';
+      case 'br':return '\n';
+      case 'ul':case 'ol':return '\n'+inner+'\n';
+      case 'li':{var ol=n.parentElement&&n.parentElement.tagName.toLowerCase()==='ol';if(ol){var idx=Array.from(n.parentElement.children).indexOf(n)+1;return idx+'. '+inner.trim()+'\n';}return '- '+inner.trim()+'\n';}
+      case 'a':{var href=n.getAttribute('href')||'',txt=inner.trim();return href&&href!==txt?'['+txt+']('+href+')':txt;}
+      case 'blockquote':return '\n\n'+inner.trim().split('\n').map(function(l){return '> '+l;}).join('\n')+'\n\n';
+      case 'code':return '`'+inner+'`';
+      case 'pre':return '\n\n```\n'+n.textContent.trim()+'\n```\n\n';
+      case 'hr':return '\n\n---\n\n';
+      case 'head':case 'style':case 'script':case 'meta':return '';
+      default:return inner;
+    }
+  }
+  function toMd(html){var d=new DOMParser().parseFromString(html,'text/html');return n2m(d.body).replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();}
+  var timer;
+  ta.addEventListener('paste',function(e){
+    var html=e.clipboardData&&e.clipboardData.getData('text/html');
+    if(!html||!hasRich(html)) return;
+    e.preventDefault();
+    var md=toMd(html),s=ta.selectionStart,end=ta.selectionEnd,v=ta.value;
+    ta.value=v.slice(0,s)+md+v.slice(end);
+    ta.selectionStart=ta.selectionEnd=s+md.length;
+    ta.dispatchEvent(new Event('input'));
+    hint.hidden=false;
+    clearTimeout(timer);
+    timer=setTimeout(function(){hint.hidden=true;},5000);
+    if(typeof _markDirty==='function') _markDirty();
+  });
+}
+// _mdToHtml: the small markdown-to-HTML renderer backing every admin edit
+// form's live preview pane. Deliberately not a full CommonMark
+// implementation — just the subset _bindMdPaste's n2m() above produces
+// (bold/italic/code/links/headings/lists/blockquotes/hr/fenced code).
+function _mdToHtml(md){
+  if(!md) return '';
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function inline(s){
+    s=esc(s);
+    s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+    s=s.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>');
+    s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    s=s.replace(/_(.+?)_/g,'<em>$1</em>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){
+      url=url.trim();
+      if(!/^(https?:|mailto:|tel:|\/|#)/i.test(url)) url='#';
+      return '<a href="'+url.replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">'+txt+'</a>';
+    });
+    return s;
+  }
+  var lines=md.split('\n'),out=[],inUl=false,inOl=false,inPre=false,preBuf=[];
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i];
+    if(/^```/.test(l)){
+      if(inPre){out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');preBuf=[];inPre=false;}
+      else{if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}inPre=true;}
+      continue;
+    }
+    if(inPre){preBuf.push(l);continue;}
+    var hm=l.match(/^(#{1,6}) (.*)/);
+    if(hm){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<h'+hm[1].length+'>'+inline(hm[2])+'</h'+hm[1].length+'>');continue;}
+    if(/^>\s/.test(l)){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<blockquote>'+inline(l.replace(/^>\s*/,''))+'</blockquote>');continue;}
+    if(/^-{3,}$/.test(l.trim())){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<hr>');continue;}
+    var ulm=l.match(/^[*-] (.*)/);
+    if(ulm){if(inOl){out.push('</ol>');inOl=false;}if(!inUl){out.push('<ul>');inUl=true;}out.push('<li>'+inline(ulm[1])+'</li>');continue;}
+    var olm=l.match(/^\d+\. (.*)/);
+    if(olm){if(inUl){out.push('</ul>');inUl=false;}if(!inOl){out.push('<ol>');inOl=true;}out.push('<li>'+inline(olm[1])+'</li>');continue;}
+    if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}
+    if(!l.trim()){out.push('<p class="md-br"></p>');continue;}
+    out.push('<p>'+inline(l)+'</p>');
+  }
+  if(inUl)out.push('</ul>');if(inOl)out.push('</ol>');
+  if(inPre)out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');
+  return out.join('');
+}
+// _bindMdAutosize: wraps a markdown textarea with a live preview pane and an
+// expand/collapse toggle, growing the textarea to fit its content.
+function _bindMdAutosize(taId){
+  var ta=document.getElementById(taId);
+  if(!ta) return;
+  var ch=ta.offsetHeight||(parseInt(ta.getAttribute('rows')||'4')*22+14);
+  var wrap=document.createElement('div');
+  wrap.className='md-ta-wrap';
+  ta.parentNode.insertBefore(wrap,ta);
+  wrap.appendChild(ta);
+  var left=document.createElement('div');
+  left.className='md-ta-left';
+  wrap.insertBefore(left,ta);
+  left.appendChild(ta);
+  var btn=document.createElement('button');
+  btn.type='button';btn.className='md-ta-toggle';btn.title='Collapse';btn.textContent='▲';
+  left.appendChild(btn);
+  var prev=document.createElement('div');
+  prev.className='md-preview';
+  wrap.appendChild(prev);
+  var descRow=wrap.closest&&wrap.closest('.desc-row');
+  if(descRow){var mh=descRow.querySelector('.md-help');if(mh)mh.hidden=true;}
+  ta.style.overflow='hidden';ta.style.resize='none';
+  var open=true;
+  function renderPrev(){prev.innerHTML=_mdToHtml(ta.value)||'<span class="md-preview-empty">Preview</span>';}
+  function doExpand(){open=true;ta.style.height='0';ta.style.height=Math.max(ch,ta.scrollHeight)+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
+  function doCollapse(){open=false;ta.style.height=ch+'px';ta.style.overflow='auto';btn.textContent='▼';btn.title='Expand';}
+  renderPrev();
+  if(ta.offsetHeight>0){doExpand();}
+  else{var ro=new ResizeObserver(function(e){if(e[0].contentRect.height>0){doExpand();ro.disconnect();}});ro.observe(ta);}
+  ta.addEventListener('input',function(){if(open)doExpand();renderPrev();});
+  btn.addEventListener('click',function(){if(open)doCollapse();else doExpand();});
+}
+// initImageDropZone: drag&drop + click-to-pick preview for the admin edit
+// forms' image upload field. Self-guarding (no-ops when the drop-zone
+// elements aren't on the page, e.g. admin_event_form.html's template mode),
+// so it's called unconditionally below instead of requiring each template
+// to call it itself.
+function initImageDropZone(){
+  var dz=document.getElementById('drop-zone');
+  var inp=document.getElementById('image');
+  var prev=document.getElementById('image-preview');
+  var lbl=document.getElementById('drop-label');
+  if(!dz||!inp||!prev||!lbl) return;
+  function showPreview(file){
+    var url=URL.createObjectURL(file);
+    prev.src=url;prev.style.display='block';
+    lbl.style.display='none';
+  }
+  inp.addEventListener('change',function(){if(this.files[0])showPreview(this.files[0]);});
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
+  dz.addEventListener('drop',function(e){
+    e.preventDefault();dz.classList.remove('drag-over');
+    var f=e.dataTransfer.files[0];
+    if(f&&f.type.startsWith('image/')){
+      var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
+      showPreview(f);
+    }
+  });
+}
+initImageDropZone();
+
+// initLongPressMultiSelect: shared long-press-on-touch machinery for the
+// admin list pages' mobile bulk-select drawer (admin_events.html,
+// admin_fetchurls.html, admin_locations.html, admin_series_edit.html).
+// Each page's own enterMultiSelect/exitMultiSelect/updateCount stay
+// page-specific (different checkbox classes, different optional toolbar
+// elements) -- only the touch-timing/tolerance boilerplate was actually
+// identical across all four (#1322). Returns an object whose
+// suppressClick flag a caller can check in its own tbody 'click' handler
+// to ignore the synthetic click that follows a long-press on some
+// browsers (admin_series_edit.html's tbody does this).
+function initLongPressMultiSelect(tbody, rowSelector, onLongPress){
+  if(!tbody) return null;
+  var LONG_PRESS_MS=500, MOVE_TOLERANCE=10;
+  var pressTimer=null, startX=0, startY=0, pressRow=null;
+  var api={suppressClick:false};
+  function clearPressTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } pressRow=null; }
+  tbody.addEventListener('touchstart',function(e){
+    if(!window.matchMedia('(max-width:640px)').matches) return;
+    var row=e.target.closest(rowSelector);
+    if(!row) return;
+    pressRow=row;
+    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+    pressTimer=setTimeout(function(){ onLongPress(pressRow); api.suppressClick=true; clearPressTimer(); },LONG_PRESS_MS);
+  },{passive:true});
+  tbody.addEventListener('touchmove',function(e){
+    if(!pressTimer) return;
+    var dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
+    if(dx>MOVE_TOLERANCE||dy>MOVE_TOLERANCE) clearPressTimer();
+  },{passive:true});
+  tbody.addEventListener('touchend',clearPressTimer);
+  tbody.addEventListener('touchcancel',clearPressTimer);
+  return api;
+}
+
 function openHelpModal(){document.getElementById('hm-backdrop').hidden=false;}
 function closeHelpModal(){document.getElementById('hm-backdrop').hidden=true;}
 document.addEventListener('keydown',function(e){

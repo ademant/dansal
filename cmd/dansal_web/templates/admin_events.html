@@ -615,26 +615,7 @@ function pubEvent(id){
   }
   if(mtMsClose) mtMsClose.addEventListener('click',exitMultiSelect);
 
-  if(tbody){
-    var LONG_PRESS_MS=500, MOVE_TOLERANCE=10;
-    var pressTimer=null, startX=0, startY=0, pressRow=null;
-    function clearPressTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } pressRow=null; }
-    tbody.addEventListener('touchstart',function(e){
-      if(!window.matchMedia('(max-width:640px)').matches) return;
-      var row=e.target.closest('tr[data-evt-row]');
-      if(!row) return;
-      pressRow=row;
-      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
-      pressTimer=setTimeout(function(){ enterMultiSelect(pressRow); clearPressTimer(); },LONG_PRESS_MS);
-    },{passive:true});
-    tbody.addEventListener('touchmove',function(e){
-      if(!pressTimer) return;
-      var dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
-      if(dx>MOVE_TOLERANCE||dy>MOVE_TOLERANCE) clearPressTimer();
-    },{passive:true});
-    tbody.addEventListener('touchend',clearPressTimer);
-    tbody.addEventListener('touchcancel',clearPressTimer);
-  }
+  initLongPressMultiSelect(tbody,'tr[data-evt-row]',enterMultiSelect);
 })();
 
 // Mobile filter popup — wired unconditionally (works even with zero events).

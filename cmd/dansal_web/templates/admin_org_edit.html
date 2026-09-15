@@ -454,7 +454,6 @@ function filterLocs(q){
 }
 </script>
 <script nonce="{{$.Nonce}}">
-function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
   var inp=document.getElementById('actor_name');
   var st=document.getElementById('actor-name-status');
@@ -478,28 +477,6 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
         }
       }).catch(function(){st.textContent='';});
     },400);
-  });
-})();
-(function(){
-  var dz=document.getElementById('drop-zone');
-  var inp=document.getElementById('image');
-  var prev=document.getElementById('image-preview');
-  var lbl=document.getElementById('drop-label');
-  function showPreview(file){
-    var url=URL.createObjectURL(file);
-    prev.src=url;prev.style.display='block';
-    lbl.style.display='none';
-  }
-  inp.addEventListener('change',function(){if(this.files[0])showPreview(this.files[0]);});
-  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
-  dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
-  dz.addEventListener('drop',function(e){
-    e.preventDefault();dz.classList.remove('drag-over');
-    var f=e.dataTransfer.files[0];
-    if(f&&f.type.startsWith('image/')){
-      var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
-      showPreview(f);
-    }
   });
 })();
 (function(){
@@ -667,79 +644,6 @@ function safeGoBack(){
     _markDirty();
   });
 })();
-function _mdToHtml(md){
-  if(!md) return '';
-  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function inline(s){
-    s=esc(s);
-    s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
-    s=s.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>');
-    s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-    s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
-    s=s.replace(/_(.+?)_/g,'<em>$1</em>');
-    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){
-      url=url.trim();
-      if(!/^(https?:|mailto:|tel:|\/|#)/i.test(url)) url='#';
-      return '<a href="'+url.replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">'+txt+'</a>';
-    });
-    return s;
-  }
-  var lines=md.split('\n'),out=[],inUl=false,inOl=false,inPre=false,preBuf=[];
-  for(var i=0;i<lines.length;i++){
-    var l=lines[i];
-    if(/^```/.test(l)){
-      if(inPre){out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');preBuf=[];inPre=false;}
-      else{if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}inPre=true;}
-      continue;
-    }
-    if(inPre){preBuf.push(l);continue;}
-    var hm=l.match(/^(#{1,6}) (.*)/);
-    if(hm){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<h'+hm[1].length+'>'+inline(hm[2])+'</h'+hm[1].length+'>');continue;}
-    if(/^>\s/.test(l)){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<blockquote>'+inline(l.replace(/^>\s*/,''))+'</blockquote>');continue;}
-    if(/^-{3,}$/.test(l.trim())){if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}out.push('<hr>');continue;}
-    var ulm=l.match(/^[*-] (.*)/);
-    if(ulm){if(inOl){out.push('</ol>');inOl=false;}if(!inUl){out.push('<ul>');inUl=true;}out.push('<li>'+inline(ulm[1])+'</li>');continue;}
-    var olm=l.match(/^\d+\. (.*)/);
-    if(olm){if(inUl){out.push('</ul>');inUl=false;}if(!inOl){out.push('<ol>');inOl=true;}out.push('<li>'+inline(olm[1])+'</li>');continue;}
-    if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}
-    if(!l.trim()){out.push('<p class="md-br"></p>');continue;}
-    out.push('<p>'+inline(l)+'</p>');
-  }
-  if(inUl)out.push('</ul>');if(inOl)out.push('</ol>');
-  if(inPre)out.push('<pre><code>'+esc(preBuf.join('\n'))+'</code></pre>');
-  return out.join('');
-}
-function _bindMdAutosize(taId){
-  var ta=document.getElementById(taId);
-  if(!ta) return;
-  var ch=ta.offsetHeight||(parseInt(ta.getAttribute('rows')||'4')*22+14);
-  var wrap=document.createElement('div');
-  wrap.className='md-ta-wrap';
-  ta.parentNode.insertBefore(wrap,ta);
-  wrap.appendChild(ta);
-  var left=document.createElement('div');
-  left.className='md-ta-left';
-  wrap.insertBefore(left,ta);
-  left.appendChild(ta);
-  var btn=document.createElement('button');
-  btn.type='button';btn.className='md-ta-toggle';btn.title='Collapse';btn.textContent='▲';
-  left.appendChild(btn);
-  var prev=document.createElement('div');
-  prev.className='md-preview';
-  wrap.appendChild(prev);
-  var descRow=wrap.closest&&wrap.closest('.desc-row');
-  if(descRow){var mh=descRow.querySelector('.md-help');if(mh)mh.hidden=true;}
-  ta.style.overflow='hidden';ta.style.resize='none';
-  var open=true;
-  function renderPrev(){prev.innerHTML=_mdToHtml(ta.value)||'<span class="md-preview-empty">Preview</span>';}
-  function doExpand(){open=true;ta.style.height='0';ta.style.height=Math.max(ch,ta.scrollHeight)+'px';ta.style.overflow='hidden';btn.textContent='▲';btn.title='Collapse';}
-  function doCollapse(){open=false;ta.style.height=ch+'px';ta.style.overflow='auto';btn.textContent='▼';btn.title='Expand';}
-  renderPrev();
-  if(ta.offsetHeight>0){doExpand();}
-  else{var ro=new ResizeObserver(function(e){if(e[0].contentRect.height>0){doExpand();ro.disconnect();}});ro.observe(ta);}
-  ta.addEventListener('input',function(){if(open)doExpand();renderPrev();});
-  btn.addEventListener('click',function(){if(open)doCollapse();else doExpand();});
-}
 _bindMdAutosize('description');
 </script>
 {{end}}

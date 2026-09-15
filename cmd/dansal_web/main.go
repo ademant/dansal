@@ -133,7 +133,15 @@ func main() {
 		// dansal's GzipMiddleware compresses every response accordingly --
 		// a compress+decompress cycle on every backend call for a transfer
 		// that would've been free either way (see #1122).
-		HTTP:           &http.Client{Timeout: 180 * time.Second, Transport: &http.Transport{DisableCompression: true}},
+		// MaxIdleConnsPerHost: every request this client makes goes to the
+		// same host (BaseURL), so Go's default of 2 forces connections to be
+		// closed and reopened under any real concurrency instead of being
+		// pooled -- raised well above expected concurrent page-render
+		// traffic (#1321).
+		HTTP: &http.Client{Timeout: 180 * time.Second, Transport: &http.Transport{
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 100,
+		}},
 		InternalSecret: cfg.InternalSharedSecret,
 	}
 

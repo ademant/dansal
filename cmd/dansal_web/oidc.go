@@ -21,9 +21,8 @@ const oidcFlowCookie = "dsw_oidc_flow"
 // GET /oidc/{id}/start?invite=<token>
 func oidcStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		providerID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		providerID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		invite := r.URL.Query().Get("invite")
@@ -108,9 +107,8 @@ func oidcLinkStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if _, ok := requireLogin(w, r); !ok {
 			return
 		}
-		providerID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		providerID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		redirectURI := cfg.publicBaseURL() + "/settings/oidc/" + strconv.Itoa(providerID) + "/link-callback"

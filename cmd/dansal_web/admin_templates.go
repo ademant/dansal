@@ -130,9 +130,8 @@ func adminTemplateDeleteHandler(db *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := deleteTemplate(db, id, su.ID, su.Role == "admin"); err != nil {
@@ -158,9 +157,8 @@ func adminTemplatePinHandler(db *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := pinTemplate(db, su.ID, id); err != nil {
@@ -176,9 +174,8 @@ func adminTemplateUnpinHandler(db *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := unpinTemplate(db, su.ID, id); err != nil {
@@ -212,9 +209,8 @@ func adminTemplateDataHandler(db *sql.DB, client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		t, err := getTemplate(db, id)

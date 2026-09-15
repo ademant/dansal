@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -48,9 +47,8 @@ func boardSuccessRedirect(w http.ResponseWriter, r *http.Request, eventID int, m
 // POST /events/{id}/board
 func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		eventID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		ip := getClientIP(r)
@@ -130,8 +128,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 // right when it opens, without a full page reload.
 func boardFormTokenHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, err := strconv.Atoi(r.PathValue("id")); err != nil {
-			http.NotFound(w, r)
+		if _, ok := intPathValueOr404(w, r, "id"); !ok {
 			return
 		}
 		ip := getClientIP(r)
@@ -147,22 +144,19 @@ func boardFormTokenHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"form_token": tok})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"form_token": tok})
 	}
 }
 
 // POST /events/{id}/board/{post_id}/delete
 func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		eventID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
-		postID, err := strconv.Atoi(r.PathValue("post_id"))
-		if err != nil {
-			http.NotFound(w, r)
+		postID, ok := intPathValueOr404(w, r, "post_id")
+		if !ok {
 			return
 		}
 		if _, ok := requireLogin(w, r); !ok {
@@ -182,14 +176,12 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 // POST /events/{id}/board/{post_id}/contact
 func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		eventID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
-		postID, err := strconv.Atoi(r.PathValue("post_id"))
-		if err != nil {
-			http.NotFound(w, r)
+		postID, ok := intPathValueOr404(w, r, "post_id")
+		if !ok {
 			return
 		}
 		ip := getClientIP(r)

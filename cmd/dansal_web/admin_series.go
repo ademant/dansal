@@ -334,9 +334,8 @@ func adminSeriesEditPageHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -426,9 +425,8 @@ func adminSeriesSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -493,9 +491,8 @@ func adminSeriesDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -512,9 +509,8 @@ func adminSeriesSaveDescriptionsHandler(cfg *Config, client *DansalClient) http.
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -552,9 +548,8 @@ func adminSeriesAddDateHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -585,9 +580,8 @@ func adminSeriesRegenerateTokenHandler(cfg *Config, client *DansalClient) http.H
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -604,9 +598,8 @@ func adminSeriesRevokeTokenHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -627,9 +620,8 @@ func adminSeriesImageUploadHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -659,9 +651,8 @@ func adminSeriesImageDeleteHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteSeriesImage(r.Context(), id, getSessionToken(r)); err != nil {
@@ -680,9 +671,8 @@ func adminSeriesApplyToEventsHandler(cfg *Config, client *DansalClient) http.Han
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)

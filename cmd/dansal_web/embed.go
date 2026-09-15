@@ -153,9 +153,8 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 // embedEventHandler serves GET /embed/event/{id} — single event card.
 func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, err := client.GetEvent(r.Context(), id)
@@ -192,9 +191,8 @@ func embedEventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 // public timetable section — see embed_timetable.html.
 func embedTimetableHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, err := client.GetEvent(r.Context(), id)

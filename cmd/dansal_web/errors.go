@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 // newErrorID returns a short random hex string for correlating errors across
@@ -36,4 +37,30 @@ func logHTTPError(w http.ResponseWriter, r *http.Request, msg string, code int) 
 	id := newErrorID()
 	log.Printf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
 	http.Error(w, msg+" (error_id: "+id+")", code)
+}
+
+// intPathValueOr404 parses the named path value as an integer, writing a 404
+// and returning ok=false on failure. Consolidates the ~84 hand-rolled
+// `id, err := strconv.Atoi(r.PathValue(key)); if err != nil { http.NotFound(w, r) }`
+// sites (#1320) used by HTML admin pages, where a bad/missing ID means "no
+// such page" rather than a structured API error.
+func intPathValueOr404(w http.ResponseWriter, r *http.Request, key string) (int, bool) {
+	v, err := strconv.Atoi(r.PathValue(key))
+	if err != nil {
+		http.NotFound(w, r)
+		return 0, false
+	}
+	return v, true
+}
+
+// intPathValueOr400 is intPathValueOr404's sibling for the smaller cluster of
+// JSON-style admin endpoints (#1320) that respond with a plain-text 400
+// instead of a 404 on a bad ID.
+func intPathValueOr400(w http.ResponseWriter, r *http.Request, key, errMsg string) (int, bool) {
+	v, err := strconv.Atoi(r.PathValue(key))
+	if err != nil {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return 0, false
+	}
+	return v, true
 }

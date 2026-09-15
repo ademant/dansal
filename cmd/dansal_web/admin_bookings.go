@@ -39,9 +39,8 @@ func adminBookingsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		eventID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -108,9 +107,8 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		bookingID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -133,9 +131,8 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		bookingID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -158,9 +155,8 @@ func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		bookingID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)

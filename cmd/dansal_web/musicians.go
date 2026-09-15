@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -47,8 +46,7 @@ func musicianSearchHandler(client *DansalClient) http.HandlerFunc {
 				}
 			}
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out)
+		writeJSONResponse(w, http.StatusOK, out)
 	}
 }
 
@@ -66,9 +64,8 @@ func musiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 
 func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		musician, err := client.GetMusician(r.Context(), id)

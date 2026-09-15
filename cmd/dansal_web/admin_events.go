@@ -218,9 +218,8 @@ func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -241,9 +240,8 @@ func adminPendingEditHandler(cfg *Config, client *DansalClient, approve bool) ht
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -267,9 +265,8 @@ func adminEventCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -288,9 +285,8 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, fetchErr := client.GetEvent(r.Context(), id)
@@ -382,12 +378,8 @@ func adminEventBulkRecheckSourceHandler(cfg *Config, client *DansalClient) http.
 
 func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -416,9 +408,8 @@ func adminEventAssignSeriesHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -442,9 +433,8 @@ func adminEventRemoveFromSeriesHandler(cfg *Config, client *DansalClient) http.H
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -709,12 +699,8 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 // fields are filled from non-base events. Non-base events are deleted.
 func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -974,9 +960,8 @@ func adminEventImageDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteEventImage(r.Context(), id, getSessionToken(r)); err != nil {
@@ -2061,9 +2046,8 @@ func adminTemplateEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		tpl, err := getTemplate(db, id)
@@ -2117,9 +2101,8 @@ func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		tpl, err := getTemplate(db, id)
@@ -2845,9 +2828,8 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		var event Event
@@ -2952,9 +2934,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -3501,9 +3482,8 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 
@@ -3661,9 +3641,8 @@ func adminInstructorDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, 
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 
@@ -3737,9 +3716,8 @@ func adminMusicianDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, cl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 

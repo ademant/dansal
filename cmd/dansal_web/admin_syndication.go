@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 // GET /admin/orgs/{id}/syndication — fetch current syndication config.
@@ -16,9 +15,8 @@ func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		if !canManageOrg(su, id, memberOrgSet(r, client, su)) {
@@ -31,8 +29,7 @@ func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(synCfg)
+		writeJSONResponse(w, http.StatusOK, synCfg)
 	}
 }
 
@@ -43,9 +40,8 @@ func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.Handler
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		if !canManageOrg(su, id, memberOrgSet(r, client, su)) {
@@ -62,8 +58,7 @@ func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.Handler
 			http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "saved"})
 	}
 }
 
@@ -74,9 +69,8 @@ func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		platform := r.PathValue("platform")
@@ -94,8 +88,7 @@ func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.Handl
 			http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "pending"})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "pending"})
 	}
 }
 
@@ -106,9 +99,8 @@ func adminGetSyncStatusHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -126,7 +118,6 @@ func adminGetSyncStatusHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			http.Error(w, "upstream error", http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(s)
+		writeJSONResponse(w, http.StatusOK, s)
 	}
 }

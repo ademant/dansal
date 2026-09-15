@@ -7,7 +7,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,9 +16,8 @@ import (
 // feedEventICSHandler serves a single event as an iCal download.
 func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, err := client.GetEvent(r.Context(), id)
@@ -131,9 +129,8 @@ func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 // feedInstructorHandler serves events for one instructor, identified by numeric ID.
 func feedInstructorHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		instructor, err := client.GetInstructor(r.Context(), id)

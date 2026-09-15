@@ -226,7 +226,6 @@ func cityPastEventsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) h
 		if past == nil {
 			past = []pastEvent{}
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(past)
+		writeJSONResponse(w, http.StatusOK, past)
 	}
 }

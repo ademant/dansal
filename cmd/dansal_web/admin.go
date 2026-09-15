@@ -226,3 +226,19 @@ func requireLogin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 	}
 	return u, true
 }
+
+// requireAdmin is requireLogin plus an admin-role check, writing a uniform
+// 403 (via forbidden) for a logged-in non-admin. Consolidates the ~28
+// hand-rolled `requireLogin` + `if user.Role != "admin" { forbidden(w, r) }`
+// sequences (#1320).
+func requireAdmin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
+	u, ok := requireLogin(w, r)
+	if !ok {
+		return nil, false
+	}
+	if u.Role != "admin" {
+		forbidden(w, r)
+		return nil, false
+	}
+	return u, true
+}

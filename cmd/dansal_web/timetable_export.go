@@ -104,9 +104,8 @@ func filterTimetableEntries(entries []TimetableEntry, raw string) []TimetableEnt
 // starred). Same published-event visibility as the whole-event .ics export.
 func feedEventTimetableICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, err := client.GetEvent(r.Context(), id)
@@ -205,9 +204,8 @@ func csvFormulaSafe(s string) string {
 // and optional ?entries= filter as the .ics sibling above.
 func feedEventTimetableExportHandler(client *DansalClient, format string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		event, err := client.GetEvent(r.Context(), id)

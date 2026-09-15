@@ -248,8 +248,7 @@ func actorsListHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 				URL:    actorURL(cfg, slug),
 			})
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		writeJSONResponse(w, http.StatusOK, result)
 	}
 }
 
@@ -398,8 +397,7 @@ func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 				},
 			},
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		writeJSONResponse(w, http.StatusOK, resp)
 	}
 }
 

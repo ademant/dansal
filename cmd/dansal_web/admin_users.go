@@ -146,17 +146,12 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 func adminGenerateMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if su.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		link, err := client.GenerateMagicLink(r.Context(), id, getSessionToken(r), cfg.publicBaseURL())
@@ -164,24 +159,18 @@ func adminGenerateMagicLinkHandler(cfg *Config, client *DansalClient) http.Handl
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"url": link})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"url": link})
 	}
 }
 
 func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if su.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -205,9 +194,8 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		userID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		userID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -237,12 +225,8 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if su.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -274,17 +258,12 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if su.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -301,17 +280,12 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 
 func adminUserTelegramMessageHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if su.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -489,8 +463,7 @@ func adminPublisherCreateHandler(cfg *Config, client *DansalClient) http.Handler
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(pub)
+		writeJSONResponse(w, http.StatusOK, pub)
 	}
 }
 
@@ -535,8 +508,7 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"api_key": newKey, "key_id": keyID})
+		writeJSONResponse(w, http.StatusOK, map[string]any{"api_key": newKey, "key_id": keyID})
 	}
 }
 

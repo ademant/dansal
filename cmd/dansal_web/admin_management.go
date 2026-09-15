@@ -165,12 +165,8 @@ type AdminStatsData struct {
 
 func adminStatsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 
@@ -192,12 +188,8 @@ func adminManagementHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.Hand
 
 func adminInfoHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 

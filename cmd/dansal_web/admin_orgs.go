@@ -181,12 +181,8 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 
 func adminOrgNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		user, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		title := i18n.T(r, "admin_new")
@@ -196,12 +192,8 @@ func adminOrgNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.Hand
 
 func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		user, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
@@ -274,9 +266,8 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			forbidden(w, r)
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		org, err := client.GetOrganization(r.Context(), id)
@@ -380,17 +371,12 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 
 func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -428,17 +414,12 @@ func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.H
 
 func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -469,17 +450,12 @@ func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 
 func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		orgID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		orgID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -512,9 +488,8 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		orgID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		orgID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -567,9 +542,8 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		// detailed photo) — extend the deadline for this request rather than
 		// raising it server-wide.
 		adminWriteDeadline(w)
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 
@@ -670,17 +644,12 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 
 func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteOrganization(r.Context(), id, getSessionToken(r)); err != nil {
@@ -697,9 +666,8 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		// Matches adminOrgEditPageHandler's/adminOrgRedeliverHandler's access
@@ -738,9 +706,8 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		// Redelivery blasts the org's whole follower list — restrict it to
@@ -791,12 +758,8 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 // AJAX endpoint: checks if an actor_name is available.
 func adminOrgCheckActorNameHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -831,9 +794,8 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteOrgImage(r.Context(), id, getSessionToken(r)); err != nil {
@@ -849,9 +811,8 @@ func adminOrgAvatarDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteOrgAvatar(r.Context(), id, getSessionToken(r)); err != nil {

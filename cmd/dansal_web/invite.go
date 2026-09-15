@@ -55,17 +55,13 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			Password    string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 			return
 		}
 
 		ctx := r.Context()
 		if err := client.UseInvitePassword(ctx, token, req.Email, req.DisplayName, req.Password); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -78,7 +74,6 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"redirect": redirect})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"redirect": redirect})
 	}
 }

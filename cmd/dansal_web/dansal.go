@@ -47,6 +47,15 @@ const (
 	// two attempts of the GET retry loop, to avoid thundering-herd retries.
 	retryJitterMin = 50
 	retryJitterMax = 150
+	// fastCallTimeout bounds every do()/getWithHeader() call -- i.e. every
+	// backend call except the multipart image/avatar uploads, which bypass
+	// both and call c.HTTP directly, keeping the full 180s client timeout for
+	// the backend's own slow AVIF re-encode (#1321). context.WithTimeout only
+	// ever shortens an existing deadline, so this is safe to apply
+	// unconditionally: a caller with its own longer-lived ctx (e.g. a
+	// background goroutine's 5-minute context) still gets that ctx back for
+	// everything else in its flow -- only this one HTTP call is bounded.
+	fastCallTimeout = 15 * time.Second
 )
 
 type DansalClient struct {
@@ -277,6 +286,8 @@ func classifyAPIError(err error) error {
 // render on the very first hit (#1119). Never retried for non-GET: POST/PUT
 // /PATCH/DELETE aren't safe to resend blindly.
 func (c *DansalClient) do(ctx context.Context, method, path, token string, body []byte, out any, okStatus ...int) error {
+	ctx, cancel := context.WithTimeout(ctx, fastCallTimeout)
+	defer cancel()
 	var bodyReader io.Reader = http.NoBody
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -312,6 +323,14 @@ func (c *DansalClient) do(ctx context.Context, method, path, token string, body 
 		c.setInternalHeader(req)
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
+			// Transport-level error (connection refused/reset, dial timeout —
+			// e.g. dansal restarting mid-deploy) is exactly the transient
+			// failure #1119 was meant to survive on GET; retry it the same as
+			// a 429/503 response instead of failing the page render outright.
+			if attempt+1 < attempts {
+				lastErr = err
+				continue
+			}
 			return err
 		}
 		ok := false
@@ -779,6 +798,8 @@ type UserInfo struct {
 // only in what they capture from the headers; getWithTotalAuthed adds a
 // Bearer token for the authed admin list endpoints.
 func (c *DansalClient) getWithHeader(ctx context.Context, path, token string, headerHook func(http.Header), out any) error {
+	ctx, cancel := context.WithTimeout(ctx, fastCallTimeout)
+	defer cancel()
 	const maxAttempts = 2
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {

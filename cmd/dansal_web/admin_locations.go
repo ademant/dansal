@@ -132,12 +132,8 @@ func adminLocationsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		locs, err := client.GetLocations(r.Context())
@@ -172,12 +168,8 @@ func adminLocationMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dans
 func adminLocationJSONHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -197,12 +189,8 @@ func adminLocationJSONHandler(client *DansalClient) http.HandlerFunc {
 func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -259,12 +247,8 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 
 func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -392,9 +376,8 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		loc, err := client.GetLocation(r.Context(), id)
@@ -457,9 +440,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		// Fetch existing location to preserve its org assignments.
@@ -541,9 +523,8 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteLocation(r.Context(), id, getSessionToken(r)); err != nil {
@@ -566,12 +547,8 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 // locations are deleted.
 func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -730,9 +707,8 @@ func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -764,9 +740,8 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -815,9 +790,8 @@ func adminLocationConflictAssignOrgsHandler(cfg *Config, client *DansalClient) h
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -908,14 +882,12 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 		if !ok {
 			return
 		}
-		locID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		locID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
-		roomID, err := strconv.Atoi(r.PathValue("room_id"))
-		if err != nil {
-			http.NotFound(w, r)
+		roomID, ok := intPathValueOr404(w, r, "room_id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -967,9 +939,7 @@ func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.
 			// error_key (#1285) lets the JS show a specific, localized message
 			// ("too large"/"wrong format") instead of the generic fallback it
 			// already had; see imageUploadErrorKey for the classification.
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": "upload failed", "error_key": imageUploadErrorKey(uerr)})
+			writeJSONResponse(w, http.StatusBadGateway, map[string]string{"error": "upload failed", "error_key": imageUploadErrorKey(uerr)})
 			return
 		}
 		// Return the new URL so the JS can update the preview immediately.

@@ -25,12 +25,8 @@ type AdminCategoryMappingsData struct {
 
 func adminCategoryMappingsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		aliases, err := client.GetCategoryAliases(r.Context())
@@ -51,12 +47,8 @@ func adminCategoryMappingsHandler(cfg *Config, tmpls *Templates, client *DansalC
 
 func adminCategoryMappingCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -76,12 +68,8 @@ func adminCategoryMappingCreateHandler(cfg *Config, client *DansalClient) http.H
 
 func adminCategoryMappingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {

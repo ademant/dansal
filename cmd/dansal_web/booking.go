@@ -24,9 +24,8 @@ func redirectBookingError(w http.ResponseWriter, r *http.Request, eventID int, e
 // POST /events/{id}/book
 func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		eventID, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		ip := getClientIP(r)

@@ -295,23 +295,17 @@ func registerPasswordSubmitHandler(cfg *Config, client *DansalClient) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(pendingRegCookie)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "no pending registration"})
 			return
 		}
 		parts := strings.SplitN(c.Value, ":", 2)
 		if len(parts) != 2 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "no pending registration"})
 			return
 		}
 		pendingID, err := strconv.Atoi(parts[0])
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "no pending registration"})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "no pending registration"})
 			return
 		}
 		token := parts[1]
@@ -321,21 +315,16 @@ func registerPasswordSubmitHandler(cfg *Config, client *DansalClient) http.Handl
 			Password    string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 			return
 		}
 
 		if err := client.RegisterSetPassword(r.Context(), pendingID, token, req.DisplayName, req.Password); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": apiErrUserMessage(err)})
+			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": apiErrUserMessage(err)})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "password_set"})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "password_set"})
 	}
 }
 
@@ -372,9 +361,8 @@ func adminRegistrationApproveHandler(cfg *Config, client *DansalClient) http.Han
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		r.ParseForm()
@@ -397,9 +385,8 @@ func adminRegistrationResendInviteHandler(cfg *Config, client *DansalClient) htt
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -417,9 +404,8 @@ func adminRegistrationRejectHandler(cfg *Config, client *DansalClient) http.Hand
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		r.ParseForm()

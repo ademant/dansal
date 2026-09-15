@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -16,12 +15,8 @@ type AdminDancesData struct {
 
 func adminDancesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		dances, _ := client.GetDances(r.Context())
@@ -32,12 +27,8 @@ func adminDancesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 
 func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
-			return
-		}
-		if user.Role != "admin" {
-			forbidden(w, r)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -60,17 +51,12 @@ func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 // is editable in the UI today).
 func adminDanceEditHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -90,17 +76,12 @@ func adminDanceEditHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		_, ok := requireAdmin(w, r)
 		if !ok {
 			return
 		}
-		if user.Role != "admin" {
-			forbidden(w, r)
-			return
-		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := client.DeleteDance(r.Context(), id, getSessionToken(r)); err != nil {

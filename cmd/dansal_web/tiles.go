@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -170,8 +169,7 @@ func tileRequestAuthorized(r *http.Request, client *DansalClient) bool {
 // tileRequestAuthorized); this just gives a non-browser caller a way to fetch
 // it too, closing the gap WEB.md's tile-proxy section documents.
 func tileTokenHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": siteCfg.TileToken()})
+	writeJSONResponse(w, http.StatusOK, map[string]string{"token": siteCfg.TileToken()})
 }
 
 // tileProxyHandler serves GET /tiles/{scheme}/{z}/{x}/{yfile}, proxying and

@@ -776,44 +776,41 @@ function applyTimeDefaults(dateFrom, dateTo) {
     btn.disabled = true;
     clearGeoFields();
     var lang = document.documentElement.lang || 'en';
-    var fetchP = fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(q) + '&limit=5&addressdetails=1', {
-      headers: {'Accept-Language': lang}
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(results) {
+    var start = Date.now();
+    nominatimSearch(q, lang, 5, function(results) {
       var ul = document.getElementById('nominatim-results');
       ul.innerHTML = '';
       if (!results.length) {
         var li = document.createElement('li');
         li.textContent = '{{$.Strings.T "suggest_location_no_results"}}';
-        ul.appendChild(li); ul.hidden = false; return;
-      }
-      results.forEach(function(res) {
-        var li = document.createElement('li');
-        li.textContent = res.display_name;
-        li.addEventListener('click', function() {
-          var a = res.address || {};
-          document.getElementById('sg-location').value = res.name || a.amenity || a.building || a.house_number || '';
-          document.getElementById('sg-town').value = a.city || a.town || a.village || a.municipality || a.suburb || '';
-          document.getElementById('sg-country').value = (a.country_code || '').toUpperCase();
-          document.getElementById('sg-lat').value = res.lat || '';
-          document.getElementById('sg-lon').value = res.lon || '';
-          document.getElementById('sg-osm-id').value = res.osm_id || '';
-          document.getElementById('sg-osm-type').value = (res.osm_type || '').toLowerCase();
-          var road = a.road || a.pedestrian || a.path || '';
-          var hn   = a.house_number || '';
-          document.getElementById('sg-address').value = road && hn ? road + ' ' + hn : road || hn;
-          document.getElementById('sg-zipcode').value = a.postcode || '';
-          ul.hidden = true;
-        });
         ul.appendChild(li);
-      });
+      } else {
+        results.forEach(function(res) {
+          var li = document.createElement('li');
+          li.textContent = res.display_name;
+          li.addEventListener('click', function() {
+            var a = res.address || {};
+            document.getElementById('sg-location').value = res.name || a.amenity || a.building || a.house_number || '';
+            document.getElementById('sg-town').value = a.city || a.town || a.village || a.municipality || a.suburb || '';
+            document.getElementById('sg-country').value = (a.country_code || '').toUpperCase();
+            document.getElementById('sg-lat').value = res.lat || '';
+            document.getElementById('sg-lon').value = res.lon || '';
+            document.getElementById('sg-osm-id').value = res.osm_id || '';
+            document.getElementById('sg-osm-type').value = (res.osm_type || '').toLowerCase();
+            var road = a.road || a.pedestrian || a.path || '';
+            var hn   = a.house_number || '';
+            document.getElementById('sg-address').value = road && hn ? road + ' ' + hn : road || hn;
+            document.getElementById('sg-zipcode').value = a.postcode || '';
+            ul.hidden = true;
+          });
+          ul.appendChild(li);
+        });
+      }
       ul.hidden = false;
-    })
-    .catch(function(){});
-    Promise.all([fetchP, new Promise(function(r){ setTimeout(r, 2000); })])
-      .then(function(){ btn.disabled = false; })
-      .catch(function(){ btn.disabled = false; });
+      // Same "disabled for at least 2s" anti-spam pacing as before, just
+      // measured around the callback instead of chained onto a fetch promise.
+      setTimeout(function(){ btn.disabled = false; }, Math.max(0, 2000 - (Date.now() - start)));
+    });
   });
   document.addEventListener('click', function(e) {
     if (!e.target.closest('#nominatim-results') && e.target !== document.getElementById('nominatim-q')) {

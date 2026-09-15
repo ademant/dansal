@@ -1332,38 +1332,35 @@ document.querySelectorAll('.board-persons-control').forEach(function(ctrl){
     latInput.value = '';
     lonInput.value = '';
     var lang = document.documentElement.lang || 'en';
-    var fetchP = fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5&addressdetails=1', {
-      headers: {'Accept-Language': lang}
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(results){
+    var start = Date.now();
+    nominatimSearch(query, lang, 5, function(results){
       ul.innerHTML = '';
       if (!results.length) {
         var li = document.createElement('li');
         li.textContent = noResultsMsg;
-        ul.appendChild(li); ul.hidden = false; return;
-      }
-      results.forEach(function(res){
-        var li = document.createElement('li');
-        li.textContent = res.display_name;
-        li.addEventListener('click', function(){
-          var a = res.address || {};
-          var city = a.city || a.town || a.village || a.municipality || '';
-          var district = a.suburb || a.city_district || a.neighbourhood || '';
-          cityInput.value = (city && district && district !== city) ? (city + ' - ' + district) : (city || res.display_name);
-          osmInput.value = res.osm_id || '';
-          latInput.value = res.lat || '';
-          lonInput.value = res.lon || '';
-          ul.hidden = true;
-        });
         ul.appendChild(li);
-      });
+      } else {
+        results.forEach(function(res){
+          var li = document.createElement('li');
+          li.textContent = res.display_name;
+          li.addEventListener('click', function(){
+            var a = res.address || {};
+            var city = a.city || a.town || a.village || a.municipality || '';
+            var district = a.suburb || a.city_district || a.neighbourhood || '';
+            cityInput.value = (city && district && district !== city) ? (city + ' - ' + district) : (city || res.display_name);
+            osmInput.value = res.osm_id || '';
+            latInput.value = res.lat || '';
+            lonInput.value = res.lon || '';
+            ul.hidden = true;
+          });
+          ul.appendChild(li);
+        });
+      }
       ul.hidden = false;
-    })
-    .catch(function(){});
-    Promise.all([fetchP, new Promise(function(r){ setTimeout(r, 2000); })])
-      .then(function(){ btn.disabled = false; })
-      .catch(function(){ btn.disabled = false; });
+      // Same "disabled for at least 2s" anti-spam pacing as before, just
+      // measured around the callback instead of chained onto a fetch promise.
+      setTimeout(function(){ btn.disabled = false; }, Math.max(0, 2000 - (Date.now() - start)));
+    });
   }
   btn.addEventListener('click', search);
   q.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); search(); } });

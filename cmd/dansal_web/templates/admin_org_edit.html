@@ -605,16 +605,10 @@ function safeGoBack(){
   if (!websiteInp || !wikidataInp) return;
   var site = websiteInp.value.trim();
   if (!site || wikidataInp.value.trim()) return;
-  var sparql = 'SELECT ?item WHERE { ?item wdt:P856 "' + site + '" }';
-  fetch('https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json',
-    {headers:{'Accept':'application/sparql-results+json'}})
+  fetch('/admin/api/wikidata/qid?prop=website&value=' + encodeURIComponent(site))
     .then(function(r){ return r.json(); })
     .then(function(d){
-      var b = d.results && d.results.bindings;
-      if (b && b.length === 1) {
-        var qid = b[0].item.value.replace('http://www.wikidata.org/entity/', '');
-        wikidataInp.value = qid;
-      }
+      if (d && d.qid) wikidataInp.value = d.qid;
     }).catch(function(){});
 })();
 (function(){

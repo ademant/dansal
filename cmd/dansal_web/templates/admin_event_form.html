@@ -1608,9 +1608,8 @@ function geocodeLocation(){
   var status=document.getElementById('geo-status');
   btn.disabled=true;
   status.textContent='Searching…';
-  fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
-    .then(function(r){return r.json();})
-    .then(function(data){
+  nominatimSearch(q, null, 1, function(data){
+      btn.disabled=false;
       if(data&&data.length>0){
         var r=data[0];
         var a=r.address||{};
@@ -1626,7 +1625,7 @@ function geocodeLocation(){
         status.textContent='✓ '+r.display_name;
         showGeoMap(lat,lon);
         // town/country/region are language-dependent — the search above had
-        // no Accept-Language at all (browser default), not the venue's
+        // no explicit language (Nominatim's own default), not the venue's
         // country, so re-fetch once in the venue's own language (#1126).
         nominatimRefine(lat, lon, a.country_code, function(a2){
           a2 = a2 || a;
@@ -1638,9 +1637,7 @@ function geocodeLocation(){
       } else {
         status.textContent='Not found';
       }
-    })
-    .catch(function(){status.textContent='Geocoding failed';})
-    .finally(function(){btn.disabled=false;});
+    });
 }
 
 // Timetable location picker: flat searchable list of every top-level venue

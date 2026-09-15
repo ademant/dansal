@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +38,11 @@ var (
 	geocodeRateMu   sync.Mutex
 	geocodeLastCall time.Time
 )
+
+// nominatimBaseURL is a package-level var (not a const) so tests can point
+// it at an httptest server instead of the real Nominatim — mirrors
+// tileUpstreams' swappable-for-tests pattern in tiles.go.
+var nominatimBaseURL = "https://nominatim.openstreetmap.org"
 
 // geocodeResult is the trimmed shape sent to the browser — just enough to
 // label a suggestion and drive the radius filter.
@@ -92,47 +99,23 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// fetchNominatim waits for the global pacing slot, then queries Nominatim's
-// /search endpoint restricted to settlement-level results (city/town/village)
-// so street addresses and POIs don't clutter city-radius suggestions.
+// fetchNominatim queries Nominatim's /search endpoint restricted to
+// settlement-level results (city/town/village) so street addresses and POIs
+// don't clutter city-radius suggestions.
 func fetchNominatim(ctx context.Context, cfg *Config, q string) ([]geocodeResult, error) {
-	if err := waitGeocodeSlot(ctx); err != nil {
-		return nil, err
-	}
-
-	endpoint := "https://nominatim.openstreetmap.org/search?" + url.Values{
+	body, err := nominatimGet(ctx, cfg, "/search", url.Values{
 		"q":              {q},
 		"format":         {"json"},
 		"limit":          {"5"},
 		"addressdetails": {"0"},
 		"featureType":    {"settlement"},
-	}.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	})
 	if err != nil {
 		return nil, err
-	}
-	// Nominatim's usage policy requires a User-Agent identifying the
-	// application and a contact — reused from cfg so it stays accurate
-	// without a separate setting.
-	contact := cfg.SecurityContact
-	if contact == "" {
-		contact = "https://" + cfg.Domain
-	}
-	req.Header.Set("User-Agent", fmt.Sprintf("dansal-web/1.0 (+https://%s; %s)", cfg.Domain, contact))
-
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nominatim returned %d", resp.StatusCode)
 	}
 
 	var items []nominatimItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+	if err := json.Unmarshal(body, &items); err != nil {
 		return nil, err
 	}
 
@@ -146,6 +129,159 @@ func fetchNominatim(ctx context.Context, cfg *Config, q string) ([]geocodeResult
 		results = append(results, geocodeResult{Name: it.DisplayName, Lat: lat, Lng: lng})
 	}
 	return results, nil
+}
+
+// nominatimMaxBody caps how much of an upstream Nominatim response is read,
+// guarding against a misbehaving/compromised upstream — real responses here
+// are at most a few KB per result.
+const nominatimMaxBody = 1 << 20 // 1MB
+
+// nominatimUserAgent builds the User-Agent Nominatim's usage policy
+// requires (https://operations.osmfoundation.org/policies/nominatim/) —
+// shared by every dansal_web call to Nominatim, direct (fetchNominatim) or
+// proxied (nominatimGeocodeSearchHandler/nominatimGeocodeReverseHandler).
+func nominatimUserAgent(cfg *Config) string {
+	contact := cfg.SecurityContact
+	if contact == "" {
+		contact = "https://" + cfg.Domain
+	}
+	return fmt.Sprintf("dansal-web/1.0 (+https://%s; %s)", cfg.Domain, contact)
+}
+
+// nominatimGet waits for the shared pacing slot (waitGeocodeSlot), issues a
+// GET to Nominatim at path with the given query params, and returns the raw
+// response body. Every dansal_web call to Nominatim goes through this one
+// function, so the combined outbound rate — regardless of which feature or
+// how many concurrent local users triggered it — never exceeds Nominatim's
+// ~1 request/second policy.
+func nominatimGet(ctx context.Context, cfg *Config, path string, params url.Values) ([]byte, error) {
+	if err := waitGeocodeSlot(ctx); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nominatimBaseURL+path+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", nominatimUserAgent(cfg))
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nominatim returned %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, nominatimMaxBody))
+}
+
+// nominatimLangPattern matches the shape of every lang value dansal's own
+// JS actually sends (document.documentElement.lang, e.g. "de", or
+// nominatimLang()'s comma-joined region fallbacks, e.g. "ca,fr,it") — a
+// defensive allowlist for a value that ends up in an outbound query param
+// to a third party, rather than passing arbitrary client input through.
+var nominatimLangPattern = regexp.MustCompile(`^[a-zA-Z]{2}(-[a-zA-Z]{2})?(,[a-zA-Z]{2}(-[a-zA-Z]{2})?){0,4}$`)
+
+func sanitizeNominatimLang(lang string) string {
+	if nominatimLangPattern.MatchString(lang) {
+		return lang
+	}
+	return ""
+}
+
+// clampGeocodeLimit parses raw as a result-count limit, defaulting to 5 and
+// capping at 10 — every current caller asks for 1, 5, or 8.
+func clampGeocodeLimit(raw string) string {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		n = 5
+	} else if n > 10 {
+		n = 10
+	}
+	return strconv.Itoa(n)
+}
+
+// nominatimGeocodeSearchHandler is GET /search/geocode/search — a general
+// (not settlement-restricted) Nominatim address search, proxied server-side
+// so the browser never talks to Nominatim directly (#1313): a browser
+// fetch() can't set the User-Agent Nominatim's policy requires (it's a
+// forbidden header), and independent page loads have no way to coordinate
+// the required shared pacing among themselves. Shares geocodeThrottle
+// (per-IP) with the settlement-only /search/geocode endpoint above, and
+// nominatimGet's pacing with every other Nominatim call in this file — used
+// by both admin location-entry forms and the public board-post/
+// suggest-event location pickers.
+func nominatimGeocodeSearchHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		w.Header().Set("Content-Type", "application/json")
+		if geocodeThrottle.isBlocked(ip) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`[]`))
+			return
+		}
+		geocodeThrottle.record(ip)
+
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			http.Error(w, "q is required", http.StatusBadRequest)
+			return
+		}
+		params := url.Values{
+			"format":         {"json"},
+			"q":              {q},
+			"limit":          {clampGeocodeLimit(r.URL.Query().Get("limit"))},
+			"addressdetails": {"1"},
+		}
+		if lang := sanitizeNominatimLang(r.URL.Query().Get("lang")); lang != "" {
+			params.Set("accept-language", lang)
+		}
+		body, err := nominatimGet(r.Context(), cfg, "/search", params)
+		if err != nil {
+			logHTTPError(w, r, "geocode search failed", http.StatusBadGateway)
+			return
+		}
+		w.Write(body)
+	}
+}
+
+// nominatimGeocodeReverseHandler is GET /search/geocode/reverse — see
+// nominatimGeocodeSearchHandler above for why this is proxied server-side
+// rather than called from the browser directly.
+func nominatimGeocodeReverseHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		w.Header().Set("Content-Type", "application/json")
+		if geocodeThrottle.isBlocked(ip) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"rate limit exceeded"}`))
+			return
+		}
+		geocodeThrottle.record(ip)
+
+		lat := r.URL.Query().Get("lat")
+		lon := r.URL.Query().Get("lon")
+		if _, err := strconv.ParseFloat(lat, 64); err != nil {
+			http.Error(w, "lat is required", http.StatusBadRequest)
+			return
+		}
+		if _, err := strconv.ParseFloat(lon, 64); err != nil {
+			http.Error(w, "lon is required", http.StatusBadRequest)
+			return
+		}
+		params := url.Values{"format": {"json"}, "lat": {lat}, "lon": {lon}, "addressdetails": {"1"}}
+		if lang := sanitizeNominatimLang(r.URL.Query().Get("lang")); lang != "" {
+			params.Set("accept-language", lang)
+		}
+		body, err := nominatimGet(r.Context(), cfg, "/reverse", params)
+		if err != nil {
+			logHTTPError(w, r, "geocode reverse failed", http.StatusBadGateway)
+			return
+		}
+		w.Write(body)
+	}
 }
 
 // waitGeocodeSlot blocks until at least geocodeMinInterval has passed since

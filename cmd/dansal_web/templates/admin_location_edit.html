@@ -804,11 +804,8 @@ document.addEventListener('DOMContentLoaded', function(){
     if (!q) return;
     if (searchBtn) searchBtn.disabled = true;
     results.innerHTML = '<li style="color:#666">…</li>';
-    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=8&addressdetails=1', {
-      headers: {'Accept-Language': document.documentElement.lang || 'de'}
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
+    nominatimSearch(q, document.documentElement.lang || 'de', 8, function(data){
+      if (searchBtn) searchBtn.disabled = false;
       results.innerHTML = '';
       if (!data.length) {
         results.innerHTML = '<li style="color:#999">–</li>';
@@ -841,9 +838,7 @@ document.addEventListener('DOMContentLoaded', function(){
         });
         results.appendChild(li);
       });
-    })
-    .catch(function(){ results.innerHTML = '<li style="color:#c00">Error</li>'; })
-    .finally(function(){ if (searchBtn) searchBtn.disabled = false; });
+    });
   }
 
   btn.addEventListener('click', function(){
@@ -876,11 +871,8 @@ document.addEventListener('DOMContentLoaded', function(){
     var btn = this;
     btn.disabled = true;
     results.innerHTML = '<li style="color:#666">…</li>';
-    fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1', {
-      headers: {'Accept-Language': document.documentElement.lang || 'de'}
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(item){
+    nominatimReverse(lat, lon, document.documentElement.lang || 'de', function(item){
+      btn.disabled = false;
       results.innerHTML = '';
       if (!item || item.error) {
         results.innerHTML = '<li style="color:#999">–</li>';
@@ -902,9 +894,7 @@ document.addEventListener('DOMContentLoaded', function(){
       li.appendChild(coords);
       li.appendChild(copyBtn);
       results.appendChild(li);
-    })
-    .catch(function(){ results.innerHTML = '<li style="color:#c00">Error</li>'; })
-    .finally(function(){ btn.disabled = false; });
+    });
   });
 
   /* ── initialise map from existing coords ── */

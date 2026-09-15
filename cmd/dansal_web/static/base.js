@@ -241,18 +241,41 @@ var NOMINATIM_REGION_LANG = {
 function nominatimLang(countryCode){
   return NOMINATIM_REGION_LANG[(countryCode||'').toUpperCase()] || 'en';
 }
-// Re-fetches Nominatim's reverse endpoint for (lat, lon) in the country's own
-// language and hands the resulting `address` object to cb (null on failure).
-// Callers use this as a second pass once an initial search/reverse call (in
-// whatever language) has revealed the country_code, so town/country/region
-// end up in the local language instead of whatever language the first,
-// necessarily-blind call happened to use.
-function nominatimRefine(lat, lon, countryCode, cb){
-  fetch('https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=' + lat + '&lon=' + lon, {
-    headers: {'Accept-Language': nominatimLang(countryCode)}
-  }).then(function(r){ return r.json(); }).then(function(item){
-    cb((item && item.address) || null);
+// nominatimSearch/nominatimReverse: proxy through dansal_web's own
+// /search/geocode/search and /search/geocode/reverse endpoints instead of
+// calling nominatim.openstreetmap.org directly from the browser (#1313) — a
+// browser fetch() can't set the User-Agent Nominatim's usage policy
+// requires (it's a forbidden header), and independently-loaded pages have
+// no way to coordinate the shared ~1 request/second pacing that policy also
+// requires. The server-side proxy does both, same as it already did for
+// search.html's town-radius geocoding. Response shape is untouched
+// (Nominatim's own JSON passed straight through), so callers parse it
+// exactly as before.
+function nominatimSearch(q, lang, limit, cb){
+  var url = '/search/geocode/search?q=' + encodeURIComponent(q) + '&limit=' + (limit || 5);
+  if (lang) url += '&lang=' + encodeURIComponent(lang);
+  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    cb(data || []);
+  }).catch(function(){ cb([]); });
+}
+function nominatimReverse(lat, lon, lang, cb){
+  var url = '/search/geocode/reverse?lat=' + lat + '&lon=' + lon;
+  if (lang) url += '&lang=' + encodeURIComponent(lang);
+  fetch(url).then(function(r){ return r.json(); }).then(function(item){
+    cb(item || null);
   }).catch(function(){ cb(null); });
+}
+// Re-fetches Nominatim's reverse endpoint (via nominatimReverse above) for
+// (lat, lon) in the country's own language and hands the resulting
+// `address` object to cb (null on failure). Callers use this as a second
+// pass once an initial search/reverse call (in whatever language) has
+// revealed the country_code, so town/country/region end up in the local
+// language instead of whatever language the first, necessarily-blind call
+// happened to use.
+function nominatimRefine(lat, lon, countryCode, cb){
+  nominatimReverse(lat, lon, nominatimLang(countryCode), function(item){
+    cb((item && item.address) || null);
+  });
 }
 // renderMiniCalendar draws a small multi-month event calendar into
 // #containerId: one grid per month in `months` (array of Date, each the

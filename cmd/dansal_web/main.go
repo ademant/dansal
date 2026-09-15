@@ -269,6 +269,8 @@ func main() {
 		r.HandleFunc("GET /search", searchPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /search/geocode", geocodeHandler(cfg, db))
+		r.HandleFunc("GET /search/geocode/search", nominatimGeocodeSearchHandler(cfg))
+		r.HandleFunc("GET /search/geocode/reverse", nominatimGeocodeReverseHandler(cfg))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/{id}/assign-org", adminRateLimit(eventAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))
@@ -483,6 +485,10 @@ func main() {
 
 		r.HandleFunc("POST /admin/api/musician/quick-create", adminRateLimit(adminMusicianQuickCreateHandler(client)))
 		r.HandleFunc("POST /admin/api/instructor/quick-create", adminRateLimit(adminInstructorQuickCreateHandler(client)))
+		r.HandleFunc("GET /admin/api/musicbrainz/search", musicBrainzSearchHandler(cfg))
+		r.HandleFunc("GET /admin/api/musicbrainz/artist/{mbid}", musicBrainzArtistHandler(cfg))
+		r.HandleFunc("GET /admin/api/discogs/search", discogsSearchHandler(cfg))
+		r.HandleFunc("GET /admin/api/wikidata/qid", wikidataQIDHandler(cfg))
 		r.HandleFunc("GET /admin/musicians", musicianEntity.List(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/musicians/new", musicianEntity.NewPage(cfg, tmpls, i18n))
 		r.HandleFunc("POST /admin/musicians/new", adminRateLimit(musicianEntity.Create(cfg, tmpls, client, i18n)))
@@ -631,7 +637,10 @@ func baselineCSP(nonce string) string {
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
 		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com https://challenges.cloudflare.com; " +
-		"connect-src 'self' https://nominatim.openstreetmap.org https://musicbrainz.org https://api.discogs.com https://query.wikidata.org; " +
+		// #1313: Nominatim/MusicBrainz/Discogs/Wikidata are no longer called
+		// from the browser — all four are proxied server-side now (geocode.go,
+		// enrichment_proxy.go), so the browser only ever needs 'self' here.
+		"connect-src 'self'; " +
 		"object-src 'none'; base-uri 'self'; form-action 'self'; "
 }
 

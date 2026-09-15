@@ -2354,31 +2354,36 @@ function safeGoBack(){
   });
 })();
 
-(function(){
+// #1326: base.js now loads with defer, so initDateRangePicker/_bindMdPaste/
+// _bindMdAutosize aren't defined yet at plain top-level script time — wait
+// for DOMContentLoaded (base.js's deferred execution is guaranteed to finish
+// before this fires).
+document.addEventListener('DOMContentLoaded', function(){
   var dateInp   = document.getElementById('date');
   var endInp    = document.getElementById('end_date');
-  if(!dateInp || !endInp) return;
-  initDateRangePicker({
-    btn:   document.getElementById('ef-date-btn'),
-    popup: document.getElementById('ef-date-popup'),
-    grid:  document.getElementById('ef-cal-grid'),
-    title: document.getElementById('ef-cal-title'),
-    prev:  document.getElementById('ef-cal-prev'),
-    next:  document.getElementById('ef-cal-next'),
-    from:  dateInp.value,
-    to:    endInp.value,
-    onSelect: function(f, t){
-      dateInp.value = f;
-      // Let onStartDateChange auto-fill end_date (marks it data-auto),
-      // then immediately override with the explicitly chosen end date.
-      onStartDateChange(f);
-      endInp.value = t;
-      endInp.removeAttribute('data-auto');
-    }
-  });
-})();
-_bindMdPaste('description','md-paste-hint');
-_bindMdAutosize('description');
+  if(dateInp && endInp){
+    initDateRangePicker({
+      btn:   document.getElementById('ef-date-btn'),
+      popup: document.getElementById('ef-date-popup'),
+      grid:  document.getElementById('ef-cal-grid'),
+      title: document.getElementById('ef-cal-title'),
+      prev:  document.getElementById('ef-cal-prev'),
+      next:  document.getElementById('ef-cal-next'),
+      from:  dateInp.value,
+      to:    endInp.value,
+      onSelect: function(f, t){
+        dateInp.value = f;
+        // Let onStartDateChange auto-fill end_date (marks it data-auto),
+        // then immediately override with the explicitly chosen end date.
+        onStartDateChange(f);
+        endInp.value = t;
+        endInp.removeAttribute('data-auto');
+      }
+    });
+  }
+  _bindMdPaste('description','md-paste-hint');
+  _bindMdAutosize('description');
+});
 </script>
 {{end}}{{/* .Data */}}
 {{end}}

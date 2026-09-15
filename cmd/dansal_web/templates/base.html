@@ -417,13 +417,22 @@ var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",
 // cmd/dansal_web/tiles.go for what this actually gates.
 var DANSAL_TILE_TOKEN="{{$.TileToken}}";
 </script>
-<!-- Not deferred, deliberately: many page templates call dansalLeafletCss()/
-     attachTileLayer()/renderMiniCalendar() from their own inline, non-deferred
-     <script> blocks further down the page, expecting these functions to
-     already exist. A deferred load would execute after those call sites run
-     (defer scripts run after the whole document parses, regardless of source
-     position) and break every one of them (#1217). -->
-<script nonce="{{$.Nonce}}" src="/static/base.js?v={{.AppVersion}}"></script>
+<!-- #1326: deferred so it no longer blocks first render/LCP. Was loaded
+     synchronously for years (#1217) because several page templates called
+     dansalLeafletCss()/attachTileLayer()/renderMiniCalendar() from their own
+     inline, non-deferred <script> blocks, expecting these functions to
+     already exist -- a deferred load executes after those run (defer scripts
+     run after the whole document parses, regardless of source position) and
+     would have broken every one of them. Audited every call site: the
+     map-function callers were already DOMContentLoaded-wrapped (forced to be,
+     since leaflet.js itself already loads with defer), and the data-fn/
+     data-on event dispatcher only needs document.addEventListener(...),
+     which works before DOMContentLoaded fires and only ever dispatches on
+     real user interaction. The one real remaining risk -- a handful of admin
+     templates calling initDateRangePicker/initLongPressMultiSelect/
+     _bindMdPaste/_bindMdAutosize/nominatimSearch et al. from an immediately-
+     executing top-level script -- is now wrapped in DOMContentLoaded too. -->
+<script nonce="{{$.Nonce}}" defer src="/static/base.js?v={{.AppVersion}}"></script>
 <main>
 {{block "breadcrumb" .}}{{end}}
 {{block "content" .}}{{end}}

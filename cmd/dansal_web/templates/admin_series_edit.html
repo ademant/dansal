@@ -476,7 +476,10 @@ function filterLocOptions(q){
     o.hidden=q&&!(o.dataset.search||'').includes(q);
   });
 }
-(function(){
+// #1326: base.js now loads with defer, so initLongPressMultiSelect below
+// isn't defined yet at plain top-level script time — wait for
+// DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var cbAll=document.getElementById('series-cb-all');
   if(!cbAll) return;
   var cbs=document.querySelectorAll('.series-event-cb');
@@ -530,7 +533,7 @@ function filterLocOptions(q){
       openEvtPopup(row);
     });
   }
-})();
+});
 
 // Mobile quick-edit popup for a single event card.
 (function(){

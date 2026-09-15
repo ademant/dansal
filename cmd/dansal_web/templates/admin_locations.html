@@ -206,7 +206,10 @@ function delLocation(id) {
   f.method = 'post'; f.action = '/admin/locations/' + id + '/delete';
   document.body.appendChild(f); f.submit();
 }
-(function(){
+// #1326: base.js now loads with defer, so initLongPressMultiSelect below
+// isn't defined yet at plain top-level script time — wait for
+// DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var cbAll = document.getElementById('cb-all');
   if(!cbAll) return;
   var tbody = document.querySelector('#loc-table tbody');
@@ -242,6 +245,6 @@ function delLocation(id) {
   }
   initLongPressMultiSelect(tbody,'tr[data-loc-row]',enterMultiSelect);
   document.getElementById('ms-close').addEventListener('click', exitMultiSelect);
-})();
+});
 </script>
 {{end}}

@@ -560,7 +560,11 @@ function pubEvent(id){
   f.method='post';f.action='/admin/events/'+id+'/publish';
   document.body.appendChild(f);f.submit();
 }
-(function(){
+// #1326: base.js now loads with defer, so initLongPressMultiSelect below
+// isn't defined yet at plain top-level script time — wait for
+// DOMContentLoaded (base.js's deferred execution is guaranteed to finish
+// before this fires).
+document.addEventListener('DOMContentLoaded', function(){
   var cbAll=document.getElementById('event-cb-all');
   if(!cbAll) return;
   var cbs=document.querySelectorAll('.event-cb');
@@ -616,7 +620,7 @@ function pubEvent(id){
   if(mtMsClose) mtMsClose.addEventListener('click',exitMultiSelect);
 
   initLongPressMultiSelect(tbody,'tr[data-evt-row]',enterMultiSelect);
-})();
+});
 
 // Mobile filter popup — wired unconditionally (works even with zero events).
 (function(){
@@ -673,7 +677,9 @@ function pubEvent(id){
   })();
 })();
 
-(function(){
+// #1326: base.js now loads with defer — see the first wait-for-DOMContentLoaded
+// comment above in this file.
+document.addEventListener('DOMContentLoaded', function(){
   var filterForm = document.querySelector('form.event-filters');
   if(!filterForm) return;
   initDateRangePicker({
@@ -692,6 +698,6 @@ function pubEvent(id){
       filterForm.submit();
     }
   });
-})();
+});
 </script>
 {{end}}

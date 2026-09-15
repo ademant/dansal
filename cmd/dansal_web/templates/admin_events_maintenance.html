@@ -504,7 +504,9 @@ var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsS
 })();
 
 // Date range picker for filter form
-(function(){
+// #1326: base.js now loads with defer, so initDateRangePicker isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   initDateRangePicker({
     btn:       document.getElementById('em-date-btn'),
     popup:     document.getElementById('em-date-popup'),
@@ -521,7 +523,7 @@ var _emInstructors = [{{range $.Data.Instructors}}{id:{{.ID}},name:{{.Name | jsS
       document.getElementById('em-filter-form').submit();
     }
   });
-})();
+});
 
 // Cancel buttons: use a detached form to avoid breaking the outer bulk form.
 // Nested <form> elements are invalid HTML — the inner </form> would close the

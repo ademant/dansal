@@ -3,13 +3,10 @@
 // used across every page. Cached by the browser across page
 // navigations instead of being re-downloaded as inline HTML.
 //
-// Loaded synchronously (no defer) and at the same position base.html
-// always loaded it: many page templates (location.html, event.html,
-// org.html, festivals.html, and others) call dansalLeafletCss()/
-// attachTileLayer()/renderMiniCalendar() from their own inline,
-// non-deferred <script> blocks further down the page, expecting
-// these functions to already be defined — a deferred load would
-// execute after those call sites run and break every one of them.
+// Loaded with defer (#1326) — see base.html's script tag for why this is
+// now safe (it wasn't when #1217 first wrote this file: several inline,
+// non-deferred page scripts called functions here expecting them to
+// already exist, which a deferred load would have broken).
 
 // --- Delegated event-handler dispatcher (#1149) ---
 // Elements use data-fn/data-args instead of inline onclick=/onchange=/

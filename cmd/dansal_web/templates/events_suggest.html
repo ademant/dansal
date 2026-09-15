@@ -578,7 +578,11 @@ function sgGrowTTTable(el) {
 })();
 
 // ── Date range picker ─────────────────────────────────────────────────────
-(function(){
+// #1326: base.js now loads with defer, so initDateRangePicker isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded. (line 888
+// below already guards window.sgDatePickerSet being unset for exactly this
+// kind of race, so nothing else needs to change.)
+document.addEventListener('DOMContentLoaded', function(){
   var btn  = document.getElementById('sg-date-btn');
   var popup = document.getElementById('sg-date-popup');
   if (!btn || !popup) return;
@@ -600,7 +604,7 @@ function sgGrowTTTable(el) {
   document.addEventListener('click', function(e) {
     if (!popup.hidden && !popup.contains(e.target) && e.target !== btn) popup.hidden = true;
   });
-})();
+});
 
 // ── Time helpers (shared by the desktop native inputs and the mobile
 // swipe picker; #1049) ────────────────────────────────────────────────────

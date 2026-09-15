@@ -337,6 +337,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	wasDisabled := user.Disabled
 
 	// Publishers are locked to their initial organisation — org reassignment is blocked.
 	if user.Role == RolePublisher && req.Role != "" && req.Role != RolePublisher {
@@ -434,6 +435,31 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	// Evict cached credentials immediately so a role change or disable takes
 	// effect on the next request instead of lingering for credCacheTTL.
 	credentials.pruneByUserID(targetID)
+
+	// Safety net for a disabled->enabled transition made here (the generic
+	// admin toggle, e.g. from /admin/users) rather than through
+	// approveRegHandler's dedicated /admin/registrations approve action: a
+	// join_org registrant's pending_registrations row carries the org they
+	// asked to join, but only approveRegHandler ever reads it — enabling the
+	// account any other way left the user active with no org membership at
+	// all, and the stale pending_registrations row lingering forever. Finish
+	// the same join_org work here too so "enable this user" always leaves a
+	// consistent result regardless of which admin screen did it. new_org
+	// registrations are deliberately left alone — auto-creating an
+	// organisation as a side effect of an unrelated toggle is a bigger,
+	// less predictable change than joining one that already exists and
+	// that the registrant explicitly chose.
+	if wasDisabled && req.Disabled != nil && !*req.Disabled {
+		var pendingID, orgID int
+		var regType string
+		err := db.QueryRow(
+			"SELECT id, reg_type, org_id FROM pending_registrations WHERE user_id=? AND reg_type='join_org'", targetID,
+		).Scan(&pendingID, &regType, &orgID)
+		if err == nil {
+			db.Exec("INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?,?)", orgID, targetID)
+			db.Exec("DELETE FROM pending_registrations WHERE id=?", pendingID)
+		}
+	}
 
 	json.NewEncoder(w).Encode(user)
 }

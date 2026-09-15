@@ -416,6 +416,41 @@ var qrcodeJS []byte
 //go:embed static/base.js
 var baseJS []byte
 
+// Vendored Leaflet/leaflet.markercluster (#1329): the exact same pinned
+// bytes previously loaded from unpkg.com in ~15 templates -- verified
+// byte-identical against each script/link tag's existing SRI hash before
+// vendoring, so this is pure self-hosting, not a version change. Directory
+// layout mirrors each package's own dist/ layout (images/ alongside
+// leaflet.css) so leaflet.css's relative `url(images/layers.png)` etc.
+// resolve correctly without rewriting the CSS.
+//
+//go:embed static/leaflet/leaflet.js
+var leafletJS []byte
+
+//go:embed static/leaflet/leaflet.css
+var leafletCSS []byte
+
+//go:embed static/leaflet/images/marker-icon.png
+var leafletMarkerIcon []byte
+
+//go:embed static/leaflet/images/marker-icon-2x.png
+var leafletMarkerIcon2x []byte
+
+//go:embed static/leaflet/images/marker-shadow.png
+var leafletMarkerShadow []byte
+
+//go:embed static/leaflet/images/layers.png
+var leafletLayersIcon []byte
+
+//go:embed static/leaflet/images/layers-2x.png
+var leafletLayersIcon2x []byte
+
+//go:embed static/leaflet.markercluster/leaflet.markercluster.js
+var markerclusterJS []byte
+
+//go:embed static/leaflet.markercluster/MarkerCluster.Default.css
+var markerclusterCSS []byte
+
 func suggestAvailable(cfg *Config) bool {
 	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
 }

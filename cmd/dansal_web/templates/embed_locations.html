@@ -21,8 +21,8 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 <body>
 <div id="loc-map"></div>
 <script type="application/json" id="loc-data">{{.LocData}}</script>
-<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
+<script nonce="{{$.Nonce}}" defer src="/static/leaflet.markercluster/leaflet.markercluster.js"></script>
 <script nonce="{{$.Nonce}}">
 (function(){
   var locData = JSON.parse(document.getElementById('loc-data').textContent);
@@ -62,13 +62,10 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     // <head>); see base.html's helper for the comment and rationale.
     if(dansalLeafletCss.done) return;
     dansalLeafletCss.done=true;
-    var sheets=[
-      ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'],
-      ['https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css','sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+']
-    ];
-    sheets.forEach(function(s){
+    var sheets=['/static/leaflet/leaflet.css','/static/leaflet.markercluster/MarkerCluster.Default.css'];
+    sheets.forEach(function(href){
       var l=document.createElement('link');
-      l.rel='stylesheet';l.href=s[0];l.integrity=s[1];l.crossOrigin='anonymous';l.media='print';
+      l.rel='stylesheet';l.href=href;l.media='print';
       l.onload=function(){l.media='all';};
       document.head.appendChild(l);
     });
@@ -90,9 +87,9 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
     fixDefaultMarkerIcon.done=true;
     L.Icon.Default.imagePath='';
     L.Icon.Default.mergeOptions({
-      iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-      shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+      iconUrl:'/static/leaflet/images/marker-icon.png',
+      iconRetinaUrl:'/static/leaflet/images/marker-icon-2x.png',
+      shadowUrl:'/static/leaflet/images/marker-shadow.png'
     });
   }
 

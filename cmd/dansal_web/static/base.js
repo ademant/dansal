@@ -443,9 +443,9 @@ function fixDefaultMarkerIcon(){
   fixDefaultMarkerIcon.done=true;
   L.Icon.Default.imagePath='';
   L.Icon.Default.mergeOptions({
-    iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+    iconUrl:'/static/leaflet/images/marker-icon.png',
+    iconRetinaUrl:'/static/leaflet/images/marker-icon-2x.png',
+    shadowUrl:'/static/leaflet/images/marker-shadow.png'
   });
 }
 function dansalLeafletCss(cluster){
@@ -457,11 +457,11 @@ function dansalLeafletCss(cluster){
   // happens here via the property (which the nonce'd script may set).
   if(dansalLeafletCss.done) return;
   dansalLeafletCss.done=true;
-  var sheets=[['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H']];
-  if(cluster) sheets.push(['https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css','sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+']);
-  sheets.forEach(function(s){
+  var sheets=['/static/leaflet/leaflet.css'];
+  if(cluster) sheets.push('/static/leaflet.markercluster/MarkerCluster.Default.css');
+  sheets.forEach(function(href){
     var l=document.createElement('link');
-    l.rel='stylesheet';l.href=s[0];l.integrity=s[1];l.crossOrigin='anonymous';l.media='print';
+    l.rel='stylesheet';l.href=href;l.media='print';
     l.onload=function(){l.media='all';};
     document.head.appendChild(l);
   });

@@ -234,48 +234,53 @@ func main() {
 		r.HandleFunc("POST /internal/relay/redeliver", internalRelayRedeliverHandler(cfg, db, client))
 		r.HandleFunc("POST /internal/relay/profile-update", internalRelayProfileUpdateHandler(cfg, db))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Vary", "Accept-Encoding")
-			w.Header().Set("Content-Type", "application/javascript")
-			w.Header().Set("Cache-Control", "public, max-age=604800")
 			// Respect Save-Data: return a tiny stub to reduce traffic.
 			if saveDataOn(r) {
+				w.Header().Set("Content-Type", "application/javascript")
 				w.Write([]byte("/* Save-Data: on - script omitted */"))
 				return
 			}
-			// br/gzip versions are precomputed at startup (#1323), not
-			// compressed on the fly per request.
-			switch ae := r.Header.Get("Accept-Encoding"); {
-			case strings.Contains(ae, "br"):
-				w.Header().Set("Content-Encoding", "br")
-				w.Write(qrcodeJSBrotli)
-			case strings.Contains(ae, "gzip"):
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Write(qrcodeJSGzip)
-			default:
-				w.Write(qrcodeJS)
-			}
+			serveNegotiatedStatic(w, r, "application/javascript", qrcodeJS, qrcodeJSGzip, qrcodeJSBrotli)
 		})
 		r.HandleFunc("GET /static/base.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Vary", "Accept-Encoding")
-			w.Header().Set("Content-Type", "application/javascript")
-			w.Header().Set("Cache-Control", "public, max-age=604800")
 			// No Save-Data stub here (unlike qrcode.min.js): this file carries
 			// the data-fn dispatcher, nav/menu toggles, and map-init helpers
 			// every page depends on for basic interactivity — a stub would
 			// break the page rather than just skip an optional feature.
-			// Minified + br/gzip versions are precomputed at startup (#1323),
-			// not minified/compressed on the fly per request.
-			switch ae := r.Header.Get("Accept-Encoding"); {
-			case strings.Contains(ae, "br"):
-				w.Header().Set("Content-Encoding", "br")
-				w.Write(baseJSMinBrotli)
-			case strings.Contains(ae, "gzip"):
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Write(baseJSMinGzip)
-			default:
-				w.Write(baseJSMin)
-			}
+			serveNegotiatedStatic(w, r, "application/javascript", baseJSMin, baseJSMinGzip, baseJSMinBrotli)
 		})
+		// Vendored Leaflet/markercluster (#1329) -- see frontend.go's embed
+		// comment for why these are the exact same bytes unpkg.com served.
+		r.HandleFunc("GET /static/leaflet/leaflet.js", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "application/javascript", leafletJSMin, leafletJSMinGzip, leafletJSMinBrotli)
+		})
+		r.HandleFunc("GET /static/leaflet/leaflet.css", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "text/css", leafletCSSMin, leafletCSSMinGzip, leafletCSSMinBrotli)
+		})
+		r.HandleFunc("GET /static/leaflet.markercluster/leaflet.markercluster.js", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "application/javascript", markerclusterJSMin, markerclusterJSGzip, markerclusterJSBrotli)
+		})
+		r.HandleFunc("GET /static/leaflet.markercluster/MarkerCluster.Default.css", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "text/css", markerclusterCSSMin, markerclusterCSSGzip, markerclusterCSSBrotli)
+		})
+		// leaflet.css references these by relative path (url(images/...)) --
+		// served at the same relative layout as upstream's dist/ so the CSS
+		// needs no rewriting. Small, already-compressed PNGs: no minify/br/gzip
+		// negotiation, just a long cache lifetime.
+		for path, data := range map[string][]byte{
+			"/static/leaflet/images/marker-icon.png":    leafletMarkerIcon,
+			"/static/leaflet/images/marker-icon-2x.png": leafletMarkerIcon2x,
+			"/static/leaflet/images/marker-shadow.png":  leafletMarkerShadow,
+			"/static/leaflet/images/layers.png":         leafletLayersIcon,
+			"/static/leaflet/images/layers-2x.png":      leafletLayersIcon2x,
+		} {
+			path, data := path, data
+			r.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "image/png")
+				w.Header().Set("Cache-Control", "public, max-age=604800")
+				w.Write(data)
+			})
+		}
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 		// Legacy Gancio URL patterns dansal doesn't support: 301 instead of
 		// silently falling through to the "/" catch-all with a 200 (issue #823).

@@ -1469,7 +1469,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
      the attribute) — so the map-init script below is wrapped in a
      DOMContentLoaded listener instead, which is what actually delays it
      until after the deferred external script has run and L is defined. -->
-<script nonce="{{$.Nonce}}" defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 <script nonce="{{$.Nonce}}">
 // #1166: same bfcache staleness as #1162 — an admin editing this event
 // elsewhere and coming back via history.back() restores this page's

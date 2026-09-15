@@ -15,9 +15,11 @@ cmd/dansal_web/dansal_web
 # Database
 *.db
 
-# Images directory (uploaded event images — not wiki screenshots)
+# Images directory (uploaded event images — not wiki screenshots or
+# vendored Leaflet marker icons, which are go:embed targets and must ship)
 images/
 !wiki/images/
+!cmd/dansal_web/static/leaflet/images/
 
 # Environment / config overrides
 *.env

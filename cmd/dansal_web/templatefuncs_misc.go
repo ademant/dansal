@@ -18,6 +18,13 @@ import (
 // reURLAttr matches href="..." and src="..." produced by goldmark's renderer.
 var reURLAttr = regexp.MustCompile(`(?i)(href|src)="([^"]*)"`)
 
+// reAnchorTag matches a goldmark-rendered <a ...>...</a>, capturing its inner
+// text. Non-greedy and scoped to <a> specifically, so it doesn't need to
+// understand HTML generally -- goldmark's own output is simple/well-formed
+// enough for this, same trust level sanitizeMarkdownHTML already places in
+// regex-based post-processing of that output.
+var reAnchorTag = regexp.MustCompile(`(?is)<a\b[^>]*>(.*?)</a>`)
+
 // safeSchemes lists URL schemes allowed in rendered markdown output.
 var safeSchemes = map[string]bool{
 	"http": true, "https": true, "mailto": true, "tel": true,
@@ -205,6 +212,22 @@ var tmplFuncsMisc = template.FuncMap{
 			return template.HTML(template.HTMLEscapeString(s))
 		}
 		return template.HTML(sanitizeMarkdownHTML(buf.String()))
+	},
+	// markdownPreviewHTML is markdownHTML with every <a> unwrapped to its
+	// plain text (href dropped, text kept) — for a description excerpt shown
+	// inside a card that's itself one big <a> (orgs.html's org-card, e.g.),
+	// where a link in the source markdown would otherwise render as an
+	// invalid nested <a>, which browsers handle by silently truncating or
+	// splitting the outer card link. The full, unmodified description (with
+	// working links) is still shown on the entity's own page.
+	"markdownPreviewHTML": func(s string) template.HTML {
+		var buf bytes.Buffer
+		if err := goldmark.Convert([]byte(s), &buf); err != nil {
+			return template.HTML(template.HTMLEscapeString(s))
+		}
+		html := sanitizeMarkdownHTML(buf.String())
+		html = reAnchorTag.ReplaceAllString(html, "$1")
+		return template.HTML(html)
 	},
 	"jsonLines": func(s string) string {
 		if s == "" {

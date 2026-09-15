@@ -18,7 +18,16 @@ type SuggestPageData struct {
 	CaptchaSiteKey string
 	GroupedTags    []TagGroup
 	FormToken      string
-	Dances         []Dance
+	// GeoToken (#1314) gates the public geocode-search proxy — a stateless
+	// HMAC'd timestamp (newFormToken/validGeoToken, formguard.go), distinct
+	// from FormToken above: that one is a one-time token consumed by the
+	// real wizard submission, but this page's location-search widget can
+	// fire several lookups before that submission happens, so its token
+	// must not be invalidated by being used. Unlike FormToken it's set
+	// unconditionally, including in ManageToken mode — the location search
+	// widget works there too.
+	GeoToken string
+	Dances   []Dance
 	// ManageToken/PrefillJSON/PrefillTags/PrefillDanceIDs are set when the
 	// wizard is loaded via the #928 magic link (/events/suggest/manage/{token}),
 	// pre-filling the same form instead of a separate simpler edit page.
@@ -87,6 +96,7 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         tok,
+			GeoToken:          newFormToken(),
 			Dances:            dances,
 			CanUploadImageNow: suggestCanUploadImage(r),
 		}))
@@ -109,6 +119,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				CanUploadImageNow: suggestCanUploadImage(r),
 				Error:             i18n.T(r, "suggest_error_rate_limit"),
 				FormToken:         issueFormToken(ip),
+				GeoToken:          newFormToken(),
 			}))
 			return
 		}
@@ -122,6 +133,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				CanUploadImageNow: suggestCanUploadImage(r),
 				Error:             i18n.T(r, "suggest_error_parse"),
 				FormToken:         issueFormToken(ip),
+				GeoToken:          newFormToken(),
 			}))
 			return
 		}
@@ -185,6 +197,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			PreviewEvents:     events,
 			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         issueFormToken(ip),
+			GeoToken:          newFormToken(),
 			Dances:            dances,
 			IsImportMode:      true,
 			PrefillJSON:       prefillJSON,
@@ -215,6 +228,7 @@ func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Te
 		CanUploadImageNow: suggestCanUploadImage(r),
 		Error:             errMsg,
 		FormToken:         issueFormToken(ip),
+		GeoToken:          newFormToken(),
 	}))
 }
 
@@ -535,6 +549,7 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CanUploadImageNow: suggestCanUploadImage(r),
 			FormToken:         issueFormToken(ip),
+			GeoToken:          newFormToken(),
 			Dances:            dances,
 			ManageToken:       token,
 			PrefillJSON:       template.JS(b),

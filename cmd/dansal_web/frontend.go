@@ -279,8 +279,15 @@ type EventData struct {
 	UserOrgs          []Organization
 	BookFormToken     string
 	BoardFormToken    string
-	PrevEvent         *Event
-	NextEvent         *Event
+	// GeoToken (#1314) gates the public geocode-search proxy used by the
+	// board-post form's location search — a stateless HMAC'd timestamp
+	// (newFormToken/validGeoToken, formguard.go), distinct from
+	// BoardFormToken above: that one is consumed by the real board-post
+	// submission, but a visitor can fire several location lookups first, so
+	// its token must not be invalidated by being used.
+	GeoToken  string
+	PrevEvent *Event
+	NextEvent *Event
 	// Board session prefill (#1047): populated from dsw_board cookie when valid.
 	BoardSessionEmail    string
 	BoardSessionNickname string
@@ -1034,6 +1041,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			UserOrgs:               epd.userOrgs,
 			BookFormToken:          issueFormToken(clientIP),
 			BoardFormToken:         issueFormToken(clientIP),
+			GeoToken:               newFormToken(),
 			PrevEvent:              epd.prevEvent,
 			NextEvent:              epd.nextEvent,
 			BoardSessionEmail:      bsEmail,
@@ -1459,12 +1467,12 @@ type BoardData struct {
 	ShowSleep     bool
 	ShowTickets   bool
 	ShowLostFound bool
-	FormToken    string // shared token for the per-post contact forms (one per page)
-	ResendToken  string // dedicated token for POST /board/resend-manage (#1303)
-	RenewToken   string // dedicated token for POST /board/renew-session (#1303)
-	ResendSent   bool   // true when redirected back from POST /board/resend-manage
-	RenewSent    bool   // true when redirected back from POST /board/renew-session
-	RenewDone    bool   // true when redirected back from GET /board/renew-session/{token} (session set)
+	FormToken     string // shared token for the per-post contact forms (one per page)
+	ResendToken   string // dedicated token for POST /board/resend-manage (#1303)
+	RenewToken    string // dedicated token for POST /board/renew-session (#1303)
+	ResendSent    bool   // true when redirected back from POST /board/resend-manage
+	RenewSent     bool   // true when redirected back from POST /board/renew-session
+	RenewDone     bool   // true when redirected back from GET /board/renew-session/{token} (session set)
 }
 
 func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

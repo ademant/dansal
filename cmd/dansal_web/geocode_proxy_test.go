@@ -3,6 +3,8 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -53,13 +55,18 @@ func TestClampGeocodeLimit(t *testing.T) {
 	}
 }
 
-// TestNominatimGeocodeSearchHandler covers #1313: the proxy forwards the
-// query, sets a compliant User-Agent (impossible for the browser's own
-// fetch() to do), and passes Nominatim's response straight through, with no
-// login required (the public board-post/suggest-event forms need this).
+// TestNominatimGeocodeSearchHandler covers #1313/#1314: the proxy forwards
+// the query, sets a compliant User-Agent (impossible for the browser's own
+// fetch() to do), and passes Nominatim's response straight through — gated
+// by either a valid session (admin callers) or a valid geo_token (the
+// public board-post/suggest-event callers), never both required, and
+// rejecting a same-origin-spoofing Origin/Referer either way.
 func TestNominatimGeocodeSearchHandler(t *testing.T) {
 	oldBase := nominatimBaseURL
 	t.Cleanup(func() { nominatimBaseURL = oldBase })
+	oldHost := adminAllowedHost
+	t.Cleanup(func() { adminAllowedHost = oldHost })
+	adminAllowedHost = "example.test"
 
 	var gotUA, gotPath, gotQuery string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -73,28 +80,70 @@ func TestNominatimGeocodeSearchHandler(t *testing.T) {
 	nominatimBaseURL = upstream.URL
 
 	geocodeThrottle = newSubmissionThrottle(100, time.Minute)
-	cfg := &Config{Domain: "example.test"}
+	cfg := &Config{Domain: "example.test", FormTokenMaxAgeMins: 30}
 	handler := nominatimGeocodeSearchHandler(cfg)
 
-	req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville&limit=3&lang=de", nil)
-	rec := httptest.NewRecorder()
-	handler(rec, req)
+	t.Run("no session and no geo_token: rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville", nil)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", rec.Code)
+		}
+	})
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	if gotUA == "" || gotUA == "Go-http-client/1.1" {
-		t.Errorf("User-Agent not set to a compliant value, got %q", gotUA)
-	}
-	if gotPath != "/search" {
-		t.Errorf("upstream path = %q, want /search", gotPath)
-	}
-	if !strings.Contains(gotQuery, "q=Testville") || !strings.Contains(gotQuery, "limit=3") || !strings.Contains(gotQuery, "accept-language=de") || !strings.Contains(gotQuery, "addressdetails=1") {
-		t.Errorf("upstream query = %q, missing expected params", gotQuery)
-	}
-	if !strings.Contains(rec.Body.String(), "Testville") {
-		t.Errorf("response body not passed through: %s", rec.Body.String())
-	}
+	t.Run("Origin present but wrong host: rejected even with a valid geo_token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville&geo_token="+url.QueryEscape(newFormToken()), nil)
+		req.Header.Set("Origin", "https://evil.test")
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", rec.Code)
+		}
+	})
+
+	t.Run("valid session, no geo_token: allowed (admin callers)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville&limit=3&lang=de", nil)
+		req = withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		if gotUA == "" || gotUA == "Go-http-client/1.1" {
+			t.Errorf("User-Agent not set to a compliant value, got %q", gotUA)
+		}
+		if gotPath != "/search" {
+			t.Errorf("upstream path = %q, want /search", gotPath)
+		}
+		if !strings.Contains(gotQuery, "q=Testville") || !strings.Contains(gotQuery, "limit=3") || !strings.Contains(gotQuery, "accept-language=de") || !strings.Contains(gotQuery, "addressdetails=1") {
+			t.Errorf("upstream query = %q, missing expected params", gotQuery)
+		}
+		if !strings.Contains(rec.Body.String(), "Testville") {
+			t.Errorf("response body not passed through: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("valid geo_token, no session: allowed (public callers)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville&geo_token="+url.QueryEscape(newFormToken()), nil)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("expired geo_token, no session: rejected", func(t *testing.T) {
+		staleTS := time.Now().Add(-2 * time.Hour).Unix()
+		staleToken := strconv.FormatInt(staleTS, 10) + "." + formMAC(staleTS)
+		req := httptest.NewRequest(http.MethodGet, "/search/geocode/search?q=Testville&geo_token="+url.QueryEscape(staleToken), nil)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403 for a stale token", rec.Code)
+		}
+	})
 }
 
 // TestNominatimGeocodeSearchHandlerRequiresQuery covers the missing-q case.
@@ -104,6 +153,7 @@ func TestNominatimGeocodeSearchHandlerRequiresQuery(t *testing.T) {
 	handler := nominatimGeocodeSearchHandler(cfg)
 
 	req := httptest.NewRequest(http.MethodGet, "/search/geocode/search", nil)
+	req = withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 

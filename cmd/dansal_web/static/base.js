@@ -251,9 +251,19 @@ function nominatimLang(countryCode){
 // search.html's town-radius geocoding. Response shape is untouched
 // (Nominatim's own JSON passed straight through), so callers parse it
 // exactly as before.
+// _geoToken gates /search/geocode/search for pages with no session (#1314)
+// — a public page sets it once via setGeoToken() with its page-rendered
+// GeoToken value, then keeps it current via its own existing _form_token
+// background-refresh cycle (both ride the same /api-internal/refresh-
+// form-token response). Admin pages never call setGeoToken; the endpoint
+// accepts their logged-in session instead, so leaving this blank there is
+// correct, not an oversight.
+var _geoToken = '';
+function setGeoToken(tok){ _geoToken = tok || ''; }
 function nominatimSearch(q, lang, limit, cb){
   var url = '/search/geocode/search?q=' + encodeURIComponent(q) + '&limit=' + (limit || 5);
   if (lang) url += '&lang=' + encodeURIComponent(lang);
+  if (_geoToken) url += '&geo_token=' + encodeURIComponent(_geoToken);
   fetch(url).then(function(r){ return r.json(); }).then(function(data){
     cb(data || []);
   }).catch(function(){ cb([]); });

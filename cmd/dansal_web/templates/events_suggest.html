@@ -1053,10 +1053,13 @@ function applyWizardData(data) {
     }
   });
 })();
-// Background form-token refresh (#1211). Absent when ManageToken is set.
+// Background refresh for _form_token (#1211, absent when ManageToken is
+// set) and the location search's geo_token (#1314, always present — the
+// search widget works in ManageToken mode too). Runs even in ManageToken
+// mode, when there's no _form_token element to update.
 (function(){
+  setGeoToken({{$.Data.GeoToken | jsStr}});
   var el = document.querySelector('#wiz-form input[name="_form_token"]');
-  if (!el) return;
   var last = 0;
   function refresh(){
     var now = Date.now();
@@ -1064,7 +1067,11 @@ function applyWizardData(data) {
     last = now;
     fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ if (d && d.token) el.value = d.token; })
+      .then(function(d){
+        if (!d) return;
+        if (el && d.token) el.value = d.token;
+        if (d.geo_token) setGeoToken(d.geo_token);
+      })
       .catch(function(){});
   }
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });

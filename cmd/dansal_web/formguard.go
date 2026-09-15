@@ -55,6 +55,32 @@ func validFormToken(token string, minSecs int) bool {
 	return time.Now().Unix()-ts >= int64(minSecs)
 }
 
+// validGeoToken checks a newFormToken()-shaped "ts.mac" token for a maximum
+// age instead of validFormToken's minimum-age check — this gates the public
+// geocode search proxy (#1314). validFormToken's minimum-age check exists to
+// catch a bot submitting a POST form suspiciously fast; a GET lookup has no
+// equivalent tell, and the actual concern here runs the other way — a
+// leaked or stale token being replayed indefinitely — so this checks the
+// token isn't OLDER than maxAge. Deliberately not one-time-use like
+// consumeFormToken: a page can fire several geocode searches before (or
+// instead of) ever submitting its real form, so nothing here should be
+// invalidated by being used.
+func validGeoToken(token string, maxAge time.Duration) bool {
+	parts := strings.SplitN(token, ".", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return false
+	}
+	if !hmac.Equal([]byte(parts[1]), []byte(formMAC(ts))) {
+		return false
+	}
+	age := time.Now().Unix() - ts
+	return age >= 0 && time.Duration(age)*time.Second <= maxAge
+}
+
 func formMAC(ts int64) string {
 	mac := hmac.New(sha256.New, formHMACKey)
 	fmt.Fprintf(mac, "%d", ts)
@@ -111,7 +137,7 @@ type oneTimeToken struct {
 	ip        string
 }
 
-var oneTimeTokens sync.Map   // key: hex string, value: oneTimeToken
+var oneTimeTokens sync.Map // key: hex string, value: oneTimeToken
 var outstandingTokens atomic.Int64
 var formTokenCap int64 // set from config in main(); 0 = no cap
 
@@ -315,7 +341,11 @@ func refreshFormTokenHandler(cfg *Config) http.HandlerFunc {
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"token": tok})
+		// geo_token (#1314) rides along on the same refresh cycle: it's
+		// needed by the same long-lived public pages (board post, suggest
+		// wizard) that already poll this endpoint for their real form
+		// token, so there's no reason to give it a separate refresh loop.
+		json.NewEncoder(w).Encode(map[string]string{"token": tok, "geo_token": newFormToken()})
 	}
 }
 

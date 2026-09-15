@@ -213,10 +213,37 @@ func clampGeocodeLimit(raw string) string {
 // nominatimGet's pacing with every other Nominatim call in this file — used
 // by both admin location-entry forms and the public board-post/
 // suggest-event location pickers.
+//
+// Since it has to stay reachable without a login (the public pages above
+// have none), it's gated instead by two cheaper layers (#1314):
+//   - checkAdminOrigin: same-host Origin/Referer check when either header
+//     is present, allowing requests through when both are absent (the same
+//     shape #748 already uses for admin POST CSRF protection — but here the
+//     caller is typically a direct scripted requester who controls its own
+//     headers, so on its own this only deters casual/naive reuse, not a
+//     deliberate scraper).
+//   - a valid session (the admin callers) OR a valid geo_token (the public
+//     callers) — geo_token is a stateless HMAC'd timestamp (newFormToken/
+//     validGeoToken, formguard.go) that a caller can only have gotten by
+//     actually loading one of dansal's own pages first; unlike the
+//     one-time _form_token the public POST pipelines use, it isn't
+//     consumed on use, since a page can fire several searches before (or
+//     instead of) ever submitting its real form.
 func nominatimGeocodeSearchHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
 		w.Header().Set("Content-Type", "application/json")
+		if !checkAdminOrigin(r) {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`[]`))
+			return
+		}
+		if getSessionUser(r) == nil && !validGeoToken(r.URL.Query().Get("geo_token"), stdFormMaxAge(cfg)) {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`[]`))
+			return
+		}
+
+		ip := getClientIP(r)
 		if geocodeThrottle.isBlocked(ip) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte(`[]`))

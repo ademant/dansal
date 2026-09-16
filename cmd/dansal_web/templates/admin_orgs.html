@@ -88,7 +88,11 @@
   </div>
 </div>
 <script nonce="{{$.Nonce}}">
-document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+});
 function delOrg(id){var f=document.createElement('form');f.method='post';f.action='/admin/organizations/'+id+'/delete';document.body.appendChild(f);f.submit();}
 function confirmTypedDeleteOrg(name,id){ return confirmTypedDelete(name,function(){delOrg(id);}); }
 var _ctdCb=null,_ctdExpected='';

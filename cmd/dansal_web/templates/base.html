@@ -516,7 +516,9 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
 </div>
 <script type="application/json" id="{{.ID}}-events">{{$calEvents}}</script>
 <script nonce="{{.Nonce}}">
-(function(){
+// #1330: base.js now loads with defer, so renderMiniCalendar isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
   var el = document.getElementById('{{.ID}}-events');
   var calEvents = el ? JSON.parse(el.textContent || '[]') : [];
   var months = [];
@@ -528,7 +530,7 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
   document.getElementById('{{.ID}}-wrap').hidden = false;
   renderMiniCalendar('{{.ID}}', calEvents, months,
     {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap'});
-})();
+});
 </script>
 {{end}}
 

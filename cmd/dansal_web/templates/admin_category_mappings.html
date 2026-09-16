@@ -60,6 +60,10 @@
 .btn-primary:hover{background:#0d4a80}
 </style>
 <script nonce="{{$.Nonce}}">
-document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+});
 </script>
 {{end}}

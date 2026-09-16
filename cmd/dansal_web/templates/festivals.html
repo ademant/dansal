@@ -128,9 +128,13 @@ table.fest-folded{opacity:.75}
   // ── Calendar ─────────────────────────────────────────────────────────────
   // #1161: rendering itself now lives in renderMiniCalendar (base.html),
   // shared with the /org/{slug} rolling-month calendar.
-  var months = [];
-  for (var m = 0; m < 12; m++) months.push(new Date(year, m, 1));
-  renderMiniCalendar('fest-calendar', calEvents, months);
+  // #1330: base.js now loads with defer, so renderMiniCalendar isn't defined
+  // yet at plain top-level script time — wait for DOMContentLoaded.
+  document.addEventListener('DOMContentLoaded', function(){
+    var months = [];
+    for (var m = 0; m < 12; m++) months.push(new Date(year, m, 1));
+    renderMiniCalendar('fest-calendar', calEvents, months);
+  });
 })();
 </script>
 {{end}}

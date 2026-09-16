@@ -181,7 +181,11 @@
 </style>
 <script nonce="{{$.Nonce}}">
 function delEvent(id){var f=document.createElement('form');f.method='post';f.action='/admin/events/'+id+'/delete';document.body.appendChild(f);f.submit();}
-document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+});
 (function(){
   var cbAll=document.getElementById('event-cb-all');
   if(!cbAll)return;

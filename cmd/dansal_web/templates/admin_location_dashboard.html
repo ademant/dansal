@@ -381,7 +381,11 @@ function delEvent(id){var f=document.createElement('form');f.method='post';f.act
     });
   });
 })();
-document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+});
 (function(){
   var mergeForm=document.getElementById('event-bulk-form');
   if(!mergeForm)return;

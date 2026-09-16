@@ -86,7 +86,11 @@ function rowAction(url) {
   document.body.appendChild(f); f.submit();
 }
 
-document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined
+// yet at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+});
 document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var url = btn.dataset.runUrl;

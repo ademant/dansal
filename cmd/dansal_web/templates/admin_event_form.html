@@ -1123,7 +1123,11 @@ function toggleDifficulty(){
   var show=document.getElementById('tag-dance-workshop').checked||document.getElementById('tag-musician-workshop').checked;
   document.getElementById('workshop-difficulty').hidden=!show;
 }
-document.querySelectorAll('#org-picker-table,#loc-picker-table').forEach(initSortable);
+// #1330: base.js now loads with defer, so initSortable isn't defined yet
+// at plain top-level script time — wait for DOMContentLoaded.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('#org-picker-table,#loc-picker-table').forEach(initSortable);
+});
 function filterAssignTable(tableID,q){
   q=q.toLowerCase();
   var hasOrg=false, hasOther=false;

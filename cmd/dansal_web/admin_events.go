@@ -1725,6 +1725,17 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}
 		}
 
+		// #1331: a non-admin who belongs to exactly one org can only ever
+		// create events for that org anyway (enforced server-side by
+		// requireEventOrg) — default new events to it instead of making
+		// them assign it manually every time.
+		if su.Role != "admin" && len(userOrgs) == 1 && (prefill == nil || prefill.OrgID == 0) {
+			if prefill == nil {
+				prefill = &EventPrefill{}
+			}
+			prefill.OrgID = userOrgs[0].ID
+		}
+
 		renderEventNewForm(w, r, cfg, tmpls, db, i18n, su, bundle, userOrgs, selected, prefill)
 	}
 }

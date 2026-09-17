@@ -188,11 +188,11 @@
     <input type="hidden" id="org_choice" name="org_choice" value="{{if .Event.OrganizationID}}existing{{end}}">
     <select id="org_id" name="org_id" hidden>
       <option value="">—</option>
-      {{range .Organizations}}<option value="{{.ID}}"{{if and $.Data.Event.OrganizationID (eq .ID (derefInt $.Data.Event.OrganizationID))}} selected{{end}}>{{.Name}}</option>{{end}}
+      {{range .UserOrgs}}<option value="{{.ID}}"{{if and $.Data.Event.OrganizationID (eq .ID (derefInt $.Data.Event.OrganizationID))}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
 
     <div id="org-assigned-chip" class="assign-chip"{{if not .Event.OrganizationID}} hidden{{end}}>
-      <span class="assign-chip-name" id="org-assigned-name">{{range .Organizations}}{{if and $.Data.Event.OrganizationID (eq .ID (derefInt $.Data.Event.OrganizationID))}}{{.Name}}{{end}}{{end}}</span>
+      <span class="assign-chip-name" id="org-assigned-name">{{with .Org}}{{.Name}}{{end}}</span>
       <button type="button" class="btn-sm btn-del" data-fn="removeOrgAssignment" data-args="[]">{{$.Strings.T "assign_remove_btn"}}</button>
     </div>
 
@@ -204,7 +204,7 @@
         <table class="assign-table" id="org-picker-table" data-sortable>
           <thead><tr><th data-sort="str">{{$.Strings.T "org_name"}}</th><th></th></tr></thead>
           <tbody>
-          {{range .Organizations}}
+          {{range .UserOrgs}}
           <tr>
             <td>{{.Name}}</td>
             <td><button type="button" class="btn-primary-sm" data-fn="assignOrg" data-args="{{dargs .ID .Name}}">{{$.Strings.T "loc_assign_btn"}}</button></td>

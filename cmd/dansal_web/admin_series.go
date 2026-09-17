@@ -184,6 +184,9 @@ func adminSeriesNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if orgIDStr := r.URL.Query().Get("org_id"); orgIDStr != "" {
 			data.PrefillOrgID, _ = strconv.Atoi(orgIDStr)
 		}
+		if locIDStr := r.URL.Query().Get("loc_id"); locIDStr != "" {
+			data.PrefillLocID, _ = strconv.Atoi(locIDStr)
+		}
 		if musicianIDStr := r.URL.Query().Get("musician_id"); musicianIDStr != "" {
 			data.PrefillMusicianID, _ = strconv.Atoi(musicianIDStr)
 		}

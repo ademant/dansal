@@ -21,6 +21,15 @@ type DashboardData struct {
 	UnpinnedTemplates []EventTemplate
 	TemplateOrgMap    map[int]string
 	Series            []EventSeries
+	// OrgLocations/OrgFutureCounts/LocFutureCounts back the "Your orgs"
+	// org -> locations tree (#1332): OrgLocations is the set of locations
+	// assigned to each user org (mirrors adminOrgDashboardHandler's
+	// OrgLocations); the two count maps are computed by grouping the
+	// already-fetched future-only Events slice, so no extra event fetch
+	// is needed.
+	OrgLocations   map[int][]Location
+	OrgFutureCount map[int]int
+	LocFutureCount map[int]map[int]int
 }
 
 func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -38,6 +47,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			stats      MeStats
 			orgStats   map[int]OrgStatRecord
 			series     []EventSeries
+			allLocs    []Location
 		)
 
 		fetchParallel(
@@ -75,6 +85,14 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			},
 			func() error {
 				var err error
+				allLocs, err = client.GetLocations(ctx)
+				if err != nil {
+					log.Printf("dashboard: could not load locations: %v", err)
+				}
+				return nil
+			},
+			func() error {
+				var err error
 				series, err = client.GetSeriesList(ctx, token)
 				if err != nil {
 					log.Printf("dashboard: could not load series: %v", err)
@@ -105,6 +123,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 					defer evtWg.Done()
 					params := url.Values{}
 					params.Set("organization_id", strconv.Itoa(oid))
+					params.Set("limit", "1000")
 					evts, err := client.GetAdminEvents(ctx, token, params)
 					if err != nil {
 						log.Printf("dashboard: could not load events for org %d: %v", oid, err)
@@ -123,6 +142,33 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 		orgMap := make(map[int]string, len(userOrgs))
 		for _, o := range userOrgs {
 			orgMap[o.ID] = o.Name
+		}
+
+		// #1332: org -> its assigned locations (mirrors adminOrgDashboardHandler's
+		// OrgLocations), plus future-event counts per org and per (org, location)
+		// pair, computed from the events slice above rather than a second fetch.
+		orgLocations := make(map[int][]Location, len(userOrgs))
+		for _, l := range allLocs {
+			for _, oid := range l.OrganizationIDs {
+				if orgSet[oid] {
+					orgLocations[oid] = append(orgLocations[oid], l)
+				}
+			}
+		}
+		orgFutureCount := make(map[int]int, len(userOrgs))
+		locFutureCount := make(map[int]map[int]int, len(userOrgs))
+		for _, ev := range events {
+			if ev.OrganizationID == nil {
+				continue
+			}
+			oid := *ev.OrganizationID
+			orgFutureCount[oid]++
+			if ev.LocationID != nil {
+				if locFutureCount[oid] == nil {
+					locFutureCount[oid] = make(map[int]int)
+				}
+				locFutureCount[oid][*ev.LocationID]++
+			}
 		}
 
 		// Presets: templates the user has access to (own + orgs they belong to;
@@ -161,6 +207,9 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			UnpinnedTemplates: unpinnedTemplates,
 			TemplateOrgMap:    templateOrgMap,
 			Series:            series,
+			OrgLocations:      orgLocations,
+			OrgFutureCount:    orgFutureCount,
+			LocFutureCount:    locFutureCount,
 		}))
 	}
 }

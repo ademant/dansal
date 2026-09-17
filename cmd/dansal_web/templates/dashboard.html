@@ -42,17 +42,41 @@
   <summary>{{$.Strings.T "dashboard_your_orgs"}} ({{len .UserOrgs}})</summary>
   <div class="dash-orgs-list">
     {{range .UserOrgs}}
+    {{$org := .}}
     {{$os := index $.Data.OrgStats .ID}}
-    <div class="dash-org-row">
-      <a href="/org/{{.ActorName}}" class="dash-org-name">{{.Name}}</a>
+    {{$orgLocs := index $.Data.OrgLocations .ID}}
+    <div class="dash-org-row dash-org-row-tree">
+      <details class="dash-org-tree-toggle">
+        <summary class="dash-org-tree-summary">
+          <a href="/org/{{$org.ActorName}}" class="dash-org-name">{{$org.Name}}</a>
+        </summary>
+        {{if $orgLocs}}
+        <div class="dash-loc-list">
+          {{range $orgLocs}}
+          <div class="dash-org-row dash-loc-row">
+            <span class="dash-org-name">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</span>
+            <div class="dash-org-mini-stats">
+              <span title="{{$.Strings.T "loc_event_count"}}">📅 {{index $.Data.LocFutureCount $org.ID .ID}}</span>
+            </div>
+            <div class="dash-org-actions">
+              <a href="/admin/events/new?org_id={{$org.ID}}&amp;loc_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+              <a href="/admin/series/new?org_id={{$org.ID}}&amp;loc_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+              <a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+            </div>
+          </div>
+          {{end}}
+        </div>
+        {{end}}
+      </details>
       <div class="dash-org-mini-stats">
-        <span title="{{$.Strings.T "admin_stats_events"}}">📅 {{$os.EventCount}}</span>
+        <span title="{{$.Strings.T "admin_stats_events"}}">📅 {{index $.Data.OrgFutureCount $org.ID}}</span>
         <span title="{{$.Strings.T "admin_stats_locations"}}">📍 {{$os.LocationCount}}</span>
         <span title="{{$.Strings.T "nav_board"}}">📋 {{$os.BoardEntryCount}}</span>
       </div>
       <div class="dash-org-actions">
-        <a href="/admin/events/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
-        <a href="/admin/series/new?org_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+        <a href="/admin/events/new?org_id={{$org.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+        <a href="/admin/series/new?org_id={{$org.ID}}" class="btn-sm">+ {{$.Strings.T "series_new"}}</a>
+        <a href="/admin/organizations/{{$org.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       </div>
     </div>
     {{end}}
@@ -176,6 +200,12 @@
 .dash-org-name{font-weight:500;flex:1}
 .dash-org-mini-stats{display:flex;gap:.8rem;font-size:.85rem;color:var(--fg-2,#666);flex-shrink:0}
 .dash-org-actions{display:flex;gap:.5rem;flex-shrink:0}
+.dash-org-row-tree{align-items:flex-start}
+.dash-org-tree-toggle{flex:1;min-width:0}
+.dash-org-tree-summary{cursor:pointer;list-style-position:outside}
+.dash-org-tree-summary .dash-org-name{display:inline;flex:none}
+.dash-loc-list{margin:.4rem 0 0 1.4rem;padding-left:.6rem;border-left:2px solid var(--border-low,#eee)}
+.dash-loc-row{padding:.3rem 0}
 @media(max-width:480px){.dash-org-row{flex-direction:column;align-items:flex-start}}
 .muted{color:var(--fg-2,#888);font-weight:400}
 .dash-section-actions{padding:.2rem 0 .6rem}

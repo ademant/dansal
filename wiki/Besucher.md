@@ -69,8 +69,8 @@ Auch ohne Benutzerkonto kannst du eine fehlende Veranstaltung vorschlagen, damit
 **So funktioniert's:**
 1. Über „Veranstaltung vorschlagen“ in der Navigation die Seite `/events/suggest` öffnen
 2. Entweder das Formular von Hand ausfüllen (Titel, Beschreibung, Datum/Uhrzeit, Ort, Tags, Tänze, Speisen/Getränke, Link, E-Mail-Adresse) oder eine `.ics`-/`.json`-Datei hochladen, deren Termine zur Vorschau eingelesen werden
-3. Vorschlag absenden
-4. Falls die Instanz E-Mail-Versand eingerichtet hat, erhältst du einen Bestätigungslink per E-Mail; erst nach dem Klick wird der Vorschlag an die Administratoren weitergeleitet. Ist kein E-Mail-Versand eingerichtet, werden die Administratoren direkt benachrichtigt
+3. Vorschlag absenden – die Administratoren werden direkt benachrichtigt und der Vorschlag ist sofort für sie zur Prüfung sichtbar, unabhängig von einer E-Mail-Bestätigung
+4. Ist E-Mail-Versand eingerichtet, erhältst du zusätzlich einen Link per E-Mail, über den du den Vorschlag später jederzeit selbst einsehen oder bearbeiten kannst – ein Klick darauf ist aber keine Voraussetzung dafür, dass der Vorschlag bei den Administratoren ankommt
 5. Ein Administrator prüft den Vorschlag und veröffentlicht ihn – bis dahin ist die Veranstaltung **nicht öffentlich sichtbar**
 
 **Hinweise:**
@@ -78,9 +78,25 @@ Auch ohne Benutzerkonto kannst du eine fehlende Veranstaltung vorschlagen, damit
 - Zum Schutz vor Spam gibt es ein Rate-Limit pro IP-Adresse sowie automatische Bot-Erkennung
 - Eine angegebene E-Mail-Adresse wird nur zur Verifizierung verwendet (siehe Abschnitt „Datenspeicherung“ unten)
 
+## 🔄 Feed vorschlagen
+
+Kennst du einen Verein oder eine Location mit eigenem Veranstaltungskalender (iCal- oder JSON-Feed), der noch nicht auf dansal erscheint? Auch das lässt sich ganz ohne Benutzerkonto vorschlagen – anders als beim einzelnen Veranstaltungsvorschlag oben wird hier ein **ganzer, dauerhaft automatisch aktualisierter Feed** angemeldet.
+
+**So funktioniert's:**
+1. Über „Feed vorschlagen“ die Seite `/feeds/suggest` öffnen
+2. E-Mail-Adresse angeben und entweder eine bestehende Organisation auswählen oder eine neue vorschlagen
+3. Feed-URL eingeben – eine Vorschau prüft, ob sich der Feed einlesen lässt und zeigt die enthaltenen Veranstaltungen
+4. Enthaltene Ortsangaben einzeln einem bestehenden Ort zuordnen oder mit Adresse/Ort für einen neuen Ort ergänzen
+5. Vorschlag absenden – auch hier landet er sofort bei den Administratoren (bzw. bei bereits aktiven Mitgliedern der gewählten Organisation) zur Prüfung
+6. Bei Genehmigung wird die Organisation/der Ort bei Bedarf angelegt und die Veranstaltungen sofort erstmalig abgerufen
+
+Auf der Bestätigungsseite und per E-Mail wird direkt ein Link angeboten, um ein Konto einzurichten und die Organisation bzw. den Feed künftig selbst zu verwalten.
+
+**Hinweise:** wie beim Veranstaltungsvorschlag ist die Funktion nur verfügbar, wenn die Instanz E-Mail- oder Telegram-Benachrichtigungen konfiguriert hat, und ebenso mehrschichtig gegen Missbrauch abgesichert (Rate-Limit, Bot-Erkennung).
+
 ## 🌍 Mehrsprachigkeit
 
-dansal unterstützt 8 Sprachen. Sprache ändern über:
+dansal unterstützt 12 Sprachen. Sprache ändern über:
 - Sprachauswahl in der Navigationsleiste (wird in einem Cookie gespeichert)
 - Automatische Erkennung der Browsersprache (für neue Besucher)
 

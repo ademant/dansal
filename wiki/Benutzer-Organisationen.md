@@ -42,6 +42,8 @@ Unter **Quellen → Neue Quelle** (`/admin/fetchurls/new`) richtest du einen dau
 - Über den **„Jetzt ausführen“**-Button lässt sich ein Abruf auch sofort manuell anstoßen, ohne auf den nächsten automatischen Lauf zu warten
 - **Wichtig**: Über diesen automatischen Weg importierte Veranstaltungen werden **sofort veröffentlicht** – es gibt hier keinen Freigabe-Schritt wie beim manuellen Import. Quellen sollten daher nur eingerichtet werden, wenn der Inhalt des Feeds vertrauenswürdig ist
 
+**Von Besuchern vorgeschlagene Feeds:** Ein Besucher kann ganz ohne Konto einen neuen Feed für eure Organisation vorschlagen (`/feeds/suggest`, siehe Besucher-Guide). Solche Vorschläge erscheinen unter **Quellen → N ausstehende Feed-Vorschläge** (`/admin/fetchurl-suggestions`) und können von jedem aktiven Mitglied der betroffenen Organisation genehmigt oder abgelehnt werden – nicht nur von Administratoren. Bei Genehmigung wird die Quelle wie eine selbst angelegte behandelt und sofort erstmalig abgerufen.
+
 ## 📐 Vorlagen (Templates)
 
 Eine **Vorlage** speichert die festen Standardangaben einer Veranstaltung (Ort, Preise, Tags, Tanzstile, Zeitplan usw.), damit diese beim automatischen Feed-Import wiederverwendet werden können – nützlich, wenn ein Veranstaltungsort z. B. ein festes wöchentliches Programm hat, das die externe Feed-Quelle nicht zuverlässig oder vollständig liefert.

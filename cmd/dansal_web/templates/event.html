@@ -620,7 +620,7 @@
       {{with .Pricing}}
       {{$cur := .Currency}}
       <div class="evt-admission">
-        <span class="sidebar-label">{{$.Strings.T "evt_admission"}}:</span>
+        <span class="sidebar-label">{{$.Strings.T "evt_admission"}}</span>
         {{if eq .Type "free"}}<span>{{$.Strings.T "evt_free"}}</span>{{end}}
         {{if eq .Type "donation"}}<span>{{if gt .Amount 0.0}}ca. {{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}{{else}}{{$.Strings.T "evt_donation"}}{{end}}</span>{{end}}
         {{if eq .Type "single"}}<span>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</span>{{end}}

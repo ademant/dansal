@@ -1,5 +1,7 @@
 # dansal – Veranstaltungsplattform für Tanzgemeinschaften
 
+![dansal – Veranstaltungen entdecken, Gemeinschaft & Tanz, Kalender verwalten & teilen](images/intro.svg)
+
 **dansal** ist eine Open-Source-Kalender- und Veranstaltungsplattform für Tanzgemeinschaften – von Bal-folk und Fest-noz über Tango bis hin zu Salsa-Festivals und Workshops. Sie richtet sich sowohl an Besucher, die Veranstaltungen finden möchten, als auch an Veranstalter, die ihre Termine verwalten und einer breiteren Gemeinschaft zugänglich machen wollen.
 
 Für Veranstalter bietet dansal insbesondere:

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1200" height="380" fill="#faf3e7"/>
+
+  <!-- soft decorative glow -->
+  <circle cx="600" cy="-60" r="360" fill="#c8873a" opacity="0.07"/>
+
+  <!-- column dividers -->
+  <line x1="400" y1="55" x2="400" y2="300" stroke="#c8873a" stroke-width="1.5" opacity="0.45"/>
+  <line x1="800" y1="55" x2="800" y2="300" stroke="#c8873a" stroke-width="1.5" opacity="0.45"/>
+
+  <!-- ============ Column 1: Discover events ============ -->
+  <g>
+    <!-- calendar card -->
+    <rect x="125" y="90" width="150" height="125" rx="18" fill="#ffffff" stroke="#10263f" stroke-width="5"/>
+    <path d="M143,90 H257 Q275,90 275,108 V126 H125 V108 Q125,90 143,90 Z" fill="#10263f"/>
+    <rect x="160" y="72" width="12" height="30" rx="6" fill="#10263f"/>
+    <rect x="228" y="72" width="12" height="30" rx="6" fill="#10263f"/>
+    <rect x="145" y="145" width="16" height="16" rx="4" fill="#c8873a"/>
+    <rect x="192" y="145" width="16" height="16" rx="4" fill="#e3b46a"/>
+    <rect x="145" y="178" width="16" height="16" rx="4" fill="#e3b46a"/>
+    <rect x="192" y="178" width="16" height="16" rx="4" fill="#c8873a"/>
+    <!-- map pin -->
+    <circle cx="256" cy="182" r="24" fill="#c8873a"/>
+    <path d="M232,190 L280,190 L256,232 Z" fill="#c8873a"/>
+    <circle cx="256" cy="180" r="9" fill="#faf3e7"/>
+  </g>
+  <text x="200" y="272" text-anchor="middle" font-size="21" font-weight="bold" fill="#10263f">Veranstaltungen entdecken</text>
+  <line x1="160" y1="288" x2="240" y2="288" stroke="#c8873a" stroke-width="2"/>
+  <text x="200" y="310" text-anchor="middle" font-size="13" fill="#6b5a3f">Karte, Wochenübersicht, Terminliste</text>
+
+  <!-- ============ Column 2: Community & dance ============ -->
+  <g>
+    <!-- dancer A (navy) -->
+    <circle cx="555" cy="95" r="15" fill="#10263f"/>
+    <path d="M540,115 Q555,107 570,115 L590,212 L520,212 Z" fill="#10263f"/>
+    <path d="M567,120 L601,150" stroke="#10263f" stroke-width="10" stroke-linecap="round"/>
+    <!-- dancer B (gold) -->
+    <circle cx="645" cy="95" r="15" fill="#c8873a"/>
+    <path d="M630,115 Q645,107 660,115 L680,212 L610,212 Z" fill="#c8873a"/>
+    <path d="M633,120 L599,150" stroke="#c8873a" stroke-width="10" stroke-linecap="round"/>
+    <!-- joined hands -->
+    <circle cx="600" cy="150" r="9" fill="#7a5a2e"/>
+    <!-- music notes -->
+    <g transform="translate(500,55)">
+      <circle cx="0" cy="24" r="7" fill="#10263f"/>
+      <line x1="7" y1="24" x2="7" y2="0" stroke="#10263f" stroke-width="3"/>
+      <path d="M7,0 C18,4 20,12 15,18" fill="none" stroke="#10263f" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(690,45)">
+      <circle cx="0" cy="24" r="7" fill="#c8873a"/>
+      <line x1="7" y1="24" x2="7" y2="0" stroke="#c8873a" stroke-width="3"/>
+      <path d="M7,0 C18,4 20,12 15,18" fill="none" stroke="#c8873a" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </g>
+  <text x="600" y="272" text-anchor="middle" font-size="21" font-weight="bold" fill="#10263f">Gemeinschaft &amp; Tanz</text>
+  <line x1="555" y1="288" x2="645" y2="288" stroke="#c8873a" stroke-width="2"/>
+  <text x="600" y="310" text-anchor="middle" font-size="13" fill="#6b5a3f">Organisationen, Musiker, Veranstaltungsorte</text>
+
+  <!-- ============ Column 3: Manage & share ============ -->
+  <g>
+    <!-- venue building -->
+    <path d="M960,112 L1000,76 L1040,112 Z" fill="#10263f"/>
+    <rect x="965" y="112" width="70" height="68" rx="6" fill="#ffffff" stroke="#10263f" stroke-width="5"/>
+    <rect x="988" y="150" width="24" height="30" rx="3" fill="#10263f"/>
+    <rect x="974" y="126" width="14" height="14" rx="3" fill="#c8873a"/>
+    <rect x="1012" y="126" width="14" height="14" rx="3" fill="#c8873a"/>
+    <!-- sync loop -->
+    <g transform="translate(1050,108)">
+      <path d="M -22,0 A 22,22 0 1 1 10,19" fill="none" stroke="#c8873a" stroke-width="7" stroke-linecap="round"/>
+      <path d="M 22,0 A 22,22 0 1 1 -10,-19" fill="none" stroke="#c8873a" stroke-width="7" stroke-linecap="round"/>
+      <path d="M 10,19 L 22,15 L 16,28 Z" fill="#c8873a"/>
+      <path d="M -10,-19 L -22,-15 L -16,-28 Z" fill="#c8873a"/>
+    </g>
+  </g>
+  <text x="1000" y="272" text-anchor="middle" font-size="21" font-weight="bold" fill="#10263f">Kalender verwalten &amp; teilen</text>
+  <line x1="945" y1="288" x2="1055" y2="288" stroke="#c8873a" stroke-width="2"/>
+  <text x="1000" y="310" text-anchor="middle" font-size="13" fill="#6b5a3f">iCal-/JSON-Feeds, Einbettung per iFrame</text>
+</svg>

@@ -4641,6 +4641,12 @@ func main() {
 	smux.Handle("DELETE /api/v1/fetchurl/{id}", auth(deleteFetchSource))
 	smux.Handle("POST /api/v1/fetchurl/{id}/fetch", auth(fetchURLByID))
 
+	// Pending feed suggestions review (#1333 phase 2) — same admin-or-org-member
+	// posture as pending_registrations; enforced inside each handler.
+	smux.Handle("GET /api/v1/fetchurl-suggestions", auth(listPendingFetchSuggestionsHandler))
+	smux.Handle("POST /api/v1/fetchurl-suggestions/{id}/approve", auth(approveFetchSuggestionHandler))
+	smux.Handle("POST /api/v1/fetchurl-suggestions/{id}/reject", auth(rejectFetchSuggestionHandler))
+
 	// API key endpoints (protected)
 	smux.Handle("GET /api/v1/apikeys", auth(listAPIKeys))
 	smux.Handle("POST /api/v1/apikeys", auth(createAPIKey))

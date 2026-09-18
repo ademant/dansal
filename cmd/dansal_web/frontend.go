@@ -706,6 +706,7 @@ type Templates struct {
 	registerDone              *template.Template
 	registerVerified          *template.Template
 	adminRegistrations        *template.Template
+	adminFetchurlSuggestions  *template.Template
 	adminManagement           *template.Template
 	adminRecentChanges        *template.Template
 	help                      *template.Template
@@ -811,6 +812,7 @@ func loadTemplates() *Templates {
 		registerDone:              load("register_done"),
 		registerVerified:          load("register_verified"),
 		adminRegistrations:        load("admin_registrations"),
+		adminFetchurlSuggestions:  load("admin_fetchurl_suggestions"),
 		adminManagement:           load("admin_management"),
 		adminRecentChanges:        load("admin_recent_changes"),
 		help:                      load("help"),

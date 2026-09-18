@@ -17,6 +17,11 @@ type AdminFetchurlsData struct {
 	OrgMap  map[int]Organization
 	Orgs    []Organization
 	IsAdmin bool
+	// PendingSuggestionCount (#1333 phase 2) is how many pending_fetch_suggestions
+	// rows this caller may review — client.ListFetchSuggestions already applies
+	// the same admin-vs-org-member filter the review page itself uses, so this
+	// count is exactly "how many are actionable for them", not a raw total.
+	PendingSuggestionCount int
 }
 
 type AdminFetchurlEditData struct {
@@ -68,12 +73,14 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				return nil
 			}, memberOrgSet(r, client, su))
 		}
+		pendingSuggestions, _ := client.ListFetchSuggestions(r.Context(), token)
 		title := i18n.T(r, "admin_fetchurls_title")
 		renderTemplate(w, tmpls.adminFetchurls, tmplData(r, cfg, i18n, title, AdminFetchurlsData{
-			Sources: sources,
-			OrgMap:  orgMap,
-			Orgs:    orgs,
-			IsAdmin: isAdmin,
+			Sources:                sources,
+			OrgMap:                 orgMap,
+			Orgs:                   orgs,
+			IsAdmin:                isAdmin,
+			PendingSuggestionCount: len(pendingSuggestions),
 		}))
 	}
 }

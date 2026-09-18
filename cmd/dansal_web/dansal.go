@@ -3733,6 +3733,40 @@ func (c *DansalClient) RegisterSetPassword(ctx context.Context, pendingID int, v
 	return c.do(ctx, http.MethodPost, "/api/v1/register/password", "", body, nil, http.StatusCreated)
 }
 
+// PendingFetchSuggestion mirrors cmd/dansal's identically-named type — one
+// pending_fetch_suggestions row awaiting admin/org-member review (#1333
+// phase 2).
+type PendingFetchSuggestion struct {
+	ID         int    `json:"id"`
+	Email      string `json:"email"`
+	FeedURL    string `json:"feed_url"`
+	FeedType   string `json:"feed_type"`
+	EventCount int    `json:"event_count"`
+	OrgID      *int   `json:"org_id,omitempty"`
+	OrgName    string `json:"org_name"`
+	IsNewOrg   bool   `json:"is_new_org"`
+	Status     string `json:"status"`
+	CreatedAt  string `json:"created_at"`
+}
+
+// ListFetchSuggestions calls GET /api/v1/fetchurl-suggestions.
+func (c *DansalClient) ListFetchSuggestions(ctx context.Context, token string) ([]PendingFetchSuggestion, error) {
+	var suggestions []PendingFetchSuggestion
+	return suggestions, c.do(ctx, http.MethodGet, "/api/v1/fetchurl-suggestions", token, nil, &suggestions)
+}
+
+// ApproveFetchSuggestion calls POST /api/v1/fetchurl-suggestions/{id}/approve.
+func (c *DansalClient) ApproveFetchSuggestion(ctx context.Context, token string, id int) error {
+	path := fmt.Sprintf("/api/v1/fetchurl-suggestions/%d/approve", id)
+	return c.do(ctx, http.MethodPost, path, token, nil, nil)
+}
+
+// RejectFetchSuggestion calls POST /api/v1/fetchurl-suggestions/{id}/reject.
+func (c *DansalClient) RejectFetchSuggestion(ctx context.Context, token string, id int) error {
+	path := fmt.Sprintf("/api/v1/fetchurl-suggestions/%d/reject", id)
+	return c.do(ctx, http.MethodPost, path, token, nil, nil)
+}
+
 // ListPendingRegistrations calls GET /api/v1/pending-registrations.
 func (c *DansalClient) ListPendingRegistrations(ctx context.Context, token string) ([]PendingRegistration, error) {
 	var regs []PendingRegistration

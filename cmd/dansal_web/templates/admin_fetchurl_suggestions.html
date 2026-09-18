@@ -1,0 +1,63 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_fetchurl_suggestions_title"}}</h1>
+{{with .Data}}
+{{if .Flash}}<div class="alert{{if .FlashIsError}} alert-error{{else}} alert-ok{{end}}">{{$.Strings.T .Flash}}</div>{{end}}
+
+{{if .Suggestions}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "fetch_suggest_email"}}</th>
+      <th>{{$.Strings.T "fetch_suggest_url_label"}}</th>
+      <th>{{$.Strings.T "register_org"}}</th>
+      <th>{{$.Strings.T "admin_events_count"}}</th>
+      <th>{{$.Strings.T "col_date"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Suggestions}}
+  <tr>
+    <td>{{.Email}}</td>
+    <td class="reg-desc"><a href="{{.FeedURL}}" target="_blank" rel="noopener">{{.FeedURL}}</a></td>
+    <td>{{if .IsNewOrg}}{{.OrgName}} <span class="muted">({{$.Strings.T "register_tab_new"}})</span>{{else}}{{.OrgName}}{{end}}</td>
+    <td>{{.EventCount}}</td>
+    <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
+    <td style="white-space:nowrap">
+      <form method="post" action="/admin/fetchurl-suggestions/{{.ID}}/approve" style="display:inline">
+        <button type="submit" class="btn-sm btn-ok">{{$.Strings.T "admin_reg_approve"}}</button>
+      </form>
+      <form method="post" action="/admin/fetchurl-suggestions/{{.ID}}/reject" style="display:inline">
+        <button type="submit" class="btn-sm btn-danger">{{$.Strings.T "admin_reg_reject"}}</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="hint">{{$.Strings.T "fetchurl_suggestions_none"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--border-lite)}
+.event-table th{background:var(--bg-subtle);font-weight:600;color:var(--fg-dim)}
+.btn-sm{padding:.2rem .6rem;font-size:.8rem;border:none;border-radius:3px;cursor:pointer}
+.btn-ok{background:#2a7a2a;color:#fff}
+.btn-ok:hover{background:#1e5e1e}
+.btn-danger{background:#a02020;color:#fff}
+.btn-danger:hover{background:#7a1818}
+.hint{color:var(--fg-muted);font-style:italic}
+.reg-desc{max-width:280px;font-size:.85rem;color:var(--fg-2);white-space:pre-wrap;word-break:break-word}
+.muted{color:var(--fg-2,#888);font-weight:400}
+.alert{border-radius:6px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.alert-ok{background:#d4edda;color:#155724}
+.alert-error{background:#fde2e1;color:#c0392b}
+</style>
+{{end}}

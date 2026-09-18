@@ -273,11 +273,11 @@
       <h2>{{$.Strings.T "evt_instructors"}}</h2>
       <div class="evt-instructor-tiles">
         {{range .Instructors}}
-        <div class="evt-instructor-tile">
+        <a href="/instructors/{{.ID}}" class="evt-instructor-tile">
           <span class="evt-instructor-name">{{.Name}}</span>
-          {{if .Website}}<a href="{{.Website}}" class="evt-instructor-link" target="_blank" rel="noopener">↗</a>{{end}}
+          {{if .Website}}<span class="evt-instructor-link">↗</span>{{end}}
           {{with .Bio}}<div class="evt-instructor-bio md-content">{{markdownHTML .}}</div>{{end}}
-        </div>
+        </a>
         {{end}}
       </div>
     </section>
@@ -974,10 +974,11 @@
 .evt-musician-img{width:48px;height:48px;border-radius:50%;object-fit:cover}
 .evt-musician-name{font-weight:600;font-size:.95rem}
 .evt-musician-short{color:var(--fg-faint);font-size:.8rem}
-.evt-instructor-tiles{display:flex;flex-direction:column;gap:.6rem}
-.evt-instructor-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem .9rem}
+.evt-instructor-tiles{display:flex;flex-wrap:wrap;gap:.6rem}
+.evt-instructor-tile{display:inline-flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem .9rem;text-decoration:none;color:var(--heading);transition:background .15s}
+.evt-instructor-tile:hover{background:var(--bg-hover);border-color:var(--link)}
 .evt-instructor-name{font-weight:600;font-size:.95rem;color:var(--heading)}
-.evt-instructor-link{color:var(--link);text-decoration:none;font-size:.85rem;margin-left:.4rem}
+.evt-instructor-link{color:var(--fg-faint);font-size:.8rem;margin-left:.3rem}
 .evt-instructor-bio{font-size:.88rem;color:var(--fg-dim);margin:.25rem 0 0;padding:0}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
 .tt-row{position:relative;display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer}

@@ -31,6 +31,7 @@ dansal helps dance communities organize, publish, and discover events — from b
 - Automatic import from iCal and JSON feeds, attached to organizations
 - Import preview with duplicate detection before confirming
 - Location alias matching so feed venue names auto-resolve across imports
+- Suggest-a-feed wizard for unauthenticated visitors: preview + location mapping up front, admin/org-member approval before the feed goes live
 
 **Organizations & musicians**
 - Organization pages with upcoming/past events and musician rosters

@@ -2701,6 +2701,52 @@ func migrateDB() {
 			)`)
 		}
 	}
+	// v41 (#1333 phase 1): pending_fetch_suggestions — anonymous suggestions of
+	// a new .ics/.json feed to import, awaiting admin/org-member approval.
+	if !applied(41) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS pending_fetch_suggestions (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			token             TEXT NOT NULL UNIQUE,
+			email             TEXT NOT NULL,
+			feed_url          TEXT NOT NULL,
+			feed_type         TEXT NOT NULL,
+			event_count       INTEGER NOT NULL DEFAULT 0,
+			org_id            INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+			org_name          TEXT NOT NULL DEFAULT '',
+			org_actor_name    TEXT NOT NULL DEFAULT '',
+			org_description   TEXT NOT NULL DEFAULT '',
+			org_website       TEXT NOT NULL DEFAULT '',
+			org_contact_email TEXT NOT NULL DEFAULT '',
+			location_mappings TEXT NOT NULL DEFAULT '[]',
+			status            TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
+		mark(41)
+	}
+	// Safety net: ensure pending_fetch_suggestions exists even if v41 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pending_fetch_suggestions'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS pending_fetch_suggestions (
+				id                INTEGER PRIMARY KEY AUTOINCREMENT,
+				token             TEXT NOT NULL UNIQUE,
+				email             TEXT NOT NULL,
+				feed_url          TEXT NOT NULL,
+				feed_type         TEXT NOT NULL,
+				event_count       INTEGER NOT NULL DEFAULT 0,
+				org_id            INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+				org_name          TEXT NOT NULL DEFAULT '',
+				org_actor_name    TEXT NOT NULL DEFAULT '',
+				org_description   TEXT NOT NULL DEFAULT '',
+				org_website       TEXT NOT NULL DEFAULT '',
+				org_contact_email TEXT NOT NULL DEFAULT '',
+				location_mappings TEXT NOT NULL DEFAULT '[]',
+				status            TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+				created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+			)`)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3982,6 +4028,29 @@ func createTables() error {
 		-- to point at and is meaningless, so silently removing it is the correct behaviour.
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
+	-- #1333 (phase 1): an anonymous visitor's suggestion of a new .ics/.json
+	-- feed to import, pending admin/org-member review. org_id is set when the
+	-- submitter picked an existing org; org_name (+ the other org_* fields)
+	-- carries a proposed new org instead, materialised only on approval.
+	-- location_mappings is a JSON array of {feed_name, matched_location_id,
+	-- new_location} — see FetchSuggestLocationMapping in fetchurl_suggest.go.
+	CREATE TABLE IF NOT EXISTS pending_fetch_suggestions (
+		id                INTEGER PRIMARY KEY AUTOINCREMENT,
+		token             TEXT NOT NULL UNIQUE,
+		email             TEXT NOT NULL,
+		feed_url          TEXT NOT NULL,
+		feed_type         TEXT NOT NULL,
+		event_count       INTEGER NOT NULL DEFAULT 0,
+		org_id            INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+		org_name          TEXT NOT NULL DEFAULT '',
+		org_actor_name    TEXT NOT NULL DEFAULT '',
+		org_description   TEXT NOT NULL DEFAULT '',
+		org_website       TEXT NOT NULL DEFAULT '',
+		org_contact_email TEXT NOT NULL DEFAULT '',
+		location_mappings TEXT NOT NULL DEFAULT '[]',
+		status            TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+		created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	CREATE INDEX IF NOT EXISTS idx_events_time_range ON events(start_time, end_time);
 	CREATE INDEX IF NOT EXISTS idx_tokens_user_id                    ON tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_events_series_id                  ON events(series_id);
@@ -4124,6 +4193,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(38)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(39)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(40)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(41)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4150,6 +4220,7 @@ func reloadConfig(path string) {
 	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
+	initFetchSuggestRateLimiters()
 	initRegisterRateLimiter()
 	log.Printf("Config reloaded from %s", path)
 }
@@ -4237,6 +4308,7 @@ func main() {
 	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters()
+	initFetchSuggestRateLimiters()
 	initRegisterRateLimiter()
 	initResendRateLimiter()
 	startAutoDeclineJob()
@@ -4555,6 +4627,10 @@ func main() {
 	// Fetch URL endpoints (protected)
 	smux.Handle("GET /api/v1/fetchurl", auth(getFetchSources))
 	smux.Handle("POST /api/v1/fetchurl", auth(fetchURL))
+	// Anonymous feed suggestion (#1333 phase 1) — no auth, rate-limited like
+	// the anonymous event-suggestion endpoints above.
+	smux.HandleFunc("POST /api/v1/fetchurl/suggest-preview", fetchSuggestPreviewHandler)
+	smux.HandleFunc("POST /api/v1/fetchurl/suggest", fetchSuggestHandler)
 	smux.HandleFunc("OPTIONS /api/v1/fetchurl", optionsSchema[FetchURLRequest])
 	smux.HandleFunc("OPTIONS /api/v1/fetchurl/{id}", optionsSchema[FetchSourcePatchRequest])
 	smux.Handle("POST /api/v1/fetchurl/bulk-delete", auth(bulkDeleteFetchSources))

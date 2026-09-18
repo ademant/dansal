@@ -194,6 +194,12 @@ func main() {
 		r.HandleFunc("GET /events/suggest/manage/{token}", suggestManagePageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/suggest/manage/{token}", suggestManageSubmitHandler(cfg, tmpls, client, i18n))
 
+		// #1333 phase 1: suggest a new .ics/.json feed for dansal to import.
+		r.HandleFunc("GET /feeds/suggest", fetchSuggestPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /feeds/suggest", fetchSuggestPreviewPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /feeds/suggest/submit", fetchSuggestSubmitPageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /feeds/suggest/done", fetchSuggestDoneHandler(cfg, tmpls, i18n))
+
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client))
 		r.HandleFunc("POST /invites/{token}/webauthn/begin", webauthnInviteProxy(cfg, client, "begin"))

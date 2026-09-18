@@ -3515,6 +3515,88 @@ func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, ba
 	return token, nil
 }
 
+// FetchSuggestionLocationMapping mirrors cmd/dansal's identically-named type —
+// the anonymous submitter's own mapping of one unique feed location name to
+// either an existing DB location or manually filled-in details for a new one
+// (#1333 phase 1).
+type FetchSuggestionLocationMapping struct {
+	FeedName          string                      `json:"feed_name"`
+	MatchedLocationID *int                        `json:"matched_location_id,omitempty"`
+	NewLocation       *FetchSuggestionNewLocation `json:"new_location,omitempty"`
+}
+
+// FetchSuggestionNewLocation is the subset of EventLocationRequest's fields
+// the public suggest-a-feed form collects for a feed location with no
+// existing DB match.
+type FetchSuggestionNewLocation struct {
+	Location string `json:"location"`
+	Address  string `json:"address,omitempty"`
+	Zipcode  string `json:"zipcode,omitempty"`
+	Town     string `json:"town,omitempty"`
+	Country  string `json:"country,omitempty"`
+}
+
+// FetchSuggestionReq is the body of DansalClient.SubmitFetchSuggestion,
+// mirroring cmd/dansal's FetchSuggestRequest.
+type FetchSuggestionReq struct {
+	Email            string                           `json:"email"`
+	Phone2           string                           `json:"phone2"`
+	FeedURL          string                           `json:"feed_url"`
+	FeedType         string                           `json:"feed_type,omitempty"`
+	OrgID            *int                             `json:"org_id,omitempty"`
+	OrgName          string                           `json:"org_name,omitempty"`
+	OrgActorName     string                           `json:"org_actor_name,omitempty"`
+	OrgDescription   string                           `json:"org_description,omitempty"`
+	OrgWebsite       string                           `json:"org_website,omitempty"`
+	OrgContactEmail  string                           `json:"org_contact_email,omitempty"`
+	LocationMappings []FetchSuggestionLocationMapping `json:"location_mappings,omitempty"`
+}
+
+// SuggestFetchPreview calls POST /api/v1/fetchurl/suggest-preview with a
+// multipart body — the anonymous, no-org-required dry-run parse backing the
+// public "suggest a feed" form's preview step (#1333 phase 1). Mirrors
+// SuggestEventPreview's shape exactly since both endpoints return the same
+// []EventCreateRequest JSON shape.
+func (c *DansalClient) SuggestFetchPreview(ctx context.Context, body io.Reader, contentType string) ([]PreviewEvent, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/fetchurl/suggest-preview", body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiErr(resp)
+	}
+	var events []PreviewEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// SubmitFetchSuggestion calls POST /api/v1/fetchurl/suggest.
+func (c *DansalClient) SubmitFetchSuggestion(ctx context.Context, req FetchSuggestionReq) error {
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/fetchurl/suggest", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		return apiErr(resp)
+	}
+	return nil
+}
+
 // VerifySuggestion calls GET /api/v1/events/suggest/verify/{token}.
 func (c *DansalClient) VerifySuggestion(ctx context.Context, token string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/events/suggest/verify/"+token, nil)

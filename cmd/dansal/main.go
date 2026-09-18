@@ -2747,6 +2747,19 @@ func migrateDB() {
 			)`)
 		}
 	}
+
+	if !applied(42) {
+		db.Exec("ALTER TABLE events ADD COLUMN reservation_requested INTEGER DEFAULT 0")
+		mark(42)
+	}
+	// Safety net: ensure events.reservation_requested exists even if v42 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='reservation_requested'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN reservation_requested INTEGER DEFAULT 0")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3630,6 +3643,7 @@ func createTables() error {
 		image_ai_generated INTEGER DEFAULT 0,
 		timetable_tracks TEXT,
 		timetable_room_order TEXT,
+		reservation_requested INTEGER DEFAULT 0,
 		-- location_id and organization_id are intentionally nullable (#736):
 		-- events may be created without a venue (online/TBD) or outside any org (admin-only).
 		-- Nullability is enforced at the endpoint level where required (e.g. non-admin batch import

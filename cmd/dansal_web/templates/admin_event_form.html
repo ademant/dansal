@@ -465,6 +465,9 @@
         </tbody>
       </table>
     </div>
+
+    <label class="check-label"><input type="checkbox" name="reservation_requested"{{if .Event.ReservationRequested}} checked{{end}}> {{$.Strings.T "evt_reservation_requested"}}</label>
+    <span class="field-hint">{{$.Strings.T "evt_reservation_requested_hint"}}</span>
   </section>
 
   <!-- Tickets -->

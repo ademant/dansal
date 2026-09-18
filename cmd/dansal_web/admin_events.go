@@ -2989,35 +2989,36 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		saveLocationID := roomIDFromForm(r)
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
-			Title:            strings.TrimSpace(r.FormValue("title")),
-			Description:      strings.TrimSpace(r.FormValue("description")),
-			StartTime:        startTime,
-			EndTime:          endTime,
-			HasBall:          sliceContains(tags, "bal-folk"),
-			HasWorkshop:      sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival:      sliceContains(tags, "festival"),
-			BookingURL:       strings.TrimSpace(r.FormValue("booking_url")),
-			Food:             r.FormValue("food"),
-			Drink:            r.FormValue("drink"),
-			FloorCondition:   r.FormValue("floor_condition"),
-			Attributes:       eventAttrsFromForm(r),
-			ContactName:      strings.TrimSpace(r.FormValue("contact_name")),
-			ContactEmail:     strings.TrimSpace(r.FormValue("contact_email")),
-			IsCancelled:      r.FormValue("is_cancelled") == "on",
-			Availability:     r.FormValue("availability"),
-			TicketsTotal:     ticketsTotal,
-			BookingEnabled:   r.FormValue("booking_enabled") == "on",
-			IsPublished:      r.FormValue("is_published") == "on",
-			Tags:             tags,
-			URL:              strings.TrimSpace(r.FormValue("url")),
-			OrganizationID:   orgID,
-			Pricing:          pricing,
-			Location:         locReq,
-			Musicians:        musicianIDs,
-			Instructors:      instructorIDs,
-			Dances:           danceIDs,
-			LocationID:       saveLocationID,
-			ImageAIGenerated: r.FormValue("image_ai_generated") == "1",
+			Title:                strings.TrimSpace(r.FormValue("title")),
+			Description:          strings.TrimSpace(r.FormValue("description")),
+			StartTime:            startTime,
+			EndTime:              endTime,
+			HasBall:              sliceContains(tags, "bal-folk"),
+			HasWorkshop:          sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
+			HasFestival:          sliceContains(tags, "festival"),
+			BookingURL:           strings.TrimSpace(r.FormValue("booking_url")),
+			Food:                 r.FormValue("food"),
+			Drink:                r.FormValue("drink"),
+			FloorCondition:       r.FormValue("floor_condition"),
+			Attributes:           eventAttrsFromForm(r),
+			ContactName:          strings.TrimSpace(r.FormValue("contact_name")),
+			ContactEmail:         strings.TrimSpace(r.FormValue("contact_email")),
+			IsCancelled:          r.FormValue("is_cancelled") == "on",
+			Availability:         r.FormValue("availability"),
+			TicketsTotal:         ticketsTotal,
+			BookingEnabled:       r.FormValue("booking_enabled") == "on",
+			ReservationRequested: r.FormValue("reservation_requested") == "on",
+			IsPublished:          r.FormValue("is_published") == "on",
+			Tags:                 tags,
+			URL:                  strings.TrimSpace(r.FormValue("url")),
+			OrganizationID:       orgID,
+			Pricing:              pricing,
+			Location:             locReq,
+			Musicians:            musicianIDs,
+			Instructors:          instructorIDs,
+			Dances:               danceIDs,
+			LocationID:           saveLocationID,
+			ImageAIGenerated:     r.FormValue("image_ai_generated") == "1",
 		}
 
 		// Apply template overrides if submitted (suggestion acceptance flow).
@@ -3068,6 +3069,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			event.Availability = req.Availability
 			event.TicketsTotal = req.TicketsTotal
 			event.BookingEnabled = req.BookingEnabled
+			event.ReservationRequested = req.ReservationRequested
 			event.IsPublished = req.IsPublished
 			event.Tags = req.Tags
 			event.URL = req.URL

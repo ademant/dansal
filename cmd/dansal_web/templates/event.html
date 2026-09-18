@@ -639,6 +639,14 @@
     </div>
     {{end}}
 
+    {{/* Reservation notice (#1337) */}}
+    {{if .ReservationRequested}}
+    <div class="sidebar-block">
+      <div class="evt-reservation-notice">{{$.Strings.T "evt_reservation_notice"}}</div>
+      {{with .ContactEmail}}<a href="mailto:{{.}}" class="btn-reservation">{{$.Strings.T "evt_reservation_cta"}}</a>{{end}}
+    </div>
+    {{end}}
+
     {{/* Website */}}
     {{if .URL}}
     <div class="sidebar-block">
@@ -1078,6 +1086,9 @@
 .evt-loc-notes p{margin:.2rem 0}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-booking:hover{background:#0d4a80;color:#fff}
+.evt-reservation-notice{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}
+.btn-reservation{display:block;text-align:center;padding:.45rem 1rem;background:var(--bg-subtle);border:1px solid var(--border-mid);color:var(--link);border-radius:4px;font-size:.88rem;font-weight:600;text-decoration:none;margin-top:.4rem}
+.btn-reservation:hover{background:var(--bg-card);color:var(--link)}
 .booking-section{margin-top:2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem}
 .booking-section h2{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.9rem}
 .booking-details{margin-top:.5rem}

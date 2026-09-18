@@ -896,9 +896,18 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		// is known before doing any other work. A crawler revisiting an
 		// unchanged event list gets a 304 without the orgs/dances/tags
 		// fetches or a template render (#1129).
-		if _, err := client.GetEvents(r.Context(), ""); err == nil {
-			if checkETag(w, r, client.EventsETag()) {
-				return
+		//
+		// EventsETag() is a single global value shared by every visitor, not
+		// personalized per session — so unlike ChangedAt-based conditional
+		// GET elsewhere, it must also skip logged-in sessions (#1338): a
+		// logged-in visitor whose browser holds a cached anonymous "/" under
+		// the same still-current ETag would otherwise get a 304 from the
+		// server itself and keep seeing the logged-out nav avatar.
+		if getSessionUser(r) == nil {
+			if _, err := client.GetEvents(r.Context(), ""); err == nil {
+				if checkETag(w, r, client.EventsETag()) {
+					return
+				}
 			}
 		}
 		var events []Event
@@ -1022,6 +1031,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				changedAt = boardAt
 			}
 			if changedAt > 0 {
+				// #1338: without an explicit Cache-Control, a browser applies
+				// RFC 7234 §4.2.2 heuristic freshness to a Last-Modified-only
+				// response and can reuse it straight from disk on a later
+				// navigation — without ever asking the server — even after
+				// the visitor has since logged in. no-cache still allows
+				// caching (keeping the 304 win for repeat anonymous/crawler
+				// visits) but forces revalidation on every use, so a
+				// subsequent logged-in request always reaches this handler
+				// and hits the su != nil branch above instead of being
+				// served a stale logged-out page from the browser's cache.
+				w.Header().Set("Cache-Control", "no-cache")
 				if checkLastModified(w, r, time.Unix(changedAt, 0)) {
 					return
 				}
@@ -1272,14 +1292,19 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		// Conditional GET (#1129): freshness must cover both the location
 		// row itself and every event shown on the page (a new/changed event
 		// at this location doesn't touch loc.UpdatedAt), so take the max of
-		// both. Public page — no session-user personalization to worry about
-		// here, unlike eventHandler.
+		// both. The page body itself has no session-user personalization,
+		// but base.html's nav avatar does — skip for logged-in sessions like
+		// eventHandler, and see #1338 for why Cache-Control: no-cache is
+		// required alongside Last-Modified even so.
 		if getSessionUser(r) == nil {
 			latest := loc.UpdatedAt
 			for _, ev := range events {
 				if ca := parseChangedAt(ev.ChangedAt); ca > latest {
 					latest = ca
 				}
+			}
+			if latest > 0 {
+				w.Header().Set("Cache-Control", "no-cache")
 			}
 			if latest > 0 && checkLastModified(w, r, time.Unix(latest, 0)) {
 				return

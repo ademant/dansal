@@ -253,6 +253,7 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if smtpEnabled() {
+		registerURL := buildRegisterLinkURL(r, req.Email, req.OrgID, req.OrgName, req.OrgActorName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail)
 		go func() {
 			msg := "Thank you for suggesting a new event feed! Your submission has been received and is now waiting for review by the site's admins" +
 				func() string {
@@ -260,7 +261,8 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 						return " and the organization's members.\n"
 					}
 					return ".\n"
-				}()
+				}() +
+				fmt.Sprintf("\nWant to manage this organization and its feed yourself? Create an account:\n\n%s\n", registerURL)
 			if _, err := SendEmail(req.Email, "Your feed suggestion", msg, false); err != nil {
 				log.Printf("fetch-suggest: send email: %v", err)
 			}
@@ -269,6 +271,30 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 	go notifyFetchSuggestion(normURL, req.OrgID)
 
 	writeJSONStatus(w, http.StatusAccepted, map[string]string{"token": token})
+}
+
+// buildRegisterLinkURL builds a link to dansal_web's /register prefilled
+// with the org choice + email just submitted (#1336), so the confirmation
+// email can offer "create an account to manage this" immediately -- for both
+// the existing-org and new-org cases, per the accepted tradeoff that a
+// new-org suggestion may result in two independently-approved orgs of the
+// same name if both this registration and the feed suggestion are approved.
+// Field names mirror dansal_web's registerPageHandler prefill query params.
+func buildRegisterLinkURL(r *http.Request, email string, orgID *int, orgName, orgActorName, orgDescription, orgWebsite, orgContactEmail string) string {
+	v := url.Values{}
+	v.Set("email", email)
+	if orgID != nil {
+		v.Set("reg_type", "join_org")
+		v.Set("org_id", fmt.Sprintf("%d", *orgID))
+	} else {
+		v.Set("reg_type", "new_org")
+		v.Set("org_name", orgName)
+		v.Set("org_actor_name", orgActorName)
+		v.Set("org_description", orgDescription)
+		v.Set("org_website", orgWebsite)
+		v.Set("org_contact_email", orgContactEmail)
+	}
+	return buildBaseURL(r) + "/register?" + v.Encode()
 }
 
 // notifyFetchSuggestion alerts admins (and, when the submitter picked an

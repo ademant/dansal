@@ -40,6 +40,38 @@ type RegisterPageData struct {
 	PendingHasAuthMethod bool   // true = onboarding complete (password set, or passkey bound) -- ready for admin review (#1223)
 	InviteURL            string // set when approved without contact info
 	TelegramAvailable    bool   // true = telegram channel is configured on the API
+
+	// Prefill* fields (#1336): populated from query params when arriving from
+	// an entry point that already knows the org choice, e.g. the "create an
+	// account" link on the feed-suggestion done page/email. Field names mirror
+	// the POST form fields they prefill.
+	PrefillRegType         string
+	PrefillOrgID           int
+	PrefillOrgName         string
+	PrefillOrgActorName    string
+	PrefillOrgDescription  string
+	PrefillOrgWebsite      string
+	PrefillOrgContactEmail string
+	PrefillEmail           string
+}
+
+// readRegisterPrefill reads the optional query-param prefill (#1336) shared
+// by the fresh-form render path. Field names mirror the real POST fields.
+func readRegisterPrefill(r *http.Request) (regType string, orgID int, orgName, orgActorName, orgDesc, orgWebsite, orgContactEmail, email string) {
+	q := r.URL.Query()
+	regType = q.Get("reg_type")
+	if s := q.Get("org_id"); s != "" {
+		if id, err := strconv.Atoi(s); err == nil {
+			orgID = id
+		}
+	}
+	orgName = q.Get("org_name")
+	orgActorName = q.Get("org_actor_name")
+	orgDesc = q.Get("org_description")
+	orgWebsite = q.Get("org_website")
+	orgContactEmail = q.Get("org_contact_email")
+	email = q.Get("email")
+	return
 }
 
 type RegisterDoneData struct {
@@ -109,11 +141,20 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			logHTTPError(w, r, "could not load register data", http.StatusBadGateway)
 			return
 		}
+		regType, prefOrgID, orgName, orgActorName, orgDesc, orgWebsite, orgContactEmail, email := readRegisterPrefill(r)
 		title := i18n.T(r, "register_title")
 		renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-			Orgs:              orgs,
-			FormToken:         tok,
-			TelegramAvailable: info.TelegramChannelAvailable,
+			Orgs:                   orgs,
+			FormToken:              tok,
+			TelegramAvailable:      info.TelegramChannelAvailable,
+			PrefillRegType:         regType,
+			PrefillOrgID:           prefOrgID,
+			PrefillOrgName:         orgName,
+			PrefillOrgActorName:    orgActorName,
+			PrefillOrgDescription:  orgDesc,
+			PrefillOrgWebsite:      orgWebsite,
+			PrefillOrgContactEmail: orgContactEmail,
+			PrefillEmail:           email,
 		}))
 	}
 }

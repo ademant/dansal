@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -340,7 +341,7 @@ func fetchSuggestSubmitPageHandler(cfg *Config, tmpls *Templates, client *Dansal
 			req.LocationMappings = append(req.LocationMappings, mapping)
 		}
 
-		if err := client.SubmitFetchSuggestion(r.Context(), req); err != nil {
+		if err := client.SubmitFetchSuggestion(r.Context(), req, cfg.publicBaseURL()); err != nil {
 			msg := apiErrUserMessage(err)
 			if msg == "" {
 				msg = i18n.T(r, "suggest_error_parse")
@@ -349,13 +350,48 @@ func fetchSuggestSubmitPageHandler(cfg *Config, tmpls *Templates, client *Dansal
 			return
 		}
 
-		http.Redirect(w, r, "/feeds/suggest/done", http.StatusSeeOther)
+		http.Redirect(w, r, "/feeds/suggest/done?"+fetchSuggestAccountValues(fields).Encode(), http.StatusSeeOther)
 	}
+}
+
+// fetchSuggestAccountValues builds the query params carrying the
+// just-submitted email + org choice through to the done page and from there
+// into the "create an account" link to /register (#1336) -- field names
+// mirror /register's own POST fields exactly since both are consumed by
+// readRegisterPrefill.
+func fetchSuggestAccountValues(fields fetchSuggestFormFields) url.Values {
+	v := url.Values{}
+	v.Set("email", fields.Email)
+	if fields.OrgChoice == "new" {
+		v.Set("reg_type", "new_org")
+		v.Set("org_name", fields.OrgName)
+		v.Set("org_actor_name", fields.OrgActorName)
+		v.Set("org_description", fields.OrgDescription)
+		v.Set("org_website", fields.OrgWebsite)
+		v.Set("org_contact_email", fields.OrgContactEmail)
+	} else {
+		v.Set("reg_type", "join_org")
+		if fields.OrgID > 0 {
+			v.Set("org_id", strconv.Itoa(fields.OrgID))
+		}
+	}
+	return v
+}
+
+// FetchSuggestDoneData is the template data for the feed-suggestion
+// thank-you page. RegisterURL is set when the submission carried enough
+// info to offer a prefilled "create an account" link (#1336).
+type FetchSuggestDoneData struct {
+	RegisterURL string
 }
 
 func fetchSuggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := i18n.T(r, "fetch_suggest_done_title")
-		renderTemplate(w, tmpls.suggestFetchDone, tmplData(r, cfg, i18n, title, nil))
+		data := FetchSuggestDoneData{}
+		if r.URL.Query().Get("email") != "" {
+			data.RegisterURL = "/register?" + r.URL.RawQuery
+		}
+		renderTemplate(w, tmpls.suggestFetchDone, tmplData(r, cfg, i18n, title, data))
 	}
 }

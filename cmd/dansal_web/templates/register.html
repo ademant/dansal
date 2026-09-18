@@ -74,15 +74,15 @@
   {{else}}
 
   <div class="tab-bar" style="margin-bottom:1.25rem">
-    <button type="button" class="tab-btn active" data-fn="switchTab" data-args='["join"]'>{{$.Strings.T "register_tab_join"}}</button>
-    <button type="button" class="tab-btn" data-fn="switchTab" data-args='["new"]'>{{$.Strings.T "register_tab_new"}}</button>
+    <button type="button" class="tab-btn{{if ne .PrefillRegType "new_org"}} active{{end}}" data-fn="switchTab" data-args='["join"]'>{{$.Strings.T "register_tab_join"}}</button>
+    <button type="button" class="tab-btn{{if eq .PrefillRegType "new_org"}} active{{end}}" data-fn="switchTab" data-args='["new"]'>{{$.Strings.T "register_tab_new"}}</button>
   </div>
 
   <form method="post" action="/register">
     <input type="hidden" name="_form_token" value="{{.FormToken}}">
     <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
 
-    <input type="hidden" id="field-reg-type" name="reg_type" value="join_org">
+    <input type="hidden" id="field-reg-type" name="reg_type" value="{{if eq .PrefillRegType "new_org"}}new_org{{else}}join_org{{end}}">
 
     {{/* Verification channel */}}
     <div class="form-group">
@@ -95,7 +95,7 @@
     </div>
     <div id="email-field" class="form-group">
       <label for="field-email">{{$.Strings.T "register_email"}}</label>
-      <input type="email" id="field-email" name="email" autocomplete="email" class="form-input" placeholder="folkinneustadt@havefun.dance">
+      <input type="email" id="field-email" name="email" autocomplete="email" class="form-input" placeholder="folkinneustadt@havefun.dance" value="{{.PrefillEmail}}">
       <p class="form-hint">{{$.Strings.T "register_email_hint"}}</p>
     </div>
     <div id="channel-address-field" hidden class="form-group">
@@ -113,39 +113,39 @@
     </div>
 
     {{/* join_org fields */}}
-    <div id="join-fields">
+    <div id="join-fields"{{if eq .PrefillRegType "new_org"}} hidden{{end}}>
       <div class="form-group">
         <label for="field-org-id">{{$.Strings.T "register_org"}}</label>
         <select id="field-org-id" name="org_id" class="form-input">
           <option value="">—</option>
-          {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+          {{range .Orgs}}<option value="{{.ID}}"{{if eq .ID $.Data.PrefillOrgID}} selected{{end}}>{{.Name}}</option>{{end}}
         </select>
         <div id="org-error" hidden class="form-error" role="alert" style="margin-top:.5rem">{{$.Strings.T "register_error_no_org"}}</div>
       </div>
     </div>
 
     {{/* new_org fields */}}
-    <div id="new-fields" hidden>
+    <div id="new-fields"{{if ne .PrefillRegType "new_org"}} hidden{{end}}>
       <div class="form-group">
         <label for="field-org-name">{{$.Strings.T "register_org_name"}}</label>
-        <input type="text" id="field-org-name" name="org_name" class="form-input">
+        <input type="text" id="field-org-name" name="org_name" class="form-input" value="{{.PrefillOrgName}}">
       </div>
       <div class="form-group">
         <label for="field-org-actor-name">{{$.Strings.T "register_org_actor_name"}}</label>
-        <input type="text" id="field-org-actor-name" name="org_actor_name" class="form-input" pattern="[a-zA-Z0-9_-]+" title="Letters, digits, underscores and hyphens only">
+        <input type="text" id="field-org-actor-name" name="org_actor_name" class="form-input" pattern="[a-zA-Z0-9_-]+" title="Letters, digits, underscores and hyphens only" value="{{.PrefillOrgActorName}}">
         <p class="form-hint">{{$.Strings.T "register_org_actor_name_hint"}}</p>
       </div>
       <div class="form-group">
         <label for="field-org-desc">{{$.Strings.T "register_org_desc"}}</label>
-        <textarea id="field-org-desc" name="org_description" class="form-input" rows="3"></textarea>
+        <textarea id="field-org-desc" name="org_description" class="form-input" rows="3">{{.PrefillOrgDescription}}</textarea>
       </div>
       <div class="form-group">
         <label for="field-org-website">{{$.Strings.T "register_org_website"}}</label>
-        <input type="url" id="field-org-website" name="org_website" class="form-input">
+        <input type="url" id="field-org-website" name="org_website" class="form-input" value="{{.PrefillOrgWebsite}}">
       </div>
       <div class="form-group">
         <label for="field-org-email">{{$.Strings.T "register_org_email"}}</label>
-        <input type="email" id="field-org-email" name="org_contact_email" class="form-input">
+        <input type="email" id="field-org-email" name="org_contact_email" class="form-input" value="{{.PrefillOrgContactEmail}}">
       </div>
     </div>
 

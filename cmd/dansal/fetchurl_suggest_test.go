@@ -135,3 +135,28 @@ func TestFetchSuggestHandlerRejectsInvalidEmail(t *testing.T) {
 		t.Fatalf("invalid-email submission was persisted: %d rows", n)
 	}
 }
+
+// TestBuildRegisterLinkURL locks in the query params the confirmation email's
+// "create an account" link carries (#1336) -- they must match the field names
+// dansal_web's registerPageHandler prefill (readRegisterPrefill) expects.
+func TestBuildRegisterLinkURL(t *testing.T) {
+	oldCfg := config
+	config = &Config{}
+	t.Cleanup(func() { config = oldCfg })
+
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/fetchurl/suggest", nil)
+	r.Header.Set("X-Base-URL", "https://web.example.com")
+
+	existingOrgID := 42
+	got := buildRegisterLinkURL(r, "join@example.com", &existingOrgID, "", "", "", "", "")
+	want := "https://web.example.com/register?email=join%40example.com&org_id=42&reg_type=join_org"
+	if got != want {
+		t.Fatalf("join_org link:\n got=%s\nwant=%s", got, want)
+	}
+
+	got = buildRegisterLinkURL(r, "new@example.com", nil, "New Org", "neworg", "desc", "https://neworg.example", "contact@example.com")
+	want = "https://web.example.com/register?email=new%40example.com&org_actor_name=neworg&org_contact_email=contact%40example.com&org_description=desc&org_name=New+Org&org_website=https%3A%2F%2Fneworg.example&reg_type=new_org"
+	if got != want {
+		t.Fatalf("new_org link:\n got=%s\nwant=%s", got, want)
+	}
+}

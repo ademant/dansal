@@ -5,6 +5,9 @@
     <p class="suggest-done-icon">✉</p>
     <h2>{{.Strings.T "fetch_suggest_done_title"}}</h2>
     <p>{{.Strings.T "fetch_suggest_done_body"}}</p>
+    {{with .Data.RegisterURL}}
+    <p class="suggest-done-account"><a href="{{.}}">{{$.Strings.T "fetch_suggest_done_create_account"}}</a></p>
+    {{end}}
     <a href="/">{{.Strings.T "suggest_done_back"}}</a>
   </div>
 </div>
@@ -15,5 +18,6 @@
 .suggest-done-box h2{margin:0 0 .75rem}
 .suggest-done-box p{font-size:1rem;margin-bottom:1.25rem}
 .suggest-done-box a{color:inherit;font-weight:600}
+.suggest-done-account{font-size:.9rem}
 </style>
 {{end}}

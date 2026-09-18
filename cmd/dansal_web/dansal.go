@@ -3578,14 +3578,19 @@ func (c *DansalClient) SuggestFetchPreview(ctx context.Context, body io.Reader, 
 	return events, nil
 }
 
-// SubmitFetchSuggestion calls POST /api/v1/fetchurl/suggest.
-func (c *DansalClient) SubmitFetchSuggestion(ctx context.Context, req FetchSuggestionReq) error {
+// SubmitFetchSuggestion calls POST /api/v1/fetchurl/suggest. baseURL is
+// forwarded as X-Base-URL (#1336) so the confirmation email's "create an
+// account" link points at dansal_web's own public URL, not the API's.
+func (c *DansalClient) SubmitFetchSuggestion(ctx context.Context, req FetchSuggestionReq, baseURL string) error {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/fetchurl/suggest", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if baseURL != "" {
+		httpReq.Header.Set("X-Base-URL", baseURL)
+	}
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
 		return err

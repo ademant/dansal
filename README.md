@@ -146,6 +146,8 @@ See [Admin Guide](ADMIN_GUIDE.md) for full installation and configuration instru
 
 ## 📐 Architecture
 
+![dansal architecture overview](docs/architecture.svg)
+
 | Component | Binary | Default port |
 |---|---|---|
 | REST API | `dansal` | 8000 |
@@ -154,7 +156,7 @@ See [Admin Guide](ADMIN_GUIDE.md) for full installation and configuration instru
 | Per-instance docs server (serves `wiki/`) | `dansal-doc` | 8070 |
 | Admin CLI | `dansal_admin` | — |
 
-`dansal` is the only component with real data — the other three services are all clients of its REST API (`dansal-webmin` also uses a local Unix socket for privileged admin actions). nginx sits in front of everything as a reverse proxy and TLS terminator; every service binds to `127.0.0.1` only.
+`dansal` is the only component with real data. `dansal-web` and `dansal-webmin` are both clients of its REST API (`dansal-webmin` also uses a local Unix socket for privileged admin actions, and reads/writes `web.db` directly for runtime site settings); `dansal-doc` is fully standalone and never talks to `dansal` at all. nginx sits in front of everything as a reverse proxy and TLS terminator; every service binds to `127.0.0.1` only.
 
 Two SQLite databases: `dansal`'s `calendar.db` (events, locations, organizations, musicians, users — the source of truth) and `dansal-web`'s own `web.db` (ActivityPub state, runtime site settings, caches). Uploaded images (events, organizations, musicians, venues) live under one shared directory tree, separate from `dansal-web`'s own tiny directory for instance branding (logo/banner/favicon).
 

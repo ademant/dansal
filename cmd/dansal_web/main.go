@@ -298,6 +298,7 @@ func main() {
 		r.HandleFunc("GET /add", legacyGancioRedirect("/events/suggest"))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /events-more", eventsMoreHandler(tmpls, i18n, client))
+		r.HandleFunc("GET /events-past", eventsPastHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /dashboard", dashboardHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /search", searchPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))

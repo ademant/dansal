@@ -74,14 +74,21 @@
 
 <hr class="week-divider">
 
-<!-- Table header: search link + week/all toggle + clear filters -->
+<!-- Table header: search link + week/all toggle + add past events -->
 <div class="search-trigger-bar">
   <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
   <div class="tmt" id="tmt">
     <button type="button" class="tmt-btn tmt-active" id="tmt-week">{{$.Strings.T "table_mode_week"}}</button>
     <button type="button" class="tmt-btn" id="tmt-all">{{$.Strings.T "table_mode_all"}}</button>
   </div>
-  <button type="button" id="reset-filters-btn" class="reset-filters-btn">{{$.Strings.T "clear_filters"}}</button>
+  {{/* #1339: only meaningful while viewing the current week (a past week
+       already shows everything unconditionally) -- but stays visible rather
+       than disabled outside that context, since its checked state must
+       survive week navigation either way. */}}
+  <label class="add-past-events-lbl">
+    <input type="checkbox" id="add-past-events-cb">
+    {{$.Strings.T "index_add_past_events"}}
+  </label>
 </div>
 
 <!-- Event table -->
@@ -197,8 +204,7 @@
 .search-trigger-bar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin:1rem 0;flex-wrap:wrap}
 .search-events-btn{padding:.4rem 1rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.92rem;text-decoration:none}
 .search-events-btn:hover{background:var(--link);color:#fff}
-.reset-filters-btn{padding:.4rem 1rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.92rem}
-.reset-filters-btn:hover{background:var(--btn-bg-h)}
+.add-past-events-lbl{display:flex;align-items:center;gap:.35rem;font-size:.88rem;color:var(--fg-2);cursor:pointer;user-select:none}
 .tmt{display:flex;border:1px solid var(--border-mid);border-radius:4px;overflow:hidden}
 .tmt-btn{padding:.35rem .85rem;border:none;border-right:1px solid var(--border-mid);background:var(--btn-bg);color:var(--fg-2);cursor:pointer;font-size:.88rem;line-height:1.4}
 .tmt-btn:last-child{border-right:none}
@@ -257,6 +263,10 @@
 .cal-evt{display:block;background:var(--cal-evt-bg);border:1px solid var(--cal-evt-border);border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem;text-decoration:none;color:var(--heading);font-size:.82rem}
 .cal-evt:hover{background:var(--cal-today);border-color:var(--link)}
 .cal-evt.cal-cancelled{background:var(--badge-danger-bg);border-color:var(--badge-danger-fg);opacity:.75}
+/* #1339: past events stay visible (still clickable) but visually recede,
+   in the weekly grid and the mobile per-day tile list alike. */
+.cal-evt-past{opacity:.5}
+.event-tile.tile-past{opacity:.5}
 .cal-evt.cal-limited{border-left:3px solid #ffc107}
 .cal-evt.cal-sold-out{border-left:3px solid #dc3545}
 .cal-evt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -286,6 +296,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .heat-2{background:var(--heat-2)}
 .heat-3{background:var(--heat-3)}
 .heat-4{background:var(--heat-4);color:#fff!important}
+/* #1339: past days use the same 4-bucket scale, blended toward white so they
+   read as "already happened" at a glance without a separate legend. */
+.heat-past-1{background:color-mix(in srgb, var(--heat-1) 35%, white)}
+.heat-past-2{background:color-mix(in srgb, var(--heat-2) 35%, white)}
+.heat-past-3{background:color-mix(in srgb, var(--heat-3) 35%, white)}
+.heat-past-4{background:color-mix(in srgb, var(--heat-4) 35%, white)}
 .week-mobile{display:none}
 .week-mobile-nav{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .wm-arrow{padding:.25rem .65rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:1.05rem;line-height:1;color:var(--fg)}
@@ -364,6 +380,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // True server-side total (may exceed rows.length: see "allLoaded" below, the
   // initial fetch is capped at 100 events).
   var total = {{.Data.TotalEvents}};
+  // #1339: "Add past events" checkbox — only actually gates anything while
+  // viewing the current week (any other displayed week is by construction
+  // either entirely past or entirely future, so there's nothing to gate);
+  // deliberately never reset by week navigation so its checked state
+  // survives moving away from and back to the current week.
+  var addPastEvents = false;
   var weekOffset = urlToWeekOffset();
   var weekKeys = [];
   // HOME_GROUPS (#1173): the home-page format-selector buttons, derived
@@ -383,6 +405,13 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function todayIso(){ return dateToIso(new Date()); }
   function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // isPastRow (#1339): true once an event has fully ended — a still-ongoing
+  // multi-day event that started before today but ends today or later is
+  // not "past" yet.
+  function isPastRow(r){
+    var e = r.dataset.endDate || r.dataset.date || '';
+    return e !== '' && e < todayIso();
+  }
   // rowFlag reads a row's data-<key> attribute for a HOME_GROUPS key that
   // may itself contain hyphens (a custom instance's own home_group, e.g.
   // "swing-dance") — the DOM camelCases data-swing-dance into
@@ -459,6 +488,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(!allLoaded && weekEndMs > maxLoadedStartMs()){
       ensureLoadedUntil(weekEndMs).then(refilterKeepShown);
     }
+    // #1339: the grid always shows past days grayed out, so make sure
+    // they're actually loaded whenever the displayed week reaches earlier
+    // than what's covered so far.
+    if(pastLoadedFromMs===null || ws.getTime() < pastLoadedFromMs){
+      ensurePastLoadedUntil(ws.getTime()).then(refilterKeepShown);
+    }
     var days=[], keys=[];
     for(var i=0;i<7;i++){
       var d=new Date(ws); d.setDate(d.getDate()+i);
@@ -494,7 +529,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
     function evtCls(r){
       var avail=r.dataset.availability||'';
-      return 'cal-evt'+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
+      return 'cal-evt'+(isPastRow(r)?' cal-evt-past':'')+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
         (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'');
     }
     function feeSym(r){
@@ -580,7 +615,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     days.forEach(function(d,i){
       var isActive = i===currentDayIndex;
       var cls='day-code'+(isActive?' active':'')+((d.getDay()===0||HOLIDAYS.has(keys[i]))?' wt-weekend':'');
-      if(!isActive){ var hc=heatClass(evtCounts[keys[i]]); if(hc) cls+=' '+hc; }
+      if(!isActive){ var hc=heatClassForDay(keys[i], evtCounts[keys[i]]); if(hc) cls+=' '+hc; }
       html += '<span class="'+cls+'" data-day="'+i+'">'+escHtml(fmtWeekday.format(d))+'</span>';
     });
     html += '</div>';
@@ -650,6 +685,13 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(frac<=0.75) return 'heat-3';
     return 'heat-4';
   }
+  // heatClassForDay (#1339): same 4-bucket scale, swapped to the paler
+  // heat-past-N variant for a day that's already over.
+  function heatClassForDay(iso, count){
+    var hc = heatClass(count);
+    if(!hc) return '';
+    return iso < todayIso() ? hc.replace('heat-', 'heat-past-') : hc;
+  }
 
   function renderMiniCal(){
     var lang=document.documentElement.lang||'de';
@@ -670,6 +712,17 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var nextMonthEndMs = new Date(miniCalYear, miniCalMonth+2, 0, 23, 59, 59).getTime();
     if(!allLoaded && nextMonthEndMs > maxLoadedStartMs()){
       ensureLoadedUntil(nextMonthEndMs).then(refilterKeepShown);
+    }
+    // #1339: same on-demand fetch backward, so the heatmap has past-day
+    // counts too. monthStartMs covers the displayed month; the look-behind
+    // fetch (previous month) mirrors the look-ahead above.
+    var monthStartMs = new Date(miniCalYear, miniCalMonth, 1).getTime();
+    if(pastLoadedFromMs===null || monthStartMs < pastLoadedFromMs){
+      ensurePastLoadedUntil(monthStartMs).then(refilterKeepShown);
+    }
+    var prevMonthStartMs = new Date(miniCalYear, miniCalMonth-1, 1).getTime();
+    if(pastLoadedFromMs===null || prevMonthStartMs < pastLoadedFromMs){
+      ensurePastLoadedUntil(prevMonthStartMs).then(refilterKeepShown);
     }
 
     var evtCounts=getEventCounts();
@@ -702,7 +755,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
         var iso=dateToIso(cur);
         var cls=(cur.getMonth()!==miniCalMonth?'mc-other':'')+(iso===today?' mc-today':'');
         if(col===6||HOLIDAYS.has(iso)) cls=(cls?cls+' ':'')+'mc-weekend';
-        var hc=heatClass(evtCounts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
+        var hc=heatClassForDay(iso, evtCounts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
         html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+'</td>';
         cur.setDate(cur.getDate()+1);
       }
@@ -785,7 +838,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       var d=new Date(monday); d.setDate(d.getDate()+i);
       var iso=dateToIso(d);
       var cls=(iso===today?'mc-today':'');
-      var hc=heatClass(counts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
+      var hc=heatClassForDay(iso, counts[iso]); if(hc) cls=(cls?cls+' ':'')+hc;
       html+='<div class="wp-day'+(cls?' '+cls:'')+'">'+d.getDate()+'</div>';
     }
     html+='</div>';
@@ -1028,7 +1081,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // food/drink, accessibility) instead of re-deriving the icon logic here.
     var attrCell=r.querySelector('.col-attr');
     var attrHtml=attrCell?attrCell.innerHTML.trim():'';
-    var tileCls='event-tile'+(spanPos?' tile-span-'+spanPos:'');
+    var tileCls='event-tile'+(spanPos?' tile-span-'+spanPos:'')+(isPastRow(r)?' tile-past':'');
     var titleStyle='font-size:.95rem;font-weight:bold;margin-bottom:.25rem'+(cancelled?';text-decoration:line-through;color:var(--fg-hint)':'');
     return '<a href="'+detailUrl+'" class="'+tileCls+'">'+
       '<div style="'+titleStyle+'">'+(timeStr?'<span style="color:var(--fg-muted);font-weight:600">'+escHtml(timeStr)+'</span> ':'')+escHtml(d.title||'')+'</div>'+
@@ -1043,7 +1096,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var lang=document.documentElement.lang||'de';
     var fmtSep=new Intl.DateTimeFormat(lang,{weekday:'short',day:'numeric',month:'long',year:'numeric'});
     var html='', lastDate=null;
-    visible.slice(0,shown).forEach(function(r){
+    // #1339: tableRows(), not raw `visible' -- visible now includes past
+    // events (loaded on demand) that tableRows() may exclude (e.g. 'all'
+    // mode always stays future-only; week mode gates on the checkbox).
+    tableRows().slice(0,shown).forEach(function(r){
       var d=r.dataset.date;
       if(d && d!==lastDate){
         lastDate=d;
@@ -1118,8 +1174,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function updateMapMarkers(refit){
     if(!map) return;
     clusterGroup.clearLayers();
+    // #1339: same past-visibility rule as tableRows() -- hide past events on
+    // the map for the current week unless the checkbox is on; any other
+    // displayed week always shows everything.
+    function pastHidden(r){ return weekOffset===0 && !addPastEvents && isPastRow(r); }
     var visIds={};
-    visible.forEach(function(r){ visIds[parseInt(r.dataset.id)]=true; });
+    visible.forEach(function(r){ if(!pastHidden(r)) visIds[parseInt(r.dataset.id)]=true; });
     var weekSet={};
     weekKeys.forEach(function(k){ weekSet[k]=true; });
     var layers=[];
@@ -1127,6 +1187,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var weekStart=weekDates[0], weekEnd=weekDates[weekDates.length-1];
     var weekTotal=0;
     visible.forEach(function(r){
+      if(pastHidden(r)) return;
       var s=r.dataset.date||'', e=r.dataset.endDate||s;
       if(s<=weekEnd && e>=weekStart) weekTotal++;
     });
@@ -1234,6 +1295,53 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     return loadMorePromise;
   }
 
+  // ── Loading past events on demand (#1339) ───────────────────────────────────
+  // Mirrors ensureLoadedUntil above, but backward: once set, pastLoadedFromMs
+  // guarantees every event with start_time in [pastLoadedFromMs, now) has
+  // already been fetched and merged into `rows`. null means nothing past has
+  // been loaded yet. Unlike the future side, each call is a single bounded
+  // range query (the API already supports start_time_after/before +
+  // include_past directly) rather than a multi-batch loop -- the caller only
+  // ever asks for "the rest of this displayed week/month", never an
+  // open-ended target, so one request per call is enough.
+  var pastLoadedFromMs = null;
+  var pastLoadPromise = null;
+
+  function ensurePastLoadedUntil(targetMs){
+    function step(){
+      var upper = pastLoadedFromMs===null ? Date.now() : pastLoadedFromMs;
+      if(targetMs >= upper) return Promise.resolve();
+      var url = '/events-past?start='+Math.floor(targetMs/1000)+'&end='+Math.floor(upper/1000);
+      return fetch(url, {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(data.rows_html){
+            // afterbegin, not beforeend: past rows must land before every
+            // already-loaded (future, or earlier-fetched past) row to keep
+            // the whole tbody in ascending start_time order, which
+            // maxLoadedStartMs() above relies on.
+            document.getElementById('event-tbody').insertAdjacentHTML('afterbegin', data.rows_html);
+            rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
+          }
+          (data.geo||[]).forEach(function(e){
+            if(geoById[e.id]) return;
+            geoById[e.id] = {lat:e.lat, lng:e.lng};
+            eventsGeo.push(e);
+            if(!allMarkers[e.id] && window.L){
+              var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
+              m.bindPopup(buildPopup(e),{maxWidth:300});
+              allMarkers[e.id] = m;
+            }
+          });
+          pastLoadedFromMs = targetMs;
+          dayCountsCache = null;
+        })
+        .catch(function(){ pastLoadedFromMs = targetMs; }); // don't retry a failed window forever
+    }
+    pastLoadPromise = pastLoadPromise ? pastLoadPromise.then(step) : step();
+    return pastLoadPromise;
+  }
+
   // ── Type selector ─────────────────────────────────────────────────────────
   document.querySelectorAll('.type-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
@@ -1264,15 +1372,27 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   // Returns the rows to display in the table: all visible in 'all' mode,
   // only those overlapping the current week in 'week' mode.
+  //
+  // #1339: 'all' mode stays future-only regardless -- its pagination/total
+  // count come from the server's future-only total (client.EventsTotal()),
+  // so mixing in past rows there would desync the "X of Y" display. In week
+  // mode, past events only show for the *current* week when the "Add past
+  // events" checkbox is on; any other displayed week is by construction
+  // either entirely past or entirely future, so it always shows everything
+  // that overlaps it.
   function tableRows(){
-    if(tableMode !== 'week') return visible;
+    if(tableMode !== 'week') return visible.filter(function(r){ return !isPastRow(r); });
     var ws = weekKeys.length ? weekKeys[0] : '';
     var we = weekKeys.length ? weekKeys[weekKeys.length-1] : '';
-    return visible.filter(function(r){
+    var base = visible.filter(function(r){
       var s = r.dataset.date || '';
       var e = r.dataset.endDate || s;
       return s <= we && e >= ws;
     });
+    if(weekOffset === 0 && !addPastEvents){
+      base = base.filter(function(r){ return !isPastRow(r); });
+    }
+    return base;
   }
 
   // weekHasEvents reports whether any already-loaded row falls within the
@@ -1361,7 +1481,13 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     renderAll();
   }
 
-  document.getElementById('reset-filters-btn').addEventListener('click', clear);
+  // #1339: only meaningful for the current week (see tableRows()), but the
+  // checked state itself is never reset by week navigation.
+  document.getElementById('add-past-events-cb').addEventListener('change', function(){
+    addPastEvents = this.checked;
+    shown = 0;
+    renderAll();
+  });
 
   // Insert a date-separator row before the first visible row of each new
   // date. Walks the table's actual DOM row order (not the `visible` array),

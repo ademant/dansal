@@ -224,6 +224,8 @@ func main() {
 		r.HandleFunc("GET /tiles/token", tileTokenHandler)
 		r.HandleFunc("GET /tiles/{scheme}/{z}/{x}/{yfile}", tileProxyHandler(cfg, client))
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
+		r.HandleFunc("GET /favicon.ico", faviconICOHandler(cfg.ImagesDir, faviconSVG))
+		r.HandleFunc("GET /apple-touch-icon.png", appleTouchIconHandler(cfg.ImagesDir, faviconSVG))
 		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
 		r.HandleFunc("GET /banner.avif", bannerHandler(cfg.ImagesDir, bannerAVIF))
 		r.HandleFunc("GET /relay-icon", func(w http.ResponseWriter, r *http.Request) {
@@ -747,7 +749,7 @@ func panicRecoveryMiddleware(next http.Handler) http.Handler {
 // Mastodon/Fediverse profiles (#1148). These are the only dansal_web
 // subresources a browser plausibly loads via a cross-origin <img>/<link>.
 var corpAllowCrossOrigin = []string{
-	"/favicon.svg", "/logo.avif", "/banner.avif",
+	"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/logo.avif", "/banner.avif",
 	"/relay-icon", "/relay-banner", "/ai-badge",
 }
 

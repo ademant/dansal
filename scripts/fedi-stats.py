@@ -12,7 +12,7 @@ Usage:
              delivery counts.  Defaults to /var/lib/dansal-web/prod/web.db.
 
 Reads:
-    /var/log/nginx/access.log (and .1/.2.gz) — AP endpoint traffic.
+    /var/log/nginx/balfolk.jetzt.access.log (override: DANSAL_NGINX_LOG; and .1/.2.gz) — AP endpoint traffic.
     web.db — follower gains and event delivery counts for the target day.
 """
 
@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 # Nginx log parser (same format as bot-stats.py)
 # ---------------------------------------------------------------------------
 LOG_RE = re.compile(
-    r'^\[(?P<time>[^\]]+)\] '
+    r'^(?:\S+ - )?\[(?P<time>[^\]]+)\] '
     r'"(?P<request>[^"]*)" '
     r'(?P<status>\d{3}) '
     r'(?P<bytes>\d+) '
@@ -120,8 +120,10 @@ def parse_date_from_time(time_str: str) -> date | None:
 
 def nginx_log_files() -> list[str]:
     import os
-    candidates = ["/var/log/nginx/access.log", "/var/log/nginx/access.log.1"]
-    gz = "/var/log/nginx/access.log.2.gz"
+    # Per-instance log (ed341c3); dansal_main format, see LOG_RE.
+    base = os.environ.get("DANSAL_NGINX_LOG", "/var/log/nginx/balfolk.jetzt.access.log")
+    candidates = [base, base + ".1"]
+    gz = base + ".2.gz"
     if os.path.exists(gz):
         candidates.append(gz)
     return candidates

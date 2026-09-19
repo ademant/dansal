@@ -9,7 +9,7 @@ Usage:
     --store writes the aggregated rows into a SQLite file for dashboard use.
 
 Reads:
-    /var/log/nginx/access.log (and .1 if the target date falls in the
+    /var/log/nginx/balfolk.jetzt.access.log (override: DANSAL_NGINX_LOG; and .1 if the target date falls in the
     previous rotation) for server_name balfolk.jetzt (dansal-prod).
     journalctl -u dansal@prod   for the target day.
     journalctl -u dansal-web@prod for the target day.
@@ -75,7 +75,7 @@ CATEGORIES = [
 #         "$http_user_agent" "$http_x_forwarded_for"
 # ---------------------------------------------------------------------------
 LOG_RE = re.compile(
-    r'^\[(?P<time>[^\]]+)\] '
+    r'^(?:\S+ - )?\[(?P<time>[^\]]+)\] '
     r'"(?P<request>[^"]*)" '
     r'(?P<status>\d{3}) '
     r'(?P<bytes>\d+) '
@@ -122,9 +122,11 @@ def open_log(path: str):
 def nginx_log_files() -> list[str]:
     """Return candidate nginx log files in read order (newest first)."""
     import os
-    candidates = ["/var/log/nginx/access.log", "/var/log/nginx/access.log.1"]
+    # Per-instance log (ed341c3); dansal_main format, see LOG_RE.
+    base = os.environ.get("DANSAL_NGINX_LOG", "/var/log/nginx/balfolk.jetzt.access.log")
+    candidates = [base, base + ".1"]
     # include .2.gz if it exists (covers weekends with thin traffic)
-    gz = "/var/log/nginx/access.log.2.gz"
+    gz = base + ".2.gz"
     if os.path.exists(gz):
         candidates.append(gz)
     return candidates

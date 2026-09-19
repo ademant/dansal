@@ -9,7 +9,7 @@ Usage:
     --store writes aggregated rows into a SQLite file (same DB as bot-stats.py).
 
 Reads:
-    /var/log/nginx/access.log (and .1) — human requests only (bots filtered).
+    /var/log/nginx/balfolk.jetzt.access.log (override: DANSAL_NGINX_LOG; and .1) — human requests only (bots filtered).
 
 Note: nginx log_format omits $remote_addr, so per-visitor session tracking is
 impossible. Referrer-based attribution is the best available signal.
@@ -80,7 +80,7 @@ SEARCH_ENGINES = {
 # Nginx log parser
 # ---------------------------------------------------------------------------
 LOG_RE = re.compile(
-    r'^\[(?P<time>[^\]]+)\] '
+    r'^(?:\S+ - )?\[(?P<time>[^\]]+)\] '
     r'"(?P<request>[^"]*)" '
     r'(?P<status>\d{3}) '
     r'(?P<bytes>\d+) '
@@ -131,8 +131,10 @@ def classify_referrer(ref: str) -> str:
 
 def nginx_log_files() -> list[str]:
     import os
-    candidates = ["/var/log/nginx/access.log", "/var/log/nginx/access.log.1"]
-    gz = "/var/log/nginx/access.log.2.gz"
+    # Per-instance log (ed341c3); dansal_main format, see LOG_RE.
+    base = os.environ.get("DANSAL_NGINX_LOG", "/var/log/nginx/balfolk.jetzt.access.log")
+    candidates = [base, base + ".1"]
+    gz = base + ".2.gz"
     if os.path.exists(gz):
         candidates.append(gz)
     return candidates

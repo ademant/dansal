@@ -74,6 +74,18 @@ export function createUser(email: string, password: string, role: string): numbe
   }
 }
 
+// Deletes a user (dansal_admin delete-user); a no-op if it doesn't exist.
+// Lets a spec start from a known-clean fixture account — e.g. auth-totp.spec.ts
+// wipes its dedicated user first so an earlier interrupted run that left
+// TOTP enabled (no cleanup ran) can't lock the next run out at loginViaApi.
+export function deleteUser(email: string): void {
+  try {
+    cli(`delete-user --email ${email}`);
+  } catch (e) {
+    if (!String(e).includes("not found")) throw e;
+  }
+}
+
 // Adds an existing user to an org (dansal_admin add-member), the same
 // membership a real org invite/registration would grant — used by specs
 // exercising org-member-scoped approval flows (e.g. feed-suggestion
@@ -178,6 +190,28 @@ export async function getTokenFromCookie(page: Page): Promise<string> {
   const cookies = await page.context().cookies();
   const tok = cookies.find((c) => c.name === "dsw_token");
   return tok?.value ?? "";
+}
+
+// Opens the admin events list narrowed to the day around one event.
+// /admin/events?include_past=1 alone returns the whole table sorted
+// oldest-first, capped at 1000 rows (apiListLimit) — and the shared dev DB
+// keeps accumulating fixture events across runs, so past ~1000 the newest
+// (i.e. freshly created) events silently fall off the end and their
+// tr[data-evt-id] row never renders (#1348). Bounding by date keeps the
+// row inside the window no matter how large the table grows. The +/-1 day
+// margin sidesteps UTC-vs-local day-boundary questions.
+export async function gotoAdminEventsFor(page: Page, eventId: number): Promise<void> {
+  const token = await getTokenFromCookie(page);
+  const resp = await page.request.fetch(`${API_BASE}/api/v1/events/${eventId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const ev = await resp.json();
+  const start = new Date(ev.start_time).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  await page.goto(
+    `/admin/events?include_past=1&date_from=${iso(start - day)}&date_to=${iso(start + day)}`
+  );
 }
 
 // Exported (not just used internally) so other fixture helpers — e.g.

@@ -1,6 +1,6 @@
 import { test, expect } from "../../helpers/fixtures";
 import { Page } from "@playwright/test";
-import { fullSeed, SeedResult, getTokenFromCookie } from "../../helpers/seed";
+import { fullSeed, SeedResult, getTokenFromCookie, gotoAdminEventsFor } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import {
   randomFutureDate,
@@ -202,7 +202,7 @@ test.describe("Admin: recurring event series lifecycle", () => {
     await expect(page.locator(".series-cadence")).toContainText(cadenceText);
 
     // -- Cancelling one instance doesn't affect the siblings. --
-    await page.goto("/admin/events?include_past=1");
+    await gotoAdminEventsFor(page, ev1.id);
     const cancelForm = page.locator(`tr[data-evt-id="${ev1.id}"] form[action*="/cancel"]`);
     page.once("dialog", (d) => d.accept());
     await cancelForm.locator("button").click();

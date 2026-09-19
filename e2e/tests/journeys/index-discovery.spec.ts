@@ -93,9 +93,17 @@ test.describe("Index page: discovery mechanics", () => {
     // one exact original zoom level (fragile — depends on fitBounds' own
     // math) — asserting it re-groups at *some* zoomed-out level is the
     // robust check.
-    const zoomOut = page.locator(".leaflet-control-zoom-out");
+    //
+    // The map has no zoom buttons: #1299 set zoomControl:false so the
+    // aria-hidden map holds no focusable controls, so drive Leaflet's
+    // scroll-wheel zoom instead (the map itself is IIFE-scoped, not
+    // reachable from page.evaluate).
+    const box = await page.locator("#map-container").boundingBox();
+    if (!box) throw new Error("#map-container has no bounding box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     for (let i = 0; i < 6; i++) {
-      await zoomOut.click();
+      await page.mouse.wheel(0, 240);
+      await page.waitForTimeout(150);
     }
     await page.waitForTimeout(500);
     await expect(page.locator(".marker-cluster").first()).toBeVisible();

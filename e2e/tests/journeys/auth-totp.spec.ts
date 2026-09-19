@@ -20,7 +20,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { TOTP_USER } from "../../fixtures/data";
-import { createUser, loginViaApi } from "../../helpers/seed";
+import { createUser, deleteUser, loginViaApi } from "../../helpers/seed";
 import { freshTOTPCode } from "../../helpers/totp";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
@@ -40,6 +40,10 @@ test("TOTP: enable, log in with a second factor, then disable", async ({ browser
   // CLI --timeout under an unlucky window alignment.
   test.setTimeout(120_000);
 
+  // Start from a fresh account: if a previous run was interrupted before its
+  // disable-TOTP cleanup, the fixture user is still TOTP-enabled and
+  // password-only loginViaApi below would fail with "totp_required" (#1351).
+  deleteUser(TOTP_USER.email);
   createUser(TOTP_USER.email, TOTP_USER.password, "user");
 
   // ── Enable TOTP (ordinary authenticated settings POSTs — real navigation is fine) ──

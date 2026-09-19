@@ -8,6 +8,7 @@ import {
   loginViaApi,
   createUser,
   addOrgMember,
+  gotoAdminEventsFor,
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { VIEWER, randomFutureDate, isoDate, hhmm, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
@@ -148,7 +149,7 @@ test.describe("Admin: event org/location assignment", () => {
     const loc2Id = await createLocation(page, loc2);
 
     // -- Assign to org1 via the /admin/events bulk quick-assign tool. --
-    await page.goto("/admin/events?include_past=1");
+    await gotoAdminEventsFor(page, eventId);
     await page
       .locator(`tr[data-evt-id="${eventId}"] .event-cb`)
       .evaluate((el) => {
@@ -169,7 +170,7 @@ test.describe("Admin: event org/location assignment", () => {
     await expect(page.locator(".event-list").filter({ hasText: title })).toBeVisible();
 
     // -- Assign to loc1 via the same tool (org left untouched). --
-    await page.goto("/admin/events?include_past=1");
+    await gotoAdminEventsFor(page, eventId);
     await page
       .locator(`tr[data-evt-id="${eventId}"] .event-cb`)
       .evaluate((el) => {

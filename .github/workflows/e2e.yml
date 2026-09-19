@@ -45,6 +45,11 @@ jobs:
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
           sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # The suite drives the API directly on loopback (no shared-secret
+          # exemption), so every spec's seed calls share one per-IP bucket;
+          # the packaging default of 100/min is exhausted mid-run (#1345).
+          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &
@@ -111,6 +116,11 @@ jobs:
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
           sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # The suite drives the API directly on loopback (no shared-secret
+          # exemption), so every spec's seed calls share one per-IP bucket;
+          # the packaging default of 100/min is exhausted mid-run (#1345).
+          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &

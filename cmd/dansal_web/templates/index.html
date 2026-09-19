@@ -262,10 +262,14 @@
 .week-table th.wt-weekend.wt-today,.week-table td.wt-weekend.wt-today{background:var(--cal-today)}
 .cal-evt{display:block;background:var(--cal-evt-bg);border:1px solid var(--cal-evt-border);border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem;text-decoration:none;color:var(--heading);font-size:.82rem}
 .cal-evt:hover{background:var(--cal-today);border-color:var(--link)}
-.cal-evt.cal-cancelled{background:var(--badge-danger-bg);border-color:var(--badge-danger-fg);opacity:.75}
+.cal-evt.cal-cancelled{background:var(--badge-danger-bg);border-color:var(--badge-danger-fg)}
 /* #1339: past events stay visible (still clickable) but visually recede,
-   in the weekly grid and the mobile per-day tile list alike. */
-.cal-evt-past{opacity:.5}
+   in the weekly grid and the mobile per-day tile list alike. The grid
+   recedes via muted text + dashed border rather than opacity: halving the
+   opacity dropped title/time/town text to 2-3:1, below WCAG AA. */
+.cal-evt-past{background:transparent;border-style:dashed;color:var(--fg-muted)}
+/* the danger background is tinted, so muted greys fall just under 4.5:1 on it */
+.cal-evt.cal-cancelled small,.cal-evt.cal-cancelled .cal-town,.cal-evt-past.cal-cancelled{color:var(--fg-dim)!important}
 .event-tile.tile-past{opacity:.5}
 .cal-evt.cal-limited{border-left:3px solid #ffc107}
 .cal-evt.cal-sold-out{border-left:3px solid #dc3545}

@@ -41,11 +41,11 @@
   {{$canManage := $.Data.IsAdmin}}
   {{if not $canManage}}{{range $userOrgs}}{{if index $.Data.MyOrgIDs .}}{{$canManage = true}}{{end}}{{end}}{{end}}
   <tr{{if .Disabled}} class="user-disabled-row"{{end}} data-user-row data-user-id="{{$uid}}">
-    {{if $.Data.IsAdmin}}<td class="col-cb cell-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
+    {{if $.Data.IsAdmin}}<td class="col-cb cell-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb" aria-label="{{$.Strings.T "js_select"}}"></td>{{end}}
     <td class="cell-name">{{if .DisplayName}}{{.DisplayName}}{{else if .Email}}{{.Email}}{{else}}<span class="muted">{{$.Strings.T "admin_user_no_name"}}</span>{{end}} <span class="muted user-id-tag">#{{$uid}}</span>{{if .Disabled}} <span class="badge-disabled">disabled</span>{{end}}</td>
     <td class="cell-role" data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
-      <select name="role" class="inline-select" data-stop data-on="change" data-fn="changeUserRole" data-args="{{dargs $uid "@value"}}">
+      <select name="role" class="inline-select" aria-label="{{$.Strings.T "settings_role"}}" data-stop data-on="change" data-fn="changeUserRole" data-args="{{dargs $uid "@value"}}">
         <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
         <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
         <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
@@ -61,7 +61,7 @@
         </span>
       {{end}}
       {{if $canManage}}
-      <select class="inline-select" data-stop data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
+      <select class="inline-select" aria-label="{{$.Strings.T "fetch_org"}}" data-stop data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
         <option value="">+</option>
         {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
       </select>
@@ -94,7 +94,7 @@
         </span>
       {{end}}
       {{if $canManage}}
-      <select class="inline-select" data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
+      <select class="inline-select" aria-label="{{$.Strings.T "fetch_org"}}" data-if-value data-on="change" data-fn="addOrg" data-args="{{dargs $uid "@value"}}">
         <option value="">+</option>
         {{if $.Data.IsAdmin}}{{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{else}}{{range $.Data.MyOrgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
       </select>
@@ -332,7 +332,7 @@
 .invite-create-row input,.invite-create-row select{padding:.3rem .5rem;border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
 .invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
 .invite-link-cell code{word-break:break-all}
-.muted{color:#888;font-size:.85rem}
+.muted{color:var(--fg-muted,#666);font-size:.85rem}
 .btn-warn{background:#e67e00;color:#fff;border:none}
 .btn-warn:hover{background:#c06000}
 .badge-disabled{display:inline-block;background:#f0b429;color:#333;border-radius:3px;padding:.1rem .35rem;font-size:.75rem;font-weight:600;vertical-align:middle}

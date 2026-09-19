@@ -61,7 +61,7 @@
     {{if .Message}}<p class="bgc-message">{{.Message}}</p>{{end}}
     {{if and .ImageURLs (or (eq .Type "lost_item") (eq .Type "found_item"))}}
     <div class="board-item-imgs">
-      {{range .ImageURLs}}<a href="{{.}}" target="_blank" rel="noopener"><img src="{{.}}" class="board-item-img" loading="lazy"></a>{{end}}
+      {{range .ImageURLs}}<a href="{{.}}" target="_blank" rel="noopener"><img src="{{.}}" class="board-item-img" alt="{{$.Strings.T "board_images_title"}}" loading="lazy"></a>{{end}}
     </div>
     {{end}}
     <div class="bgc-event">

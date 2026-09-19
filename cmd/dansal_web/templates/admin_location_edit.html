@@ -473,11 +473,11 @@
   </table>
   </div>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_rooms"}}</p>
+  <p class="empty-note loose">{{$.Strings.T "loc_no_rooms"}}</p>
   {{end}}
   <form method="post" action="/admin/locations/{{.Location.ID}}/rooms/new" class="room-add-form">
     <input type="text" name="name" placeholder="{{$.Strings.T "loc_room_name_placeholder"}}" required class="room-add-input">
-    <select name="floor_condition">
+    <select name="floor_condition" aria-label="{{$.Strings.T "floor_label"}}">
       <option value="">{{$.Strings.T "floor_label"}}…</option>
       <option value="parquet">{{$.Strings.T "floor_parquet"}}</option>
       <option value="stone">{{$.Strings.T "floor_stone"}}</option>
@@ -515,7 +515,7 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">{{$.Strings.T "loc_no_orgs_assigned"}}</p>
+  <p class="empty-note loose">{{$.Strings.T "loc_no_orgs_assigned"}}</p>
   {{end}}
   {{if .AvailableOrgs}}
   <div class="org-ac-wrap">
@@ -646,7 +646,7 @@
 .btn-primary-sm:hover{background:#0d4a80}
 .btn-del{background:#b00020;color:#fff}
 .btn-del:hover{background:#800016}
-.field-hint{font-weight:400;color:#888;font-size:.82rem}
+.field-hint{font-weight:400;color:var(--fg-muted,#666);font-size:.82rem}
 .siteplan-canvas{position:relative;max-width:100%;margin-top:.5rem;border:1px solid var(--border-mid,#ddd);border-radius:6px;overflow:hidden;background:#f4f4f4}
 .siteplan-canvas img{display:block;width:100%;height:auto;pointer-events:none}
 .siteplan-marker{position:absolute;transform:translate(-50%,-50%);background:#1a6eb5;color:#fff;border-radius:12px;padding:.15rem .55rem;font-size:.78rem;white-space:nowrap;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,.3);user-select:none}
@@ -680,7 +680,9 @@
 .md-preview pre code{background:none;padding:0}
 .md-preview a{color:#1a6eb5}
 .md-preview hr{border:none;border-top:1px solid var(--border);margin:.4rem 0}
-.md-preview-empty{color:#aaa;font-style:italic}
+.empty-note{color:var(--fg-muted,#666);font-size:.9rem;margin:.25rem 0}
+.empty-note.loose{margin-bottom:.5rem}
+.md-preview-empty{color:var(--fg-muted,#666);font-style:italic}
 .md-br{margin:.2rem 0!important;height:0!important}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>

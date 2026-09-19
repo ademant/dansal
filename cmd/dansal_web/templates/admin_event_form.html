@@ -507,8 +507,8 @@
       <div class="tt-entry">
         <div class="tt-line1">
           <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="{{.EntryDate}}" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>
-          <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" value="{{.StartTime}}"></span>
-          <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" value="{{.EndTime}}"></span>
+          <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" aria-label="{{$.Strings.T "tt_start"}}" value="{{.StartTime}}"></span>
+          <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" aria-label="{{$.Strings.T "tt_end"}}" value="{{.EndTime}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" value="{{.LocationName}}" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value="{{if $entry.LocationID}}{{derefInt $entry.LocationID}}{{end}}"><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" value="{{.Room}}" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
           <!-- #1234: options populated client-side from the event's own
@@ -516,7 +516,7 @@
                timetable editor), not a fixed 3-value list — see
                _ttPopulateTypeSelect(). data-value carries the entry's
                current type until that runs. -->
-          <select name="tt_type" class="tt-type-sel" data-value="{{.EntryType}}"></select>
+          <select name="tt_type" class="tt-type-sel" aria-label="{{$.Strings.T "col_type"}}" data-value="{{.EntryType}}"></select>
           <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" value="{{.Title}}" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
@@ -530,11 +530,11 @@
       <div class="tt-entry">
         <div class="tt-line1">
           <span class="tt-field tt-date-wrap" hidden><label>{{$.Strings.T "tt_date"}}</label><select name="tt_entry_date" data-value="" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>
-          <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start"></span>
-          <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end"></span>
+          <span class="tt-field"><label>{{$.Strings.T "tt_start"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_start" aria-label="{{$.Strings.T "tt_start"}}"></span>
+          <span class="tt-field"><label>{{$.Strings.T "tt_end"}}</label><input type="time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" name="tt_end" aria-label="{{$.Strings.T "tt_end"}}"></span>
           <div class="tt-loc-wrap"><input type="text" class="tt-loc-input" autocomplete="off" placeholder="{{$.Strings.T "tt_location"}}" data-on="input" data-fn="_ttLocInput" data-args='["@this"]' data-on2="keydown" data-fn2="_ttLocKeydown" data-args2='["@event","@this"]'><input type="hidden" name="tt_loc_id" value=""><ul class="tt-loc-suggest" hidden></ul></div>
           <input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}" class="tt-room-input">
-          <select name="tt_type" class="tt-type-sel" data-value=""></select>
+          <select name="tt_type" class="tt-type-sel" aria-label="{{$.Strings.T "col_type"}}" data-value=""></select>
           <button type="button" class="btn-del-row" data-fn="delRow" data-args='["@this"]' title="Remove">×</button>
         </div>
         <div class="tt-line2"><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" data-on="input" data-fn="growTTTable" data-args='["@this"]'></div>
@@ -851,7 +851,7 @@
   {{else}}
   {{if not .IsNew}}
   <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
-    <select name="series_id" form="evt-form" class="assign-select">
+    <select name="series_id" form="evt-form" class="assign-select" aria-label="{{$.Strings.T "evt_series_select"}}">
       <option value="">— {{$.Strings.T "evt_series_select"}} —</option>
       {{range .Series}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
     </select>
@@ -960,7 +960,7 @@
 .form-section input:focus,.form-section textarea:focus,.form-section select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .field-row{display:flex;gap:.75rem;flex-wrap:wrap}
 .field-row>div{flex:1;min-width:120px}
-.field-hint{font-weight:400;color:#888;font-size:.82rem}
+.field-hint{font-weight:400;color:var(--fg-muted,#666);font-size:.82rem}
 .check-row{display:flex;gap:1.5rem;margin:.5rem 0;flex-wrap:wrap}
 .radio-group{display:flex;flex-direction:column;gap:.35rem;margin:.4rem 0 0}
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
@@ -975,7 +975,7 @@
 .tag-checks{display:flex;flex-wrap:wrap;gap:.4rem .75rem}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
 .drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
-.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:var(--fg-muted,#666);font-size:.9rem}
 .btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
 .btn-sm-secondary:hover{background:#e8e8e8}
 .loc-new-fields{display:flex;flex-direction:column;gap:.1rem}
@@ -993,7 +993,7 @@
 .tt-desc{grid-column:2;grid-row:2/4}
 .tt-desc textarea{height:100%}
 .tt-field{display:flex;flex-direction:column;gap:.1rem}
-.tt-field label{font-size:.72rem;color:#888}
+.tt-field label{font-size:.72rem;color:var(--fg-muted,#666)}
 .tt-line1 .btn-del-row{margin-left:auto;align-self:center}
 .tt-entry input,.tt-entry select,.tt-entry textarea{padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.85rem;color:#555;font-family:inherit;resize:vertical}
 .tt-room-input{width:6rem}
@@ -1080,7 +1080,7 @@
 .md-preview pre code{background:none;padding:0}
 .md-preview a{color:#1a6eb5}
 .md-preview hr{border:none;border-top:1px solid var(--border);margin:.4rem 0}
-.md-preview-empty{color:#aaa;font-style:italic}
+.md-preview-empty{color:var(--fg-muted,#666);font-style:italic}
 .md-br{margin:.2rem 0!important;height:0!important}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>
@@ -2049,11 +2049,11 @@ function addTTRow(){
   entry.innerHTML=
     '<div class="tt-line1">'+
       '<span class="tt-field tt-date-wrap" hidden><label>'+{{$.Strings.T "tt_date" | jsStr}}+'</label><select name="tt_entry_date" data-value="" data-on="change" data-fn="_ttMarkEdited" data-args="[]"></select></span>'+
-      '<span class="tt-field"><label>'+{{$.Strings.T "tt_start" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_start"></span>'+
-      '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end"></span>'+
+      '<span class="tt-field"><label>'+{{$.Strings.T "tt_start" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_start" aria-label="'+{{$.Strings.T "tt_start" | jsStr}}+'"></span>'+
+      '<span class="tt-field"><label>'+{{$.Strings.T "tt_end" | jsStr}}+'</label><input type="time" lang="'+_tl+'" name="tt_end" aria-label="'+{{$.Strings.T "tt_end" | jsStr}}+'"></span>'+
       _buildTTLocWidget()+
       '<input type="text" name="tt_room" class="tt-room-input" placeholder='+{{$.Strings.T "tt_room_placeholder" | jsStr}}+'>'+
-      '<select name="tt_type" class="tt-type-sel" data-value=""></select>'+
+      '<select name="tt_type" class="tt-type-sel" aria-label="'+{{$.Strings.T "col_type" | jsStr}}+'" data-value=""></select>'+
       '<button type="button" class="btn-del-row" data-fn="delRow" data-args=\'["@this"]\' title="Remove">×</button>'+
     '</div>'+
     '<div class="tt-line2"><input type="text" name="tt_title" placeholder='+{{$.Strings.T "tt_title_placeholder" | jsStr}}+' data-on="input" data-fn="growTTTable" data-args=\'["@this"]\'></div>'+

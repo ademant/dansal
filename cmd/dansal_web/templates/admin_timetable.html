@@ -78,8 +78,8 @@
    palette (#1174, see trackColor() below) instead of a fixed class list. */
 .tt-panel{color:#fff}
 .tt-panel .tt-panel-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tt-panel .tt-panel-sub{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
-.tt-panel .tt-panel-time{opacity:.75;font-size:.7rem}
+.tt-panel .tt-panel-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
+.tt-panel .tt-panel-time{font-size:.7rem}
 /* tt-continues: starts here, ends next day — only round top corners */
 .tt-panel.tt-continues{border-radius:5px 5px 0 0}
 /* tt-continued: started previous day, ends here — only round bottom corners */
@@ -180,7 +180,7 @@
   <button type="button" id="tt-next" data-fn="changePage" data-args="[1]">›</button>
 </div>
 
-<div class="tt-editor-scroll">
+<div class="tt-editor-scroll" tabindex="0" role="region" aria-label="{{$.Strings.T "evt_timetable"}}">
   <div class="tt-editor-grid" id="tt-editor-grid"></div>
 </div>
 </div>
@@ -998,7 +998,7 @@ function makeTile(e){
 
   var div = document.createElement('div');
   div.className = 'tt-panel';
-  div.style.background = trackColor(e.entry_type||(_tracks[0]&&_tracks[0].slug));
+  div.style.background = panelBackground(trackColor(e.entry_type||(_tracks[0]&&_tracks[0].slug)));
   div.style.top = startPx+'px'; div.style.height=heightPx+'px';
   div.dataset.cid = e._cid;
 
@@ -1396,6 +1396,21 @@ function ppDifficultyClick(level){
 function trackColor(slug){
   var t = _tracks.find(function(tr){return tr.slug===slug;});
   return t ? colorToHex(t.color) : '#4a7fcb';
+}
+// panelBackground darkens a track color just enough that the panel's white
+// text meets WCAG AA (4.5:1). The track color itself (what the picker shows
+// and what is saved) is left untouched — only the rendered panel shifts, and
+// only for colors that were too light to begin with (e.g. the default blue).
+function _relLum(hex){
+  function ch(i){ var v=parseInt(hex.substr(i,2),16)/255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }
+  return 0.2126*ch(1)+0.7152*ch(3)+0.0722*ch(5);
+}
+function panelBackground(hex){
+  for(var i=0;i<25 && 1.05/(_relLum(hex)+0.05) < 4.5;i++){
+    var c=[1,3,5].map(function(k){ return Math.max(0,Math.round(parseInt(hex.substr(k,2),16)*0.96)); });
+    hex='#'+c.map(function(n){ return ('0'+n.toString(16)).slice(-2); }).join('');
+  }
+  return hex;
 }
 // <input type=color> only accepts #rrggbb; the default palette's colors are
 // rgba(...) values, so translate those (only) to hex — a custom track's own

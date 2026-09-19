@@ -254,7 +254,7 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0">No members. Assign members via user management.</p>
+  <p class="empty-note">No members. Assign members via user management.</p>
   {{end}}
 </fieldset>
 
@@ -279,7 +279,7 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0 .5rem">No locations assigned.</p>
+  <p class="empty-note loose">No locations assigned.</p>
   {{end}}
   {{if .UnassignedLocations}}
   <details style="margin-top:.75rem">
@@ -336,7 +336,7 @@
     </tbody>
   </table>
   {{else}}
-  <p style="color:#888;font-size:.9rem;margin:.25rem 0">No followed actors yet.</p>
+  <p class="empty-note">No followed actors yet.</p>
   {{end}}
   <form method="post" action="/admin/organizations/{{$orgID}}/follow" style="display:flex;gap:.5rem;margin-top:.75rem;align-items:center">
     <input type="text" name="followee" placeholder="@relay@other.example or https://..." style="flex:1;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
@@ -376,12 +376,12 @@
 .edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.25rem}
 .edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
 .edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
-.field-hint{margin:0;font-size:.8rem;color:#777}
+.field-hint{margin:0;font-size:.8rem;color:var(--fg-muted,#666)}
 .image-fieldset,.social-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
 .image-fieldset legend,.social-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
 .drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
-.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:var(--fg-muted,#666);font-size:.9rem}
 .btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
 .btn-sm-secondary:hover{background:#e8e8e8}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
@@ -441,7 +441,9 @@
 .md-preview pre code{background:none;padding:0}
 .md-preview a{color:#1a6eb5}
 .md-preview hr{border:none;border-top:1px solid var(--border);margin:.4rem 0}
-.md-preview-empty{color:#aaa;font-style:italic}
+.empty-note{color:var(--fg-muted,#666);font-size:.9rem;margin:.25rem 0}
+.empty-note.loose{margin-bottom:.5rem}
+.md-preview-empty{color:var(--fg-muted,#666);font-style:italic}
 .md-br{margin:.2rem 0!important;height:0!important}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
 </style>

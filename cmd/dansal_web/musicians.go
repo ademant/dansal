@@ -80,6 +80,10 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			return
 		}
 
+		if checkPublicPage(w, r, i18n, musician.UpdatedAt, allEvents) {
+			return
+		}
+
 		upcoming, past := splitUpcomingPast(allEvents, time.Now())
 
 		includePast := r.URL.Query().Get("include_past") == "1"

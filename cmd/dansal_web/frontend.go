@@ -1021,38 +1021,21 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 		su := getSessionUser(r)
 
-		// Conditional GET (#1129): anonymous visitors and crawlers all see
-		// the same public page, so a 304 is safe there. Logged-in sessions
-		// see personalized controls (canManage, board-session prefill) that
-		// don't move with ChangedAt, so skip it for them — mirrors the
-		// admin-skips-cache-headers convention in getEvents (cmd/dansal).
-		if su == nil {
-			// #1279: event.ChangedAt only tracks edits to the event row
-			// itself — the same page also renders the bulletin board
-			// (contact posts + images), which never touches ChangedAt. Take
-			// the newer of the two so a visitor's cached page gets busted
-			// the moment a new board post/image appears, not just when the
-			// event's own metadata changes.
-			changedAt := parseChangedAt(event.ChangedAt)
-			if boardAt := parseChangedAt(event.BoardUpdatedAt); boardAt > changedAt {
-				changedAt = boardAt
-			}
-			if changedAt > 0 {
-				// #1338: without an explicit Cache-Control, a browser applies
-				// RFC 7234 §4.2.2 heuristic freshness to a Last-Modified-only
-				// response and can reuse it straight from disk on a later
-				// navigation — without ever asking the server — even after
-				// the visitor has since logged in. no-cache still allows
-				// caching (keeping the 304 win for repeat anonymous/crawler
-				// visits) but forces revalidation on every use, so a
-				// subsequent logged-in request always reaches this handler
-				// and hits the su != nil branch above instead of being
-				// served a stale logged-out page from the browser's cache.
-				w.Header().Set("Cache-Control", "no-cache")
-				if checkLastModified(w, r, time.Unix(changedAt, 0)) {
-					return
-				}
-			}
+		// Conditional GET (#1129, #1354): anonymous visitors and crawlers all
+		// see the same public page, so a 304 is safe there; logged-in
+		// sessions skip it (see checkPublicPage).
+		//
+		// #1279: event.ChangedAt only tracks edits to the event row itself
+		// -- the same page also renders the bulletin board (contact posts +
+		// images), which never touches ChangedAt. Take the newer of the two
+		// so a visitor's cached page gets busted the moment a new board
+		// post/image appears, not just when the event's own metadata changes.
+		changedAt := parseChangedAt(event.ChangedAt)
+		if boardAt := parseChangedAt(event.BoardUpdatedAt); boardAt > changedAt {
+			changedAt = boardAt
+		}
+		if checkPublicPage(w, r, i18n, changedAt, nil) {
+			return
 		}
 
 		epd := loadEventPageData(r, client, event, su)
@@ -1296,26 +1279,11 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
 		}
 
-		// Conditional GET (#1129): freshness must cover both the location
-		// row itself and every event shown on the page (a new/changed event
-		// at this location doesn't touch loc.UpdatedAt), so take the max of
-		// both. The page body itself has no session-user personalization,
-		// but base.html's nav avatar does — skip for logged-in sessions like
-		// eventHandler, and see #1338 for why Cache-Control: no-cache is
-		// required alongside Last-Modified even so.
-		if getSessionUser(r) == nil {
-			latest := loc.UpdatedAt
-			for _, ev := range events {
-				if ca := parseChangedAt(ev.ChangedAt); ca > latest {
-					latest = ca
-				}
-			}
-			if latest > 0 {
-				w.Header().Set("Cache-Control", "no-cache")
-			}
-			if latest > 0 && checkLastModified(w, r, time.Unix(latest, 0)) {
-				return
-			}
+		// Conditional GET (#1129, #1354): freshness must cover both the
+		// location row itself and every event shown on the page (a
+		// new/changed event at this location doesn't touch loc.UpdatedAt).
+		if checkPublicPage(w, r, i18n, loc.UpdatedAt, events) {
+			return
 		}
 
 		title := loc.ShortName

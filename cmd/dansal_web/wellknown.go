@@ -86,6 +86,22 @@ Contact the instance administrator for privacy inquiries.
 	}
 }
 
+// robotsDisallowBlock lists paths crawlers only waste requests on (#1353):
+// the JS lazy-load endpoints, search results/geocoding, the map tile proxy,
+// the login page, the POST-only board form URL, and per-event .ics
+// downloads (the /feed/ endpoints stay crawlable). Wildcards and "$" are
+// honoured by Google, Bing and the major AI crawlers; /events/N pages, the
+// sitemap and /feed/ stay allowed.
+const robotsDisallowBlock = "Disallow: /admin/\n" +
+	"Disallow: /api/\n" +
+	"Disallow: /events-more\n" +
+	"Disallow: /events-past\n" +
+	"Disallow: /search/\n" +
+	"Disallow: /tiles/\n" +
+	"Disallow: /login\n" +
+	"Disallow: /events/*/board\n" +
+	"Disallow: /events/*.ics$\n\n"
+
 // robotsTxtHandler serves /robots.txt.
 //
 // #1297: previously also emitted "Content-Signal: search=yes, ai-train=yes,
@@ -103,7 +119,7 @@ func robotsTxtHandler(cfg *Config) http.HandlerFunc {
 		base := cfg.publicBaseURL()
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nDisallow: /api/\n\nSitemap: %s/sitemap.xml\n", base)
+		fmt.Fprintf(w, "User-agent: *\n%sSitemap: %s/sitemap.xml\n", robotsDisallowBlock, base)
 	}
 }
 

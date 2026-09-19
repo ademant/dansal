@@ -73,3 +73,87 @@ func TestCheckLastModified(t *testing.T) {
 		}
 	})
 }
+
+func TestEtagMatches(t *testing.T) {
+	for _, c := range []struct {
+		inm, etag string
+		want      bool
+	}{
+		{`"a"`, `"a"`, true},
+		{`W/"a"`, `"a"`, true}, // nginx compression weakens the ETag
+		{`"a"`, `W/"a"`, true},
+		{`"x", W/"a"`, `"a"`, true},
+		{`*`, `"a"`, true},
+		{`"b"`, `"a"`, false},
+		{``, `"a"`, false},
+		{`"a"`, ``, false},
+	} {
+		if got := etagMatches(c.inm, c.etag); got != c.want {
+			t.Errorf("etagMatches(%q, %q) = %v, want %v", c.inm, c.etag, got, c.want)
+		}
+	}
+}
+
+func TestCheckETagWeakFromCompressedClient(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("If-None-Match", `W/"abc"`)
+	if !checkETag(w, r, `"abc"`) || w.Code != http.StatusNotModified {
+		t.Fatalf("weak If-None-Match must match: code=%d", w.Code)
+	}
+}
+
+func TestCheckPublicPage(t *testing.T) {
+	i18n := loadI18n("")
+	get := func(lang, inm string) (*httptest.ResponseRecorder, bool) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/musicians/1", nil)
+		if lang != "" {
+			r.AddCookie(&http.Cookie{Name: cookieLang, Value: lang})
+		}
+		if inm != "" {
+			r.Header.Set("If-None-Match", inm)
+		}
+		return w, checkPublicPage(w, r, i18n, 1_700_000_000, nil)
+	}
+
+	w, hit := get("de", "")
+	if hit {
+		t.Fatal("first request must not be a 304")
+	}
+	etag := w.Header().Get("ETag")
+	if etag == "" || w.Header().Get("Last-Modified") == "" || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("headers: etag=%q lm=%q cc=%q", etag, w.Header().Get("Last-Modified"), w.Header().Get("Cache-Control"))
+	}
+	if w2, hit := get("de", etag); !hit || w2.Code != http.StatusNotModified {
+		t.Fatalf("same language + matching ETag must 304 (code=%d)", w2.Code)
+	}
+	if w2, hit := get("de", "W/"+etag); !hit || w2.Code != http.StatusNotModified {
+		t.Fatalf("weak validator from a compressed client must 304 (code=%d)", w2.Code)
+	}
+	// Switching language must not be answered from the old language's cache.
+	if _, hit := get("en", etag); hit {
+		t.Fatal("a different language must not 304 against another language's ETag")
+	}
+}
+
+func TestCheckPublicPageEndedEventMovesLastModified(t *testing.T) {
+	i18n := loadI18n("")
+	ended := time.Now().Add(-time.Hour).UTC()
+	events := []Event{{EndTime: ended.Format(time.RFC3339)}}
+	w := httptest.NewRecorder()
+	checkPublicPage(w, httptest.NewRequest(http.MethodGet, "/", nil), i18n, 1_000, events)
+	lm, err := http.ParseTime(w.Header().Get("Last-Modified"))
+	if err != nil || lm.Unix() != ended.Unix() {
+		t.Fatalf("Last-Modified = %v (%v), want the ended event's end time %v", lm, err, ended)
+	}
+}
+
+func TestCheckPublicPageSkipsLoggedIn(t *testing.T) {
+	i18n := loadI18n("")
+	w := httptest.NewRecorder()
+	r := withSessionUser(httptest.NewRequest(http.MethodGet, "/", nil), &SessionUser{ID: 1})
+	if checkPublicPage(w, r, i18n, 1_700_000_000, nil) || w.Header().Get("ETag") != "" {
+		t.Fatal("logged-in sessions must skip conditional GET entirely")
+	}
+}

@@ -74,6 +74,15 @@ export function createUser(email: string, password: string, role: string): numbe
   }
 }
 
+// Adds an existing user to an org (dansal_admin add-member), the same
+// membership a real org invite/registration would grant — used by specs
+// exercising org-member-scoped approval flows (e.g. feed-suggestion
+// approval, suggest-feed.spec.ts) that need a non-admin member without
+// going through the full invite/registration UI just to seed one.
+export function addOrgMember(orgId: number, email: string): void {
+  cli(`add-member --org-id ${orgId} --email ${email}`);
+}
+
 export interface SeedResult {
   adminId: number;
   editorId: number;

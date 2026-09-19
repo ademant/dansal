@@ -6,6 +6,8 @@ import {
   getTokenFromCookie,
   apiPost,
   loginViaApi,
+  createUser,
+  addOrgMember,
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { VIEWER, randomFutureDate, isoDate, hhmm, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
@@ -51,7 +53,11 @@ async function createMinimalEvent(page: Page, title: string): Promise<number> {
 async function createOrg(page: Page, name: string): Promise<number> {
   await page.goto("/admin/organizations/new");
   await page.fill("#name", name);
-  await page.locator("#save-btn").click();
+  // On the Pixel 7 viewport the submit button can be obstructed mid-retry
+  // (same trap as feed-import.spec.ts's #import-btn) — scroll it into view
+  // and force the click rather than fighting the layout.
+  await page.locator("#save-btn").scrollIntoViewIfNeeded();
+  await page.locator("#save-btn").click({ force: true });
   await page.waitForURL("**/admin/organizations");
   return idByName(page, "/api/v1/organizations", name);
 }
@@ -328,6 +334,75 @@ test.describe("Org membership rules on create/assign (#1273, #1275)", () => {
     await expect(page.locator(".event-list").filter({ hasText: orglessTitle })).toBeVisible();
 
     await viewerContext.close();
+  });
+});
+
+test.describe("New-event org-picker restricted to the caller's own orgs (#1331)", () => {
+  test("a single-org user's new-event form auto-assigns their org; a two-org user sees only their own orgs in the picker, never a foreign one", async ({
+    page,
+    browser,
+  }) => {
+    const adminToken = await getTokenFromCookie(page);
+
+    const soloOrg = unique("E2E Role Solo Org");
+    const soloOrgId = await createOrg(page, soloOrg);
+    const multiOrgA = unique("E2E Role Multi Org A");
+    const multiOrgAId = await createOrg(page, multiOrgA);
+    const multiOrgB = unique("E2E Role Multi Org B");
+    const multiOrgBId = await createOrg(page, multiOrgB);
+    // Never assigned to either test user — must never appear in either
+    // user's org-picker-table.
+    const foreignOrg = unique("E2E Role Foreign Org");
+    await createOrg(page, foreignOrg);
+
+    const soloEmail = `e2e-role-solo-${Date.now()}@example.com`;
+    const soloPassword = "Bq3nWt8kFj5xRv2Y";
+    createUser(soloEmail, soloPassword, "user");
+    addOrgMember(soloOrgId, soloEmail);
+
+    const multiEmail = `e2e-role-multi-${Date.now()}@example.com`;
+    const multiPassword = "Cw6mYd1sHq4jTz9K";
+    createUser(multiEmail, multiPassword, "user");
+    addOrgMember(multiOrgAId, multiEmail);
+    addOrgMember(multiOrgBId, multiEmail);
+
+    // -- Solo-org user: adminEventNewPageHandler (#1331) pre-fills the org
+    //    assignment for a non-admin belonging to exactly one org, so the
+    //    chip shows it immediately, not hidden awaiting manual assignment. --
+    const { context: soloCtx, page: soloPage } = await loginViaApi(browser, soloEmail, soloPassword);
+    try {
+      await soloPage.goto("/admin/events/new");
+      await expect(soloPage.locator("#org-assigned-chip")).toBeVisible();
+      await expect(soloPage.locator("#org-assigned-name")).toHaveText(soloOrg);
+    } finally {
+      await soloCtx.close();
+    }
+
+    // -- Two-org user: starts unassigned (2+ orgs, #1331 only auto-assigns
+    //    for exactly one), and the picker table must list both of their own
+    //    orgs but never the foreign one. --
+    const { context: multiCtx, page: multiPage } = await loginViaApi(browser, multiEmail, multiPassword);
+    try {
+      await multiPage.goto("/admin/events/new");
+      await expect(multiPage.locator("#org-assigned-chip")).toBeHidden();
+
+      await multiPage.locator("#org-add-btn").click();
+      const pickerRows = multiPage.locator("#org-picker-table tr");
+      await expect(pickerRows.filter({ hasText: multiOrgA })).toBeVisible();
+      await expect(pickerRows.filter({ hasText: multiOrgB })).toBeVisible();
+      await expect(pickerRows.filter({ hasText: foreignOrg })).toHaveCount(0);
+    } finally {
+      await multiCtx.close();
+    }
+
+    // Sanity: the seeded orgs are real rows an admin can also see (guards
+    // against a false pass from e.g. createOrg silently failing).
+    const adminOrgsResp = await page.request.fetch(
+      `${API_BASE}/api/v1/organizations?limit=1000`,
+      { headers: { Authorization: `Bearer ${adminToken}` } }
+    );
+    const adminOrgs = await adminOrgsResp.json();
+    expect(Array.isArray(adminOrgs) ? adminOrgs.some((o: any) => o.name === soloOrg) : false).toBe(true);
   });
 });
 

@@ -1,0 +1,125 @@
+#!/bin/bash
+# Keeps the ngx_brotli dynamic module in sync with the installed nginx (#1342).
+#
+# A dynamic module only loads into the exact nginx version it was built
+# against, so after every nginx upgrade it has to be rebuilt. Brotli is wired
+# in through glob includes (see install-nginx-brotli), so "disabled" simply
+# means the generated files are absent and nginx runs with gzip only.
+#
+#   ensure  (default) rebuild if the module doesn't match nginx, then enable
+#   check   never builds: enable if it matches, disable if it doesn't
+#           (used by the systemd ExecStartPre so a restart can't fail)
+#   hook    ensure, then restart nginx only if a rebuild happened
+#           (used by the apt Post-Invoke hook)
+set -euo pipefail
+
+MODE="${1:-ensure}"
+NGINX=/usr/sbin/nginx
+MODDIR=/usr/lib/nginx/modules
+STAMP="$MODDIR/.ngx_brotli-built-for"
+CONF=/etc/nginx/brotli
+# Pinned so a rebuild is reproducible; bump deliberately.
+NGX_BROTLI_REF="${NGX_BROTLI_REF:-a71f9312c2deb28875acc7bacfdd5695a111aa53}"
+LOCK=/run/nginx-brotli-ensure.lock
+
+log() { echo "nginx-brotli-ensure: $*"; logger -t nginx-brotli-ensure -- "$*" 2>/dev/null || true; }
+
+installed_version() { "$NGINX" -v 2>&1 | sed -n 's#.*nginx/\([0-9][0-9.]*\).*#\1#p'; }
+
+modules_present() {
+    [ -f "$MODDIR/ngx_http_brotli_filter_module.so" ] && [ -f "$MODDIR/ngx_http_brotli_static_module.so" ]
+}
+
+matches() {
+    [ "$(cat "$STAMP" 2>/dev/null || true)" = "$1" ] && modules_present
+}
+
+enable() {
+    mkdir -p "$CONF/load.d" "$CONF/http.d"
+    cat > "$CONF/load.d/brotli.conf" <<'CONF_EOF'
+load_module modules/ngx_http_brotli_filter_module.so;
+load_module modules/ngx_http_brotli_static_module.so;
+CONF_EOF
+    cat > "$CONF/http.d/brotli.conf" <<'CONF_EOF'
+brotli on;
+brotli_comp_level 5;
+brotli_min_length 256;
+brotli_types text/css text/plain text/xml text/javascript application/javascript application/json application/xml application/rss+xml image/svg+xml application/manifest+json;
+CONF_EOF
+}
+
+disable() { rm -f "$CONF/load.d/brotli.conf" "$CONF/http.d/brotli.conf"; }
+
+# Enable, but never leave nginx with a config that doesn't pass nginx -t.
+enable_checked() {
+    enable
+    if ! "$NGINX" -t >/dev/null 2>&1; then
+        log "nginx -t fails with brotli enabled; falling back to gzip only"
+        disable
+        return 1
+    fi
+}
+
+build() {
+    local ver="$1" work
+    work="$(mktemp -d /var/tmp/ngx-brotli.XXXXXX)"
+    trap 'rm -rf "$work"' RETURN
+    log "building ngx_brotli ${NGX_BROTLI_REF:0:12} for nginx $ver"
+    # Explicit "|| return 1": build runs inside `if !`, where set -e is off.
+    curl -fsSL "https://nginx.org/download/nginx-$ver.tar.gz" -o "$work/nginx.tar.gz" || return 1
+    tar -xzf "$work/nginx.tar.gz" -C "$work" || return 1
+    git clone -q https://github.com/google/ngx_brotli.git "$work/ngx_brotli" || return 1
+    git -C "$work/ngx_brotli" checkout -q "$NGX_BROTLI_REF" || return 1
+    git -C "$work/ngx_brotli" submodule update -q --init --recursive || return 1
+    local args
+    args="$("$NGINX" -V 2>&1 | sed -n 's/^configure arguments: //p')"
+    [ -n "$args" ] || return 1
+    (
+        cd "$work/nginx-$ver"
+        eval ./configure "$args" --add-dynamic-module="$work/ngx_brotli" >"$work/configure.log" 2>&1
+        make modules -j"$(nproc)" >"$work/make.log" 2>&1
+    ) || { tail -20 "$work"/configure.log "$work"/make.log 2>/dev/null; return 1; }
+    for m in filter static; do
+        install -m 644 "$work/nginx-$ver/objs/ngx_http_brotli_${m}_module.so" "$MODDIR/.ngx_http_brotli_${m}_module.so.new" || return 1
+        mv -f "$MODDIR/.ngx_http_brotli_${m}_module.so.new" "$MODDIR/ngx_http_brotli_${m}_module.so" || return 1
+    done
+    echo "$ver" > "$STAMP" || return 1
+}
+
+exec 9>"$LOCK"
+if [ "$MODE" = check ]; then
+    # A build is in progress (the hook restarts nginx itself afterwards);
+    # don't block or second-guess it.
+    flock -n 9 || exit 0
+else
+    flock -w 600 9
+fi
+
+ver="$(installed_version)"
+[ -n "$ver" ] || { log "cannot determine nginx version"; exit 1; }
+
+if matches "$ver"; then
+    enable_checked || exit 1
+    exit 0
+fi
+
+if [ "$MODE" = check ]; then
+    log "module was not built for nginx $ver; brotli disabled until rebuilt"
+    disable
+    exit 0
+fi
+
+# Mismatch: never leave a stale load_module in place while building.
+disable
+if ! build "$ver"; then
+    log "rebuild for nginx $ver failed; nginx keeps running with gzip only"
+    exit 1
+fi
+enable_checked || exit 1
+log "brotli enabled for nginx $ver"
+
+if [ "$MODE" = hook ] && systemctl is-active --quiet nginx; then
+    log "restarting nginx to load the rebuilt module"
+    flock -u 9   # the ExecStartPre check takes this lock too
+    systemctl restart nginx
+fi

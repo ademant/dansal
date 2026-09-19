@@ -1,0 +1,3 @@
+// Rebuild the ngx_brotli module after an nginx upgrade (#1342). Cheap no-op
+// (a version comparison) when nothing changed; never fails the apt run.
+DPkg::Post-Invoke { "if [ -x /usr/local/sbin/nginx-brotli-ensure ]; then /usr/local/sbin/nginx-brotli-ensure hook || true; fi"; };

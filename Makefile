@@ -13,7 +13,7 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
         run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default deploy-full \
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-full \
         wp-zip deploy-wp rollback list
 
 # ROLLBACK_VERSION only takes VERSION into account when it was actually passed
@@ -512,6 +512,12 @@ endif
 
 # Install the global catch-all server block that rejects requests with an
 # unrecognized Host header. One-time, independent of INSTANCE.
+# Install brotli for nginx.org's nginx + auto-rebuild on nginx upgrades (#1342).
+# Usage: sudo make install-nginx-brotli
+install-nginx-brotli:
+	@[ "$(shell id -u)" = "0" ] || { echo "install-nginx-brotli requires root"; exit 1; }
+	scripts/install-nginx-brotli
+
 # Usage: sudo make deploy-nginx-default
 .ONESHELL:
 deploy-nginx-default:

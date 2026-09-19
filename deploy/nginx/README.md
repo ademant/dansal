@@ -723,3 +723,10 @@ Create QUIC host key:
 sudo openssl rand -hex 32 | sudo tee /etc/nginx/quic_key
 sudo chmod 600 /etc/nginx/quic_key
 ```
+## Brotli (optional)
+
+nginx.org's nginx ships without a brotli module, and a dynamic module only loads into the exact nginx version it was built against. `sudo make install-nginx-brotli` (`scripts/install-nginx-brotli`) builds `ngx_brotli` for the installed nginx and keeps it working across upgrades (#1342):
+
+- `/usr/local/sbin/nginx-brotli-ensure` rebuilds the module when the nginx version no longer matches the stamp in `/usr/lib/nginx/modules/.ngx_brotli-built-for`. An apt `Post-Invoke` hook runs it after upgrades (restarting nginx only if it rebuilt); a systemd `ExecStartPre` drop-in runs its `check` mode so a restart can never fail on a stale module.
+- Brotli is enabled through glob includes (`/etc/nginx/brotli/{load.d,http.d}/*.conf`). If a rebuild fails (e.g. no network), the generated files are removed and nginx serves gzip only; `nginx -t` gates every enable.
+- Settings (level, min length, types) live in `nginx-brotli-ensure`'s `enable()`; the ngx_brotli commit is pinned via `NGX_BROTLI_REF`.

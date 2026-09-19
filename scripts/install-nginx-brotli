@@ -1,0 +1,27 @@
+#!/bin/bash
+# Installs brotli support for nginx.org's nginx and keeps it working across
+# nginx upgrades (#1342). Idempotent. Usage: sudo scripts/install-nginx-brotli
+set -euo pipefail
+[ "$(id -u)" = 0 ] || { echo "run as root (sudo $0)"; exit 1; }
+SRC="$(cd "$(dirname "$0")/.." && pwd)/deploy/nginx/brotli"
+
+apt-get install -y build-essential git curl libpcre2-dev libssl-dev zlib1g-dev libbrotli-dev
+
+install -m 755 "$SRC/nginx-brotli-ensure" /usr/local/sbin/nginx-brotli-ensure
+install -m 644 "$SRC/99-nginx-brotli" /etc/apt/apt.conf.d/99-nginx-brotli
+install -D -m 644 "$SRC/nginx-service-brotli.conf" /etc/systemd/system/nginx.service.d/brotli.conf
+install -m 644 "$SRC/01-brotli.conf" /etc/nginx/conf.d/01-brotli.conf
+mkdir -p /etc/nginx/brotli/load.d /etc/nginx/brotli/http.d
+
+# nginx.conf: replace direct load_module lines with the glob include (main context).
+if ! grep -q '/etc/nginx/brotli/load.d' /etc/nginx/nginx.conf; then
+    cp /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak-brotli-$(date +%Y%m%d%H%M%S)"
+    sed -i '/^load_module modules\/ngx_http_brotli_\(filter\|static\)_module\.so;$/d' /etc/nginx/nginx.conf
+    sed -i '1i include /etc/nginx/brotli/load.d/*.conf;\n' /etc/nginx/nginx.conf
+fi
+
+systemctl daemon-reload
+/usr/local/sbin/nginx-brotli-ensure ensure
+/usr/sbin/nginx -t
+systemctl reload nginx
+echo "brotli installed; check: curl -sI -H 'Accept-Encoding: br' https://<host>/ | grep -i content-encoding"

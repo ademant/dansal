@@ -155,6 +155,39 @@ async function submitManageUpdate(
   await page.waitForURL(/\/events\/suggest\/done/);
 }
 
+/**
+ * Delete every event (published or not) carrying `title` — the suggestion this
+ * run created. The shared dev instance keeps whatever a run leaves behind, and
+ * an interrupted/failed run (before the publish step, or after it) otherwise
+ * piles up "E2E Suggest …" rows in the admin's pending-suggestions list and
+ * on the dashboard's hint. Best-effort: cleanup must never mask the test's
+ * own failure, so errors are swallowed.
+ */
+async function deleteSuggestionsByTitle(
+  page: import("@playwright/test").Page,
+  token: string,
+  title: string
+): Promise<void> {
+  try {
+    for (const filter of ["is_published=false", "is_published=true"]) {
+      const resp = await page.request.fetch(
+        `${API_BASE}/api/v1/events?${filter}&include_past=true&limit=1000`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const events = await resp.json();
+      for (const e of Array.isArray(events) ? events : []) {
+        if (e.title !== title) continue;
+        await page.request.fetch(`${API_BASE}/api/v1/events/${e.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    }
+  } catch {
+    // best-effort
+  }
+}
+
 test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   page,
   browser,
@@ -330,5 +363,6 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
     expect(finalEvent.description).toBe(pendingDesc);
   } finally {
     await anonCtx.close();
+    await deleteSuggestionsByTitle(page, adminToken, title);
   }
 });

@@ -50,14 +50,21 @@ CONF_EOF
 
 disable() { rm -f "$CONF/load.d/brotli.conf" "$CONF/http.d/brotli.conf"; }
 
-# Enable, but never leave nginx with a config that doesn't pass nginx -t.
+# Enable brotli, but never leave nginx with a config that fails because of it.
+# If nginx -t fails, retest without brotli: only if that passes is brotli the
+# culprit (stay disabled). If it still fails, the config is broken for some
+# unrelated reason -- leave brotli enabled and let nginx report the real error.
 enable_checked() {
     enable
-    if ! "$NGINX" -t >/dev/null 2>&1; then
+    "$NGINX" -t >/dev/null 2>&1 && return 0
+    disable
+    if "$NGINX" -t >/dev/null 2>&1; then
         log "nginx -t fails with brotli enabled; falling back to gzip only"
-        disable
         return 1
     fi
+    log "nginx -t fails independently of brotli; leaving brotli enabled"
+    enable
+    return 0
 }
 
 build() {
@@ -99,7 +106,7 @@ ver="$(installed_version)"
 [ -n "$ver" ] || { log "cannot determine nginx version"; exit 1; }
 
 if matches "$ver"; then
-    enable_checked || exit 1
+    enable_checked || { [ "$MODE" = check ] && exit 0; exit 1; }
     exit 0
 fi
 

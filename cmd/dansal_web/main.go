@@ -225,7 +225,7 @@ func main() {
 		r.HandleFunc("GET /tiles/{scheme}/{z}/{x}/{yfile}", tileProxyHandler(cfg, client))
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
-		r.HandleFunc("GET /banner.avif", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerAVIF))
+		r.HandleFunc("GET /banner.avif", bannerHandler(cfg.ImagesDir, bannerAVIF))
 		r.HandleFunc("GET /relay-icon", func(w http.ResponseWriter, r *http.Request) {
 			if !maybeServeSiteAsset(w, r, cfg.ImagesDir, "relay-avatar") {
 				http.NotFound(w, r)

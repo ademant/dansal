@@ -38,6 +38,7 @@ type TemplateData struct {
 	ImpressumURL           string
 	Data                   any
 	BannerHeight           int
+	BannerSrcset           template.Srcset // #1343; empty = no variants
 	LogoHeight             int
 	DarkMode               string // "auto", "light", or "dark"
 	TimeFormat             string // "24h" or "12h"
@@ -191,6 +192,11 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		relayActorURL = actorURL(cfg, cfg.RelayActorName)
 	}
 
+	var bannerSrcsetVal template.Srcset
+	if bannerHeight > 0 {
+		bannerSrcsetVal = bannerSrcset(cfg.ImagesDir)
+	}
+
 	return TemplateData{
 		Title:        title,
 		Domain:       cfg.Domain,
@@ -203,6 +209,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		ImpressumURL: impressumURL,
 		Data:         data,
 		BannerHeight: bannerHeight,
+		BannerSrcset: bannerSrcsetVal,
 		LogoHeight:   logoHeight,
 		DarkMode:     cfg.DarkMode,
 		TimeFormat: func() string {

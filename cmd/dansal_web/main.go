@@ -236,7 +236,7 @@ func main() {
 				http.NotFound(w, r)
 			}
 		})
-		r.HandleFunc("GET /ai-badge", dynamicSVGHandler(cfg.ImagesDir, "ai-badge", aiBadgeDefault))
+		r.HandleFunc("GET /ai-badge", aiBadgeHandler(cfg.ImagesDir, aiBadgeDefault))
 		r.HandleFunc("POST /internal/relay/redeliver", internalRelayRedeliverHandler(cfg, db, client))
 		r.HandleFunc("POST /internal/relay/profile-update", internalRelayProfileUpdateHandler(cfg, db))
 		r.HandleFunc("GET /static/qrcode.min.js", func(w http.ResponseWriter, r *http.Request) {

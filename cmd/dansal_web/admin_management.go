@@ -110,10 +110,16 @@ func detectAssetMIMEFromExt(ext string) string {
 }
 
 // detectAssetMIME returns the MIME type for supported site asset formats
-// (SVG, AVIF, JPEG, GIF) or "" if the data is not a recognised format.
+// (SVG, AVIF, JPEG, GIF, plus PNG for detection only) or "" if unrecognised.
 func detectAssetMIME(data []byte) string {
 	if len(data) == 0 {
 		return ""
+	}
+	// PNG first: a PNG whose first 512 bytes happen to contain the text
+	// "<svg" (e.g. an embedded C2PA/XMP manifest) was misdetected as SVG by
+	// the substring check below (#1341).
+	if len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n" {
+		return "image/png"
 	}
 	// SVG: text-based, look for the <svg element
 	s := strings.TrimSpace(string(data[:min(len(data), 512)]))

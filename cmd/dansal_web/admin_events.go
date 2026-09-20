@@ -2357,11 +2357,7 @@ func parseTimetableEntryReqs(r *http.Request, client *DansalClient) []TimetableE
 			entry.Room = strings.TrimSpace(rooms[i])
 		}
 		if i < len(ttTypes) {
-			if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
-				entry.EntryType = v
-			} else {
-				entry.EntryType = "bal"
-			}
+			entry.EntryType = normalizeTimetableEntryType(ttTypes[i])
 		}
 		if i < len(locIDs) {
 			if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
@@ -2402,6 +2398,20 @@ func parseTimetableEntryReqs(r *http.Request, client *DansalClient) []TimetableE
 		ttEntries = append(ttEntries, entry)
 	}
 	return ttEntries
+}
+
+// normalizeTimetableEntryType returns the entry type a submitted tt_type value
+// stands for. The type is a free-text track slug drawn from the event's own
+// palette (#1174 — e.g. meal, session, concert, dance-workshop or a custom
+// one), so any non-empty value is kept; only a blank one falls back to "bal".
+// (This used to accept just "workshop"/"break" and flattened every other type
+// back to "bal" on each inline-editor save.)
+func normalizeTimetableEntryType(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || len(v) > 64 {
+		return "bal"
+	}
+	return v
 }
 
 // renderEventFormError re-renders the event form with errKey after a failed
@@ -2754,11 +2764,7 @@ func parseTimetableFormEntries(r *http.Request, musicians []Musician, instructor
 			entry.Room = strings.TrimSpace(rooms[i])
 		}
 		if i < len(ttTypes) {
-			if v := strings.TrimSpace(ttTypes[i]); v == "workshop" || v == "break" {
-				entry.EntryType = v
-			} else {
-				entry.EntryType = "bal"
-			}
+			entry.EntryType = normalizeTimetableEntryType(ttTypes[i])
 		}
 		if i < len(locIDs) {
 			if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {

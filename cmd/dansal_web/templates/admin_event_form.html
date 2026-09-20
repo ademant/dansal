@@ -1650,6 +1650,17 @@ function _ttMarkEdited(){
   var el=document.getElementById('tt-edited');
   if(el) el.value='1';
 }
+// Only title/description typing, the date select and add/remove/clone used to
+// raise the flag, so changing just a row's type, times, room, location or
+// people looked saved but was never submitted (the server skips
+// ReplaceTimetable unless timetable_edited=1). Catch every user edit inside
+// the timetable body instead of hooking fields one by one.
+(function(){
+  var b=document.getElementById('tt-body');
+  if(!b) return;
+  b.addEventListener('input',_ttMarkEdited);
+  b.addEventListener('change',_ttMarkEdited);
+})();
 // A timetable row only needs a valid start/end time once it's actually in
 // use (title filled in) — the perpetual empty trailing row must stay
 // optional, or the required-field gate would permanently disable Save.

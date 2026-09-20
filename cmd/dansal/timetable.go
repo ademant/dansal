@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"time"
 )
 
@@ -211,7 +212,40 @@ func fetchTimetable(q querier, eventID int) ([]TimetableEntry, error) {
 		}
 		entries = append(entries, e)
 	}
+
+	// The SQL ORDER BY above files an entry with no entry_date under
+	// '0000-00-00', i.e. before every dated one. Single-day events routinely
+	// mix both kinds — the inline editor leaves entry_date empty, the
+	// dedicated timetable editor stamps it — so an entry saved from the
+	// dedicated editor jumped behind its undated siblings regardless of its
+	// start time. Re-sort treating "no date" as the event's own start date.
+	var startEpoch int64
+	if err := q.QueryRow("SELECT start_time FROM events WHERE id = ?", eventID).Scan(&startEpoch); err == nil && startEpoch > 0 {
+		sortTimetableEntries(entries, time.Unix(startEpoch, 0).In(berlinLoc).Format("2006-01-02"))
+	}
 	return entries, nil
+}
+
+// sortTimetableEntries orders entries by (effective date, start time, id),
+// where an entry without an entry_date takes eventDate (the event's first
+// local day).
+func sortTimetableEntries(entries []TimetableEntry, eventDate string) {
+	day := func(e TimetableEntry) string {
+		if e.EntryDate != "" {
+			return e.EntryDate
+		}
+		return eventDate
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		di, dj := day(entries[i]), day(entries[j])
+		if di != dj {
+			return di < dj
+		}
+		if entries[i].StartTime != entries[j].StartTime {
+			return entries[i].StartTime < entries[j].StartTime
+		}
+		return entries[i].ID < entries[j].ID
+	})
 }
 
 func validateTimetableRequests(reqs []TimetableEntryRequest) error {

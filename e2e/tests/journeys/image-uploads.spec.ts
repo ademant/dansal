@@ -61,7 +61,9 @@ async function createMinimalEvent(page: Page, t: string): Promise<number> {
     end_time:   end.toISOString().replace(".000Z", ""),
     published:  false,
   });
-  return data.id;
+  // POST /api/v1/events always responds with an array of created events
+  // (bulk-create support), so a single create still comes back as [event].
+  return Array.isArray(data) ? data[0]?.id : data.id;
 }
 
 // Create an event via the admin UI to get a proper event ID for UI tests.
@@ -311,6 +313,10 @@ test.describe("Image uploads", () => {
     const eventId = await createEventViaUI(page);
     await page.goto(`/admin/events/${eventId}/edit`);
 
+    // The event form's optional sections are collapsed by default; open the
+    // Image section so the preview is on screen.
+    await page.locator('.evt-nav-item[data-target="sec-image"]').click();
+
     // The file input is hidden; setInputFiles still works on it.
     const buf = await makeImage("png", 300, 200);
     const input = page.locator('#image');
@@ -328,6 +334,8 @@ test.describe("Image uploads", () => {
   test("UI: event admin form — image upload + save persists image", async ({ page }) => {
     const eventId = await createEventViaUI(page);
     await page.goto(`/admin/events/${eventId}/edit`);
+
+    await page.locator('.evt-nav-item[data-target="sec-image"]').click();
 
     const buf = await makeImage("jpeg", 300, 200);
     await page.locator('#image').setInputFiles({
@@ -378,8 +386,10 @@ test.describe("Image uploads", () => {
     });
 
     await page.locator('#save-btn').click();
-    // org save redirects to /admin/organizations/{id}/edit (with optional query params)
-    await page.waitForURL(/\/admin\/organizations\/\d+\/edit/);
+    // org save redirects to the originating page or the org list; reopen the
+    // edit form to verify the banner persisted.
+    await page.waitForURL(/\/admin\/organizations$/);
+    await page.goto(`/admin/organizations/${seed.orgId}/edit`);
     await expect(page.locator('#existing-image')).toBeVisible();
   });
 
@@ -398,7 +408,10 @@ test.describe("Image uploads", () => {
     // Musician template has no #save-btn — it's a plain submit button on
     // form#mus-form.
     await page.locator('button[type="submit"][form="mus-form"]').click();
-    await page.waitForURL(/\/admin\/musicians\/\d+\/edit/);
+    // Musician save redirects to the originating page or the list; reopen the
+    // edit form to verify the photo persisted.
+    await page.waitForURL(/\/admin\/musicians$/);
+    await page.goto(`/admin/musicians/${seed.musicianId}/edit`);
     await expect(page.locator('#existing-image')).toBeVisible();
   });
 });

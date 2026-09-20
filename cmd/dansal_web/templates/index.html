@@ -1320,11 +1320,28 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
         .then(function(r){ return r.json(); })
         .then(function(data){
           if(data.rows_html){
+            // Skip events already in the table: a still-running multi-day
+            // event is server-rendered with the initial future rows AND
+            // falls inside a past range (its start is before now), and the
+            // two-sided exclusive range bounds can return a boundary event
+            // in two adjacent batches. Federated rows share the numeric id
+            // space with real events, so only native rows count as "have".
+            var have = {};
+            nativeRows().forEach(function(r){ have[r.dataset.id] = true; });
+            var tmp = document.createElement('tbody');
+            tmp.innerHTML = data.rows_html;
+            var frag = document.createDocumentFragment();
+            Array.from(tmp.querySelectorAll('tr.event-row')).forEach(function(tr){
+              if(have[tr.dataset.id]) return;
+              have[tr.dataset.id] = true;
+              frag.appendChild(tr);
+            });
             // afterbegin, not beforeend: past rows must land before every
             // already-loaded (future, or earlier-fetched past) row to keep
             // the whole tbody in ascending start_time order, which
             // maxLoadedStartMs() above relies on.
-            document.getElementById('event-tbody').insertAdjacentHTML('afterbegin', data.rows_html);
+            var tb = document.getElementById('event-tbody');
+            tb.insertBefore(frag, tb.firstChild);
             rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
           }
           (data.geo||[]).forEach(function(e){

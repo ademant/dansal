@@ -665,10 +665,23 @@ type Musician struct {
 	CreatedAt        string `json:"created_at,omitempty"`
 	UpdatedAt        int64  `json:"updated_at,omitempty"`
 	UpdatedBy        string `json:"updated_by,omitempty"`
+	// Media is the external link list (#1360). Read from the single-musician
+	// GET; on writes see musicianWrite, which decides whether it is sent.
+	Media []MediaLink `json:"media,omitempty"`
 
 	FutureEventCount int    `json:"future_event_count,omitempty"`
 	PastEventCount   int    `json:"past_event_count,omitempty"`
 	NextEventAt      string `json:"next_event_at,omitempty"`
+}
+
+// musicianWrite is the request body for musician create/update. Media is
+// declared again here as a pointer (it shadows the embedded field of the same
+// JSON name): nil is omitted so callers that never touched links leave the
+// stored list alone, while a non-nil pointer — even to an empty slice — is
+// sent, which is how the edit form clears every link.
+type musicianWrite struct {
+	Musician
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 type Location struct {
@@ -1299,7 +1312,11 @@ func (c *DansalClient) GetMusician(ctx context.Context, id int) (Musician, error
 }
 
 func (c *DansalClient) CreateMusician(ctx context.Context, m Musician, token string) (Musician, error) {
-	body, _ := json.Marshal(m)
+	w := musicianWrite{Musician: m}
+	if m.Media != nil {
+		w.Media = &m.Media
+	}
+	body, _ := json.Marshal(w)
 	var out []Musician
 	if err := c.do(ctx, http.MethodPost, "/api/v1/musicians", token, body, &out, http.StatusCreated); err != nil {
 		return Musician{}, err
@@ -1312,7 +1329,12 @@ func (c *DansalClient) CreateMusician(ctx context.Context, m Musician, token str
 }
 
 func (c *DansalClient) UpdateMusician(ctx context.Context, id int, m Musician, token string) error {
-	body, _ := json.Marshal(m)
+	// The edit form always submits its full link list, so always send it.
+	links := m.Media
+	if links == nil {
+		links = []MediaLink{}
+	}
+	body, _ := json.Marshal(musicianWrite{Musician: m, Media: &links})
 	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/musicians/%d", id), token, body, nil); err != nil {
 		return err
 	}

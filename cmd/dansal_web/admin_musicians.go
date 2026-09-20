@@ -54,6 +54,7 @@ func musicianFromForm(r *http.Request) Musician {
 		Genre:            strings.TrimSpace(r.FormValue("genre")),
 		Email:            strings.TrimSpace(r.FormValue("email")),
 		ImageAIGenerated: r.FormValue("image_ai_generated") == "1",
+		Media:            mediaLinksFromForm(r),
 	}
 }
 

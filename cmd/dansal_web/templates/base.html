@@ -263,6 +263,16 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .dpr-range-start{background:var(--heading);color:#fff!important;border-radius:50% 0 0 50%}
 .dpr-range-end{background:var(--heading);color:#fff!important;border-radius:0 50% 50% 0}
 .dpr-range-start.dpr-range-end{border-radius:50%}
+/* media links (#1360/#1361): plain external links, never embedded */
+.media-notice{font-size:.85rem;color:var(--fg-muted);margin:.2rem 0 .6rem}
+.media-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.35rem}
+.media-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem}
+.media-host{font-size:.8rem;color:var(--fg-muted)}
+.media-editor .media-rows{display:flex;flex-direction:column;gap:.5rem;margin:.5rem 0}
+.media-row{display:grid;grid-template-columns:7rem 1fr 2fr auto;gap:.4rem;align-items:center}
+.media-row-btns{display:flex;gap:.25rem}
+.media-row-btns button{padding:.2rem .5rem;cursor:pointer}
+@media(max-width:640px){.media-row{grid-template-columns:1fr auto}.media-row select,.media-row input{grid-column:1/-1}.media-row-btns{grid-column:1/-1}}
 </style>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://{{.Domain}}/#website","url":"https://{{.Domain}}/","name":"{{.SiteName}}","description":"{{.Strings.T "meta_description" | js}}","inLanguage":"{{.LangCode}}","version":"{{.AppVersion | js}}","audience":{"@type":"PeopleAudience","typicalAgeRange":"12-"}{{if .SiteSameAs}},"sameAs":[{{range $i, $u := .SiteSameAs}}{{if $i}},{{end}}"{{$u | js}}"{{end}}]{{end}}}</script>
 {{/* Debug aid: "version" is non-standard for WebSite, deliberately not
@@ -592,4 +602,44 @@ document.addEventListener('DOMContentLoaded', function(){
   </td>
 </tr>
 {{end}}
+{{end}}
+
+{{/* media links (#1360/#1361). "media-links-list" is the public section, "media-links-editor" the admin form's repeatable rows; both take a dict with S (the page's Strings) and Links ([]MediaLink). */}}
+{{define "media-links-list"}}{{if .Links}}
+<div class="page-section media-links">
+  <h2>{{.S.T "media_title"}}</h2>
+  <p class="media-notice">{{.S.T "media_external_notice"}}</p>
+  <ul class="media-list">
+    {{range .Links}}<li><span aria-hidden="true">{{if eq .Kind "video"}}🎬{{else if eq .Kind "audio"}}🎧{{else if eq .Kind "image"}}🖼️{{else}}🔗{{end}}</span> <a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" title="{{$.S.T "media_external_link_title"}}">{{.DisplayTitle}}</a> <span class="media-host">{{.Host}}</span></li>
+    {{end}}
+  </ul>
+</div>{{end}}{{end}}
+
+{{define "media-links-editor"}}
+<div class="media-editor" data-max="20">
+  <p class="form-hint">{{.S.T "media_admin_hint"}}</p>
+  <div class="media-rows">
+    {{range .Links}}{{template "media-row" (dict "S" $.S "L" .)}}{{end}}
+  </div>
+  <template class="media-row-tpl">{{template "media-row" (dict "S" .S "L" nil)}}</template>
+  <button type="button" class="btn-secondary" data-fn="mediaAddRow" data-args='["@this"]'>+ {{.S.T "media_add"}}</button>
+</div>
+{{end}}
+
+{{define "media-row"}}{{$k := ""}}{{with .L}}{{$k = .Kind}}{{end}}
+<div class="media-row">
+  <select name="media_kind" aria-label="{{.S.T "media_kind_label"}}">
+    <option value="video"{{if eq $k "video"}} selected{{end}}>{{.S.T "media_kind_video"}}</option>
+    <option value="audio"{{if eq $k "audio"}} selected{{end}}>{{.S.T "media_kind_audio"}}</option>
+    <option value="image"{{if eq $k "image"}} selected{{end}}>{{.S.T "media_kind_image"}}</option>
+    <option value="other"{{if or (eq $k "other") (eq $k "")}} selected{{end}}>{{.S.T "media_kind_other"}}</option>
+  </select>
+  <input type="text" name="media_title" maxlength="120" value="{{with .L}}{{.Title}}{{end}}" placeholder="{{.S.T "col_title"}}" aria-label="{{.S.T "col_title"}}">
+  <input type="url" name="media_url" maxlength="2048" pattern="https://.+" value="{{with .L}}{{.URL}}{{end}}" placeholder="https://…" aria-label="{{.S.T "media_field_url"}}">
+  <span class="media-row-btns">
+    <button type="button" class="btn-sm" data-fn="mediaMoveRow" data-args='["@this",-1]' title="{{.S.T "media_move_up"}}" aria-label="{{.S.T "media_move_up"}}">↑</button>
+    <button type="button" class="btn-sm" data-fn="mediaMoveRow" data-args='["@this",1]' title="{{.S.T "media_move_down"}}" aria-label="{{.S.T "media_move_down"}}">↓</button>
+    <button type="button" class="btn-sm" data-fn="mediaRemoveRow" data-args='["@this"]' title="{{.S.T "assign_remove_btn"}}" aria-label="{{.S.T "assign_remove_btn"}}">×</button>
+  </span>
+</div>
 {{end}}

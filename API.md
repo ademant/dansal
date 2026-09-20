@@ -736,6 +736,8 @@ Musicians are performers linked to events; instructors are teachers linked to wo
 
 `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`. Instructor edit permissions are unchanged between `PUT` and `PATCH`: admins may edit any instructor, other users only ones they created.
 
+**Media links (#1360).** A musician can carry a list of external links, returned as `media: [{"kind","title","url"}]` on `GET /api/v1/musicians/{id}` (not in list results) and on create/update responses. `POST` and `PUT` accept the same `media` array: when present it replaces the whole list (array order = display order, `[]` clears it); when omitted the stored list is left untouched, so clients that don't know the field never wipe it. `kind` is `video`, `audio`, `image` or `other` (default `other`); each `url` must be an absolute `https://` URL without credentials (max 2048 chars), `title` is optional (max 120), and at most 20 links are allowed — anything else is rejected with `400` and nothing is changed. The links are stored and shown as plain links only; dansal never embeds or fetches them.
+
 **Query parameters for GET /api/v1/musicians:**
 - `name=` — substring match on bandname
 - `organization_id=N` — musicians linked to events of this org

@@ -2760,6 +2760,30 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN reservation_requested INTEGER DEFAULT 0")
 		}
 	}
+
+	// v43: owner_media — external media links for musicians/orgs/locations (#1360/#1361).
+	const ownerMediaSchema = `CREATE TABLE IF NOT EXISTS owner_media (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		owner_type TEXT NOT NULL CHECK(owner_type IN ('musician','organization','location')),
+		owner_id   INTEGER NOT NULL,
+		kind       TEXT NOT NULL DEFAULT 'other',
+		title      TEXT NOT NULL DEFAULT '',
+		url        TEXT NOT NULL,
+		sort_order INTEGER NOT NULL DEFAULT 0
+	)`
+	if !applied(43) {
+		db.Exec(ownerMediaSchema)
+		mark(43)
+	}
+	// Safety net: ensure owner_media exists even if v43 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='owner_media'").Scan(&n)
+		if n == 0 {
+			db.Exec(ownerMediaSchema)
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order)")
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4042,6 +4066,19 @@ func createTables() error {
 		-- to point at and is meaningless, so silently removing it is the correct behaviour.
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
+	-- #1360/#1361: external media links (video/audio/image URLs) for a musician,
+	-- organization or location. Polymorphic on (owner_type, owner_id) with no
+	-- foreign key, so owner delete handlers clear their rows explicitly.
+	CREATE TABLE IF NOT EXISTS owner_media (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		owner_type TEXT NOT NULL CHECK(owner_type IN ('musician','organization','location')),
+		owner_id   INTEGER NOT NULL,
+		kind       TEXT NOT NULL DEFAULT 'other',
+		title      TEXT NOT NULL DEFAULT '',
+		url        TEXT NOT NULL,
+		sort_order INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order);
 	-- #1333 (phase 1): an anonymous visitor's suggestion of a new .ics/.json
 	-- feed to import, pending admin/org-member review. org_id is set when the
 	-- submitter picked an existing org; org_name (+ the other org_* fields)
@@ -4208,6 +4245,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(39)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(40)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(41)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(43)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

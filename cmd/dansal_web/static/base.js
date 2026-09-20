@@ -792,3 +792,41 @@ document.addEventListener('keydown',function(e){
     el.hidden?openHelpModal():closeHelpModal();
   }
 });
+
+// ─── media links editor (#1360/#1361) ────────────────────────────────────────
+// Repeatable rows for an owner's external link list (template "media-links-
+// editor" in base.html). Rows post as parallel media_kind/media_title/
+// media_url fields; the server keeps their DOM order as the display order.
+function mediaEditorChanged(ed){
+  if(typeof _markDirty==='function') _markDirty();
+  // Adding/removing/moving rows raises no input event of its own; emit one so
+  // section-completeness dots and any form-level listeners see the change.
+  if(ed) ed.dispatchEvent(new Event('change',{bubbles:true}));
+}
+function mediaAddRow(btn){
+  var ed=btn.closest('.media-editor');
+  var rows=ed.querySelector('.media-rows');
+  var max=parseInt(ed.getAttribute('data-max'),10)||20;
+  if(rows.children.length>=max) return;
+  var row=ed.querySelector('template.media-row-tpl').content.firstElementChild.cloneNode(true);
+  rows.appendChild(row);
+  var url=row.querySelector('input[type=url]');
+  if(url) url.focus();
+  mediaEditorChanged(ed);
+}
+function mediaRemoveRow(btn){
+  var row=btn.closest('.media-row');
+  if(!row) return;
+  var ed=row.closest('.media-editor');
+  row.remove();
+  mediaEditorChanged(ed);
+}
+function mediaMoveRow(btn,dir){
+  var row=btn.closest('.media-row');
+  if(!row) return;
+  var sib=dir<0?row.previousElementSibling:row.nextElementSibling;
+  if(!sib) return;
+  var ed=row.closest('.media-editor');
+  if(dir<0) row.parentNode.insertBefore(row,sib); else row.parentNode.insertBefore(sib,row);
+  mediaEditorChanged(ed);
+}

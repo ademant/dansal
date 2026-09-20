@@ -26,6 +26,7 @@
     <button type="button" class="evt-nav-item" data-target="sec-biography"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_biography"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-links"><span class="evt-nav-dot"></span>Links &amp; IDs</button>
     <button type="button" class="evt-nav-item" data-target="sec-social"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_social"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-media"><span class="evt-nav-dot"></span>{{$.Strings.T "media_admin_title"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_image"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-avatar"><span class="evt-nav-dot"></span>{{$.Strings.T "avatar_section"}}</button>
   </div>
@@ -159,6 +160,11 @@
     <input id="spotify" type="url" name="spotify" value="{{.Musician.Spotify}}" placeholder="https://open.spotify.com/artist/…">
     <label for="deezer">Deezer</label>
     <input id="deezer" type="url" name="deezer" value="{{.Musician.Deezer}}" placeholder="https://www.deezer.com/artist/…">
+  </section>
+
+  <section class="form-section optional-section" id="sec-media">
+    <h2>{{$.Strings.T "media_admin_title"}}</h2>
+    {{template "media-links-editor" (dict "S" $.Strings "Links" .Musician.Media)}}
   </section>
 
   <section class="form-section optional-section" id="sec-image">
@@ -598,6 +604,9 @@
     'sec-social':function(){
       var ids=['mastodon','instagram','facebook','soundcloud','spotify','deezer'];
       return ids.some(function(id){ var el=document.getElementById(id); return !!(el&&el.value.trim()); });
+    },
+    'sec-media':function(){
+      return document.querySelectorAll('#sec-media .media-row').length>0;
     },
     'sec-image':function(){
       var existing=document.getElementById('existing-image');

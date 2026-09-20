@@ -107,6 +107,8 @@
 </div>
 {{end}}
 
+{{template "media-links-list" (dict "S" $.Strings "Links" .Musician.Media)}}
+
 <div class="page-section">
   <div class="events-heading-row">
     <h2 class="section-heading">{{$.Strings.T "musician_upcoming_events"}}</h2>

@@ -34,9 +34,12 @@ type Musician struct {
 	ImageURL         string `json:"image_url,omitempty"`
 	ImageAIGenerated bool   `json:"image_ai_generated,omitempty"`
 	AvatarURL        string `json:"avatar_url,omitempty"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at,omitempty"`
-	UpdatedBy        string `json:"updated_by,omitempty"`
+	// Media is the musician's external link list (#1360). Filled only on the
+	// single-musician GET and on create/update responses, not in list results.
+	Media     []MediaLink `json:"media,omitempty"`
+	CreatedAt string      `json:"created_at"`
+	UpdatedAt int64       `json:"updated_at,omitempty"`
+	UpdatedBy string      `json:"updated_by,omitempty"`
 
 	FutureEventCount int    `json:"future_event_count,omitempty"`
 	PastEventCount   int    `json:"past_event_count,omitempty"`
@@ -65,6 +68,10 @@ type MusicianCreateRequest struct {
 	Genre            string `json:"genre"`
 	Email            string `json:"email"`
 	ImageAIGenerated bool   `json:"image_ai_generated,omitempty"`
+	// Media replaces the musician's whole link list when present (order =
+	// display order; [] clears it). Omitted leaves the stored list untouched,
+	// so older clients that don't know the field never wipe it.
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 // MusicianMergePatchRequest is the body accepted by PATCH
@@ -269,6 +276,7 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 		writeMusiciansAtom(w, r, []Musician{musician})
 		return
 	}
+	musician.Media = loadOwnerMedia(db, ownerTypeMusician, musician.ID)
 	writeJSON(w, musician)
 }
 
@@ -297,8 +305,23 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 		reqs = []MusicianCreateRequest{single}
 	}
 
+	// Validate every submitted link list before inserting anything, so a bad
+	// URL in one entry can't leave earlier musicians of a bulk request created.
+	normalizedMedia := make([][]MediaLink, len(reqs))
+	for i, req := range reqs {
+		if req.Media == nil {
+			continue
+		}
+		links, err := normalizeMediaLinks(*req.Media)
+		if err != nil {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		normalizedMedia[i] = links
+	}
+
 	musicians := make([]Musician, 0, len(reqs))
-	for _, req := range reqs {
+	for i, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
 			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre, email, created_by_id)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
@@ -310,6 +333,13 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeInternalError(w, err)
 			return
+		}
+		if reqs[i].Media != nil {
+			if err := replaceOwnerMedia(db, ownerTypeMusician, m.ID, normalizedMedia[i]); err != nil {
+				writeInternalError(w, err)
+				return
+			}
+			m.Media = normalizedMedia[i]
 		}
 		musicians = append(musicians, m)
 	}
@@ -338,6 +368,15 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var newMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if newMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
@@ -359,11 +398,20 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Media != nil {
+		mid, _ := strconv.Atoi(id)
+		if err := replaceOwnerMedia(db, ownerTypeMusician, mid, newMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
+
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
+	musician.Media = loadOwnerMedia(db, ownerTypeMusician, musician.ID)
 
 	json.NewEncoder(w).Encode(musician)
 }
@@ -514,6 +562,9 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 	if rowsAffected == 0 {
 		writeError(w, "Musician not found", http.StatusNotFound)
 		return
+	}
+	if mid, err := strconv.Atoi(id); err == nil {
+		deleteOwnerMedia(db, ownerTypeMusician, mid)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

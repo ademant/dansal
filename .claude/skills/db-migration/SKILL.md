@@ -56,6 +56,29 @@ After each version block, add a structural check so the column/table exists even
 
 **Retrofitting an index onto an existing column** (no new column involved — e.g. a column that's had no index since it was first added) is simpler: just `CREATE INDEX IF NOT EXISTS idx_... ON table(column)` in its own new version block, no `pragma_table_info` check needed since there's no column existence to verify, and no `ALTER TABLE`. Still needs the version bump + `createTables()` catch-all mark, same as any other migration — `createTables()`'s own `CREATE TABLE` for that table should already define the index going forward too, for fresh installs.
 
+## New tables (not columns)
+
+Same two-part shape, but the safety net checks `sqlite_master` instead of `pragma_table_info`, and the index goes in the safety net too:
+
+```go
+if !applied(43) {
+    db.Exec(ownerMediaSchema) // CREATE TABLE IF NOT EXISTS ...
+    mark(43)
+}
+{
+    var n int
+    db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='owner_media'").Scan(&n)
+    if n == 0 {
+        db.Exec(ownerMediaSchema)
+    }
+    db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order)")
+}
+```
+
+Keep the migration's DDL in one local const (`ownerMediaSchema`) so the version block and its safety net can't drift from each other; `createTables()` carries its own copy for fresh installs, so change both when the schema changes. `TestSmokeMigrationOwnerMedia` (`smoke_migration_test.go`) is the template for a permanent test worth keeping for a table: fresh install → drop table + delete the version row and re-migrate (upgrade path) → drop table with the version still marked (pre-marked path) → migrate again (idempotent).
+
+**Polymorphic owner tables (`owner_type` + `owner_id`, e.g. `owner_media`) have no foreign key**, so nothing cascades. Every delete path for an owner must clear its rows explicitly (collect child ids *before* the delete — a location's rooms — and clear after it succeeds), and every merge path must fold or drop them. Add a test for each; a forgotten one leaves orphans that silently reappear when an id is reused.
+
 ## `createTables()` — keep fresh installs identical
 
 Fresh installs must end up with the same final schema as migrated instances, or the catch-all breaks:

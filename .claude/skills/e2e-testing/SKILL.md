@@ -25,6 +25,20 @@ npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 
 - **Any product code change under test must already be deployed to `dev`** (`make build && sudo make deploy INSTANCE=dev` — see the `deploy` skill) before running against it. `go build`/`go test` passing locally does not mean the running dev instance has the fix.
 - A single test run commonly takes 15–60s; background it (`run_in_background`/Monitor) rather than blocking on a foreground `Bash` call, especially when iterating repeatedly.
 
+## Running against a scratch instance instead of dev
+
+When the code under test isn't deployed to dev (and deploying needs sudo you don't have), run the API and web binaries from a scratch directory with their own config and DB and point the suite at them:
+
+```bash
+go build -o /tmp/scratch/dansal ./cmd/dansal && go build -o /tmp/scratch/dansal_web ./cmd/dansal_web && go build -o /tmp/scratch/dansal_admin ./cmd/dansal_admin
+export BASE_URL=http://localhost:18080 API_URL=http://localhost:18000
+export ADMIN_CLI=/tmp/scratch/dansal_admin ADMIN_SOCKET=/tmp/scratch/dansal.sock ADMIN_NO_SUDO=1   # helpers/seed.ts prefixes `sudo -n` otherwise
+```
+
+- Use `localhost`, not `127.0.0.1`: the web layer's CSRF/origin check requires the request host to match `domain` in `web.yaml`, and a mismatch shows up as a bare "Forbidden" on every form POST.
+- Restart by PID (`pgrep -af`, `kill <pid>`), never `pkill -f "<path>"` from a Bash tool call — the pattern also matches the shell running the command, which kills it (exit 144).
+- `sudo -n` is only allowed for `/usr/lib/dansal/dev/dansal_admin`; that's why `ADMIN_NO_SUDO=1` is needed for any other binary.
+
 ## Auth: storageState, not per-test logins
 
 `playwright.config.ts` + `global-setup.ts` log in **once** for the whole suite (admin) and save `.auth/admin.json` (`AUTH_FILE` from `helpers/auth.ts`). Every spec's `page` fixture and `beforeAll`'s `browser.newContext({ storageState: AUTH_FILE })` load pre-authenticated — never call `loginAs()` for the admin role.
@@ -59,6 +73,8 @@ async function createOrg(page: Page, name: string): Promise<number> {
   // then look the id up by name via the raw (uncached) API — reads aren't cached
 }
 ```
+
+The same cache serves the public `/org/{slug}` page (it resolves the slug through the cached org list), so an API-created org 404s there for up to a minute. Create the org through `/admin/organizations/new`, then look up its id/`actor_name` by name via the API; the slug is `actor_name` or the name lowercased with runs of non-alphanumerics turned into `-`. `org-location-media.spec.ts` has a ready `createOrg` helper.
 
 Same reasoning for locations (`#location`, `#town` under the `sec-address` nav section, `#loc-nav-toggle` opens it on mobile — see `locations.spec.ts`'s `openSection` helper). A location created via raw API is fine to use *once you have its ID*, as long as nothing later needs to find it by name in a cached picker.
 
@@ -139,10 +155,26 @@ Specs that drive an anonymous/public form (`board.spec.ts`, `suggest-wizard.spec
 
 - **`loginRateLimiter` (`/api/v1/login`, 5 req/min per IP by default) is IP-only — a per-run User-Agent doesn't help here.** Any spec doing more than one real login in quick succession (`loginViaApi`, the web layer's `/login` POST, invite/OIDC auto-login) draws from this same budget, and it's a *sliding* window: a rejected call doesn't consume a slot, but every accepted one sits in the window for a full minute regardless of which spec or run made it. A single isolated run of a login-heavy spec (`auth-totp.spec.ts`, `auth-invite.spec.ts`) stays well under 5/min on its own — this only bites when iterating on one of these specs rapidly, back-to-back, against the shared dev instance. Symptom: `loginViaApi` throws `"Too many login attempts"` even though the failing call's own test made only one or two login attempts. A `curl` probe confirming the limiter *looks* clear isn't enough to prove the next run is safe — that probe's own accepted call re-occupies a slot, and several rapid retries can keep the window full of your own prior attempts. Let it drain quietly (~70–90s with no login-triggering requests at all, including probes) rather than tightening the retry loop.
 
+## API request gotchas in specs
+
+- `PATCH` needs `Content-Type: application/merge-patch+json`; plain `application/json` gets `415`.
+- Create endpoints that accept bulk bodies answer with an **array** — `POST /events` and `/musicians` return `[{…}]`, `POST /locations` returns `[{location, similar_locations}]` (`seedLocation` already unwraps it). Reading `.id` off the top level gives `undefined` and the next call goes to `/…/undefined`. Tolerate both: `const x = Array.isArray(b) ? b[0] : b`.
+- After a form save that redirects back to the *same* URL, `waitForURL` can't tell "saved" from "not submitted yet"; poll the API (`expect.poll(...)`) for the outcome instead.
+
+## Collapsed edit-form sections: check before you click
+
+Clicking a section's nav item **toggles** it. A section that already holds data starts open (its `hasData` check passes), so a second click closes it and every input inside becomes "not visible". Use a helper that returns early when the section is already visible, and only then opens the mobile drawer toggle and clicks the item (`openSection` in `org-location-media.spec.ts`; `locations.spec.ts` has the drawer half).
+
+## Cleaning up what a spec leaves behind
+
+The "no cleanup expected" default below holds for events, orgs and locations. It does **not** hold for things that land in an admin review queue: pending event suggestions and feed suggestions pile up on the dashboard and eventually swamp real ones. `suggest-wizard.spec.ts` deletes the suggestion it created in a `finally` (`deleteSuggestionsByTitle`, best-effort so cleanup never masks the test's own failure). New helpers for setup/teardown live in `helpers/seed.ts`: `addOrgMember`, `deleteUser`, `gotoAdminEventsFor`.
+
+CI sets `rate_limit: 1000` in the e2e instance's `config.yaml` (`.github/workflows/e2e.yml`): every spec's seed calls share one per-IP bucket, and the packaging default of 100/min runs out mid-suite.
+
 ## Everything else
 
 - `unique(name)` (`` `${name} ${Date.now()}` ``) on every fixture title/org/location name — keeps repeated runs against the shared, persistent dev DB from colliding, and doubles as a readable marker for manual cleanup.
 - `authedGet`/`authedJSON` helpers (`page.request.fetch` with `Authorization: Bearer <token>`) for API-level assertions after a UI flow — most specs duplicate a small local copy rather than importing a shared one; match that convention.
-- No cleanup step is expected for events/orgs/locations created by a spec (unlike `locations.spec.ts`'s location deletes, which exist only because of the geohash `UNIQUE` index forcing it) — leaving fixtures in the shared dev DB is accepted precedent, not an oversight.
+- No cleanup step is expected for events/orgs/locations created by a spec (see the review-queue exception above) (unlike `locations.spec.ts`'s location deletes, which exist only because of the geohash `UNIQUE` index forcing it) — leaving fixtures in the shared dev DB is accepted precedent, not an oversight.
 - `waitForMailboxURL`/`waitForMail` (`helpers/mailbox.ts`) return the *first* match in the mbox file, not the latest. A spec that sends more than one email of the same link-shape across its run — or shares the file with another spec's leftover, never-cleared mail from a moment earlier — must call `clearMailbox()` immediately before the request that triggers the specific email it's about to wait for, not just once at the top of the test.
 - The account-level API rate limiter (`cmd/dansal/account_rate_limit.go`, 30 req/min) self-clears within ~60–90s; a burst of failures across many concurrent spec files that look like generic `seedLocation`/API errors is often this, not a real regression — confirm via a direct curl probe before concluding otherwise.

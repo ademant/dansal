@@ -39,12 +39,36 @@ form.addEventListener('change',_markDirty);
 ```
 
 Rules:
-- **Back button** uses `onclick="safeGoBack()"` (never `history.back()` directly) — see `admin_musician_edit.html:10`.
+- **Back button** uses `data-fn="safeGoBack" data-args="[]"` (never `history.back()` directly) — see the first button in `admin_musician_edit.html`.
 - **Every input/change fires `_markDirty`** — including select boxes and any custom controls; wire them explicitly.
 - **On successful save** the page reloads/re-navigates, so `_formDirty` reset happens naturally; if you add a save path that doesn't navigate, reset `_formDirty=false` after saving.
 - `_markDirty` attaches `beforeunload` only on the first change (idempotent).
 - Confirm strings come from i18n (`$.Strings.T "admin_unsaved_confirm"`) — add new ones via the `add-i18n` skill (all 12 languages).
-- Existing forms using the pattern: `admin_musician_edit.html`, `admin_location_edit.html`, `admin_event_form.html`, `admin_org_edit.html`, `admin_series_edit.html`, `admin_timetable.html`, `admin_instructor_edit.html`, `admin_fetchurl_edit.html`.
+- Existing forms using the pattern (the `data-fn`/dispatcher rule above applies to all of them): `admin_musician_edit.html`, `admin_location_edit.html`, `admin_event_form.html`, `admin_org_edit.html`, `admin_series_edit.html`, `admin_timetable.html`, `admin_instructor_edit.html`, `admin_fetchurl_edit.html`.
+
+## No inline handlers — `data-fn` / `data-args` / `data-on`
+
+`script-src` carries no `'unsafe-inline'` (nonce + `'strict-dynamic'`), so `onclick=`/`onchange=`/`onsubmit=` attributes are dead. Buttons and inputs call a function on `window` through the dispatcher documented at the top of `static/base.js`: `data-fn="name"`, `data-args='[...]'` (JSON; the literal `"@this"` passes the element itself), and `data-on="change|submit|input|…"` for non-click events (click is the default). Put new helper functions in `static/base.js`, not in an inline `<script>` that other templates would need to copy.
+
+## Section-nav forms (org / location / musician / event edit)
+
+The long edit forms are a sidebar of sections (`.org-nav-item`, `.loc-nav-item`, `.evt-nav-item`, each with `data-target="sec-…"`) over `<section class="form-section" id="sec-…">` blocks that stay collapsed until opened. Adding a section takes **three** edits in the same template, and forgetting the third leaves a dot that never lights up:
+
+1. a nav button with `<span class="…-nav-dot">` and an i18n label,
+2. the `<section id="sec-…">`,
+3. an entry in that template's `hasData` map (`'sec-…': function(){ return …; }`). It decides whether the dot is filled **and** whether the section starts open, so a section that already holds data is open on load.
+
+Consequences: custom controls that change data without a real input (add/remove/reorder rows) must dispatch `input` and `change` themselves, because the dots refresh on `input` and the dirty guard listens for both (see `mediaEditorChanged` in `base.js`). On narrow viewports the whole nav is a drawer behind a toggle button (`#org-nav-toggle`, `#loc-nav-toggle`, `#mus-nav-toggle`).
+
+## Repeatable rows and other shared blocks
+
+Put a UI piece that several pages need in `base.html` as a named `{{define}}` block and call it with `{{template "name" (dict "S" $.Strings "Links" .Foo)}}` — a block only sees the one argument you pass, so `$.Strings` has to be handed in as `S`. The external-media-link list is the reference: `media-links-list` (public), `media-links-editor` + `media-row` (admin, rows cloned from a `<template>`, posted as parallel `media_kind`/`media_title`/`media_url` arrays and parsed by `mediaLinksFromForm`). A form that posts parallel arrays must treat "no rows" as "clear", so the parser returns a non-nil empty slice, and the API client sends the field only when non-nil (see next section).
+
+## Pages that read from `DansalClient`: list vs single endpoint
+
+Some `DansalClient` getters answer from a cached list (`GetOrganization` scans the ~1 min `GetOrganizations` cache first). List endpoints deliberately omit heavy per-owner fields such as `media`, so a page or form that shows or edits one of those fields must call the single-resource getter — `GetOrganizationDetail` for organizations; `GetLocation`/`GetMusician` already hit the single endpoint. Symptom of using the wrong one: the data is saved (API returns it) but the page renders as if it were empty.
+
+For writes, an optional field that must distinguish "leave untouched" from "clear" is sent through a wrapper struct that shadows it with a pointer (`orgWrite`/`locationWrite`/`musicianWrite` + `mediaPtr`): `nil` is omitted, a pointer to an empty slice sends `[]`.
 
 ## Maps — always `attachTileLayer`
 

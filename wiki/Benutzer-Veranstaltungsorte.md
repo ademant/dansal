@@ -22,6 +22,16 @@ Ein Veranstaltungsort kann von mehreren Organisationen verwendet werden.
 
 Über ein Suchfeld kann aus der Adresse die Koordinaten über Openstreetmap gesucht werden. Wird das Gebäude gefunden, wird die Adresse und die Koordinaten übernommen. Dies ist zwingend erforderlich, um den Veranstaltungsort auf einer Karte anzeigen zu können.
 
+## 🔗 Medien-Links
+
+Zu einem Veranstaltungsort (auch zu einem einzelnen Raum) lassen sich externe Links hinterlegen, z. B. ein Rundgang als Video oder Fotos des Saals:
+
+1. Den Ort bearbeiten und den Abschnitt **Medien-Links** öffnen
+2. **+ Link hinzufügen**, Art wählen, optional Titel eingeben, Link (`https://…`) einfügen
+3. Mit **↑ / ↓** sortieren, mit **×** entfernen, speichern
+
+Die Links stehen auf der Ortsseite als einfache Links, nichts wird eingebettet. Bis zu 20 Links pro Ort. Werden zwei Orte zusammengeführt, übernimmt der verbleibende Ort auch die Links des gelöschten (Doppelte werden übersprungen).
+
 ## 🔗 Veranstaltungsorte einer Organisation zuordnen
 
 1. Veranstaltungsort bearbeiten

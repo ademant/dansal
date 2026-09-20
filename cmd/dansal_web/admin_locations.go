@@ -327,6 +327,7 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			NoStreetShoes:  r.FormValue("no_street_shoes") == "1",
 			Capacity:       parseFormOptionalInt(r.Form, "capacity"),
 			SizeSqm:        parseFormOptionalInt(r.Form, "size_sqm"),
+			Media:          mediaLinksFromForm(r),
 		}
 		// Parse multi-value organization_ids checkboxes. Non-admin callers must
 		// include these so the API can authorize the create request.
@@ -478,6 +479,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Aliases:         existing.Aliases,
 			Capacity:        parseFormOptionalInt(r.Form, "capacity"),
 			SizeSqm:         parseFormOptionalInt(r.Form, "size_sqm"),
+			Media:           mediaLinksFromForm(r),
 		}
 		returnURL := safeLocationsReturnURL(r.FormValue("return"))
 		from := safeReturnPath(r.FormValue("from"))
@@ -637,6 +639,9 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			if base.FloorCondition == "" {
 				base.FloorCondition = l.FloorCondition
 			}
+			// The dropped location's external links move to the survivor
+			// (deleting it clears its own rows).
+			base.Media = mergeMediaLists(base.Media, l.Media)
 			// Attribute map: base value wins per key; only add keys base lacks.
 			for k, v := range l.Attributes {
 				if base.Attributes == nil {

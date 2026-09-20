@@ -58,3 +58,25 @@ func mediaLinksFromForm(r *http.Request) []MediaLink {
 	}
 	return links
 }
+
+// maxMediaLinks mirrors the API's per-owner cap (maxMediaLinksPerOwner).
+const maxMediaLinks = 20
+
+// mergeMediaLists appends extra's links to base's, skipping URLs base already
+// has and stopping at the per-owner cap. Used when locations are merged so the
+// survivor keeps the links of the ones deleted. Returns nil when both are
+// empty, so callers that then send it don't accidentally clear anything.
+func mergeMediaLists(base, extra []MediaLink) []MediaLink {
+	out := append([]MediaLink(nil), base...)
+	seen := make(map[string]bool, len(out))
+	for _, l := range out {
+		seen[l.URL] = true
+	}
+	for _, l := range extra {
+		if !seen[l.URL] && len(out) < maxMediaLinks {
+			out = append(out, l)
+			seen[l.URL] = true
+		}
+	}
+	return out
+}

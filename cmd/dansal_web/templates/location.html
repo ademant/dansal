@@ -87,6 +87,8 @@
 
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 
+{{template "media-links-list" (dict "S" $.Strings "Links" .Media)}}
+
 {{if .SitePlanURL}}
 <details class="loc-siteplan">
   <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>

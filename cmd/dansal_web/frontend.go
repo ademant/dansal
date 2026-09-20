@@ -1190,7 +1190,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			return
 		}
 
-		org, err := client.GetOrganization(r.Context(), actor.OrgID)
+		org, err := client.GetOrganizationDetail(r.Context(), actor.OrgID)
 		if err != nil {
 			http.NotFound(w, r)
 			return

@@ -33,6 +33,9 @@ type Organization struct {
 	NotesMd          string     `json:"notes_md,omitempty"`
 	FetchSourceIDs   []int      `json:"fetch_source_ids,omitempty"`
 	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
+	// Media is the organization's external link list (#1361); filled on the
+	// single-organization GET and on create/update responses only.
+	Media []MediaLink `json:"media,omitempty"`
 
 	FutureEventCount int      `json:"future_event_count,omitempty"`
 	PastEventCount   int      `json:"past_event_count,omitempty"`
@@ -63,6 +66,9 @@ type CreateOrganizationRequest struct {
 	NotesMd          string     `json:"notes_md"`
 	ChatLinks        []ChatLink `json:"chat_links"`
 	ImageAIGenerated bool       `json:"image_ai_generated,omitempty"`
+	// Media replaces the external link list when present ([] clears); omitted
+	// leaves it untouched (#1361).
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 type AddMemberRequest struct {
@@ -87,6 +93,8 @@ type OrganizationMergePatchRequest struct {
 	WikidataID   *string     `json:"wikidata_id,omitempty"`
 	NotesMd      *string     `json:"notes_md,omitempty"`
 	ChatLinks    *[]ChatLink `json:"chat_links,omitempty"`
+	// Media replaces the external link list when present (#1361).
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 // ensureOrgFromOrganizer finds or creates an organization from a vevent's ORGANIZER property.
@@ -398,6 +406,14 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var newMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if newMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	chatLinksJSON, _ := json.Marshal(filterChatLinks(req.ChatLinks))
 	o, err := scanOrg(db.QueryRow(
 		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email, contact_name, wikidata_id, notes_md, chat_links, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,strftime('%s','now')) RETURNING "+orgSelectCols,
@@ -408,6 +424,13 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addOrgMember(db, o.ID, callerID)
+	if req.Media != nil {
+		if err := replaceOwnerMedia(db, ownerTypeOrganization, o.ID, newMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		o.Media = newMedia
+	}
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/organizations/%d", o.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(o)
@@ -451,6 +474,7 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 		writeOrgsAtom(w, r, []Organization{o})
 		return
 	}
+	o.Media = loadOwnerMedia(db, ownerTypeOrganization, o.ID)
 	writeJSON(w, o)
 }
 
@@ -521,6 +545,14 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	var newMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if newMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if callerRole == RoleAdmin {
 		if req.ActorName != "" && !checkActorNameAvailable(w, req.ActorName, id) {
 			return
@@ -545,8 +577,15 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
+	if req.Media != nil {
+		if err := replaceOwnerMedia(db, ownerTypeOrganization, o.ID, newMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 	// writeOrganizationFields bumped updated_at server-side (#1128).
 	db.QueryRow("SELECT COALESCE(updated_at,0) FROM organizations WHERE id=?", o.ID).Scan(&o.UpdatedAt)
+	o.Media = loadOwnerMedia(db, ownerTypeOrganization, o.ID)
 	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
 	json.NewEncoder(w).Encode(o)
 }
@@ -590,6 +629,14 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 	var req OrganizationMergePatchRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	var patchMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if patchMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if callerRole == RoleAdmin {
 		if req.ActorName != nil {
@@ -636,8 +683,15 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
+	if req.Media != nil {
+		if err := replaceOwnerMedia(db, ownerTypeOrganization, o.ID, patchMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 	// writeOrganizationFields bumped updated_at server-side (#1128).
 	db.QueryRow("SELECT COALESCE(updated_at,0) FROM organizations WHERE id=?", o.ID).Scan(&o.UpdatedAt)
+	o.Media = loadOwnerMedia(db, ownerTypeOrganization, o.ID)
 	w.Header().Set("ETag", weakEtag(o.UpdatedAt))
 	json.NewEncoder(w).Encode(o)
 }
@@ -657,6 +711,9 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 	if n, _ := result.RowsAffected(); n == 0 {
 		writeError(w, "Organization not found", http.StatusNotFound)
 		return
+	}
+	if oid, err := strconv.Atoi(id); err == nil {
+		deleteOwnerMedia(db, ownerTypeOrganization, oid)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

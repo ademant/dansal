@@ -634,6 +634,8 @@ GET    /api/v1/organizations/check-actor-name  # check ActivityPub actor name av
 
 List and get are public. Create/update/delete require authentication. `GET /api/v1/organizations/members` requires authentication; non-admin callers only get results for orgs they belong to (others are silently omitted).
 
+**Media links (#1361).** Organizations and locations (including rooms) carry the same `media` list as musicians (see [Musicians](#musicians-and-instructors): same shape, validation and limits). It is returned on `GET /api/v1/organizations/{id}` and `GET /api/v1/locations/{id}` and on create/update/patch responses, but not in list results or the Atom feed. `POST`, `PUT` and `PATCH` accept `media`: present replaces the whole list (`[]` clears it), omitted leaves it untouched — so an old client doing a `PUT` without the field never wipes the links. Invalid links reject the whole request with `400` before anything is written. Deleting an organization or location deletes its links (a location's rooms' links too); merging locations moves the deleted location's links to the survivor, skipping URLs it already has, up to the 20-link cap.
+
 `PUT` replaces every editable field with the body's values. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body. In both, `name`/`actor_name` may only be changed by admins — a non-admin org member's `name`/`actor_name` value in the body is silently ignored rather than rejected, matching the pre-existing `PUT` behavior. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`. There is no `OPTIONS` schema-discovery endpoint for organizations, matching the exclusion for users/apikeys/publishers (see Vocabulary section) — organization management is meant to stay inside dansal rather than become an external self-service surface.
 
 ## Locations
@@ -659,6 +661,8 @@ POST   /api/v1/locations/{id}/children            # auth required — create a r
 List and get are public. Locations support `Accept: application/geo+json` on the list endpoint.
 
 **`PUT` vs `PATCH`:** `PUT` replaces the entire location — send the complete object; any field omitted from the body is cleared to its zero value. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body — an omitted key leaves the existing value unchanged, an explicit `""` clears a plain text field. Array/map fields (`organization_ids`, `attributes`, `aliases`) are replaced wholesale when present in a `PATCH` body, never merged element-by-element. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`.
+
+Locations accept and return `media` too — see the organizations section above for the semantics (#1361).
 
 **Rooms are child locations.** A room (e.g. "Grand Hall", "Studio 2") is a normal `locations` row with `parent_id` set to its building's location `id` — not a separate entity type. This means a room automatically gets everything a location already has: its own `organization_ids` (a room can be assigned to a different org than its building), `aliases`, its own `/location/{id}` page, and its own event dedup. A location can only be a parent OR a child, never both — `parent_id` must reference a top-level location (one with `parent_id: null`); a room cannot itself have children.
 

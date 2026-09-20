@@ -81,6 +81,8 @@
 </div>
 {{end}}
 
+{{template "media-links-list" (dict "S" $.Strings "Links" .Org.Media)}}
+
 <div class="fediverse">
   <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
   <span class="fediverse-followers">{{$.Strings.TF "org_followers" .FollowerCount}}</span>

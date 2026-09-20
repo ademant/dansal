@@ -571,6 +571,9 @@ type Organization struct {
 	NotesMd          string     `json:"notes_md,omitempty"`
 	FetchSourceIDs   []int      `json:"fetch_source_ids,omitempty"`
 	ChatLinks        []ChatLink `json:"chat_links,omitempty"`
+	// Media is the external link list (#1361), read from the single-
+	// organization GET; see orgWrite for how writes send it.
+	Media []MediaLink `json:"media,omitempty"`
 }
 
 // ChatLink is one entry in an organization's chat_links: a community
@@ -679,6 +682,27 @@ type Musician struct {
 // JSON name): nil is omitted so callers that never touched links leave the
 // stored list alone, while a non-nil pointer — even to an empty slice — is
 // sent, which is how the edit form clears every link.
+type orgWrite struct {
+	Organization
+	Media *[]MediaLink `json:"media,omitempty"`
+}
+
+type locationWrite struct {
+	Location
+	Media *[]MediaLink `json:"media,omitempty"`
+}
+
+// mediaPtr returns a pointer to links when the caller populated the list
+// (non-nil — even empty, which clears it) and nil otherwise, so a Location or
+// Organization built without any media information never touches the stored
+// links.
+func mediaPtr(links []MediaLink) *[]MediaLink {
+	if links == nil {
+		return nil
+	}
+	return &links
+}
+
 type musicianWrite struct {
 	Musician
 	Media *[]MediaLink `json:"media,omitempty"`
@@ -734,6 +758,9 @@ type Location struct {
 
 	FutureEventCount int `json:"future_event_count,omitempty"`
 	PastEventCount   int `json:"past_event_count,omitempty"`
+	// Media is the external link list (#1361), read from the single-location
+	// GET; see locationWrite for how writes send it.
+	Media []MediaLink `json:"media,omitempty"`
 }
 
 // DisplayCountry/DisplayRegion resolve Country/Region through
@@ -1242,6 +1269,17 @@ func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, er
 	})
 }
 
+// GetOrganizationDetail always fetches the single-organization endpoint, which
+// (unlike the cached list GetOrganization prefers) carries the external media
+// links (#1361). Use it where those links are shown or edited.
+func (c *DansalClient) GetOrganizationDetail(ctx context.Context, id int) (Organization, error) {
+	var org Organization
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/organizations/%d", id), &org); err != nil {
+		return Organization{}, err
+	}
+	return org, nil
+}
+
 func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organization, error) {
 	orgs, err := c.GetOrganizations(ctx)
 	if err == nil {
@@ -1480,7 +1518,7 @@ func (c *DansalClient) authed(ctx context.Context, method, path, token string, b
 }
 
 func (c *DansalClient) CreateOrganization(ctx context.Context, org Organization, token string) (Organization, error) {
-	body, _ := json.Marshal(org)
+	body, _ := json.Marshal(orgWrite{Organization: org, Media: mediaPtr(org.Media)})
 	var out Organization
 	if err := c.do(ctx, http.MethodPost, "/api/v1/organizations", token, body, &out, http.StatusCreated); err != nil {
 		return Organization{}, err
@@ -1490,7 +1528,7 @@ func (c *DansalClient) CreateOrganization(ctx context.Context, org Organization,
 }
 
 func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organization, token string) error {
-	body, _ := json.Marshal(org)
+	body, _ := json.Marshal(orgWrite{Organization: org, Media: mediaPtr(org.Media)})
 	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/organizations/%d", id), token, body, nil); err != nil {
 		return err
 	}
@@ -1594,7 +1632,7 @@ func (e *LocationConflictError) Error() string {
 }
 
 func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token string) (Location, error) {
-	body, _ := json.Marshal(loc)
+	body, _ := json.Marshal(locationWrite{Location: loc, Media: mediaPtr(loc.Media)})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations", token, body)
 	if err != nil {
 		return Location{}, err
@@ -1625,7 +1663,7 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 }
 
 func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {
-	body, _ := json.Marshal(loc)
+	body, _ := json.Marshal(locationWrite{Location: loc, Media: mediaPtr(loc.Media)})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
 	if err != nil {
 		return err

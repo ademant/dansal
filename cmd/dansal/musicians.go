@@ -99,6 +99,8 @@ type MusicianMergePatchRequest struct {
 	Deezer       *string `json:"deezer,omitempty"`
 	Genre        *string `json:"genre,omitempty"`
 	Email        *string `json:"email,omitempty"`
+	// Media replaces the external link list when present (#1360).
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 const musicianCols = `id, bandname,
@@ -443,6 +445,14 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	var patchMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if patchMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if req.Bandname != nil {
 		m.Bandname = *req.Bandname
 	}
@@ -518,12 +528,20 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	if req.Media != nil {
+		mid, _ := strconv.Atoi(id)
+		if err := replaceOwnerMedia(db, ownerTypeMusician, mid, patchMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
+	musician.Media = loadOwnerMedia(db, ownerTypeMusician, musician.ID)
 	json.NewEncoder(w).Encode(musician)
 }
 

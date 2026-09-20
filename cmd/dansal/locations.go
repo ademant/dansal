@@ -53,6 +53,9 @@ type Location struct {
 	PlanX            *float64        `json:"plan_x,omitempty"` // room's position (0-1) on the parent building's site-plan image (#877)
 	PlanY            *float64        `json:"plan_y,omitempty"`
 	SitePlanURL      string          `json:"site_plan_url,omitempty"` // set when this (top-level) location has an uploaded site-plan image
+	// Media is the location's external link list (#1361); filled on the
+	// single-location GET and on create/update responses only.
+	Media []MediaLink `json:"media,omitempty"`
 }
 
 func validCountryCode(code string) bool {
@@ -104,6 +107,9 @@ type LocationCreateRequest struct {
 	SizeSqm         *int            `json:"size_sqm,omitempty"`
 	PlanX           *float64        `json:"plan_x,omitempty"`
 	PlanY           *float64        `json:"plan_y,omitempty"`
+	// Media replaces the external link list when present ([] clears);
+	// omitted leaves it untouched (#1361).
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 // locationCols is the shared SELECT column list used by all location queries.
@@ -351,6 +357,8 @@ type LocationMergePatchRequest struct {
 	SizeSqm         *int             `json:"size_sqm,omitempty"`
 	PlanX           *float64         `json:"plan_x,omitempty"`
 	PlanY           *float64         `json:"plan_y,omitempty"`
+	// Media replaces the external link list when present (#1361).
+	Media *[]MediaLink `json:"media,omitempty"`
 }
 
 // GET /api/v1/locations - List all locations
@@ -526,7 +534,16 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate all items before inserting any.
-	for _, req := range reqs {
+	normalizedMedia := make([][]MediaLink, len(reqs))
+	for i, req := range reqs {
+		if req.Media != nil {
+			links, err := normalizeMediaLinks(*req.Media)
+			if err != nil {
+				writeError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			normalizedMedia[i] = links
+		}
 		if req.Location == "" {
 			writeError(w, "location is required", http.StatusBadRequest)
 			return
@@ -588,7 +605,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := make([]LocationCreateResponse, 0, len(reqs))
-	for _, req := range reqs {
+	for reqIdx, req := range reqs {
 		// Derive street and town for the duplicate-street check.
 		// Prefer explicit request fields; fall back to parsing the location name.
 		street, town := req.Address, req.Town
@@ -635,6 +652,12 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		id, _ := result.LastInsertId()
 		syncLocationOrgs(int(id), req.OrganizationIDs)
 		syncLocationAliases(int(id), req.Aliases)
+		if req.Media != nil {
+			if err := replaceOwnerMedia(db, ownerTypeLocation, int(id), normalizedMedia[reqIdx]); err != nil {
+				writeInternalError(w, err)
+				return
+			}
+		}
 		loc := Location{
 			ID:              int(id),
 			Location:        req.Location,
@@ -660,6 +683,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			SizeSqm:         req.SizeSqm,
 			PlanX:           req.PlanX,
 			PlanY:           req.PlanY,
+			Media:           normalizedMedia[reqIdx],
 		}
 		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
@@ -736,6 +760,8 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("ETag", weakEtag(location.UpdatedAt))
+
+	location.Media = loadOwnerMedia(db, ownerTypeLocation, location.ID)
 
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/geo+json") {
@@ -963,6 +989,14 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "plan_x/plan_y must be between 0 and 1", http.StatusBadRequest)
 		return
 	}
+	var newMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if newMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
 	var existingUpdatedAt int64
 	var existingUpdatedAtNull sql.NullInt64
@@ -1005,6 +1039,12 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	syncLocationOrgs(idInt, req.OrganizationIDs)
 	syncLocationAliases(idInt, req.Aliases)
+	if req.Media != nil {
+		if err := replaceOwnerMedia(db, ownerTypeLocation, idInt, newMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 
 	var loc Location
 	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
@@ -1013,6 +1053,7 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	loc.Media = loadOwnerMedia(db, ownerTypeLocation, idInt)
 	w.Header().Set("ETag", weakEtag(loc.UpdatedAt))
 	json.NewEncoder(w).Encode(loc)
 }
@@ -1037,6 +1078,14 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	var req LocationMergePatchRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	var patchMedia []MediaLink
+	if req.Media != nil {
+		var merr error
+		if patchMedia, merr = normalizeMediaLinks(*req.Media); merr != nil {
+			writeError(w, merr.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if req.CountryCode != nil && !validCountryCode(*req.CountryCode) {
 		writeError(w, "country_code must be 2 uppercase letters (e.g. 'DE') or empty", http.StatusBadRequest)
@@ -1185,11 +1234,18 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	if req.Aliases != nil {
 		syncLocationAliases(loc.ID, loc.Aliases)
 	}
+	if req.Media != nil {
+		if err := replaceOwnerMedia(db, ownerTypeLocation, loc.ID, patchMedia); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 
 	// writeLocationFields bumped updated_at server-side; reflect the new
 	// value in the response ETag rather than the stale one read before the
 	// write (#1128).
 	db.QueryRow("SELECT COALESCE(updated_at,0) FROM locations WHERE id=?", loc.ID).Scan(&loc.UpdatedAt)
+	loc.Media = loadOwnerMedia(db, ownerTypeLocation, loc.ID)
 	w.Header().Set("ETag", weakEtag(loc.UpdatedAt))
 	json.NewEncoder(w).Encode(loc)
 }
@@ -1318,6 +1374,8 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mediaOwnerIDs := locationAndChildIDs(db, locationID)
+
 	result, err := db.Exec("DELETE FROM locations WHERE id = ?", id)
 	if err != nil {
 		writeInternalError(w, err)
@@ -1328,6 +1386,9 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	if rowsAffected == 0 {
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
+	}
+	for _, oid := range mediaOwnerIDs {
+		deleteOwnerMedia(db, ownerTypeLocation, oid)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -1502,7 +1563,11 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 	// Copy aliases from merged location to keep (junction table; ON DELETE CASCADE handles cleanup).
 	tx.Exec("INSERT OR IGNORE INTO location_aliases (location_id, alias) SELECT ?, alias FROM location_aliases WHERE location_id=?", keep.ID, merge.ID)
 
-	// Delete the merged location.
+	// Fold the merged location's media links into the survivor, then delete it.
+	if err := mergeOwnerMedia(tx, ownerTypeLocation, keep.ID, merge.ID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	tx.Exec("DELETE FROM locations WHERE id=?", merge.ID)
 
 	if err := tx.Commit(); err != nil {

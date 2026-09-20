@@ -71,3 +71,43 @@ func TestMusicianWriteMediaSemantics(t *testing.T) {
 		t.Errorf("shadowed field must marshal once: %s", b)
 	}
 }
+
+func TestMergeMediaLists(t *testing.T) {
+	a := MediaLink{Kind: "video", URL: "https://example.org/a"}
+	b := MediaLink{Kind: "audio", URL: "https://example.org/b"}
+
+	if got := mergeMediaLists(nil, nil); got != nil {
+		t.Fatalf("empty+empty must stay nil (so nothing is sent), got %#v", got)
+	}
+	got := mergeMediaLists([]MediaLink{a}, []MediaLink{a, b})
+	if len(got) != 2 || got[0] != a || got[1] != b {
+		t.Fatalf("want [a b] with base first and duplicate URL dropped, got %#v", got)
+	}
+
+	var many []MediaLink
+	for i := 0; i < maxMediaLinks; i++ {
+		many = append(many, MediaLink{Kind: "other", URL: "https://example.org/" + string(rune('a'+i))})
+	}
+	if got := mergeMediaLists(many, []MediaLink{{Kind: "other", URL: "https://example.org/new"}}); len(got) != maxMediaLinks {
+		t.Fatalf("cap not enforced: %d", len(got))
+	}
+}
+
+func TestOrgAndLocationWriteMediaSemantics(t *testing.T) {
+	// nil -> key omitted (leave stored links alone); empty non-nil -> [] (clear).
+	loc := Location{ID: 1}
+	b, _ := json.Marshal(locationWrite{Location: loc, Media: mediaPtr(loc.Media)})
+	if strings.Contains(string(b), `"media"`) {
+		t.Fatalf("nil media must be omitted: %s", b)
+	}
+	loc.Media = []MediaLink{}
+	b, _ = json.Marshal(locationWrite{Location: loc, Media: mediaPtr(loc.Media)})
+	if !strings.Contains(string(b), `"media":[]`) {
+		t.Fatalf("empty media must send []: %s", b)
+	}
+	org := Organization{ID: 1, Media: []MediaLink{{Kind: "video", URL: "https://example.org/v"}}}
+	b, _ = json.Marshal(orgWrite{Organization: org, Media: mediaPtr(org.Media)})
+	if !strings.Contains(string(b), `"url":"https://example.org/v"`) {
+		t.Fatalf("org media not sent: %s", b)
+	}
+}

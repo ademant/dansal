@@ -95,6 +95,7 @@
     <button type="button" class="loc-nav-item" data-target="sec-parking"><span class="loc-nav-dot"></span>{{$.Strings.T "parking_label"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-floor"><span class="loc-nav-dot"></span>{{$.Strings.T "section_floor_shoes"}}</button>
     <button type="button" class="loc-nav-item" data-target="sec-capacity"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_capacity_section"}}</button>
+    <button type="button" class="loc-nav-item" data-target="sec-media"><span class="loc-nav-dot"></span>{{$.Strings.T "media_admin_title"}}</button>
     {{if not .Location.ParentID}}<button type="button" class="loc-nav-item" data-target="sec-siteplan"><span class="loc-nav-dot"></span>{{$.Strings.T "loc_siteplan_section"}}</button>{{end}}
   </aside>
   <div class="loc-main">
@@ -265,6 +266,11 @@
         <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{intVal .Location.SizeSqm}}">
       </div>
     </div>
+  </section>
+
+  <section class="form-section" id="sec-media">
+    <h2>{{$.Strings.T "media_admin_title"}}</h2>
+    {{template "media-links-editor" (dict "S" $.Strings "Links" .Location.Media)}}
   </section>
 
   {{if not .Location.ParentID}}
@@ -962,6 +968,9 @@ document.addEventListener('DOMContentLoaded', function(){
     },
     'sec-capacity':function(){
       return !!document.getElementById('capacity').value || !!document.getElementById('size_sqm').value;
+    },
+    'sec-media':function(){
+      return document.querySelectorAll('#sec-media .media-row').length>0;
     },
     'sec-siteplan':function(){
       return !!document.getElementById('siteplan-canvas');

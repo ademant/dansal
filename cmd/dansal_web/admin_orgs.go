@@ -33,6 +33,7 @@ func orgFromForm(r *http.Request) Organization {
 		NotesMd:          strings.TrimSpace(r.FormValue("notes_md")),
 		ChatLinks:        chatLinksFromForm(r),
 		ImageAIGenerated: r.FormValue("image_ai_generated") == "1",
+		Media:            mediaLinksFromForm(r),
 	}
 }
 
@@ -270,7 +271,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 		if !ok {
 			return
 		}
-		org, err := client.GetOrganization(r.Context(), id)
+		org, err := client.GetOrganizationDetail(r.Context(), id)
 		if err != nil {
 			http.NotFound(w, r)
 			return

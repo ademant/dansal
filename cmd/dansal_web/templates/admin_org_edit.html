@@ -58,6 +58,7 @@
     <button type="button" class="org-nav-item" data-target="sec-contact"><span class="org-nav-dot"></span>{{$.Strings.T "org_section_contact"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-social"><span class="org-nav-dot"></span>{{$.Strings.T "org_social"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-chat"><span class="org-nav-dot"></span>{{$.Strings.T "org_chat_links"}}</button>
+    <button type="button" class="org-nav-item" data-target="sec-media"><span class="org-nav-dot"></span>{{$.Strings.T "media_admin_title"}}</button>
     <button type="button" class="org-nav-item" data-target="sec-additional"><span class="org-nav-dot"></span>{{$.Strings.T "org_notes"}}</button>
   </aside>
   <div class="org-main">
@@ -144,6 +145,11 @@
     <label for="chat_{{.Slug}}">{{if eq .Slug "mailing_list"}}{{$.Strings.T "org_chat_mailing_list"}}{{else}}{{.Label}}{{end}}</label>
     <input id="chat_{{.Slug}}" type="url" name="chat_{{.Slug}}" value="{{chatLinkURL $.Data.Org.ChatLinks .Slug}}" placeholder="https://...">
     {{end}}
+  </section>
+
+  <section class="form-section" id="sec-media">
+    <h2>{{$.Strings.T "media_admin_title"}}</h2>
+    {{template "media-links-editor" (dict "S" $.Strings "Links" .Org.Media)}}
   </section>
 
   <section class="form-section" id="sec-additional">
@@ -507,6 +513,7 @@ function filterLocs(q){
     'sec-chat':function(){
       return Array.prototype.some.call(document.querySelectorAll('#sec-chat input'),function(i){return i.value.trim();});
     },
+    'sec-media':function(){return document.querySelectorAll('#sec-media .media-row').length>0;},
     'sec-additional':function(){return !!document.getElementById('notes_md').value.trim();}
   };
   function refreshDots(){

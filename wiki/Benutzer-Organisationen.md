@@ -21,6 +21,16 @@ Organisationen (Vereine oder wie auch immer ihr organisiert seid) können nur vo
 - **iCal-Feeds**: Automatischen Veranstaltungsimport einrichten
 - **Mitglieder**: Benutzer hinzufügen, die Veranstaltungen für diese Organisation erstellen/verwalten dürfen
 
+## 🔗 Medien-Links
+
+Auch eine Organisation kann eine Liste externer Links pflegen, z. B. ein Vorstellungsvideo, Fotoalben oder Pressematerial. Die Bedienung ist dieselbe wie bei Musikern (siehe [Benutzer-Musiker](Benutzer-Musiker)):
+
+1. Die Organisation bearbeiten und den Abschnitt **Medien-Links** öffnen
+2. **+ Link hinzufügen**, Art wählen, optional Titel eingeben, Link (`https://…`) einfügen
+3. Mit **↑ / ↓** sortieren, mit **×** entfernen, speichern
+
+Die Links erscheinen als einfache Links auf der Organisationsseite; es wird nichts eingebettet oder beim Seitenaufruf nachgeladen. Bis zu 20 Links pro Organisation. Auch Mitglieder der Organisation (nicht nur Administratoren) dürfen die Links pflegen.
+
 ## 🔄 Automatische Feed-Synchronisation einrichten
 
 Unter **Quellen → Neue Quelle** (`/admin/fetchurls/new`) richtest du einen dauerhaften Feed ein, der regelmäßig automatisch abgerufen wird – im Unterschied zum einmaligen, von Hand bestätigten Import (siehe [Benutzer-Veranstaltungen](Benutzer-Veranstaltungen)).

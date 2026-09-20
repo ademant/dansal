@@ -17,7 +17,9 @@ type MediaLink struct {
 }
 
 const (
-	ownerTypeMusician = "musician"
+	ownerTypeMusician     = "musician"
+	ownerTypeOrganization = "organization"
+	ownerTypeLocation     = "location"
 
 	maxMediaLinksPerOwner = 20
 	maxMediaURLLen        = 2048
@@ -108,4 +110,46 @@ func replaceOwnerMedia(q querier, ownerType string, ownerID int, links []MediaLi
 // foreign key), so owner delete handlers must call this explicitly.
 func deleteOwnerMedia(q querier, ownerType string, ownerID int) {
 	q.Exec("DELETE FROM owner_media WHERE owner_type = ? AND owner_id = ?", ownerType, ownerID)
+}
+
+// mergeOwnerMedia folds dropID's links into keepID's (keep's first, then
+// drop's, skipping URLs keep already has, capped at maxMediaLinksPerOwner) and
+// removes dropID's rows — used when two owners are merged so the surviving
+// one doesn't lose the links the other had collected.
+func mergeOwnerMedia(q querier, ownerType string, keepID, dropID int) error {
+	combined := loadOwnerMedia(q, ownerType, keepID)
+	seen := make(map[string]bool, len(combined))
+	for _, l := range combined {
+		seen[l.URL] = true
+	}
+	for _, l := range loadOwnerMedia(q, ownerType, dropID) {
+		if !seen[l.URL] && len(combined) < maxMediaLinksPerOwner {
+			combined = append(combined, l)
+			seen[l.URL] = true
+		}
+	}
+	if err := replaceOwnerMedia(q, ownerType, keepID, combined); err != nil {
+		return err
+	}
+	deleteOwnerMedia(q, ownerType, dropID)
+	return nil
+}
+
+// locationAndChildIDs returns a location's id plus those of its child rooms
+// (deleting a building cascades to its rooms via parent_id, so their links
+// must go with it). Call before the delete: the children are gone afterwards.
+func locationAndChildIDs(q querier, locationID int) []int {
+	ids := []int{locationID}
+	rows, err := q.Query("SELECT id FROM locations WHERE parent_id = ?", locationID)
+	if err != nil {
+		return ids
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }

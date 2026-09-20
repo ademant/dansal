@@ -801,7 +801,10 @@ function mediaEditorChanged(ed){
   if(typeof _markDirty==='function') _markDirty();
   // Adding/removing/moving rows raises no input event of its own; emit one so
   // section-completeness dots and any form-level listeners see the change.
-  if(ed) ed.dispatchEvent(new Event('change',{bubbles:true}));
+  if(ed){
+    ed.dispatchEvent(new Event('input',{bubbles:true}));
+    ed.dispatchEvent(new Event('change',{bubbles:true}));
+  }
 }
 function mediaAddRow(btn){
   var ed=btn.closest('.media-editor');

@@ -642,6 +642,21 @@
     document.addEventListener('click',function(e){
       if(!e.target.closest('.ac-wrap'))document.getElementById('ac-list').hidden=true;
     });
+    // Enter in an autocomplete search field must never submit the whole event
+    // form (#1369): it activates the first existing match, else the
+    // "create" suggestion. Delegated, so it also covers the instructor and
+    // room pickers defined further down.
+    document.addEventListener('keydown',function(e){
+      if(e.key!=='Enter')return;
+      var lists={'musician-search':'ac-list','instructor-search':'ac-instr-list','room-search':'room-ac-list'};
+      var id=e.target&&e.target.id;
+      if(!lists[id])return;
+      e.preventDefault();
+      var list=document.getElementById(lists[id]);
+      if(!list||list.hidden)return;
+      var item=list.querySelector('.ac-item:not(.ac-create)')||list.querySelector('.ac-create');
+      if(item)item.click();
+    },true);
     </script>
   </section>
 

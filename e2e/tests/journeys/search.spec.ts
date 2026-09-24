@@ -156,8 +156,10 @@ test("town filter narrows results and clears on reset; map stays in sync [#976]"
 
   // Wait for the Leaflet map to initialise (the deferred <script> must run
   // and attachTileLayer must have been called before we check markers).
+  // .leaflet-map-pane (not .leaflet-pane): Leaflet creates 7 .leaflet-pane
+  // divs per map, so the broad selector trips strict mode.
   await expect(
-    page.locator("#map-container .leaflet-pane")
+    page.locator("#map-container .leaflet-map-pane")
   ).toBeAttached({ timeout: 10_000 });
 
   // ── local-match path: "Testville" is in the loaded locs array ──

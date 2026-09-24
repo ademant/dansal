@@ -90,4 +90,19 @@ export async function fetchImageMeta(
   return sharp(body).metadata();
 }
 
+/**
+ * Fetch an image URL and force a full decode with sharp, returning stats.
+ * Unlike fetchImageMeta (header-only), this decodes every pixel, so a
+ * payload the server labels image/avif but can't actually be decoded fails
+ * loudly instead of passing a content-type check.
+ */
+export async function decodeImageStats(
+  page: Page,
+  url: string
+): Promise<sharp.Stats> {
+  const resp = await page.request.fetch(url);
+  const body = await resp.body();
+  return sharp(body).stats();
+}
+
 export { API_BASE };

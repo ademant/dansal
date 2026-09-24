@@ -228,11 +228,14 @@ test.describe("Admin: feed import, preview, and duplicate detection", () => {
     await page.locator("#import-btn").click({ force: true });
     await page.waitForURL(/\/admin\/events\?/);
 
-    // -- New event created cleanly, wired to the selected org. --
+    // -- New event created cleanly, wired to the selected org. Scope the
+    //    query to the fresh org: the shared dev DB holds >1000 events, and
+    //    /events?limit=1000 returns the 1000 OLDEST ascending — a brand-new
+    //    future event would fall outside the window entirely. --
     const newEvents = await authedJSON(
       page,
       token,
-      `/api/v1/events?limit=1000&include_past=true`
+      `/api/v1/events?limit=1000&include_past=true&organization_id=${orgId}`
     );
     const createdNew = (Array.isArray(newEvents) ? newEvents : []).find(
       (e: any) => e.title === newTitle

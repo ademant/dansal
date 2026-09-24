@@ -473,6 +473,9 @@ var tmplFuncsTime = template.FuncMap{
 	// hardcoded <option> list. Returns "" for any custom, organizer-added
 	// track — the caller falls back to the track's own (untranslated) Name.
 	"trackI18nKey": trackI18nKey,
+	"ttTypeLabel":  ttTypeLabel,
+	"ttBadgeKind":  ttBadgeKind,
+	"ttKindClass":  ttKindClass,
 	"usedRoomIDs": func(entries []TimetableEntry) map[int]bool {
 		ids := map[int]bool{}
 		for _, e := range entries {
@@ -548,3 +551,45 @@ var defaultTrackI18nKeys = map[string]string{
 }
 
 func trackI18nKey(slug string) string { return defaultTrackI18nKeys[slug] }
+
+// ttTypeLabel is the public label for a timetable entry's type (#1368): the
+// translated label for a default-palette slug, else the event's own track
+// name for an organizer-added one, else the raw slug. It must never fall
+// back to "Bal" -- that made dance-workshop, session, concert etc. look
+// like a Bal on the public event page.
+func ttTypeLabel(strs I18nStrings, tracks []TimetableTrack, slug string) string {
+	if key := trackI18nKey(slug); key != "" {
+		return strs.T(key)
+	}
+	for _, t := range tracks {
+		if t.Slug == slug && t.Name != "" {
+			return t.Name
+		}
+	}
+	return slug
+}
+
+// ttBadgeKind groups an entry_type slug into the three existing visual
+// families: "ws" (anything containing "workshop"), "break" (break, meal),
+// "bal" (everything else, incl. custom tracks).
+func ttBadgeKind(slug string) string {
+	switch {
+	case strings.Contains(slug, "workshop"):
+		return "ws"
+	case slug == "break" || slug == "meal":
+		return "break"
+	default:
+		return "bal"
+	}
+}
+
+// ttKindClass is the row/panel CSS class for a slug's family ("" for bal).
+func ttKindClass(slug string) string {
+	switch ttBadgeKind(slug) {
+	case "ws":
+		return "tt-workshop"
+	case "break":
+		return "tt-break"
+	}
+	return ""
+}

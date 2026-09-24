@@ -112,9 +112,9 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
       <h3 class="tt-column-title">{{if $col.IsOther}}{{$.Strings.T "evt_timetable_other_room"}}{{else}}{{$col.Label}}{{end}}</h3>
       <div class="tt-column-body" style="height:{{$grid.HeightPx}}px">
         {{range $col.Panels}}
-        <div class="tt-panel{{if eq .Entry.EntryType "workshop"}} tt-workshop{{else if eq .Entry.EntryType "break"}} tt-break{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-entry-id="{{.Entry.ID}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-tt-detail data-has-time="0">
+        <div class="tt-panel{{with ttKindClass .Entry.EntryType}} {{.}}{{end}}" style="top:{{.TopPx}}px;height:{{.HeightPx}}px{{if gt .TotalLanes 1}};left:calc({{.LeftPct}}% + 2px);width:calc({{.WidthPct}}% - 4px);right:auto{{end}}" data-entry-id="{{.Entry.ID}}" data-start="{{.Entry.StartTime}}" data-end="{{.Entry.EndTime}}" data-tt-detail data-has-time="0">
           <button type="button" class="tt-star-btn" data-entry-id="{{.Entry.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
-          <div class="tt-panel-title">{{.Entry.Title}}{{if eq .Entry.EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .Entry.EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}{{if .Entry.Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Entry.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Entry.Difficulty)}}</span>{{end}}</div>
+          <div class="tt-panel-title">{{.Entry.Title}}<span class="tt-badge-{{ttBadgeKind .Entry.EntryType}}">{{ttTypeLabel $.Strings $.Event.TimetableTracks .Entry.EntryType}}</span>{{if .Entry.Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Entry.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Entry.Difficulty)}}</span>{{end}}</div>
           {{if .Entry.Room}}<div class="tt-meta">{{.Entry.Room}}</div>{{end}}
           {{if .Entry.MusicianName}}<div class="tt-meta">{{.Entry.MusicianName}}</div>{{end}}
           {{if .Entry.InstructorName}}<div class="tt-meta">{{.Entry.InstructorName}}</div>{{end}}
@@ -129,11 +129,11 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
 {{else}}
 <div class="evt-timetable">
   {{range $dayEntries}}
-  <div class="tt-row{{if eq .EntryType "workshop"}} tt-workshop{{else if eq .EntryType "break"}} tt-break{{end}}" data-entry-id="{{.ID}}" data-tt-detail data-has-time="1">
+  <div class="tt-row{{with ttKindClass .EntryType}} {{.}}{{end}}" data-entry-id="{{.ID}}" data-tt-detail data-has-time="1">
     <button type="button" class="tt-star-btn" data-entry-id="{{.ID}}" data-tt-star title="{{$.Strings.T "tt_star_toggle"}}" aria-label="{{$.Strings.T "tt_star_toggle"}}">☆</button>
     <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
     <div class="tt-body">
-      <div class="tt-title">{{.Title}}{{if eq .EntryType "workshop"}}<span class="tt-badge-ws">{{$.Strings.T "tt_type_workshop"}}</span>{{else if eq .EntryType "break"}}<span class="tt-badge-break">{{$.Strings.T "tt_type_break"}}</span>{{else}}<span class="tt-badge-bal">{{$.Strings.T "tt_type_bal"}}</span>{{end}}{{if .Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Difficulty)}}</span>{{end}}</div>
+      <div class="tt-title">{{.Title}}<span class="tt-badge-{{ttBadgeKind .EntryType}}">{{ttTypeLabel $.Strings $.Event.TimetableTracks .EntryType}}</span>{{if .Difficulty}}<span class="tt-badge-diff tt-badge-diff-{{.Difficulty}}">{{$.Strings.T (print "workshop_difficulty_" .Difficulty)}}</span>{{end}}</div>
       {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
       {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
       {{if .MusicianName}}<div class="tt-meta">{{.MusicianName}}</div>{{end}}

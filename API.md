@@ -23,6 +23,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [OIDC / SSO](#oidc--sso)
 - [TOTP](#totp)
 - [API Keys](#api-keys)
+- [Publisher Webhooks](#publisher-webhooks)
 - [Organizations](#organizations)
 - [Locations](#locations)
 - [Musicians and Instructors](#musicians-and-instructors)
@@ -694,6 +695,48 @@ Authorization: Bearer ak_<current-key>
 ```
 
 Renewing the key itself (`POST /api/v1/apikeys/renew`) carries the existing `signing_secret`/`require_signature` over to the rotated row — a routine expiry renewal never silently turns signature enforcement off.
+
+## Publisher Webhooks
+
+Push-based reverse sync (#1370): a publisher registers an HTTPS URL and dansal POSTs a small signed notification when events of the publisher's organizations change, so a client (e.g. wp-dansal) can re-fetch just that event within seconds instead of waiting for its next poll. Off by default: `server.webhooks.enabled` (subscriptions can still be created and tested while it's off, so an admin can pre-configure before enabling).
+
+```
+GET    /api/v1/publishers/{id}/webhooks
+POST   /api/v1/publishers/{id}/webhooks
+PATCH  /api/v1/publishers/{id}/webhooks/{webhook_id}        # merge-patch
+DELETE /api/v1/publishers/{id}/webhooks/{webhook_id}
+POST   /api/v1/publishers/{id}/webhooks/{webhook_id}/test
+```
+
+The caller must be that publisher, or an admin. At most 5 subscriptions per publisher.
+
+**Create:** `{"url": "https://...", "event_types": "event.publish,event.cancel"}`. `event_types` is a CSV of `event.create`, `event.update`, `event.publish`, `event.cancel`, `event.delete`, or `*` (default, all). The URL must be `https`, carry no credentials, and not resolve to a private/loopback/link-local address (re-checked at every delivery, and redirects are never followed). Creating requires the publisher to already have a [signing secret](#request-signing-opt-in-1366) — deliveries are signed with it — and, when the producer is enabled, immediately sends a `ping` so the client can verify its signature handling. `PATCH` can change `url`, `event_types` and `active`; setting `active` back to `true` resets the failure counters.
+
+**Which events:** those whose `organization_id` is an organization the publisher belongs to. Events without an organization notify nobody.
+
+**Payload** (a pointer, never the resource — re-fetch `GET /api/v1/events/{resource_id}`):
+
+```json
+{
+  "event": "event.update",
+  "resource": "event",
+  "resource_id": 42,
+  "action": "update",
+  "changed_at": "2026-09-24T14:22:31Z",
+  "organization_id": 7,
+  "changed_by_user_id": 12,
+  "delivery_id": "9f2c...",
+  "emitted_at": "2026-09-24T14:22:31Z"
+}
+```
+
+`changed_by_user_id` is the account whose action caused the change (absent for feed imports), so a client can skip the echo of its own write. `delivery_id` is stable across retries for idempotent handling. The test/create ping is `{"event": "ping", "delivery_id": "...", "emitted_at": "..."}`.
+
+**Signature:** identical to [request signing](#request-signing-opt-in-1366) — `X-Wpd-Timestamp`, `X-Wpd-Nonce`, `X-Wpd-Signature`, HMAC-SHA256 over `POST` / subscriber path plus canonical (sorted) query / timestamp / sha256(body) / nonce, keyed with the publisher's signing secret. The query is part of the signed path, so subscriber URLs like `/?rest_route=/wpd/v1/webhook` verify correctly.
+
+**Delivery:** fire-and-forget from a background goroutine, `server.webhooks.timeout_seconds` (default 10) per attempt. A non-2xx or timeout increments `consecutive_failures`, then retries after 30 s, 5 min, 30 min (`retry_backoff_seconds`); at `disable_after_failures` (default 4) the subscription is set `active=false` with `last_error` recorded, and stays off until re-enabled via `PATCH`. A 2xx resets the counters and sets `last_delivery_at`. There is no persistent queue: a dansal restart mid-retry drops that delivery — clients keep their pull fallback for gap recovery.
+
+**Test (`.../test`):** one synchronous `ping`, returning `{"ok": true|false, "http_status": N, "error": "..."}`. Works while the producer is disabled and doesn't touch the failure counters.
 
 ## Organizations
 

@@ -317,10 +317,37 @@ func validDrink(s string) bool          { return validDrinkValues[s] }
 func validFloorCondition(s string) bool { return validFloorConditionValues[s] }
 func validParking(s string) bool        { return validParkingValues[s] }
 
-// touchEvent stamps changed_at/changed_by on an event after a sub-resource mutation.
-func touchEvent(eventID, callerID int) {
+// stampEvent stamps changed_at/changed_by on an event without notifying
+// webhook subscribers — for callers that emit a more specific event type
+// themselves (e.g. cancel).
+func stampEvent(eventID, callerID int) {
 	db.Exec("UPDATE events SET changed_at=?, changed_by=? WHERE id=?",
 		time.Now().UTC().Unix(), resolveDisplayName(callerID), eventID)
+}
+
+// touchEvent stamps changed_at/changed_by on an event after a sub-resource
+// mutation and notifies webhook subscribers (#1370, event.update). It is the
+// central post-mutation hook, so every caller gets webhook coverage for free.
+func touchEvent(eventID, callerID int) {
+	stampEvent(eventID, callerID)
+	go emitEventWebhook(eventID, "update", callerID)
+}
+
+// emitEventStateWebhooks emits publish/cancel for the transitions that
+// happened in a full/partial event update, or a plain update when neither did.
+func emitEventStateWebhooks(eventID int, wasPublished, wasCancelled, nowPublished, nowCancelled bool, actorID int) {
+	emitted := false
+	if !wasPublished && nowPublished {
+		go emitEventWebhook(eventID, "publish", actorID)
+		emitted = true
+	}
+	if !wasCancelled && nowCancelled {
+		go emitEventWebhook(eventID, "cancel", actorID)
+		emitted = true
+	}
+	if !emitted {
+		go emitEventWebhook(eventID, "update", actorID)
+	}
 }
 
 // resolveLocationID returns the location ID to use for a write request.
@@ -2131,6 +2158,14 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	webhookAction := "update"
+	if totalCounts.AllNew() {
+		webhookAction = "create"
+	}
+	for _, ev := range allCreatedEvents {
+		go emitEventWebhook(ev.ID, webhookAction, callerID)
+	}
+
 	if totalCounts.AllNew() {
 		if len(allCreatedEvents) == 1 {
 			w.Header().Set("Location", fmt.Sprintf("/api/v1/events/%d", allCreatedEvents[0].ID))
@@ -2485,6 +2520,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		event.Timetable = timetable
 	}
 
+	emitEventStateWebhooks(id, existingIsPublished, existingIsCancelled, event.IsPublished, event.IsCancelled, callerID)
 	writeJSON(w, event)
 }
 
@@ -2825,6 +2861,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		event.Timetable = timetable
 	}
 
+	emitEventStateWebhooks(id, wasPublished, wasCancelled, event.IsPublished, event.IsCancelled, callerID)
 	writeJSON(w, event)
 }
 
@@ -2847,6 +2884,9 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		}
+		if eid, err := strconv.Atoi(id); err == nil {
+			go emitEventWebhook(eid, "publish", callerID)
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -2865,6 +2905,9 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		db.Exec("UPDATE events SET is_published=1, email_verified=1, suggester_email='' WHERE id=?", id)
+		if eid, err := strconv.Atoi(id); err == nil {
+			go emitEventWebhook(eid, "publish", callerID)
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -2968,6 +3011,11 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	                AND z.needs_duplicate_review = 1
 	            )`, id, id)
 
+	// Capture the org before the row is gone: a delete webhook still has to
+	// reach that org's publishers.
+	var deletedOrg sql.NullInt64
+	db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&deletedOrg)
+
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
 		writeInternalError(w, err)
@@ -2976,6 +3024,10 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	if n, _ := result.RowsAffected(); n == 0 {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
+	}
+	if deletedOrg.Valid {
+		o := int(deletedOrg.Int64)
+		go dispatchEventWebhooks(id, &o, "delete", callerID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -3038,7 +3090,8 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
-	touchEvent(id, callerID)
+	stampEvent(id, callerID)
+	go emitEventWebhook(id, "cancel", callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

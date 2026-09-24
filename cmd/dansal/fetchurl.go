@@ -1049,6 +1049,7 @@ func importEntries[T any](ctx context.Context, src FetchSource, entries []T, req
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 
 	td := parseTemplateData(src.TemplateData)
+	importStart := time.Now().Unix()
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1071,6 +1072,7 @@ func importEntries[T any](ctx context.Context, src FetchSource, entries []T, req
 	if err := tx.Commit(); err != nil {
 		return nil, ImportCounts{}, err
 	}
+	go emitImportedEventWebhooks(allEvents, importStart)
 	return allEvents, counts, nil
 }
 

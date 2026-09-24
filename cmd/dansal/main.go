@@ -2806,6 +2806,33 @@ func migrateDB() {
 			db.Exec("ALTER TABLE api_keys ADD COLUMN require_signature INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+	// v45 (#1370): publisher webhook subscriptions — push-based reverse sync.
+	const publisherWebhooksSchema = `CREATE TABLE IF NOT EXISTS publisher_webhooks (
+		id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+		publisher_id         INTEGER NOT NULL,
+		url                  TEXT NOT NULL,
+		event_types          TEXT NOT NULL DEFAULT '*',
+		active               INTEGER NOT NULL DEFAULT 1,
+		consecutive_failures INTEGER NOT NULL DEFAULT 0,
+		last_delivery_at     INTEGER,
+		last_error           TEXT NOT NULL DEFAULT '',
+		created_at           INTEGER NOT NULL,
+		updated_at           INTEGER NOT NULL,
+		FOREIGN KEY (publisher_id) REFERENCES users(id) ON DELETE CASCADE
+	)`
+	if !applied(45) {
+		db.Exec(publisherWebhooksSchema)
+		mark(45)
+	}
+	// Safety net: ensure publisher_webhooks exists even if v45 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='publisher_webhooks'").Scan(&n)
+		if n == 0 {
+			db.Exec(publisherWebhooksSchema)
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_publisher_webhooks_publisher ON publisher_webhooks(publisher_id)")
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4103,6 +4130,20 @@ func createTables() error {
 		sort_order INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order);
+	CREATE TABLE IF NOT EXISTS publisher_webhooks (
+		id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+		publisher_id         INTEGER NOT NULL,
+		url                  TEXT NOT NULL,
+		event_types          TEXT NOT NULL DEFAULT '*',
+		active               INTEGER NOT NULL DEFAULT 1,
+		consecutive_failures INTEGER NOT NULL DEFAULT 0,
+		last_delivery_at     INTEGER,
+		last_error           TEXT NOT NULL DEFAULT '',
+		created_at           INTEGER NOT NULL,
+		updated_at           INTEGER NOT NULL,
+		FOREIGN KEY (publisher_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_publisher_webhooks_publisher ON publisher_webhooks(publisher_id);
 	-- #1333 (phase 1): an anonymous visitor's suggestion of a new .ics/.json
 	-- feed to import, pending admin/org-member review. org_id is set when the
 	-- submitter picked an existing org; org_name (+ the other org_* fields)
@@ -4271,6 +4312,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(41)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(43)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(44)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(45)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4741,6 +4783,12 @@ func main() {
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
 	smux.Handle("POST /api/v1/publishers/token", auth(publisherToken))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))
+	// #1370: publisher webhook subscriptions.
+	smux.Handle("GET /api/v1/publishers/{id}/webhooks", auth(listPublisherWebhooks))
+	smux.Handle("POST /api/v1/publishers/{id}/webhooks", auth(accountMutationLimit(createPublisherWebhook)))
+	smux.Handle("PATCH /api/v1/publishers/{id}/webhooks/{webhook_id}", auth(accountMutationLimit(patchPublisherWebhook)))
+	smux.Handle("DELETE /api/v1/publishers/{id}/webhooks/{webhook_id}", auth(accountMutationLimit(deletePublisherWebhook)))
+	smux.Handle("POST /api/v1/publishers/{id}/webhooks/{webhook_id}/test", auth(accountMutationLimit(testPublisherWebhook)))
 	smux.Handle("POST /api/v1/publishers/{id}/reconnect-invite", auth(createPublisherReconnectInvite))
 	smux.Handle("DELETE /api/v1/publishers/{id}", auth(deletePublisher))
 

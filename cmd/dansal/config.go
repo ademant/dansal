@@ -18,6 +18,17 @@ type RequestSigningConfig struct {
 	MaxSkewSecs int  `yaml:"max_skew_seconds"` // default 300 when unset/zero
 }
 
+// WebhooksConfig configures the publisher webhook producer (#1370). With
+// Enabled false, subscription endpoints still work (rows can be created and
+// pre-configured); the producer just never fires.
+type WebhooksConfig struct {
+	Enabled              bool  `yaml:"enabled"`                // default false
+	MaxURLLength         int   `yaml:"max_url_length"`         // default 2048
+	TimeoutSecs          int   `yaml:"timeout_seconds"`        // per-delivery connect+read cap, default 10
+	RetryBackoffSecs     []int `yaml:"retry_backoff_seconds"`  // default [30, 300, 1800]
+	DisableAfterFailures int   `yaml:"disable_after_failures"` // default 4 (initial + 3 retries)
+}
+
 type ServerConfig struct {
 	Port                          int      `yaml:"port"`
 	Listen                        string   `yaml:"listen"`
@@ -83,6 +94,9 @@ type ServerConfig struct {
 	// (#1366). Not to be confused with InviteSigningKeyPath above (invite
 	// link JWTs) — unrelated feature, unrelated key.
 	Signing RequestSigningConfig `yaml:"signing,omitempty"`
+
+	// Webhooks configures publisher webhook delivery (#1370).
+	Webhooks WebhooksConfig `yaml:"webhooks,omitempty"`
 
 	// PasswordKDF selects the key-derivation function used to hash newly
 	// set passwords: "argon2id" (default) or "pbkdf2" (FIPS 140-friendly,

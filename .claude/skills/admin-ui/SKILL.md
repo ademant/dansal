@@ -95,6 +95,17 @@ The shape, generalized as `setupDragReorder(handle, dragEl, item, itemMap, targe
 
 Don't copy-paste this per new drag-to-reorder feature — factor a shared helper (as `admin_timetable.html` already does for its two consumers) rather than re-deriving the pointer-tracking logic each time.
 
+**Persist immediately on drop, don't wait for the page's Save button** (room-column order, #1278): if a reorder represents durable state (not just an in-memory render order), fire a small dedicated save call from `onDrop` itself (e.g. `saveRoomOrder()` PUTting the new order array right after `renderAll()`), separate from whatever the main form-level Save button submits. This mirrors the existing PUT-vs-PATCH pattern below and avoids losing a drag if the user navigates away before hitting Save.
+
+## PUT vs PATCH for array/JSON fields — "carried vs. omitted"
+
+When an event field is a JSON array (e.g. `timetable_tracks`, `timetable_room_order`), `updateEvent` (PUT) and `patchEvent` (PATCH) must treat "not sent" differently from "explicitly sent empty":
+
+- **PUT** (`EventWriteRequest`, plain `[]int`/`[]string`): only overwrite the column when the incoming slice is non-empty (`len(x) > 0`) — an omitted/empty field in a full-resource PUT means "leave as-is", not "clear it".
+- **PATCH** (`EventMergePatchRequest`, pointer `*[]int`/`*[]string`): use pointer-presence (`req.Field != nil`) to distinguish "field omitted from the merge patch" (leave untouched) from "field explicitly sent, possibly as `[]`" (overwrite, including clearing).
+
+Copy this shape for any new JSON-array event field rather than inventing new null-vs-empty semantics per field.
+
 ## Layout — CSS `@media`, never User-Agent detection
 
 **Never use User-Agent detection** (`navigator.userAgent`, etc.) to decide layout. Use CSS `@media` queries. A few responsive helpers live in `base.html`; follow them instead of adding UA sniffing.

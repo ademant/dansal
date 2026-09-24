@@ -10,6 +10,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [Authentication](#authentication)
 - [Roles and Permissions](#roles-and-permissions)
 - [Content Negotiation](#content-negotiation)
+- [Caching and Conditional Requests](#caching-and-conditional-requests)
 - [Info and Health](#info-and-health)
 - [Vocabulary](#vocabulary)
 - [Authentication Endpoints](#authentication-endpoints)
@@ -97,6 +98,29 @@ curl -H "Accept: text/calendar" http://localhost:8000/api/v1/events
 
 # Get locations as GeoJSON
 curl -H "Accept: application/geo+json" http://localhost:8000/api/v1/locations
+```
+
+## Caching and Conditional Requests
+
+Events, Locations, and Organizations support conditional requests via weak `ETag`s (`W3`/RFC 7232-style, formatted as `"<value>"`) so a client can avoid re-downloading unchanged data and avoid clobbering a concurrent edit.
+
+**Reads — `ETag` + `If-None-Match`:**
+- `GET /api/v1/events/{id}`, `/api/v1/locations/{id}`, `/api/v1/organizations/{id}` each emit an `ETag` derived from the resource's own last-changed timestamp. Send it back as `If-None-Match` on a later `GET`; an unchanged resource returns `304 Not Modified` with an empty body.
+- `GET /api/v1/events` (list) additionally emits an `ETag` on the **authenticated** (role/org-scoped) branch — i.e. whenever the caller is an admin, user, or publisher — derived from the matching row count plus the newest `changed_at` among rows the filters+caller's role would return. This is what lets an integration like wp-dansal's org-scoped pull sync (`?organization_id=...`, run on a poll timer) send `If-None-Match` and get `304` instead of the full payload when nothing in its own org has changed. It's marked `Cache-Control: private, no-cache` (never shared/cached by an intermediary) since the same URL returns different data to different callers. The public (anonymous) branch of the same endpoint has its own, separately-cached whole-table fingerprint instead (`Cache-Control: public, max-age=60`). Neither list ETag is emitted for `Accept: text/calendar` (iCalendar has its own freshness semantics via `source_last_modified`).
+
+**Writes — `If-Match` + `412`:** `PUT`/`PATCH` on a single event, location, or organization accept an optional `If-Match` header carrying the ETag you last read. If the resource has changed since (a different caller's write landed in between), the request is rejected with `412 Precondition Failed` instead of silently overwriting the newer data — optimistic concurrency, opt-in only. Omitting `If-Match` preserves today's last-write-wins behavior. `If-Match: *` always passes (asserts "the resource must still exist", not "must be unchanged").
+
+```bash
+# Conditional GET
+curl -D- -H "If-None-Match: \"1732000000\"" http://localhost:8000/api/v1/events/42
+
+# Optimistic-concurrency write
+curl -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/merge-patch+json" \
+  -H "If-Match: \"1732000000\"" \
+  -d '{"title":"New title"}' \
+  http://localhost:8000/api/v1/events/42
+# → 412 Precondition Failed if the event changed since ETag "1732000000" was read
 ```
 
 ## Info and Health
@@ -850,7 +874,7 @@ Location filters:
 - `geohash=` — geohash prefix filter
 
 Structural filters:
-- `organization_id=N` — filter by organization
+- `organization_id=N` — filter by organization; repeatable (`organization_id=1&organization_id=2`) or comma-separated (`organization_id=1,2`) to match any of several, capped at 10 values per request
 - `series_id=N` — filter by event series
 - `source=` — filter by import source URL (admin/user only)
 - `created_after=` — created at or after this datetime string

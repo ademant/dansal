@@ -24,6 +24,14 @@ func startDelivery(cfg *Config, db *sql.DB, client *DansalClient, relayActor *Ac
 
 const maxDeliveryAttempts = 8
 
+// #1363: reserved org_id sentinels in the `delivered` table for the
+// poll-driven IndexNow pings above — distinct from #956's tag-delivery
+// sentinel (org_id=-1) and the relay sentinel (org_id=0).
+const (
+	indexNowPublishedSentinel = -4
+	indexNowCancelledSentinel = -5
+)
+
 // deliveryBackoff returns the number of seconds to wait before the next retry.
 func deliveryBackoff(attempts int) int64 {
 	switch {
@@ -86,7 +94,25 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 	}
 
 	for _, e := range events {
-		if !e.IsPublished || e.OrganizationID == nil {
+		// #1363: ping IndexNow for a publish/cancel regardless of which
+		// client made the change. The admin UI already does this
+		// synchronously at save time (admin_events.go), but a write coming
+		// straight through the API (e.g. wp-dansal flipping is_published/
+		// is_cancelled via PATCH) never touches dansal_web at all, so
+		// nothing pings IndexNow for it. This poll already re-fetches every
+		// upcoming published event each cycle, so it doubles as the catch:
+		// reuse the `delivered` table's org_id-sentinel convention (see
+		// #956's tag delivery, org_id=-1) to ping each transition once.
+		if !isDelivered(db, e.ID, indexNowPublishedSentinel) {
+			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{e.ID})
+			markDelivered(db, e.ID, indexNowPublishedSentinel, false)
+		}
+		if e.IsCancelled && !isDelivered(db, e.ID, indexNowCancelledSentinel) {
+			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{e.ID})
+			markDelivered(db, e.ID, indexNowCancelledSentinel, false)
+		}
+
+		if e.OrganizationID == nil {
 			continue
 		}
 		orgID := *e.OrganizationID

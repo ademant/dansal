@@ -610,6 +610,11 @@ func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 }
 
 // parseCountryCodes splits a comma-separated country param and validates each code.
+// maxOrgIDFilter bounds how many organization_id values a single GET
+// /api/v1/events call accepts (#1365), protecting the query budget the same
+// way wp-dansal's own MAX_ORG_FILTER already bounds its shortcode input.
+const maxOrgIDFilter = 10
+
 func parseCountryCodes(param string) ([]string, error) {
 	if param == "" {
 		return nil, nil
@@ -768,10 +773,31 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	if q.Get("is_cancelled") == "1" {
 		*query += " AND e.is_cancelled=1"
 	}
-	if v := q.Get("organization_id"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			*query += " AND e.organization_id = ?"
-			*args = append(*args, n)
+	// #1365: accept organization_id either repeated (?organization_id=1&organization_id=2)
+	// or comma-separated (?organization_id=1,2), same as location_id below —
+	// lets a client like wp-dansal's remote_events shortcode (which shows
+	// events from up to MAX_ORG_FILTER orgs) fetch them in one request
+	// instead of fanning out one request per org.
+	if raw := q["organization_id"]; len(raw) > 0 {
+		ids := make([]int, 0, len(raw))
+		for _, v := range raw {
+			for _, p := range strings.Split(v, ",") {
+				if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+					ids = append(ids, n)
+					if len(ids) == maxOrgIDFilter {
+						break
+					}
+				}
+			}
+			if len(ids) == maxOrgIDFilter {
+				break
+			}
+		}
+		if len(ids) > 0 {
+			*query += " AND e.organization_id IN (" + sqlPlaceholders(len(ids)) + ")"
+			for _, n := range ids {
+				*args = append(*args, n)
+			}
 		}
 	}
 	if v := q.Get("location_id"); v != "" {
@@ -1744,7 +1770,28 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	// location (lp), organizations (o), or dance-name (dn) joins that
 	// eventListSelect's full column list needs.
 	var totalCount int
-	db.QueryRow("SELECT COUNT(*) FROM events e LEFT JOIN locations l ON e.location_id = l.id "+where, args...).Scan(&totalCount)
+	var maxChanged sql.NullInt64
+	db.QueryRow("SELECT COUNT(*), MAX(e.changed_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id "+where, args...).Scan(&totalCount, &maxChanged)
+
+	// #1364: authenticated (role/org-scoped) lists get their own private
+	// ETag validator over the caller's own filtered+counted result set —
+	// e.g. wp-dansal's org-scoped pull sync (?organization_id=...) can now
+	// send If-None-Match and get a 304 instead of the full payload every
+	// poll. This is deliberately separate from the public branch's own
+	// checkPublicCacheHeaders above: that one is a public, whole-table
+	// fingerprint safe to cache shared; this one depends on the caller's
+	// role/org membership, so it's marked private and skipped for
+	// alternate representations (ICS/Atom/OpenActive) the same way the
+	// public branch already skips text/calendar.
+	if isAuthorizedAdmin && !strings.Contains(accept, "text/calendar") {
+		etag := fmt.Sprintf(`"%d-%d"`, totalCount, maxChanged.Int64)
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", "private, no-cache")
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
 
 	query := eventListSelect + " " + where
 	applyListPagination(r, "e.start_time ASC", &query, &args)

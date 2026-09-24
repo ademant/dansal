@@ -39,7 +39,7 @@ import {
   makeImage,
   uploadImageAPI,
   fetchImageMeta,
-  decodeImageStats,
+  assertImageDecodes,
   API_BASE,
   type ImageFormat,
 } from "../../helpers/images";
@@ -121,12 +121,10 @@ test.describe("Image uploads", () => {
       // A full decode, not just a content-type check: the server has shipped
       // AVIF containers Chromium couldn't decode, and a content-type header
       // won't catch a corrupt payload.
-      const stats = await decodeImageStats(
+      await assertImageDecodes(
         page,
         `${API_BASE}/api/v1/images/${eventId}`
       );
-      expect(stats.width).toBeGreaterThan(0);
-      expect(stats.height).toBeGreaterThan(0);
     });
   }
 

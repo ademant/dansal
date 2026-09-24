@@ -91,18 +91,17 @@ export async function fetchImageMeta(
 }
 
 /**
- * Fetch an image URL and force a full decode with sharp, returning stats.
- * Unlike fetchImageMeta (header-only), this decodes every pixel, so a
- * payload the server labels image/avif but can't actually be decoded fails
- * loudly instead of passing a content-type check.
+ * Fetch an image URL and force a full decode with sharp (raw pass decodes
+ * every pixel), throwing if the payload can't be decoded. Unlike
+ * fetchImageMeta (header-only), this catches a payload the server labels
+ * image/avif but can't actually be rendered. Note: sharp's Stats offers no
+ * width/height fields, so this asserts by succeeding-or-throwing rather
+ * than returning dimensions.
  */
-export async function decodeImageStats(
-  page: Page,
-  url: string
-): Promise<sharp.Stats> {
+export async function assertImageDecodes(page: Page, url: string): Promise<void> {
   const resp = await page.request.fetch(url);
   const body = await resp.body();
-  return sharp(body).stats();
+  await sharp(body).raw().toBuffer();
 }
 
 export { API_BASE };

@@ -2784,6 +2784,28 @@ func migrateDB() {
 		}
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order)")
 	}
+
+	// v44 (#1366): per-API-key HMAC request signing. signing_secret_enc holds
+	// the secret encrypted at rest (see signing.go); require_signature gates
+	// enforcement per key, off by default so existing publishers are
+	// unaffected until they opt in.
+	if !applied(44) {
+		db.Exec("ALTER TABLE api_keys ADD COLUMN signing_secret_enc TEXT")
+		db.Exec("ALTER TABLE api_keys ADD COLUMN require_signature INTEGER NOT NULL DEFAULT 0")
+		mark(44)
+	}
+	// Safety net: ensure api_keys.signing_secret_enc/require_signature exist even if v44 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('api_keys') WHERE name='signing_secret_enc'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE api_keys ADD COLUMN signing_secret_enc TEXT")
+		}
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('api_keys') WHERE name='require_signature'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE api_keys ADD COLUMN require_signature INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3829,6 +3851,8 @@ func createTables() error {
 		api_key TEXT UNIQUE NOT NULL,
 		expires_at INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		signing_secret_enc TEXT,
+		require_signature INTEGER NOT NULL DEFAULT 0,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE TABLE IF NOT EXISTS organizations (
@@ -4246,6 +4270,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(40)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(41)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(43)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(44)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4326,6 +4351,7 @@ func main() {
 	if err := loadOrGenerateInviteSigningKey(); err != nil {
 		log.Fatal(err)
 	}
+	initSigningKey()
 
 	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_txlock=immediate&_foreign_keys=ON&_cache_size=-8000&_temp_store=memory&_mmap_size=134217728",
 		config.Server.DBPath)
@@ -4710,6 +4736,8 @@ func main() {
 	// Not wrapped in auth(): revokeCurrentAPIKey authenticates by the presented
 	// key itself (self-revoke), same reasoning as renewAPIKey above.
 	smux.Handle("DELETE /api/v1/apikeys/current", http.HandlerFunc(revokeCurrentAPIKey))
+	// #1366: same self-authenticated-by-presenting-the-key shape as renewAPIKey.
+	smux.Handle("POST /api/v1/apikeys/rotate-signing-secret", http.HandlerFunc(rotateSigningSecret))
 	smux.Handle("POST /api/v1/publishers", auth(createPublisher))
 	smux.Handle("POST /api/v1/publishers/token", auth(publisherToken))
 	smux.Handle("POST /api/v1/publishers/{id}/regenerate-key", auth(regeneratePublisherKey))

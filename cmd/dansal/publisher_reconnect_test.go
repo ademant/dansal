@@ -70,7 +70,7 @@ func TestPublisherReconnectInviteRoundTrip(t *testing.T) {
 	}
 	db.Exec("INSERT INTO api_keys (user_id, name, api_key) VALUES (2, 'old key', ?)", hashAPIKey(oldKey))
 
-	if _, _, err := validateAPIKey(oldKey); err != nil {
+	if _, _, _, err := validateAPIKey(oldKey); err != nil {
 		t.Fatalf("precondition: old key should validate before reconnect, got %v", err)
 	}
 
@@ -133,10 +133,10 @@ func TestPublisherReconnectInviteRoundTrip(t *testing.T) {
 	}
 
 	// Old key no longer validates; new key does.
-	if _, _, err := validateAPIKey(oldKey); err == nil {
+	if _, _, _, err := validateAPIKey(oldKey); err == nil {
 		t.Error("old key should no longer validate after reconnect")
 	}
-	if _, _, err := validateAPIKey(resp.APIKey); err != nil {
+	if _, _, _, err := validateAPIKey(resp.APIKey); err != nil {
 		t.Errorf("new key should validate after reconnect, got %v", err)
 	}
 

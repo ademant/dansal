@@ -227,7 +227,7 @@ func createPinnedTokenInDB(userID int, ip string) (string, time.Time, error) {
 // Results are cached for up to credCacheTTL to avoid a DB round-trip per request.
 // Returns userID, role, tokenID (DB row id of the token).
 func validateToken(token, currentIP string) (int, string, int, error) {
-	if userID, role, tokenID, ok := credentials.get(token, currentIP); ok {
+	if userID, role, tokenID, _, ok := credentials.get(token, currentIP); ok {
 		return userID, role, tokenID, nil
 	}
 
@@ -265,7 +265,7 @@ func validateToken(token, currentIP string) (int, string, int, error) {
 		}
 	}
 
-	credentials.set(token, userID, userRole, tokenID, expTime, pinnedIP)
+	credentials.set(token, userID, userRole, tokenID, 0, expTime, pinnedIP)
 	return userID, userRole, tokenID, nil
 }
 
@@ -525,10 +525,11 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool
 	token := parts[1]
 
 	// Validate token, fall back to API key
+	var apiKeyID int
 	userID, userRole, tokenID, err := validateToken(token, getClientIP(r))
 	if err != nil {
 		var apiErr error
-		userID, userRole, apiErr = validateAPIKey(token)
+		userID, userRole, apiKeyID, apiErr = validateAPIKey(token)
 		if apiErr != nil {
 			writeError(w, "Invalid or expired credentials", http.StatusUnauthorized)
 			return false, false
@@ -536,6 +537,16 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool
 	} else {
 		updateLastSeen(token)
 		r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
+	}
+
+	// #1366: HMAC request signing, opt-in per API key. Only ever relevant for
+	// an API-key-authenticated publisher write — session-token calls (the
+	// admin UI) and reads never carry a signing secret to check.
+	if apiKeyID > 0 && userRole == RolePublisher && requiresSignatureCheck(r) {
+		if err := checkRequestSignature(r, apiKeyID); err != nil {
+			writeError(w, "request signature invalid: "+err.Error(), http.StatusUnauthorized)
+			return false, false
+		}
 	}
 
 	// Store userID and role in request header for later use

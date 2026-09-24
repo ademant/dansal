@@ -13,6 +13,7 @@ type credEntry struct {
 	userID    int
 	userRole  string
 	tokenID   int // 0 for API keys
+	apiKeyID  int // #1366: api_keys.id, 0 for session tokens — lets the signature-verification middleware find the right key's signing secret without a second DB round trip on every cached hit
 	expiresAt time.Time
 	pinnedIP  string // non-empty: credential is only valid when presented from this IP
 }
@@ -33,29 +34,30 @@ var credentials = newCredCache()
 
 // get returns a cached entry if it exists, has not expired, and — for
 // IP-pinned credentials — was presented from the IP it was pinned to.
-func (c *credCache) get(key, currentIP string) (userID int, role string, tokenID int, ok bool) {
+func (c *credCache) get(key, currentIP string) (userID int, role string, tokenID int, apiKeyID int, ok bool) {
 	c.mu.RLock()
 	e, found := c.entries[key]
 	c.mu.RUnlock()
 	if !found || time.Now().After(e.expiresAt) {
-		return 0, "", 0, false
+		return 0, "", 0, 0, false
 	}
 	if e.pinnedIP != "" && e.pinnedIP != currentIP {
-		return 0, "", 0, false
+		return 0, "", 0, 0, false
 	}
-	return e.userID, e.userRole, e.tokenID, true
+	return e.userID, e.userRole, e.tokenID, e.apiKeyID, true
 }
 
 // set stores a credential. tokenExpiry is the real token expiry from the DB;
 // pass time.Time{} for API keys (no natural expiry) to use the TTL cap only.
-// tokenID should be 0 for API keys. pinnedIP is empty for unpinned credentials.
-func (c *credCache) set(key string, userID int, role string, tokenID int, tokenExpiry time.Time, pinnedIP string) {
+// tokenID should be 0 for API keys. apiKeyID is api_keys.id for an API key,
+// 0 for session tokens. pinnedIP is empty for unpinned credentials.
+func (c *credCache) set(key string, userID int, role string, tokenID, apiKeyID int, tokenExpiry time.Time, pinnedIP string) {
 	exp := time.Now().Add(credCacheTTL)
 	if !tokenExpiry.IsZero() && tokenExpiry.Before(exp) {
 		exp = tokenExpiry
 	}
 	c.mu.Lock()
-	c.entries[key] = credEntry{userID: userID, userRole: role, tokenID: tokenID, expiresAt: exp, pinnedIP: pinnedIP}
+	c.entries[key] = credEntry{userID: userID, userRole: role, tokenID: tokenID, apiKeyID: apiKeyID, expiresAt: exp, pinnedIP: pinnedIP}
 	c.mu.Unlock()
 }
 

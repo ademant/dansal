@@ -41,39 +41,42 @@ func hashAPIKey(key string) string {
 	return sha256Hex(key)
 }
 
-// validateAPIKey checks an API key and returns the associated user.
+// validateAPIKey checks an API key and returns the associated user plus the
+// api_keys row id (#1366: needed by the signature-verification middleware to
+// look up that key's signing secret; 0 would be ambiguous with "no key" so
+// callers that don't need it can just discard the fourth return value).
 // Results are cached for up to credCacheTTL; the cache is invalidated on deletion.
-func validateAPIKey(key string) (int, string, error) {
-	if userID, role, _, ok := credentials.get(key, ""); ok { // API keys are never IP-pinned
-		return userID, role, nil
+func validateAPIKey(key string) (int, string, int, error) {
+	if userID, role, _, apiKeyID, ok := credentials.get(key, ""); ok { // API keys are never IP-pinned
+		return userID, role, apiKeyID, nil
 	}
 
-	var userID int
+	var userID, apiKeyID int
 	var userRole string
 	var expiresAt sql.NullString
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
+		"SELECT users.id, users.role, api_keys.id, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
 		hashAPIKey(key),
-	).Scan(&userID, &userRole, &expiresAt)
+	).Scan(&userID, &userRole, &apiKeyID, &expiresAt)
 
 	if err == sql.ErrNoRows {
-		return 0, "", fmt.Errorf("invalid api key")
+		return 0, "", 0, fmt.Errorf("invalid api key")
 	}
 	if err != nil {
-		return 0, "", err
+		return 0, "", 0, err
 	}
 
 	var expTime time.Time
 	if expiresAt.Valid && expiresAt.String != "" {
 		expTime, err = parseTokenExpiration(expiresAt.String)
 		if err != nil || time.Now().After(expTime) {
-			return 0, "", fmt.Errorf("api key expired")
+			return 0, "", 0, fmt.Errorf("api key expired")
 		}
 	}
 
-	credentials.set(key, userID, userRole, 0, expTime, "") // tokenID 0 = API key, expTime zero → TTL cap only
-	return userID, userRole, nil
+	credentials.set(key, userID, userRole, 0, apiKeyID, expTime, "") // tokenID 0 = API key, expTime zero → TTL cap only
+	return userID, userRole, apiKeyID, nil
 }
 
 func listAPIKeys(w http.ResponseWriter, r *http.Request) {
@@ -249,13 +252,13 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	presentedKey := parts[1]
 
-	var keyID, userID int
+	var keyID, userID, requireSignature int
 	var name, createdAtStr string
-	var expiresAt sql.NullString
+	var expiresAt, signingSecretEnc sql.NullString
 	err := db.QueryRow(
-		"SELECT api_keys.id, api_keys.user_id, api_keys.name, api_keys.created_at, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
+		"SELECT api_keys.id, api_keys.user_id, api_keys.name, api_keys.created_at, api_keys.expires_at, api_keys.signing_secret_enc, api_keys.require_signature FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
 		hashAPIKey(presentedKey),
-	).Scan(&keyID, &userID, &name, &createdAtStr, &expiresAt)
+	).Scan(&keyID, &userID, &name, &createdAtStr, &expiresAt, &signingSecretEnc, &requireSignature)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
@@ -318,10 +321,14 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
 		return
 	}
+	// #1366: carry the signing secret/enforcement flag over to the new row —
+	// renew only extends expiry, it must not silently disable signature
+	// enforcement (or orphan a secret the client already has cached) just
+	// because the underlying row id changed.
 	var newID int
 	if err := tx.QueryRow(
-		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id",
-		userID, name, hashAPIKey(newKey), newExpiry.Unix(),
+		"INSERT INTO api_keys (user_id, name, api_key, expires_at, signing_secret_enc, require_signature) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+		userID, name, hashAPIKey(newKey), newExpiry.Unix(), signingSecretEnc, requireSignature,
 	).Scan(&newID); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
@@ -340,6 +347,62 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		"api_key":    newKey,
 		"expires_at": newExpiry.UTC().Format(time.RFC3339),
 	})
+}
+
+// POST /api/v1/apikeys/rotate-signing-secret — publisher self-service
+// rotation of their own signing secret (#1366), authenticated the same way
+// as renewAPIKey: by presenting the API key itself, not a session token.
+// Simplification vs. the original proposal: this is an immediate hard swap,
+// not a dual-secret grace window — the old secret stops verifying the
+// instant this call succeeds, so a client should update its stored secret
+// before its next signed request, not "eventually".
+func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	authHeader := r.Header.Get("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		return
+	}
+	presentedKey := parts[1]
+
+	if !config.Server.Signing.Enabled {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "request signing is not enabled on this server"})
+		return
+	}
+
+	var keyID int
+	err := db.QueryRow(
+		"SELECT api_keys.id FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
+		hashAPIKey(presentedKey),
+	).Scan(&keyID)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+
+	secret, err := generateSigningSecret()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate signing secret"})
+		return
+	}
+	if _, err := db.Exec("UPDATE api_keys SET signing_secret_enc=? WHERE id=?", signingSecretEncrypt(secret), keyID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to store signing secret"})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"signing_secret": secret})
 }
 
 // DELETE /api/v1/apikeys/current — self-revoke, authenticated by presenting

@@ -9,6 +9,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// RequestSigningConfig configures opt-in HMAC request signing for
+// authenticated publisher writes (#1366). Enabled is a process-wide gate;
+// even when true, a given API key only actually gets enforced if its own
+// api_keys.require_signature flag is also set.
+type RequestSigningConfig struct {
+	Enabled     bool `yaml:"enabled"`          // default false
+	MaxSkewSecs int  `yaml:"max_skew_seconds"` // default 300 when unset/zero
+}
+
 type ServerConfig struct {
 	Port                          int      `yaml:"port"`
 	Listen                        string   `yaml:"listen"`
@@ -69,6 +78,11 @@ type ServerConfig struct {
 	// use if the file doesn't exist. Defaults next to db_path so it survives
 	// upgrades but isn't accidentally checked into a repo.
 	InviteSigningKeyPath string `yaml:"invite_signing_key_path"`
+
+	// Signing configures opt-in HMAC request signing for publisher writes
+	// (#1366). Not to be confused with InviteSigningKeyPath above (invite
+	// link JWTs) — unrelated feature, unrelated key.
+	Signing RequestSigningConfig `yaml:"signing,omitempty"`
 
 	// PasswordKDF selects the key-derivation function used to hash newly
 	// set passwords: "argon2id" (default) or "pbkdf2" (FIPS 140-friendly,

@@ -617,6 +617,12 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	signingSecret, err := issueSigningSecretIfEnabled(tx, keyID)
+	if err != nil {
+		writeError(w, "failed to create signing secret", http.StatusInternalServerError)
+		return
+	}
+
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 
 	if err := tx.Commit(); err != nil {
@@ -646,6 +652,9 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if challenge != "" {
 		resp["challenge"] = challenge
+	}
+	if signingSecret != "" {
+		resp["signing_secret"] = signingSecret
 	}
 	if req.ClientPubkey != "" {
 		encrypted, algorithm, err := encryptAPIKeyForClient(req.ClientPubkey, key)
@@ -702,11 +711,18 @@ func redeemPublisherReconnectInvite(w http.ResponseWriter, invite inviteRecord, 
 		writeError(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
-	if _, err := tx.Exec(
-		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?)",
+	var keyID int
+	if err := tx.QueryRow(
+		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id",
 		userID, name, hashAPIKey(key),
-	); err != nil {
+	).Scan(&keyID); err != nil {
 		writeError(w, "failed to create API key", http.StatusInternalServerError)
+		return
+	}
+
+	signingSecret, err := issueSigningSecretIfEnabled(tx, keyID)
+	if err != nil {
+		writeError(w, "failed to create signing secret", http.StatusInternalServerError)
 		return
 	}
 
@@ -733,6 +749,9 @@ func redeemPublisherReconnectInvite(w http.ResponseWriter, invite inviteRecord, 
 	}
 	if challenge != "" {
 		resp["challenge"] = challenge
+	}
+	if signingSecret != "" {
+		resp["signing_secret"] = signingSecret
 	}
 	if clientPubkey != "" {
 		encrypted, algorithm, err := encryptAPIKeyForClient(clientPubkey, key)

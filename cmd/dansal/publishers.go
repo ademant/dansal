@@ -251,6 +251,12 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	signingSecret, err := issueSigningSecretIfEnabled(tx, keyID)
+	if err != nil {
+		writeError(w, "failed to create signing secret", http.StatusInternalServerError)
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
@@ -258,12 +264,16 @@ func regeneratePublisherKey(w http.ResponseWriter, r *http.Request) {
 
 	credentials.pruneByUserID(targetID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"key_id":     keyID,
 		"api_key":    newKey,
 		"expires_at": req.ExpiresAt,
-	})
+	}
+	if signingSecret != "" {
+		resp["signing_secret"] = signingSecret
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // POST /api/v1/publishers/{id}/reconnect-invite — mint a one-time invite

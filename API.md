@@ -593,11 +593,12 @@ Authentication required.
 GET    /api/v1/apikeys
 POST   /api/v1/apikeys
 DELETE /api/v1/apikeys/{id}
-DELETE /api/v1/apikeys/current   # self-revoke; see below
-POST   /api/v1/apikeys/renew     # self-service rotation; see below
+DELETE /api/v1/apikeys/current                 # self-revoke; see below
+POST   /api/v1/apikeys/renew                   # self-service rotation; see below
+POST   /api/v1/apikeys/rotate-signing-secret   # request-signing secret rotation; see below
 ```
 
-Authentication required (except `current` and `renew`, which authenticate via the key itself).
+Authentication required (except `current`, `renew`, and `rotate-signing-secret`, which authenticate via the key itself).
 
 **Create request:**
 ```json
@@ -638,6 +639,61 @@ Only keys with a non-null `expires_at` can be renewed — a key with no expiry r
   "expires_at": "2026-08-01T00:00:00Z"
 }
 ```
+
+### Request Signing (opt-in, #1366)
+
+Binds each authenticated write to a client-held secret so a leaked Bearer token alone can't be replayed — defense in depth on top of the token itself, not a replacement for it. Off by default at two independent levels: `server.signing.enabled` (process-wide) and each key's own `require_signature` flag, so nothing changes for an existing integration until it explicitly opts in.
+
+**Getting a secret:** when `server.signing.enabled` is `true`, a fresh `signing_secret` (64 hex chars) is included — once — in the response of whatever call issues a publisher's API key: publisher-invite redemption (`POST /api/v1/invites/{token}/publisher`), its reconnect variant, and `POST /api/v1/publishers/{id}/regenerate-key`. It is stored encrypted at rest; only its owner ever sees the plaintext, and only at issuance. A key's `require_signature` flag itself is not yet exposed through a public toggle endpoint — it starts at `0` (not enforced) even after a secret is issued, so a client can start signing before enforcement is turned on for that key.
+
+**Signing a request:** compute
+
+```
+HMAC-SHA256(secret, canonical_payload)
+```
+
+where `canonical_payload` is five `\n`-joined (real newline) lines:
+
+```
+<HTTP method, uppercase>
+<request path, plus "?" + a canonical query string if there is one>
+<timestamp: seconds since epoch, ASCII decimal>
+<sha256(request body) hex, lowercase; empty string if no body>
+<nonce: 32 hex chars from a CSPRNG>
+```
+
+The canonical query string is the request's query parameters parsed, then rebuilt via alphabetical-by-key (then by value) sorting with standard percent-encoding — i.e. Go's `url.Values.Encode()`, or in PHP, `ksort()` followed by RFC3986-mode `http_build_query()`. Build it this way rather than reusing whatever order the request happened to send — the server always recomputes the canonical form from parsed values, so the client never has to guess the server's literal wire bytes.
+
+Send the result as three headers:
+
+```http
+X-Wpd-Timestamp: 1732000000
+X-Wpd-Nonce: 5f3759df1eab8a3f0c9b1a2b3c4d5e6f
+X-Wpd-Signature: 2c1743a391305fbf...
+```
+
+```bash
+curl -X PATCH https://dansal.example/api/v1/events/42 \
+  -H "Authorization: Bearer ak_..." \
+  -H "Content-Type: application/merge-patch+json" \
+  -H "X-Wpd-Timestamp: 1732000000" \
+  -H "X-Wpd-Nonce: 5f3759df1eab8a3f0c9b1a2b3c4d5e6f" \
+  -H "X-Wpd-Signature: 2c1743a391305fbf..." \
+  -d '{"title":"New title"}'
+```
+
+**Server-side checks, in order:** all three headers present → timestamp within `server.signing.max_skew_seconds` (default 300) of now → nonce not already seen for this key within that window (in-memory only; a multi-instance deployment would need shared state, not yet supported) → recomputed HMAC matches, constant-time. Any failure is `401 Unauthorized`. A key with `require_signature=0` ignores these headers entirely (quiet no-op) even if a client sends them.
+
+**Scope:** applies only to authenticated writes (`POST`/`PATCH`/`PUT`/`DELETE`) made by a **publisher**-role API key. Session-token (browser admin UI) requests are never affected. `GET` requests and `POST /api/v1/publishers/token` (the pre-auth exchange, performed by an org member/admin on the publisher's behalf) are explicitly exempt.
+
+**Rotating the secret (`POST /api/v1/apikeys/rotate-signing-secret`):** authenticates via the key itself, same shape as `renew`. Returns a brand-new `signing_secret` and immediately stops accepting the old one — this is a hard swap, not a grace-window dual-secret handoff, so update the stored secret before the next signed request.
+
+```http
+POST /api/v1/apikeys/rotate-signing-secret
+Authorization: Bearer ak_<current-key>
+```
+
+Renewing the key itself (`POST /api/v1/apikeys/renew`) carries the existing `signing_secret`/`require_signature` over to the rotated row — a routine expiry renewal never silently turns signature enforcement off.
 
 ## Organizations
 

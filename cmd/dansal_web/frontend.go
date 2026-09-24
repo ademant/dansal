@@ -898,25 +898,6 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		// Populate/refresh the events cache first so its conditional-GET
-		// ETag (already fingerprinted by the API's checkPublicCacheHeaders)
-		// is known before doing any other work. A crawler revisiting an
-		// unchanged event list gets a 304 without the orgs/dances/tags
-		// fetches or a template render (#1129).
-		//
-		// EventsETag() is a single global value shared by every visitor, not
-		// personalized per session — so unlike ChangedAt-based conditional
-		// GET elsewhere, it must also skip logged-in sessions (#1338): a
-		// logged-in visitor whose browser holds a cached anonymous "/" under
-		// the same still-current ETag would otherwise get a 304 from the
-		// server itself and keep seeing the logged-out nav avatar.
-		if getSessionUser(r) == nil {
-			if _, err := client.GetEvents(r.Context(), ""); err == nil {
-				if checkETag(w, r, client.EventsETag()) {
-					return
-				}
-			}
-		}
 		var events []Event
 		var orgs []Organization
 		var dances []Dance
@@ -1020,23 +1001,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		su := getSessionUser(r)
-
-		// Conditional GET (#1129, #1354): anonymous visitors and crawlers all
-		// see the same public page, so a 304 is safe there; logged-in
-		// sessions skip it (see checkPublicPage).
-		//
-		// #1279: event.ChangedAt only tracks edits to the event row itself
-		// -- the same page also renders the bulletin board (contact posts +
-		// images), which never touches ChangedAt. Take the newer of the two
-		// so a visitor's cached page gets busted the moment a new board
-		// post/image appears, not just when the event's own metadata changes.
-		changedAt := parseChangedAt(event.ChangedAt)
-		if boardAt := parseChangedAt(event.BoardUpdatedAt); boardAt > changedAt {
-			changedAt = boardAt
-		}
-		if checkPublicPage(w, r, i18n, changedAt, nil) {
-			return
-		}
 
 		epd := loadEventPageData(r, client, event, su)
 		canManage := eventCanManage(su, event, epd.members)
@@ -1277,13 +1241,6 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		}
 		if len(loc.Children) > 0 {
 			sort.Slice(events, func(i, j int) bool { return events[i].StartTime < events[j].StartTime })
-		}
-
-		// Conditional GET (#1129, #1354): freshness must cover both the
-		// location row itself and every event shown on the page (a
-		// new/changed event at this location doesn't touch loc.UpdatedAt).
-		if checkPublicPage(w, r, i18n, loc.UpdatedAt, events) {
-			return
 		}
 
 		title := loc.ShortName

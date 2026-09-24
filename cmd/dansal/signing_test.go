@@ -246,3 +246,54 @@ func TestResolveCaller_SignatureRequiredEndToEnd(t *testing.T) {
 		}
 	})
 }
+
+// TestRotateSigningSecret_RequiresCurrentSignatureWhenEnforced is a
+// regression test for a security-review finding on #1366: rotating the
+// signing secret must not be possible with just the bearer API key once a
+// key has require_signature=1 — otherwise a leaked token alone (with no
+// signing secret at all) could mint itself a fresh secret and then satisfy
+// the signature check on every other write, defeating the feature's entire
+// point. A key that hasn't opted into enforcement yet (require_signature=0)
+// has nothing to protect, so bearer-only rotation is fine there.
+func TestRotateSigningSecret_RequiresCurrentSignatureWhenEnforced(t *testing.T) {
+	setupDedupTestDB(t)
+	withSigningConfig(t, RequestSigningConfig{Enabled: true, MaxSkewSecs: 300})
+
+	db.Exec("INSERT INTO users (id, role, display_name, password_hash, disabled) VALUES (1, 'publisher', 'Pub', '', 0)")
+	oldSecret := "old-secret"
+	db.Exec(
+		"INSERT INTO api_keys (user_id, name, api_key, require_signature, signing_secret_enc) VALUES (1, 'k', ?, 1, ?)",
+		hashAPIKey("ak_rotatetest"), signingSecretEncrypt(oldSecret),
+	)
+
+	t.Run("rejected with bearer token alone", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/api/v1/apikeys/rotate-signing-secret", nil)
+		req.Header.Set("Authorization", "Bearer ak_rotatetest")
+		w := httptest.NewRecorder()
+		rotateSigningSecret(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401, body=%s", w.Code, w.Body.String())
+		}
+
+		// Confirm the secret was NOT changed by the rejected attempt.
+		var stillEnc string
+		db.QueryRow("SELECT signing_secret_enc FROM api_keys WHERE api_key=?", hashAPIKey("ak_rotatetest")).Scan(&stillEnc)
+		got, _ := signingSecretDecrypt(stillEnc)
+		if got != oldSecret {
+			t.Errorf("secret changed despite rejected rotation: got %q, want unchanged %q", got, oldSecret)
+		}
+	})
+
+	t.Run("accepted with a valid current-secret signature", func(t *testing.T) {
+		req := newSignedRequest(t, oldSecret, "POST", "/api/v1/apikeys/rotate-signing-secret", "22222222222222222222222222222222"[:32], time.Now(), "")
+		req.Header.Set("Authorization", "Bearer ak_rotatetest")
+		w := httptest.NewRecorder()
+		rotateSigningSecret(w, req)
+		if w.Code != 0 && w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "signing_secret") {
+			t.Errorf("expected a new signing_secret in the response, got %s", w.Body.String())
+		}
+	})
+}

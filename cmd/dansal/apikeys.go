@@ -356,6 +356,13 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 // not a dual-secret grace window — the old secret stops verifying the
 // instant this call succeeds, so a client should update its stored secret
 // before its next signed request, not "eventually".
+//
+// Security note: once a key has require_signature=1, rotation additionally
+// requires a valid signature made with the *current* secret (checked below
+// via checkRequestSignature). Without this, a leaked bearer token alone —
+// with no signing secret at all — could mint itself a fresh secret here and
+// then satisfy the signature check on every other write, defeating the
+// entire point of requiring a second, separately-held credential.
 func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -387,6 +394,12 @@ func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		return
+	}
+
+	if err := checkRequestSignature(r, keyID); err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "request signature invalid: " + err.Error()})
 		return
 	}
 

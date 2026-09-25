@@ -579,7 +579,9 @@ func adminDeleteUser(req adminRequest) adminResponse {
 	if role == RoleAdmin {
 		return adminResponse{OK: false, Error: "cannot delete admin users"}
 	}
-	db.Exec("DELETE FROM users WHERE id = ?", userID)
+	if err := deleteUserByID(db, userID); err != nil {
+		return adminResponse{OK: false, Error: "failed to delete user: " + err.Error()}
+	}
 	return adminResponse{OK: true}
 }
 

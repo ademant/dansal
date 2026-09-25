@@ -16,9 +16,50 @@ import "database/sql"
 // each block stays self-contained and readable without tracing into a
 // shared helper.
 
-// deleteUserByID deletes one user row by id.
+// deleteUserByID deletes one user row by id (#1375). Columns that reference
+// users(id) with the default NO ACTION (events.created_by_id/changed_by_id,
+// the created_by_id audit columns of musicians, instructors, ... and the
+// owner columns contact_posts.user_id / pending_registrations.user_id) used
+// to make the DELETE fail with a FOREIGN KEY error for any user who had
+// created content -- e.g. a wp-dansal publisher service account. They are
+// discovered from the schema (so a future column is covered too) and
+// cleared first: nullable audit columns are set to NULL (the content stays,
+// only the attribution goes), rows owned through a NOT NULL column are
+// deleted with the user.
 func deleteUserByID(exec querier, id any) error {
-	_, err := exec.Exec("DELETE FROM users WHERE id=?", id)
+	rows, err := exec.Query(`SELECT m.name, f."from", COALESCE((SELECT "notnull" FROM pragma_table_info(m.name) WHERE name = f."from"), 0)
+		FROM sqlite_master m, pragma_foreign_key_list(m.name) f
+		WHERE m.type = 'table' AND f."table" = 'users' AND f.on_delete NOT IN ('CASCADE', 'SET NULL')`)
+	if err != nil {
+		return err
+	}
+	type ref struct {
+		table, col string
+		notNull    bool
+	}
+	var refs []ref
+	for rows.Next() {
+		var r ref
+		var nn int
+		if err := rows.Scan(&r.table, &r.col, &nn); err != nil {
+			rows.Close()
+			return err
+		}
+		r.notNull = nn != 0
+		refs = append(refs, r)
+	}
+	rows.Close()
+	for _, r := range refs {
+		// table/col come from sqlite_master, never from user input.
+		q := "UPDATE \"" + r.table + "\" SET \"" + r.col + "\" = NULL WHERE \"" + r.col + "\" = ?"
+		if r.notNull {
+			q = "DELETE FROM \"" + r.table + "\" WHERE \"" + r.col + "\" = ?"
+		}
+		if _, err := exec.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	_, err = exec.Exec("DELETE FROM users WHERE id=?", id)
 	return err
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -350,6 +351,7 @@ func deletePublisher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := deleteUserByID(db, targetID); err != nil {
+		log.Printf("delete publisher %d: %v", targetID, err)
 		writeError(w, "failed to delete publisher", http.StatusInternalServerError)
 		return
 	}

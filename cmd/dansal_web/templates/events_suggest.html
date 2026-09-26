@@ -1061,7 +1061,10 @@ function applyWizardData(data) {
 // set) and the location search's geo_token (#1314, always present — the
 // search widget works in ManageToken mode too). Runs even in ManageToken
 // mode, when there's no _form_token element to update.
-(function(){
+// base.js is deferred (#1326): setGeoToken() only exists once it has run,
+// so this must wait for DOMContentLoaded or it throws a ReferenceError and
+// the geocode search stays token-less (403 for anonymous visitors, #1379).
+document.addEventListener('DOMContentLoaded', function(){
   setGeoToken({{$.Data.GeoToken | jsStr}});
   var el = document.querySelector('#wiz-form input[name="_form_token"]');
   var last = 0;
@@ -1080,6 +1083,6 @@ function applyWizardData(data) {
   }
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
   setInterval(refresh, 10 * 60 * 1000);
-})();
+});
 </script>
 {{end}}

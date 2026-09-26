@@ -1447,7 +1447,10 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 // _form_token is handled separately (on-panel-open refresh, above). Runs
 // regardless of whether this event has a booking form — the location
 // search doesn't depend on one existing.
-(function(){
+// base.js is deferred (#1326): setGeoToken() only exists once it has run,
+// so this must wait for DOMContentLoaded or it throws a ReferenceError and
+// the geocode search stays token-less (403 for anonymous visitors, #1379).
+document.addEventListener('DOMContentLoaded', function(){
   setGeoToken({{$.Data.GeoToken | jsStr}});
   var el = document.querySelector('.booking-form input[name="_form_token"]');
   var last = 0;
@@ -1466,7 +1469,7 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
   }
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
   setInterval(refresh, 10 * 60 * 1000);
-})();
+});
 </script>
 
 {{with .Data}}

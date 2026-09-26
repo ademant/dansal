@@ -1,6 +1,6 @@
 ---
 name: db-migration
-description: Add or modify the dansal SQLite schema (new columns, tables, indexes) safely. Use when touching the events/locations/organizations/timetable_entries schema, adding an ALTER TABLE, changing createTables(), or when a change needs to run on existing production databases. Encodes the migrateDB() version-block pattern, the pragma_table_info safety-net, createTables() sync for fresh installs, and the throwaway :memory: smoke test.
+description: Add or modify the dansal SQLite schema (new columns, tables, indexes, CHECK constraints) safely. Use when touching the events/locations/organizations/timetable_entries schema, adding an ALTER TABLE, widening a CHECK(col IN (...)) enum, changing createTables(), or when a change needs to run on existing production databases. Encodes the migrateDB() version-block pattern, the pragma_table_info safety-net, the CHECK-widening table-rebuild shape, createTables() sync for fresh installs, and the throwaway :memory: smoke test.
 ---
 
 # Safe DB migrations in dansal
@@ -78,6 +78,32 @@ if !applied(43) {
 Keep the migration's DDL in one local const (`ownerMediaSchema`) so the version block and its safety net can't drift from each other; `createTables()` carries its own copy for fresh installs, so change both when the schema changes. `TestSmokeMigrationOwnerMedia` (`smoke_migration_test.go`) is the template for a permanent test worth keeping for a table: fresh install → drop table + delete the version row and re-migrate (upgrade path) → drop table with the version still marked (pre-marked path) → migrate again (idempotent).
 
 **Polymorphic owner tables (`owner_type` + `owner_id`, e.g. `owner_media`) have no foreign key**, so nothing cascades. Every delete path for an owner must clear its rows explicitly (collect child ids *before* the delete — a location's rooms — and clear after it succeeds), and every merge path must fold or drop them. Add a test for each; a forgotten one leaves orphans that silently reappear when an id is reused.
+
+## Widening an enum-like CHECK constraint (SQLite can't ALTER one)
+
+A third shape, for a `CHECK(col IN (...))` that needs a new value added — e.g. `fetch_sources.type` gaining `'kufer'`, then later `'jcal'` (#1377). SQLite has no `ALTER TABLE ... ALTER CONSTRAINT`, so the whole table is rebuilt: create a shadow table with the wider `CHECK`, copy every row across, drop the original, rename the shadow into place. `migrateFetchSourcesKuferType`/`migrateFetchSourcesJcalType` (`cmd/dansal/main.go`) are the reference pair — copy the newer one exactly (it already carries every column the older one didn't have yet) rather than the original `migrateFetchSourcesTypeCheck`.
+
+This shape does **not** use `applied()`/`mark()` at all — it self-guards by reading the live schema and checking for the new value as a substring:
+
+```go
+func migrateFetchSourcesJcalType() {
+    var schema string
+    db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
+    if strings.Contains(schema, "'jcal'") {
+        return // already widened — including on a fresh install, since createTables() already has it
+    }
+    // ... CREATE TABLE fetch_sources_chk (... CHECK(type IN (..., 'jcal')) ...);
+    // ... INSERT INTO fetch_sources_chk SELECT ... FROM fetch_sources;
+    // ... DROP TABLE fetch_sources; ALTER TABLE fetch_sources_chk RENAME TO fetch_sources;
+    // ... re-create any index the table carried (DROP TABLE loses it).
+}
+```
+
+Consequences of no version number:
+- The function is called **unconditionally** every `migrateDB()` run (no `if !applied(N)` guard around the call) — the schema-string check is what makes repeated calls a no-op.
+- `createTables()` needs the widened `CHECK` list too, so a fresh install's `migrateFetchSourcesJcalType()` call sees `'jcal'` already present and returns immediately — there's no separate catch-all mark to add for this shape.
+- Order matters when two widenings compose: a later one's `INSERT ... SELECT` must list every column the table has *by the time it runs*, including ones an earlier widening or a plain `ALTER TABLE ADD COLUMN` introduced (e.g. `jcal`'s rebuild carries `kufer_config` in its `SELECT`, since the `kufer` widening plus its own safety-net `ALTER TABLE` both run first in `migrateDB()`). Missing one silently drops that column's data for every existing row.
+- The smoke test doesn't fit `TestSmokeMigrationOwnerMedia`'s shape (there's no version to delete from `schema_migrations`) — instead rebuild a table with the *pre-widening* `CHECK` list by hand (every real column, not a trimmed-down stand-in — the migration's `INSERT ... SELECT` will fail on a missing column, silently no-op'ing the whole widening) and confirm a row using the new value is rejected before `migrateDB()` and accepted after (`TestSmokeMigrationFetchSourcesJcalType` in `smoke_migration_test.go` is the reference).
 
 ## `createTables()` — keep fresh installs identical
 

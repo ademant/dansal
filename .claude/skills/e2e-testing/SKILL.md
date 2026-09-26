@@ -39,6 +39,38 @@ export ADMIN_CLI=/tmp/scratch/dansal_admin ADMIN_SOCKET=/tmp/scratch/dansal.sock
 - Restart by PID (`pgrep -af`, `kill <pid>`), never `pkill -f "<path>"` from a Bash tool call — the pattern also matches the shell running the command, which kills it (exit 144).
 - `sudo -n` is only allowed for `/usr/lib/dansal/dev/dansal_admin`; that's why `ADMIN_NO_SUDO=1` is needed for any other binary.
 
+### Bootstrapping the scratch instance's config from scratch
+
+`packaging/{config,web,webmin}.yaml` are real, working templates (not just documentation) — copy and `sed` them rather than writing config files by hand:
+
+```bash
+mkdir -p /tmp/scratch/images && cp packaging/config.yaml packaging/web.yaml packaging/webmin.yaml /tmp/scratch/
+sed -i \
+  -e 's|^  port: 8000|  port: 18000|' -e 's|^  listen: "127.0.0.1:8000"|  listen: "127.0.0.1:18000"|' \
+  -e "s|^  db_path: /var/lib/dansal/calendar.db|  db_path: /tmp/scratch/calendar.db|" \
+  -e "s|^  images_dir: /var/lib/dansal/images|  images_dir: /tmp/scratch/images|" \
+  -e "s|^  admin_socket: /var/lib/dansal/dansal.sock|  admin_socket: /tmp/scratch/dansal.sock|" \
+  -e "s|^  backup_dir: /var/lib/dansal/backups|  backup_dir: /tmp/scratch/backups|" \
+  -e 's|^  base_url: ""|  base_url: "http://localhost:18000"|' \
+  /tmp/scratch/config.yaml
+sed -i \
+  -e 's|^listen: "127.0.0.1:8080"|listen: "127.0.0.1:18080"|' -e 's|^domain: "events.example.com"|domain: "localhost"|' \
+  -e 's|^dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' \
+  -e "s|^db_path: /var/lib/dansal-web/web.db|db_path: /tmp/scratch/web.db|" \
+  /tmp/scratch/web.yaml
+```
+
+Then create an admin user and log in via the raw API for a bearer token — the same "don't fight the login form" reasoning as `loginAs()` below, just for `curl` instead of Playwright:
+
+```bash
+/tmp/scratch/dansal_admin --socket /tmp/scratch/dansal.sock create-user --email admin@example.com --password TestPass123! --role admin
+TOKEN=$(curl -s -X POST http://localhost:18000/api/v1/login -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"TestPass123!"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s -b "dsw_token=$TOKEN" http://localhost:18080/admin/fetchurls/new   # authRefreshMiddleware re-establishes dsw_user from just this cookie
+```
+
+**Prefer this curl-plus-scratch-instance path over a Playwright spec for a narrow check** — "does this template render the new `<option>`", "does this POST accept the new field and round-trip it into the edit page", "what does the API actually return for X" — where a single request-response pair answers the question. Reach for a real spec (or extend an existing one) instead when the check is a multi-step user journey (fill a form, navigate, verify a redirect) or needs to be a *permanent* regression test; a one-off curl session verifies the change today but leaves nothing behind for tomorrow.
+
 ## Auth: storageState, not per-test logins
 
 `playwright.config.ts` + `global-setup.ts` log in **once** for the whole suite (admin) and save `.auth/admin.json` (`AUTH_FILE` from `helpers/auth.ts`). Every spec's `page` fixture and `beforeAll`'s `browser.newContext({ storageState: AUTH_FILE })` load pre-authenticated — never call `loginAs()` for the admin role.

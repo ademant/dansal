@@ -22,6 +22,19 @@
  * network egress and no SSRF allowlist entry (contrast suggest-feed.spec.ts,
  * which must use an allowlisted host). Skips when suggest is unconfigured
  * (GET /events/suggest → 404).
+ *
+ * ⚠ Rate limit: POST /api/v1/events/suggest-preview is capped at
+ * NewRateLimiter(5, 10*time.Minute) keyed on the **client IP alone**
+ * (cmd/dansal/suggest.go) — not on ip+user-agent like the web tier's
+ * publicThrottle. The per-run unique user-agent this suite normally uses to
+ * dodge throttles therefore does NOT help here, and every spec that reaches
+ * this endpoint spends from the same budget of 5 per 10 minutes. This file
+ * alone spends 2 (desktop + mobile), and suggest-feed.spec.ts spends more, so
+ * repeated local runs — or re-running just this file twice — will start
+ * getting HTTP 429. The web tier maps that 429 to the generic
+ * "error processing the file" message rather than its own rate-limit string,
+ * so a throttled run looks like a parse failure. Space runs out, or run a
+ * single project, when iterating on this spec.
  */
 import { test, expect } from "@playwright/test";
 
@@ -91,8 +104,15 @@ test("import preview: arrows, prefilled date and date field all render", async (
     await expect(arrows.first()).toBeVisible();
 
     // ── #1389/#1390: the prefilled date is visible ─────────────────────
+    // The date row lives on wizard step 2; only step 1 is visible on load,
+    // so advance before touching anything in it.
+    await page.locator("#wiz-next").click();
+    await page.locator("#sg-date-text").waitFor({ state: "visible" });
+
     // Ground truth is the server-written hidden input; the button and the new
-    // text field must both agree with it.
+    // text field must both agree with it. Reading it rather than hardcoding
+    // keeps this timezone-agnostic — the ICS is 19:30Z, and the instance's
+    // local zone decides which calendar day that lands on.
     const from = await page.inputValue("#sg-date-from");
     expect(from, "preview must have written a start date").toMatch(
       /^\d{4}-\d{2}-\d{2}$/
@@ -105,8 +125,6 @@ test("import preview: arrows, prefilled date and date field all render", async (
       page.locator("#sg-date-text"),
       "the visible date field must show the imported date (#1390)"
     ).toHaveValue(from);
-    // A second, distinct date means the field is not just echoing the button.
-    expect(from).not.toBe("");
 
     // The label reuses the existing evt_date string — no new i18n key.
     await expect(page.locator('label[for="sg-date-text"]')).toBeVisible();
@@ -116,8 +134,9 @@ test("import preview: arrows, prefilled date and date field all render", async (
     await page.fill("#sg-date-text", typed);
     await page.locator("#sg-date-text").blur();
     await expect(page.locator("#sg-date-from")).toHaveValue(typed);
-    // A lone date in the text field is a single-day event, so #sg-date-to
-    // follows it — never left pointing at the stale imported end date.
+    // 2027-04-08 is later than the imported end date, so the old end is stale
+    // and this is a single-day event — #sg-date-to follows, rather than being
+    // left behind and inverting start/end on submit.
     await expect(page.locator("#sg-date-to")).toHaveValue(typed);
     await expect(page.locator("#sg-date-btn")).toContainText(typed);
 
@@ -131,19 +150,26 @@ test("import preview: arrows, prefilled date and date field all render", async (
 
     // ── #1390: picker → field ──────────────────────────────────────────
     // Two clicks on the same cell complete a range selection (the first arms
-    // pendingStart, the second fires onSelect).
+    // pendingStart, the second fires onSelect). Pick a day from whichever
+    // month the popup actually opens on rather than hardcoding one — the
+    // popup follows the current range, which the steps above have moved.
     await page.fill("#sg-date-text", "");
     await page.locator("#sg-date-text").blur();
     await page.locator("#sg-date-btn").click();
-    const day = page.locator('#sg-cal-grid td[data-iso="2027-05-06"]');
-    await expect(day).toBeVisible();
+    const day = page.locator('#sg-cal-grid td[data-iso]:not(.dpr-other)').nth(9);
+    const iso = await day.getAttribute("data-iso");
+    expect(iso, "picker grid must offer a day in the open month").toBeTruthy();
     await day.click();
     await day.click();
     await expect(
       page.locator("#sg-date-text"),
       "picking a date in the popup must fill the text field"
-    ).toHaveValue("2027-05-06");
-    await expect(page.locator("#sg-date-from")).toHaveValue("2027-05-06");
+    ).toHaveValue(iso!);
+    await expect(page.locator("#sg-date-from")).toHaveValue(iso!);
+
+    // The field must remain typeable where .sg-time-input is swapped out for
+    // the swipe picker, i.e. it is deliberately not in the ≤767px hide list.
+    await expect(page.locator("#sg-date-text")).toBeVisible();
   } finally {
     await ctx.close();
   }

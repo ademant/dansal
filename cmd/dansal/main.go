@@ -2279,6 +2279,10 @@ func migrateDB() {
 		}
 	}
 
+	// #1377: widen fetch_sources.type CHECK to allow 'jcal'. Must run after
+	// the kufer_config column above exists, since the rebuild carries it over.
+	migrateFetchSourcesJcalType()
+
 	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
 	// (coffee break / lunch slots), alongside the existing bal/workshop.
 	migrateTimetableEntriesBreakType()
@@ -3038,6 +3042,68 @@ func migrateFetchSourcesKuferType() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesKuferType: added 'kufer' to fetch_sources.type CHECK constraint")
+}
+
+// migrateFetchSourcesJcalType widens fetch_sources.type's CHECK constraint to
+// allow 'jcal' (#1377), following the exact rebuild pattern used when
+// 'kufer' was added in migrateFetchSourcesKuferType.
+func migrateFetchSourcesJcalType() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
+	if strings.Contains(schema, "'jcal'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateFetchSourcesJcalType: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE fetch_sources_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT UNIQUE NOT NULL,
+			type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal')),
+			tags TEXT,
+			organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+			last_fetched_at INTEGER,
+			last_result TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			template_id INTEGER,
+			template_mode TEXT NOT NULL DEFAULT '',
+			template_data TEXT,
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			dance_ids TEXT DEFAULT '[]',
+			created_by_id INTEGER REFERENCES users(id),
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT '',
+			kufer_config TEXT
+		)`,
+		`INSERT INTO fetch_sources_chk
+			(id, url, type, tags, organization_id, last_fetched_at, last_result,
+			 created_at, template_id, template_mode, template_data, consecutive_failures,
+			 dance_ids, created_by_id, updated_at, updated_by, kufer_config)
+		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
+			created_at, template_id, template_mode, template_data,
+			COALESCE(consecutive_failures, 0),
+			COALESCE(dance_ids, '[]'),
+			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config
+		FROM fetch_sources`,
+		`DROP TABLE fetch_sources`,
+		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateFetchSourcesJcalType: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	log.Printf("migrateFetchSourcesJcalType: added 'jcal' to fetch_sources.type CHECK constraint")
 }
 
 // migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
@@ -3841,7 +3907,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS fetch_sources (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		url TEXT UNIQUE NOT NULL,
-		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer')),
+		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal')),
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at INTEGER,

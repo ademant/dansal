@@ -134,16 +134,35 @@ var safeClient = &http.Client{
 	Transport: uaTransport{rt: &http.Transport{DialContext: safeDialContext}},
 }
 
+// fetchTypeHeaders returns the fixed request headers a fetch type needs to
+// get the right representation back from a content-negotiated server — e.g.
+// a "jcal" source must ask for jCal explicitly (#1377), since without an
+// Accept header a source that also serves other formats (a dansal instance's
+// own /api/v1/events, for one) answers with its default representation
+// instead. Static, admin-chosen-type-derived values only — dansal never
+// stores feed credentials, so this must never grow into a place to stash an
+// arbitrary or interpolated header.
+func fetchTypeHeaders(fetchType string) map[string]string {
+	if fetchType == "jcal" {
+		return map[string]string{"Accept": "application/calendar+json"}
+	}
+	return nil
+}
+
 // getWithRetry performs a GET request via client, retrying on HTTP 429 with
 // exponential backoff (1s, 2s, 4s, 8s). A Retry-After header, if present and
 // between 1–300 seconds, overrides the computed delay. At most 5 attempts are
 // made; the final 429 response is returned as-is so callers can log the status.
-func getWithRetry(ctx context.Context, client *http.Client, rawURL string) (*http.Response, error) {
+// headers (typically from fetchTypeHeaders) are set on every attempt; nil is fine.
+func getWithRetry(ctx context.Context, client *http.Client, rawURL string, headers map[string]string) (*http.Response, error) {
 	delays := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 		if err != nil {
 			return nil, err
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
 		}
 		resp, err := client.Do(req)
 		if err != nil {
@@ -843,6 +862,8 @@ func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCoun
 		return importFromRSSSource(ctx, src)
 	case "kufer":
 		return importFromKuferSource(ctx, src)
+	case "jcal":
+		return importFromJcalSource(ctx, src)
 	default:
 		return importFromICalSource(ctx, src)
 	}
@@ -1023,7 +1044,7 @@ const maxFeedBodySize = 64 << 20
 // fetchFeedBody fetches src.URL and returns the body bytes, handling the
 // shared status-code check and the overall size cap.
 func fetchFeedBody(ctx context.Context, src FetchSource) ([]byte, error) {
-	resp, err := getWithRetry(ctx, safeClient, src.URL)
+	resp, err := getWithRetry(ctx, safeClient, src.URL, fetchTypeHeaders(src.Type))
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
@@ -1368,6 +1389,32 @@ func importFromICalSource(ctx context.Context, src FetchSource) ([]Event, Import
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
+	return importICalBody(ctx, src, body)
+}
+
+// importFromJcalSource fetches a jCal (application/calendar+json, RFC 7265,
+// #1377) URL, converts it to iCal text via jcalToICalText, and imports it
+// through the identical iCal path — dansal already emits this exact format
+// (icalTextToJCal, jcal.go), so this is reading back a format it already
+// writes rather than a new parser. fetchFeedBody sends the Accept header a
+// content-negotiated source (a dansal instance's own /api/v1/events, for one)
+// needs to answer with jCal instead of its default representation.
+func importFromJcalSource(ctx context.Context, src FetchSource) ([]Event, ImportCounts, error) {
+	body, err := fetchFeedBody(ctx, src)
+	if err != nil {
+		return nil, ImportCounts{}, err
+	}
+	icsText, err := jcalToICalText(body)
+	if err != nil {
+		return nil, ImportCounts{}, fmt.Errorf("parse jCal: %w", err)
+	}
+	return importICalBody(ctx, src, []byte(icsText))
+}
+
+// importICalBody is the shared tail of importFromICalSource and
+// importFromJcalSource once each has produced RFC 5545 calendar text: parse,
+// then hand every VEVENT through the same dedup/merge machinery.
+func importICalBody(ctx context.Context, src FetchSource, body []byte) ([]Event, ImportCounts, error) {
 	entries, err := parseICalBody(body, src)
 	if err != nil {
 		return nil, ImportCounts{}, err

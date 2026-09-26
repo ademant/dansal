@@ -187,7 +187,7 @@ func kuferFetchCourseEvents(ctx context.Context, base *url.URL, knr string, src 
 	q.Set("knr", knr)
 	icsURL.RawQuery = q.Encode()
 
-	resp, err := getWithRetry(ctx, safeClient, icsURL.String())
+	resp, err := getWithRetry(ctx, safeClient, icsURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetch knr=%s: %w", knr, err)
 	}

@@ -23,6 +23,7 @@
       <option value="rss" {{if eq .Type "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
       <option value="json" {{if eq .Type "json"}}selected{{end}}>JSON (auto-detect)</option>
       <option value="kufer" {{if eq .Type "kufer"}}selected{{end}}>Kufer (VHS)</option>
+      <option value="jcal" {{if eq .Type "jcal"}}selected{{end}}>jCal</option>
     </select>
   </div>
   <div class="form-row" id="kufer-fields" style="{{if ne .Type "kufer"}}display:none{{end}}">

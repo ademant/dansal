@@ -16,6 +16,7 @@ package main
 // a different kind of thing entirely.
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -59,7 +60,7 @@ func recheckEventSource(w http.ResponseWriter, r *http.Request) {
 		orgIDArg = &v
 	}
 
-	outcome, err := doRecheckEventSource(db, source, uidStr, evURL, fetchSourceID, isPublished, orgIDArg)
+	outcome, err := doRecheckEventSource(r.Context(), db, source, uidStr, evURL, fetchSourceID, isPublished, orgIDArg)
 	if err != nil {
 		writeError(w, "recheck failed: "+err.Error(), http.StatusBadGateway)
 		return
@@ -74,7 +75,7 @@ func recheckEventSource(w http.ResponseWriter, r *http.Request) {
 // through as the event's *current* publish state so a recheck never
 // silently (un)publishes an event the admin explicitly set — feed sources
 // don't carry publish intent.
-func doRecheckEventSource(q querier, source, uidStr, evURL string, fetchSourceID int, isPublished bool, orgID *int) (string, error) {
+func doRecheckEventSource(ctx context.Context, q querier, source, uidStr, evURL string, fetchSourceID int, isPublished bool, orgID *int) (string, error) {
 	parsed, err := url.Parse(source)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return "", fmt.Errorf("stored source is not a valid http(s) URL")
@@ -82,7 +83,9 @@ func doRecheckEventSource(q querier, source, uidStr, evURL string, fetchSourceID
 
 	src := FetchSource{ID: fetchSourceID, Type: detectFetchType(source), URL: source, OrganizationID: orgID}
 
-	resp, err := safeClient.Get(source)
+	// getWithRetry (rather than a bare Get) so a jcal source sends the Accept
+	// header it needs to get jCal back from a content-negotiated server (#1377).
+	resp, err := getWithRetry(ctx, safeClient, source, fetchTypeHeaders(src.Type))
 	if err != nil {
 		return "", fmt.Errorf("fetch failed: %w", err)
 	}

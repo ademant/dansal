@@ -340,6 +340,8 @@ func detectFetchType(rawURL string) string {
 	switch ct {
 	case "application/json":
 		return "json"
+	case "application/calendar+json":
+		return "jcal"
 	case "application/rss+xml", "application/atom+xml", "application/xml", "text/xml":
 		return "rss"
 	default:
@@ -350,5 +352,5 @@ func detectFetchType(rawURL string) string {
 // validFetchType returns true for recognised fetch type strings.
 // "json" is the unified public type; "folkdance-json" and "gancio-json" are kept as aliases for backwards compatibility.
 func validFetchType(t string) bool {
-	return t == "ical" || t == "json" || t == "folkdance-json" || t == "gancio-json" || t == "rss" || t == "kufer"
+	return t == "ical" || t == "json" || t == "folkdance-json" || t == "gancio-json" || t == "rss" || t == "kufer" || t == "jcal"
 }

@@ -127,7 +127,7 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 			feedType = "json"
 		}
 
-		resp, err := getWithRetry(r.Context(), safeClient, rawURL)
+		resp, err := getWithRetry(r.Context(), safeClient, rawURL, fetchTypeHeaders(feedType))
 		if err != nil {
 			writeError(w, "fetch failed", http.StatusBadGateway)
 			return

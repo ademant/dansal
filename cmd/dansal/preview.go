@@ -221,6 +221,16 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 		return parseFolkdanceJSONToRequests(body, src)
 	case "gancio-json":
 		return parseGancioJSONToRequests(body, src)
+	case "jcal":
+		icsText, err := jcalToICalText(body)
+		if err != nil {
+			return nil, fmt.Errorf("parse jCal: %w", err)
+		}
+		cal, err := ics.ParseCalendar(strings.NewReader(icsText))
+		if err != nil {
+			return nil, fmt.Errorf("parse iCal: %w", err)
+		}
+		return parseICalToRequests(cal, src), nil
 	default:
 		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))
 		if err != nil {

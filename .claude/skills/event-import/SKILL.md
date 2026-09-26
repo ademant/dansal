@@ -1,6 +1,6 @@
 ---
 name: event-import
-description: Work on the event import pipeline — feed fetching, parsing, location resolution, and duplicate detection. Use when touching findExistingEvent, previewDuplicateStatus, insertEvent, ensureLocation, fetchurl*.go, location aliases, or anything that imports events from external feeds (ical, rss, json/folkdance, gancio, kufer). Encodes the 5-tier dedup hierarchy, the shared preview/insert logic, and the location resolution + alias rules that must not be broken.
+description: Work on the event import pipeline — feed fetching, parsing, location resolution, and duplicate detection. Use when touching findExistingEvent, previewDuplicateStatus, insertEvent, ensureLocation, fetchurl*.go, location aliases, or anything that imports events from external feeds (ical, rss, json/folkdance, gancio, kufer, jcal). Encodes the 5-tier dedup hierarchy, the shared preview/insert logic, and the location resolution + alias rules that must not be broken.
 ---
 
 # Event import & deduplication
@@ -50,7 +50,11 @@ Constants: `threeHours = 3 * 60 * 60` (seconds), `titlesFuzzyOverlap` in the sam
 
 ## Feed formats
 
-`parseBodyToRequests` dispatches on `src.Type` (`preview.go:198`): `json` (probed — may be gancio or TEC JSON), `folkdance-json`, `gancio-json`, otherwise iCal (`ics.ParseCalendar`). Accepted types: `ical, json, folkdance-json, gancio-json, rss, kufer` (fetchurl.go enum). Each has a `fetchurl_<format>.go` parser.
+`parseBodyToRequests` dispatches on `src.Type` (`preview.go`): `json` (probed — may be gancio or TEC JSON), `folkdance-json`, `gancio-json`, `jcal`, otherwise iCal (`ics.ParseCalendar`). Accepted types: `ical, json, folkdance-json, gancio-json, rss, kufer, jcal` (`validFetchType`, `fetchurl_folkdance.go`).
+
+**A new type must be wired into *both* dispatchers, or it silently misbehaves in one path** (#1377). `parseBodyToRequests` (`preview.go`) drives the admin/suggest *preview* step; `importFromSource` (`fetchurl.go`) drives the real scheduled fetch. Neither falls back to the other, and `parseBodyToRequests` has no case at all for `rss` or `kufer` today — its `default` branch runs `ics.ParseCalendar` directly on the body, which happens to still work for `kufer` (each course page it fetches really is a plain iCal document) but would misparse an actual RSS/XML body. Don't assume a type "just works" in preview because it works live — check both switch statements explicitly when adding one.
+
+`jcal` (RFC 7265, `application/calendar+json`) is the one format dansal also *emits* (`GET /api/v1/events`, `jcal.go`'s `icalTextToJCal`/`jcalToICalText`) — importing it is just feeding `jcalToICalText`'s output through the same iCal path (`importICalBody` in `fetchurl.go`, shared by `importFromICalSource` and `importFromJcalSource`), so RRULE/TZID/dedup all come for free rather than needing a second implementation. Content negotiation means a `jcal` source needs an explicit `Accept: application/calendar+json` header to get jCal back rather than a server's default representation — `fetchTypeHeaders(src.Type)` (`fetchurl.go`) supplies this to every `getWithRetry` call site. It's deliberately a small static map keyed by type, not a general per-source header store — dansal never stores feed credentials, and this must not become a place to stash one.
 
 ## Testing & final checks
 

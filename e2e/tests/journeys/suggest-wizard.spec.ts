@@ -63,7 +63,7 @@ async function submitSuggestWizard(
   page: import("@playwright/test").Page,
   title: string,
   email: string
-): Promise<void> {
+): Promise<string> {
   await page.goto(`${WEB_BASE}/events/suggest`);
 
   // Step 1: fill title
@@ -102,6 +102,10 @@ async function submitSuggestWizard(
   // and writes the combined ISO datetime into sg-start / name="start_time")
   await page.locator('.wiz-step[data-step="6"] button[type="submit"]').click();
   await page.waitForURL(/\/events\/suggest\/done/);
+
+  // Return the date we set so the manage-link steps can assert the prefill
+  // actually displayed it (#1389).
+  return dateStr;
 }
 
 /**
@@ -128,6 +132,7 @@ async function submitManageUpdate(
   page: import("@playwright/test").Page,
   manageToken: string,
   description: string,
+  expectedDate: string,
   contactEmail?: string
 ): Promise<void> {
   await page.goto(`${WEB_BASE}/events/suggest/manage/${manageToken}`);
@@ -135,6 +140,15 @@ async function submitManageUpdate(
   await page.waitForFunction(
     () => (document.getElementById("wiz-title") as HTMLInputElement | null)?.value !== ""
   );
+
+  // #1389: the manage-link prefill shares the import prefill's ordering bug.
+  // The submitted date is stored in the hidden input either way, so assert on
+  // the button and the new visible field — both used to keep showing 📅.
+  await expect(
+    page.locator("#sg-date-btn"),
+    "manage-link prefill must display the submitted date (#1389)"
+  ).toContainText(expectedDate);
+  await expect(page.locator("#sg-date-text")).toHaveValue(expectedDate);
 
   // Navigate to step 4 (description) — 3 Next clicks from step 1
   for (let i = 0; i < 3; i++) {
@@ -227,7 +241,11 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   });
   const anonPage = await anonCtx.newPage();
   try {
-    await submitSuggestWizard(anonPage, title, SUBMITTER_EMAIL);
+    const submittedDate = await submitSuggestWizard(
+      anonPage,
+      title,
+      SUBMITTER_EMAIL
+    );
 
     // ── Pre-publish visibility assertion ────────────────────────────────
     // The public events API only returns is_published = 1 rows.
@@ -250,7 +268,12 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
     // ── Scenario C: pre-publish manage update ───────────────────────────
     // The suggestion is still unpublished → update is applied directly.
     const prePublishDesc = `Pre-publish description ${Date.now()}`;
-    await submitManageUpdate(anonPage, manageToken, prePublishDesc);
+    await submitManageUpdate(
+      anonPage,
+      manageToken,
+      prePublishDesc,
+      submittedDate
+    );
 
     // ── Admin finds the suggestion in the "not verified" filter ─────────
     // filterNotVerified keeps events where !is_published || pending_edit_json.
@@ -308,7 +331,13 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
     // exercises both halves of that split in a single flow.
     const pendingDesc = `Post-publish pending description ${Date.now()}`;
     const pendingContactEmail = `e2e-suggest-pending-${Date.now()}@example.com`;
-    await submitManageUpdate(anonPage, manageToken, pendingDesc, pendingContactEmail);
+    await submitManageUpdate(
+      anonPage,
+      manageToken,
+      pendingDesc,
+      submittedDate,
+      pendingContactEmail
+    );
     // The manage-submit handler redirects to /events/suggest/done?review=1
     // when a pending edit was created.  waitForURL already matched the done
     // page; verify the ?review=1 query param was set.

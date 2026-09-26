@@ -11,6 +11,18 @@
   </p>
 
   {{if not .ManageToken}}
+  <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
+  <!-- #1388: hoisted out of the import-mode else-branch so a page reached -->
+  <!-- via "Preview" still renders the nav. The wizard JS tolerates a missing -->
+  <!-- #wiz-arrows, which is why its absence went unnoticed. -->
+  <nav class="wiz-arrows" id="wiz-arrows" aria-label="Progress">
+    <button type="button" class="wiz-arrow" data-step="1">{{$.Strings.T "suggest_step_title"}}</button>
+    <button type="button" class="wiz-arrow" data-step="2">{{$.Strings.T "suggest_step_time"}}</button>
+    <button type="button" class="wiz-arrow" data-step="3">{{$.Strings.T "suggest_step_location"}}</button>
+    <button type="button" class="wiz-arrow" data-step="4">{{$.Strings.T "suggest_step_description"}}</button>
+    <button type="button" class="wiz-arrow" data-step="5">{{$.Strings.T "suggest_step_timetable"}}</button>
+    <button type="button" class="wiz-arrow" data-step="6">{{$.Strings.T "suggest_step_contact"}}</button>
+  </nav>
   {{if .IsImportMode}}
   {{if gt (len .PreviewEvents) 1}}
   <div class="import-picker">
@@ -24,15 +36,6 @@
   {{end}}
   <a href="/events/suggest" class="import-back-link">&#8592; {{$.Strings.T "suggest_tab_import"}}</a>
   {{else}}
-  <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
-  <nav class="wiz-arrows" id="wiz-arrows" aria-label="Progress">
-    <button type="button" class="wiz-arrow" data-step="1">{{$.Strings.T "suggest_step_title"}}</button>
-    <button type="button" class="wiz-arrow" data-step="2">{{$.Strings.T "suggest_step_time"}}</button>
-    <button type="button" class="wiz-arrow" data-step="3">{{$.Strings.T "suggest_step_location"}}</button>
-    <button type="button" class="wiz-arrow" data-step="4">{{$.Strings.T "suggest_step_description"}}</button>
-    <button type="button" class="wiz-arrow" data-step="5">{{$.Strings.T "suggest_step_timetable"}}</button>
-    <button type="button" class="wiz-arrow" data-step="6">{{$.Strings.T "suggest_step_contact"}}</button>
-  </nav>
   <div class="suggest-tabs">
     <button class="tab-btn active" data-fn="switchTab" data-args='["@this","manual"]'>{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" data-fn="switchTab" data-args='["@this","import"]'>{{$.Strings.T "suggest_tab_import"}}</button>
@@ -114,6 +117,13 @@
               </div>
               <table class="dpr-cal-grid" id="sg-cal-grid"></table>
             </div>
+          </div>
+          <!-- #1390: visible, typeable date beside the popup button. The date -->
+          <!-- itself still lives in the #sg-date-from/#sg-date-to hidden inputs; -->
+          <!-- this mirrors that value so it can be read and edited directly. -->
+          <div class="sg-date-col">
+            <label class="sg-time-col-label" for="sg-date-text">{{$.Strings.T "evt_date"}}</label>
+            <input type="text" id="sg-date-text" class="sg-date-text" inputmode="numeric" placeholder="YYYY-MM-DD" autocomplete="off" spellcheck="false">
           </div>
           <div class="sg-time-col">
             <label class="sg-time-col-label" for="sg-start-time">{{$.Strings.T "suggest_start_time"}} *</label>
@@ -358,6 +368,10 @@
 .form-row input[type=text],.form-row input[type=email],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-date-time-row{display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap}
 .sg-date-time-row .dpr-wrap{flex:0 0 auto}
+/* #1390: matches .sg-time-input; deliberately not hidden by the ≤767px block
+   below so the date stays typeable on small screens. */
+.sg-date-col{flex:0 1 9.5rem;min-width:8rem}
+.sg-date-text{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-time-col{flex:1;min-width:9rem}
 .sg-time-col-label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.3rem}
 .sg-time-input{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
@@ -579,13 +593,21 @@ function sgGrowTTTable(el) {
 
 // ── Date range picker ─────────────────────────────────────────────────────
 // #1326: base.js now loads with defer, so initDateRangePicker isn't defined
-// yet at plain top-level script time — wait for DOMContentLoaded. (line 888
-// below already guards window.sgDatePickerSet being unset for exactly this
-// kind of race, so nothing else needs to change.)
+// yet at plain top-level script time — wait for DOMContentLoaded.
+// #1389: the import and manage-link auto-prefills further down used to run as
+// top-level IIFEs, i.e. before this handler, so their
+// `if (window.sgDatePickerSet)` guard silently skipped the button update and
+// an imported date was never displayed. They are DOMContentLoaded listeners
+// now, registered after this one, and listeners fire in registration order —
+// so window.sgDatePickerSet and window.sgDateApply always exist by the time
+// they run. Do not move either prefill back to top level.
 document.addEventListener('DOMContentLoaded', function(){
   var btn  = document.getElementById('sg-date-btn');
   var popup = document.getElementById('sg-date-popup');
   if (!btn || !popup) return;
+  var fromEl = document.getElementById('sg-date-from');
+  var toEl   = document.getElementById('sg-date-to');
+  var txtEl  = document.getElementById('sg-date-text');
   window.sgDatePickerSet = initDateRangePicker({
     btn: btn,
     popup: popup,
@@ -596,11 +618,35 @@ document.addEventListener('DOMContentLoaded', function(){
     from: '', to: '',
     placeholder: '📅',
     onSelect: function(f, t) {
-      document.getElementById('sg-date-from').value = f;
-      document.getElementById('sg-date-to').value   = t;
+      window.sgDateApply(f, t);
       applyTimeDefaults(f, t || f);
     }
   }).setRange;
+  // #1389/#1390: single writer for the date, so the hidden inputs, the button
+  // label and the #1390 text field can never drift apart. The button is
+  // refreshed via setRange, which is what the auto-prefill previously skipped
+  // by running before this handler existed.
+  window.sgDateApply = function(f, t) {
+    if (f) fromEl.value = f;
+    if (t) toEl.value = t;
+    if (txtEl && document.activeElement !== txtEl) txtEl.value = fromEl.value || '';
+    window.sgDatePickerSet(fromEl.value, toEl.value);
+  };
+  if (txtEl) {
+    txtEl.addEventListener('change', function(){
+      var v = txtEl.value.trim();
+      // A malformed entry is ignored rather than written through, so the
+      // submit-time "date required" check still fires instead of us storing
+      // garbage in the hidden inputs.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+      // Keep an existing range only while the typed start still precedes its
+      // end (ISO dates compare correctly as strings); a later date means the
+      // old end is stale, so this is a single-day event. Either way the range
+      // can never end up inverted, which would silently swap start/end.
+      var to = (toEl.value && toEl.value >= v) ? toEl.value : v;
+      window.sgDateApply(v, to);
+    });
+  }
   document.addEventListener('click', function(e) {
     if (!popup.hidden && !popup.contains(e.target) && e.target !== btn) popup.hidden = true;
   });
@@ -885,11 +931,11 @@ function applyWizardData(data) {
     var toD   = (data.end_time && data.end_time.split('T')[0]) || fromD;
     document.getElementById('sg-date-from').value = fromD;
     document.getElementById('sg-date-to').value   = toD;
+    if (window.sgDateApply) window.sgDateApply(fromD, toD);
     var startH = dt[1] ? dt[1].slice(0,5) : '';
     var endH   = data.end_time && data.end_time.split('T')[1] ? data.end_time.split('T')[1].slice(0,5) : '';
     setTimeInput('sg-start-time', startH);
     setTimeInput('sg-end-time', endH);
-    if (window.sgDatePickerSet) window.sgDatePickerSet(fromD, toD);
   }
   function makeChip(name, fieldName) {
     var chip = document.createElement('div'); chip.className = 'musician-chip';
@@ -934,11 +980,13 @@ function applyWizardData(data) {
 }
 // ── Manage-link auto-prefill (#928) ────────────────────────────────────────
 {{if .Data.ManageToken}}
-(function(){ applyWizardData({{.Data.PrefillJSON}}); })();
+document.addEventListener('DOMContentLoaded', function(){
+  applyWizardData({{.Data.PrefillJSON}});
+});
 {{end}}
 // ── Import auto-prefill + picker ──────────────────────────────────────────
 {{if .Data.IsImportMode}}
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
   applyWizardData({{.Data.PrefillJSON}});
   Array.prototype.forEach.call(document.querySelectorAll('.import-use-btn'), function(btn) {
     btn.addEventListener('click', function() {
@@ -947,7 +995,7 @@ function applyWizardData(data) {
       if (wiz) wiz.scrollIntoView({block: 'start', behavior: 'smooth'});
     });
   });
-})();
+});
 {{end}}
 
 // ── Multi-step wizard navigation ───────────────────────────────────────────

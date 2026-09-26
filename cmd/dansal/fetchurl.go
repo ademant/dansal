@@ -1295,10 +1295,39 @@ type icalImportEntry struct {
 	vevent *ics.VEvent
 }
 
+// vcalendarBegin/vcalendarEnd delimit an embedded VCALENDAR block; see
+// extractVCalendarBody.
+var vcalendarBegin = []byte("BEGIN:VCALENDAR")
+var vcalendarEnd = []byte("END:VCALENDAR")
+
+// extractVCalendarBody returns body unchanged when it already starts with
+// BEGIN:VCALENDAR (the common case). Otherwise it looks for a VCALENDAR
+// block embedded in a larger wrapper — some CMS plugins render an .ics
+// export inside their own HTML page instead of serving it standalone (#1387)
+// — and returns just that slice. ics.ParseCalendar requires BEGIN:VCALENDAR
+// at the very start, so without this a perfectly valid feed fails to parse
+// for a reason that has nothing to do with the calendar data itself. When no
+// BEGIN/END pair is found, body is returned unchanged so the original parse
+// error (a real malformed-calendar case) is preserved.
+func extractVCalendarBody(body []byte) []byte {
+	if bytes.HasPrefix(bytes.TrimLeft(body, " \t\r\n\ufeff"), vcalendarBegin) {
+		return body
+	}
+	start := bytes.Index(body, vcalendarBegin)
+	if start < 0 {
+		return body
+	}
+	end := bytes.LastIndex(body, vcalendarEnd)
+	if end < start {
+		return body
+	}
+	return body[start : end+len(vcalendarEnd)]
+}
+
 // parseICalBody parses an iCal body into event requests, expanding RRULE
 // occurrences, without touching the database.
 func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
-	cal, err := ics.ParseCalendar(bytes.NewReader(body))
+	cal, err := ics.ParseCalendar(bytes.NewReader(extractVCalendarBody(body)))
 	if err != nil {
 		return nil, fmt.Errorf("parse iCal: %w", err)
 	}

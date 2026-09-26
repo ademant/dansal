@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -232,7 +233,7 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 		}
 		return parseICalToRequests(cal, src), nil
 	default:
-		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))
+		cal, err := ics.ParseCalendar(bytes.NewReader(extractVCalendarBody(body)))
 		if err != nil {
 			return nil, fmt.Errorf("parse iCal: %w", err)
 		}

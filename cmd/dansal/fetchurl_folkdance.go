@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -342,11 +344,48 @@ func detectFetchType(rawURL string) string {
 		return "json"
 	case "application/calendar+json":
 		return "jcal"
-	case "application/rss+xml", "application/atom+xml", "application/xml", "text/xml":
+	case "application/rss+xml", "application/atom+xml":
+		return "rss"
+	case "application/xml", "text/xml":
+		// Generic/ambiguous XML content types are also used by CMS plugins
+		// that mislabel a real iCal export this way (#1387) — a URL naming
+		// an .ics/.ical export is a strong hint, checked first since it's
+		// free; otherwise sniff the body itself for a VCALENDAR block before
+		// assuming RSS.
+		if strings.Contains(lower, "ics") || strings.Contains(lower, "ical") || bodyLooksLikeICal(rawURL) {
+			return "ical"
+		}
 		return "rss"
 	default:
 		return "ical"
 	}
+}
+
+// icalSniffLimit bounds how much of an ambiguously-typed body
+// bodyLooksLikeICal reads — only detection, not import, so a small prefix is
+// enough and a large unrelated page can't make detection itself slow.
+const icalSniffLimit = 512 << 10 // 512 KiB
+
+// bodyLooksLikeICal fetches a URL already known to have an ambiguous XML
+// content type and checks whether its body contains an embedded VCALENDAR
+// block, so a feed that mislabels a real iCal export doesn't get routed to
+// the RSS parser and silently discarded (#1387). The block may be wrapped in
+// an HTML page (some CMS exports render it inside their own layout) — this
+// only needs to find it, not extract it; parseICalBody does that part.
+func bodyLooksLikeICal(rawURL string) bool {
+	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	resp, err := safeClient.Get(rawURL)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, icalSniffLimit))
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(body, []byte("BEGIN:VCALENDAR"))
 }
 
 // validFetchType returns true for recognised fetch type strings.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -133,7 +134,29 @@ func parseRSSBody(body []byte, src FetchSource) ([]EventCreateRequest, error) {
 		return atomEntriesToRequests(atomFd.Entries, src), nil
 	}
 
-	return nil, fmt.Errorf("not a valid RSS 2.0 or Atom feed")
+	return nil, fmt.Errorf("not a valid RSS 2.0 or Atom feed%s", rssMismatchHint(body))
+}
+
+// rssMismatchHint names what the body actually looks like when it was routed
+// to the RSS parser (by detection or an explicit admin choice) but isn't
+// RSS/Atom, so the error doesn't just repeat the wrong assumption (#1387) —
+// "not a valid RSS 2.0 or Atom feed" reads as "this is RSS with a syntax
+// error" when the real problem is that dansal misrouted a feed in some other
+// format entirely. An embedded VCALENDAR block is the case actually seen in
+// the wild: a feed mislabelled with a generic XML content type.
+func rssMismatchHint(body []byte) string {
+	if bytes.Contains(body, vcalendarBegin) {
+		return ` (the body contains an iCalendar VCALENDAR block, not RSS/Atom — try fetch type "ical")`
+	}
+	head := body
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	head = bytes.ToLower(head)
+	if bytes.Contains(head, []byte("<!doctype html")) || bytes.Contains(head, []byte("<html")) {
+		return " (the body looks like an HTML page, not RSS/Atom)"
+	}
+	return ""
 }
 
 func rssItemsToRequests(items []rssItem, src FetchSource) []EventCreateRequest {

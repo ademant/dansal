@@ -40,6 +40,7 @@ import {
   uploadImageAPI,
   fetchImageMeta,
   assertImageDecodes,
+  webImageURL,
   API_BASE,
   type ImageFormat,
 } from "../../helpers/images";
@@ -118,12 +119,24 @@ test.describe("Image uploads", () => {
       // Server re-encodes everything to AVIF (default config); Content-Type
       // may fall back to image/jpeg on AVIF-incapable test instances.
       expect(resp.headers()["content-type"]).toMatch(/image\/(avif|jpeg)/);
-      // A full decode, not just a content-type check: the server has shipped
-      // AVIF containers Chromium couldn't decode, and a content-type header
-      // won't catch a corrupt payload.
+
+      // The URL the browser actually requests is the root-relative one the
+      // web templates render, so check the web origin serves it too — that
+      // proxy is what makes images resolve outside a reverse-proxy setup
+      // (#1374). A missing proxy 404s, which reads as an invisible image.
+      const viaWeb = await page.request.fetch(
+        webImageURL(`/api/v1/images/${eventId}`)
+      );
+      expect(viaWeb.status()).toBe(200);
+      expect(viaWeb.headers()["content-type"]).toMatch(/image\/(avif|jpeg)/);
+
+      // A full decode in a real browser, not just a content-type check: a
+      // content-type header won't catch a payload the browser rejects.
+      // The web origin matters here because the page CSP is
+      // `img-src 'self' data: https:`, which blocks a cross-origin http image.
       await assertImageDecodes(
         page,
-        `${API_BASE}/api/v1/images/${eventId}`
+        webImageURL(`/api/v1/images/${eventId}`)
       );
     });
   }

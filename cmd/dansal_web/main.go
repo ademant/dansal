@@ -186,6 +186,11 @@ func main() {
 		r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
 		r.HandleFunc("POST /telegram/webhook", telegramWebhookProxyHandler(cfg))
 
+		// #1374: the API hands out root-relative /api/v1/... image URLs and
+		// the templates render them as-is, so the web origin has to serve
+		// them even when no reverse proxy fronts the API.
+		registerImageProxy(r, client)
+
 		r.HandleFunc("GET /events/suggest", suggestPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/suggest", suggestPreviewHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/suggest/submit", suggestSubmitHandler(cfg, tmpls, client, i18n))

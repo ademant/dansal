@@ -23,6 +23,7 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/gen2brain/avif"
 	xdraw "golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 func saveDataOn(r *http.Request) bool {
@@ -90,6 +91,12 @@ func hasImage(id int) bool {
 
 var errNotImage = errors.New("data is not an image")
 
+// errUndecodableImage marks input whose bytes sniff as an image but that no
+// registered decoder can turn into pixels: a format we don't support, or a
+// file that is corrupt/truncated. It is a client mistake, so callers map it
+// to 415 rather than letting it surface as a 500 (#1372).
+var errUndecodableImage = errors.New("unsupported or corrupt image")
+
 // maxImageMegapixels caps decoded pixel dimensions before the full pixel
 // buffer is allocated, comfortably above the 1024×1024 default resize
 // target (fitImage runs after decode) while still rejecting a crafted
@@ -114,7 +121,7 @@ func decodeImageSafely(data []byte) (image.Image, error) {
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		return nil, fmt.Errorf("%w: %w", errUndecodableImage, err)
 	}
 	return img, nil
 }

@@ -75,9 +75,15 @@ func imageUploadHandler(spec imageUploadSpec) http.HandlerFunc {
 		defer file.Close()
 
 		if err := spec.save(id, file); err != nil {
-			if errors.Is(err, errNotImage) {
+			switch {
+			case errors.Is(err, errNotImage):
 				writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
-			} else {
+			case errors.Is(err, errUndecodableImage):
+				// The bytes sniffed as an image but nothing could decode
+				// them — an unsupported format or a corrupt file. Still the
+				// client's mistake, so 415, not 500 (#1372).
+				writeError(w, err.Error(), http.StatusUnsupportedMediaType)
+			default:
 				writeInternalError(w, err)
 			}
 			return

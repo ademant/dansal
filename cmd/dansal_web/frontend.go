@@ -1423,18 +1423,34 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 	}
 }
 
-// imageProxyHandler forwards GET requests for a single path segment ID to the
-// API backend, streaming the response (including Content-Type) back to the
-// browser. This makes /api/v1/*-images/{id} URLs work when the browser hits
-// the web frontend instead of the API directly.
-func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
+// imageProxyHandler forwards a GET for one image to the API backend, streaming
+// the response (including Content-Type) back to the browser. This makes
+// /api/v1/*-images/{id} URLs work when the browser hits the web frontend
+// instead of the API directly (#1374). idParam is the path-value name the
+// route was registered with, mirroring the API's own route.
+func imageProxyHandler(client *DansalClient, prefix, idParam string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+		id := r.PathValue(idParam)
 		apiURL := client.BaseURL + prefix + id
+		// The query string selects the variant the caller wants and must be
+		// preserved: ?format=jpeg is the Fediverse JPEG sibling (#1054) and
+		// ?thumb=sq|wide the grid-thumbnail crops (#1158). Dropping it would
+		// silently hand back the canonical image instead.
+		if r.URL.RawQuery != "" {
+			apiURL += "?" + r.URL.RawQuery
+		}
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
 		if err != nil {
 			logHTTPError(w, r, "proxy error", http.StatusBadGateway)
 			return
+		}
+		// A caller-supplied If-None-Match / If-Modified-Since is passed
+		// through so revalidations still answer 304 instead of re-sending
+		// the whole image.
+		for _, h := range []string{"If-None-Match", "If-Modified-Since", "Authorization"} {
+			if v := r.Header.Get(h); v != "" {
+				req.Header.Set(h, v)
+			}
 		}
 		resp, err := client.HTTP.Do(req)
 		if err != nil {
@@ -1442,13 +1458,20 @@ func imageProxyHandler(client *DansalClient, prefix string) http.HandlerFunc {
 			return
 		}
 		defer resp.Body.Close()
-		if ct := resp.Header.Get("Content-Type"); ct != "" {
-			w.Header().Set("Content-Type", ct)
+		for _, h := range []string{
+			"Content-Type", "Cache-Control", "ETag", "Last-Modified",
+			"Vary", "Cross-Origin-Resource-Policy",
+		} {
+			if v := resp.Header.Get(h); v != "" {
+				w.Header().Set(h, v)
+			}
 		}
-		if cc := resp.Header.Get("Cache-Control"); cc != "" {
-			w.Header().Set("Cache-Control", cc)
-		}
+		// Write through the upstream status so a missing image stays a 404
+		// rather than becoming a broken image on the client.
 		w.WriteHeader(resp.StatusCode)
+		if resp.StatusCode == http.StatusNotModified {
+			return
+		}
 		io.Copy(w, resp.Body) //nolint:errcheck
 	}
 }

@@ -13,6 +13,13 @@ import { Page } from "@playwright/test";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 
+// WEB_BASE is the origin a browser actually visits. Image URLs the API hands
+// out are root-relative (/api/v1/images/{id}) and are rendered verbatim by the
+// web templates, so a browser resolves them against the web origin — which the
+// web tier re-serves by proxying to the API (#1374). Tests that assert a real
+// browser can render an image must therefore use this origin, not API_BASE.
+const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
+
 // Supported input formats the server accepts (decodeImageSafely in images.go
 // uses the Go stdlib image decoders: PNG, JPEG, GIF + WebP/AVIF via the avif
 // package).
@@ -91,17 +98,47 @@ export async function fetchImageMeta(
 }
 
 /**
- * Fetch an image URL and force a full decode with sharp (raw pass decodes
- * every pixel), throwing if the payload can't be decoded. Unlike
- * fetchImageMeta (header-only), this catches a payload the server labels
- * image/avif but can't actually be rendered. Note: sharp's Stats offers no
- * width/height fields, so this asserts by succeeding-or-throwing rather
- * than returning dimensions.
+ * Assert that an image really renders in a browser, by handing the URL to a
+ * real Chromium `HTMLImageElement.decode()` and checking the result is
+ * non-zero.
+ *
+ * This deliberately does not use sharp: sharp is a Node library with its own
+ * codecs, so a payload it accepts can still be undecodable by the browser that
+ * has to display it — exactly the failure #1374 reported (a valid AVIF
+ * container that `img.decode()` rejects, naturalWidth 0). Only a browser
+ * catches that.
+ *
+ * Pass a web-origin URL (see `webImageURL`), not an API_BASE one: the page's
+ * Content-Security-Policy is `img-src 'self' data: https:`, so a cross-origin
+ * plain-http image is blocked by CSP and would fail here for a reason that has
+ * nothing to do with the image.
  */
 export async function assertImageDecodes(page: Page, url: string): Promise<void> {
-  const resp = await page.request.fetch(url);
-  const body = await resp.body();
-  await sharp(body).raw().toBuffer();
+  const res = await page.evaluate(async (src) => {
+    const img = new Image();
+    img.src = src;
+    try {
+      await img.decode();
+    } catch (e) {
+      return { ok: false as const, err: String(e), w: 0, h: 0 };
+    }
+    return { ok: true as const, err: "", w: img.naturalWidth, h: img.naturalHeight };
+  }, url);
+
+  if (!res.ok) {
+    throw new Error(`browser could not decode ${url}: ${res.err}`);
+  }
+  if (res.w === 0 || res.h === 0) {
+    throw new Error(`browser decoded ${url} to a zero-sized image (${res.w}x${res.h})`);
+  }
 }
 
-export { API_BASE };
+/**
+ * webImageURL turns an API image path into the URL a browser on the site would
+ * use, i.e. the same root-relative path served by the web tier's image proxy.
+ */
+export function webImageURL(apiPath: string): string {
+  return `${WEB_BASE}${apiPath}`;
+}
+
+export { API_BASE, WEB_BASE };

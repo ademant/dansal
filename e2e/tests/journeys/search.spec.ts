@@ -151,7 +151,7 @@ test("town filter narrows results and clears on reset; map stays in sync [#976]"
   await page.goto(`${WEB_BASE}/search`);
 
   // Widen the date range to catch seeded events (3–45 days out by default).
-  await setSearchDates(page, addDays(0), addDays(60));
+  await setSearchDates(page, addDays(0), addDays(45));
   await waitForResults(page);
 
   // Wait for the Leaflet map to initialise (the deferred <script> must run
@@ -199,7 +199,7 @@ test("town filter narrows results and clears on reset; map stays in sync [#976]"
 
 test("type filter hides and restores typed rows", async ({ page }) => {
   await page.goto(`${WEB_BASE}/search`);
-  await setSearchDates(page, addDays(0), addDays(60));
+  await setSearchDates(page, addDays(0), addDays(45));
   await waitForResults(page);
 
   // eventTitles[0] = "Bal de Testville …" → tags: [bal-folk] → data-ball="1"
@@ -242,7 +242,7 @@ test("date range narrows results to the queried window", async ({ page }) => {
   await expect(balRow).toHaveCount(0);
 
   // Widen back to include seeded events → they reappear.
-  await setSearchDates(page, addDays(0), addDays(60));
+  await setSearchDates(page, addDays(0), addDays(45));
   await waitForResults(page);
   await expect(balRow).toBeVisible();
 });
@@ -253,7 +253,7 @@ test("country → region cascade narrows results; mutually exclusive with town f
   page,
 }) => {
   await page.goto(`${WEB_BASE}/search`);
-  await setSearchDates(page, addDays(0), addDays(60));
+  await setSearchDates(page, addDays(0), addDays(45));
   await waitForResults(page);
 
   // ── Select country ──
@@ -303,4 +303,87 @@ test("country → region cascade narrows results; mutually exclusive with town f
   await page.click("#sf-reset-btn");
   await expect(page.locator("#sf-country")).toHaveValue("");
   await expect(page.locator("#sf-region-field")).toBeHidden();
+});
+
+// ── E: capped result set degrades gracefully (#1373) ─────────────────────────
+
+// The handler used to answer too_many=true with no rows at all, and the page
+// then hid the table, the empty state AND the map — so a wide date range on a
+// busy calendar produced a blank screen, with the client-side town/type/dance
+// filters left with no data to narrow. too_many is now advisory.
+//
+// The response is stubbed rather than waited for a real over-cap window, so
+// this spec is deterministic and does not depend on how busy the instance is.
+test("capped results still render rows, map and a counted banner [#1373]", async ({
+  page,
+}) => {
+  const capped = {
+    rows_html:
+      '<tr class="event-row" data-id="900001" data-title="Capped Stub Event"' +
+      ' data-date="2030-01-01" data-end-date="2030-01-01" data-town="Testville"' +
+      ' data-country="France" data-region="" data-organizer="Stub Org"' +
+      ' data-tags="bal-folk " data-dances=" " data-ball="1" data-workshop="0"' +
+      ' data-festival="0" data-start="2030-01-01T20:00:00+01:00">' +
+      '<td><a href="/events/900001">Capped Stub Event</a></td></tr>',
+    // geo keys are the short forms eventsToGeo emits (see geoEvent in
+    // cmd/dansal_web/frontend.go): t/s/loc/c, not title/start. Omitting t or s
+    // makes buildPopup's escHtml() throw, which aborts rebuildMarkers() before
+    // render() ever runs and leaves #sf-info blank.
+    geo: [
+      {
+        id: 900001,
+        t: "Capped Stub Event",
+        s: "2030-01-01T20:00:00+01:00",
+        loc: "Stub Hall",
+        town: "Testville",
+        c: "France",
+        lat: 48.1173,
+        lng: -1.6778,
+        url: "/events/900001",
+      },
+    ],
+    total: 628,
+    shown: 500,
+    too_many: true,
+  };
+
+  await page.route("**/search/results*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(capped),
+    })
+  );
+
+  await page.goto(`${WEB_BASE}/search`);
+  await setSearchDates(page, addDays(0), addDays(45));
+  await waitForResults(page);
+
+  // Banner is shown and carries both counts (assert the numbers, not the words,
+  // so the spec survives a non-English instance).
+  const banner = page.locator("#sf-too-many");
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText("500");
+  await expect(banner).toContainText("628");
+
+  // The regression proper: content is rendered, not blanked.
+  const stubRow = page
+    .locator("#sf-event-tbody .event-row")
+    .filter({ hasText: "Capped Stub Event" });
+  await expect(stubRow).toBeVisible();
+  await expect(page.locator("#sf-event-table")).toBeVisible();
+  await expect(page.locator("#sf-empty-state")).toBeHidden();
+
+  // Map stays up, with the stub point plotted (marker or cluster).
+  await expect(page.locator("#map-container")).toBeVisible();
+  await expect(
+    page
+      .locator("#map-container .leaflet-marker-icon, #map-container .leaflet-marker-cluster")
+      .first()
+  ).toBeVisible({ timeout: 15_000 });
+
+  // A subsequent uncapped fetch must clear the banner again.
+  await page.unroute("**/search/results*");
+  await setSearchDates(page, addDays(200), addDays(210));
+  await expect(banner).toBeHidden();
 });

@@ -71,7 +71,12 @@
   <button type="button" id="sf-reset-btn" class="reset-filters-btn">{{$.Strings.T "clear_filters"}}</button>
 </div>
 
-<p id="sf-too-many" class="sf-too-many" hidden>{{$.Strings.T "search_too_many_results"}}</p>
+{{/* #1373: JS prepends a "showing N of M" count to this generic sentence, reusing
+     the js_showing/js_of pair index.html already uses — so no new i18n key and the
+     wording stays consistent with the main page's pagination label. The generic
+     text stays as the element's content so it still shows if JS never runs.
+     data-msg carries the pristine copy, because textContent is overwritten. */}}
+<p id="sf-too-many" class="sf-too-many" data-msg="{{$.Strings.T "search_too_many_results"}}" hidden>{{$.Strings.T "search_too_many_results"}}</p>
 
 {{/* #1299: same reasoning as index.html — the results table below already
      carries this same event data as accessible text, so the map is a
@@ -621,15 +626,20 @@
       .then(function(r){ return r.json(); })
       .then(function(data){
         var tooMany = document.getElementById('sf-too-many');
+        // #1373: too_many is advisory. Render whatever arrived and let the banner
+        // invite a narrower search — the town/type/dance filters below run
+        // client-side against this very batch, so hiding the table and the map
+        // left the user with no way to narrow down at all.
         if(data.too_many){
-          tooMany.hidden = false;
-          document.getElementById('sf-event-table').hidden = true;
-          document.getElementById('sf-empty-state').hidden = true;
-          document.getElementById('map-container').hidden = true;
-          rows = []; eventsGeo = []; geoById = {};
-          return;
+          // "Showing 500 of 628 — <generic>", mirroring index.html's
+          // pagination label. data-msg, not textContent: the latter is
+          // overwritten on every fetch, so a second capped fetch would
+          // otherwise stack another count onto the previous one.
+          var msg = tooMany.getAttribute('data-msg') || '';
+          tooMany.textContent = I18N.showing+' '+(data.shown||0)+' '+I18N.of+' '+(data.total||0)
+            +' — '+msg;
         }
-        tooMany.hidden = true;
+        tooMany.hidden = !data.too_many;
         document.getElementById('map-container').hidden = false;
         document.getElementById('sf-event-tbody').innerHTML = data.rows_html || '';
         rows = Array.from(document.querySelectorAll('#sf-event-tbody .event-row'));

@@ -8,15 +8,17 @@ import (
 )
 
 // searchMaxResults is the threshold past which /search/results asks the user
-// to narrow their filters instead of rendering a huge map+list. Matches the
-// API's default pagination limit (applyPagination in cmd/dansal/events.go),
-// so it's consistent with the cap visitors already see on the main page.
-const searchMaxResults = 100
+// to narrow their filters. It is advisory only: past the threshold the handler
+// still returns the rendered rows and geo, and the template shows a counted
+// banner alongside them (see #1373). Raising this is therefore a rendering-cost
+// knob, not a hard cutoff. Well below the API's own ceiling of 1000
+// (applyListPagination in cmd/dansal/events.go).
+const searchMaxResults = 500
 
 // searchLimit caps how many events /search/results fetches in one shot. It sits
 // just above searchMaxResults so the whole displayable page (up to the
-// TooMany cutoff) always arrives in a single request.
-const searchLimit = 150
+// TooMany threshold) always arrives in a single request.
+const searchLimit = 550
 
 // SearchData carries the initial-load defaults for the /search page.
 type SearchData struct {
@@ -82,7 +84,12 @@ type searchResultsResponse struct {
 	RowsHTML string     `json:"rows_html"`
 	Geo      []geoEvent `json:"geo"`
 	Total    int        `json:"total"`
-	TooMany  bool       `json:"too_many"`
+	// TooMany is advisory (#1373): the response still carries RowsHTML and Geo
+	// so the page can render what it has and invite the user to narrow down.
+	TooMany bool `json:"too_many"`
+	// Shown is how many events RowsHTML/Geo actually contain, i.e. the count
+	// after the searchLimit fetch, so the banner can say "first Shown of Total".
+	Shown int `json:"shown"`
 }
 
 // searchResultsHandler answers the /search page's date-range fetch. Events are
@@ -122,11 +129,11 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 			return
 		}
 
-		if total > searchMaxResults {
-			writeJSONResponse(w, http.StatusOK, searchResultsResponse{Total: total, TooMany: true})
-			return
-		}
-
+		// Past searchMaxResults we still render what we fetched rather than
+		// bailing out with an empty payload (#1373). The page used to hide the
+		// table, the empty state and the map entirely, so a wide date range on
+		// a busy calendar produced a blank screen -- even though the client-side
+		// town/type/dance filters that would narrow it need this very batch.
 		_, rowsHTML, err := fetchAndRenderEventRows(r, tmpls.search, i18n, client, func() ([]Event, error) {
 			return events, nil
 		})
@@ -139,6 +146,8 @@ func searchResultsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) ht
 			RowsHTML: rowsHTML,
 			Geo:      eventsToGeo(events),
 			Total:    total,
+			TooMany:  total > searchMaxResults,
+			Shown:    len(events),
 		})
 	}
 }

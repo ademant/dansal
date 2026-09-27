@@ -202,6 +202,65 @@ async function deleteSuggestionsByTitle(
   }
 }
 
+/**
+ * #1386 — `input[type=url]` was missing from the `.form-row` width rule in
+ * events_suggest.html, so both URL fields fell through to the UA default
+ * (~200px) while every sibling in the same container was full-width. The
+ * import field additionally had no <label> and was introduced by a centred
+ * muted divider, which read as an afterthought next to the drop zone.
+ *
+ * Pure layout: no form submit, so it costs nothing from the
+ * suggest-preview rate-limit budget (5 per 10 min per IP — see
+ * suggest-import-preview.spec.ts).
+ */
+test("suggest-wizard: URL fields are full-width and the import URL has a label", async ({
+  page,
+}) => {
+  const checkResp = await fetch(`${WEB_BASE}/events/suggest`);
+  if (checkResp.status === 404) {
+    test.skip(true, "suggest not configured (set smtp_sendmail in web.yaml)");
+    return;
+  }
+
+  await page.goto(`${WEB_BASE}/events/suggest`);
+
+  // Import tab: #import-url must match a sibling text input in the form.
+  await page.click('.tab-btn[data-args=\'["@this","import"]\']');
+  const importURL = page.locator("#import-url");
+  await expect(importURL).toBeVisible();
+
+  // The label is a real associated <label>, not a bare divider div.
+  // Count first so a regression fails fast and legibly instead of timing
+  // out on a locator that will never resolve.
+  const importLabel = page.locator('label[for="import-url"]');
+  await expect(importLabel).toHaveCount(1);
+  expect((await importLabel.innerText()).trim().length).toBeGreaterThan(0);
+  await expect(page.locator(".import-url-divider")).toHaveCount(0);
+
+  const importWidth = (await importURL.boundingBox())!.width;
+  const dropZoneWidth = (await page.locator("#drop-zone").boundingBox())!.width;
+  // Both fill the same .form-row container, so they should agree.
+  expect(Math.abs(importWidth - dropZoneWidth)).toBeLessThanOrEqual(2);
+
+  // Manual tab: the website field is also a URL input and was also unstyled.
+  // It lives in wizard step 4 (Details), so walk the wizard there first — a
+  // hidden step has no layout, so boundingBox() would be null. Step 1 refuses
+  // to advance without a title, and the progress arrows only jump to
+  // already-visited steps, so fill the title and click Next three times.
+  await page.click('.tab-btn[data-args=\'["@this","manual"]\']');
+  await page.fill("#wiz-title", "E2E URL width probe");
+  for (let i = 0; i < 3; i++) {
+    await page.click("#wiz-next");
+  }
+  const website = page.locator('.wiz-step[data-step="4"] input[name="url"][type="url"]');
+  await expect(website).toBeVisible();
+  const websiteRow = (await website.boundingBox())!.width;
+  const rowWidth = (await website.evaluate(
+    (el) => el.parentElement!.getBoundingClientRect().width,
+  ))!;
+  expect(Math.abs(websiteRow - rowWidth)).toBeLessThanOrEqual(2);
+});
+
 test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   page,
   browser,

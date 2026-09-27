@@ -345,8 +345,8 @@
       </div>
       <p id="drop-filename" class="drop-filename" hidden></p>
     </div>
-    <div class="import-url-divider">{{$.Strings.T "suggest_import_url_label"}}</div>
     <div class="form-row">
+      <label for="import-url">{{$.Strings.T "suggest_import_url_label"}}</label>
       <input type="url" id="import-url" name="url" placeholder="{{$.Strings.T "suggest_import_url_placeholder"}}">
     </div>
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
@@ -365,7 +365,7 @@
 .form-error{color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem}
 .form-row{margin-bottom:1rem}
 .form-row label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
-.form-row input[type=text],.form-row input[type=email],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.form-row input[type=text],.form-row input[type=email],.form-row input[type=url],.form-row textarea,.form-row input[type=date]{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-date-time-row{display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap}
 .sg-date-time-row .dpr-wrap{flex:0 0 auto}
 /* #1390: matches .sg-time-input; deliberately not hidden by the ≤767px block
@@ -398,7 +398,8 @@
 .drop-zone{border:2px dashed var(--border-mid,#ccc);border-radius:6px;padding:2rem 1rem;text-align:center;cursor:pointer;color:var(--fg-muted,#666);transition:background .15s}
 .drop-zone:hover,.drop-zone.drag-over{background:var(--bg-hover,#f0f4ff);border-color:var(--link,#1a6eb5)}
 .drop-filename{font-size:.88rem;color:var(--fg-2,#555);margin-top:.3rem}
-.import-url-divider{text-align:center;font-size:.85rem;color:var(--fg-muted,#888);margin:1rem 0 .5rem}
+/* #1386: the URL path is a peer of the drop zone, not a subordinate afterthought */
+#import-url{padding:.7rem .8rem;font-size:1rem}
 #nominatim-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
 #nominatim-results li:last-child{border-bottom:none}
 #nominatim-results li:hover{background:#f0f4ff}

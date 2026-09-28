@@ -4525,7 +4525,13 @@ func main() {
 	})
 
 	// Authentication endpoints (no token required)
-	smux.HandleFunc("GET /api/v1/login", login)
+	// Only POST: login mutates server state (it creates a session and returns a
+	// token), and GET is defined as safe and idempotent (RFC 9110 §9.1.1). A GET
+	// alias here looked harmless to any intermediary and was a latent CSRF shape
+	// once a caching proxy or a later refactor started passing a body through.
+	// The route was also dead: login() reads a form or a JSON body, so a
+	// bodyless GET could never have succeeded. Dropped in #1378; net/http now
+	// answers 405 with Allow: POST, DELETE from the surviving patterns.
 	smux.HandleFunc("POST /api/v1/login", login)
 	smux.HandleFunc("DELETE /api/v1/login", logout)
 	smux.HandleFunc("POST /api/v1/cert-login", certLogin)
@@ -4578,6 +4584,11 @@ func main() {
 	smux.HandleFunc("DELETE /api/v1/board-sessions/me", deleteBoardSessionMeHandler)
 	smux.HandleFunc("POST /api/v1/board-sessions/renew-request", requestBoardSessionRenewHandler)
 	smux.HandleFunc("GET /api/v1/board-sessions/renew/{token}", useBoardSessionRenewHandler)
+	// Header/body forms of the two token-in-path routes below. The GET forms
+	// remain registered for emailed click-through links; these exist so an
+	// app-driven caller never puts a single-use credential in a path segment,
+	// where it lands in access logs (#1382).
+	smux.HandleFunc("POST /api/v1/board-sessions/renew", useBoardSessionRenewHandler)
 	smux.HandleFunc("GET /api/v1/contact-post-images/{img_id}", getContactPostImage)
 	smux.HandleFunc("POST /api/v1/contact-posts/{id}/images", uploadContactPostImage)
 	smux.HandleFunc("DELETE /api/v1/contact-posts/{id}/images/{img_id}", deleteContactPostImage)
@@ -4591,6 +4602,7 @@ func main() {
 	// Bookings — public create + verify
 	smux.HandleFunc("POST /api/v1/events/{id}/bookings", createBooking)
 	smux.HandleFunc("GET /api/v1/bookings/verify/{token}", verifyBooking)
+	smux.HandleFunc("POST /api/v1/bookings/verify", verifyBooking)
 
 	// Public reads — OptionalTokenMiddleware enriches the response when a valid
 	// token is present (e.g. editable flag, unpublished events).

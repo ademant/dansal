@@ -203,9 +203,25 @@ func requestBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/board-sessions/renew/{token}
 // Consumes a single-use renew token and issues a new verified_email_sessions row.
 // Returns {"token","expires_at"} on success, 401 if invalid/expired.
+// GET  /api/v1/board-sessions/renew/{token}
+// POST /api/v1/board-sessions/renew   (Authorization: Bearer <token> or {"token": …})
+//
+// The GET path form stays because the renew token is delivered as an emailed
+// link ({base}/board/renew-session/{token}), so the URL is the credential for
+// that caller. The POST form lets an app-driven caller keep the token out of
+// path segments, and therefore out of access logs and Referer headers (#1382).
+//
+// This handler mints a board session from nothing but a URL, so the token is
+// the whole authorization: it is single-use, expires, and is consumed on any
+// attempt including a failed lookup.
 func useBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	noStoreTokenResponse(w)
+
 	raw := r.PathValue("token")
+	if raw == "" {
+		raw = verifyTokenFromRequest(r)
+	}
 	if raw == "" {
 		writeError(w, "token required", http.StatusBadRequest)
 		return

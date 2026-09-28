@@ -225,8 +225,22 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/bookings/verify/{token}
 // Public. Marks the booking as confirmed and generates a QR token.
+// GET /api/v1/bookings/verify/{token}
+// POST /api/v1/bookings/verify   (Authorization: Bearer <token> or {"token": …})
+//
+// The path form is kept because the verify token arrives as an emailed
+// click-through link, so for that caller the URL genuinely is the credential.
+// The POST form exists so an app-driven caller never has to place a
+// single-use credential in a path segment, where it lands in access logs
+// (#1382). Both forms consume exactly one token, identically.
 func verifyBooking(w http.ResponseWriter, r *http.Request) {
-	token := r.PathValue("token")
+	noStoreTokenResponse(w)
+
+	token := verifyTokenFromRequest(r)
+	if token == "" {
+		writeError(w, "token required", http.StatusBadRequest)
+		return
+	}
 
 	var id, eventID int
 	var expiresAt, name, email, lang string
@@ -323,7 +337,16 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/bookings/checkin/{qr_token}
 // Requires auth. Org member or admin only. Returns booking details and marks as checked_in.
+//
+// Note that the QR token is a lookup key here, not the credential: the route is
+// already wrapped in auth() and the caller supplies its own bearer. It is
+// deliberately *not* accepted as an authenticator, even though a QR code is
+// scanned in public and the value therefore does end up in shared logs
+// (#1382). Letting it stand in for a session would turn one scanned sticker
+// into a checkin capability for anyone holding it.
 func checkinBooking(w http.ResponseWriter, r *http.Request) {
+	noStoreTokenResponse(w)
+
 	callerID, callerRole := callerFromRequest(r)
 
 	qrToken := r.PathValue("qr_token")

@@ -94,6 +94,16 @@ function rowAction(url) {
 document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 });
+// #1392: a feed whose events carried unresolvable TZIDs, or that had events we
+// could not read at all, must not look like a clean import. Appended only when
+// non-zero so the common case is unchanged.
+function tzNote(d){
+  var parts = [];
+  if (d.timezone_fallback) parts.push(d.timezone_fallback + ' {{.Strings.T "fetch_run_timezone_fallback"}}');
+  if (d.unparsed) parts.push(d.unparsed + ' {{.Strings.T "fetch_run_unparsed"}}');
+  return parts.length ? ', \u26a0 ' + parts.join(', ') : '';
+}
+
 document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var url = btn.dataset.runUrl;
@@ -106,7 +116,8 @@ document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
           showToast(res.data.count + ' {{.Strings.T "fetch_run_result"}}: ' +
             res.data.updated + ' {{.Strings.T "fetch_run_updated"}}, ' +
             res.data.new + ' {{.Strings.T "fetch_run_new"}}, ' +
-            res.data.unchanged + ' {{.Strings.T "fetch_run_unchanged"}}', true);
+            res.data.unchanged + ' {{.Strings.T "fetch_run_unchanged"}}' +
+            tzNote(res.data), true);
           var now = new Date();
           var dateCell = row.querySelector('.date-cell');
           if (dateCell) {

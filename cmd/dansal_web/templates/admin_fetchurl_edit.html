@@ -124,6 +124,16 @@ function showToast(msg, ok) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ t.className = 'toast'; }, 5000);
 }
+// #1392: a feed whose events carried unresolvable TZIDs, or that had events we
+// could not read at all, must not look like a clean import. Appended only when
+// non-zero so the common case is unchanged.
+function tzNote(d){
+  var parts = [];
+  if (d.timezone_fallback) parts.push(d.timezone_fallback + ' {{$.Strings.T "fetch_run_timezone_fallback"}}');
+  if (d.unparsed) parts.push(d.unparsed + ' {{$.Strings.T "fetch_run_unparsed"}}');
+  return parts.length ? ', \u26a0 ' + parts.join(', ') : '';
+}
+
 (function(){
   var btn = document.getElementById('run-btn');
   if (!btn) return;
@@ -137,7 +147,8 @@ function showToast(msg, ok) {
           showToast(res.data.count + ' {{$.Strings.T "fetch_run_result"}}: ' +
             res.data.updated + ' {{$.Strings.T "fetch_run_updated"}}, ' +
             res.data.new + ' {{$.Strings.T "fetch_run_new"}}, ' +
-            res.data.unchanged + ' {{$.Strings.T "fetch_run_unchanged"}}', true);
+            res.data.unchanged + ' {{$.Strings.T "fetch_run_unchanged"}}' +
+            tzNote(res.data), true);
         } else {
           showToast(res.data.error || '{{$.Strings.T "fetch_run_error"}}', false);
         }

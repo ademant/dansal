@@ -111,7 +111,7 @@ func fetchSuggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqs, err := parseBodyToRequests(body, FetchSource{Type: feedType, URL: normURL})
+	reqs, err := parseBodyToRequests(body, FetchSource{Type: feedType, URL: normURL}, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
@@ -211,7 +211,7 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	reqs, err := parseBodyToRequests(feedBody, FetchSource{Type: feedType, URL: normURL})
+	reqs, err := parseBodyToRequests(feedBody, FetchSource{Type: feedType, URL: normURL}, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusUnprocessableEntity)
 		return

@@ -245,9 +245,9 @@ END:VCALENDAR`
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	preview := parseICalToRequests(cal, src)
+	preview := parseICalToRequests(cal, src, nil)
 
-	entries, err := parseICalBody([]byte(body), src)
+	entries, err := parseICalBody([]byte(body), src, nil)
 	if err != nil {
 		t.Fatalf("parseICalBody: %v", err)
 	}
@@ -298,7 +298,7 @@ END:VCALENDAR`
 	var first string
 	for i, host := range []string{"UTC", "Europe/Berlin", "America/New_York", "Asia/Tokyo"} {
 		withHostTZ(t, host)
-		entries, err := parseICalBody([]byte(body), src)
+		entries, err := parseICalBody([]byte(body), src, nil)
 		if err != nil {
 			t.Fatalf("%s: parseICalBody: %v", host, err)
 		}

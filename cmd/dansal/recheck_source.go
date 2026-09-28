@@ -98,7 +98,7 @@ func doRecheckEventSource(ctx context.Context, q querier, source, uidStr, evURL 
 		return "", fmt.Errorf("read failed: %w", err)
 	}
 
-	reqs, err := parseBodyToRequests(body, src)
+	reqs, err := parseBodyToRequests(body, src, nil)
 	if err != nil {
 		return "", err
 	}

@@ -152,7 +152,7 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	src.Type = feedType
 
-	reqs, err := parseBodyToRequests(body, src)
+	reqs, err := parseBodyToRequests(body, src, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusUnprocessableEntity)
 		return

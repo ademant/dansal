@@ -78,7 +78,7 @@ func TestParseBodyToRequestsJcal(t *testing.T) {
 		Location:  &Location{Location: "Salle des fêtes"},
 	}})
 
-	reqs, err := parseBodyToRequests(jcal, FetchSource{Type: "jcal", URL: "https://example.org/events"})
+	reqs, err := parseBodyToRequests(jcal, FetchSource{Type: "jcal", URL: "https://example.org/events"}, nil)
 	if err != nil {
 		t.Fatalf("parseBodyToRequests: %v", err)
 	}

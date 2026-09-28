@@ -102,7 +102,10 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reqs, err := parseBodyToRequests(body, src)
+	// previewReport accumulates the #1392 accounting so the preview can show
+	// which events had a timezone guessed.
+	previewReport := &icalParseReport{}
+	reqs, err := parseBodyToRequests(body, src, previewReport)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusUnprocessableEntity)
 		return
@@ -205,7 +208,10 @@ func previewLocationUpdated(eventID int, loc EventLocationRequest) bool {
 	return false
 }
 
-func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, error) {
+// parseBodyToRequests converts a fetched feed into previewable requests. rep
+// may be nil; when non-nil it accumulates the parse accounting from #1392 so the
+// preview can report which events had a timezone guessed.
+func parseBodyToRequests(body []byte, src FetchSource, rep *icalParseReport) ([]EventCreateRequest, error) {
 	switch src.Type {
 	case "json":
 		if gancioJSONProbe(src.URL) {
@@ -231,12 +237,12 @@ func parseBodyToRequests(body []byte, src FetchSource) ([]EventCreateRequest, er
 		if err != nil {
 			return nil, fmt.Errorf("parse iCal: %w", err)
 		}
-		return parseICalToRequests(cal, src), nil
+		return parseICalToRequests(cal, src, rep), nil
 	default:
 		cal, err := ics.ParseCalendar(bytes.NewReader(extractVCalendarBody(body)))
 		if err != nil {
 			return nil, fmt.Errorf("parse iCal: %w", err)
 		}
-		return parseICalToRequests(cal, src), nil
+		return parseICalToRequests(cal, src, rep), nil
 	}
 }

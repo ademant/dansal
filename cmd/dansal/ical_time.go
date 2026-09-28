@@ -1,6 +1,9 @@
 package main
 
 import (
+	"log"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,4 +88,189 @@ func icalTimeZones(vevent *ics.VEvent) (startFloating, endFloating bool) {
 		return startFloating, startFloating
 	}
 	return startFloating, icalTimeIsFloating(endP)
+}
+
+// icalVTimezoneLocs maps the TZIDs a feed defines in its own VTIMEZONE
+// components to fixed-offset locations.
+//
+// golang-ical resolves a TZID with time.LoadLocation and ignores VTIMEZONE
+// entirely, so a feed using a custom identifier (Outlook/Exchange exports, some
+// CMS plugins) fails to parse times that the feed itself fully specified. The
+// data is reachable without forking: cal.Components holds every component, and
+// *ics.VTimezone embeds ComponentBase so GetProperty is available on it.
+//
+// The offset is taken from the STANDARD sub-component only. A custom zone that
+// observes DST will be an hour off for part of the year; handling that
+// properly means evaluating each sub-component's RRULE, which re-implements
+// timezone rule evaluation. Accepted for now because the alternative is
+// dropping the event entirely.
+func icalVTimezoneLocs(cal *ics.Calendar) map[string]*time.Location {
+	if cal == nil {
+		return nil
+	}
+	locs := map[string]*time.Location{}
+	for _, c := range cal.Components {
+		tz, ok := c.(*ics.VTimezone)
+		if !ok {
+			continue
+		}
+		prop := tz.GetProperty(ics.ComponentPropertyTzid)
+		if prop == nil || prop.Value == "" {
+			continue
+		}
+		// Prefer STANDARD; a DAYLIGHT-only VTIMEZONE still gives us an offset.
+		var off string
+		for _, sub := range tz.SubComponents() {
+			g, ok := sub.(interface {
+				GetProperty(ics.ComponentProperty) *ics.IANAProperty
+			})
+			if !ok {
+				continue
+			}
+			p := g.GetProperty(ics.ComponentProperty(ics.PropertyTzoffsetto))
+			if p == nil || p.Value == "" {
+				continue
+			}
+			if _, isDaylight := sub.(*ics.Daylight); isDaylight && off != "" {
+				continue
+			}
+			off = p.Value
+		}
+		if off == "" {
+			continue
+		}
+		if secs, ok := parseICalUTCOffset(off); ok {
+			locs[prop.Value] = time.FixedZone(prop.Value, secs)
+		}
+	}
+	return locs
+}
+
+// icalUTCOffsetRe matches the RFC 5545 UTC-OFFSET form, e.g. "+0530" or "-08:00".
+var icalUTCOffsetRe = regexp.MustCompile(`^([+-])(\d{1,2}):?(\d{2})$`)
+
+// parseICalUTCOffset converts an RFC 5545 UTC-OFFSET value to seconds.
+func parseICalUTCOffset(s string) (int, bool) {
+	m := icalUTCOffsetRe.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return 0, false
+	}
+	hh, err1 := strconv.Atoi(m[2])
+	mm, err2 := strconv.Atoi(m[3])
+	if err1 != nil || err2 != nil || hh > 23 || mm > 59 {
+		return 0, false
+	}
+	secs := hh*3600 + mm*60
+	if m[1] == "-" {
+		secs = -secs
+	}
+	return secs, true
+}
+
+// icalResolveTZID resolves a TZID to a location: the system IANA database first,
+// so a feed that defines a zone Go already knows is unaffected, then the feed's
+// own VTIMEZONE. ok is false when neither knows the identifier.
+func icalResolveTZID(tzid string, vt map[string]*time.Location) (*time.Location, bool) {
+	if tzid == "" {
+		return nil, false
+	}
+	if loc, err := time.LoadLocation(tzid); err == nil {
+		return loc, true
+	}
+	if loc, ok := vt[tzid]; ok {
+		return loc, true
+	}
+	return nil, false
+}
+
+// icalWallClockLayouts are the shapes a DTSTART/DTEND value can take once the
+// zone has been stripped off, mirroring what golang-ical's own parser accepts
+// (with and without seconds, and bare all-day dates).
+var icalWallClockLayouts = []string{
+	"20060102T150405",
+	"20060102T1504",
+	"20060102",
+}
+
+// icalFallbackTime recovers a start/end time for an event whose TZID
+// golang-ical could not resolve. The raw value is a wall clock plus an
+// identifier, so the wall clock is re-anchored in the resolved location rather
+// than converted — the same rule as a floating time in #1391, since a guessed
+// instant must not inherit the host's offset either.
+//
+// usedFallback is true whenever the library could not have produced this itself,
+// so callers can count and flag it.
+func icalFallbackTime(p *ics.IANAProperty, vt map[string]*time.Location) (t time.Time, usedFallback bool, ok bool) {
+	if p == nil {
+		return time.Time{}, false, false
+	}
+	var tzid string
+	if v, found := p.ICalParameters["TZID"]; found && len(v) > 0 {
+		tzid = v[0]
+	}
+	loc, resolved := icalResolveTZID(tzid, vt)
+	if !resolved {
+		return time.Time{}, false, false
+	}
+	val := strings.TrimSpace(p.Value)
+	for _, layout := range icalWallClockLayouts {
+		if parsed, err := time.ParseInLocation(layout, val, loc); err == nil {
+			return parsed, true, true
+		}
+	}
+	return time.Time{}, false, false
+}
+
+// icalParseReport tallies events a parse could not turn into a request, so a
+// degraded feed is visible instead of importing as if it were empty (#1392).
+// Pass nil where the caller does not care; every method is nil-safe.
+type icalParseReport struct {
+	// TimezoneFallback counts events imported after their TZID was resolved
+	// from the feed's VTIMEZONE or the instance zone.
+	TimezoneFallback int
+	// Unparsed counts events dropped for a reason other than time — a
+	// malformed DTSTART, say. They are still dropped; there is no defensible
+	// instant to invent, but they are no longer silent.
+	Unparsed int
+}
+
+func (r *icalParseReport) fallback(uid, tzid string) {
+	if r == nil {
+		return
+	}
+	r.TimezoneFallback++
+	if tzid != "" {
+		log.Printf("iCal: event %q has unresolvable TZID %q; anchored its start time in the feed's VTIMEZONE or the instance zone", uid, tzid)
+	} else {
+		log.Printf("iCal: event %q has an unresolvable timezone; anchored its start time in the feed's VTIMEZONE or the instance zone", uid)
+	}
+}
+
+func (r *icalParseReport) unparsed(uid string, reason any) {
+	if r == nil {
+		return
+	}
+	r.Unparsed++
+	log.Printf("iCal: skipping event %q: %v", uid, reason)
+}
+
+// fold adds the report into the import counters returned to the admin.
+func (r *icalParseReport) fold(c *ImportCounts) {
+	if r == nil || c == nil {
+		return
+	}
+	c.TimezoneFallback += r.TimezoneFallback
+	c.Unparsed += r.Unparsed
+}
+
+// icalTZIDOf returns the TZID parameter of a raw DTSTART/DTEND property, or ""
+// when the value carries no zone identifier.
+func icalTZIDOf(p *ics.IANAProperty) string {
+	if p == nil {
+		return ""
+	}
+	if v, ok := p.ICalParameters["TZID"]; ok && len(v) > 0 {
+		return v[0]
+	}
+	return ""
 }

@@ -1749,19 +1749,28 @@ type FetchRunResult struct {
 	New       int
 	Updated   int
 	Unchanged int
+	// TimezoneFallback and Unparsed (#1392) count events whose time was
+	// anchored from the feed's VTIMEZONE or the instance zone, and events
+	// dropped as unparseable. Both are surfaced in the run toast so a feed
+	// silently degrading no longer looks like a clean import.
+	TimezoneFallback int
+	Unparsed         int
 }
 
 func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) (FetchRunResult, error) {
 	var body struct {
-		Events    []json.RawMessage `json:"events"`
-		New       int               `json:"new"`
-		Updated   int               `json:"updated"`
-		Unchanged int               `json:"unchanged"`
+		Events           []json.RawMessage `json:"events"`
+		New              int               `json:"new"`
+		Updated          int               `json:"updated"`
+		Unchanged        int               `json:"unchanged"`
+		TimezoneFallback int               `json:"timezone_fallback"`
+		Unparsed         int               `json:"unparsed"`
 	}
 	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
 		return FetchRunResult{}, err
 	}
-	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated, Unchanged: body.Unchanged}, nil
+	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated,
+		Unchanged: body.Unchanged, TimezoneFallback: body.TimezoneFallback, Unparsed: body.Unparsed}, nil
 }
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {
@@ -3445,6 +3454,10 @@ type PreviewEvent struct {
 	OrganizationID *int       `json:"organization_id,omitempty"`
 	Pricing        *Pricing   `json:"pricing,omitempty"`
 	Status         string     `json:"duplicate_status,omitempty"`
+	// TimezoneFallback (#1392) marks a previewed event whose start time was
+	// anchored from the feed's VTIMEZONE or the instance zone because its TZID
+	// was not resolvable, so the admin can see which rows were guessed.
+	TimezoneFallback bool `json:"timezone_fallback,omitempty"`
 }
 
 type PreviewLoc struct {

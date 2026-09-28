@@ -1211,9 +1211,10 @@ func applyTemplateToRequest(req *EventCreateRequest, td templateImportData, mode
 
 // parseICalToRequests converts a parsed iCal calendar to EventCreateRequests
 // without touching the database. Used by the preview endpoint.
-func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateRequest {
+func parseICalToRequests(cal *ics.Calendar, src FetchSource, rep *icalParseReport) []EventCreateRequest {
 	var reqs []EventCreateRequest
 	now := time.Now().UTC()
+	vtLocs := icalVTimezoneLocs(cal)
 
 	for _, vevent := range cal.Events() {
 		prop := func(p ics.ComponentProperty) string {
@@ -1223,13 +1224,26 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 			return ""
 		}
 
+		evUID := prop(ics.ComponentPropertyUniqueId)
+
+		// Same TZID fallback as the import path (#1392), so an admin sees the
+		// same time in the preview that will actually be stored.
+		usedFallback := false
 		startT, err := vevent.GetStartAt()
 		if err != nil {
-			continue
+			t, fb, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtStart), vtLocs)
+			if !ok {
+				rep.unparsed(evUID, err)
+				continue
+			}
+			startT, usedFallback = t, fb
+			rep.fallback(evUID, icalTZIDOf(vevent.GetProperty(ics.ComponentPropertyDtStart)))
 		}
 		endT := startT
 		if et, err := vevent.GetEndAt(); err == nil {
 			endT = et
+		} else if t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtEnd), vtLocs); ok {
+			endT = t
 		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
 			if d, err := parseICalDuration(durStr); err == nil {
 				endT = startT.Add(d)
@@ -1273,6 +1287,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				Source:             src.URL,
 				SourceLastModified: sourceLastModified,
 				FetchSourceID:      src.ID,
+				TimezoneFallback:   usedFallback,
 				EventWriteRequest: EventWriteRequest{
 					Title:          title,
 					Description:    prop(ics.ComponentPropertyDescription),
@@ -1329,7 +1344,7 @@ func extractVCalendarBody(body []byte) []byte {
 
 // parseICalBody parses an iCal body into event requests, expanding RRULE
 // occurrences, without touching the database.
-func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
+func parseICalBody(body []byte, src FetchSource, rep *icalParseReport) ([]icalImportEntry, error) {
 	cal, err := ics.ParseCalendar(bytes.NewReader(extractVCalendarBody(body)))
 	if err != nil {
 		return nil, fmt.Errorf("parse iCal: %w", err)
@@ -1337,6 +1352,7 @@ func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
 
 	var entries []icalImportEntry
 	now := time.Now().UTC()
+	vtLocs := icalVTimezoneLocs(cal)
 
 	for _, vevent := range cal.Events() {
 		prop := func(p ics.ComponentProperty) string {
@@ -1345,14 +1361,26 @@ func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
 			}
 			return ""
 		}
+		evUID := prop(ics.ComponentPropertyUniqueId)
 
+		// A TZID golang-ical cannot resolve used to drop the event silently
+		// (#1392). Recover the instant from the feed's own VTIMEZONE, or the
+		// instance zone, and count it instead of losing it.
 		startT, err := vevent.GetStartAt()
 		if err != nil {
-			continue
+			t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtStart), vtLocs)
+			if !ok {
+				rep.unparsed(evUID, err)
+				continue
+			}
+			startT = t
+			rep.fallback(evUID, icalTZIDOf(vevent.GetProperty(ics.ComponentPropertyDtStart)))
 		}
 		endT := startT
 		if et, err := vevent.GetEndAt(); err == nil {
 			endT = et
+		} else if t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtEnd), vtLocs); ok {
+			endT = t
 		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
 			if d, err := parseICalDuration(durStr); err == nil {
 				endT = startT.Add(d)
@@ -1450,11 +1478,12 @@ func importFromJcalSource(ctx context.Context, src FetchSource) ([]Event, Import
 // importFromJcalSource once each has produced RFC 5545 calendar text: parse,
 // then hand every VEVENT through the same dedup/merge machinery.
 func importICalBody(ctx context.Context, src FetchSource, body []byte) ([]Event, ImportCounts, error) {
-	entries, err := parseICalBody(body, src)
+	rep := &icalParseReport{}
+	entries, err := parseICalBody(body, src, rep)
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
-	return importEntries(ctx, src, entries,
+	evs, counts, err := importEntries(ctx, src, entries,
 		func(e icalImportEntry) EventCreateRequest { return e.req },
 		func(tx querier, e icalImportEntry, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
 			req := e.req
@@ -1470,6 +1499,8 @@ func importICalBody(ctx context.Context, src FetchSource, body []byte) ([]Event,
 			}
 			return nil
 		})
+	rep.fold(&counts)
+	return evs, counts, err
 }
 
 // POST /api/v1/fetchurl
@@ -1816,5 +1847,12 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		Updated   int     `json:"updated"`
 		Unchanged int     `json:"unchanged"`
 		Failed    int     `json:"failed"`
-	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged, Failed: counts.Failed})
+		// TimezoneFallback and Unparsed (#1392) let the admin tell a feed that
+		// was fully understood apart from a few guessed timezones from one that
+		// was partially unparseable. Zero values are omitted so the common,
+		// clean case keeps the response shape it had.
+		TimezoneFallback int `json:"timezone_fallback,omitempty"`
+		Unparsed         int `json:"unparsed,omitempty"`
+	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged, Failed: counts.Failed,
+		TimezoneFallback: counts.TimezoneFallback, Unparsed: counts.Unparsed})
 }

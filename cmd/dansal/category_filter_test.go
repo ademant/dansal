@@ -119,7 +119,7 @@ func TestParseICalBodyCategoryFilter(t *testing.T) {
 
 	t.Run("no filter imports both events", func(t *testing.T) {
 		src := FetchSource{Type: "ical"}
-		entries, err := parseICalBody(body, src)
+		entries, err := parseICalBody(body, src, nil)
 		if err != nil {
 			t.Fatalf("parseICalBody: %v", err)
 		}
@@ -130,7 +130,7 @@ func TestParseICalBodyCategoryFilter(t *testing.T) {
 
 	t.Run("Balfolk filter keeps only the matching event", func(t *testing.T) {
 		src := FetchSource{Type: "ical", CategoryFilter: []string{"Balfolk"}}
-		entries, err := parseICalBody(body, src)
+		entries, err := parseICalBody(body, src, nil)
 		if err != nil {
 			t.Fatalf("parseICalBody: %v", err)
 		}
@@ -144,7 +144,7 @@ func TestParseICalBodyCategoryFilter(t *testing.T) {
 
 	t.Run("non-matching filter keeps nothing", func(t *testing.T) {
 		src := FetchSource{Type: "ical", CategoryFilter: []string{"Musik"}}
-		entries, err := parseICalBody(body, src)
+		entries, err := parseICalBody(body, src, nil)
 		if err != nil {
 			t.Fatalf("parseICalBody: %v", err)
 		}

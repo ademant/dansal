@@ -223,6 +223,12 @@ type EventCreateRequest struct {
 	SourceLastModified int64       `json:"source_last_modified,omitempty"`
 	FetchSourceID      int         `json:"fetch_source_id,omitempty"`
 	DuplicateStatus    string      `json:"duplicate_status,omitempty"`
+	// TimezoneFallback (#1392) marks a previewed event whose start time was
+	// anchored from the feed's VTIMEZONE or the instance zone because its TZID
+	// was not resolvable. Preview-response only, so an admin can see which rows
+	// had their time guessed rather than approving them silently; it is never
+	// written to the database.
+	TimezoneFallback bool `json:"timezone_fallback,omitempty"`
 	// IsPublished, when present, overrides createEvent's default "any
 	// authenticated caller ⇒ published immediately" behavior (#1254), so an
 	// admin/publisher can save a new event as an unpublished draft in one
@@ -1014,6 +1020,15 @@ type ImportCounts struct {
 	Updated   int
 	Unchanged int
 	Failed    int
+	// TimezoneFallback and Unparsed (#1392) account for events a feed parse
+	// could not turn into an importable event. Failed already means the
+	// *insert* failed, so parse-time losses need their own counters: an
+	// unresolvable TZID is anchored from the feed's VTIMEZONE or the instance
+	// zone and imported, while anything still unreadable is dropped. Both are
+	// surfaced in the admin run summary so a feed silently degrading no longer
+	// imports as if it were empty.
+	TimezoneFallback int
+	Unparsed         int
 }
 
 // Add tallies a single insertEvent outcome.

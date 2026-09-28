@@ -56,7 +56,65 @@ func bookingVerifyExpiry() time.Time {
 	return time.Now().UTC().Add(time.Duration(h) * time.Hour)
 }
 
-// bookingLongExpiry returns the event's end_time + 90 days (for confirmed bookings).
+// bookingCheckinWindow bounds how long a QR code may be scanned at the door.
+//
+// The QR token is a physical-world credential: it is printed on a ticket and
+// shown in public, so its useful lifetime is a few hours around the event and
+// not the 90 days the row itself is retained for. Scanning is allowed from
+// checkinOpensBefore before the event starts until checkinClosesAfter after it
+// ends, so a ticket holder arriving a little early or staff finishing the
+// paperwork late are both still covered.
+const (
+	checkinOpensBefore  = 2 * time.Hour
+	checkinClosesAfter  = 4 * time.Hour
+	bookingFallbackSpan = 6 * time.Hour
+)
+
+// bookingCheckinExpiry returns the instant after which the QR code for
+// eventID stops working, derived from the event's own start and end times. A
+// missing or unparseable time falls back to start+bookingFallbackSpan, which
+// still bounds the credential rather than leaving it open-ended.
+func bookingCheckinExpiry(eventID int) time.Time {
+	var startStr, endStr string
+	err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", eventID).Scan(&startStr, &endStr)
+	if err != nil {
+		return time.Now().UTC().Add(bookingFallbackSpan)
+	}
+	parse := func(s string) (time.Time, bool) {
+		ts, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return time.Unix(ts, 0).UTC(), true
+	}
+	end, endOK := parse(endStr)
+	if !endOK {
+		if start, ok := parse(startStr); ok {
+			return start.Add(bookingFallbackSpan).Add(checkinClosesAfter)
+		}
+		return time.Now().UTC().Add(bookingFallbackSpan)
+	}
+	return end.Add(checkinClosesAfter)
+}
+
+// bookingCheckinOpens returns the instant before which the QR code for eventID
+// may not be scanned yet, so a ticket cannot be checked in days ahead.
+func bookingCheckinOpens(eventID int) time.Time {
+	var startStr string
+	if err := db.QueryRow("SELECT start_time FROM events WHERE id=?", eventID).Scan(&startStr); err != nil {
+		return time.Time{}
+	}
+	ts, err := strconv.ParseInt(strings.TrimSpace(startStr), 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(ts, 0).UTC().Add(-checkinOpensBefore)
+}
+
+// bookingLongExpiry returns the event's end_time + 90 days (for confirmed
+// bookings). This is the retention deadline for the booking row and the
+// deadline for its email verification link; it deliberately says nothing about
+// when the QR code may be scanned — see bookingCheckinExpiry.
 func bookingLongExpiry(eventID int) time.Time {
 	var endTimeStr string
 	if err := db.QueryRow("SELECT end_time FROM events WHERE id=?", eventID).Scan(&endTimeStr); err == nil {
@@ -370,9 +428,44 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A cancelled booking has no live ticket. This used to fall through and
+	// return 200 with the booking details, so staff scanning a withdrawn
+	// ticket saw a plausible-looking record instead of a refusal.
+	if b.Status == "cancelled" {
+		writeError(w, "booking is cancelled", http.StatusGone)
+		return
+	}
+	if b.Status == "pending" {
+		writeError(w, "booking is not confirmed yet", http.StatusGone)
+		return
+	}
+
+	// Bound the QR code to a short window around the event. Previously the
+	// token was never checked at all: expires_at is only consulted for
+	// status='pending' rows, and cleanup only deletes 'pending' rows too, so a
+	// confirmed QR stayed valid indefinitely however long ago its event was.
+	if exp := bookingCheckinExpiry(b.EventID); time.Now().After(exp) {
+		writeError(w, "this ticket is past its check-in window", http.StatusGone)
+		return
+	}
+	if opens := bookingCheckinOpens(b.EventID); !opens.IsZero() && time.Now().Before(opens) {
+		writeError(w, "check-in for this event has not opened yet", http.StatusGone)
+		return
+	}
+
 	if b.Status == "approved" || b.Status == "confirmed" {
-		db.Exec("UPDATE bookings SET status='checked_in' WHERE id=?", b.ID)
+		// Single-use: drop the QR token in the same statement that records the
+		// check-in, so a photographed ticket cannot be replayed at the door.
+		// Checked in by anyone with a photo of the code is exactly the abuse
+		// this closes.
+		if _, err := db.Exec(
+			"UPDATE bookings SET status='checked_in', qr_token=NULL WHERE id=?", b.ID,
+		); err != nil {
+			writeError(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 		b.Status = "checked_in"
+		b.QRToken = ""
 		log.Printf("bookings: booking %d checked in by user %d", b.ID, callerID)
 		updateEventAvailability(b.EventID)
 	}

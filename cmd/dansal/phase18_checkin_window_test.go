@@ -31,6 +31,10 @@ func bookingTestDB(t *testing.T) {
 
 	prev := config
 	config = &Config{}
+	// The window margins live in config, so tests must use the same defaults
+	// loadConfig would fill in.
+	config.Server.CheckinOpensBeforeMinutes = 120
+	config.Server.CheckinClosesAfterMinutes = 240
 	t.Cleanup(func() { config = prev })
 }
 
@@ -245,4 +249,75 @@ func TestBookingCheckinExpiryFallsBackWhenTimesUnset(t *testing.T) {
 	if exp.After(now.Add(24 * time.Hour)) {
 		t.Errorf("expiry %v is more than a day out; the fallback is not bounding anything", exp)
 	}
+}
+
+func TestCheckinWindowDefaultsMatchConfig(t *testing.T) {
+	// loadConfig fills these in; assert the shipped defaults still describe the
+	// behaviour the issue documented.
+	bookingTestDB(t)
+	old := config
+	t.Cleanup(func() { config = old })
+	cfg := &Config{}
+	applyDefaults(cfg)
+	if got := cfg.Server.CheckinOpensBeforeMinutes; got != 120 {
+		t.Errorf("checkin_opens_before_minutes default = %d, want 120", got)
+	}
+	if got := cfg.Server.CheckinClosesAfterMinutes; got != 240 {
+		t.Errorf("checkin_closes_after_minutes default = %d, want 240", got)
+	}
+}
+
+func TestCheckinWindowHonoursConfig(t *testing.T) {
+	now := time.Now()
+
+	t.Run("wider closing bound accepts a later scan", func(t *testing.T) {
+		bookingTestDB(t)
+		// Ended 5h ago: rejected at the 4h default, accepted at 12h.
+		config.Server.CheckinClosesAfterMinutes = 12 * 60
+		eventID := seedBookingEvent(t, now.Add(-8*time.Hour), now.Add(-5*time.Hour))
+		seedBooking(t, eventID, "confirmed", "qr-wide")
+
+		if rec := checkin(t, "qr-wide"); rec.Code != http.StatusOK {
+			t.Errorf("got %d, want 200 with a 12h closing bound: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("narrower opening bound refuses an early scan", func(t *testing.T) {
+		bookingTestDB(t)
+		// Starts in 1h: accepted at the 2h default, refused when the window is 30m.
+		config.Server.CheckinOpensBeforeMinutes = 30
+		eventID := seedBookingEvent(t, now.Add(time.Hour), now.Add(3*time.Hour))
+		seedBooking(t, eventID, "confirmed", "qr-narrow")
+
+		if rec := checkin(t, "qr-narrow"); rec.Code != http.StatusGone {
+			t.Errorf("got %d, want 410 with a 30m opening bound: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("negative closing bound still bounds a schedule-less event", func(t *testing.T) {
+		bookingTestDB(t)
+		config.Server.CheckinClosesAfterMinutes = -1
+		eventID := seedBookingEvent(t, now, now)
+		if _, err := db.Exec("UPDATE events SET end_time='' WHERE id=?", eventID); err != nil {
+			t.Fatal(err)
+		}
+		exp := bookingCheckinExpiry(eventID)
+		if !exp.After(now) {
+			t.Errorf("expiry %v is not after now", exp)
+		}
+		if exp.After(now.Add(24 * time.Hour)) {
+			t.Errorf("expiry %v is unbounded in practice", exp)
+		}
+	})
+
+	t.Run("negative opening bound disables the early refusal", func(t *testing.T) {
+		bookingTestDB(t)
+		config.Server.CheckinOpensBeforeMinutes = -1
+		eventID := seedBookingEvent(t, now.Add(48*time.Hour), now.Add(50*time.Hour))
+		seedBooking(t, eventID, "confirmed", "qr-noopen")
+
+		if got := bookingCheckinOpens(eventID); !got.IsZero() {
+			t.Errorf("bookingCheckinOpens = %v, want zero to disable the check", got)
+		}
+	})
 }

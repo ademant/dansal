@@ -71,6 +71,17 @@ server:
   # Hours before an email verification link expires.
   verification_expiry_hours: 24
 
+  # How long a booking's QR code may be scanned at the door, as minutes before
+  # the event starts and after it ends. The QR is printed on a ticket and shown
+  # in public, so it is a physical-world credential with a deliberately short
+  # life — nothing like the 90 days a confirmed booking row is retained for.
+  # Widen these for events that run long or open late (multi-day festivals,
+  # parties that keep going), or to let staff finish up after the advertised
+  # end. Set either to a negative value to drop that side of the check, e.g.
+  # for an event whose end time is not known when the window is computed.
+  checkin_opens_before_minutes: 120
+  checkin_closes_after_minutes: 240
+
   # Seconds a magic-login link remains valid.
   magic_login_expiry_secs: 900
 

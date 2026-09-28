@@ -30,46 +30,56 @@ type WebhooksConfig struct {
 }
 
 type ServerConfig struct {
-	Port                          int      `yaml:"port"`
-	Listen                        string   `yaml:"listen"`
-	TokenExpirationHours          int      `yaml:"token_expiration_hours"`
-	PublisherTokenExpirationHours int      `yaml:"publisher_token_expiration_hours"`
-	RateLimit                     int      `yaml:"rate_limit"`
-	AccountMutationRateLimit      int      `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
-	MaxBodyBytes                  int64    `yaml:"max_body_bytes"`
-	ReadHeaderTimeoutSecs         int      `yaml:"read_header_timeout_secs"`
-	ReadTimeoutSecs               int      `yaml:"read_timeout_secs"`
-	WriteTimeoutSecs              int      `yaml:"write_timeout_secs"`
-	IdleTimeoutSecs               int      `yaml:"idle_timeout_secs"`
-	MaxConnsPerIP                 int      `yaml:"max_conns_per_ip"`
-	ImagesDir                     string   `yaml:"images_dir"`
-	ImageXMax                     int      `yaml:"image_x_max"`
-	ImageYMax                     int      `yaml:"image_y_max"`
-	AdminSocket                   string   `yaml:"admin_socket"`
-	DBPath                        string   `yaml:"db_path"`
-	DBMaxConns                    int      `yaml:"db_max_conns"`
-	LoginRateLimit                int      `yaml:"login_rate_limit"`
-	LoginMaxFailures              int      `yaml:"login_max_failures"`
-	LoginFailureWindowSecs        int      `yaml:"login_failure_window_secs"`
-	InviteExpiryHours             int      `yaml:"invite_expiry_hours"`
-	InviteQRExpiryMinutes         int      `yaml:"invite_qr_expiry_minutes"`
-	InvitePublisherExpiryMinutes  int      `yaml:"invite_publisher_expiry_minutes"`
-	VerificationExpiryHours       int      `yaml:"verification_expiry_hours"`
-	APIKeyRenewGraceHours         int      `yaml:"api_key_renew_grace_hours"` // #1189: grace window past expires_at during which POST /apikeys/renew still succeeds
-	BaseURL                       string   `yaml:"base_url"`
-	TelegramBotToken              string   `yaml:"telegram_bot_token"`
-	TelegramBotName               string   `yaml:"telegram_bot_name"`
-	MatrixHomeserver              string   `yaml:"matrix_homeserver"`
-	MatrixAccessToken             string   `yaml:"matrix_access_token"`
-	MagicLoginExpirySecs          int      `yaml:"magic_login_expiry_secs"`
-	MagicLoginRateSecs            int      `yaml:"magic_login_rate_secs"`
-	MaxOpenTokensPerAddress       int      `yaml:"max_open_tokens_per_address"`
-	HeartbeatIntervalMins         int      `yaml:"heartbeat_interval_mins"`
-	SessionIdleTimeoutMins        int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
-	SessionMaxConcurrent          int      `yaml:"session_max_concurrent"`    // 0 = unlimited
-	AllowedOrigins                []string `yaml:"allowed_origins"`
-	MetricsPort                   int      `yaml:"metrics_port"`
-	MetricsAllowedIPs             []string `yaml:"metrics_allowed_ips"`
+	Port                          int    `yaml:"port"`
+	Listen                        string `yaml:"listen"`
+	TokenExpirationHours          int    `yaml:"token_expiration_hours"`
+	PublisherTokenExpirationHours int    `yaml:"publisher_token_expiration_hours"`
+	RateLimit                     int    `yaml:"rate_limit"`
+	AccountMutationRateLimit      int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
+	MaxBodyBytes                  int64  `yaml:"max_body_bytes"`
+	ReadHeaderTimeoutSecs         int    `yaml:"read_header_timeout_secs"`
+	ReadTimeoutSecs               int    `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs              int    `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs               int    `yaml:"idle_timeout_secs"`
+	MaxConnsPerIP                 int    `yaml:"max_conns_per_ip"`
+	ImagesDir                     string `yaml:"images_dir"`
+	ImageXMax                     int    `yaml:"image_x_max"`
+	ImageYMax                     int    `yaml:"image_y_max"`
+	AdminSocket                   string `yaml:"admin_socket"`
+	DBPath                        string `yaml:"db_path"`
+	DBMaxConns                    int    `yaml:"db_max_conns"`
+	LoginRateLimit                int    `yaml:"login_rate_limit"`
+	LoginMaxFailures              int    `yaml:"login_max_failures"`
+	LoginFailureWindowSecs        int    `yaml:"login_failure_window_secs"`
+	InviteExpiryHours             int    `yaml:"invite_expiry_hours"`
+	InviteQRExpiryMinutes         int    `yaml:"invite_qr_expiry_minutes"`
+	InvitePublisherExpiryMinutes  int    `yaml:"invite_publisher_expiry_minutes"`
+	VerificationExpiryHours       int    `yaml:"verification_expiry_hours"`
+	// CheckinOpensBeforeMinutes / CheckinClosesAfterMinutes bound how long a
+	// booking's QR code may be scanned at the door, relative to the event's own
+	// start and end times (#1382). The QR is a physical-world credential printed
+	// on a ticket and shown in public, so this is deliberately much shorter than
+	// the 90 days a booking row is retained for. Set either to 0 to fall back to
+	// the default, or to a negative value to disable that side of the window
+	// (e.g. an event with no end time, where the closing bound would otherwise
+	// be guesswork).
+	CheckinOpensBeforeMinutes int      `yaml:"checkin_opens_before_minutes"`
+	CheckinClosesAfterMinutes int      `yaml:"checkin_closes_after_minutes"`
+	APIKeyRenewGraceHours     int      `yaml:"api_key_renew_grace_hours"` // #1189: grace window past expires_at during which POST /apikeys/renew still succeeds
+	BaseURL                   string   `yaml:"base_url"`
+	TelegramBotToken          string   `yaml:"telegram_bot_token"`
+	TelegramBotName           string   `yaml:"telegram_bot_name"`
+	MatrixHomeserver          string   `yaml:"matrix_homeserver"`
+	MatrixAccessToken         string   `yaml:"matrix_access_token"`
+	MagicLoginExpirySecs      int      `yaml:"magic_login_expiry_secs"`
+	MagicLoginRateSecs        int      `yaml:"magic_login_rate_secs"`
+	MaxOpenTokensPerAddress   int      `yaml:"max_open_tokens_per_address"`
+	HeartbeatIntervalMins     int      `yaml:"heartbeat_interval_mins"`
+	SessionIdleTimeoutMins    int      `yaml:"session_idle_timeout_mins"` // 0 = disabled
+	SessionMaxConcurrent      int      `yaml:"session_max_concurrent"`    // 0 = unlimited
+	AllowedOrigins            []string `yaml:"allowed_origins"`
+	MetricsPort               int      `yaml:"metrics_port"`
+	MetricsAllowedIPs         []string `yaml:"metrics_allowed_ips"`
 
 	// InternalSharedSecret, when set, exempts loopback requests that send a
 	// matching X-Dansal-Internal header from RateLimitMiddleware and
@@ -277,6 +287,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.VerificationExpiryHours == 0 {
 		cfg.Server.VerificationExpiryHours = 24
+	}
+	if cfg.Server.CheckinOpensBeforeMinutes == 0 {
+		cfg.Server.CheckinOpensBeforeMinutes = 120
+	}
+	if cfg.Server.CheckinClosesAfterMinutes == 0 {
+		cfg.Server.CheckinClosesAfterMinutes = 240
 	}
 	if cfg.Server.APIKeyRenewGraceHours == 0 {
 		cfg.Server.APIKeyRenewGraceHours = 6

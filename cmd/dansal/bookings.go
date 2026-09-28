@@ -56,19 +56,21 @@ func bookingVerifyExpiry() time.Time {
 	return time.Now().UTC().Add(time.Duration(h) * time.Hour)
 }
 
-// bookingCheckinWindow bounds how long a QR code may be scanned at the door.
-//
-// The QR token is a physical-world credential: it is printed on a ticket and
-// shown in public, so its useful lifetime is a few hours around the event and
-// not the 90 days the row itself is retained for. Scanning is allowed from
-// checkinOpensBefore before the event starts until checkinClosesAfter after it
-// ends, so a ticket holder arriving a little early or staff finishing the
-// paperwork late are both still covered.
-const (
-	checkinOpensBefore  = 2 * time.Hour
-	checkinClosesAfter  = 4 * time.Hour
-	bookingFallbackSpan = 6 * time.Hour
-)
+// bookingFallbackSpan is the window used when an event has no usable end time,
+// so a ticket without a schedule is still bounded rather than open-ended.
+const bookingFallbackSpan = 6 * time.Hour
+
+// checkinOpensBefore / checkinClosesAfter resolve the configurable margins
+// around the event. A negative configured value disables that side of the
+// window; the zero case cannot reach here because loadConfig replaces it with
+// the default.
+func checkinOpensBefore() time.Duration {
+	return time.Duration(config.Server.CheckinOpensBeforeMinutes) * time.Minute
+}
+
+func checkinClosesAfter() time.Duration {
+	return time.Duration(config.Server.CheckinClosesAfterMinutes) * time.Minute
+}
 
 // bookingCheckinExpiry returns the instant after which the QR code for
 // eventID stops working, derived from the event's own start and end times. A
@@ -87,19 +89,31 @@ func bookingCheckinExpiry(eventID int) time.Time {
 		}
 		return time.Unix(ts, 0).UTC(), true
 	}
-	end, endOK := parse(endStr)
-	if !endOK {
-		if start, ok := parse(startStr); ok {
-			return start.Add(bookingFallbackSpan).Add(checkinClosesAfter)
+	grace := checkinClosesAfter()
+	if grace < 0 {
+		// Configured as unbounded; a ticket with no schedule still gets a
+		// finite life rather than no limit at all.
+		if end, ok := parse(endStr); ok {
+			return end.Add(bookingFallbackSpan)
 		}
 		return time.Now().UTC().Add(bookingFallbackSpan)
 	}
-	return end.Add(checkinClosesAfter)
+	end, endOK := parse(endStr)
+	if !endOK {
+		if start, ok := parse(startStr); ok {
+			return start.Add(bookingFallbackSpan).Add(grace)
+		}
+		return time.Now().UTC().Add(bookingFallbackSpan)
+	}
+	return end.Add(grace)
 }
 
 // bookingCheckinOpens returns the instant before which the QR code for eventID
 // may not be scanned yet, so a ticket cannot be checked in days ahead.
 func bookingCheckinOpens(eventID int) time.Time {
+	if checkinOpensBefore() < 0 {
+		return time.Time{}
+	}
 	var startStr string
 	if err := db.QueryRow("SELECT start_time FROM events WHERE id=?", eventID).Scan(&startStr); err != nil {
 		return time.Time{}
@@ -108,7 +122,7 @@ func bookingCheckinOpens(eventID int) time.Time {
 	if err != nil {
 		return time.Time{}
 	}
-	return time.Unix(ts, 0).UTC().Add(-checkinOpensBefore)
+	return time.Unix(ts, 0).UTC().Add(-checkinOpensBefore())
 }
 
 // bookingLongExpiry returns the event's end_time + 90 days (for confirmed

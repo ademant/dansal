@@ -1235,6 +1235,9 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				endT = startT.Add(d)
 			}
 		}
+		// Floating DTSTART/DTEND are bare wall clocks; anchor them in the
+		// instance zone so the stored instant does not depend on the host TZ.
+		startFloating, endFloating := icalTimeZones(vevent)
 
 		title := prop(ics.ComponentPropertySummary)
 		if title == "" {
@@ -1273,8 +1276,8 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource) []EventCreateReques
 				EventWriteRequest: EventWriteRequest{
 					Title:          title,
 					Description:    prop(ics.ComponentPropertyDescription),
-					StartTime:      occ[0].In(berlinLoc).Format(time.RFC3339),
-					EndTime:        occ[1].In(berlinLoc).Format(time.RFC3339),
+					StartTime:      icalOccurrenceTime(occ[0], startFloating, instanceLoc()).Format(time.RFC3339),
+					EndTime:        icalOccurrenceTime(occ[1], endFloating, instanceLoc()).Format(time.RFC3339),
 					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
 					Tags:           tags,
 					URL:            attachURL(vevent),
@@ -1355,6 +1358,9 @@ func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
 				endT = startT.Add(d)
 			}
 		}
+		// Floating DTSTART/DTEND are bare wall clocks; anchor them in the
+		// instance zone so the stored instant does not depend on the host TZ.
+		startFloating, endFloating := icalTimeZones(vevent)
 
 		title := prop(ics.ComponentPropertySummary)
 		if title == "" {
@@ -1395,8 +1401,8 @@ func parseICalBody(body []byte, src FetchSource) ([]icalImportEntry, error) {
 					EventWriteRequest: EventWriteRequest{
 						Title:          title,
 						Description:    prop(ics.ComponentPropertyDescription),
-						StartTime:      occ[0].UTC().Format(time.RFC3339),
-						EndTime:        occ[1].UTC().Format(time.RFC3339),
+						StartTime:      icalOccurrenceTime(occ[0], startFloating, instanceLoc()).Format(time.RFC3339),
+						EndTime:        icalOccurrenceTime(occ[1], endFloating, instanceLoc()).Format(time.RFC3339),
 						IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
 						Tags:           tags,
 						URL:            attachURL(vevent),

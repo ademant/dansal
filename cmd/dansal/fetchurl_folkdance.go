@@ -301,6 +301,17 @@ func folkdanceJSONProbe(rawURL string) bool {
 	return strings.Contains(rawURL, "folkdance.page") && strings.Contains(rawURL, ".json")
 }
 
+// lowerURLPath returns the lowercased path component of rawURL, excluding
+// any query string or fragment — a plain suffix check against the raw
+// (lowercased) URL string breaks the moment a query string is appended
+// (#1399).
+func lowerURLPath(rawURL string) string {
+	if u, err := url.Parse(rawURL); err == nil {
+		return strings.ToLower(u.Path)
+	}
+	return strings.ToLower(rawURL)
+}
+
 // httpContentType fetches only the Content-Type header of a URL.
 func httpContentType(rawURL string) string {
 	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -334,6 +345,18 @@ func detectFetchType(rawURL string) string {
 		return "json"
 	}
 	lower := strings.ToLower(rawURL)
+	// An explicit .ics/.ical extension in the URL's path is a more specific,
+	// equally free signal than the generic rss/atom/xml/feed keywords below
+	// — a calendar plugin's own /feed/ routing convention must not outrank
+	// a URL that plainly names a calendar-file export (#1399: a
+	// /feed/events.ics export was still misdetected as rss, making the
+	// #1387 content-sniffing fix unreachable since this check runs first
+	// and returns before any request is made). Checked against the parsed
+	// path, not the raw lowercased string, so a query string can't break
+	// the suffix match.
+	if path := lowerURLPath(rawURL); strings.HasSuffix(path, ".ics") || strings.HasSuffix(path, ".ical") {
+		return "ical"
+	}
 	if strings.Contains(lower, "rss") || strings.Contains(lower, "atom") ||
 		strings.HasSuffix(lower, ".xml") || strings.Contains(lower, "/feed") {
 		return "rss"

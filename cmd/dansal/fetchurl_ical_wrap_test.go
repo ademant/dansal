@@ -215,3 +215,24 @@ func TestImportFromICalSourceEndToEndHTMLWrapped(t *testing.T) {
 		t.Errorf("Title = %q", events[0].Title)
 	}
 }
+
+// TestDetectFetchTypeICSPathBeatsFeedKeyword regression-tests #1399: a
+// calendar plugin's own /feed/ routing convention must not outrank a URL
+// that plainly names an .ics/.ical export, and a query string must not
+// break the suffix match. No network call should even be needed for these —
+// unlike TestDetectFetchTypeSniffsHTMLWrappedICalServedAsXML, safeClient is
+// deliberately left untouched here.
+func TestDetectFetchTypeICSPathBeatsFeedKeyword(t *testing.T) {
+	cases := map[string]string{
+		"http://example.org/feed/events.ics":         "ical",
+		"http://example.org/feed/events.ics?e2e=abc": "ical",
+		"http://example.org/calendar.ical":           "ical",
+		"http://example.org/feed/events.xml":         "rss", // .xml, not .ics/.ical: unaffected
+		"http://example.org/feed/":                   "rss", // no extension at all: unaffected
+	}
+	for url, want := range cases {
+		if got := detectFetchType(url); got != want {
+			t.Errorf("detectFetchType(%q) = %q, want %q", url, got, want)
+		}
+	}
+}

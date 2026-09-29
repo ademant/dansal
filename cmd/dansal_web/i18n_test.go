@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -116,6 +117,33 @@ func TestHolidayCountryLang(t *testing.T) {
 		lang, ok := holidayCountryLang(country)
 		if lang != want.lang || ok != want.ok {
 			t.Errorf("holidayCountryLang(%q) = (%q, %v), want (%q, %v)", country, lang, ok, want.lang, want.ok)
+		}
+	}
+}
+
+// TestFetchRunTimezoneFallbackTranslationNotDrinkRelated is a narrow
+// regression guard for a specific copy-paste mistranslation: the German and
+// Breton values for fetch_run_timezone_fallback ("time taken from the feed's
+// VTIMEZONE") read "Getränkezeit"/"Koudiù" — both drink-related, apparently
+// copy-pasted from the neighbouring drink_alcohol/drink_soft keys — instead
+// of anything about a timezone. All other 10 languages translated it
+// correctly. Semantic correctness can't be checked automatically in
+// general, but this exact regression can be.
+func TestFetchRunTimezoneFallbackTranslationNotDrinkRelated(t *testing.T) {
+	i := loadI18n("")
+	for _, lang := range []string{"de", "br"} {
+		s, ok := i.langs[lang]
+		if !ok {
+			t.Fatalf("language %q not found", lang)
+		}
+		got := s.Strings["fetch_run_timezone_fallback"]
+		if got == "" {
+			t.Fatalf("%s: fetch_run_timezone_fallback is empty", lang)
+		}
+		for _, bad := range []string{"Getränk", "Koudiù"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%s: fetch_run_timezone_fallback = %q, still contains drink-related %q", lang, got, bad)
+			}
 		}
 	}
 }

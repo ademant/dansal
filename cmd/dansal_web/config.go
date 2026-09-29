@@ -51,8 +51,8 @@ type Config struct {
 	// (actor objects, outbox, followers). Discovery endpoints (WebFinger,
 	// nodeinfo, host-meta) are never gated — remote servers need them to
 	// bootstrap a follow before they can sign anything. Default: false.
-	AuthorizedFetch bool   `yaml:"authorized_fetch"`
-	RelayActorName  string `yaml:"relay_actor_name"`
+	AuthorizedFetch     bool     `yaml:"authorized_fetch"`
+	RelayActorName      string   `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
 	ShowFederatedEvents bool     `yaml:"show_federated_events"`
 	RelayDisplayName    string   `yaml:"relay_display_name"` // fediverse display name for the relay actor
@@ -151,6 +151,16 @@ type Config struct {
 	WriteTimeoutSecs      int `yaml:"write_timeout_secs"`
 	IdleTimeoutSecs       int `yaml:"idle_timeout_secs"`
 
+	// FetchRunTimeoutSecs bounds the web->API call for "run this fetch
+	// source now" (#1395) -- longer than the shared fastCallTimeout (15s,
+	// dansal.go) since fetching a slow-but-legitimate external feed can
+	// take close to the API's own 30s allowance. Deliberately below 30:
+	// WriteTimeoutSecs above is also 30s and is enforced independently by
+	// net/http regardless of this value, so a call that actually took the
+	// full 30s would risk the server's own write deadline killing the
+	// connection first (a broken pipe instead of a clean timeout response).
+	FetchRunTimeoutSecs int `yaml:"fetch_run_timeout_secs"`
+
 	// Session management
 	SessionIdleTimeoutMins int `yaml:"session_idle_timeout_mins"` // 0 = disabled; shown as client-side warning
 
@@ -227,6 +237,7 @@ func loadConfig() *Config {
 		ReadTimeoutSecs:           10,
 		WriteTimeoutSecs:          30,
 		IdleTimeoutSecs:           60,
+		FetchRunTimeoutSecs:       25,
 	}
 
 	configPath := ""
@@ -336,6 +347,7 @@ func reloadConfig(path string) *Config {
 		ReadTimeoutSecs:           10,
 		WriteTimeoutSecs:          30,
 		IdleTimeoutSecs:           60,
+		FetchRunTimeoutSecs:       25,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

@@ -67,6 +67,12 @@ type DansalClient struct {
 	// requests under the shared loopback IP.
 	InternalSecret string
 
+	// FetchRunTimeout bounds RunFetchSource's call only (#1395); every other
+	// call keeps the shared fastCallTimeout. Zero falls back to
+	// fastCallTimeout, so a client built without setting this (e.g. in a
+	// test) behaves exactly as before.
+	FetchRunTimeout time.Duration
+
 	mu             sync.Mutex
 	orgsCache      cacheEntry[[]Organization]
 	dancesCache    cacheEntry[[]Dance]
@@ -286,7 +292,14 @@ func classifyAPIError(err error) error {
 // render on the very first hit (#1119). Never retried for non-GET: POST/PUT
 // /PATCH/DELETE aren't safe to resend blindly.
 func (c *DansalClient) do(ctx context.Context, method, path, token string, body []byte, out any, okStatus ...int) error {
-	ctx, cancel := context.WithTimeout(ctx, fastCallTimeout)
+	return c.doWithTimeout(ctx, fastCallTimeout, method, path, token, body, out, okStatus...)
+}
+
+// doWithTimeout is do() with an explicit timeout instead of the shared
+// fastCallTimeout -- used by RunFetchSource (#1395), which can legitimately
+// take much longer than do()'s other, fast callers.
+func (c *DansalClient) doWithTimeout(ctx context.Context, timeout time.Duration, method, path, token string, body []byte, out any, okStatus ...int) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var bodyReader io.Reader = http.NoBody
 	if body != nil {
@@ -1766,7 +1779,14 @@ func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string)
 		TimezoneFallback int               `json:"timezone_fallback"`
 		Unparsed         int               `json:"unparsed"`
 	}
-	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
+	// #1395: a slow-but-legitimate feed can take close to the API's own 30s
+	// allowance -- the shared fastCallTimeout (15s) was cutting those off
+	// before the API's fetch had a real chance to finish.
+	timeout := c.FetchRunTimeout
+	if timeout <= 0 {
+		timeout = fastCallTimeout
+	}
+	if err := c.doWithTimeout(ctx, timeout, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
 		return FetchRunResult{}, err
 	}
 	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated,

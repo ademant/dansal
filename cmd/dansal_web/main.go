@@ -149,7 +149,8 @@ func main() {
 			DisableCompression:  true,
 			MaxIdleConnsPerHost: 100,
 		}},
-		InternalSecret: cfg.InternalSharedSecret,
+		InternalSecret:  cfg.InternalSharedSecret,
+		FetchRunTimeout: time.Duration(cfg.FetchRunTimeoutSecs) * time.Second,
 	}
 
 	tmpls := loadTemplates()

@@ -254,6 +254,72 @@ func TestParseJSONLDBodyPaidOffer(t *testing.T) {
 	}
 }
 
+// TestParseJSONLDBodyLocationByIDReference covers a shape confirmed against
+// dansal's own emitted event pages (#1376 live-deploy check): the Event's
+// "location" is a bare {"@id": "..."} pointing at a Place node factored out
+// elsewhere in @graph, rather than an inline object.
+func TestParseJSONLDBodyLocationByIDReference(t *testing.T) {
+	if berlinLoc == nil {
+		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	}
+	body := jsonldPage(fmt.Sprintf(`{
+		"@context": "https://schema.org",
+		"@graph": [
+			{
+				"@id": "https://example.org/location/42",
+				"@type": "Place",
+				"name": "Salle des Fêtes",
+				"address": {"@type": "PostalAddress", "streetAddress": "1 Rue de la Danse", "addressLocality": "Testville", "postalCode": "35000", "addressCountry": "France"},
+				"geo": {"@type": "GeoCoordinates", "latitude": 48.1, "longitude": -1.6}
+			},
+			{
+				"@id": "https://example.org/events/1",
+				"@type": "Event",
+				"name": "Bal Test",
+				"startDate": "%s",
+				"location": {"@id": "https://example.org/location/42"}
+			}
+		]
+	}`, futureDate(10, true)))
+
+	reqs, err := parseJSONLDBody(body, FetchSource{URL: "https://example.org/events/1"}, nil)
+	if err != nil {
+		t.Fatalf("parseJSONLDBody: %v", err)
+	}
+	if len(reqs) != 1 {
+		t.Fatalf("got %d requests, want 1", len(reqs))
+	}
+	loc := reqs[0].Location
+	if loc.Location != "Salle des Fêtes" || loc.Town != "Testville" || loc.Zipcode != "35000" {
+		t.Errorf("Location = %+v, want the referenced Place resolved", loc)
+	}
+	if loc.Latitude == nil || *loc.Latitude != 48.1 || loc.Longitude == nil || *loc.Longitude != -1.6 {
+		t.Errorf("Latitude/Longitude = %v/%v", loc.Latitude, loc.Longitude)
+	}
+}
+
+// TestParseJSONLDBodyInlineLocationNotOverriddenByID covers the other half:
+// a location that inlines real fields alongside its own @id must be used
+// as-is, not replaced by a (possibly different) indexed node.
+func TestParseJSONLDBodyInlineLocationNotOverriddenByID(t *testing.T) {
+	if berlinLoc == nil {
+		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	}
+	body := jsonldPage(fmt.Sprintf(`{
+		"@context": "https://schema.org", "@type": "Event", "name": "Bal",
+		"startDate": "%s",
+		"location": {"@id": "https://example.org/loc/1", "@type": "Place", "name": "Salle Inline"}
+	}`, futureDate(10, true)))
+
+	reqs, err := parseJSONLDBody(body, FetchSource{URL: "https://example.org/p"}, nil)
+	if err != nil {
+		t.Fatalf("parseJSONLDBody: %v", err)
+	}
+	if len(reqs) != 1 || reqs[0].Location.Location != "Salle Inline" {
+		t.Fatalf("got %+v", reqs)
+	}
+}
+
 func TestDetectFetchTypeDoesNotAutoDetectJsonldFromHTML(t *testing.T) {
 	// #1376 point 5: jsonld cannot be auto-detected — a generic text/html
 	// content type (from any page, including one publishing JSON-LD) must

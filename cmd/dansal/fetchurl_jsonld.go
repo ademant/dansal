@@ -104,6 +104,63 @@ func jsonldEventNodes(doc any) []map[string]any {
 	return out
 }
 
+// jsonldIndexByID collects every node carrying an "@id" anywhere in the
+// document, keyed by that id. Real event pages commonly factor a shared
+// Place out of @graph and reference it from each Event as a bare
+// {"@id": "..."} instead of repeating it — confirmed against dansal's own
+// emitted output, which does exactly this — so an Event's location (or any
+// other field) may be a reference rather than an inline object.
+func jsonldIndexByID(doc any) map[string]map[string]any {
+	index := make(map[string]map[string]any)
+	var walk func(any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case []any:
+			for _, e := range t {
+				walk(e)
+			}
+		case map[string]any:
+			if id, ok := t["@id"].(string); ok {
+				index[id] = t
+			}
+			if graph, ok := t["@graph"]; ok {
+				walk(graph)
+			}
+			if items, ok := t["itemListElement"]; ok {
+				walk(items)
+			}
+			if item, ok := t["item"]; ok {
+				walk(item)
+			}
+		}
+	}
+	walk(doc)
+	return index
+}
+
+// resolveJSONLDRef follows a bare {"@id": "..."} reference into index when v
+// carries no other usable field itself (a node that inlines real data
+// alongside its own @id is used as-is, not replaced).
+func resolveJSONLDRef(v any, index map[string]map[string]any) any {
+	m, ok := v.(map[string]any)
+	if !ok || len(index) == 0 {
+		return v
+	}
+	id, ok := m["@id"].(string)
+	if !ok {
+		return v
+	}
+	for k := range m {
+		if k != "@id" && k != "@type" {
+			return v // inlines real data alongside @id: not a bare reference
+		}
+	}
+	if resolved, ok := index[id]; ok {
+		return resolved
+	}
+	return v
+}
+
 func isJSONLDEventType(t any) bool {
 	switch v := t.(type) {
 	case string:
@@ -147,14 +204,16 @@ func jsonldFloat(v any) (float64, bool) {
 
 // jsonldLocation maps a schema.org Place (or, rarely, a bare string) to an
 // EventLocationRequest: name, PostalAddress fields, and GeoCoordinates.
-func jsonldLocation(v any) EventLocationRequest {
+// index resolves a bare {"@id": "..."} reference (see resolveJSONLDRef).
+func jsonldLocation(v any, index map[string]map[string]any) EventLocationRequest {
+	v = resolveJSONLDRef(v, index)
 	var loc EventLocationRequest
 	switch t := v.(type) {
 	case string:
 		loc.Location = t
 	case map[string]any:
 		loc.Location = jsonldString(t["name"])
-		switch a := t["address"].(type) {
+		switch a := resolveJSONLDRef(t["address"], index).(type) {
 		case string:
 			if loc.Location == "" {
 				loc.Location = a
@@ -173,7 +232,7 @@ func jsonldLocation(v any) EventLocationRequest {
 				loc.Location = loc.Town
 			}
 		}
-		if geo, ok := t["geo"].(map[string]any); ok {
+		if geo, ok := resolveJSONLDRef(t["geo"], index).(map[string]any); ok {
 			if lat, ok := jsonldFloat(geo["latitude"]); ok {
 				loc.Latitude = &lat
 			}
@@ -259,13 +318,22 @@ const jsonldFallbackSpan = 2 * time.Hour
 // fallbacks the same way the iCal path tracks TZID fallbacks, so a degraded
 // parse is visible in the admin run summary instead of importing silently.
 func parseJSONLDBody(body []byte, src FetchSource, rep *icalParseReport) ([]EventCreateRequest, error) {
-	var nodes []map[string]any
+	// index is per-block: a {"@id": ...} reference only ever points within
+	// the same <script> block's own @graph, never across blocks.
+	type found struct {
+		node  map[string]any
+		index map[string]map[string]any
+	}
+	var nodes []found
 	for _, block := range extractJSONLDBlocks(body) {
 		var doc any
 		if err := json.Unmarshal([]byte(block), &doc); err != nil {
 			continue // one malformed <script> block must not sink the whole page
 		}
-		nodes = append(nodes, jsonldEventNodes(doc)...)
+		index := jsonldIndexByID(doc)
+		for _, n := range jsonldEventNodes(doc) {
+			nodes = append(nodes, found{node: n, index: index})
+		}
 	}
 	if len(nodes) == 0 {
 		return nil, errNoMachineReadableEvents
@@ -273,7 +341,8 @@ func parseJSONLDBody(body []byte, src FetchSource, rep *icalParseReport) ([]Even
 
 	now := time.Now().UTC()
 	var reqs []EventCreateRequest
-	for i, node := range nodes {
+	for i, f := range nodes {
+		node, index := f.node, f.index
 		title := jsonldString(node["name"])
 		if title == "" {
 			continue
@@ -324,7 +393,7 @@ func parseJSONLDBody(body []byte, src FetchSource, rep *icalParseReport) ([]Even
 				URL:            jsonldString(node["url"]),
 				OrganizationID: src.OrganizationID,
 				Dances:         src.DanceIDs,
-				Location:       jsonldLocation(node["location"]),
+				Location:       jsonldLocation(node["location"], index),
 				Pricing:        jsonldPricing(node["offers"]),
 			},
 		})

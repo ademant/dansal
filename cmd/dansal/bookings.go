@@ -72,16 +72,10 @@ func checkinClosesAfter() time.Duration {
 	return time.Duration(config.Server.CheckinClosesAfterMinutes) * time.Minute
 }
 
-// bookingCheckinExpiry returns the instant after which the QR code for
-// eventID stops working, derived from the event's own start and end times. A
-// missing or unparseable time falls back to start+bookingFallbackSpan, which
-// still bounds the credential rather than leaving it open-ended.
-func bookingCheckinExpiry(eventID int) time.Time {
-	var startStr, endStr string
-	err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", eventID).Scan(&startStr, &endStr)
-	if err != nil {
-		return time.Now().UTC().Add(bookingFallbackSpan)
-	}
+// checkinExpiryFromTimes is the pure calculation bookingCheckinExpiry runs
+// once it has start_time/end_time in hand — factored out so
+// bookingCheckinWindow can reuse it against a single query (#1398).
+func checkinExpiryFromTimes(startStr, endStr string) time.Time {
 	parse := func(s string) (time.Time, bool) {
 		ts, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 		if err != nil {
@@ -108,14 +102,23 @@ func bookingCheckinExpiry(eventID int) time.Time {
 	return end.Add(grace)
 }
 
-// bookingCheckinOpens returns the instant before which the QR code for eventID
-// may not be scanned yet, so a ticket cannot be checked in days ahead.
-func bookingCheckinOpens(eventID int) time.Time {
-	if checkinOpensBefore() < 0 {
-		return time.Time{}
+// bookingCheckinExpiry returns the instant after which the QR code for
+// eventID stops working, derived from the event's own start and end times. A
+// missing or unparseable time falls back to start+bookingFallbackSpan, which
+// still bounds the credential rather than leaving it open-ended.
+func bookingCheckinExpiry(eventID int) time.Time {
+	var startStr, endStr string
+	if err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", eventID).Scan(&startStr, &endStr); err != nil {
+		return time.Now().UTC().Add(bookingFallbackSpan)
 	}
-	var startStr string
-	if err := db.QueryRow("SELECT start_time FROM events WHERE id=?", eventID).Scan(&startStr); err != nil {
+	return checkinExpiryFromTimes(startStr, endStr)
+}
+
+// checkinOpensFromStart is the pure calculation bookingCheckinOpens runs once
+// it has start_time in hand — factored out so bookingCheckinWindow can reuse
+// it against a single query (#1398).
+func checkinOpensFromStart(startStr string) time.Time {
+	if checkinOpensBefore() < 0 {
 		return time.Time{}
 	}
 	ts, err := strconv.ParseInt(strings.TrimSpace(startStr), 10, 64)
@@ -123,6 +126,28 @@ func bookingCheckinOpens(eventID int) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(ts, 0).UTC().Add(-checkinOpensBefore())
+}
+
+// bookingCheckinOpens returns the instant before which the QR code for eventID
+// may not be scanned yet, so a ticket cannot be checked in days ahead.
+func bookingCheckinOpens(eventID int) time.Time {
+	var startStr string
+	if err := db.QueryRow("SELECT start_time FROM events WHERE id=?", eventID).Scan(&startStr); err != nil {
+		return time.Time{}
+	}
+	return checkinOpensFromStart(startStr)
+}
+
+// bookingCheckinWindow returns both check-in window edges from a single
+// query, for callers (checkinBooking) that need both — every QR scan at the
+// door used to run bookingCheckinExpiry and bookingCheckinOpens back to back,
+// each re-fetching the same events row separately (#1398).
+func bookingCheckinWindow(eventID int) (opens, expires time.Time) {
+	var startStr, endStr string
+	if err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", eventID).Scan(&startStr, &endStr); err != nil {
+		return time.Time{}, time.Now().UTC().Add(bookingFallbackSpan)
+	}
+	return checkinOpensFromStart(startStr), checkinExpiryFromTimes(startStr, endStr)
 }
 
 // bookingLongExpiry returns the event's end_time + 90 days (for confirmed
@@ -283,8 +308,9 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	base := buildBaseURL(r)
 	verifyURL := base + "/api/v1/bookings/verify/" + verifyToken
 	verifyBody := fmt.Sprintf(s.VerifyBody, req.Name, verifyURL, config.Server.VerificationExpiryHours)
+	cfg := config.SMTP
 	go func() {
-		if _, err := SendEmail(req.Email, s.VerifySubject, verifyBody, false); err != nil {
+		if _, err := sendEmailWithConfig(cfg, req.Email, s.VerifySubject, verifyBody, false); err != nil {
 			log.Printf("bookings: verify email failed for booking %d: %v", id, err)
 		}
 	}()
@@ -308,7 +334,16 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	noStoreTokenResponse(w)
 
-	token := verifyTokenFromRequest(r)
+	// The emailed click-through link carries the verify token in the path
+	// ({base}/api/v1/bookings/verify/{token}); the POST form and the
+	// Authorization: Bearer header are the app-driven forms (#1382). All
+	// three must reach the same single-use token lookup — reading only
+	// verifyTokenFromRequest here (as e9b7841 did) silently broke the path
+	// form, so an emailed link hit "token required" instead of confirming.
+	token := r.PathValue("token")
+	if token == "" {
+		token = verifyTokenFromRequest(r)
+	}
 	if token == "" {
 		writeError(w, "token required", http.StatusBadRequest)
 		return
@@ -342,12 +377,33 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	longExpiry := bookingLongExpiry(eventID)
-	db.Exec(
-		"UPDATE bookings SET status='confirmed', verify_token=NULL, qr_token=?, expires_at=? WHERE id=?",
+	// The status predicate makes this UPDATE a compare-and-set instead of
+	// trusting the SELECT above: two concurrent verify requests for the same
+	// token (an email client's link-prefetch racing the real click, or a
+	// double-click) can both see status='pending' before either UPDATE
+	// commits. Without repeating the check here, both would generate and
+	// write their own qr_token, and the loser's response would hand out a
+	// token the DB no longer recognizes (#1397).
+	res, err := db.Exec(
+		"UPDATE bookings SET status='confirmed', verify_token=NULL, qr_token=?, expires_at=? WHERE id=? AND status='pending'",
 		qrToken, longExpiry.Unix(), id,
 	)
+	if err != nil {
+		writeError(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// A concurrent request already consumed this token between our
+		// SELECT above and this UPDATE.
+		writeError(w, "invalid or already used verification link", http.StatusNotFound)
+		return
+	}
 	log.Printf("bookings: verified booking %d for event %d", id, eventID)
-	go sendBookingConfirmedEmail(name, email, lang, eventID, qrToken)
+	base := strings.TrimRight(config.Server.BaseURL, "/")
+	title := eventTitle(eventID)
+	loc := bookingMailStringsFor(lang)
+	cfg := config.SMTP
+	go sendBookingConfirmedEmail(name, email, title, base, qrToken, loc, cfg)
 
 	checkinURL := buildBaseURL(r) + "/checkin/" + qrToken
 
@@ -401,7 +457,11 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		if err := db.QueryRow(
 			"SELECT name, email, COALESCE(lang,''), COALESCE(qr_token,'') FROM bookings WHERE id=?", bookingID,
 		).Scan(&name, &email, &lang, &qrToken); err == nil && qrToken != "" {
-			go sendBookingApprovedEmail(name, email, lang, eventID, qrToken)
+			base := strings.TrimRight(config.Server.BaseURL, "/")
+			title := eventTitle(eventID)
+			loc := bookingMailStringsFor(lang)
+			cfg := config.SMTP
+			go sendBookingApprovedEmail(name, email, title, base, qrToken, loc, cfg)
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -458,11 +518,14 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 	// token was never checked at all: expires_at is only consulted for
 	// status='pending' rows, and cleanup only deletes 'pending' rows too, so a
 	// confirmed QR stayed valid indefinitely however long ago its event was.
-	if exp := bookingCheckinExpiry(b.EventID); time.Now().After(exp) {
+	// One query for both edges instead of bookingCheckinExpiry/bookingCheckinOpens
+	// each re-fetching the same events row separately (#1398).
+	opens, exp := bookingCheckinWindow(b.EventID)
+	if time.Now().After(exp) {
 		writeError(w, "this ticket is past its check-in window", http.StatusGone)
 		return
 	}
-	if opens := bookingCheckinOpens(b.EventID); !opens.IsZero() && time.Now().Before(opens) {
+	if !opens.IsZero() && time.Now().Before(opens) {
 		writeError(w, "check-in for this event has not opened yet", http.StatusGone)
 		return
 	}
@@ -471,11 +534,22 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		// Single-use: drop the QR token in the same statement that records the
 		// check-in, so a photographed ticket cannot be replayed at the door.
 		// Checked in by anyone with a photo of the code is exactly the abuse
-		// this closes.
-		if _, err := db.Exec(
-			"UPDATE bookings SET status='checked_in', qr_token=NULL WHERE id=?", b.ID,
-		); err != nil {
+		// this closes. The status predicate makes the UPDATE itself the
+		// single source of truth (compare-and-set) rather than relying on the
+		// SELECT above: two concurrent scans of the same code can both pass
+		// that SELECT before either UPDATE commits, and without repeating the
+		// status check here both would otherwise succeed (#1396).
+		res, err := db.Exec(
+			"UPDATE bookings SET status='checked_in', qr_token=NULL WHERE id=? AND status IN ('approved','confirmed')", b.ID,
+		)
+		if err != nil {
 			writeError(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			// A concurrent scan already consumed this ticket between our
+			// SELECT above and this UPDATE.
+			writeError(w, "this ticket has already been checked in", http.StatusConflict)
 			return
 		}
 		b.Status = "checked_in"

@@ -257,6 +257,22 @@ function nominatimLang(countryCode){
 // correct, not an oversight.
 var _geoToken = '';
 function setGeoToken(tok){ _geoToken = tok || ''; }
+
+// tzNote (#1392, de-duplicated #1404): builds the "N <fallback label>, N
+// <unparsed label>" warning suffix appended to a fetch-source run toast when
+// a feed carried events with unresolvable TZIDs or events that couldn't be
+// read at all — appended only when non-zero, so the common clean-import case
+// is unchanged. fallbackLabel/unparsedLabel are the already-translated label
+// text: this file is served as a static asset with no access to Go's i18n,
+// so each admin_fetchurl* template still does its own tiny
+// {{$.Strings.T "..."}} interpolation at the call site and passes the
+// result in, instead of duplicating this whole function body per template.
+function tzNote(d, fallbackLabel, unparsedLabel){
+  var parts = [];
+  if (d.timezone_fallback) parts.push(d.timezone_fallback + ' ' + fallbackLabel);
+  if (d.unparsed) parts.push(d.unparsed + ' ' + unparsedLabel);
+  return parts.length ? ', ⚠ ' + parts.join(', ') : '';
+}
 function nominatimSearch(q, lang, limit, cb){
   var url = '/search/geocode/search?q=' + encodeURIComponent(q) + '&limit=' + (limit || 5);
   if (lang) url += '&lang=' + encodeURIComponent(lang);

@@ -1800,7 +1800,15 @@ func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, to
 
 func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token string) error {
 	body, _ := json.Marshal(map[string]any{"ids": ids})
-	return c.do(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-fetch", token, body, nil, http.StatusOK, http.StatusCreated)
+	// Same FetchRunTimeout-or-fastCallTimeout fallback as RunFetchSource
+	// (#1395): a bulk run drives the identical per-source import work, so a
+	// slow-but-legitimate feed can be cut off here too if this still used
+	// the shared fastCallTimeout (#1400).
+	timeout := c.FetchRunTimeout
+	if timeout <= 0 {
+		timeout = fastCallTimeout
+	}
+	return c.doWithTimeout(ctx, timeout, http.MethodPost, "/api/v1/fetchurl/bulk-fetch", token, body, nil, http.StatusOK, http.StatusCreated)
 }
 
 func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, orgID *int, token string) error {

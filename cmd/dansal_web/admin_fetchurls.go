@@ -435,6 +435,23 @@ func filterFetchSourceIDsByOrg(r *http.Request, client *DansalClient, memberSet 
 	return out
 }
 
+// fetchRunResultJSON is the admin "run now" button's JSON response shape.
+// Factored out so it's directly unit-testable: it must carry
+// timezone_fallback/unparsed, which admin_fetchurl_edit.html's and
+// admin_fetchurls.html's tzNote(d) JS helper both read to warn the admin a
+// feed degraded — a hand-inlined map literal here previously omitted them,
+// so that warning silently never appeared after a manual run (#1401).
+func fetchRunResultJSON(result FetchRunResult) map[string]int {
+	return map[string]int{
+		"count":             result.Count,
+		"new":               result.New,
+		"updated":           result.Updated,
+		"unchanged":         result.Unchanged,
+		"timezone_fallback": result.TimezoneFallback,
+		"unparsed":          result.Unparsed,
+	}
+}
+
 func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -460,12 +477,7 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 				writeJSONError(w, r, http.StatusBadGateway, runErr.Error())
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]int{
-				"count":     result.Count,
-				"new":       result.New,
-				"updated":   result.Updated,
-				"unchanged": result.Unchanged,
-			})
+			json.NewEncoder(w).Encode(fetchRunResultJSON(result))
 			return
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)

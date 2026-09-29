@@ -1217,93 +1217,149 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource, rep *icalParseRepor
 	vtLocs := icalVTimezoneLocs(cal)
 
 	for _, vevent := range cal.Events() {
-		prop := func(p ics.ComponentProperty) string {
-			if v := vevent.GetProperty(p); v != nil {
-				return v.Value
-			}
-			return ""
-		}
-
-		evUID := prop(ics.ComponentPropertyUniqueId)
-
-		// Same TZID fallback as the import path (#1392), so an admin sees the
-		// same time in the preview that will actually be stored.
-		usedFallback := false
-		startT, err := vevent.GetStartAt()
-		if err != nil {
-			t, fb, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtStart), vtLocs)
-			if !ok {
-				rep.unparsed(evUID, err)
-				continue
-			}
-			startT, usedFallback = t, fb
-			rep.fallback(evUID, icalTZIDOf(vevent.GetProperty(ics.ComponentPropertyDtStart)))
-		}
-		endT := startT
-		if et, err := vevent.GetEndAt(); err == nil {
-			endT = et
-		} else if t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtEnd), vtLocs); ok {
-			endT = t
-		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
-			if d, err := parseICalDuration(durStr); err == nil {
-				endT = startT.Add(d)
-			}
-		}
-		// Floating DTSTART/DTEND are bare wall clocks; anchor them in the
-		// instance zone so the stored instant does not depend on the host TZ.
-		startFloating, endFloating := icalTimeZones(vevent)
-
-		title := prop(ics.ComponentPropertySummary)
-		if title == "" {
+		d, ok := deriveICalEvent(vevent, vtLocs, src, rep)
+		if !ok {
 			continue
 		}
-
-		eventCategories := parseICalCategories(vevent)
-		if !eventCategoriesMatchFilter(eventCategories, src.CategoryFilter) {
-			continue
-		}
-		tags := mergeTags(eventCategories, src.Tags)
-		baseUID := prop(ics.ComponentPropertyUniqueId)
-		sourceLastModified := icalLastModified(vevent)
-
-		occs, _ := expandRRuleOccurrences(vevent, startT, endT)
-		if occs == nil {
-			occs = [][2]time.Time{{startT, endT}}
-		}
-
-		for _, occ := range occs {
+		for _, occ := range d.occs {
 			if occ[1].Before(now) {
 				continue
 			}
-			uid := baseUID
-			if len(occs) > 1 && !occ[0].Equal(startT) {
-				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
+			uid := d.baseUID
+			if len(d.occs) > 1 && !occ[0].Equal(d.startT) {
+				uid = fmt.Sprintf("%s_%d", d.baseUID, occ[0].UTC().Unix())
 			}
-
-			loc := parseICalLocation(vevent)
 
 			reqs = append(reqs, EventCreateRequest{
 				UID:                uid,
 				Source:             src.URL,
-				SourceLastModified: sourceLastModified,
+				SourceLastModified: d.sourceLastModified,
 				FetchSourceID:      src.ID,
-				TimezoneFallback:   usedFallback,
+				// A preview-only per-event display flag (events.go); the
+				// import path (parseICalBody) deliberately never sets this —
+				// it aggregates fallbacks via icalParseReport/ImportCounts
+				// instead, see deriveICalEvent's usedFallback.
+				TimezoneFallback: d.usedFallback,
 				EventWriteRequest: EventWriteRequest{
-					Title:          title,
-					Description:    prop(ics.ComponentPropertyDescription),
-					StartTime:      icalOccurrenceTime(occ[0], startFloating, instanceLoc()).Format(time.RFC3339),
-					EndTime:        icalOccurrenceTime(occ[1], endFloating, instanceLoc()).Format(time.RFC3339),
-					IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
-					Tags:           tags,
-					URL:            attachURL(vevent),
+					Title:          d.title,
+					Description:    d.description,
+					StartTime:      icalOccurrenceTime(occ[0], d.startFloating, instanceLoc()).Format(time.RFC3339),
+					EndTime:        icalOccurrenceTime(occ[1], d.endFloating, instanceLoc()).Format(time.RFC3339),
+					IsCancelled:    d.isCancelled,
+					Tags:           d.tags,
+					URL:            d.url,
 					OrganizationID: src.OrganizationID,
 					Dances:         src.DanceIDs,
-					Location:       loc,
+					Location:       d.loc,
 				},
 			})
 		}
 	}
 	return reqs
+}
+
+// icalEventDerived is everything deriveICalEvent works out from one VEVENT,
+// shared by parseICalToRequests (preview) and parseICalBody (import) so
+// neither hand-copies the sequence (#1403).
+type icalEventDerived struct {
+	title              string
+	description        string
+	tags               []string
+	baseUID            string
+	sourceLastModified int64
+	url                string
+	loc                EventLocationRequest
+	isCancelled        bool
+	// usedFallback (#1392) is true when startT came from icalFallbackTime
+	// rather than a TZID golang-ical could resolve itself. Only
+	// parseICalToRequests puts this on its EventCreateRequest — see the
+	// comment at that call site.
+	usedFallback  bool
+	occs          [][2]time.Time
+	startFloating bool
+	endFloating   bool
+	// startT is the un-expanded base occurrence's start, needed by both
+	// callers' "is this a recurrence past the base?" UID check.
+	startT time.Time
+}
+
+// deriveICalEvent computes an icalEventDerived from one VEVENT: the TZID
+// fallback (#1392), end-time/duration fallback, floating-time anchoring,
+// title/category-filter/tag resolution, and RRULE expansion. ok is false
+// when the event should be skipped entirely (unparseable, untitled, or
+// filtered by src.CategoryFilter) — the caller's zero-value icalEventDerived
+// is otherwise unused.
+func deriveICalEvent(vevent *ics.VEvent, vtLocs map[string]*time.Location, src FetchSource, rep *icalParseReport) (icalEventDerived, bool) {
+	prop := func(p ics.ComponentProperty) string {
+		if v := vevent.GetProperty(p); v != nil {
+			return v.Value
+		}
+		return ""
+	}
+	evUID := prop(ics.ComponentPropertyUniqueId)
+
+	// A TZID golang-ical cannot resolve used to drop the event silently
+	// (#1392). Recover the instant from the feed's own VTIMEZONE, or the
+	// instance zone, and count it instead of losing it.
+	usedFallback := false
+	startT, err := vevent.GetStartAt()
+	if err != nil {
+		t, fb, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtStart), vtLocs)
+		if !ok {
+			rep.unparsed(evUID, err)
+			return icalEventDerived{}, false
+		}
+		startT, usedFallback = t, fb
+		rep.fallback(evUID, icalTZIDOf(vevent.GetProperty(ics.ComponentPropertyDtStart)))
+	}
+	endT := startT
+	if et, err := vevent.GetEndAt(); err == nil {
+		endT = et
+	} else if t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtEnd), vtLocs); ok {
+		endT = t
+	} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
+		if d, err := parseICalDuration(durStr); err == nil {
+			endT = startT.Add(d)
+		}
+	}
+	// Floating DTSTART/DTEND are bare wall clocks; anchor them in the
+	// instance zone so the stored instant does not depend on the host TZ.
+	startFloating, endFloating := icalTimeZones(vevent)
+
+	title := prop(ics.ComponentPropertySummary)
+	if title == "" {
+		return icalEventDerived{}, false
+	}
+
+	eventCategories := parseICalCategories(vevent)
+	if !eventCategoriesMatchFilter(eventCategories, src.CategoryFilter) {
+		return icalEventDerived{}, false
+	}
+	tags := mergeTags(eventCategories, src.Tags)
+	baseUID := prop(ics.ComponentPropertyUniqueId)
+	sourceLastModified := icalLastModified(vevent)
+
+	// Expand RRULE if present; fall back to the single base occurrence.
+	occs, _ := expandRRuleOccurrences(vevent, startT, endT)
+	if occs == nil {
+		occs = [][2]time.Time{{startT, endT}}
+	}
+
+	return icalEventDerived{
+		title:              title,
+		description:        prop(ics.ComponentPropertyDescription),
+		tags:               tags,
+		baseUID:            baseUID,
+		sourceLastModified: sourceLastModified,
+		url:                attachURL(vevent),
+		loc:                parseICalLocation(vevent),
+		isCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
+		usedFallback:       usedFallback,
+		occs:               occs,
+		startFloating:      startFloating,
+		endFloating:        endFloating,
+		startT:             startT,
+	}, true
 }
 
 // icalImportEntry pairs an iCal event request with its source vevent so the
@@ -1355,88 +1411,42 @@ func parseICalBody(body []byte, src FetchSource, rep *icalParseReport) ([]icalIm
 	vtLocs := icalVTimezoneLocs(cal)
 
 	for _, vevent := range cal.Events() {
-		prop := func(p ics.ComponentProperty) string {
-			if v := vevent.GetProperty(p); v != nil {
-				return v.Value
-			}
-			return ""
-		}
-		evUID := prop(ics.ComponentPropertyUniqueId)
-
-		// A TZID golang-ical cannot resolve used to drop the event silently
-		// (#1392). Recover the instant from the feed's own VTIMEZONE, or the
-		// instance zone, and count it instead of losing it.
-		startT, err := vevent.GetStartAt()
-		if err != nil {
-			t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtStart), vtLocs)
-			if !ok {
-				rep.unparsed(evUID, err)
-				continue
-			}
-			startT = t
-			rep.fallback(evUID, icalTZIDOf(vevent.GetProperty(ics.ComponentPropertyDtStart)))
-		}
-		endT := startT
-		if et, err := vevent.GetEndAt(); err == nil {
-			endT = et
-		} else if t, _, ok := icalFallbackTime(vevent.GetProperty(ics.ComponentPropertyDtEnd), vtLocs); ok {
-			endT = t
-		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
-			if d, err := parseICalDuration(durStr); err == nil {
-				endT = startT.Add(d)
-			}
-		}
-		// Floating DTSTART/DTEND are bare wall clocks; anchor them in the
-		// instance zone so the stored instant does not depend on the host TZ.
-		startFloating, endFloating := icalTimeZones(vevent)
-
-		title := prop(ics.ComponentPropertySummary)
-		if title == "" {
+		d, ok := deriveICalEvent(vevent, vtLocs, src, rep)
+		if !ok {
 			continue
 		}
-
-		eventCategories := parseICalCategories(vevent)
-		if !eventCategoriesMatchFilter(eventCategories, src.CategoryFilter) {
-			continue
-		}
-		tags := mergeTags(eventCategories, src.Tags)
-		baseUID := prop(ics.ComponentPropertyUniqueId)
-		sourceLastModified := icalLastModified(vevent)
-
-		// Expand RRULE if present; fall back to the single base occurrence.
-		occs, _ := expandRRuleOccurrences(vevent, startT, endT)
-		if occs == nil {
-			occs = [][2]time.Time{{startT, endT}}
-		}
-
-		for _, occ := range occs {
+		for _, occ := range d.occs {
 			if occ[1].Before(now) {
 				continue
 			}
 			// Recurring occurrences after the base get a timestamp-qualified UID
 			// so each instance deduplicates independently across re-imports.
-			uid := baseUID
-			if len(occs) > 1 && !occ[0].Equal(startT) {
-				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
+			uid := d.baseUID
+			if len(d.occs) > 1 && !occ[0].Equal(d.startT) {
+				uid = fmt.Sprintf("%s_%d", d.baseUID, occ[0].UTC().Unix())
 			}
 
 			entries = append(entries, icalImportEntry{
 				req: EventCreateRequest{
 					UID:                uid,
 					Source:             src.URL,
-					SourceLastModified: sourceLastModified,
+					SourceLastModified: d.sourceLastModified,
 					FetchSourceID:      src.ID,
+					// d.usedFallback deliberately not set here: it's a
+					// preview-only display flag (see parseICalToRequests);
+					// the import path aggregates fallbacks via
+					// icalParseReport/ImportCounts instead.
 					EventWriteRequest: EventWriteRequest{
-						Title:          title,
-						Description:    prop(ics.ComponentPropertyDescription),
-						StartTime:      icalOccurrenceTime(occ[0], startFloating, instanceLoc()).Format(time.RFC3339),
-						EndTime:        icalOccurrenceTime(occ[1], endFloating, instanceLoc()).Format(time.RFC3339),
-						IsCancelled:    prop(ics.ComponentPropertyStatus) == "CANCELLED",
-						Tags:           tags,
-						URL:            attachURL(vevent),
+						Title:          d.title,
+						Description:    d.description,
+						StartTime:      icalOccurrenceTime(occ[0], d.startFloating, instanceLoc()).Format(time.RFC3339),
+						EndTime:        icalOccurrenceTime(occ[1], d.endFloating, instanceLoc()).Format(time.RFC3339),
+						IsCancelled:    d.isCancelled,
+						Tags:           d.tags,
+						URL:            d.url,
 						OrganizationID: src.OrganizationID,
 						Dances:         src.DanceIDs,
-						Location:       parseICalLocation(vevent),
+						Location:       d.loc,
 					},
 				},
 				vevent: vevent,

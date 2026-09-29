@@ -61,7 +61,18 @@
       <input type="url" id="field-feed-url" name="feed_url" required class="form-input" value="{{.FeedURL}}" placeholder="https://example.com/calendar.ics">
       <p class="form-hint">{{$.Strings.T "fetch_suggest_url_hint"}}</p>
     </div>
-    <input type="hidden" name="feed_type" value="{{.FeedType}}">
+    <div class="form-group">
+      <label for="field-feed-type">{{$.Strings.T "fetch_type"}}</label>
+      <select id="field-feed-type" name="feed_type" class="form-input">
+        <option value="" {{if eq .FeedType ""}}selected{{end}}>{{$.Strings.T "fetch_type_auto"}}</option>
+        <option value="ical" {{if eq .FeedType "ical"}}selected{{end}}>iCal</option>
+        <option value="json" {{if eq .FeedType "json"}}selected{{end}}>JSON</option>
+        <option value="rss" {{if eq .FeedType "rss"}}selected{{end}}>{{$.Strings.T "fetch_type_rss"}}</option>
+        <option value="jsonld" {{if eq .FeedType "jsonld"}}selected{{end}}>{{$.Strings.T "fetch_type_jsonld"}}</option>
+      </select>
+      <!-- jsonld cannot be auto-detected from a generic text/html response
+           (#1376) — a submitter who wants it must pick it explicitly. -->
+    </div>
 
     {{if .PreviewEvents}}
     <div class="fetch-preview-box">

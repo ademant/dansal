@@ -293,6 +293,15 @@ func adminFetchAll() adminResponse {
 		if err != nil {
 			continue
 		}
+		// A one-shot source (jsonld: a single event page, not a
+		// subscription, #1376) that already imported successfully once is
+		// left out of the periodic refresh entirely — the page will 404
+		// once the event has passed, and re-fetching it would just fail
+		// forever and inflate consecutive_failures. An admin can still
+		// force a re-run via the explicit per-source "run now" action.
+		if src.Type == "jsonld" && src.ImportedOnce {
+			continue
+		}
 		sources = append(sources, src)
 	}
 

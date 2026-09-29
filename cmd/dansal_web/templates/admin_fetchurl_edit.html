@@ -35,6 +35,7 @@
     <option value="json"{{if or (eq .Source.Type "json") (eq .Source.Type "folkdance-json") (eq .Source.Type "gancio-json")}} selected{{end}}>JSON (auto-detect)</option>
     <option value="kufer"{{if eq .Source.Type "kufer"}} selected{{end}}>Kufer (VHS)</option>
     <option value="jcal"{{if eq .Source.Type "jcal"}} selected{{end}}>jCal</option>
+    <option value="jsonld"{{if eq .Source.Type "jsonld"}} selected{{end}}>{{$.Strings.T "fetch_type_jsonld"}}</option>
   </select>
 
   <div id="kufer-fields" style="{{if ne .Source.Type "kufer"}}display:none{{end}}">

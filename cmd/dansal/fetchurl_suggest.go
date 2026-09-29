@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,20 @@ import (
 	"strings"
 	"time"
 )
+
+// writeFeedSuggestParseError maps a parseBodyToRequests failure to a stable
+// error_code the web layer can translate for an anonymous submitter (#1376),
+// instead of passing the API's English message straight through — the
+// "no machine-readable events" case (a jsonld page with no schema.org Event
+// markup) is common enough on this public form to deserve its own code
+// rather than folding into the generic error path.
+func writeFeedSuggestParseError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errNoMachineReadableEvents) {
+		writeErrorCode(w, "no_machine_readable_events", err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeError(w, err.Error(), http.StatusUnprocessableEntity)
+}
 
 var (
 	fetchSuggestPreviewRateLimiter *RateLimiter
@@ -113,11 +128,11 @@ func fetchSuggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 
 	reqs, err := parseBodyToRequests(body, FetchSource{Type: feedType, URL: normURL}, nil)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusUnprocessableEntity)
+		writeFeedSuggestParseError(w, err)
 		return
 	}
 	if len(reqs) == 0 {
-		writeError(w, "no events found in feed", http.StatusUnprocessableEntity)
+		writeErrorCode(w, "no_events_in_feed", "no events found in feed", http.StatusUnprocessableEntity)
 		return
 	}
 	json.NewEncoder(w).Encode(reqs)
@@ -213,11 +228,11 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	reqs, err := parseBodyToRequests(feedBody, FetchSource{Type: feedType, URL: normURL}, nil)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusUnprocessableEntity)
+		writeFeedSuggestParseError(w, err)
 		return
 	}
 	if len(reqs) == 0 {
-		writeError(w, "no events found in feed", http.StatusUnprocessableEntity)
+		writeErrorCode(w, "no_events_in_feed", "no events found in feed", http.StatusUnprocessableEntity)
 		return
 	}
 

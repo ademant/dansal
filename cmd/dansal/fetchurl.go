@@ -22,7 +22,7 @@ import (
 
 type FetchURLRequest struct {
 	URL            string   `json:"url"`
-	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer"`
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer,jcal,jsonld"`
 	Tags           []string `json:"tags"`
 	Organization   string   `json:"organization,omitempty"`    // find-or-create by name
 	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
@@ -35,7 +35,7 @@ type FetchURLRequest struct {
 
 // FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
 type FetchSourcePatchRequest struct {
-	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer"`
+	Type           string   `json:"type" enum:"ical,json,folkdance-json,gancio-json,rss,kufer,jcal,jsonld"`
 	Tags           []string `json:"tags"`
 	DanceIDs       []int    `json:"dance_ids"`
 	OrganizationID *int     `json:"organization_id"`
@@ -66,6 +66,13 @@ type FetchSource struct {
 	// tags). Empty/unset imports everything, as before. See
 	// eventCategoriesMatchFilter in fetchurl.go.
 	CategoryFilter []string `json:"category_filter,omitempty"`
+	// ImportedOnce (#1376) marks a one-shot source (currently only "jsonld":
+	// a single event page, not a subscription) that has already completed
+	// its first successful import. adminFetchAll's periodic refresh loop
+	// skips such a source instead of re-fetching a page that will 404 once
+	// the event has passed, which would otherwise fail forever and inflate
+	// consecutive_failures for no benefit.
+	ImportedOnce bool `json:"imported_once,omitempty"`
 }
 
 // KuferConfig is the JSON stored in fetch_sources.kufer_config for type="kufer"
@@ -83,7 +90,7 @@ type KuferConfig struct {
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,'')"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -586,7 +593,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -864,6 +871,8 @@ func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCoun
 		return importFromKuferSource(ctx, src)
 	case "jcal":
 		return importFromJcalSource(ctx, src)
+	case "jsonld":
+		return importFromJSONLDSource(ctx, src)
 	default:
 		return importFromICalSource(ctx, src)
 	}

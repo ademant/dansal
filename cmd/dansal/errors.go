@@ -23,6 +23,24 @@ func writeError(w http.ResponseWriter, msg string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// writeErrorCode is writeError plus a stable machine-readable "error_code",
+// for the handful of error conditions a client needs to react to
+// specifically rather than just display (#1376) — e.g. dansal_web mapping a
+// jsonld suggestion's "no machine-readable events" to a translated i18n
+// string instead of passing the English msg straight through to an
+// anonymous, potentially non-English-speaking submitter. The existing
+// error_id (errorIDWriter.flush, below) is a random per-request support
+// token, not a machine code, so it cannot be reused for this — the two
+// fields coexist in the same JSON body without conflict.
+func writeErrorCode(w http.ResponseWriter, code string, msg string, status int) {
+	if status >= 500 {
+		log.Printf("error %d: %s", status, msg)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg, "error_code": code})
+}
+
 // writeInternalError logs the raw error detail server-side and sends a generic
 // 500 message to the client, preventing internal DB/system details from leaking.
 func writeInternalError(w http.ResponseWriter, err error) {

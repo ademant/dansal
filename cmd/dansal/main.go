@@ -2283,6 +2283,12 @@ func migrateDB() {
 	// the kufer_config column above exists, since the rebuild carries it over.
 	migrateFetchSourcesJcalType()
 
+	// #1376: widen fetch_sources.type CHECK to allow 'jsonld', and add
+	// imported_once (a jsonld source is a one-shot import of a single event
+	// page, not a subscription — the refresh loop skips it after its first
+	// successful import instead of failing forever once the page 404s).
+	migrateFetchSourcesJsonldType()
+
 	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
 	// (coffee break / lunch slots), alongside the existing bal/workshop.
 	migrateTimetableEntriesBreakType()
@@ -3062,6 +3068,15 @@ func migrateFetchSourcesJcalType() {
 	ctx := context.Background()
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
 	stmts := []string{
+		// #1376: dance_ids (an early denormalized column) was dropped in
+		// favor of the fetch_source_dances join table, and category_filter
+		// was added, both *before* this rebuild is ever actually reached on
+		// a real DB (migrateDB() runs every block in sequence every startup)
+		// — this rebuild's column list must track the table's real current
+		// shape, not the shape it had when this function was first written,
+		// or it silently drops category_filter data (and errors out on the
+		// no-longer-existent dance_ids, since CREATE TABLE + rebuild happens
+		// unconditionally once the version guard above lets it through).
 		`CREATE TABLE fetch_sources_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT UNIQUE NOT NULL,
@@ -3075,21 +3090,20 @@ func migrateFetchSourcesJcalType() {
 			template_mode TEXT NOT NULL DEFAULT '',
 			template_data TEXT,
 			consecutive_failures INTEGER NOT NULL DEFAULT 0,
-			dance_ids TEXT DEFAULT '[]',
 			created_by_id INTEGER REFERENCES users(id),
 			updated_at INTEGER,
 			updated_by TEXT DEFAULT '',
-			kufer_config TEXT
+			kufer_config TEXT,
+			category_filter TEXT
 		)`,
 		`INSERT INTO fetch_sources_chk
 			(id, url, type, tags, organization_id, last_fetched_at, last_result,
 			 created_at, template_id, template_mode, template_data, consecutive_failures,
-			 dance_ids, created_by_id, updated_at, updated_by, kufer_config)
+			 created_by_id, updated_at, updated_by, kufer_config, category_filter)
 		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
 			created_at, template_id, template_mode, template_data,
 			COALESCE(consecutive_failures, 0),
-			COALESCE(dance_ids, '[]'),
-			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config
+			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config, category_filter
 		FROM fetch_sources`,
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
@@ -3104,6 +3118,68 @@ func migrateFetchSourcesJcalType() {
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesJcalType: added 'jcal' to fetch_sources.type CHECK constraint")
+}
+
+// migrateFetchSourcesJsonldType widens fetch_sources.type's CHECK constraint
+// to allow 'jsonld' (#1376), following the exact rebuild pattern used when
+// 'jcal' was added in migrateFetchSourcesJcalType.
+func migrateFetchSourcesJsonldType() {
+	var schema string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
+	if strings.Contains(schema, "'jsonld'") {
+		return
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateFetchSourcesJsonldType: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	stmts := []string{
+		`CREATE TABLE fetch_sources_chk (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT UNIQUE NOT NULL,
+			type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal','jsonld')),
+			tags TEXT,
+			organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+			last_fetched_at INTEGER,
+			last_result TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			template_id INTEGER,
+			template_mode TEXT NOT NULL DEFAULT '',
+			template_data TEXT,
+			consecutive_failures INTEGER NOT NULL DEFAULT 0,
+			created_by_id INTEGER REFERENCES users(id),
+			updated_at INTEGER,
+			updated_by TEXT DEFAULT '',
+			kufer_config TEXT,
+			category_filter TEXT,
+			imported_once INTEGER NOT NULL DEFAULT 0
+		)`,
+		`INSERT INTO fetch_sources_chk
+			(id, url, type, tags, organization_id, last_fetched_at, last_result,
+			 created_at, template_id, template_mode, template_data, consecutive_failures,
+			 created_by_id, updated_at, updated_by, kufer_config, category_filter, imported_once)
+		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
+			created_at, template_id, template_mode, template_data,
+			COALESCE(consecutive_failures, 0),
+			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config, category_filter, 0
+		FROM fetch_sources`,
+		`DROP TABLE fetch_sources`,
+		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}
+	for _, s := range stmts {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+			log.Printf("migrateFetchSourcesJsonldType: %v", err)
+			return
+		}
+	}
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
+	log.Printf("migrateFetchSourcesJsonldType: added 'jsonld' to fetch_sources.type CHECK constraint and imported_once column")
 }
 
 // migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
@@ -3907,7 +3983,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS fetch_sources (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		url TEXT UNIQUE NOT NULL,
-		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal')),
+		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal','jsonld')),
 		tags TEXT,
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at INTEGER,
@@ -3921,7 +3997,8 @@ func createTables() error {
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT '',
 		kufer_config TEXT,
-		category_filter TEXT
+		category_filter TEXT,
+		imported_once INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

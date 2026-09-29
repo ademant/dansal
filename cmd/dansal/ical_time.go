@@ -232,6 +232,18 @@ type icalParseReport struct {
 	// malformed DTSTART, say. They are still dropped; there is no defensible
 	// instant to invent, but they are no longer silent.
 	Unparsed int
+	// Kind labels the log lines below ("iCal", "JSON-LD", #1376's jsonld
+	// importer reuses this same counter/report shape for its own
+	// date-only-startDate fallback). Empty defaults to "iCal" so every
+	// existing caller's log output is unchanged.
+	Kind string
+}
+
+func (r *icalParseReport) kind() string {
+	if r.Kind == "" {
+		return "iCal"
+	}
+	return r.Kind
 }
 
 func (r *icalParseReport) fallback(uid, tzid string) {
@@ -240,9 +252,9 @@ func (r *icalParseReport) fallback(uid, tzid string) {
 	}
 	r.TimezoneFallback++
 	if tzid != "" {
-		log.Printf("iCal: event %q has unresolvable TZID %q; anchored its start time in the feed's VTIMEZONE or the instance zone", uid, tzid)
+		log.Printf("%s: event %q has unresolvable TZID %q; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid, tzid)
 	} else {
-		log.Printf("iCal: event %q has an unresolvable timezone; anchored its start time in the feed's VTIMEZONE or the instance zone", uid)
+		log.Printf("%s: event %q has an unresolvable timezone; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid)
 	}
 }
 
@@ -251,7 +263,7 @@ func (r *icalParseReport) unparsed(uid string, reason any) {
 		return
 	}
 	r.Unparsed++
-	log.Printf("iCal: skipping event %q: %v", uid, reason)
+	log.Printf("%s: skipping event %q: %v", r.kind(), uid, reason)
 }
 
 // fold adds the report into the import counters returned to the admin.

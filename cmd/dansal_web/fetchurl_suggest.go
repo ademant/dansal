@@ -185,7 +185,7 @@ func fetchSuggestPreviewPageHandler(cfg *Config, tmpls *Templates, client *Dansa
 
 		events, err := client.SuggestFetchPreview(r.Context(), &buf, mw.FormDataContentType())
 		if err != nil {
-			msg := apiErrUserMessage(err)
+			msg := apiErrUserMessageT(r, i18n, err)
 			if msg == "" {
 				msg = i18n.T(r, "suggest_error_parse")
 			}
@@ -342,7 +342,7 @@ func fetchSuggestSubmitPageHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		if err := client.SubmitFetchSuggestion(r.Context(), req, cfg.publicBaseURL()); err != nil {
-			msg := apiErrUserMessage(err)
+			msg := apiErrUserMessageT(r, i18n, err)
 			if msg == "" {
 				msg = i18n.T(r, "suggest_error_parse")
 			}

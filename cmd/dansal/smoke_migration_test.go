@@ -105,7 +105,10 @@ func TestSmokeMigrationFetchSourcesJcalType(t *testing.T) {
 	// migrateFetchSourcesKuferType's own rebuild produces (pre-#1377 CHECK
 	// list, but every other column a real existing DB would already have —
 	// a table missing those would make the real migration's SELECT fail on
-	// an unrelated column, which isn't what this test is checking).
+	// an unrelated column, which isn't what this test is checking). No
+	// dance_ids: it was dropped in favor of the fetch_source_dances join
+	// table well before this migration is ever reached on a real upgrade
+	// (#1376 found and fixed the migration referencing it regardless).
 	conn.Exec("DELETE FROM fetch_sources")
 	conn.Exec("DROP TABLE fetch_sources")
 	if _, err := conn.Exec(`CREATE TABLE fetch_sources (
@@ -121,11 +124,11 @@ func TestSmokeMigrationFetchSourcesJcalType(t *testing.T) {
 		template_mode TEXT NOT NULL DEFAULT '',
 		template_data TEXT,
 		consecutive_failures INTEGER NOT NULL DEFAULT 0,
-		dance_ids TEXT DEFAULT '[]',
 		created_by_id INTEGER REFERENCES users(id),
 		updated_at INTEGER,
 		updated_by TEXT DEFAULT '',
-		kufer_config TEXT
+		kufer_config TEXT,
+		category_filter TEXT
 	)`); err != nil {
 		t.Fatal(err)
 	}
@@ -140,5 +143,82 @@ func TestSmokeMigrationFetchSourcesJcalType(t *testing.T) {
 	migrateDB() // idempotent
 	if err := insertJcal(); err != nil {
 		t.Fatalf("after idempotent re-migration: 'jcal' rejected: %v", err)
+	}
+}
+
+// fetch_sources.type's CHECK constraint (#1376) must allow 'jsonld' on both a
+// fresh install and an existing DB that already has 'jcal' but predates
+// 'jsonld' — and the rebuild must add the imported_once column.
+func TestSmokeMigrationFetchSourcesJsonldType(t *testing.T) {
+	conn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := db
+	db = conn
+	t.Cleanup(func() { db = old; conn.Close() })
+
+	n := 0
+	insertJsonld := func() error {
+		n++
+		_, err := conn.Exec("INSERT INTO fetch_sources (url, type) VALUES (?, 'jsonld')", fmt.Sprintf("https://example.org/jsonld-%d", n))
+		return err
+	}
+	hasImportedOnce := func() bool {
+		var c int
+		conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='imported_once'").Scan(&c)
+		return c > 0
+	}
+
+	if err := createTables(); err != nil {
+		t.Fatal(err)
+	}
+	migrateDB()
+	if err := insertJsonld(); err != nil {
+		t.Fatalf("fresh install: 'jsonld' rejected by CHECK constraint: %v", err)
+	}
+	if !hasImportedOnce() {
+		t.Fatal("fresh install: imported_once column missing")
+	}
+
+	// Existing DB that already migrated to 'jcal' but predates 'jsonld' and
+	// imported_once.
+	conn.Exec("DELETE FROM fetch_sources")
+	conn.Exec("DROP TABLE fetch_sources")
+	if _, err := conn.Exec(`CREATE TABLE fetch_sources (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		url TEXT UNIQUE NOT NULL,
+		type TEXT NOT NULL DEFAULT 'ical' CHECK(type IN ('ical','json','folkdance-json','gancio-json','rss','kufer','jcal')),
+		tags TEXT,
+		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+		last_fetched_at INTEGER,
+		last_result TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		template_id INTEGER,
+		template_mode TEXT NOT NULL DEFAULT '',
+		template_data TEXT,
+		consecutive_failures INTEGER NOT NULL DEFAULT 0,
+		created_by_id INTEGER REFERENCES users(id),
+		updated_at INTEGER,
+		updated_by TEXT DEFAULT '',
+		kufer_config TEXT,
+		category_filter TEXT
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertJsonld(); err == nil {
+		t.Fatal("expected the pre-migration CHECK constraint to reject 'jsonld'")
+	}
+
+	migrateDB()
+	if err := insertJsonld(); err != nil {
+		t.Fatalf("after migration: 'jsonld' still rejected: %v", err)
+	}
+	if !hasImportedOnce() {
+		t.Fatal("after migration: imported_once column missing")
+	}
+	migrateDB() // idempotent
+	if err := insertJsonld(); err != nil {
+		t.Fatalf("after idempotent re-migration: 'jsonld' rejected: %v", err)
 	}
 }

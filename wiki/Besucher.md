@@ -92,6 +92,8 @@ Kennst du einen Verein oder eine Location mit eigenem Veranstaltungskalender (iC
 
 Auf der Bestätigungsseite und per E-Mail wird direkt ein Link angeboten, um ein Konto einzurichten und die Organisation bzw. den Feed künftig selbst zu verwalten.
 
+**Nur eine einzelne Veranstaltungsseite statt eines ganzen Feeds?** Beim Feld „Typ“ lässt sich statt der automatischen Erkennung auch „Event-Seite (JSON-LD)“ auswählen. Damit lässt sich die URL einer einzelnen Veranstaltungsseite vorschlagen, die ihre Angaben in strukturierten Daten (schema.org, wie sie z. B. WordPress-Eventkalender-Plugins oder viele Ticketing-Anbieter automatisch einbetten) veröffentlicht – auch ohne eigenen iCal- oder JSON-Feed. Da es sich um eine einzelne Seite statt eines dauerhaften Feeds handelt, wird sie nur einmalig abgerufen, nicht laufend aktualisiert.
+
 **Hinweise:** wie beim Veranstaltungsvorschlag ist die Funktion nur verfügbar, wenn die Instanz E-Mail- oder Telegram-Benachrichtigungen konfiguriert hat, und ebenso mehrschichtig gegen Missbrauch abgesichert (Rate-Limit, Bot-Erkennung).
 
 ## 🌍 Mehrsprachigkeit

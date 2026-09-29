@@ -209,6 +209,12 @@ type apiHTTPError struct {
 	StatusCode int
 	Message    string
 	ErrorID    string
+	// ErrorCode is a stable machine-readable value (writeErrorCode, #1376)
+	// some API errors carry alongside Message, for callers that need to
+	// react to a specific condition — e.g. translating a public-form error
+	// for an anonymous submitter instead of passing the API's English
+	// Message straight through. Empty when the API used plain writeError.
+	ErrorCode string
 }
 
 func (e *apiHTTPError) Error() string {
@@ -231,14 +237,39 @@ func apiErrUserMessage(err error) string {
 	return ""
 }
 
+// feedSuggestErrorI18nKeys maps a writeErrorCode value (cmd/dansal's
+// fetchurl_suggest.go) to the i18n key that explains it to an anonymous
+// submitter (#1376) — apiErrUserMessageT prefers this over the API's raw
+// English Message when a code is present and mapped.
+var feedSuggestErrorI18nKeys = map[string]string{
+	"no_machine_readable_events": "fetch_suggest_error_no_machine_events",
+	"no_events_in_feed":          "fetch_suggest_error_no_events",
+}
+
+// apiErrUserMessageT is apiErrUserMessage plus the error_code -> i18n
+// translation above, for callers rendering a message to a public/anonymous
+// audience (the feed-suggestion form) rather than an admin who can be shown
+// the raw API string. Falls back to apiErrUserMessage's behavior when err
+// carries no mapped code.
+func apiErrUserMessageT(r *http.Request, i18n *I18n, err error) string {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) && ae.ErrorCode != "" {
+		if key, ok := feedSuggestErrorI18nKeys[ae.ErrorCode]; ok {
+			return i18n.T(r, key)
+		}
+	}
+	return apiErrUserMessage(err)
+}
+
 func apiErr(resp *http.Response) error {
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	var body struct {
-		Error   string `json:"error"`
-		ErrorID string `json:"error_id"`
+		Error     string `json:"error"`
+		ErrorID   string `json:"error_id"`
+		ErrorCode string `json:"error_code"`
 	}
 	if json.Unmarshal(b, &body) == nil && body.Error != "" {
-		return &apiHTTPError{StatusCode: resp.StatusCode, Message: body.Error, ErrorID: body.ErrorID}
+		return &apiHTTPError{StatusCode: resp.StatusCode, Message: body.Error, ErrorID: body.ErrorID, ErrorCode: body.ErrorCode}
 	}
 	if msg := strings.TrimSpace(string(b)); msg != "" {
 		return &apiHTTPError{StatusCode: resp.StatusCode, Message: msg}

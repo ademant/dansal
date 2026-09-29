@@ -238,6 +238,8 @@ func parseBodyToRequests(body []byte, src FetchSource, rep *icalParseReport) ([]
 			return nil, fmt.Errorf("parse iCal: %w", err)
 		}
 		return parseICalToRequests(cal, src, rep), nil
+	case "jsonld":
+		return parseJSONLDBody(body, src, rep)
 	default:
 		cal, err := ics.ParseCalendar(bytes.NewReader(extractVCalendarBody(body)))
 		if err != nil {

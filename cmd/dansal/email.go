@@ -135,7 +135,14 @@ func sendMailLocal(cfg SMTPConfig, to, subject, body string, bulk bool) (string,
 // SendEmail sends a plain-text email and returns the generated Message-ID.
 // If smtp.sendmail is set, the local MTA is used; otherwise the configured SMTP server is used.
 func SendEmail(to, subject, body string, bulk bool) (string, error) {
-	cfg := config.SMTP
+	return sendEmailWithConfig(config.SMTP, to, subject, body, bulk)
+}
+
+// sendEmailWithConfig is SendEmail with an explicit SMTP config snapshot. The
+// booking/confirm goroutines capture config.SMTP synchronously and pass it in,
+// so a background send never races the package-level config that the test
+// harness swaps between checks.
+func sendEmailWithConfig(cfg SMTPConfig, to, subject, body string, bulk bool) (string, error) {
 	if cfg.Sendmail != "" {
 		return sendMailLocal(cfg, to, subject, body, bulk)
 	}

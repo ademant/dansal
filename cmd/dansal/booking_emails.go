@@ -116,24 +116,23 @@ func eventTitle(eventID int) string {
 	return title
 }
 
-// sendBookingConfirmedEmail sends the post-verification confirmed email.
-func sendBookingConfirmedEmail(name, email, lang string, eventID int, qrToken string) {
-	s := bookingMailStringsFor(lang)
-	base := strings.TrimRight(config.Server.BaseURL, "/")
+// sendBookingConfirmedEmail sends the post-verification confirmed email. All
+// config-derived values and the DB lookups are computed synchronously by the
+// caller and passed in, so the goroutine never reads the package globals that
+// the test harness swaps between checks.
+func sendBookingConfirmedEmail(name, email, title, base, qrToken string, loc bookingMailStrings, cfg SMTPConfig) {
 	checkinURL := base + "/checkin/" + qrToken
-	body := fmt.Sprintf(s.ConfirmedBody, name, eventTitle(eventID), checkinURL)
-	if _, err := SendEmail(email, s.ConfirmedSubject, body, false); err != nil {
+	body := fmt.Sprintf(loc.ConfirmedBody, name, title, checkinURL)
+	if _, err := sendEmailWithConfig(cfg, email, loc.ConfirmedSubject, body, false); err != nil {
 		log.Printf("bookings: confirmed email failed for %s: %v", email, err)
 	}
 }
 
 // sendBookingApprovedEmail sends the approval notification email.
-func sendBookingApprovedEmail(name, email, lang string, eventID int, qrToken string) {
-	s := bookingMailStringsFor(lang)
-	base := strings.TrimRight(config.Server.BaseURL, "/")
+func sendBookingApprovedEmail(name, email, title, base, qrToken string, loc bookingMailStrings, cfg SMTPConfig) {
 	checkinURL := base + "/checkin/" + qrToken
-	body := fmt.Sprintf(s.ApprovedBody, name, eventTitle(eventID), checkinURL)
-	if _, err := SendEmail(email, s.ApprovedSubject, body, true); err != nil {
+	body := fmt.Sprintf(loc.ApprovedBody, name, title, checkinURL)
+	if _, err := sendEmailWithConfig(cfg, email, loc.ApprovedSubject, body, true); err != nil {
 		log.Printf("bookings: approved email failed for %s: %v", email, err)
 	}
 }

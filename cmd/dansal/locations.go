@@ -606,6 +606,10 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]LocationCreateResponse, 0, len(reqs))
 	for reqIdx, req := range reqs {
+		req.Location = decodeHTMLEntities(req.Location)
+		req.ShortName = decodeHTMLEntities(req.ShortName)
+		req.Address = decodeHTMLEntities(req.Address)
+		req.Town = decodeHTMLEntities(req.Town)
 		// Derive street and town for the duplicate-street check.
 		// Prefer explicit request fields; fall back to parsing the location name.
 		street, town := req.Address, req.Town
@@ -946,6 +950,10 @@ func nullIfEmpty(s string) any {
 }
 
 func writeLocationFields(id string, f locationUpdateFields, updatedBy string) error {
+	f.Location = decodeHTMLEntities(f.Location)
+	f.ShortName = decodeHTMLEntities(f.ShortName)
+	f.Address = decodeHTMLEntities(f.Address)
+	f.Town = decodeHTMLEntities(f.Town)
 	_, err := db.Exec(
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, country_code=?, region=?, latitude=?, longitude=?, internetsite=?, osm_id=?, osm_type=?, geohash=?, wikidata_id=?, mb_place_id=?, notes_md=?, attributes=?, parking=?, floor_condition=?, no_street_shoes=?, parent_id=?, capacity=?, size_sqm=?, plan_x=?, plan_y=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
 		f.Location, f.ShortName, f.Address, f.Zipcode, f.Town, f.Country, f.CountryCode, f.Region, f.Latitude, f.Longitude, f.Internetsite, f.OsmID, f.OsmType, nullIfEmpty(f.Geohash), f.WikidataID, f.MBPlaceID, f.NotesMd, attrsJSON(f.Attributes), f.Parking, f.FloorCondition, f.NoStreetShoes, f.ParentID, f.Capacity, f.SizeSqm, f.PlanX, f.PlanY, updatedBy, id,
@@ -1121,19 +1129,19 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Location != nil {
-		loc.Location = *req.Location
+		loc.Location = decodeHTMLEntities(*req.Location)
 	}
 	if req.ShortName != nil {
-		loc.ShortName = *req.ShortName
+		loc.ShortName = decodeHTMLEntities(*req.ShortName)
 	}
 	if req.Address != nil {
-		loc.Address = *req.Address
+		loc.Address = decodeHTMLEntities(*req.Address)
 	}
 	if req.Zipcode != nil {
 		loc.Zipcode = *req.Zipcode
 	}
 	if req.Town != nil {
-		loc.Town = *req.Town
+		loc.Town = decodeHTMLEntities(*req.Town)
 	}
 	if req.Country != nil {
 		loc.Country = *req.Country
@@ -1639,7 +1647,8 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
+	name := decodeHTMLEntities(strings.TrimSpace(req.Name))
+	if name == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
@@ -1659,14 +1668,14 @@ func createLocationChild(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := db.Exec(
 		"INSERT INTO locations (location, floor_condition, no_street_shoes, attributes, parent_id, capacity, size_sqm) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		strings.TrimSpace(req.Name), req.FloorCondition, req.NoStreetShoes, attrsJSON(req.Attributes), locID, req.Capacity, req.SizeSqm,
+		name, req.FloorCondition, req.NoStreetShoes, attrsJSON(req.Attributes), locID, req.Capacity, req.SizeSqm,
 	)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
 	childID, _ := result.LastInsertId()
-	child := Location{ID: int(childID), Location: strings.TrimSpace(req.Name), FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID, Capacity: req.Capacity, SizeSqm: req.SizeSqm}
+	child := Location{ID: int(childID), Location: name, FloorCondition: req.FloorCondition, NoStreetShoes: req.NoStreetShoes, Attributes: req.Attributes, ParentID: &locID, Capacity: req.Capacity, SizeSqm: req.SizeSqm}
 	writeJSONStatus(w, http.StatusCreated, child)
 }
 

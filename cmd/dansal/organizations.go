@@ -394,6 +394,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
+	req.Name = decodeHTMLEntities(req.Name)
 	if req.ActorName != "" {
 		if req.ActorName == "relay" {
 			writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
@@ -501,6 +502,7 @@ func checkActorNameAvailable(w http.ResponseWriter, actorName, excludeID string)
 // and patchOrganization (PATCH) — both end up replacing the same editable
 // columns on o (#1012).
 func writeOrganizationFields(id string, o Organization, updatedBy string) error {
+	o.Name = decodeHTMLEntities(o.Name)
 	chatLinksJSON, _ := json.Marshal(o.ChatLinks)
 	_, err := db.Exec(
 		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=?, contact_name=?, wikidata_id=?, notes_md=?, chat_links=?, image_ai_generated=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
@@ -558,7 +560,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if req.Name != "" {
-			o.Name = req.Name
+			o.Name = decodeHTMLEntities(req.Name)
 		}
 		o.ActorName = req.ActorName
 	}
@@ -646,7 +648,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 			o.ActorName = *req.ActorName
 		}
 		if req.Name != nil && *req.Name != "" {
-			o.Name = *req.Name
+			o.Name = decodeHTMLEntities(*req.Name)
 		}
 	}
 	if req.Description != nil {

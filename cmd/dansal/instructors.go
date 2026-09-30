@@ -168,9 +168,10 @@ func createInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
+	name := decodeHTMLEntities(strings.TrimSpace(req.Name))
 	inst, err := scanInstructor(db.QueryRow(
 		"INSERT INTO instructors (name, bio, website, email, mastodon, instagram, facebook, created_by_id) VALUES (?,?,?,?,?,?,?,?) RETURNING "+instructorCols,
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, callerID,
+		name, req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, callerID,
 	))
 	if err != nil {
 		writeInternalError(w, err)
@@ -225,7 +226,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := db.Exec(
 		"UPDATE instructors SET name=?, bio=?, website=?, email=?, mastodon=?, instagram=?, facebook=?, updated_at=strftime('%s','now'), updated_by=? WHERE id=?",
-		strings.TrimSpace(req.Name), req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, resolveDisplayName(callerID), id,
+		decodeHTMLEntities(strings.TrimSpace(req.Name)), req.Bio, req.Website, req.Email, req.Mastodon, req.Instagram, req.Facebook, resolveDisplayName(callerID), id,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -280,7 +281,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "name is required", http.StatusBadRequest)
 			return
 		}
-		inst.Name = strings.TrimSpace(*req.Name)
+		inst.Name = decodeHTMLEntities(strings.TrimSpace(*req.Name))
 	}
 	if req.Bio != nil {
 		inst.Bio = *req.Bio

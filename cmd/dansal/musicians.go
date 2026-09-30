@@ -324,6 +324,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 
 	musicians := make([]Musician, 0, len(reqs))
 	for i, req := range reqs {
+		req.Bandname = decodeHTMLEntities(req.Bandname)
 		m, err := scanMusician(db.QueryRow(
 			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre, email, created_by_id)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
@@ -378,6 +379,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	req.Bandname = decodeHTMLEntities(req.Bandname)
 
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
@@ -454,7 +456,7 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.Bandname != nil {
-		m.Bandname = *req.Bandname
+		m.Bandname = decodeHTMLEntities(*req.Bandname)
 	}
 	if req.ShortName != nil {
 		m.ShortName = *req.ShortName

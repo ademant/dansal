@@ -1094,7 +1094,7 @@ type EventInput struct {
 // Deduplication runs findExistingEvent's shared 5-tier hierarchy (#1005),
 // also used by previewDuplicateStatus so the two paths can't drift.
 func insertEvent(q querier, in EventInput) (int, string, string, error) {
-	title, description := in.Title, in.Description
+	title, description := decodeHTMLEntities(in.Title), decodeHTMLEntities(in.Description)
 	startTime, endTime := in.StartTime, in.EndTime
 	locationID := in.LocationID
 	hasBall, hasWorkshop, hasFestival := in.HasBall, in.HasWorkshop, in.HasFestival
@@ -2362,6 +2362,8 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "title is required", http.StatusBadRequest)
 		return
 	}
+	req.Title = decodeHTMLEntities(req.Title)
+	req.Description = decodeHTMLEntities(req.Description)
 	if err := validateTags(req.Tags); err != nil {
 		writeError(w, "invalid tag: "+err.Error(), http.StatusBadRequest)
 		return
@@ -2648,10 +2650,10 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Title != nil {
-		title = *req.Title
+		title = decodeHTMLEntities(*req.Title)
 	}
 	if req.Description != nil {
-		description = *req.Description
+		description = decodeHTMLEntities(*req.Description)
 	}
 	if req.StartTime != nil {
 		startUnix, err = parseTimeToUnix(*req.StartTime)

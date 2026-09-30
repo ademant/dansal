@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -57,27 +56,14 @@ type tecResponse struct {
 }
 
 var htmlTagRE = regexp.MustCompile(`<[^>]+>`)
-var htmlNumericEntityRE = regexp.MustCompile(`&#(\d+);`)
 
 func tecStripHTML(s string) string {
 	s = htmlTagRE.ReplaceAllString(s, "")
-	s = htmlNumericEntityRE.ReplaceAllStringFunc(s, func(m string) string {
-		sub := htmlNumericEntityRE.FindStringSubmatch(m)
-		if len(sub) < 2 {
-			return m
-		}
-		n, err := strconv.Atoi(sub[1])
-		if err != nil || n < 0 || n > 0x10FFFF {
-			return m
-		}
-		return string(rune(n))
-	})
-	s = strings.ReplaceAll(s, "&amp;", "&")
-	s = strings.ReplaceAll(s, "&lt;", "<")
-	s = strings.ReplaceAll(s, "&gt;", ">")
-	s = strings.ReplaceAll(s, "&quot;", `"`)
-	s = strings.ReplaceAll(s, "&#39;", "'")
-	s = strings.ReplaceAll(s, "&nbsp;", " ")
+	// #1405: html.UnescapeString covers the full HTML5 named-entity table
+	// plus decimal/hex numeric references, replacing the previous hand-rolled
+	// regex (numeric-only) + manual &amp;/&lt;/&gt;/&quot;/&#39; replacement.
+	s = decodeHTMLEntities(s)
+	s = strings.ReplaceAll(s, " ", " ") // &nbsp; decodes to U+00A0, not a plain space
 	return strings.TrimSpace(s)
 }
 

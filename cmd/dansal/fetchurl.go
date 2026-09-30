@@ -248,6 +248,13 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	if loc.Location == "" {
 		return 0, nil
 	}
+	// #1405: decode HTML entities a producer may have mistakenly baked into
+	// plain-text fields (e.g. a WordPress get_the_title()-style filter run
+	// on a venue name before it reached the feed/API).
+	loc.Location = decodeHTMLEntities(loc.Location)
+	loc.ShortName = decodeHTMLEntities(loc.ShortName)
+	loc.Address = decodeHTMLEntities(loc.Address)
+	loc.Town = decodeHTMLEntities(loc.Town)
 	var id int64
 	var matchedByOSM bool
 
